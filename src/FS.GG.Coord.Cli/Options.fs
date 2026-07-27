@@ -254,7 +254,15 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              PR object lags). Neither can green; both are pending (#737)
 
   claim  <ref> [--worker W] [--force] [--json]
-                                             take the lock; --json emits a fresh marker/Status receipt
+                                             take the lock; --json emits a fresh marker/Status receipt.
+                                             --force STEALS: it takes an item another worker holds RIGHT
+                                             NOW, deleting their marker and posting the theft on the item
+                                             so they and a later reader both see it (#1620 — the recovery
+                                             route for a holder that died with an open PR and hours of
+                                             lease left, which `reap` and `adopt` correctly refuse). It
+                                             also lifts the #516 one-item-per-worker refusal. It does NOT
+                                             override a twin marker (#419) or an unparseable one: those
+                                             are a broken identity, not a contested item
   take   [--repo NAME] [--worker W] [--json]
                                              schedule AND claim the next item, in one step. Ready only:
          [--include-backlog]                 a Backlog row is passed over AT THE COLUMN unless you ask for
@@ -590,10 +598,18 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | FOver -> Only [ RoomOpen ]
 
-        // `--force` bypasses the #516 one-item-per-worker check, and `claim` is the ONLY reader. The usage
-        // block advertised `release [--force]` for the whole life of the port and `release` never read it —
-        // a documented no-op, found by building this table (#991). The usage line lost it; refusing it here
-        // breaks no working behaviour, because there was none to break.
+        // `--force` STEALS A LIVE CLAIM, and secondarily bypasses the #516 one-item-per-worker check.
+        // `claim` is the ONLY reader. The usage block advertised `release [--force]` for the whole life of
+        // the port and `release` never read it — a documented no-op, found by building this table (#991).
+        // The usage line lost it; refusing it here breaks no working behaviour, because there was none.
+        //
+        // #1620 IS #991'S OTHER HALF, and it lived in this very row. `--force` was scoped correctly — one
+        // reader, `claim`, exactly as written — but that reader consulted it only for the #516 pre-check,
+        // while `adopt`'s refusal and the usage line above both advertised it as the way to take another
+        // worker's item. A flag can be documented as read by the right command and still be wired to the
+        // wrong DECISION inside it, which is the shape a scope table cannot see. The steal in
+        // `Writes.claim`'s `Lost` arm is what made the advertisement true; `CommandSurfaceTests` pins the
+        // two meanings together so they cannot drift apart again.
         | FForce -> Only [ Claim ]
 
         // Scheduling reads take their freshness from a `Cache.ReadIntent`, not from this flag, so

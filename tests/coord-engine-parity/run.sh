@@ -1633,9 +1633,19 @@ fi
 # (j') THE #418 PROPERTY, re-expressed. The pre-claim read must sit on the WINNING post path only: a claim
 #      that loses the CAS to a live holder must spend ZERO item-Status reads — otherwise every losing `take`
 #      round would pay a GraphQL point on the budget that dies first under fan-out.
+#
+#      A BARE `claim`, AND THE MISSING FLAG IS THE POINT (.github#1620). Every other `renv claim` in this
+#      file passes `--force` to skip the #516 one-item-per-worker pre-check, and this leg did too — back
+#      when `--force` was read ONLY by that pre-check and could not affect the CAS. It can now: `--force`
+#      TAKES a live claim, which is the recovery route `adopt` and the usage block always advertised and
+#      #1620 finally implemented. So `--force` here would WIN, and there would be no losing claim left to
+#      measure. The bare form is what this leg always meant: `heldElsewhere` rides the board SCAN (which
+#      `restore_server.graphql` serves, and which is counted as `boardScan`, not `itemStatus`), pika-r01
+#      holds nothing else, and the claim reaches the CAS and loses to finch-a3f's live marker — spending
+#      the zero item-Status reads this asserts.
 rsrv 'FSGG_PARITY_MARKERS=[{"n":360,"id":860,"worker":"finch-a3f"}]' --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (j') bound a port"; else
-  renv claim FS.GG.SDD#360 --force --worker pika-r01 >/dev/null 2>&1; lrc=$?
+  renv claim FS.GG.SDD#360 --worker pika-r01 >/dev/null 2>&1; lrc=$?
   { [ "$lrc" -ne 0 ] && [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "0" ]; } \
     && ok "#418: a claim that LOSES to a live holder spends ZERO pre-claim reads — the read is on the win path only" \
     || bad "#418: a losing claim must not pay the pre-claim read" "rc=$lrc gql=$(rget "$RS_PORT" /_gql)"
@@ -4142,7 +4152,9 @@ fi
 #
 # Disposed on the record (ADR-0040 §5): where the engine's wording differs from bash's literal, the
 # PROPERTY is asserted, not the spelling — (c) `held by heron-b71` vs `worker 'heron-b71' does` (both name
-# the holder); (d) `claim --force` vs `fsgg-coord claim` (both point at re-claiming); (f) `unparseable
+# the holder); (d) NO LONGER DISPOSED — both engines now point at a plain re-claim (.github#1620 changed the
+# engine's line from `claim --force`, which was wrong twice over: an expired lease needs no force, and
+# `--force` now really does evict a LIVE holder); (f) `unparseable
 # lock` vs `unparsed-marker` (both BLOCK the item); (g) `could not take … a LOSS` vs `removed our marker`/
 # `nothing was claimed` (both DELETE the posted marker at `/_deletes` and claim NOTHING via a non-zero exit).
 # ==================================================================================================

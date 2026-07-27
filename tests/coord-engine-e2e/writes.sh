@@ -68,6 +68,61 @@ else
   bad "a non-holder cannot heartbeat" "rc=$hxrc: $hbx"
 fi
 
+# ---- .github#1620: THE INSTRUCTION `adopt` PRINTS, FOLLOWED VERBATIM, MUST WORK ---------------------
+#
+# This is #1620's acceptance criterion 2 made executable, and it is the one that has to run against a REAL
+# lock rather than a unit fixture, because the defect was never in one component: `adopt` refused a live
+# claim and told the operator to run `claim <ref> --force`; `claim` parsed `--force`, scoped it correctly
+# to itself, and read it in a pre-check that had nothing to do with the holder. Every part behaved as
+# documented, and the composition dead-ended. So the assertion is a COMPOSITION: take the command the tool
+# prints, run THAT, and require it to do what the sentence promised.
+#
+# It is extracted from the refusal rather than retyped. A test that retypes the command asserts that a
+# command works; this asserts that the ADVICE works, which is the thing that was false.
+adoptout="$("$ENGINE" adopt FS.GG.SDD#42 --worker kite-461 2>&1)"; adrc=$?
+# The last `scripts/fsgg-coord ...` token run on the refusal — the remedy line, with the shim's name
+# dropped so the compiled engine can run the same argv.
+advice="$(printf '%s\n' "$adoptout" | grep -o 'scripts/fsgg-coord claim [^ ]* --force' | tail -n1 | sed 's|^scripts/fsgg-coord ||')"
+if [ "$adrc" -ne 0 ] && [ -n "$advice" ]; then
+  ok ".github#1620: adopt refuses a LIVE claim and prints a remedy command to follow"
+else
+  bad ".github#1620: adopt must refuse a live claim and name a remedy" "rc=$adrc advice='$advice': $adoptout"
+fi
+
+# shellcheck disable=SC2086 # $advice is the tool's OWN argv, split on purpose — that is what "verbatim" means
+steal="$("$ENGINE" $advice --worker kite-461 2>&1)"; strc=$?
+if [ "$strc" -eq 0 ] && printf '%s' "$steal" | grep -q 'STOLE FS.GG.SDD#42'; then
+  ok ".github#1620: ...and running it VERBATIM takes the item — the advertised route is real"
+else
+  bad ".github#1620: adopt's remedy must work when followed" "rc=$strc: $steal"
+fi
+
+# THE DISPLACED WORKER MUST FIND OUT. It is still running — that is the whole difference between a steal
+# and a stale collection — so a heartbeat that quietly succeeded would leave two workers on one item.
+hbs="$(run heartbeat FS.GG.SDD#42 2>&1)"; hbsrc=$?
+if [ "$hbsrc" -ne 0 ] && printf '%s' "$hbs" | grep -qi 'held by kite-461'; then
+  ok ".github#1620: the displaced holder's heartbeat FAILS LOUDLY and names the worker that took it"
+else
+  bad ".github#1620: a displaced holder must not heartbeat successfully" "rc=$hbsrc: $hbs"
+fi
+
+# AND THE THEFT IS RECORDED ON THE ITEM, reachable by the displaced worker through its own inbox. The
+# evicted MARKER was deleted, so this notice is the only surviving trace of the claim that was taken.
+# `--repo` because this fixture serves no Status column, so the board scan yields no in-progress row for
+# the mailbox to derive its repo set from. On a real board the item's own `In progress` row supplies it.
+ibx="$(run inbox --repo FS.GG.SDD 2>&1)"; ibxrc=$?
+if [ "$ibxrc" -eq 0 ] && printf '%s' "$ibx" | grep -q 'kite-461' && printf '%s' "$ibx" | grep -q 'TAKEN'; then
+  ok ".github#1620: ...and the steal is recorded on the item, in the displaced worker's inbox"
+else
+  bad ".github#1620: a steal must be announced to the worker it displaced" "rc=$ibxrc: $ibx"
+fi
+
+# Hand #42 back, so the legs below run against the state they were written for: kite-461 drops the lock it
+# stole and vole-418 re-takes it. A fixture leg that leaves the world moved is a leg that breaks its
+# neighbours for reasons that have nothing to do with them.
+"$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
+run claim FS.GG.SDD#42 >/dev/null 2>&1
+
 # ---- release drops the lock ------------------------------------------------------------------------
 rel="$(run release FS.GG.SDD#42 2>&1)"; rrc=$?
 if [ "$rrc" -eq 0 ] && printf '%s' "$rel" | grep -q 'released FS.GG.SDD#42'; then

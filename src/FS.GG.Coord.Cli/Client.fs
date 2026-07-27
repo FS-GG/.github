@@ -2136,10 +2136,12 @@ module Client =
                         | Json -> printfn "%s" (renderClaimReceiptJson receipt)
                         | Text ->
                             let humanPrefix =
-                                if kind = "renewed" then
-                                    $"held %s{ref.Short} by worker %s{w.Id} (lease renewed;"
-                                else
-                                    $"claimed %s{ref.Short} by worker %s{w.Id} ("
+                                match kind with
+                                | "renewed" -> $"held %s{ref.Short} by worker %s{w.Id} (lease renewed;"
+                                // #1620: a steal reads as a steal on stdout too. The stderr lines above
+                                // named the displaced worker; this is the line a human skims.
+                                | "stolen" -> $"STOLE %s{ref.Short} for worker %s{w.Id} (--force; "
+                                | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                             if converged then
                                 printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
@@ -2152,14 +2154,17 @@ module Client =
                         KitDigest.declaredWarn ctx.Transport ref
                         ExitGreen
 
-                    match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref readPreviousStatus with
-                    | Error e -> fail e
-                    | Ok(Writes.Won(held, collected)) ->
-                        // A stale marker we claimed over was COLLECTED (deleted) by the CAS, never merely
-                        // out-ordered — an ignored stale marker is what `heartbeat` resurrects underneath us,
-                        // two live markers on one item. TELL each evicted worker, on their own item, that
-                        // their expired claim was collected and the item is taken: a silent eviction is how a
-                        // worker keeps building against a lock it no longer holds.
+                    // A stale marker we claimed over was COLLECTED (deleted) by the CAS, never merely
+                    // out-ordered — an ignored stale marker is what `heartbeat` resurrects underneath us,
+                    // two live markers on one item. TELL each evicted worker, on their own item, that their
+                    // expired claim was collected and the item is taken: a silent eviction is how a worker
+                    // keeps building against a lock it no longer holds.
+                    //
+                    // ONE COPY, THREE CALLERS (`Won`, `Renewed`, `Stolen`). It was two identical copies
+                    // before #1620, and adding the third is exactly when a duplicated announcement starts
+                    // drifting — this is the courtesy that stops a displaced worker corrupting an item, so
+                    // the version that gets forgotten is the one that matters.
+                    let announceCollected (collected: WorkerId list) =
                         for evicted in collected do
                             match opts.Render with
                             | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
@@ -2173,36 +2178,61 @@ module Client =
                                 $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
                             |> ignore
 
-                        // Move the board column to In progress — the ONE board write, through the
-                        // queue-aware path so an exhausted budget defers rather than drops (#510).
-                        let outcome =
-                            match board.Force() with
-                            | Error e -> Error e
-                            | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                    // Move the board column to In progress — the ONE board write, through the queue-aware
+                    // path so an exhausted budget defers rather than drops (#510).
+                    let setInProgress () =
+                        match board.Force() with
+                        | Error e -> Error e
+                        | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
 
-                        emitClaimReceipt "claimed" held outcome
+                    let force =
+                        if opts.Force then
+                            Writes.StealLiveHolder
+                        else
+                            Writes.RefuseLiveHolder
+
+                    match Writes.claim ctx.Transport opts.LeaseMinutes force (WorkerId w.Id) session ref readPreviousStatus with
+                    | Error e -> fail e
+                    | Ok(Writes.Won(held, collected)) ->
+                        announceCollected collected
+                        emitClaimReceipt "claimed" held (setInProgress ())
+                    | Ok(Writes.Stolen(held, from, collected)) ->
+                        // #1620 — `--force` TOOK this item off a LIVE holder. Everything below is the
+                        // "loud accounting" half of that decision, and it is not optional: a silent
+                        // transfer is worse than a refusal, because the displaced worker is still RUNNING.
+                        //
+                        // The `say` is the load-bearing part. It posts a comment ON THE ITEM naming the
+                        // prior holder, the worker that took it, and (by the comment's own timestamp) when
+                        // — so a reader of the issue afterwards can see the theft, AND the displaced worker
+                        // finds it in `inbox`. Both obligations, one comment. It matters more here than on
+                        // a stale collection: an expired lease means its holder probably stopped, but a
+                        // STOLEN live claim means it probably did not.
+                        //
+                        // The evicted marker is DELETED by the CAS, so this comment is the only surviving
+                        // trace of the claim that was taken. `say` is best-effort — a failed comment does
+                        // not un-take the lock we hold — but the receipt below still reports the steal.
+                        for victim in from do
+                            match opts.Render with
+                            | Json -> eprint $"STOLE {ref.Short} from worker '{victim.Value}' (--force)"
+                            | Text -> printfn "STOLE %s from worker '%s' (--force)" ref.Short victim.Value
+
+                            Writes.say
+                                ctx.Transport
+                                (WorkerId w.Id)
+                                victim
+                                ref
+                                $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
+                            |> ignore
+
+                        announceCollected collected
+                        emitClaimReceipt "stolen" held (setInProgress ())
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
                         // second (a `take` retry, or a worker beating its own lease). Any stale debris it
                         // claimed over was still collected, so tell the evicted workers exactly as a fresh
                         // win does.
-                        for evicted in collected do
-                            match opts.Render with
-                            | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
-                            | Text -> printfn "collected worker '%s' expired claim" evicted.Value
-
-                            Writes.say
-                                ctx.Transport
-                                (WorkerId w.Id)
-                                evicted
-                                ref
-                                $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
-                            |> ignore
-
-                        let outcome =
-                            match board.Force() with
-                            | Error e -> Error e
-                            | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                        announceCollected collected
+                        let outcome = setInProgress ()
 
                         // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
                         // it renewed a marker on the strength of its worker id alone — and a marker bearing
@@ -2220,7 +2250,21 @@ module Client =
 
                         emitClaimReceipt "renewed" held outcome
                     | Ok(Writes.Lost holder) ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+                        // TWO DIFFERENT FACTS, ONE OUTCOME (#1620). Without `--force` the holder refused us
+                        // before we posted anything. WITH it, we evicted the live holder and then lost the
+                        // fresh race to a worker that arrived after the eviction — so "wait for the lease"
+                        // is the wrong advice (the lease we were waiting on is gone), and, more importantly,
+                        // the worker we set out to displace HAS been displaced even though we did not get
+                        // the item. Saying so is the difference between a retry and a worker quietly
+                        // assuming its force did nothing.
+                        if opts.Force then
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
+
+                            eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
+                        else
+                            eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+
                         ExitRed
                     | Ok(Writes.Twin theirs) ->
                         // #419: the marker is ours by id but a DIFFERENT session — two workers share one id.
@@ -2682,9 +2726,21 @@ module Client =
                     | Ok markers ->
                         match Reads.winner opts.LeaseMinutes markers with
                         | Some m when m.Worker <> WorkerId w.Id ->
+                            // #1620: this is also the arm a worker lands in after its live claim was STOLEN
+                            // — the thief deleted our marker, so the live winner is now somebody else. It
+                            // must stay LOUD and non-zero for exactly that reason: a displaced worker that
+                            // heartbeats successfully is a worker that never learns it was displaced. Name
+                            // the possibility, because "held by someone else" reads as a mistake of ours,
+                            // and a steal is not.
                             eprint $"fsgg-coord-engine: %s{ref.Short} is held by %s{m.Worker.Value}, not %s{w.Id} — STOP working it, or reap it."
+
+                            eprint
+                                $"  If you DID hold it, your claim was taken (`claim --force`) — check `inbox` for the notice, and do not push against %s{ref.Short}."
                         | _ ->
-                            eprint $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (claim --force if its work is gone)."
+                            // An EXPIRED lease needs no `--force`: a plain `claim` COLLECTS the stale marker
+                            // it claims over. `--force` steals a LIVE claim (#1620), which this is not, and
+                            // advertising it here taught workers to reach for the steal by default.
+                            eprint $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
 
                         ExitError
                     | Error e -> fail e

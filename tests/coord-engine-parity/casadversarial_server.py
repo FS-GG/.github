@@ -44,7 +44,10 @@ so the harness can prove a refused heartbeat (leg c) patched NOTHING.
 Disposed on the record (ADR-0040 §5), where the engine's wording differs from bash's literal strings — the
 PROPERTY is asserted, not the spelling:
   (c) engine says `held by heron-b71`, bash `worker 'heron-b71' does`  — both NAME the new holder.
-  (d) engine points at `claim --force`, bash `fsgg-coord claim`        — both point at RE-CLAIMING.
+  (d) engine and bash BOTH point at a plain re-claim — no disposition needed (.github#1620 retired it:
+      the engine used to say `claim --force`, which was wrong twice over. An expired lease needs no
+      force — a plain `claim` COLLECTS the stale marker — and once `--force` became a real steal, the
+      line was advertising a live-claim eviction as the remedy for one's own lapsed lease).
   (f) engine says `unparseable lock`, bash `unparsed-marker`           — both BLOCK the item, fail closed.
   (g) engine says `could not take … a LOSS`, bash `removed our marker` / `nothing was claimed` — both
       DELETE the just-posted marker (proven at `/_deletes`) and claim NOTHING (a non-zero exit).
