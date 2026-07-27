@@ -48,17 +48,30 @@
 #     conditioned, so declared∧present ⇒ digest must match; declared∧absent-everywhere ⇒ fine
 #     (skipped, counted); present∧undeclared ⇒ dangling UNLESS the id matches a --co-tenants
 #     glob (process skills from a co-tenant producer, e.g. "fs-gg-sdd-* speckit-*").
-# CHECKS 1 AND 2 ARE INDEPENDENT QUESTIONS, AND BOTH ARE ALWAYS ASKED (.github#1506). Check 1 used to
-# SHORT-CIRCUIT — a [partitioned] id was `continue`d past the byte comparison — so the bytes of a skill
-# that WAS in two roots were never compared, and `byte-identical=` in the summary silently counted only
-# the ids that survived to the comparison. A skill declared and present in SOME roots but not all still
-# fails check 1 ([partitioned]) AND is now byte-compared across the roots it does occupy; it can be both
-# [partitioned] and [divergent], and it is reported as both. See docs/coordination/skill-union-assertion.md.
+# CHECKS 1, 2 AND 3 ARE INDEPENDENT QUESTIONS, AND ALL THREE ARE ALWAYS ASKED (.github#1506, #1513).
+# `SkillMirror.verify` returns THREE facts on ONE `SkillDrift` record — `MissingRoots`, `Divergent` and
+# `HashMismatchRoots` — computed independently of one another, and this script is defined to follow it
+# (#120). It short-circuited twice. Check 1 `continue`d a [partitioned] id past the byte comparison, so
+# the bytes of a skill that WAS in two roots were never compared (#1506); then checks 1-2 `continue`d
+# past the manifest check, so an id that was BOTH partitioned AND digest-mismatched reported only
+# [partitioned] and its declared digest was never read at all (#1513). An id can be [partitioned] AND
+# [divergent] AND [drifted], and all three are reported.
+#
+# CHECK 3 IS PER-ROOT, LIKE `HashMismatchRoots`, NOT PER-REPRESENTATIVE-ROOT (.github#1513). It used to
+# digest ONE root's copy as representative of the id, which is only safe for an id that is whole and
+# coherent — the exact ids the short-circuit meant were the only ones ever to reach it. Measured against
+# the library over the shared vector table (tests/skill-union/skillmirror.fixtures.json): a tree whose
+# `.claude` and `.codex` copies match the manifest and whose `.agents` copy has DRIFTED yields
+# `HashMismatchRoots=[".agents"]` from the library and NOTHING AT ALL from a representative-root check,
+# because the representative is the clean one. That is a fail-OPEN (#266) and it is why this is per-root.
 #
 # THE SUMMARY REPORTS EVERY COUNT WITH THE POPULATION IT WAS TAKEN OVER, for the same reason: a count
 # whose denominator is invisible is a claim about coverage the reader supplies for themselves, and they
 # supply the generous one. `byte-identical=4` over a 50-id union read as "the union is byte-coherent"
-# and two downstream issues were sized against it while 30 comparable pairs differed, uncompared.
+# and two downstream issues were sized against it while 30 comparable pairs differed, uncompared. The
+# MANIFEST counts were left bare by that same fix and carried the identical defect one check over
+# (#1513): `manifest-matched=1` over a 2-id union, when one of the two was never examined against the
+# manifest at all. They now carry their populations too.
 #
 # (4) condition-aware — only when BOTH --manifest and --params <scaffold-provenance.json> are given
 # (ADR-0017). The manifest entry may carry a `materializes-when` predicate over the scaffold
@@ -460,22 +473,33 @@ declare -A MANIFEST_WHEN=()
 declare -A MANIFEST_HAS_FILES=()
 declare -A MANIFEST_TREE=()
 MANIFEST_IDS=""
+MANIFEST_TOTAL=0        # ids the manifest declares — the population the manifest→disk counts are over
 if [ -n "$MANIFEST" ]; then
   [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
   command -v jq >/dev/null 2>&1 || die "jq not found (required to read --manifest)."
   jq -e '.skills | type == "array"' "$MANIFEST" >/dev/null 2>&1 \
     || die "manifest has no .skills array: $MANIFEST"
-  while IFS=$'\t' read -r id sha when; do
+  # UNIT SEPARATOR, NOT TAB (.github#1513). These rows were read as `@tsv` with `IFS=$'\t'`, and TAB is
+  # an IFS *whitespace* character: bash COLLAPSES runs of it even when IFS names it explicitly, so an
+  # empty field in the MIDDLE of a row silently disappears and every later field shifts left. A skill
+  # declared with `"sha256": ""` — which `SkillMirror.ExpectedSkill` defines as "no reference digest",
+  # a legitimate row — therefore had its `materializes-when` predicate read as its DIGEST, and its
+  # condition read as empty (which `eval_condition` treats as `always`). Two wrong answers from one
+  # unnoticed shift: a spurious `[drifted]` on a row that declared no digest, and a false `[missing]`
+  # for a legitimately off-profile skill. `\x1f` is not IFS whitespace, so empty fields survive.
+  # (A trailing empty field happened to survive the tab form; a middle one never did.)
+  while IFS=$'\x1f' read -r id sha when; do
     [ -n "$id" ] || continue
     MANIFEST_SHA["$id"]="$sha"
     MANIFEST_WHEN["$id"]="$when"
     MANIFEST_IDS="$MANIFEST_IDS $id"
-  done < <(jq -r '.skills[] | [.id, (.sha256 // ""), (.["materializes-when"] // "always")] | @tsv' "$MANIFEST")
-  while IFS=$'\t' read -r id has_files tree_sha; do
+    MANIFEST_TOTAL=$((MANIFEST_TOTAL + 1))
+  done < <(jq -r '.skills[] | [.id, (.sha256 // ""), (.["materializes-when"] // "always")] | join("\u001f")' "$MANIFEST")
+  while IFS=$'\x1f' read -r id has_files tree_sha; do
     [ -n "$id" ] || continue
     MANIFEST_HAS_FILES["$id"]="$has_files"
     MANIFEST_TREE["$id"]="$tree_sha"
-  done < <(jq -r '.skills[] | [.id, ((.files | type) == "array" | tostring), (.["tree-sha256"] // "")] | @tsv' "$MANIFEST")
+  done < <(jq -r '.skills[] | [.id, ((.files | type) == "array" | tostring), (.["tree-sha256"] // "")] | join("\u001f")' "$MANIFEST")
 fi
 
 # Scaffold parameters (scaffold-provenance.json → .effectiveParameters), read only with --params.
@@ -506,6 +530,14 @@ present_ct=0; identical_ct=0; manifest_ct=0; cotenant_ct=0; skill_ct=0
 # least two roots (there is a pair to diff); `compared` = ids this run actually diffed. They must be
 # EQUAL, and printing both is what makes a re-introduced short-circuit visible instead of silent.
 partitioned_ct=0; comparable_ct=0; compared_ct=0; differing_ct=0; single_root_ct=0
+# ...and the SAME discipline for the manifest check (.github#1513), which #1506 left bare. `declared` =
+# union ids the manifest declares (what check 3 CAN examine); `comparable` = of those, the ones that
+# reached the comparison with a reference to compare against; `examined` = the ones it actually
+# compared; `matched` = the ones that came back clean. `no-reference` is the honest home for a declared
+# id with neither a `sha256` nor a `files` array: NOTHING was compared for it, and "nothing to compare"
+# must never be folded into "compared, and matching" (#266) — the trap #1506 closed for byte-identity.
+mdeclared_ct=0; mcomparable_ct=0; mexamined_ct=0; mnoref_ct=0
+undeclared_ct=0; dangling_ct=0; unexpected_ct=0
 
 echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}' (from $ROOTS_SRC)${MANIFEST:+ manifest='$MANIFEST'}${CO_TENANTS:+ co-tenants='$CO_TENANTS'}"
 
@@ -520,12 +552,12 @@ while IFS= read -r id; do
     if [ -d "$PRODUCT/$r/$id" ]; then present_roots+=("$r"); else missing="$missing $r"; fi
   done
 
-  # (1) present in EVERY root
-  partitioned=""
+  # (1) present in EVERY root. No `partitioned=1` flag any more: the ONLY reader it ever had was the
+  # `continue` that suppressed check 3 (.github#1513), and a flag kept alive after its last reader is
+  # how the next short-circuit gets written back in — the state to hang it on is already there.
   if [ -n "$missing" ]; then
     echo "::error::[partitioned] skill '$id' is absent from root(s):$missing"
     fail=1
-    partitioned=1
     partitioned_ct=$((partitioned_ct + 1))
   else
     present_ct=$((present_ct + 1))
@@ -571,102 +603,152 @@ while IFS= read -r id; do
     single_root_ct=$((single_root_ct + 1))
   fi
 
-  # Checks 3-4 read ONE root's copy as representative of the id, so they are only meaningful for an id
-  # that is whole AND coherent across the roots. Unchanged from before: a partitioned or divergent id
-  # stops here, having already been reported. Spelled as an `if` rather than `A && B || continue` —
-  # that idiom is correct here and reads like it might not be, which is the wrong trade in a gate.
-  if [ -n "$partitioned" ] || [ -n "$differing" ]; then
-    continue
-  fi
-
   # (3) matches-manifest — only when a manifest is supplied. Producer semantics (.github#120):
   # declared∧present ⇒ SKILL.md digest must match; undeclared ⇒ dangling unless co-tenant.
+  #
+  # ASKED OF A [partitioned] OR [divergent] ID TOO, and that is .github#1513. Checks 1-2 used to
+  # `continue` here, so an id that was both partitioned and digest-mismatched reported ONLY the
+  # partition and its declared digest was never read — while `SkillMirror.verify` returns
+  # `MissingRoots` and `HashMismatchRoots` on the SAME record, computed independently. A repair plan
+  # needs to know it faces both a missing projection AND a body that does not match what the producer
+  # declared; being told only the first sends it to rematerialize bytes that will still be wrong.
+  #
+  # AND IT IS ASKED OF EVERY PRESENT ROOT, not of one representative. See the header: the reference
+  # root is the FIRST root that has the skill, and when that one happens to be clean a
+  # representative-root digest reports nothing at all about the root that drifted.
   if [ -n "$MANIFEST" ]; then
     if [ -z "${MANIFEST_SHA[$id]+x}" ]; then
+      undeclared_ct=$((undeclared_ct + 1))
       if is_co_tenant "$id"; then
         cotenant_ct=$((cotenant_ct + 1))
         continue
       fi
       echo "::error::[dangling] skill '$id' is present in the roots but the manifest does not declare it (and it matches no --co-tenants pattern)"
       fail=1
+      dangling_ct=$((dangling_ct + 1))
       continue
     fi
+    mdeclared_ct=$((mdeclared_ct + 1))
     # (4) condition-aware — declared ∧ PRESENT ∧ materializes-when FALSE ⇒ [unexpected]
     # (materialized off-profile). Only with --params; else fall through to the digest check.
     if [ -n "$PARAMS" ] && ! eval_condition "${MANIFEST_WHEN[$id]}"; then
       echo "::error::[unexpected] skill '$id' is materialized but its materializes-when ('${MANIFEST_WHEN[$id]}') is false for the scaffold parameters"
       fail=1
+      unexpected_ct=$((unexpected_ct + 1))
       continue
     fi
     want="${MANIFEST_SHA[$id]}"
+    # A declared id with NEITHER a `files` array NOR a `sha256` carries no reference to compare
+    # against. Counted apart, never as a match: `manifest-matched` must mean "compared, and matching".
+    if [ "${MANIFEST_HAS_FILES[$id]-false}" != "true" ] && [ -z "$want" ]; then
+      mnoref_ct=$((mnoref_ct + 1))
+      continue
+    fi
+    mcomparable_ct=$((mcomparable_ct + 1))
+    drifted=""
     if [ "${MANIFEST_HAS_FILES[$id]-false}" = "true" ]; then
       # v2: compare the directory as a closed transport unit. This catches missing and extra files,
-      # divergent bytes, and both directions of executable-mode drift.
+      # divergent bytes, and both directions of executable-mode drift. The manifest's own
+      # `tree-sha256` is a property of the MANIFEST, not of a root, so it is checked once per id.
+      #
+      # The per-file comparison runs per PRESENT ROOT, for the same reason the SKILL.md digest does:
+      # a divergent id has different bytes in different roots, and auditing one of them is a claim
+      # about the id that only one root's evidence supports. The library has no v2 counterpart to
+      # follow here (`ActualCopy.Body` is the SKILL.md body alone) — this arm is this repo's own
+      # extension, and it takes the same per-root rule rather than inventing a second one.
       if [ -n "${MANIFEST_TREE[$id]-}" ]; then
         tree_got="$(jq -c --arg id "$id" '.skills[] | select(.id == $id) | .files' "$MANIFEST" \
           | tr -d '\n' | sha256sum | cut -d' ' -f1)"
         if [ "$tree_got" != "${MANIFEST_TREE[$id]}" ]; then
           echo "::error::[drifted] skill '$id' file manifest digest $tree_got != tree-sha256 ${MANIFEST_TREE[$id]}"
           fail=1
+          drifted=1
         fi
       fi
-      declare -A expected=()
-      expected_count=0
-      while IFS=$'\t' read -r path sha executable; do
+      # THE DECLARED SET IS A PROPERTY OF THE MANIFEST, SO IT IS READ ONCE — and so is the complaint
+      # about an unsafe path in it. Reading it inside the root loop would re-run jq per root and, worse,
+      # print `manifest contains unsafe file path` once PER ROOT: a manifest-level fact reported as
+      # though it were a per-root finding, which is the same category error this change exists to fix,
+      # pointed the other way. `tree-sha256` above is hoisted for exactly the same reason.
+      declare -A expected_master=()
+      while IFS=$'\x1f' read -r path sha executable; do
         if [ -z "$path" ] || [[ "$path" = /* ]] || [[ "$path" == ../* ]] || [[ "$path" == */../* ]]; then
           echo "::error::[drifted] skill '$id' manifest contains unsafe file path '$path'"
           fail=1
+          drifted=1
           continue
         fi
-        expected["$path"]="$sha	$executable"
-        expected_count=$((expected_count + 1))
-      done < <(jq -r --arg id "$id" '.skills[] | select(.id == $id) | .files[] | [.path, .sha256, (.executable | tostring)] | @tsv' "$MANIFEST")
-      actual_count=0
-      while IFS= read -r -d '' full; do
-        path="${full#"$PRODUCT/$ref/$id/"}"
-        actual_count=$((actual_count + 1))
-        if [ -z "${expected[$path]+x}" ]; then
-          echo "::error::[drifted] skill '$id' has extra undeclared file '$path'"
+        # \x1f here too, for the reason above: `$sha` is empty in a malformed row and a leading
+        # TAB would collapse, shifting `$executable` into `file_want`.
+        expected_master["$path"]="$sha"$'\x1f'"$executable"
+      done < <(jq -r --arg id "$id" '.skills[] | select(.id == $id) | .files[] | [.path, (.sha256 // ""), (.executable | tostring)] | join("\u001f")' "$MANIFEST")
+      for mr in "${present_roots[@]}"; do
+        # A fresh COPY per root: the walk below `unset`s each path as it matches, so sharing one table
+        # would leave it empty by the second root and report every declared file missing there. Asserted
+        # by the multi-root v2 leg in tests/skill-union/run.sh, not left to `declare -A x=()` semantics.
+        declare -A expected=()
+        for ep in "${!expected_master[@]}"; do expected["$ep"]="${expected_master[$ep]}"; done
+        while IFS= read -r -d '' full; do
+          path="${full#"$PRODUCT/$mr/$id/"}"
+          if [ -z "${expected[$path]+x}" ]; then
+            echo "::error::[drifted] skill '$id' in root '$mr' has extra undeclared file '$path'"
+            fail=1
+            drifted=1
+            continue
+          fi
+          IFS=$'\x1f' read -r file_want exec_want <<< "${expected[$path]}"
+          if [ ! -f "$full" ] || [ -L "$full" ]; then
+            echo "::error::[drifted] skill '$id' in root '$mr' path '$path' is not a regular file"
+            fail=1
+            drifted=1
+            unset 'expected[$path]'
+            continue
+          fi
+          file_got="$(sha256sum "$full" | cut -d' ' -f1)"
+          [ -x "$full" ] && exec_got=true || exec_got=false
+          if [ "$file_got" != "$file_want" ]; then
+            echo "::error::[drifted] skill '$id' in root '$mr' file '$path' digest $file_got != manifest $file_want"
+            fail=1
+            drifted=1
+          elif [ "$exec_got" != "$exec_want" ]; then
+            echo "::error::[drifted] skill '$id' in root '$mr' file '$path' executable=$exec_got != manifest $exec_want"
+            fail=1
+            drifted=1
+          fi
+          unset 'expected[$path]'
+        done < <(find "$PRODUCT/$mr/$id" -mindepth 1 ! -type d -print0 | LC_ALL=C sort -z)
+        for path in "${!expected[@]}"; do
+          echo "::error::[drifted] skill '$id' in root '$mr' is missing declared file '$path'"
           fail=1
-          continue
-        fi
-        IFS=$'\t' read -r file_want exec_want <<< "${expected[$path]}"
-        if [ ! -f "$full" ] || [ -L "$full" ]; then
-          echo "::error::[drifted] skill '$id' path '$path' is not a regular file"
-          fail=1
-          continue
-        fi
-        file_got="$(sha256sum "$full" | cut -d' ' -f1)"
-        [ -x "$full" ] && exec_got=true || exec_got=false
-        if [ "$file_got" != "$file_want" ]; then
-          echo "::error::[drifted] skill '$id' file '$path' digest $file_got != manifest $file_want"
-          fail=1
-        elif [ "$exec_got" != "$exec_want" ]; then
-          echo "::error::[drifted] skill '$id' file '$path' executable=$exec_got != manifest $exec_want"
-          fail=1
-        fi
-        unset 'expected[$path]'
-      done < <(find "$PRODUCT/$ref/$id" -mindepth 1 ! -type d -print0 | LC_ALL=C sort -z)
-      for path in "${!expected[@]}"; do
-        echo "::error::[drifted] skill '$id' is missing declared file '$path'"
-        fail=1
+          drifted=1
+        done
       done
-      if [ "$actual_count" -ne "$expected_count" ]; then
-        : # individual diagnostics above carry the actionable difference.
-      fi
-    elif [ -n "$want" ]; then
-      if ! got="$(skill_digest "$PRODUCT/$ref/$id")"; then
-        echo "::error::[drifted] skill '$id' has no SKILL.md to digest (manifest declares $want)"
+    else
+      # v1: the canonical SKILL.md digest, taken in EVERY present root and reported as a ROOT LIST —
+      # the shape of the library's `HashMismatchRoots`, and one line however many roots drifted
+      # (`::error::` is a workflow command parsed only to the first newline).
+      mismatch_roots=""
+      noskill_roots=""
+      for mr in "${present_roots[@]}"; do
+        if ! got="$(skill_digest "$PRODUCT/$mr/$id")"; then
+          noskill_roots="$noskill_roots $mr"
+          continue
+        fi
+        [ "$got" = "$want" ] || mismatch_roots="$mismatch_roots $mr=$got"
+      done
+      if [ -n "$noskill_roots" ]; then
+        echo "::error::[drifted] skill '$id' has no SKILL.md to digest (manifest declares $want) in root(s):$noskill_roots"
         fail=1
-        continue
+        drifted=1
       fi
-      if [ "$got" != "$want" ]; then
-        echo "::error::[drifted] skill '$id' SKILL.md digest $got != manifest $want"
+      if [ -n "$mismatch_roots" ]; then
+        echo "::error::[drifted] skill '$id' SKILL.md digest != manifest $want in root(s):$mismatch_roots"
         fail=1
-        continue
+        drifted=1
       fi
     fi
-    manifest_ct=$((manifest_ct + 1))
+    mexamined_ct=$((mexamined_ct + 1))
+    [ -n "$drifted" ] || manifest_ct=$((manifest_ct + 1))
   fi
 done < <(union_ids)
 
@@ -704,6 +786,14 @@ if [ "$compared_ct" -ne "$comparable_ct" ]; then
   fail=1
 fi
 
+# THE SAME NON-VACUITY, FOR CHECK 3 (.github#1513). #1506 asserted it for the byte comparison and left
+# the manifest arm asserted by nothing — which is exactly where the next short-circuit was found. Every
+# declared, present, condition-true id with a reference to compare against must have been compared.
+if [ "$mexamined_ct" -ne "$mcomparable_ct" ]; then
+  echo "::error::skill-union-assert: $mcomparable_ct skill(s) were comparable against the manifest but only $mexamined_ct were examined — the summary below would overstate its own coverage (.github#1513)."
+  fail=1
+fi
+
 # EVERY COUNT CARRIES THE POPULATION IT WAS TAKEN OVER. This line was
 # `present=$present_ct byte-identical=$identical_ct`, and it was true and misread every time it mattered:
 # `present=4 byte-identical=4` over a 50-id union is a statement about 4 skills that an operator who does
@@ -714,8 +804,30 @@ fi
 #
 # The differing count is spelled `byte-differing`, deliberately NOT the class word: `[divergent]` names a
 # DIAGNOSTIC line, and a fixture asserting that no such diagnostic was emitted must not be tripped by a
-# zero in a summary.
-echo "skill-union-assert: $skill_ct skill(s) — in-every-root=$present_ct/$skill_ct partitioned=$partitioned_ct | byte-comparable=$comparable_ct byte-compared=$compared_ct byte-identical=$identical_ct/$compared_ct byte-differing=$differing_ct single-root=$single_root_ct${MANIFEST:+ | manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct${PARAMS:+ (justified) missing=$missing_ct}}"
+# zero in a summary. THE NEW MANIFEST COUNTS KEEP THAT CARE: none of them is spelled with a class word,
+# so `undeclared-rejected` and `off-profile` rather than `dangling` and `unexpected`. A fixture asserting
+# that no `[dangling]` diagnostic was emitted must not be tripped by a ZERO — and a plain unbracketed
+# `grep -q dangling` is exactly the shape a fixture in this very suite already uses for `divergent`.
+# (`missing=` predates this and is left alone; renaming it would be churn, and it is named here so the
+# exception is visible rather than looking like an oversight.)
+#
+# THE MANIFEST HALF CARRIES ITS POPULATIONS TOO (.github#1513). #1506 gave the byte counts their
+# denominators and left `manifest-matched=$manifest_ct` bare — a count with no population, printed
+# beside an id that was never examined against the manifest at all. Each denominator names a DIFFERENT
+# population on purpose, because these counts are not taken over the same set:
+#   manifest-declared=<d>/<union>      how much of the on-disk union the manifest even declares
+#   manifest-comparable / -examined    what check 3 could examine vs what it did (the #1506 pair)
+#   manifest-matched=<m>/<examined>    of what was compared, how much matched
+#   manifest-no-reference=<n>          declared, but with nothing to compare against — never a match
+#   undeclared-rejected / co-tenant =<n>/<undeclared>  the two dispositions of an undeclared id; they
+#                                      sum to <undeclared> exactly, which is the count checking itself
+#   declared-absent / missing =<n>/<declared-in-manifest>   the manifest→disk sweep's own population
+manifest_summary=""
+if [ -n "$MANIFEST" ]; then
+  manifest_summary=" | manifest-declared=$mdeclared_ct/$skill_ct manifest-comparable=$mcomparable_ct manifest-examined=$mexamined_ct manifest-matched=$manifest_ct/$mexamined_ct manifest-no-reference=$mnoref_ct undeclared-rejected=$dangling_ct/$undeclared_ct co-tenant=$cotenant_ct/$undeclared_ct declared-absent=$declared_absent_ct/$MANIFEST_TOTAL"
+  [ -z "$PARAMS" ] || manifest_summary="$manifest_summary (justified) missing=$missing_ct/$MANIFEST_TOTAL off-profile=$unexpected_ct/$mdeclared_ct"
+fi
+echo "skill-union-assert: $skill_ct skill(s) — in-every-root=$present_ct/$skill_ct partitioned=$partitioned_ct | byte-comparable=$comparable_ct byte-compared=$compared_ct byte-identical=$identical_ct/$compared_ct byte-differing=$differing_ct single-root=$single_root_ct$manifest_summary"
 if [ "$fail" -ne 0 ]; then
   echo "::error::skill-union-assert: FAILED — the roots are not the byte-identical union (see above)."
   exit 1

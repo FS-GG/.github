@@ -36,8 +36,10 @@ in the union it asserts:
    comparison](#a-partition-never-suppresses-the-byte-comparison-1506);
 3. **matches-manifest** *(only with `--manifest`)* — if the producer's
    [skill-manifest](#the-manifest-and-the-canonical-digest) declares it, its `SKILL.md` digest
-   equals the declared digest (*drifted*); if the manifest does **not** declare it, it must match
-   a `--co-tenants` glob (*dangling* otherwise).
+   equals the declared digest **in every root the skill is present in** (*drifted*); if the manifest
+   does **not** declare it, it must match a `--co-tenants` glob (*dangling* otherwise). Check 3 is
+   independent of checks 1–2 and is **always asked** — see [check 3 is the third independent fact,
+   and it is per-root](#check-3-is-the-third-independent-fact-and-it-is-per-root-1513).
 4. **condition-aware** *(only with `--manifest` **and** `--params`)* — evaluates each declared
    skill's `materializes-when` against the scaffold's `effectiveParameters`
    ([the condition-aware manifest](#condition-aware-check-4----params-adr-0017), ADR-0017), adding
@@ -49,7 +51,9 @@ the manifests the producers actually ship ([FS.GG.SDD#61](https://github.com/FS-
 [FS.GG.Rendering#43](https://github.com/FS-GG/FS.GG.Rendering/issues/43), ADR-0014 P0–P2), in
 **their** semantics — aligned by [.github#120](https://github.com/FS-GG/.github/issues/120):
 `Fsgg.SkillMirror` (FS.GG.Contracts 1.4.0) is ADR-0014's "one implementation", so the assertion
-follows it, not vice versa. Check 4 is the ADR-0017 tightening — see below.
+follows it, not vice versa. **That "follows it" is now pinned by a gate rather than by this
+sentence** — see [what pins the alignment claim](#what-pins-120s-alignment-claim-1513). Check 4 is
+the ADR-0017 tightening — see below.
 
 ## The manifest and the canonical digest
 
@@ -328,6 +332,162 @@ the first, the summary asserted **byte-for-byte**, a regex refusing any denomina
 byte-differing=0`, a one-root skill counted `single-root`, and a single-root **root set** claiming `0/0`
 rather than byte-identity. **All seven legs fail against the pre-fix script**, which is what makes them a
 regression test rather than a description.
+
+## Check 3 is the third independent fact, and it is per-root (#1513)
+
+The section above fixed two of the three. **Check 3 still short-circuited**, and it is the same defect
+one check further down:
+
+```sh
+if [ -n "$partitioned" ] || [ -n "$differing" ]; then continue; fi   # ← checks 3 AND 4 skipped
+```
+
+Measured on `main` at `22461b4` — *after* #1506 landed — over a tree where `beta` is present in
+`.claude` + `.codex`, absent from `.agents`, and whose `SKILL.md` digest does **not** match the
+manifest's declared `sha256`:
+
+```
+::error::[partitioned] skill 'beta' is absent from root(s): .agents/skills
+skill-union-assert: 2 skill(s) — in-every-root=1/2 partitioned=1 | byte-comparable=2 byte-compared=2 byte-identical=2/2 byte-differing=0 single-root=0 | manifest-matched=1 co-tenant=0 declared-absent=0
+```
+
+`beta`'s declared digest was never read, no `[drifted]` was emitted, and `manifest-matched=1` is a
+count with no population over a 2-id union — **exactly the defect #1506 fixed for the byte counts,
+left in place for the manifest counts**. The same tree now reports:
+
+```
+::error::[partitioned] skill 'beta' is absent from root(s): .agents/skills
+::error::[drifted] skill 'beta' SKILL.md digest != manifest 1111…1111 in root(s): .claude/skills=4b929eb7… .codex/skills=4b929eb7…
+skill-union-assert: 2 skill(s) — in-every-root=1/2 partitioned=1 | byte-comparable=2 byte-compared=2 byte-identical=2/2 byte-differing=0 single-root=0 | manifest-declared=2/2 manifest-comparable=2 manifest-examined=2 manifest-matched=1/2 manifest-no-reference=0 undeclared-rejected=0/0 co-tenant=0/0 declared-absent=0/2
+```
+
+### Per-root, not per-representative-root — and the evidence that decided it
+
+`SkillMirror.verify`'s `HashMismatchRoots` is a **list of roots**; the shell digested **one
+representative root** (the first root that has the skill). #1506's worker flagged the difference and
+deliberately did not fold it in, because it is a design question and not a reordering. It is settled
+here **on measurement**, not preference, and the measurement is in
+[`tests/skill-union/skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json)
+(vector `divergent-and-the-REFERENCE-root-is-the-clean-one`), derived by running the library itself:
+
+> Three roots. `.claude` and `.codex` match the manifest; `.agents` has **drifted**. The library
+> returns `HashMismatchRoots = [".agents"]`. A representative-root digest takes `.claude` — one of the
+> **clean** ones — and reports **nothing at all**.
+
+That is not a difference of detail, it is a **fail-open**: the [#266](https://github.com/FS-GG/.github/issues/266)
+family again, a check that was not made rendered as a check that passed. Representative-root also
+cannot *name* the drifted root even when it happens to catch one. So check 3 is per-root, and reports
+a **root list** on one line — the shape of `HashMismatchRoots`, and one line however many roots
+drifted, because `::error::` is a workflow command parsed only to its first newline.
+
+The change is a **no-op on every coherent tree**: an id that is whole and byte-identical has the same
+digest in every root, so per-root and representative-root give the same verdict. It differs only where
+representative-root was already unsound.
+
+**The v2 whole-directory arm takes the same rule**, and that is this repo's own extension rather than
+the library's: `ActualCopy.Body` is the `SKILL.md` body alone, so `Fsgg.SkillMirror` has no v2
+counterpart to follow. Per-root there is the same reasoning — a divergent id has different bytes in
+different roots, and auditing one of them is a claim about the id that only one root's evidence
+supports.
+
+### Independence must not become manufacture
+
+Running check 3 unconditionally must not make a partition *look* like a drift. A partition whose
+present copies **do** match the manifest emits **no** `[drifted]`, exactly as a partition of
+byte-identical copies emits no `[divergent]`. Both directions are pinned in
+`tests/skill-union/run.sh`.
+
+### The manifest counts carry their populations
+
+Each denominator names a **different** population, because these counts are not taken over the same
+set — a single shared denominator would be the same overstatement in a new costume:
+
+| field | population |
+| --- | --- |
+| `manifest-declared=<n>/<union>` | how much of the on-disk union the manifest declares at all |
+| `manifest-comparable=<n>` | declared ∧ present ∧ condition-true ∧ **has a reference to compare against** |
+| `manifest-examined=<n>` | what check 3 **did** compare. Unequal to `manifest-comparable` ⇒ the gate emits an `::error::` and **fails**, exactly as `byte-comparable` vs `byte-compared` does |
+| `manifest-matched=<n>/<examined>` | never a bare count — the string `manifest-matched=1` is what #1513 was filed about |
+| `manifest-no-reference=<n>` | declared, but with neither `sha256` nor `files`: **nothing was compared**, so it is never folded into `manifest-matched` |
+| `undeclared-rejected` / `co-tenant` `=<n>/<undeclared>` | the two dispositions of an undeclared id; they sum to `<undeclared>` exactly |
+| `declared-absent` / `missing` `=<n>/<declared>` | the manifest→disk sweep's own population |
+
+**None of the new fields is spelled with a class word** — `undeclared-rejected` and `off-profile`, not
+`dangling` and `unexpected`. `byte-differing` was spelled that way deliberately so a **zero** in the
+summary could not trip a fixture asserting no `[divergent]` diagnostic, and a fixture in this very
+suite does `grep -q 'divergent'` unbracketed. That care is load-bearing and it is kept. (`missing=`
+predates this and is left alone; it is named here so the exception reads as a decision.)
+
+### One more defect, found by the fixture that was written for the first
+
+Adding the `manifest-no-reference` leg turned a latent bug red. The manifest rows were read as `@tsv`
+with `IFS=$'\t'`, and **tab is an IFS *whitespace* character**: bash collapses runs of it even when
+`IFS` names it explicitly, so an **empty field in the middle of a row disappears and every later field
+shifts left**. A skill declared `"sha256": ""` — which `SkillMirror.ExpectedSkill` defines as *"no
+reference digest"*, a legitimate row — therefore had its `materializes-when` **predicate read as its
+digest**, and its condition read as empty (which evaluates as `always`). Two wrong answers from one
+unnoticed shift: a spurious `[drifted]` on a row declaring no digest, and a false `[missing]` for a
+legitimately off-profile skill. The rows are now separated by `\u001f` (ASCII unit separator), which is not IFS whitespace.
+
+## What pins #120's alignment claim (#1513)
+
+**The root cause of all three divergences is that nothing enforced the claim.**
+[#120](https://github.com/FS-GG/.github/issues/120) settled that `Fsgg.SkillMirror` is ADR-0014's *one
+implementation* and that this script *follows* it, and that sentence was pinned by **nothing** — so the
+two drifted three times, each found by hand, each after real work had already been misdirected. Fixing
+the third fact without pinning the claim buys a fourth.
+
+The repo already knew the pattern: `tests/skill-union/conformance.sh` pins the shell `materializes-when`
+evaluator against Python's `normalize_when` over a **shared fixture table**
+([#398](https://github.com/FS-GG/.github/issues/398)), precisely because *"a divergence fails OPEN"*.
+The shell ↔ `SkillMirror` pair now has the same:
+
+| file | what it is |
+| --- | --- |
+| [`tests/skill-union/skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json) | the shared vector table. Every vector states **all three** of `verify`'s facts, plus what the shell must report |
+| [`tests/skill-union/skillmirror-conformance.sh`](../../tests/skill-union/skillmirror-conformance.sh) | materializes each vector as a real tree + manifest, runs the gate, and reads the three facts back **out of its diagnostics** — compared **one fact at a time**, so a shell that gets two right and drops the third fails on the third. Hermetic; folded into `run.sh` |
+| [`tests/skill-union/skillmirror-oracle.sh`](../../tests/skill-union/skillmirror-oracle.sh) | the **derivation**: `#load`s the library's own source and runs `verify` over those exact vectors, so the table's expectations are *measured* rather than transcribed from the `.fsi` comments — which is the failure mode #1513 is about |
+
+**The mechanism decision, which #1513 asks for explicitly rather than by assumption.** A fixture that
+executes `Fsgg.SkillMirror` on every PR would couple this repo's suite to a cross-repo checkout or a
+NuGet restore. So the two halves are split: **conformance is hermetic** (no dotnet, no package, no
+network — it runs everywhere and cannot be skipped into a green), and **derivation is a committed,
+re-runnable command** anyone holding the library can execute:
+
+```sh
+bash tests/skill-union/skillmirror-oracle.sh --lib <FS.GG.SDD checkout>/src/FS.GG.Contracts
+```
+
+It is a **checker, not a writer**. A generator that rewrote its own expectations from the
+implementation would green any divergence the moment it was regenerated — the shape of the defect, not
+a fix for it. It also verifies the `SkillMirror.fs` digest recorded in the table's `derivedFrom` block,
+so a table derived from a *different* library revision cannot claim to have been derived from this one.
+
+**The residual gap, stated rather than implied.** This closes shell-drifts-from-table (a gate on every
+PR) and table-drifts-from-library-at-`a066e0b` (a re-runnable derivation). It does **not** notice a
+**future** library change on its own: this repo's CI holds neither the source nor the package, and the
+sibling repository is not this item's to edit. What would close it is a scheduled cross-repo freshness
+check reading `SkillMirror.fs` over the API and comparing its digest to `derivedFrom.skillMirrorFsSha256`
+— cheap, but a new workflow and a new checker, so it is **filed rather than smuggled in**:
+[#1546](https://github.com/FS-GG/.github/issues/1546). Until it lands, `#120`'s claim is pinned in one
+direction and dated in the other, and this paragraph is the honest statement of which is which.
+
+### Intentional differences are asserted, not commented
+
+Two vectors carry a `divergence` block, and each is asserted in **both** directions — the shell must
+match its recorded behaviour **and** must still differ from the library. A documented difference that
+quietly disappears is as much a drift as one that grows, and neither may be discovered by reading a
+comment:
+
+| difference | direction | why |
+| --- | --- | --- |
+| **CRLF** — `SkillMirror.sha256` replaces `\r\n` with `\n` **before** hashing (feature 070); `skill_digest` does not | the shell is **stricter** — it reports a `[drifted]` the library does not, so it fails **closed** | The digest has **three** implementations, and the shell is not the outlier: `fsgg-skill-registry-check`'s `canonical_digest` does not CRLF-normalize either. Two agree and the library differs, so aligning them is an org decision across three files, not a fixture-scoped edit. This satisfies #1513's criterion 4 by **pinning** rather than describing. Filed: [#1547](https://github.com/FS-GG/.github/issues/1547) |
+| **declared ∧ absent from every root** — `verify` iterates the *expected* set and returns `MissingRoots = every root`; the shell iterates the *on-disk union*, so such an id is not a union member | the shell is **looser**, by design | Settled by [#120](https://github.com/FS-GG/.github/issues/120) (the manifest is a superset **catalog**) and tightened by ADR-0017's `--params`, which turns it into `[missing]` when the condition is true. Asserted so it stays a decision rather than becoming an accident |
+
+Note the CRLF row's direction. It is **not** a fail-open, which is why pinning it was the proportionate
+move: a CRLF checkout produces a *spurious* `[drifted]`, never a *missed* one. Divergence detection is
+unaffected in either implementation — `Divergent` compares raw bodies and `diff -r` compares raw bytes,
+so the two agree there.
 
 ## Adoption — wiring it into a consumer repo's CI
 
@@ -675,7 +835,17 @@ and manifest-drifted root, and that `--digest` equals the producers' `sha256sum 
 reports both diagnostics for the same id, every partitioned id is compared rather than just the first,
 the summary is asserted byte-for-byte with its populations, no denominator-free `byte-identical=` may
 reach it on any tree, and both a one-root skill and a one-root **root set** count `single-root` rather
-than claiming a byte-identity nothing established. For the
+than claiming a byte-identity nothing established. It pins
+[#1513](https://github.com/FS-GG/.github/issues/1513) the same way: a tree that is **partitioned *and*
+digest-mismatched** reports both facts with the drift naming **every** root it was found in, the
+manifest counts are asserted byte-for-byte with their populations, no denominator-free
+`manifest-matched=` may reach the summary, a drift in a **non-reference** root is still caught and
+named (the fail-open that decided per-root), a partition of manifest-**matching** copies manufactures
+**no** `[drifted]`, and a declared id with no reference digest counts `manifest-no-reference` rather
+than as a match. **Six of those seven legs fail against the pre-#1513 script**; the seventh is the
+no-manufacture leg, which must pass against both. It additionally runs
+[`skillmirror-conformance.sh`](../../tests/skill-union/skillmirror-conformance.sh) — see [what pins
+#120's alignment claim](#what-pins-120s-alignment-claim-1513). For the
 condition-aware check (ADR-0017) it additionally proves — with a `--params` provenance — a
 `[missing]` (declared ∧ true ∧ absent, the `fs-gg-project` case), an `[unexpected]` (present ∧
 false), a **justified** absence + compound-true present that **pass**, that the *same* manifest
