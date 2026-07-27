@@ -6,10 +6,19 @@
 # source/dest read are each an exit 2 naming the read that failed — not an empty loop that stages a kit
 # with no skills, no client and no engine manifest and reports success (.github#1614).
 #
-# WHY IT IS NOT COVERED BY coordination-sync-selftest. That fixture INVOKES stage-kit.sh (to build a
-# real .nupkg for the --against-pin legs) and requires it to succeed, so it exercises the happy path
-# only; the fail-open lives entirely in the failure legs, which nothing drove. Same subject, opposite
-# half.
+# WHY IT IS NOT COVERED BY THE TWO GATES THAT ALREADY RUN stage-kit.sh. Both require it to SUCCEED,
+# so between them they cover the happy path twice and the failure legs not at all — and the fail-open
+# lives entirely in the failure legs:
+#
+#   kit-package.yml            -> src/FS.GG.Kit/verify-package.sh: packs, materializes, and proves the
+#                                 package fails loud on a TAMPERED file. Its subject is the artifact a
+#                                 successful stage produced.
+#   coordination-sync-selftest -> tests/coordination-sync/run.sh invokes stage-kit.sh to build a real
+#                                 .nupkg for the --against-pin legs, and treats a non-zero exit as a
+#                                 broken fixture.
+#
+# This one is the other half: what stage-kit.sh does when the registry read it derives everything from
+# does not answer. Same subject, opposite side.
 #
 # The `paths:` are the script AND its inputs — the registry it derives the kit from, the reader it
 # derives it THROUGH, the sync-build-config.sh whose FILES=() set it re-derives, and the dist/dotnet
