@@ -365,3 +365,206 @@ module RankTests =
         // phase", which was true and incomplete — it also outranks the blocking count, and a driver
         // reading the shorter sentence would not understand why a hub lost its lane.
         Assert.Contains("above every other rank term", text)
+
+    // ================================================================================================
+    // .github#1628 — THE BLOCKING COUNT IS A WHOLE-BOARD FACT, NOT A CANDIDATE-SET ONE.
+    //
+    // `Rank`'s primary term used to be derived from the list it ranked, and `Scan.snapshot` scopes that
+    // list with `--repo`. So the SAME item, on the SAME board, at the SAME instant, ranked as blocking
+    // nothing under `take --repo <its own repo>` and as blocking three under a bare org-wide `batch` —
+    // and the scoped spelling is the one every worker actually runs. Nothing errored: the batch stayed
+    // well-formed, disjoint and deterministic, and was ordered by a count that was wrong in the one
+    // direction that matters most, because an item with cross-repo dependents is by construction a hub.
+    //
+    // The fixture below is AC2's, at the Core layer: one item in repo A, three OPEN items in repo B
+    // naming it in `Blocked by`, and a candidate list scoped to repo A. `CrossRepoRankTests` drives the
+    // same shape through the real scan, the real snapshot codec and the real `--repo` scope.
+    // ================================================================================================
+
+    let private otherRepo n =
+        { Owner = "FS-GG"
+          Repo = "FS.GG.SDD"
+          Number = n }
+
+    /// An item in the OTHER repo, blocked by `.github#hub`. `Scan.snapshot --repo .github` never puts one
+    /// of these on the candidate list, which is exactly what made the undercount invisible.
+    let private dependent n hub =
+        { item n with
+            Ref = otherRepo n
+            Blockers =
+                [ { Ref = Some(ref hub)
+                    Raw = (ref hub).Short
+                    State = BlockerOpen } ] }
+
+    /// The whole board: the hub and one ordinary item in `.github`, three dependents in `FS.GG.SDD`.
+    let private wholeBoard =
+        [ item 10
+          item 11
+          dependent 200 10
+          dependent 201 10
+          dependent 202 10 ]
+
+    /// What `--repo .github` leaves on the candidate list.
+    let private scopedToGithub =
+        wholeBoard |> List.filter (fun i -> i.Ref.Repo = ".github")
+
+    /// The whole board's counts, spelled the way `Client.boardBlockingCounts` spells them.
+    let private wholeBoardCounts = Rank.blockingCounts wholeBoard
+
+    [<Fact>]
+    let ``#1628 THE DEFECT — candidate-derived counts rank a cross-repo hub as blocking NOTHING`` () =
+        // THIS IS THE BUG, PINNED AS A FACT ABOUT THE OLD SPELLING, so the fixtures below cannot go
+        // vacuous. A test that only asserted the fixed behaviour would keep passing if the scoping were
+        // quietly removed from the scan — and then it would be asserting nothing at all.
+        let scoped = Rank.blockingCounts scopedToGithub
+        Assert.Equal(None, scoped |> Map.tryFind (ref 10))
+
+        // The same board, unscoped, at the same instant: three.
+        Assert.Equal(3, wholeBoardCounts |> Map.find (ref 10))
+
+    [<Fact>]
+    let ``#1628 AC1 an item's blocking count is the same scoped and unscoped`` () =
+        // The acceptance criterion, stated as the equality it is. `ofItemsWith` is handed the WHOLE
+        // board's counts and the SCOPED candidate list — the exact shape the offer path now uses.
+        let scopedRanks = Rank.ofItemsWith wholeBoardCounts scopedToGithub
+        let wholeRanks = Rank.ofItemsWith wholeBoardCounts wholeBoard
+
+        let blockingOf ranks n =
+            ranks
+            |> List.find (fun ((i: Item), _) -> i.Ref.Number = n)
+            |> snd
+            |> fun (r: Rank.Rank) -> r.Blocking
+
+        Assert.Equal(3, blockingOf scopedRanks 10)
+        Assert.Equal(blockingOf wholeRanks 10, blockingOf scopedRanks 10)
+
+    [<Fact>]
+    let ``#1628 a count for a ref that is not a candidate is INERT`` () =
+        // This is why handing a one-repo batch the whole ORG's counts is safe by construction rather than
+        // by filtering: `ofItemsWith` reads the map BY REF, so the entries for `FS.GG.SDD` items that are
+        // not on this candidate list are never looked at. If it merged, summed, or iterated the map
+        // instead, a whole-board map would leak other repos' items into a scoped batch.
+        let ranks = Rank.ofItemsWith wholeBoardCounts scopedToGithub
+
+        Assert.Equal<int list>([ 10; 11 ], ranks |> List.map (fun (i, _) -> i.Ref.Number))
+
+    [<Fact>]
+    let ``#1628 AC4 off-board and unparseable edges keep #1598's treatment under the whole-board count`` () =
+        // AC4. Widening the SOURCE set must not widen what counts as an EDGE — the two are independent,
+        // and the easy mistake is to let "count more sources" become "count more kinds of edge".
+        let prose =
+            { item 300 with
+                Ref = otherRepo 300
+                Blockers =
+                    [ { Ref = None
+                        Raw = "waiting on the platform team"
+                        State = BlockerUnparseable } ] }
+
+        // An OFF-BOARD ref: parseable, so it is credited — but to a node no candidate can be, so no rank
+        // ever reads it. It must not land on the hub.
+        let offBoard =
+            { item 301 with
+                Ref = otherRepo 301
+                Blockers =
+                    [ { Ref = Some(otherRepo 9999)
+                        Raw = "FS-GG/FS.GG.SDD#9999"
+                        State = BlockerUnknown } ] }
+
+        let counts = Rank.blockingCounts (wholeBoard @ [ prose; offBoard ])
+
+        // Unchanged: three real dependents, and neither the prose nor the off-board edge joined them.
+        Assert.Equal(3, counts |> Map.find (ref 10))
+        Assert.Equal(1, counts |> Map.find (otherRepo 9999))
+
+    [<Fact>]
+    let ``#1628 blockingCountsOf counts every edge it is handed — the caller owns the source set`` () =
+        // The contract that makes the fix possible, asserted directly. `blockingCountsOf` deliberately
+        // does NOT filter by open-ness or scope: it cannot see rows, only edges. `blockingCounts` is this
+        // function over the open items' edges, and `Client.boardBlockingCounts` is it over the whole
+        // board's open non-PR rows — one counting rule, two source sets, no second implementation.
+        let edges = wholeBoard |> List.map (fun i -> i.Ref, i.Blockers)
+
+        Assert.Equal(3, Rank.blockingCountsOf edges |> Map.find (ref 10))
+
+        // Hand it ONE source and it says one. Nothing about the list it did not see leaks in.
+        Assert.Equal(
+            1,
+            Rank.blockingCountsOf [ (otherRepo 200), (dependent 200 10).Blockers ]
+            |> Map.find (ref 10)
+        )
+
+    // ---- the fold, which is where the count actually decides something --------------------------------
+
+    /// Every candidate declares `src/f<n>.fs`, so nothing collides and a batch here is a pure ORDERING
+    /// test rather than a disjointness one.
+    let private consideredOrder (result: Verdict<Batch.BatchResult>) =
+        match result with
+        | Green r -> r.Decisions |> List.map (fun d -> d.Item.Ref.Number)
+        | other -> failwith $"the batch must be schedulable — got %A{other}"
+
+    [<Fact>]
+    let ``#1628 scheduleWith ranks by the counts it is GIVEN, not by the candidates' own`` () =
+        // THE FIX, AT THE FOLD. Under candidate-derived counts the hub and the ordinary row both rank at
+        // blocking 0 and the issue NUMBER decides — the pre-#1598 ordering wearing a rank's clothes.
+        let scopedResult =
+            Batch.scheduleWith wholeBoardCounts false None [] scopedToGithub
+
+        match scopedResult with
+        | Green r ->
+            let hub = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 10)
+            let ordinary = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 11)
+
+            Assert.Equal(3, hub.Rank.Blocking)
+            Assert.Equal(0, ordinary.Rank.Blocking)
+        | other -> failwith $"the batch must be schedulable — got %A{other}"
+
+        // The old spelling, on the same candidates, still says zero. That is the delta this item is.
+        match Batch.schedule false None [] scopedToGithub with
+        | Green r ->
+            let hub = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 10)
+            Assert.Equal(0, hub.Rank.Blocking)
+        | other -> failwith $"the batch must be schedulable — got %A{other}"
+
+    [<Fact>]
+    let ``#1628 a whole-board count OUTRANKS a scoped defect, which a scoped count could not`` () =
+        // The ordering consequence, made visible — and it needs a term the NUMBER cannot also explain, or
+        // the assertion would pass either way. `blocking` sits ABOVE `Class` in the lexicographic key, so
+        // a hub blocking three must lead a defect that blocks nothing. Under the scoped count the hub
+        // read as blocking 0 and LOST to that defect: the wrong item handed out, silently, on every
+        // `take --repo`.
+        let defect = { item 11 with Class = Some Defect }
+        let candidates = [ defect; item 10 ]
+
+        Assert.Equal<int list>(
+            [ 10; 11 ],
+            consideredOrder (Batch.scheduleWith wholeBoardCounts false None [] candidates)
+        )
+
+        // Candidate-derived: the defect wins, because the hub's three dependents are invisible.
+        Assert.Equal<int list>([ 11; 10 ], consideredOrder (Batch.schedule false None [] candidates))
+
+    [<Fact>]
+    let ``#1628 AC5 --explain prints the count the ordering actually used`` () =
+        // An ordering nobody can inspect is one nobody trusts (#1598 AC5), and the failure mode this
+        // guards is specific: a fix that changed the SORT but left `--explain` printing the old
+        // candidate-derived number would leave every driver reading "blocking 0" beside an item that led
+        // the batch, and concluding the scheduler was broken.
+        match Batch.scheduleWith wholeBoardCounts false None [] scopedToGithub with
+        | Green r ->
+            let hubLine =
+                Batch.explainRanking r |> List.find (fun l -> l.Contains ".github#10")
+
+            Assert.Contains("blocking 3", hubLine)
+        | other -> failwith $"the batch must be schedulable — got %A{other}"
+
+    [<Fact>]
+    let ``#1628 schedule is scheduleWith over the candidates' own counts — one fold, not two`` () =
+        // `schedule` survives for `decide --snapshot`, which is handed a document and nothing wider. It
+        // must be the SAME fold: a second copy would be free to drift, and #485 is this repo's standing
+        // verdict on one question with more than one implementation.
+        let viaWrapper = Batch.schedule false None [] wholeBoard
+
+        let viaExplicit =
+            Batch.scheduleWith (Rank.blockingCounts wholeBoard) false None [] wholeBoard
+
+        Assert.Equal<int list>(consideredOrder viaWrapper, consideredOrder viaExplicit)

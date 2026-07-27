@@ -67,25 +67,45 @@ module Rank =
          -(r.AgeDays |> Option.defaultValue 0),
          r.Number)
 
-    /// How many OPEN items name each ref in a `Blocked by` edge that is still holding.
+    /// How many of the GIVEN EDGES name each ref in a `Blocked by` edge that is still holding — the one
+    /// counting rule, over whatever slice of the blocking graph the caller could see (.github#1628).
+    ///
+    /// **THE CALLER OWNS THE SOURCE SET, AND THAT IS THE WHOLE POINT.** This counts every edge it is
+    /// handed; it has no idea which items are open, in scope, or issues rather than PRs, so a caller must
+    /// hand it exactly the sources that should count. That looks like a weaker contract than
+    /// `blockingCounts`' and it is deliberately so: the bug this exists to end (.github#1628) was a
+    /// counting function that took the CANDIDATE LIST and therefore silently answered a scoped question
+    /// with a whole-board vocabulary. Taking edges makes the source set a decision somebody had to make.
     ///
     /// THE EDGES THIS SKIPS ARE THE FINDING, NOT AN OMISSION. An unparseable blocker — prose in a
     /// dependency field — has no `Ref` by construction (`Types.Blocker`), so there is no node to credit
     /// and guessing one would distort every rank around it. A RESOLVED edge is not a dependency any more,
     /// so counting it would keep promoting an item whose dependents were all unblocked weeks ago.
     ///
-    /// Counted per SOURCE item, deduplicated: an item naming `#42` twice in one field is one dependent,
-    /// not two. Nothing is read — the whole graph is already on the candidate list.
-    let blockingCounts (items: Item list) : Map<Ref, int> =
-        items
-        |> List.filter (fun i -> i.State = Open)
-        |> List.collect (fun i ->
-            i.Blockers
+    /// Counted per SOURCE, deduplicated: a source naming `#42` twice in one field is one dependent, not
+    /// two. Pure and total: it reads nothing.
+    let blockingCountsOf (edges: (Ref * Blocker list) list) : Map<Ref, int> =
+        edges
+        |> List.collect (fun (_, blockers) ->
+            blockers
             |> List.filter (Blockers.isResolved >> not)
             |> List.choose (fun b -> b.Ref)
             |> List.distinct)
         |> List.countBy id
         |> Map.ofList
+
+    /// The CANDIDATE-SET spelling of `blockingCountsOf` — the graph as far as the items in hand can see it.
+    ///
+    /// **THIS IS A PROJECTION OF THE GRAPH, NOT THE GRAPH** (.github#1628). Whatever list it is handed is
+    /// the entire universe of dependents it can find, so handing it a `--repo`-scoped list silently
+    /// truncates every cross-repo edge. `Batch.scheduleWith` exists so the impure edge can hand the fold
+    /// the WHOLE board's counts instead; this remains the honest answer when the whole board is genuinely
+    /// all there is (`Batch.schedule`, `decide --snapshot`).
+    let blockingCounts (items: Item list) : Map<Ref, int> =
+        items
+        |> List.filter (fun i -> i.State = Open)
+        |> List.map (fun i -> i.Ref, i.Blockers)
+        |> blockingCountsOf
 
     /// STARVATION, and it is deliberately narrow.
     ///
@@ -116,10 +136,23 @@ module Rank =
           AgeDays = item.AgeDays
           Number = item.Ref.Number }
 
-    /// Every candidate's rank, in one pass, so the blocking graph is walked once for the whole batch.
-    let ofItems (items: Item list) : (Item * Rank) list =
-        let counts = blockingCounts items
+    /// Every candidate's rank against blocking counts the CALLER derived — the spelling that lets the
+    /// counts come from a wider set than the candidates (.github#1628).
+    ///
+    /// `counts` is looked up by `Ref`, so a count for a ref that is not a candidate is simply never read.
+    /// That is what makes a whole-board count map safe to hand a repo-scoped candidate list: the extra
+    /// entries are inert, and the entries the candidates DO have are the whole-board truth rather than a
+    /// scoped undercount.
+    let ofItemsWith (counts: Map<Ref, int>) (items: Item list) : (Item * Rank) list =
         items |> List.map (fun i -> i, ofItem counts i)
+
+    /// Every candidate's rank, in one pass, so the blocking graph is walked once for the whole batch.
+    ///
+    /// The counts come from the candidate list itself, which is correct exactly when that list IS the
+    /// board. When it is a `--repo` projection of one, `ofItemsWith` and whole-board counts are the
+    /// spelling that does not truncate the graph (.github#1628).
+    let ofItems (items: Item list) : (Item * Rank) list =
+        ofItemsWith (blockingCounts items) items
 
     /// TRUE when the rank carries no priority evidence at all — no dependents, no class, no phase, no
     /// readable age. Such an item still schedules; it simply sorts last, which is AC1's whole safety
