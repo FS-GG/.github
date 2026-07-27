@@ -68,14 +68,46 @@ The producer manifest is JSON — ADR-0014's `{ id, scope, sha256, body }` per s
 ```
 
 **Digest.** The `sha256` is the **canonical-body sha256 of the skill's `SKILL.md` only** — the
-algorithm `Fsgg.SkillMirror` ships (byte-equivalent to `sha256sum SKILL.md`, verified in
+algorithm `Fsgg.SkillMirror` ships (verified in
 [.github#120](https://github.com/FS-GG/.github/issues/120)). Multi-file skills (`SKILL.md` +
 `references/**`) are covered by the **cross-root identity** of checks 1–2, not by the digest.
-The assertion exposes the algorithm as a **reference generator** so producers and checker never
-drift:
+
+**Two normalizations, both the library's.** Before hashing, the body has a leading UTF-8 **BOM
+stripped** and **CRLF folded to LF**:
+
+| input | canonical digest |
+| --- | --- |
+| `# beta skill\n` | `79215589…` |
+| `# beta skill\r\n` | `79215589…` — **the same** |
+| `<BOM># beta skill\n` | `79215589…` — the same |
+| `<BOM># beta skill\r\n` | `79215589…` — the same |
+
+**Say the consequence out loud: a CRLF file and its LF twin now hash identically**, so the digest
+check is deliberately *slightly more permissive* than a byte comparison. That is the library's
+considered semantics (feature 070 added it so an LF-authored body does not spuriously drift on a
+Windows or `eol=crlf` checkout), not an accident, and a reader should not have to infer it from the
+code. **Cross-root byte-identity (check 2) is untouched** — it compares raw bytes and still reports a
+CRLF copy and an LF copy of one skill as `[divergent]`. The two questions stay independent: *"is this
+the body the producer declared?"* tolerates line-ending translation; *"are the roots byte-for-byte
+the same?"* does not.
+
+The fold replaces the **pair** `\r\n`, never the character `\r`, so a lone CR survives into the
+digest. This is not pedantry: deleting every `\r` would give `# beta skill\r` and `# beta skill` the
+**same** digest — two distinct bodies sharing one value, a *missed* drift rather than a spurious one.
+Pinned by the `lone-cr`, `cr-cr-lf` and `trailing-lone-cr` vectors in
+[`skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json).
+
+This alignment is [#1547](https://github.com/FS-GG/.github/issues/1547): until it landed, the library
+folded CRLF and the **two** shell implementations did not, so a CRLF checkout drew a spurious
+`[drifted]` from both. See [Three implementations of one
+digest](#three-implementations-of-one-digest) for why the shells moved rather than the library.
+
+Both checkers expose the algorithm as a **reference generator**, so producers and checkers never
+drift, and so the conformance harness can drive them:
 
 ```sh
 scripts/skill-union-assert.sh --digest .claude/skills/<id>   # prints the canonical digest
+scripts/fsgg-skill-registry-check --digest <path/to/SKILL.md>  # the Python checker's, same value
 ```
 
 **Set semantics.** The manifest is a **superset catalog** — an *upper bound*, not an exact set.
@@ -489,20 +521,96 @@ gate** on a schedule instead of waiting to be found by hand for a fourth time.
 
 ### Intentional differences are asserted, not commented
 
-Two vectors carry a `divergence` block, and each is asserted in **both** directions — the shell must
+One vector carries a `divergence` block, and it is asserted in **both** directions — the shell must
 match its recorded behaviour **and** must still differ from the library. A documented difference that
 quietly disappears is as much a drift as one that grows, and neither may be discovered by reading a
 comment:
 
 | difference | direction | why |
 | --- | --- | --- |
-| **CRLF** — `SkillMirror.sha256` replaces `\r\n` with `\n` **before** hashing (feature 070); `skill_digest` does not | the shell is **stricter** — it reports a `[drifted]` the library does not, so it fails **closed** | The digest has **three** implementations, and the shell is not the outlier: `fsgg-skill-registry-check`'s `canonical_digest` does not CRLF-normalize either. Two agree and the library differs, so aligning them is an org decision across three files, not a fixture-scoped edit. This satisfies #1513's criterion 4 by **pinning** rather than describing. Filed: [#1547](https://github.com/FS-GG/.github/issues/1547) |
 | **declared ∧ absent from every root** — `verify` iterates the *expected* set and returns `MissingRoots = every root`; the shell iterates the *on-disk union*, so such an id is not a union member | the shell is **looser**, by design | Settled by [#120](https://github.com/FS-GG/.github/issues/120) (the manifest is a superset **catalog**) and tightened by ADR-0017's `--params`, which turns it into `[missing]` when the condition is true. Asserted so it stays a decision rather than becoming an accident |
 
-Note the CRLF row's direction. It is **not** a fail-open, which is why pinning it was the proportionate
-move: a CRLF checkout produces a *spurious* `[drifted]`, never a *missed* one. Divergence detection is
-unaffected in either implementation — `Divergent` compares raw bodies and `diff -r` compares raw bytes,
-so the two agree there.
+**The CRLF row used to live here and no longer does.** It recorded that the library folded `\r\n`
+and `skill_digest` did not, pinned as *stricter, fails closed*. [#1547](https://github.com/FS-GG/.github/issues/1547)
+resolved it by aligning the shells to the library, so the vector still exists — renamed
+`crlf-body-against-an-lf-digest-AGREES` — but now asserts **agreement**, and its `divergence` block is
+gone. A table that kept asserting a difference which no longer existed would red, which is precisely
+why removing the block was part of the same change.
+
+### Three implementations of one digest
+
+The `fixtures` table pins `verify`'s three facts across **two** implementations. The canonical
+**digest** has **three**, and until [#1547](https://github.com/FS-GG/.github/issues/1547) nothing
+compared them all:
+
+| implementation | role | folds CRLF? |
+| --- | --- | --- |
+| `Fsgg.SkillMirror.sha256` | FS.GG.Contracts — ADR-0014's **one implementation** | yes |
+| `skill_digest` (`scripts/skill-union-assert.sh`) | verifier | yes, since #1547 |
+| `canonical_digest` (`scripts/fsgg-skill-registry-check`) | verifier | yes, since #1547 |
+| `canonical_digest` (`scripts/generate-driver-manifest`) | **producer** | **no** — [#1585](https://github.com/FS-GG/.github/issues/1585) |
+| `digest` (`scripts/repos.sh`) | **producer** | **no** (nor BOM) — [#1585](https://github.com/FS-GG/.github/issues/1585) |
+
+**The heading says three because #1547 did; the honest count is five.** #1547 was scoped to the two
+**verifiers**, and aligning them is what its decision comment settled. The two **producers** that
+emit the `sha256` values those verifiers check were found afterwards, by an adversarial review of the
+implementing PR, and are filed rather than folded in — changing a producer changes what gets written
+into a shipped manifest, which is a different blast radius needing its own call. Today they agree
+anyway, because no tracked `SKILL.md` in this repo contains a CR; the split is latent, and it fails
+*closed* (a producer's raw digest is one no verifier reproduces, so it reads as `[drifted]`).
+
+The two pins that existed were **pairwise, and both skipped the digest**: `conformance.sh` pins
+shell↔Python for the *predicate grammar* only, and `skillmirror-conformance.sh` pinned shell↔library
+for the *three facts*. So when the library folded CRLF and both shells did not, two of three agreed
+with each other and all the pins were green. **Shell-vs-shell agreement was the trap** — they agreed
+perfectly and were both wrong.
+
+**The decision (2026-07-27): the shells moved.** ADR-0014 names `Fsgg.SkillMirror` the one
+implementation and [#120](https://github.com/FS-GG/.github/issues/120) records that this repo's
+checkers *follow* it, so the shells were the drifted copies. Changing the library instead would have
+overturned a deliberate feature-070 decision and altered a published `FS.GG.Contracts` surface, which
+needs a version story it does not have. Both shells were changed — leaving one behind would merely
+have relocated the disagreement.
+
+**The gate.** `digestVectors` in
+[`skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json) carries ten vectors
+(LF, CRLF, BOM+LF, BOM+CRLF, empty, lone CR, `\r\r\n`, trailing lone CR, no trailing newline, many
+trailing newlines) with **one** expected `digest` each — deliberately not one column per
+implementation, so re-introducing a disagreement cannot be done by editing one side's expectations.
+Each value is **measured** by `skillmirror-oracle.sh` running the library's own `sha256`;
+`skillmirror-conformance.sh` then holds **both shells** to it hermetically on every PR, via their
+`--digest` reference seams, and compares each shell **to the library's measured value** rather than
+to the other. Inputs are stored as `bytesBase64` because these vectors turn on a BOM, on lone CRs and
+on exact trailing bytes — the things a JSON string literal or a stray reformat silently normalizes
+away.
+
+**The scope of the agreement claim: valid UTF-8.** The three implementations agree for every body
+that decodes cleanly. They do **not** agree on bytes that are *not* valid UTF-8, and #1547 did not
+change that in either direction — the shells hash the raw bytes, while the library hashes text that a
+decoder has already replaced invalid sequences in with `U+FFFD`. Measured, not assumed: a file of
+`0xFF` and a file of `0xFE` are different files that the **library gives the same digest**, while both
+shells tell them apart. So on invalid UTF-8 the shells are the *stricter* pair and the library holds a
+latent collision. It is out of this repo's hands — the lossy decode is `FS.GG.Contracts` behaviour —
+and it is filed rather than implied: [#1589](https://github.com/FS-GG/.github/issues/1589). The
+`digestVectors` table is deliberately all valid UTF-8, so it pins what is actually agreed rather than
+freezing a disagreement into an expectation.
+
+The same boundary covers a **UTF-16/UTF-32 BOM**: `File.ReadAllText` detects those and decodes
+accordingly, while both shells special-case only the UTF-8 BOM `EF BB BF`, so a UTF-16LE `SKILL.md`
+gets three different answers. Also pre-existing, also fails closed, and tracked with the invalid-UTF-8
+case in [#1589](https://github.com/FS-GG/.github/issues/1589) — a `SKILL.md` that is not UTF-8 is the
+single underlying condition.
+
+**One implementation detail worth knowing before you edit `skill_digest`.** It streams the body
+through `sed -z` rather than slurping it into a shell variable, and all three reasons are fail-open
+defects that the *first* cut of #1547 actually shipped and an adversarial review caught: `$(cat …)`
+silently **discards NUL bytes** (so `a\0b` and `ab` hashed identically — two files, one digest); a
+command substitution reports its **last** command's status, so `$(cat f; printf x)` swallowed a read
+failure and returned sha256("") with exit 0 for an unreadable file; and bash's pattern substitution is
+**superlinear**, taking 215 s on a 4 MB CRLF body that `sed -z` handles in milliseconds — a cost that
+is zero on LF and unbounded on exactly the CRLF checkout this change exists to support. All three are
+now pinned: the `nul-byte` vector, the unreadable-`SKILL.md` case in `tests/skill-union/run.sh`, and
+a start-up self-test of the `sed -z` fold itself.
 
 ## Adoption — wiring it into a consumer repo's CI
 
@@ -926,7 +1034,9 @@ a reviewable commit, and needs no network to re-run offline.
 workspace trees and proves the assertion **passes** on a coherent union (including a
 superset-catalog manifest with declared-but-absent ids and `--co-tenants`-admitted process
 skills) and **fails** on a divergent (`SKILL.md` *and* `references/**`), partitioned, dangling,
-and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. It also pins
+and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md` for a
+BOM-free, LF-only body (the cases where the canonical digest deliberately *differs* from raw
+`sha256sum` are `digestVectors`, measured against the library). It also pins
 [#1506](https://github.com/FS-GG/.github/issues/1506): a tree that is **partitioned *and* divergent**
 reports both diagnostics for the same id, every partitioned id is compared rather than just the first,
 the summary is asserted byte-for-byte with its populations, no denominator-free `byte-identical=` may

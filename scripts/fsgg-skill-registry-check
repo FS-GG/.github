@@ -23,8 +23,10 @@ Over each row the registry ALREADY declares:
   2. DIGEST MATCHES  sha256(canonical body) == the declared `sha256:`.
   3. FROZEN MIRROR   for a row the owner DECLARES `mirrored: true`, FS.GG.Rendering's frozen copy at
                      `template/product-skills/<id>/SKILL.md` -- the accepted two-copies cost
-                     (ADR-0022 §6, retired at P6) -- exists and is byte-identical to the canonical
-                     body. A declared obligation with NO copy is a finding too: see check 7.
+                     (ADR-0022 §6, retired at P6) -- exists and has the same CANONICAL DIGEST as the
+                     canonical body. Not "is byte-identical": the digest is BOM- and CRLF-normalized
+                     (.github#384, #1547), so a copy differing only in those respects is deliberately
+                     NOT a finding. A declared obligation with NO copy is a finding too: see check 7.
 
 Over the SET of rows -- the converse direction, and the reason this file grew (.github#289, epic
 #266 "coherence gates that fail open"). Checks 1-3 are each a predicate over a row that is already
@@ -234,10 +236,35 @@ DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def canonical_digest(raw: bytes) -> str:
-    """sha256 over the body text's UTF-8 bytes, BOM-free (Fsgg.SkillMirror.sha256)."""
+    """sha256 over the body text's UTF-8 bytes, BOM-free and CRLF-folded (Fsgg.SkillMirror.sha256).
+
+    TWO NORMALIZATIONS, BOTH THE LIBRARY'S (.github#1547). The BOM strip mirrors the library's
+    callers, which decode the file as UTF-8 and whose decoder consumes the BOM. The CRLF fold
+    mirrors `Fsgg.SkillMirror.sha256` itself, which does `body.Replace("\\r\\n", "\\n")` before
+    hashing (feature 070) so an LF-authored body does not spuriously drift on a CRLF checkout.
+
+    WHY THE FOLD IS HERE NOW. The canonical digest had THREE implementations — this one,
+    `skill_digest` in scripts/skill-union-assert.sh, and the library — and only the library folded
+    CRLF, so on a Windows/`eol=crlf` checkout the two shells reported a drift the library did not.
+    ADR-0014 names `Fsgg.SkillMirror` the ONE implementation and .github#120 records that this
+    repo's checkers FOLLOW it, so the two shells were the drifted copies; the 2026-07-27 decision on
+    #1547 aligned both. CONSEQUENCE, STATED PLAINLY: a CRLF file and its LF twin now have the SAME
+    canonical digest, so this is deliberately slightly more permissive than a byte comparison. The
+    `frozen-mirror` check below compares two digests and therefore inherits that permissiveness by
+    design — a frozen copy that differs from its canonical only by line endings is no longer a
+    finding, which is the same call feature 070 made for the manifest digest.
+
+    IT FOLDS THE PAIR, NOT THE CHARACTER. Deleting every ``\\r`` would also drop LONE carriage
+    returns, which the library keeps — and that collapses ``b"x\\r"`` and ``b"x"`` onto ONE digest,
+    two distinct bodies sharing a value, which is a fail-open (#266) rather than a cosmetic
+    difference. Done on BYTES rather than decoded text on purpose: CR and LF cannot occur inside a
+    multi-byte UTF-8 sequence, so the byte-wise replace is exactly the library's string-wise one
+    without this checker having to decode (and therefore without it having to decide what to do with
+    input that is not valid UTF-8).
+    """
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
-    return hashlib.sha256(raw).hexdigest()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def read_bytes(path: str) -> bytes | None:
@@ -709,12 +736,24 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
         if raw is None:
             continue  # `source-exists` already fired; a mirror has nothing to be compared against.
 
-        # Compared on the CANONICAL digest, not on the raw bytes — i.e. on the same BOM-free body text
-        # every other reader of these files hashes (`Fsgg.SkillMirror`, `repos.sh digest`, both producer
-        # generators). The raw-byte comparison this replaces disagreed with the digest it PRINTED: a
+        # Compared on the CANONICAL digest, not on the raw bytes — i.e. on the body text as
+        # `Fsgg.SkillMirror.sha256` defines it, which this checker and `skill-union-assert.sh` now
+        # both follow (.github#1547). NOT every reader of these files agrees: `repos.sh digest` and
+        # `generate-driver-manifest`'s own `canonical_digest` still hash CRLF raw, which is a real
+        # remaining split and is filed as .github#1585 rather than asserted away here — this comment
+        # named them as agreeing while they no longer do, and a false comment is exactly the kind of
+        # evidence the paragraph below is about. The raw-byte comparison this replaces disagreed with
+        # the digest it PRINTED: a
         # copy differing only by a leading BOM was reported as "not byte-identical (d1833a67… vs
         # d1833a67…)" — the same digest, twice, offered as proof that they differ. A finding that
         # contradicts its own evidence is one the next reader learns to wave through.
+        #
+        # SINCE .github#1547 THE CANONICAL DIGEST ALSO FOLDS CRLF, so a frozen copy differing from its
+        # canonical ONLY by line endings is no longer a finding either. Same call as the BOM, one
+        # normalization further: it is the library's definition of "the same body", and this check
+        # follows the library rather than keeping a private stricter one. The FINDING TEXT therefore
+        # says what was actually compared — it used to claim "not byte-identical" while comparing
+        # canonical digests, which was the original self-contradiction pointed one degree away.
         copy = read_bytes(twin)
         if copy is not None and canonical_digest(copy) != canonical_digest(raw):
             findings.append(
@@ -722,8 +761,9 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
                     "id": skill_id,
                     "check": "frozen-mirror",
                     "detail": (
-                        f"{FROZEN_MIRROR_REPO}'s frozen copy is not byte-identical to the canonical "
-                        f"body ({canonical_digest(copy)[:8]}… vs {canonical_digest(raw)[:8]}…)"
+                        f"{FROZEN_MIRROR_REPO}'s frozen copy does not match the canonical body "
+                        f"digest ({canonical_digest(copy)[:8]}… vs {canonical_digest(raw)[:8]}…); "
+                        f"a BOM- or line-ending-only difference is NOT reported (.github#384/#1547)"
                     ),
                 }
             )
@@ -1190,6 +1230,16 @@ def main() -> int:
         "cannot silently drift (.github#398). Pure-stdlib: needs no registry, --repos-root, or PyYAML.",
     )
     parser.add_argument(
+        "--digest",
+        metavar="PATH",
+        help="reference seam: print canonical_digest(PATH's bytes) and exit — the canonical body "
+        "digest this checker compares against. The counterpart of `skill-union-assert.sh --digest`, "
+        "and the seam tests/skill-union/skillmirror-conformance.sh drives so all THREE "
+        "implementations of one digest (this, the shell, and Fsgg.SkillMirror.sha256) are pinned "
+        "over one shared table rather than pairwise (.github#1547). Pure-stdlib: needs no registry, "
+        "--repos-root, or PyYAML.",
+    )
+    parser.add_argument(
         "--baseline-registry",
         metavar="PATH",
         help="the registry as it stands on the MERGE BASE. Turns the verdict from 'is the world "
@@ -1200,6 +1250,16 @@ def main() -> int:
 
     if args.normalize_when is not None:
         print(normalize_when(args.normalize_when))
+        return 0
+
+    if args.digest is not None:
+        # An UNREADABLE file is exit 2, never a printed digest: this seam is the reference a
+        # conformance table is measured against, and the one thing it must never do is answer
+        # confidently about bytes it did not read (#266). `read_bytes` returns None on OSError.
+        raw = read_bytes(args.digest)
+        if raw is None:
+            sys.exit(f"fsgg-skill-registry-check: --digest '{args.digest}' is not a readable file.")
+        print(canonical_digest(raw))
         return 0
 
     if not os.path.isdir(args.repos_root):

@@ -169,6 +169,98 @@ done < <(jq -c '.fixtures[]' "$FIXTURES")
 
 [ "$n" -eq "$total" ] || { echo "skillmirror-conformance: ran $n of $total vectors — the table did not stream fully" >&2; exit 2; }
 
+# ================================================================================================
+# THE THREE-WAY DIGEST LEG — FS-GG/.github#1547.
+# ================================================================================================
+# Everything above pins `verify`'s three FACTS across TWO implementations. This pins the DIGEST
+# across THREE, which is the surface #1547 exists because nothing covered.
+#
+# WHAT WAS UNPINNED. The canonical skill digest has three implementations — `Fsgg.SkillMirror.sha256`
+# (the library), `skill_digest` here in scripts/skill-union-assert.sh, and `canonical_digest` in
+# scripts/fsgg-skill-registry-check — and the two pins that existed were PAIRWISE and both skipped
+# the digest: conformance.sh pins shell<->Python for the PREDICATE GRAMMAR only, and the loop above
+# pins shell<->library for the THREE FACTS. Nothing ran one input through all three, so when the
+# library folded CRLF and the two shells did not, a Windows checkout got a spurious [drifted] from
+# both shells and nothing noticed until a person read the code. #1547's decision (2026-07-27) aligned
+# both shells to the library.
+#
+# HOW THE THREE ARE REACHED FROM A HERMETIC SHELL. The two shells are run directly, through the
+# `--digest` reference seams they expose for exactly this purpose. The LIBRARY cannot be run here —
+# it is F# in a sibling repository, and #1513's criterion 3 settled that a conformance leg a missing
+# dependency can SKIP is the fail-open it exists to prevent — so its answer is the table's `digest`
+# value, MEASURED by skillmirror-oracle.sh running the library's own source. Same division of labour
+# as the `library` column above: measured there, asserted here, on every PR, with no dotnet.
+#
+# ONE EXPECTED VALUE, NOT THREE COLUMNS. `digest` is what all three must return, so re-introducing a
+# disagreement cannot be done by editing one implementation's column — there isn't one.
+DIGEST_SUBJECT="${FSGG_SKILL_REGISTRY_CHECK:-$HERE/../../scripts/fsgg-skill-registry-check}"
+[ -f "$DIGEST_SUBJECT" ] || { echo "skillmirror-conformance: no registry checker at $DIGEST_SUBJECT" >&2; exit 2; }
+command -v base64 >/dev/null 2>&1 || { echo "skillmirror-conformance: base64 required" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "skillmirror-conformance: python3 required for the registry checker's --digest seam" >&2; exit 2; }
+
+# The same fail-open guard the vector table gets: a missing, empty or malformed digest table must be
+# a hard exit 2, never a quiet zero-iteration pass. This leg's entire subject arrives through it.
+dtotal="$(jq '.digestVectors.vectors | length' "$FIXTURES")"
+[ "$dtotal" -ge 1 ] || { echo "skillmirror-conformance: digestVectors table is empty or malformed: $FIXTURES" >&2; exit 2; }
+
+dn=0
+while IFS= read -r dv; do
+  dn=$((dn+1))
+  dname="$(jq -r '.name'         <<<"$dv")"
+  want="$(jq -r '.digest'        <<<"$dv")"
+  b64="$(jq -r '.bytesBase64'    <<<"$dv")"
+
+  # Decoded from base64 rather than carried as a JSON string literal: these vectors turn on a leading
+  # BOM, on LONE carriage returns and on exact trailing bytes, and `jq -r` would append a newline of
+  # its own to every one of them. `base64 -d` puts the vector's bytes on disk verbatim.
+  vdir="$WORK/d$dn/skill"
+  mkdir -p "$vdir"
+  printf '%s' "$b64" | base64 -d > "$vdir/SKILL.md"
+
+  # A vector whose bytes did not survive to disk would be graded as though they had. Compare the
+  # ROUND TRIP, so a broken decode is a loud failure rather than a digest computed over the wrong
+  # input that then merely fails to match (which reads as an implementation defect, blaming the
+  # wrong thing).
+  back="$(base64 -w0 < "$vdir/SKILL.md" 2>/dev/null || base64 < "$vdir/SKILL.md" | tr -d '\n')"
+  if [ "$back" != "$b64" ]; then
+    bad "[digest $dn] $dname — the vector's bytes did not round-trip to disk (got '$back', table '$b64'); the harness is not testing what the table declares"
+    continue
+  fi
+
+  sh_got="$(bash "$ASSERT" --digest "$vdir" 2>&1)" || {
+    bad "[digest $dn] $dname — skill-union-assert.sh --digest failed: $sh_got"; continue; }
+  py_got="$(python3 "$DIGEST_SUBJECT" --digest "$vdir/SKILL.md" 2>&1)" || {
+    bad "[digest $dn] $dname — fsgg-skill-registry-check --digest failed: $py_got"; continue; }
+
+  # EACH IMPLEMENTATION AGAINST THE MEASURED VALUE, SEPARATELY. Comparing the two shells to EACH
+  # OTHER and stopping there is the precise mistake #1547 documents: before the fix they agreed with
+  # one another perfectly and BOTH disagreed with the library, so a shell-vs-shell assertion was
+  # green over the whole defect. Both are therefore compared to the library's measured answer, and a
+  # message naming which one drifted.
+  d_ok=1
+  [ "$sh_got" = "$want" ] \
+    || { bad "[digest $dn] $dname — skill-union-assert.sh: '$sh_got' != library-measured '$want'"; d_ok=0; }
+  [ "$py_got" = "$want" ] \
+    || { bad "[digest $dn] $dname — fsgg-skill-registry-check: '$py_got' != library-measured '$want'"; d_ok=0; }
+  [ "$d_ok" -eq 1 ] && ok "[digest $dn] $dname — all three agree: $want"
+done < <(jq -c '.digestVectors.vectors[]' "$FIXTURES")
+
+[ "$dn" -eq "$dtotal" ] || { echo "skillmirror-conformance: ran $dn of $dtotal digest vectors — the table did not stream fully" >&2; exit 2; }
+
+# NON-VACUITY OF THE DIGEST TABLE, IN BOTH DIRECTIONS (#266, #436). If every vector shared one
+# digest, an implementation that ignored its input entirely would pass; if no two vectors shared one,
+# nothing would pin the CRLF-folds-to-LF equality that IS #1547's decision. The table must do both,
+# and neither property may be lost to a tidy-up of the vector list.
+ddistinct="$(jq '[.digestVectors.vectors[].digest] | unique | length' "$FIXTURES")"
+if [ "$ddistinct" -lt 2 ]; then
+  echo "::error::skillmirror-conformance: all $dtotal digest vectors share one digest — an implementation that ignored its input would pass" >&2
+  failcount=$((failcount+1))
+fi
+if [ "$ddistinct" -eq "$dtotal" ]; then
+  echo "::error::skillmirror-conformance: no two of the $dtotal digest vectors share a digest — nothing pins the CRLF/LF equality .github#1547 decided" >&2
+  failcount=$((failcount+1))
+fi
+
 # NON-VACUITY OF THE TABLE ITSELF (#266, #436). A gate that cannot fail is not a gate. The whole point
 # is the CONJUNCTION of facts no short-circuiting implementation can express, so the table must actually
 # contain a vector with two facts true at once and one with all three — otherwise every vector could be
@@ -181,5 +273,8 @@ if [ "$two" -lt 1 ] || [ "$three" -lt 1 ]; then
 fi
 
 echo "--------------------------------------------"
-echo "SkillMirror conformance: $pass passed, $failcount failed across $n vector(s)"
+# BOTH POPULATIONS, EACH WITH ITS OWN DENOMINATOR (#1506/#1513's rule, applied to this harness's own
+# summary): a single merged "across N vector(s)" would let a run that exercised every verify vector
+# and ZERO digest vectors print a total that reads as full coverage.
+echo "SkillMirror conformance: $pass passed, $failcount failed across $n verify vector(s) + $dn digest vector(s)"
 [ "$failcount" -eq 0 ] || exit 1

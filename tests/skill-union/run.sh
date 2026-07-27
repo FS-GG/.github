@@ -150,8 +150,15 @@ cat > "$V2_MANIFEST" <<EOF
 ] }
 EOF
 
-# The canonical digest must equal raw `sha256sum SKILL.md` — the producers' shipped algorithm
-# (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
+# The canonical digest must equal raw `sha256sum SKILL.md` FOR THIS FIXTURE — the producers' shipped
+# algorithm (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
+#
+# THE EQUALITY IS CONDITIONAL, AND THE CONDITION IS WHY THIS FIXTURE STILL HOLDS (.github#1547): the
+# canonical digest strips a leading BOM and folds CRLF->LF, so it equals `sha256sum` only for a
+# BOM-free, LF-only body. `alpha`'s SKILL.md is exactly that, deliberately — this vector's job is to
+# pin that the algorithm adds NOTHING for the ordinary case a producer actually ships. The cases
+# where the two DIVERGE are `digestVectors` in skillmirror.fixtures.json, measured against the
+# library itself; asserting them here against `sha256sum` would just re-hardcode the wrong answer.
 want_raw="$(sha256sum "$GOOD/.claude/skills/alpha/SKILL.md" | cut -d' ' -f1)"
 got_gen="$(digest "$GOOD/.claude/skills/alpha")"
 if [ "$got_gen" = "$want_raw" ]; then
@@ -173,6 +180,35 @@ if [ "$got_bom" = "$want_raw" ] && [ "$got_bom" != "$raw_bom" ]; then
 else
   echo "FAIL  --digest BOM handling: got $got_bom, want BOM-free $want_raw (raw-with-BOM $raw_bom)"; failcount=$((failcount+1))
 fi
+
+# AN UNREADABLE SKILL.md IS A FAILURE, NEVER A DIGEST (.github#1547, epic #266).
+#
+# THIS PINS A FAIL-OPEN #1547 ITSELF SHIPPED AND AN ADVERSARIAL REVIEW CAUGHT. The first cut of the
+# CRLF fold read the body with `body="$(cat "$f"; printf x)"`. A command substitution's exit status is
+# that of its LAST command, so `printf`'s success MASKED `cat`'s failure: a SKILL.md the gate could not
+# read produced sha256("") — e3b0c442… — and exit 0. A confident digest for bytes nobody read is the
+# #266 shape exactly, and it silently killed the `if ! got="$(skill_digest …)"` arm that reports
+# `[drifted] … has no SKILL.md to digest`. `--digest` must exit non-zero and print no digest.
+UNREADABLE="$WORK/unreadable/skill"; mkdir -p "$UNREADABLE"
+printf '# alpha skill\n' > "$UNREADABLE/SKILL.md"
+chmod 000 "$UNREADABLE/SKILL.md"
+if [ "$(id -u)" = "0" ]; then
+  # root reads anything, so the case cannot be staged — say so rather than printing a PASS that
+  # exercised nothing (a skip reported as a pass is the same disease one level up).
+  echo "SKIP  --digest on an unreadable SKILL.md (running as root; chmod 000 is not a barrier)"
+else
+  # `|| unreadable_rc=$?`, not a bare assignment then `$?`: this file runs under `set -e`, so a
+  # failing command substitution aborts the suite before the check can grade it — which would read as
+  # the fixture vanishing rather than as the refusal it is testing for.
+  unreadable_rc=0
+  unreadable_out="$(digest "$UNREADABLE" 2>/dev/null)" || unreadable_rc=$?
+  if [ "$unreadable_rc" -ne 0 ] && [ -z "$unreadable_out" ]; then
+    echo "PASS  (expected fail) --digest refuses an unreadable SKILL.md (rc=$unreadable_rc, no digest)"; pass=$((pass+1))
+  else
+    echo "FAIL  --digest on an unreadable SKILL.md returned rc=$unreadable_rc out='$unreadable_out' — a digest for bytes it never read"; failcount=$((failcount+1))
+  fi
+fi
+chmod 644 "$UNREADABLE/SKILL.md"
 
 # --- 1. coherent union, no manifest → PASS ---
 expect_pass "coherent union (content-equality only)" "$GOOD"
