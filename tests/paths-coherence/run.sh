@@ -786,11 +786,15 @@ fi
 # The selftest carries a signed `allow-uncovered .github/workflows` for exactly that reason: the
 # script is named there as a library, not as a gate over this tree. This leg fired on the first CI
 # run of that PR — the tripwire doing its job for the third time.
+# 8 -> 9: ignored-author-coherence.yml (.github#1538) names scripts/check-ignored-author-coherence.py
+# exactly and that gate declares a PATHS_SUBJECT — `(.github/workflows, default.json)`, the two halves
+# of the comparison it makes — so rule (c) attaches and the census counts it. This leg fired on that
+# gate's first CI run, the tripwire doing its job for the fourth time.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "8" ]; then
+if [ "${s:-0}" = "9" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 8 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 9 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
