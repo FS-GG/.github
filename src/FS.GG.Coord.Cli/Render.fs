@@ -95,6 +95,26 @@ module Render =
           Note: string option
           Reason: string option }
 
+    /// ONE claim a path update now collides with (.github#1517). The human OVERLAP branch prints these same
+    /// facts across two stderr lines and then a THIRD naming whether the courtesy notice landed; the machine
+    /// form carries all of it in one element, because a notice that FAILED still leaves a standing collision
+    /// and a consumer must not have to infer that from an absent log line.
+    type PathCollision =
+        { Ref: Ref
+          Worker: string
+          SharedTokens: string
+          Notified: bool
+          NotifyError: string option }
+
+    /// The `widen --json` / `set-paths --json` receipt (.github#1517) — the ref, the RESULTING declaration,
+    /// and the #353 overlap verdict in one object. `Kind` is the past-tense verb, mirroring `ClaimReceipt`.
+    type PathUpdateReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          Paths: string list
+          Collisions: PathCollision list }
+
     /// `ready --json` — THE MACHINE CONTRACT a reconciler (`/check-board`) and `next` read, an array of
     /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
     /// `number`/`repo` that name the item, the board `status` (null when the column is unset — a modelled
@@ -284,6 +304,57 @@ module Render =
         writeOpt "ownerValue" result.OwnerValue
         writeOpt "note" result.Note
         writeOpt "reason" result.Reason
+        w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    /// `widen --json` / `set-paths --json` (.github#1517). The field order and the `ref`/`repo`/`number`/
+    /// `worker`/`kind` head are `renderClaimReceiptJson`'s, because this is the same KIND of thing — a
+    /// receipt for one mutation this worker just made to one item — and a second dialect for it would be a
+    /// new thing for every consumer to learn.
+    ///
+    /// `verdict` is DERIVED from `Collisions` rather than passed in beside it. The two cannot then disagree,
+    /// which is the whole failure the human form has: it prints `DISJOINT` on stdout and the OVERLAP detail
+    /// on stderr, so a consumer reading one stream can be told the opposite of what the other says.
+    let renderPathUpdateJson (receipt: PathUpdateReceipt) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartObject()
+        w.WriteString("ref", receipt.Ref.Short)
+        w.WriteString("repo", $"%s{receipt.Ref.Owner}/%s{receipt.Ref.Repo}")
+        w.WriteNumber("number", receipt.Ref.Number)
+        w.WriteString("worker", receipt.Worker)
+        w.WriteString("kind", receipt.Kind)
+
+        w.WriteStartArray("paths")
+
+        for p in receipt.Paths do
+            w.WriteStringValue p
+
+        w.WriteEndArray()
+
+        w.WriteString("verdict", (if List.isEmpty receipt.Collisions then "disjoint" else "overlap"))
+
+        w.WriteStartArray("collisions")
+
+        for c in receipt.Collisions do
+            w.WriteStartObject()
+            w.WriteString("ref", c.Ref.Short)
+            w.WriteString("repo", $"%s{c.Ref.Owner}/%s{c.Ref.Repo}")
+            w.WriteNumber("number", c.Ref.Number)
+            w.WriteString("worker", c.Worker)
+            w.WriteString("sharedTokens", c.SharedTokens)
+            w.WriteBoolean("notified", c.Notified)
+
+            match c.NotifyError with
+            | Some e -> w.WriteString("notifyError", e)
+            | None -> w.WriteNull("notifyError")
+
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
         w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())

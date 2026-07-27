@@ -76,6 +76,33 @@ module Render =
           Note: string option
           Reason: string option }
 
+    /// ONE claim a path update now collides with (.github#1517) — the same three facts the human OVERLAP
+    /// branch prints (`OVERLAP — now collides with <ref> (worker <holder>)` / `  <tokens>`), plus whether
+    /// the courtesy notice this command posts on that holder's item actually landed. The notify outcome is
+    /// part of the receipt because a notice that FAILED still leaves a standing collision: the human form
+    /// says so on stderr, so the machine form must not have to infer it from silence.
+    type PathCollision =
+        { Ref: Ref
+          Worker: string
+          /// The shared token STEMS, exactly as the human line names them.
+          SharedTokens: string
+          Notified: bool
+          /// Why the notice failed; `None` when it landed.
+          NotifyError: string option }
+
+    /// The receipt `widen --json` and `set-paths --json` emit (.github#1517): the ref, the declaration the
+    /// update RESULTED IN, and the #353 overlap verdict — all three in ONE object, so a machine consumer
+    /// never scrapes `widened <ref> → Paths: a, b` prose or reads the overlap detail off a second stream.
+    /// `Kind` is the past-tense verb (`widened`/`set`), mirroring `ClaimReceipt.Kind`'s `claimed`.
+    /// `Collisions` is empty exactly when the verdict is `disjoint`.
+    type PathUpdateReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          /// The tokens the item now declares — the resulting touch-set, not the tokens that were asked for.
+          Paths: string list
+          Collisions: PathCollision list }
+
     /// `ready --json` — the machine contract a reconciler reads: a JSON array of the startable rows. A
     /// real JSON writer, so a title or path carrying a quote cannot forge the array.
     val renderReadyJson: rows: Scan.Row list -> string
@@ -99,3 +126,9 @@ module Render =
     /// `predicate --json` — a single JSON object: the ADR-0050 verdict and its assertion (.github#1202).
     /// A real JSON writer, so a governing note carrying a quote cannot forge the object.
     val renderPredicateJson: result: PredicateResult -> string
+
+    /// `widen --json` / `set-paths --json` — one typed touch-set receipt (.github#1517). `verdict` is
+    /// `disjoint` or `overlap`, derived from `Collisions` rather than carried beside it, so the two can
+    /// never disagree. A real JSON writer, so a path token or worker id carrying a quote cannot forge the
+    /// object.
+    val renderPathUpdateJson: receipt: PathUpdateReceipt -> string

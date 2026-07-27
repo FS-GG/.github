@@ -1071,8 +1071,19 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest
         | "set-field" :: rest -> flags { defaults with Command = SetField } rest
         | "child" :: rest -> flags { defaults with Command = Child } rest
-        | "widen" :: rest -> flags { defaults with Command = Widen } rest
-        | "set-paths" :: rest -> flags { defaults with Command = SetPaths } rest
+        // `widen`/`set-paths` report as TEXT by default — a receipt a worker reads — and `--json` opts into
+        // the machine contract, the same way `who` and `inbox` do.
+        //
+        // THIS LINE IS PART OF #1517'S FIX AND IS NOT COSMETIC. Until then `updateTouchSet` never read
+        // `opts.Render` at all, so what these two arms left the field at could not be observed: both verbs
+        // printed prose on `--json` and without it. The module `defaults` are `Render = Json`, so the moment
+        // the renderer STARTED honouring the field, the missing `Render = Text` here would have flipped the
+        // BARE `widen` — the form every recipe, skill and driver in the corpus runs — from its human receipt
+        // to a JSON object. That is the fix breaking the thing it was careful not to touch, and the reason
+        // the repair is two edits in two files rather than the one it looks like: honouring a flag means
+        // honouring its ABSENCE too, and the default is where absence is spelled.
+        | "widen" :: rest -> flags { defaults with Command = Widen; Render = Text } rest
+        | "set-paths" :: rest -> flags { defaults with Command = SetPaths; Render = Text } rest
         | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
         // `inbox` reports as a human table by default (a worker reads it), `--json` for a machine consumer —
