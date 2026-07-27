@@ -280,6 +280,12 @@ help_out="$(bash "$SYNC" --help)"
 printf '%s' "$help_out" | grep -q '^Exit: .*2 = misconfiguration' \
   && ok "usage: --help documents the exit-code contract it is asserted against" \
   || bad "usage: --help truncates before the Exit: block" "$help_out"
+# ...and it documents the INCONCLUSIVE code too (#1584). Asserted on the SAME line rather than anywhere
+# in the header, because a code that wraps onto a continuation line is a code a caller reading the
+# contract off `Exit:` does not see — the truncation defect above, one field over.
+printf '%s' "$help_out" | grep -q '^Exit: .*3 = INCONCLUSIVE' \
+  && ok "usage: --help documents the INCONCLUSIVE exit code on the Exit: line (#1584)" \
+  || bad "usage: --help does not carry '3 = INCONCLUSIVE' on the Exit: line" "$help_out"
 printf '%s' "$help_out" | grep -q '^Env: ' \
   && ok "usage: --help documents AGENT_SKILL_ROOTS" \
   || bad "usage: --help truncates before the Env: block" "$help_out"
@@ -580,6 +586,366 @@ EMPTY="$WORK/empty-decl-receiver"; mkdir -p "$EMPTY"
 printf '# all comments, no roots\n\n' > "$EMPTY/.agent-skill-roots"
 expect_out "roots: an empty .agent-skill-roots is a misconfig (rc 2), not a fall-back to the default" 2 \
   'declares no roots' bash "$SYNC" "$EMPTY"
+
+# --- PIN-RELATIVE VERIFICATION (--against-pin, #1584) ---------------------------------------------
+#
+# The gate's comparand is no longer THIS CHECKOUT at check time — it is the FS.GG.Kit package version
+# the receiver itself pins, restored from the feed and compared against the sha256s that package's own
+# kit-manifest.tsv ships. These assertions drive the REAL fetch/unzip/verify path: a genuine .nupkg is
+# built here by the producer's own stage-kit.sh and served over a `file://` flat container, so only the
+# base URL differs from production. Nothing is mocked, and there is no network.
+echo "--- pin-relative (#1584) ---"
+
+PINW="$WORK/pin"; mkdir -p "$PINW"
+STAGE="$PINW/stage"
+bash "$REPO_ROOT/src/FS.GG.Kit/stage-kit.sh" "$STAGE" >/dev/null 2>&1 \
+  || { echo "::error::fixture: stage-kit.sh could not stage the kit — nothing to build a package from."; exit 1; }
+[ -s "$STAGE/kit-manifest.tsv" ] \
+  || { echo "::error::fixture: staged kit-manifest.tsv is empty."; exit 1; }
+
+FEED="$PINW/feed"
+# Pack with python3's zipfile rather than `zip(1)`: --against-pin already REQUIRES python3, so the
+# fixture adds no dependency the thing under test does not have, and it runs where `zip` is absent.
+pack_kit() {   # pack_kit <version> [<staging dir>]
+  local version="$1" stage="${2:-$STAGE}" root="$PINW/pack-$1"
+  rm -rf "$root"; mkdir -p "$root/kit" "$root/build"
+  cp -r "$stage/." "$root/kit/"
+  # build/ is packed from the SAME sources FS.GG.Kit.csproj packs, and it is not decoration: the pin
+  # check reads its skill-root default out of build/FS.GG.Kit.props rather than out of this checkout.
+  # A fixture package missing it would be testing a package shape that is never published.
+  cp "$REPO_ROOT/src/FS.GG.Kit/build/FS.GG.Kit.props"   "$root/build/"
+  cp "$REPO_ROOT/src/FS.GG.Kit/build/FS.GG.Kit.targets" "$root/build/"
+  mkdir -p "$FEED/fs.gg.kit/$version"
+  python3 - "$root" "$FEED/fs.gg.kit/$version/fs.gg.kit.$version.nupkg" <<'PY'
+import os, sys, zipfile
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for dirpath, _dirs, files in os.walk(src):
+        for name in files:
+            full = os.path.join(dirpath, name)
+            z.write(full, os.path.relpath(full, src).replace(os.sep, "/"))
+PY
+}
+pack_kit 0.9.0
+
+# The receiver: apply mode writes exactly the destinations the manifest names, which is what makes this
+# a real end-to-end check rather than a restatement — the writer and the pin verifier are independent.
+PRECV="$PINW/receiver"; mkdir -p "$PRECV"
+bash "$SYNC" "$PRECV" >/dev/null
+
+# `Version=` inline on the PackageReference — the no-CPM shape (FS.GG.Templates' today).
+mkdir -p "$PRECV/.config/kit"
+write_proj() {   # write_proj <attrs>
+  cat > "$PRECV/.config/kit/FS.GG.Kit.receiver.proj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup><PackageReference Include="FS.GG.Kit" $1 /></ItemGroup>
+</Project>
+EOF
+}
+write_proj 'Version="0.9.0"'
+
+pin_env() { env FSGG_NUGET_ORG_BASE="file://$FEED" FSGG_KIT_FETCH_TRIES=1 FSGG_KIT_FETCH_BACKOFF_S=0 "$@"; }
+pin_check() { pin_env bash "$SYNC" --check --against-pin "$@"; }
+
+expect_rc "pin: a tree matching its pin is coherent (rc 0)" 0 pin_check "$PRECV"
+
+# CRITERION 3 — GREEN REGARDLESS OF HUB STATE, proved directly.
+#
+# The receiver is put in EXACTLY the FS.GG.Audio position: pinned to an older kit, with that older kit
+# faithfully materialized. Canonical (this checkout) has moved on. The strict, hub-relative arm MUST go
+# red on that tree — that IS the #1584 defect, and asserting it here is what stops this from being a
+# proof that the pin arm simply checks nothing. The pin arm MUST call the same tree coherent.
+#
+# The older kit is a real package built from a perturbed staging dir with its manifest rehashed, so the
+# receiver is verified against a genuinely different comparand — and NOTHING in the repo checkout is
+# mutated to arrange it, which a fixture that appended to a canonical source could not promise if it
+# died between the write and the restore.
+perturb_stage() {   # perturb_stage <staging dir> <package-relative path> — edit a file AND its manifest row
+  python3 - "$1" "$2" <<'PY'
+import hashlib, sys
+stage, target = sys.argv[1], sys.argv[2]
+path = f"{stage}/{target}"
+with open(path, "ab") as fh:
+    fh.write(b"\n# an older kit, faithfully materialized\n")
+digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+manifest = f"{stage}/kit-manifest.tsv"
+rows = []
+for line in open(manifest, encoding="utf-8").read().splitlines():
+    fields = line.split("\t")
+    if len(fields) >= 4 and fields[1] == target:
+        fields[3] = digest
+    rows.append("\t".join(fields))
+open(manifest, "w", encoding="utf-8").write("\n".join(rows) + "\n")
+PY
+}
+OLDSTAGE="$PINW/stage-old"
+cp -r "$STAGE" "$OLDSTAGE"
+perturb_stage "$OLDSTAGE" client/fsgg-coord
+pack_kit 0.8.0 "$OLDSTAGE"
+cp "$OLDSTAGE/client/fsgg-coord" "$PRECV/scripts/fsgg-coord"; chmod a+x "$PRECV/scripts/fsgg-coord"
+write_proj 'Version="0.8.0"'
+expect_rc "pin: the STRICT hub-relative arm reds a receiver pinned behind canonical (rc 1) — the #1584 defect itself" 1 \
+  bash "$SYNC" --check "$PRECV"
+expect_rc "pin: ...and the SAME tree is coherent against its OWN pin (rc 0) — criterion 3" 0 \
+  pin_check "$PRECV"
+# ...and it is green because it VERIFIED, not because it skipped: the file that differs from canonical
+# is the very one the pin arm reports ok.
+expect_out "pin: ...and it is green having actually verified the file that differs from canonical" 0 \
+  '^ok: scripts/fsgg-coord$' pin_check "$PRECV"
+bash "$SYNC" "$PRECV" >/dev/null            # back to canonical == 0.9.0
+write_proj 'Version="0.9.0"'
+
+# CRITERION 4 — a tree that diverges from its pin is RED, and NAMES the file.
+CLIENT_DEST="scripts/fsgg-coord"
+cp "$PRECV/$CLIENT_DEST" "$PINW/client.orig"
+printf '\n# tampered\n' >> "$PRECV/$CLIENT_DEST"
+expect_out "pin: a file perturbed away from the pin is drift (rc 1)" 1 \
+  "DRIFT \(differs\): $CLIENT_DEST" pin_check "$PRECV"
+expect_out "pin: ...and the red says the hub cannot have caused it" 1 \
+  'THIS TREE ONLY' pin_check "$PRECV"
+cp "$PINW/client.orig" "$PRECV/$CLIENT_DEST"
+expect_rc "pin: restoring the file clears the drift (rc 0)" 0 pin_check "$PRECV"
+
+# The mode is part of the pin, exactly as it is part of the materialize (#506's shape, one comparand
+# over): a client that is byte-identical but has lost +x is a kit no worker can run.
+chmod a-x "$PRECV/$CLIENT_DEST"
+expect_out "pin: a client that lost its exec bit is drift, and the red NAMES the bit (rc 1)" 1 \
+  'LOST its executable bit' pin_check "$PRECV"
+chmod a+x "$PRECV/$CLIENT_DEST"
+
+# A skill directory is a CLOSED set on this side too — build/FS.GG.Kit.targets deletes undeclared files
+# on every materialize, so a leftover from an older kit IS a tree that does not match its pin.
+printf 'stale\n' > "$PRECV/.claude/skills/${SKILLS[0]}/leftover.txt"
+expect_out "pin: an undeclared file in a managed skill dir is drift (rc 1)" 1 \
+  'DRIFT \(extra\)' pin_check "$PRECV"
+rm -f "$PRECV/.claude/skills/${SKILLS[0]}/leftover.txt"
+
+# A missing file is drift, not a silent skip.
+rm -f "$PRECV/.agents/skills/${SKILLS[0]}/SKILL.md"
+expect_out "pin: a missing materialized file is drift (rc 1)" 1 \
+  "DRIFT \(missing\): [.]agents/skills/${SKILLS[0]}/SKILL[.]md" pin_check "$PRECV"
+bash "$SYNC" "$PRECV" >/dev/null
+
+# CRITERION 2 — THE PIN LOCATION IS DERIVED. Each of the three shapes the org runs today is proved
+# against the SAME receiver tree, so what changes between these cases is only where the version literal
+# lives. None of the three is named in the resolver: they fall out of following MSBuild's own
+# resolution from the receiver project.
+expect_out "pin shape 1/3: inline Version on the PackageReference" 0 \
+  'pin = 0[.]9[.]0 \(from [.]config/kit/FS[.]GG[.]Kit[.]receiver[.]proj' pin_check "$PRECV"
+
+# Shape 2: CPM through Directory.Packages.props, which is where the hand-authored-build-config
+# receivers (net, audio) pin.
+write_proj ''
+cat > "$PRECV/Directory.Packages.props" <<'EOF'
+<Project>
+  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
+  <ItemGroup><PackageVersion Include="FS.GG.Kit" Version="0.9.0" /></ItemGroup>
+</Project>
+EOF
+expect_out "pin shape 2/3: CPM via Directory.Packages.props (a versionless PackageReference)" 0 \
+  'pin = 0[.]9[.]0 \(from Directory[.]Packages[.]props' pin_check "$PRECV"
+
+# Shape 3: CPM through Directory.Packages.LOCAL.props — reached ONLY by following the canonical
+# Directory.Packages.props's own <Import>. This is the case a filename list gets wrong, and the one
+# that proves the resolver is following MSBuild rather than guessing: the literal is in a file the
+# resolver is never told about.
+cat > "$PRECV/Directory.Packages.props" <<'EOF'
+<Project>
+  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
+  <Import Project="Directory.Packages.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Packages.local.props')" />
+</Project>
+EOF
+cat > "$PRECV/Directory.Packages.local.props" <<'EOF'
+<Project>
+  <ItemGroup><PackageVersion Include="FS.GG.Kit" Version="0.9.0" /></ItemGroup>
+</Project>
+EOF
+expect_out "pin shape 3/3: CPM via Directory.Packages.local.props, reached through the canonical file's own Import" 0 \
+  'pin = 0[.]9[.]0 \(from Directory[.]Packages[.]local[.]props' pin_check "$PRECV"
+
+# A VersionOverride BEATS the central PackageVersion, so grading the central one would verify a version
+# the receiver does not restore — this sweep's own failure mode, one attribute over.
+write_proj 'VersionOverride="0.9.0"'
+cat > "$PRECV/Directory.Packages.local.props" <<'EOF'
+<Project>
+  <ItemGroup><PackageVersion Include="FS.GG.Kit" Version="0.6.0" /></ItemGroup>
+</Project>
+EOF
+expect_out "pin: VersionOverride WINS over the central PackageVersion, rather than contradicting it" 0 \
+  'pin = 0[.]9[.]0 \(from [.]config/kit/FS[.]GG[.]Kit[.]receiver[.]proj -> 0[.]9[.]0 \(VersionOverride\)' pin_check "$PRECV"
+
+# Two CPM literals that DISAGREE with no override to settle them. The receiver project stays
+# VERSIONLESS on purpose: an inline Version short-circuits the walk-up (correctly — MSBuild would
+# restore it), so writing one here would have produced a single unambiguous pin and asserted nothing.
+# The ambiguity that can really happen is two reachable central declarations, which is exactly what the
+# 0.6.0 left over from the override case above now becomes once nothing outranks it.
+write_proj ''
+cat > "$PRECV/Directory.Packages.props" <<'EOF'
+<Project>
+  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
+  <ItemGroup><PackageVersion Include="FS.GG.Kit" Version="0.9.0" /></ItemGroup>
+  <Import Project="Directory.Packages.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Packages.local.props')" />
+</Project>
+EOF
+expect_out "pin: two DISAGREEING central pins are INCONCLUSIVE (rc 3), never a pass" 3 \
+  'pinned to more than one version' pin_check "$PRECV"
+# ...and the refusal NAMES both files, or the reader cannot act on it.
+expect_out "pin: ...and the refusal names both declaring files" 3 \
+  'Directory[.]Packages[.]props -> 0[.]9[.]0.*Directory[.]Packages[.]local[.]props -> 0[.]6[.]0' \
+  pin_check "$PRECV"
+
+# --- CRITERION 5: "I could not check" is neither green nor a wiring finding -----------------------
+# Every case below must exit 3 — its own code, distinct from 0 (coherent) and 1 (drifted).
+rm -f "$PRECV/Directory.Packages.props" "$PRECV/Directory.Packages.local.props"
+write_proj 'Version="0.9.0"'
+
+# The pinned version is not on the feed. DETERMINISTIC, so it is reported PERMANENT and not retried.
+write_proj 'Version="9.9.9"'
+expect_out "pin: a pin the feed does not serve is INCONCLUSIVE/PERMANENT (rc 3), not green" 3 \
+  'INCONCLUSIVE \(PERMANENT\)' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# The feed itself is unreachable. RETRYABLE — an outage must not read as a permanent no-verdict, which
+# is the distinction #1540 already had to fix in the sibling sweep.
+expect_out "pin: an unreachable feed is INCONCLUSIVE/RETRYABLE (rc 3), not green and not drift" 3 \
+  'INCONCLUSIVE \(RETRYABLE\)' \
+  env FSGG_NUGET_ORG_BASE="http://127.0.0.1:1/nope" FSGG_KIT_FETCH_TRIES=1 FSGG_KIT_FETCH_BACKOFF_S=0 \
+      bash "$SYNC" --check --against-pin "$PRECV"
+
+# No receiver project at all: unresolvable, so nothing was verified.
+mv "$PRECV/.config/kit/FS.GG.Kit.receiver.proj" "$PINW/proj.parked"
+expect_out "pin: no receiver project is INCONCLUSIVE (rc 3), not 'nothing to check'" 3 \
+  'does not exist in this tree' pin_check "$PRECV"
+mv "$PINW/proj.parked" "$PRECV/.config/kit/FS.GG.Kit.receiver.proj"
+
+# A versionless PackageReference with no reachable Directory.Packages.props is the CPM shape with the
+# pin missing. Unresolvable is not unpinned, and it is not current.
+write_proj ''
+expect_out "pin: a CPM shape with no reachable PackageVersion is INCONCLUSIVE (rc 3)" 3 \
+  'The pin is unresolvable' pin_check "$PRECV"
+
+# Unparsable XML. The one shape most likely to be mistaken for "no pin here, move on".
+printf 'not xml at all <<<\n' > "$PRECV/.config/kit/FS.GG.Kit.receiver.proj"
+expect_out "pin: an unparsable receiver project is INCONCLUSIVE (rc 3), never a pass" 3 \
+  'Unparsable is not unpinned' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# SELF-ATTESTATION HAS A FLOOR (#1584 risk 3). The manifest ships inside the package it describes, so a
+# tree-vs-manifest compare cannot see a package that disagrees with CANONICAL — that is
+# check-kit-published-coherence.py's question. What it CAN see is a package that disagrees with ITSELF,
+# and it must, or a corrupt package would grade a healthy tree as drifted and blame the wrong repo.
+BADSTAGE="$PINW/stage-bad"
+cp -r "$STAGE" "$BADSTAGE"
+printf 'payload the manifest does not describe\n' >> "$BADSTAGE/client/fsgg-coord"
+pack_kit 0.9.1 "$BADSTAGE"
+write_proj 'Version="0.9.1"'
+expect_out "pin: a package whose payload disagrees with its OWN manifest is INCONCLUSIVE (rc 3), not the receiver's drift" 3 \
+  'PRODUCER defect' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# An empty manifest must not verify a tree vacuously — the floor build/FS.GG.Kit.targets holds on the
+# materialize side, held again here (#266: "I checked nothing" is not "it is fine").
+EMPTYSTAGE="$PINW/stage-empty"
+mkdir -p "$EMPTYSTAGE"; : > "$EMPTYSTAGE/kit-manifest.tsv"
+pack_kit 0.9.2 "$EMPTYSTAGE"
+write_proj 'Version="0.9.2"'
+expect_out "pin: an EMPTY manifest is INCONCLUSIVE (rc 3), never a vacuous pass" 3 \
+  'names no files' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# --- CRITERION 6: the PR-arm asymmetry is DROPPED, and refused rather than silently ignored -------
+# --base-ref exists to excuse a branch for drift a moving canonical caused. A pin-relative comparand is
+# read from the branch's own tree, so there is no inherited drift to attribute — and a caller combining
+# the flags has misunderstood the change rather than requested a mode.
+expect_out "pin: --base-ref with --against-pin is a misconfig (rc 2), not a silently ignored flag" 2 \
+  'mutually exclusive' bash "$SYNC" --check --against-pin --base-ref main "$PRECV"
+expect_out "pin: --against-pin on a WRITE is a misconfig (rc 2)" 2 \
+  'only meaningful with --check' bash "$SYNC" --against-pin "$PRECV"
+
+# build-config is OPT-IN on the materialize side (FsggKitMaterializeBuildConfig, default false), so it
+# must be opt-in here: verifying it unconditionally would red every receiver that correctly does not
+# carry it. The default run above passed with no Directory.Build.props in the tree at all.
+expect_out "pin: --include-build-config makes an absent build-config file drift (rc 1)" 1 \
+  'DRIFT \(missing\): Directory[.]Build[.]props' \
+  env FSGG_NUGET_ORG_BASE="file://$FEED" FSGG_KIT_FETCH_TRIES=1 FSGG_KIT_FETCH_BACKOFF_S=0 \
+      bash "$SYNC" --check --against-pin --include-build-config "$PRECV"
+
+# --- THE SKILL ROOTS COME FROM THE PIN, NOT FROM THIS CHECKOUT -----------------------------------
+# WHERE a skill materializes is as much a part of the verdict as WHAT it contains, so if the pin check
+# read its root set from `coordination-sync`'s own DEFAULT_ROOTS, a hub edit to that constant would red
+# every receiver over files "missing" from a root they never adopted — #1584's defect arriving through
+# the program instead of the data. The roots must therefore be pinned or receiver-owned.
+expect_out "pin roots: default to the PINNED PACKAGE's build/FS.GG.Kit.props, not this checkout" 0 \
+  "skill roots = .* [(]from the pinned package's build/FS[.]GG[.]Kit[.]props default[)]" pin_check "$PRECV"
+
+# A package that cannot answer the question is INCONCLUSIVE — the hub's default is NOT substituted,
+# which is the whole point. Built by dropping build/FS.GG.Kit.props from an otherwise valid package.
+NOPROPS="$PINW/pack-noprops"
+rm -rf "$NOPROPS"; mkdir -p "$NOPROPS/kit"; cp -r "$STAGE/." "$NOPROPS/kit/"
+mkdir -p "$FEED/fs.gg.kit/0.9.3"
+python3 - "$NOPROPS" "$FEED/fs.gg.kit/0.9.3/fs.gg.kit.0.9.3.nupkg" <<'PY'
+import os, sys, zipfile
+src, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for dirpath, _dirs, files in os.walk(src):
+        for name in files:
+            full = os.path.join(dirpath, name)
+            z.write(full, os.path.relpath(full, src).replace(os.sep, "/"))
+PY
+write_proj 'Version="0.9.3"'
+expect_out "pin roots: a package with no build/FS.GG.Kit.props is INCONCLUSIVE, NOT the hub's default" 3 \
+  'will not substitute the hub' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# The receiver's own <FsggKitSkillRoots> beats the package default — receiver-owned, in its own tree,
+# and what MSBuild would actually use. Proved by narrowing to one root: the other two stop being looked
+# at rather than going 'missing'.
+cat > "$PRECV/.config/kit/FS.GG.Kit.receiver.proj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="FS.GG.Kit" Version="0.9.0" /></ItemGroup>
+</Project>
+EOF
+expect_out "pin roots: the receiver project's own FsggKitSkillRoots beats the package default" 0 \
+  "skill roots = [.]claude/skills [(]from [.]config/kit/FS[.]GG[.]Kit[.]receiver[.]proj" pin_check "$PRECV"
+# ...and it really narrowed the subject: a root the receiver no longer declares is not looked for, so
+# deleting it is NOT drift. A gate that kept the package default would call this missing.
+rm -rf "$PRECV/.codex/skills"
+expect_rc "pin roots: ...and a root the receiver does not declare is not verified (rc 0)" 0 \
+  pin_check "$PRECV"
+bash "$SYNC" "$PRECV" >/dev/null
+write_proj 'Version="0.9.0"'
+
+# A manifest destination that escapes the receiver root is a PRODUCER defect, not this tree's drift.
+# Nothing here writes, so the cost is a verdict about the wrong subject rather than a clobbered file —
+# which is still the failure this fabric keeps returning to, so it is asserted rather than trusted.
+ESCSTAGE="$PINW/stage-escape"
+cp -r "$STAGE" "$ESCSTAGE"
+python3 - "$ESCSTAGE/kit-manifest.tsv" <<'PY'
+import sys
+path = sys.argv[1]
+rows = []
+for line in open(path, encoding="utf-8").read().splitlines():
+    fields = line.split("\t")
+    if fields and fields[0] == "client":
+        fields[2] = "../../escaped-fsgg-coord"
+    rows.append("\t".join(fields))
+open(path, "w", encoding="utf-8").write("\n".join(rows) + "\n")
+PY
+pack_kit 0.9.4 "$ESCSTAGE"
+write_proj 'Version="0.9.4"'
+expect_out "pin: a manifest dest escaping the receiver root is INCONCLUSIVE (rc 3), not drift" 3 \
+  'resolves outside the tree under test' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
+# The roster gate still SKIPS a non-receiver before any of this runs — it is the one hub read left, and
+# it can only ever skip, never red.
+expect_out "pin: the roster gate still skips a non-receiver (rc 0) before any pin is resolved" 0 \
+  'does not receive coordination-kit' pin_check --repo FS-GG/.github "$PRECV"
 
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }

@@ -15,6 +15,12 @@
 #                                         # error; drift it merely INHERITED from an out-of-date base is
 #                                         # an advisory naming whose job it is. Without --base-ref the
 #                                         # check is the strict tree compare it has always been.
+#   coordination-sync --check --against-pin <target>
+#                                         # verify against the RECEIVER'S OWN PIN, not this checkout
+#                                         # (#1584). The comparand is the FS.GG.Kit package version the
+#                                         # receiver itself references, restored from the feed, compared
+#                                         # against the sha256s that package's own kit-manifest.tsv
+#                                         # ships. This is what the CI gate runs. See PIN-RELATIVE below.
 #
 # `.github` (this repo, the ADR-0019 authority) is the canonical SOURCE — the kit files under this
 # checkout are the source of truth, exactly as sync-build-config's dist/dotnet/ is. Two arms carry the
@@ -41,9 +47,66 @@
 #        never copied.
 # Each skill DIRECTORY is the transport unit: every regular file and its executable bit is managed.
 #
+#
+# PIN-RELATIVE VERIFICATION (--against-pin, #1584) — WHY THE COMPARAND MOVED
+#
+# The strict arm above compares a receiver's tree against THIS CHECKOUT at check time. `.github@main`
+# moves constantly, so a receiver's verdict is a function of WHEN the check ran rather than of what the
+# receiver committed. On 2026-07-27 the required `kit / coordination-kit` context passed on FS.GG.SDD's
+# merged SHA 0376309 at 08:15Z and FAILED on byte-identical content at 08:21Z, because the hub had
+# moved in between (FS.GG.SDD#731). Six receivers were "repaired" in one day for a drift none of them
+# caused. A green required check that can go red with nothing changed is not a durable statement, so
+# branch protection cannot mean what it says.
+#
+# --against-pin makes the verdict a function of the RECEIVER ALONE:
+#   1. DERIVE the receiver's own FS.GG.Kit version by resolving its receiver project the way MSBuild
+#      resolves it (inline Version / VersionOverride, else the CPM walk up to Directory.Packages.props
+#      and the imports that file itself declares). The three pin shapes the org uses today are not a
+#      LIST here — they are what falls out of following MSBuild's own resolution, which is the whole
+#      difference between this and the hand-maintained location tables #1507/#1510/#1515/#1528 closed.
+#   2. RESTORE that exact version from the flat-container feed (anonymous; FS.GG.Kit is public).
+#   3. VERIFY every materialized destination against the sha256s that package's kit-manifest.tsv ships.
+#
+# A hub commit can now NEVER retroactively red a receiver: nothing in steps 1-3 reads a byte of this
+# checkout. A receiver goes red only when its own tree diverges from its own pin — an invariant wholly
+# inside its control, and therefore durable.
+#
+# WHAT THIS DELIBERATELY STOPS DETECTING. A receiver pinned two versions back with a perfectly
+# materialized tree is now legitimately, permanently green. That is the trade, and it is not
+# hypothetical: FS.GG.Audio sat green all day at kit 0.6.0 while every other receiver moved to 0.8.x.
+# "Is my pin current?" is a DIFFERENT question and it has a different owner — the kit-pin freshness
+# sweep in scripts/repos-audit.sh (#1540), which is f(roster, feed), needs no receiver to push, runs
+# daily at 08:17 UTC, and exits 1 (a red workflow with a named ::error::) on any stale pin. It is
+# advisory in the sense AC7 means — it gates no receiver's PR — and emphatically NOT advisory at org
+# level, which is what makes it safe to be the sole "you are behind" signal. Do not re-add a staleness
+# opinion here; two gates answering one question is how both get ignored.
+#
+# WHAT THIS IS NOT PROOF OF (state this plainly, #1584 risk 3). The manifest verified against ships
+# INSIDE the package being verified, so this check is self-attesting: a package built with a manifest
+# that disagrees with its own payload is invisible to a tree-vs-manifest compare. It catches the
+# package's INTERNAL disagreement (payload vs its own manifest, below) but it cannot see a package
+# whose payload disagrees with CANONICAL. That question belongs to check-kit-published-coherence.py,
+# on the hub side. The end-to-end invariant "a receiver's files are canonical's files" holds only in
+# COMPOSITION with that gate, and only for as long as that gate is HEALTHY — which is a live condition,
+# not a constant. It went red on 2026-07-27 when FS.GG.Kit 0.8.0 fell behind canonical (#1583, repaired
+# the same day by the 0.9.0 bump in #1605), and every hour it is red is an hour a green here is worth
+# less than it looks. Check that gate before treating a green here as end-to-end proof; it is not one.
+#
 # Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default
 #                         ".claude/skills .codex/skills .agents/skills").
-# Exit: 0 = in sync / written, or drift this branch did not author (--base-ref); 1 = drift; 2 = misconfiguration.
+#      FSGG_NUGET_ORG_BASE      override the flat-container base (--against-pin; the fixture points this
+#                               at a local file:// tree, so the test drives the real fetch/parse path).
+#      FSGG_KIT_FETCH_TRIES     attempts for a RETRYABLE feed failure (default 3).
+#      FSGG_KIT_FETCH_BACKOFF_S seconds between those attempts (default 3).
+# Exit: 0 = in sync / written, or drift this branch did not author (--base-ref); 1 = drift; 2 = misconfiguration; 3 = INCONCLUSIVE (--against-pin: nothing was verified).
+#       Every code stays on the `Exit:` line above, on ONE line, because that line is what --help is
+#       asserted to carry and what a caller reads the contract off. A `sed` range once truncated this
+#       block and hid the exit codes — the one thing a caller must know (#335) — so the fixture greps
+#       that line for each code. Wrapping 3 onto a continuation would pass a rc-only assertion while
+#       silently undocumenting it, which is the same rot one field over.
+#       3 is not 0 and it is not 1 on purpose: "I could not check" must never render as "I checked, and
+#       it's fine" (#266), and it must not render as "your tree is wrong" either (#320). Callers retry
+#       a 3 whose message says RETRYABLE; a re-run reproduces every other 3 exactly.
 
 set -euo pipefail
 
@@ -72,15 +135,23 @@ die()   { echo "coordination-sync: $*" >&2; exit 2; }
 # honour. Same rot, same fix, as repos-audit.sh (#335).
 usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; }
 
-mode="apply"; repo=""; target=""; base_ref=""
+mode="apply"; repo=""; target=""; base_ref=""; against_pin=""; receiver_project=""; include_build_config=""
+# The receiver project default is the SAME literal kit-materialize.yml declares as its own
+# `receiver-project` input default. It is a shared contract with the workflow that WRITES the kit, not a
+# location this script invented — the two must name one file or the verifier grades a pin the
+# materialize never restored.
+DEFAULT_RECEIVER_PROJECT=".config/kit/FS.GG.Kit.receiver.proj"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --check)    mode="check"; shift ;;
-    --repo)     need_val "$@"; repo="$2"; shift 2 ;;
-    --base-ref) need_val "$@"; base_ref="$2"; shift 2 ;;
-    -h|--help)  usage; exit 0 ;;
-    -*)         die "unknown flag '$1'." ;;
-    *)          [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
+    --check)                mode="check"; shift ;;
+    --repo)                 need_val "$@"; repo="$2"; shift 2 ;;
+    --base-ref)             need_val "$@"; base_ref="$2"; shift 2 ;;
+    --against-pin)          against_pin="yes"; shift ;;
+    --receiver-project)     need_val "$@"; receiver_project="$2"; shift 2 ;;
+    --include-build-config) include_build_config="yes"; shift ;;
+    -h|--help)              usage; exit 0 ;;
+    -*)                     die "unknown flag '$1'." ;;
+    *)                      [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
   esac
 done
 [ -n "$target" ] || { usage; exit 2; }
@@ -97,6 +168,553 @@ resolve_roots "$target" "$DEFAULT_ROOTS" "default (ADR-0065's universal three)"
 # Attribution is a property of the CHECK. In apply mode there is no branch to attribute drift to, and a
 # caller passing --base-ref to a writer has misunderstood the flag — say so rather than ignoring it.
 [ -z "$base_ref" ] || [ "$mode" = "check" ] || die "--base-ref is only meaningful with --check."
+[ -z "$against_pin" ] || [ "$mode" = "check" ] || die "--against-pin is only meaningful with --check."
+[ -n "$against_pin" ] || [ -z "$receiver_project" ] \
+  || die "--receiver-project is only meaningful with --against-pin."
+[ -n "$against_pin" ] || [ -z "$include_build_config" ] \
+  || die "--include-build-config is only meaningful with --against-pin."
+
+# #1584 criterion 6, ANSWERED RATHER THAN INHERITED: the PR-arm/main-arm asymmetry does not carry over.
+#
+# --base-ref exists because canonical (`.github@main`) moves independently of the branch, so a PR that
+# never touched the kit could be red for (2) "your base is behind canonical" or (3) "your branch
+# predates a sync already on base". Both are artefacts of a comparand that moves on its own.
+#
+# A PIN-RELATIVE comparand does not move on its own. It is read out of the branch's OWN tree, so it
+# moves WITH the branch — and (2) and (3) become impossible rather than merely rarer:
+#   * a branch forked before a Renovate pin bump carries the OLD pin AND the old pin's files, which is
+#     coherent, so it is green — where the strict hub compare red it for being behind;
+#   * a branch that edits a vendored kit file no longer matches its own pin's manifest, so it is red,
+#     and merge-base arithmetic is not needed to know whose it is: nothing else could have moved.
+# The one PR that legitimately reds is Renovate's pin bump before kit-materialize re-materializes on it
+# — which is correct, is the bot's, and is fixable IN the branch, unlike every red the asymmetry existed
+# to suppress.
+#
+# So the asymmetry is DROPPED here rather than silently kept, and the two flags are refused together
+# rather than left to combine into a mode nobody designed. The strict hub-relative arm keeps --base-ref
+# unchanged; it is no longer what the CI gate runs.
+[ -z "$against_pin" ] || [ -z "$base_ref" ] \
+  || die "--base-ref and --against-pin are mutually exclusive. --base-ref attributes drift against a comparand that moves independently of the branch (.github@main); a pin-relative comparand is read from the branch's own tree and moves with it, so there is no inherited drift to attribute (#1584 criterion 6). Drop --base-ref."
+
+# The pin-relative verdict program (#1584). Argv: <receiver root> <receiver project, root-relative>
+# <skill roots, space-separated> <yes|no include build-config>. Stdout: a tab-separated ledger the shell
+# classifies — `pin`, `source`, `ok`, `drift`, `inconclusive`. It exits 0 whenever it REACHED a verdict,
+# including an inconclusive one; a non-zero exit means it crashed, which the caller turns into exit 3.
+PIN_VERIFY_PY=$(cat <<'PY'
+import hashlib
+import io
+import os
+import stat
+import sys
+import time
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
+
+sys.path.insert(0, os.environ["FSGG_SCRIPTS_DIR"])
+import fsgg_feed  # noqa: E402
+
+PACKAGE = "FS.GG.Kit"
+
+# The flat-container base the pinned package is restored from. Unset in CI, so this reads the real
+# nuget.org through fsgg_feed's own constant — the SAME registry the org preset routes FS.GG.* to, and
+# therefore the same one the receiver's own `dotnet restore` resolves. The fixture points this at a
+# local flat-container tree over file://, which exercises this exact fetch/unzip/verify path rather
+# than a mock of it: only the base URL differs between the test and production.
+_base = os.environ.get("FSGG_NUGET_ORG_BASE", "").strip()
+if _base:
+    fsgg_feed.NUGET_ORG = _base.rstrip("/")
+
+
+def _int_env(name, default):
+    try:
+        return max(1, int(os.environ.get(name, "").strip() or default))
+    except ValueError:
+        return default
+
+
+TRIES = _int_env("FSGG_KIT_FETCH_TRIES", 3)
+BACKOFF = _int_env("FSGG_KIT_FETCH_BACKOFF_S", 3)
+
+out = []
+
+
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
+
+
+class Inconclusive(Exception):
+    """I could not check. Never 'coherent' (#266) and never 'drifted' (#320).
+
+    `retryable` splits the two causes a caller must treat differently: a feed blip resolves itself on a
+    re-run, an unresolvable pin reproduces exactly and needs a commit. Collapsing them would make every
+    receiver's required check red-forever on a 30-second outage, which is the availability cost #1584's
+    risk analysis flagged as the price of putting a package feed in the required-check path.
+    """
+
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def localname(tag):
+    # MSBuild files may or may not carry the 2003 namespace; both spellings are live in this org.
+    return tag.rsplit("}", 1)[-1]
+
+
+def _kit_rows(root, tags):
+    for el in root.iter():
+        if localname(el.tag) not in tags:
+            continue
+        # NuGet package ids are case-insensitive; comparing them case-sensitively is how a resolver
+        # misses a real pin and reports the repo as unpinned.
+        include = (el.get("Include") or el.get("Update") or "").strip()
+        if include.lower() != PACKAGE.lower():
+            continue
+        yield el
+
+
+def _version_of(el):
+    """(version, is_override) for one PackageReference/PackageVersion. (None, False) if versionless."""
+    # VersionOverride BEATS the central PackageVersion under CPM, so a repo can carry
+    # `<PackageReference Include="FS.GG.Kit" VersionOverride="0.6.0" />` while its
+    # Directory.Packages.props says 0.9.0 — and reading only `Version` would verify against the version
+    # that is NOT restored, greening a tree that does not match what it actually materializes.
+    override = (el.get("VersionOverride") or "").strip()
+    if override:
+        return override, True
+    version = el.get("Version")
+    if version is None:
+        child = next((c for c in el if localname(c.tag) == "Version"), None)
+        version = child.text if child is not None else None
+    if version is None:
+        return None, False        # a version-less PackageReference IS the CPM shape: pin is elsewhere.
+    version = version.strip()
+    return (version or None), False
+
+
+def _property_value(root, name):
+    """The first non-empty MSBuild <PropertyGroup> value named `name`."""
+    for el in root.iter():
+        if localname(el.tag) == name and (el.text or "").strip():
+            return (el.text or "").strip()
+    return None
+
+
+def skill_roots(target, proj_rel, archive, override):
+    """Where a skill row materializes — WITHOUT asking this hub.
+
+    This is the last place a hub byte could have reached the verdict, and it is worth spelling out why
+    it is closed. `coordination-sync`'s own DEFAULT_ROOTS is a constant in THIS checkout: had the pin
+    check fallen back to it, editing that constant on the hub would have made every receiver's files
+    "missing" in a root they never adopted — no receiver committing anything, every receiver red. That
+    is precisely the #1584 defect, surviving through the PROGRAM rather than through the data.
+
+    The materialize's own truth is `FsggKitSkillRoots`, and both places it can come from are pinned or
+    receiver-owned, so both are safe:
+
+      1. $AGENT_SKILL_ROOTS      an explicit operator override (a CI knob), and the only one that is
+                                 neither — a human asked for it by name, in this run.
+      2. the receiver project's <FsggKitSkillRoots>   receiver-owned, in the branch's own tree, exactly
+                                 what MSBuild would use.
+      3. the PINNED PACKAGE's build/FS.GG.Kit.props default   pinned, so it moves only when the receiver
+                                 moves its pin.
+
+    `.agent-skill-roots` is deliberately NOT consulted here. It is the byte-copy fabric's declaration and
+    the materialize does not read it, so honouring it would make this gate look somewhere the kit was
+    never written — the writer/checker disagreement of #525, one fabric over. No receiver declares one
+    today (measured: 0 of 7), so nothing changes hands; the reason is recorded for whoever adds the first.
+    """
+    if override.strip():
+        return [r for r in override.replace(";", " ").split() if r], "$AGENT_SKILL_ROOTS"
+    declared = _property_value(_parse(os.path.join(target, proj_rel), proj_rel), "FsggKitSkillRoots")
+    if declared:
+        return ([r for r in declared.replace(";", " ").split() if r],
+                f"{proj_rel} <FsggKitSkillRoots>")
+    try:
+        props = archive.read("build/FS.GG.Kit.props").decode("utf-8")
+    except (KeyError, UnicodeDecodeError) as e:
+        raise Inconclusive(
+            f"the pinned {PACKAGE} package carries no readable build/FS.GG.Kit.props "
+            f"({type(e).__name__}: {e}), so the skill roots it materializes into cannot be read from "
+            f"it — and this gate will not substitute the hub's default for them (#1584). The package "
+            f"is malformed; nothing was verified."
+        )
+    try:
+        default = _property_value(ET.fromstring(props), "FsggKitSkillRoots")
+    except ET.ParseError as e:
+        raise Inconclusive(
+            f"build/FS.GG.Kit.props in the pinned {PACKAGE} package is not parsable XML ({e}), so the "
+            f"skill roots could not be read. Nothing was verified."
+        )
+    if not default:
+        raise Inconclusive(
+            f"build/FS.GG.Kit.props in the pinned {PACKAGE} package declares no FsggKitSkillRoots "
+            f"default, so there is no pinned answer to where skills materialize. Nothing was verified."
+        )
+    return ([r for r in default.replace(";", " ").split() if r],
+            "the pinned package's build/FS.GG.Kit.props default")
+
+
+def _read(path, rel):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Inconclusive(
+            f"{rel} could not be read ({type(e).__name__}: {e}), so this tree's {PACKAGE} pin could "
+            f"not be resolved and nothing was verified."
+        )
+
+
+def _parse(path, rel):
+    try:
+        return ET.fromstring(_read(path, rel))
+    except ET.ParseError as e:
+        raise Inconclusive(
+            f"{rel} is not parsable XML ({e}), so this tree's {PACKAGE} pin could not be resolved. "
+            f"Unparsable is not unpinned, and it is not coherent."
+        )
+
+
+def _imports(root, doc_dir, doc_rel, unresolved):
+    """Every <Import Project=...> target of one MSBuild file, resolved to an absolute path.
+
+    Only `$(MSBuildThisFileDirectory)` is expanded — it is the one property the canonical
+    Directory.Packages.props uses, and the CPM pin shape reaches Directory.Packages.local.props through
+    exactly this import. An import carrying any OTHER property is recorded in `unresolved` rather than
+    guessed at, and it can only ever cost us a literal — which lands on "pin unresolvable" (exit 3), not
+    on a pass. This resolver fails closed by construction.
+    """
+    for el in root.iter():
+        if localname(el.tag) != "Import":
+            continue
+        proj = (el.get("Project") or "").strip()
+        if not proj:
+            continue
+        expanded = proj.replace("$(MSBuildThisFileDirectory)", doc_dir + os.sep)
+        if "$(" in expanded:
+            unresolved.append(f"{doc_rel} imports '{proj}' (unexpanded MSBuild property)")
+            continue
+        yield os.path.normpath(os.path.join(doc_dir, expanded.replace("\\", os.sep)))
+
+
+def _collect(target, path, literals, unresolved, seen):
+    real = os.path.realpath(path)
+    if real in seen:
+        return                    # MSBuild tolerates a diamond import; a resolver must not loop on one.
+    seen.add(real)
+    rel = os.path.relpath(path, target)
+    root = _parse(path, rel)
+    for el in _kit_rows(root, ("PackageVersion", "PackageReference")):
+        version, is_override = _version_of(el)
+        if version:
+            literals.append((rel, version, is_override))
+    for imported in _imports(root, os.path.dirname(path), rel, unresolved):
+        if os.path.isfile(imported):
+            _collect(target, imported, literals, unresolved, seen)
+
+
+def _walk_up_to_cpm(target, start_dir, literals, unresolved):
+    """MSBuild's own Directory.Packages.props discovery: walk up, FIRST one found wins, then stop."""
+    directory = os.path.realpath(start_dir)
+    ceiling = os.path.realpath(target)
+    while True:
+        candidate = os.path.join(directory, "Directory.Packages.props")
+        if os.path.isfile(candidate):
+            _collect(target, candidate, literals, unresolved, set())
+            return
+        if directory == ceiling:
+            return
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            return
+        directory = parent
+
+
+def resolve_pin(target, proj_rel):
+    """This tree's effective FS.GG.Kit version, resolved the way MSBuild resolves it.
+
+    DERIVED, NOT LISTED (#1584 criterion 2). The three pin shapes the org runs today are not enumerated
+    anywhere in this function — they are what falls out of following the receiver project's own
+    resolution:
+
+      * an inline `Version=`/`VersionOverride=` on the PackageReference        -> read here, directly
+      * CPM via Directory.Packages.props                                       -> the walk-up below
+      * CPM via Directory.Packages.local.props                                 -> that file's own <Import>
+
+    A hand-maintained table of which repo pins in which file is the defect class #1507/#1510/#1515/#1528
+    closed, and it is precisely what rots when a fourth shape appears. This resolver learns a fourth
+    shape for free if MSBuild does.
+    """
+    proj_path = os.path.join(target, proj_rel)
+    if not os.path.isfile(proj_path):
+        raise Inconclusive(
+            f"the receiver project {proj_rel} does not exist in this tree, so there is no {PACKAGE} pin "
+            f"to verify against and NOTHING was verified. A coordination-kit receiver on package "
+            f"delivery carries one (kit-materialize.yml materializes FROM it); pass --receiver-project "
+            f"if this repo keeps it elsewhere."
+        )
+    root = _parse(proj_path, proj_rel)
+    refs = list(_kit_rows(root, ("PackageReference",)))
+    if not refs:
+        raise Inconclusive(
+            f"{proj_rel} declares no {PACKAGE} PackageReference, so this tree does not reference the "
+            f"kit package and its pin cannot be resolved."
+        )
+
+    unresolved = []
+    literals = []
+    for el in refs:
+        version, is_override = _version_of(el)
+        if version:
+            literals.append((proj_rel, version, is_override))
+    if not literals:
+        _walk_up_to_cpm(target, os.path.dirname(proj_path), literals, unresolved)
+    if not literals:
+        hint = (" Imports left unexpanded: " + "; ".join(unresolved) + ".") if unresolved else ""
+        raise Inconclusive(
+            f"{proj_rel} references {PACKAGE} with no Version, which is the central-package-management "
+            f"shape — but no Directory.Packages.props reachable from it (directly, or through its own "
+            f"<Import>s, walking up to the repo root) declares a {PACKAGE} PackageVersion.{hint} The "
+            f"pin is unresolvable; unresolvable is not unpinned, and it is not coherent."
+        )
+
+    overrides = [(p, v) for p, v, o in literals if o]
+    if overrides:
+        literals = [(p, v, True) for p, v in overrides]   # an override collapses the set, not contradicts it
+    where = ", ".join(f"{p} -> {v}{' (VersionOverride)' if o else ''}" for p, v, o in literals)
+    distinct = {v for _, v, _ in literals}
+    if len(distinct) > 1:
+        raise Inconclusive(
+            f"{PACKAGE} is pinned to more than one version in this tree ({where}). The effective pin is "
+            f"a restore-order accident, so no single version can be verified against."
+        )
+    return next(iter(distinct)), where
+
+
+def restore(version):
+    """The pinned .nupkg bytes, from the flat container. Retries only what a retry could fix."""
+    ident = PACKAGE.lower()
+    ver = version.lower()
+    url = f"{fsgg_feed.NUGET_ORG}/{ident}/{ver}/{ident}.{ver}.nupkg"
+    last = None
+    for attempt in range(1, TRIES + 1):
+        try:
+            request = urllib.request.Request(
+                url, headers={"User-Agent": "fsgg-coordination-sync", "Accept": "application/octet-stream"}
+            )
+            with urllib.request.urlopen(request, timeout=60) as resp:
+                return resp.read(), url
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # DETERMINISTIC, so it is not retried: a version the feed does not serve is a version
+                # the receiver's own restore cannot resolve either. Retrying it would hold the runner
+                # and still be wrong.
+                raise Inconclusive(
+                    f"{PACKAGE} {version} — the version THIS TREE pins — is not served at {url} "
+                    f"(HTTP 404), so there was nothing to verify against. A pin the feed cannot serve "
+                    f"is one this repo's own restore cannot resolve; fix the pin, or publish it."
+                )
+            last = f"HTTP {e.code} {e.reason}"
+        except urllib.error.URLError as e:
+            # file:// (the fixture's flat container) reports a missing package this way rather than as
+            # an HTTP 404. Same determinism, same treatment — a resolver whose verdict depended on the
+            # URL SCHEME would prove nothing about production.
+            if isinstance(e.reason, FileNotFoundError):
+                raise Inconclusive(
+                    f"{PACKAGE} {version} — the version THIS TREE pins — is not present at {url}, so "
+                    f"there was nothing to verify against."
+                )
+            last = f"unreachable: {e.reason}"
+        except (TimeoutError, OSError, ValueError) as e:
+            last = f"{type(e).__name__}: {e}"
+        if attempt < TRIES:
+            time.sleep(BACKOFF)
+    raise Inconclusive(
+        f"could not restore {PACKAGE} {version} from {url} after {TRIES} attempt(s) ({last}). NOTHING "
+        f"was verified about this tree. This is a FEED failure — it is not drift, it is not a wiring "
+        f"gap, and it is not this branch's doing.",
+        retryable=True,
+    )
+
+
+def manifest_rows(blob, url):
+    """(kind, package-relative path, receiver dest, sha256, executable) per kit-manifest.tsv row."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(blob))
+    except (zipfile.BadZipFile, OSError) as e:
+        raise Inconclusive(f"the artifact served at {url} is not a readable .nupkg ({e}). Nothing was verified.")
+    try:
+        raw = archive.read("kit/kit-manifest.tsv").decode("utf-8")
+    except (KeyError, UnicodeDecodeError) as e:
+        raise Inconclusive(
+            f"the {PACKAGE} package restored from {url} carries no readable kit/kit-manifest.tsv "
+            f"({type(e).__name__}: {e}), so there is no comparand. The package is malformed."
+        )
+    rows = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        fields = line.split("\t")
+        if len(fields) not in (4, 5):
+            raise Inconclusive(
+                f"kit/kit-manifest.tsv in {PACKAGE} carries a malformed row (want 4 legacy or 5 v2 "
+                f"tab-separated fields): {line!r}. Nothing was verified."
+            )
+        kind, pkg_rel, dest, want = fields[0], fields[1], fields[2], fields[3].lower()
+        if len(fields) == 4:
+            executable = kind == "client"     # v1 compatibility, same rule build/FS.GG.Kit.targets uses.
+        elif fields[4].strip().lower() in ("true", "false"):
+            executable = fields[4].strip().lower() == "true"
+        else:
+            raise Inconclusive(
+                f"kit/kit-manifest.tsv in {PACKAGE} carries a malformed executable field: {line!r}. "
+                f"Nothing was verified."
+            )
+        rows.append((kind, pkg_rel, dest, want, executable))
+    if not rows:
+        # The floor build/FS.GG.Kit.targets holds on the materialize side, held again here: an empty
+        # manifest would otherwise verify nothing and report a coherent kit — a silently missing kit,
+        # the one failure mode ADR-0062 exists to rule out.
+        raise Inconclusive(
+            f"kit/kit-manifest.tsv in the {PACKAGE} package restored from {url} names no files, so a "
+            f"tree could be verified against it vacuously. The package is malformed or truncated."
+        )
+    return rows, archive
+
+
+def contained(target, path, what):
+    """`path` resolved, asserted to sit inside the receiver root.
+
+    Every destination this gate touches comes from the package's manifest, and the manifest is data —
+    so a row naming `../../somewhere` would send the sha256 read, and the closed-set walk below, outside
+    the tree under test. Nothing here writes, so the blast radius is a confusing verdict rather than a
+    clobbered file; that is still a verdict about the wrong subject, which is the failure this fabric's
+    comments keep coming back to. Assert containment instead of trusting the row.
+    """
+    resolved = os.path.realpath(path)
+    root = os.path.realpath(target)
+    if resolved != root and not resolved.startswith(root + os.sep):
+        raise Inconclusive(
+            f"the {PACKAGE} package's manifest names {what} {os.path.relpath(path, target)!r}, which "
+            f"resolves outside the tree under test. Nothing was verified — a manifest that points out "
+            f"of the receiver is a PRODUCER defect, not this tree's."
+        )
+    return resolved
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify(target, roots, rows, archive, include_build_config):
+    managed_skill_dirs = {}
+    for kind, pkg_rel, dest, want, executable in rows:
+        if kind == "build-config" and not include_build_config:
+            # OPT-IN on the materialize side (FsggKitMaterializeBuildConfig, default false), so it must
+            # be opt-in here too. Verifying it unconditionally would red every receiver that correctly
+            # does not carry it.
+            continue
+
+        # The package's INTERNAL coherence, checked before its payload is used as a comparand. This is
+        # the only self-attestation this gate can break, and it is worth breaking: a package whose
+        # payload disagrees with its own manifest is a producer defect, and grading a receiver against
+        # it would blame the wrong tree. It is NOT proof the payload matches canonical — that is
+        # check-kit-published-coherence.py's question, on the hub side (#1583).
+        try:
+            packed = archive.read("kit/" + pkg_rel)
+        except KeyError:
+            raise Inconclusive(
+                f"the {PACKAGE} package's manifest names kit/{pkg_rel}, which the package does not "
+                f"contain. The package is malformed; nothing was verified about this tree."
+            )
+        got = hashlib.sha256(packed).hexdigest()
+        if got != want:
+            raise Inconclusive(
+                f"{PACKAGE} package integrity: kit/{pkg_rel} hashes {got} but its own manifest says "
+                f"{want}. The package disagrees with itself, so it cannot be a comparand. This is a "
+                f"PRODUCER defect, not this tree's."
+            )
+
+        # A skill row materializes into EVERY root; everything else has exactly one destination. The
+        # skill DIRECTORY is carried alongside, because it is the closed-set unit swept below — and
+        # deriving it from `dest`'s first component is what the materialize does, rather than
+        # re-splitting the joined path afterwards.
+        if kind == "skill":
+            placements = [(os.path.join(root, dest), os.path.join(target, root, dest.split("/")[0]))
+                          for root in roots]
+        else:
+            placements = [(dest, None)]
+
+        for rel, skill_dir in placements:
+            path = os.path.join(target, rel)
+            resolved = contained(target, path, "a destination")
+            if skill_dir is not None:
+                # Registered whether or not the file is present: a MISSING file must not also silence
+                # the closed-set sweep over the directory it belongs to.
+                expected = managed_skill_dirs.setdefault(
+                    contained(target, skill_dir, "a skill directory"), set())
+                expected.add(resolved)
+            if not os.path.isfile(path):
+                emit("drift", "missing", rel)
+                continue
+            if sha256_file(path) != want:
+                emit("drift", "differs", rel)
+                continue
+            # os.access(X_OK) answers True for everything when the process is root, which is how a mode
+            # check quietly stops checking inside a container. Read the mode bits.
+            is_exec = bool(stat.S_IMODE(os.stat(path).st_mode) & 0o111)
+            if executable and not is_exec:
+                emit("drift", "not executable", rel)
+            elif not executable and is_exec:
+                emit("drift", "unexpected executable", rel)
+            else:
+                emit("ok", rel)
+
+    # A skill directory is a CLOSED transport unit — build/FS.GG.Kit.targets deletes undeclared files
+    # inside one on every materialize, so a file the pinned package does not declare is a tree that does
+    # not match its pin. Without this, a stale file left by an older kit survives every check.
+    for skill_dir, expected in managed_skill_dirs.items():
+        if not os.path.isdir(skill_dir):
+            continue
+        for dirpath, _dirnames, filenames in os.walk(skill_dir):
+            for name in filenames:
+                found = os.path.realpath(os.path.join(dirpath, name))
+                if found not in expected:
+                    emit("drift", "extra", os.path.relpath(found, target))
+
+
+def main():
+    target, proj_rel, roots_raw, include_bc = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+    try:
+        version, where = resolve_pin(target, proj_rel)
+        emit("pin", version, where)
+        blob, url = restore(version)
+        emit("source", url)
+        rows, archive = manifest_rows(blob, url)
+        roots, roots_src = skill_roots(target, proj_rel, archive, roots_raw)
+        if not roots:
+            raise Inconclusive(
+                f"the skill roots resolved from {roots_src} are empty, so no skill file has a "
+                f"destination to verify and a pass would be vacuous."
+            )
+        emit("roots", " ".join(roots), roots_src)
+        verify(target, roots, rows, archive, include_bc == "yes")
+    except Inconclusive as e:
+        emit("inconclusive", "RETRYABLE" if e.retryable else "PERMANENT", str(e))
+    print("\n".join(out))
+
+
+main()
+PY
+)
 
 # Roster gate: only repos that `receives: coordination-kit` hold the kit. If --repo is a non-receiver
 # (e.g. the authority .github itself, or a repo removed from the kit list), there is nothing to do.
@@ -118,6 +736,91 @@ if [ -n "$repo" ]; then
     echo "coordination-sync: $repo does not receive coordination-kit (per repos.yml) — nothing to do."
     exit 0
   fi
+fi
+
+# --- PIN-RELATIVE CHECK (--against-pin, #1584) ----------------------------------------------------
+#
+# Everything below this block reads THIS CHECKOUT as the comparand. The pin arm reads none of it, so it
+# returns from here rather than falling through — the separation is the feature, and a later edit that
+# lets the two share a comparand would silently reinstate the moving tip.
+#
+# The one thing above this line that IS a hub read is the roster gate, and it is worth being exact
+# rather than reassuring about what it costs. It decides ONLY whether this repo is checked at all, so a
+# hub commit can move a repo between "checked" and "skipped" — it can never turn a COHERENT tree into an
+# INCOHERENT verdict, which is the retroactive red on byte-identical content that #1584 exists to close.
+#
+# Being exact: a hub commit that BREAKS the roster (an unparsable registry, a roster naming no receiver)
+# still reds every receiver, because that read fails CLOSED by design (#315) and exits 2. That is a
+# "could not check" red, not a "your tree is wrong" red, and this workflow reports it as one — but it is
+# a hub-caused red and claiming otherwise here would be the kind of comfortable half-truth this file's
+# own history warns about. What is gone is the channel that mattered: a hub commit changing the VERDICT
+# on a tree it never touched. No byte of this checkout reaches the comparison below.
+if [ -n "$against_pin" ]; then
+  command -v python3 >/dev/null 2>&1 \
+    || die "--against-pin needs python3 (it resolves the receiver's MSBuild pin, restores the pinned package, and verifies sha256s). Install python3 on this runner."
+  [ -f "$HERE/fsgg_feed.py" ] \
+    || die "the feed reader is not at $HERE/fsgg_feed.py. --against-pin IMPORTS its flat-container base from there rather than restating it, so that the version a receiver is graded against is resolved from the SAME registry the org preset routes FS.GG.* to (and therefore the same one Renovate bumps against). Without it no pin can be restored — and reporting that as a coherent kit is the fail-open this flag exists to remove."
+
+  pin_project="${receiver_project:-$DEFAULT_RECEIVER_PROJECT}"
+  pin_bc="no"; [ -z "$include_build_config" ] || pin_bc="yes"
+
+  # The roots are handed over ONLY when a human named them in this run ($AGENT_SKILL_ROOTS). Otherwise
+  # an EMPTY string goes across and the verifier derives them from the receiver project or from the
+  # PINNED PACKAGE — never from this checkout's DEFAULT_ROOTS. That constant is hub state, and a pin
+  # check that fell back to it would let a hub edit red every receiver over files "missing" from a root
+  # they never adopted: #1584's own defect, arriving through the program instead of the data.
+  # `$ROOTS_SRC` is resolve_roots' own report of which rule won, so this asks the resolver rather than
+  # re-deriving the precedence and risking a second, disagreeing answer (#525).
+  pin_roots=""
+  [ "$ROOTS_SRC" != '$AGENT_SKILL_ROOTS' ] || pin_roots="$ROOTS"
+
+  PIN_LEDGER="$(mktemp "${TMPDIR:-/tmp}/coordination-sync-pin.XXXXXX")"
+  trap 'rm -f "$PIN_LEDGER"' EXIT
+  # A crash of the verdict program is NOT a verdict. It reaches the caller as INCONCLUSIVE (3) and
+  # never as green (#266) or as drift (#320) — the same discipline repos-audit.sh applies to its own
+  # embedded program, for the same reason: an escaping traceback that fell through to exit 0 would be
+  # the exact fail-open this flag was written to remove.
+  pin_rc=0
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$PIN_VERIFY_PY" \
+    "$target" "$pin_project" "$pin_roots" "$pin_bc" > "$PIN_LEDGER" || pin_rc=$?
+  if [ "$pin_rc" -ne 0 ]; then
+    echo "::error::coordination-sync: INCONCLUSIVE — the pin-relative verifier exited $pin_rc without reaching a verdict, so NOTHING was verified about this tree. This is not a coherent kit and it is not a drifted one." >&2
+    exit 3
+  fi
+
+  pin_line="$(awk -F'\t' '$1 == "pin" { print; exit }' "$PIN_LEDGER")"
+  [ -z "$pin_line" ] || echo "coordination-sync: pin = $(printf '%s' "$pin_line" | cut -f2) (from $(printf '%s' "$pin_line" | cut -f3))"
+  src_line="$(awk -F'\t' '$1 == "source" { print $2; exit }' "$PIN_LEDGER")"
+  [ -z "$src_line" ] || echo "coordination-sync: comparand = $src_line (the package's own kit-manifest.tsv; NOT this checkout)"
+  roots_line="$(awk -F'\t' '$1 == "roots" { print; exit }' "$PIN_LEDGER")"
+  [ -z "$roots_line" ] || echo "coordination-sync: skill roots = $(printf '%s' "$roots_line" | cut -f2) (from $(printf '%s' "$roots_line" | cut -f3))"
+
+  # INCONCLUSIVE outranks everything. Some `ok` lines may already have been emitted before the read
+  # failed, and a partial verification is not a verification.
+  if grep -q '^inconclusive	' "$PIN_LEDGER"; then
+    while IFS=$'\t' read -r _k class message; do
+      echo "::error::coordination-sync: INCONCLUSIVE ($class) — $message" >&2
+    done < <(grep '^inconclusive	' "$PIN_LEDGER")
+    echo "::error::coordination-sync: NOTHING was verified about this tree. INCONCLUSIVE is neither 'the kit is coherent' nor 'the kit has drifted'; a RETRYABLE one is worth re-running, a PERMANENT one reproduces exactly and needs a commit." >&2
+    exit 3
+  fi
+
+  awk -F'\t' '$1 == "ok" { print "ok: " $2 }' "$PIN_LEDGER"
+  if grep -q '^drift	' "$PIN_LEDGER"; then
+    while IFS=$'\t' read -r _k kind rel; do
+      echo "::error::coordination-sync: DRIFT ($kind): $rel"
+    done < <(grep '^drift	' "$PIN_LEDGER")
+    if grep -q '^drift	not executable	' "$PIN_LEDGER"; then
+      echo "::error::coordination-sync: a managed file matches its pinned package byte-for-byte but has LOST its executable bit — 'chmod +x' the file(s) above, or re-run the materialize, which restores the mode as well as the bytes." >&2
+    fi
+    pin_v="$(printf '%s' "$pin_line" | cut -f2)"
+    echo "::error::coordination-sync: this tree does NOT match the FS.GG.Kit ${pin_v:-pin} it pins. This verdict is about THIS TREE ONLY — the hub was not consulted and cannot have caused it. Re-run the materialize to restore it: dotnet build $pin_project -t:FsggKitMaterialize" >&2
+    exit 1
+  fi
+  ok_n="$(awk -F'\t' '$1 == "ok"' "$PIN_LEDGER" | wc -l | tr -d ' ')"
+  echo "coordination-sync: OK — all $ok_n materialized file(s) match the FS.GG.Kit $(printf '%s' "$pin_line" | cut -f2) this tree pins."
+  echo "coordination-sync: this says nothing about whether that pin is CURRENT — that is the #1540 kit-pin freshness sweep's question, and it is graded daily in FS-GG/.github regardless of whether this repo pushes."
+  exit 0
 fi
 
 # The kit's skills: the `kind: skill` rows of registry/repos.yml, READ from the registry rather than

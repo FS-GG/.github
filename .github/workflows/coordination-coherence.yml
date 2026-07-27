@@ -1,64 +1,124 @@
 # Reusable coordination-kit coherence gate (ADR-0019 slice 2).
 #
 # Every FS-GG repo that `receives: coordination-kit` (per FS-GG/.github registry/repos.yml) calls this
-# via `workflow_call`. It checks out the caller and FS-GG/.github (the ADR-0019 authority / canonical
-# kit source), then runs `scripts/coordination-sync --check`, so the caller's CI fails if its copy of
-# the coordination kit (the cross-repo-coordination skill + the fsgg-coord client) has drifted from —
-# or is missing against — the canonical source. `--repo ${{ github.repository }}` gates on the roster:
-# a repo that is NOT a coordination-kit receiver (e.g. .github itself) passes trivially with nothing
-# to check. Mirrors the contract-coherence / skill-union-assert reusable-gate pattern.
+# via `workflow_call`. It verifies that the repo's committed coordination kit (the cross-repo skills,
+# the fsgg-coord client, the engine manifest) matches THE FS.GG.Kit PACKAGE VERSION THAT REPO ITSELF
+# PINS — restored from the feed, compared against the sha256s that package's own kit-manifest.tsv
+# ships. `--repo ${{ github.repository }}` gates on the roster: a repo that is NOT a coordination-kit
+# receiver (e.g. .github itself) passes trivially with nothing to check.
 #
-# ON A PULL REQUEST THE GATE ATTRIBUTES THE DRIFT (#450). Canonical is `.github@main`, which moves
-# constantly, and the receiver's own main moves behind it in the window before a Renovate FS.GG.Kit pin
-# bump re-materializes the kit. The check used to compare the PR's tree against canonical and report one identical
-# `DRIFT` for all three of:
+# WHY THE COMPARAND IS THE PIN AND NOT THIS HUB (#1584)
 #
-#   1. the PR itself edits a vendored kit file   — real drift, and the author's to fix
-#   2. the receiver's main is behind canonical   — real, but the REPO's; propagate owes it a sync PR
-#   3. the PR's branch predates a kit sync that  — nothing is wrong at all
-#      is already on the receiver's main
+# This gate used to check out `FS-GG/.github@main` and byte-compare the receiver against it. `main`
+# moves constantly, so a receiver's verdict was a function of WHEN the check ran rather than of what
+# the receiver committed. On 2026-07-27 the required `kit / coordination-kit` context PASSED on
+# FS.GG.SDD's merged SHA 0376309 at 08:15Z and FAILED on byte-identical content at 08:21Z, because a
+# hub commit landed at 08:05:39Z in between (FS.GG.SDD#731). The same shape hit FS.GG.SDD#722,
+# FS.GG.Net#37, FS.GG.Templates#1540, FS.GG.Rendering#1027 and FS.GG.Game#512 — six receiver repairs
+# in one day, none caused by the receiver. Publishing FS.GG.Kit 0.8.1 moved six receivers from current
+# to stale in a single step, with no receiver committing anything.
 #
-# (2) and (3) fire on PRs that never went near the kit, so in a repo running 5-6 parallel workers the
-# check is red on branches that have nothing to do with it. That is not a cosmetic problem: a worker
-# read the red as a repo defect and filed a long, well-evidenced issue about a kit resync that had
-# merged 110 SECONDS EARLIER (FS.GG.Rendering#473, a phantom), and a second worker lost an hour to the
-# same signal 20 minutes later. A check that is red for a reason its reader cannot fix is one they
-# learn to ignore — and then it cannot catch the real drift when it comes.
+# Branch protection cannot protect against that: a green required check was not a durable statement,
+# so a merge could be legitimately green at merge time and red minutes later with nothing changed.
 #
-# So on a `pull_request` we hand the script the caller's CURRENT base tip and it reports only the drift
-# the BRANCH AUTHORED (merge-base-relative); inherited drift becomes an advisory that names whose job it
-# is. Every other event — notably the receiver's push to main — takes no base ref and stays the strict
-# tree compare it always was. THAT run is the verdict of record on a repo's kit; the PR-side relaxation
-# only ever declines to blame a branch for drift it did not cause, and never hides it.
+# Now the verdict is a function of the receiver ALONE. A hub commit can never retroactively red a
+# receiver, because no byte of this hub reaches the comparison. A receiver goes red only when its own
+# tree diverges from its own pin — an invariant wholly inside its own control, and therefore durable.
 #
-# The base tip is read FRESH (not the PR event's pinned `base.sha`), which is what makes the phantom
-# self-heal: once the sync lands on the receiver's main, a re-run of the stale branch's check goes green
-# on its own. Rendering#473's red would have cleared itself 110 seconds later instead of becoming an issue.
+# WHAT THAT DELIBERATELY GIVES UP, AND WHO PICKS IT UP
 #
-# Receivers need no change: `workflow_call` inherits the caller's triggering event, so this workflow
-# derives the base ref itself.
+# A receiver pinned two versions back with a perfectly materialized tree is now legitimately and
+# permanently green here. That is the trade, stated rather than discovered: FS.GG.Audio sat green all
+# day at kit 0.6.0 while every other receiver moved to 0.8.x, and under this gate it is green
+# *correctly*. "Is my pin CURRENT?" is a different question with a different owner:
 #
-# Callers must be public or grant the checkout token read on FS-GG/.github (public). No packages/
-# write scopes are needed — this gate is pure file comparison, deliberately taking no dependency on
-# the SDD-owned typed tooling.
+#   scripts/repos-audit.sh's kit-pin freshness sweep (.github#1540) is f(roster, feed) — it needs no
+#   receiver to push, runs DAILY at 08:17 UTC in FS-GG/.github, and EXITS 1 on any stale pin, reddening
+#   that workflow with an ::error:: naming the repo.
+#
+# It is advisory in the only sense that matters here — it gates no receiver's PR — and it is emphatically
+# NOT advisory at org level, which is what makes it safe to be the sole "you are behind" signal. Do not
+# add a staleness opinion to this gate: two gates answering one question is how both get ignored.
+#
+# THIS IS NOT END-TO-END PROOF, AND MUST NOT BE READ AS ONE
+#
+# The manifest verified against ships INSIDE the package being verified, so this check is
+# self-attesting. It does catch a package that disagrees with ITSELF (payload vs its own manifest, a
+# producer defect that would otherwise blame a healthy receiver), but it cannot see a package whose
+# payload disagrees with CANONICAL. That question belongs to `check-kit-published-coherence.py` on the
+# hub side. The invariant "a receiver's committed kit is canonical's kit" holds only in COMPOSITION
+# with that gate, and only for as long as that gate is HEALTHY — a live condition, not a constant. It
+# went red on 2026-07-27 when FS.GG.Kit 0.8.0 fell behind canonical (.github#1583, repaired the same
+# day), and every hour it is red is an hour a green here is worth less than it looks. A green here is a
+# statement about this repo and its pin, and nothing more.
+#
+# THE PR-ARM / main-ARM ASYMMETRY IS GONE (#1584 criterion 6), AND HERE IS WHY
+#
+# This workflow used to hand the script a `--base-ref` on pull requests so it could ATTRIBUTE drift
+# (#450). That existed because canonical moved independently of the branch, so a PR that never went
+# near the kit could be red for "your base is behind canonical" or "your branch predates a sync already
+# on base" — reds their author could not fix. A worker once filed a long, well-evidenced issue about a
+# kit resync that had merged 110 SECONDS earlier (FS.GG.Rendering#473, a phantom), and a second worker
+# lost an hour to the same signal 20 minutes later.
+#
+# A pin-relative comparand is read out of the branch's OWN tree, so it moves WITH the branch, and both
+# of those cases become impossible rather than merely rarer: a branch forked before a Renovate pin bump
+# carries the old pin AND the old pin's files, which is coherent, so it is green. Attribution therefore
+# has nothing left to attribute and is DROPPED rather than silently carried — the script refuses
+# `--base-ref` together with `--against-pin` rather than letting them combine into a mode nobody
+# designed. The one PR that legitimately reds is Renovate's pin bump before kit-materialize
+# re-materializes on it, which is correct, is the bot's, and is fixable IN the branch.
+#
+# A welcome consequence: the caller no longer needs `fetch-depth: 0` on pull requests. Attribution was
+# merge-base arithmetic and needed the branch's full history; a pin check reads files. Every receiver's
+# PR pipeline stops paying for a full clone it no longer reads.
+#
+# Callers must be public or grant the checkout token read on FS-GG/.github (public). The restore is
+# ANONYMOUS — FS.GG.Kit ships to public nuget.org (release-kit.yml dual-publishes, ADR-0012/0013), the
+# same registry the org Renovate preset routes FS.GG.* to and therefore the same one the receiver's own
+# `dotnet restore` resolves. No packages scope and no feed credential are needed.
 name: coordination-coherence
 
 on:
   workflow_call:
     inputs:
       github-ref:
-        description: "Ref of FS-GG/.github to source the canonical kit + roster from."
+        description: >-
+          Ref of FS-GG/.github to source the VERIFIER and the roster from. It is no longer the source of
+          the comparand: since #1584 the kit bytes are compared against the receiver's own pinned
+          package, so moving this ref changes which program runs, never whether a coherent receiver
+          passes.
         type: string
         default: "main"
       target-path:
         description: "Path within the caller's checkout to verify (the repo root by default)."
         type: string
         default: "."
+      receiver-project:
+        description: >-
+          The FS.GG.Kit receiver project the pin is resolved from. Shares kit-materialize.yml's input
+          name AND default deliberately: the gate must read the pin off the same project the
+          materialize writes from, or it grades a version the receiver never restored.
+        type: string
+        default: .config/kit/FS.GG.Kit.receiver.proj
+      include-build-config:
+        description: >-
+          Also verify the build-config members (Directory.Build.props / Directory.Packages.props). OFF
+          by default, mirroring the materialize's own FsggKitMaterializeBuildConfig: build-config is
+          opt-in and reaches only 4 receivers, so verifying it unconditionally would red every receiver
+          that correctly does not carry it.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  # DO NOT RENAME THIS JOB. Every receiver's branch protection requires the context `kit /
+  # coordination-kit`, which is built from the caller's job name and THIS job id. Renaming it makes the
+  # required context reference a check run that will never report, and a required context with no run
+  # reads as passing on some paths (.github#1575) — a rename would silently retire the gate in eight
+  # repos at once.
   coordination-kit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -67,42 +127,110 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: caller
-          # Attribution is merge-base arithmetic, so a PR needs the branch's history: a shallow clone
-          # cannot answer "did this branch author the kit change?", and the script fails CLOSED (exit 2)
-          # rather than guessing. The push-to-main run passes no --base-ref and does a strict tree
-          # compare, so it needs no history at all — don't make every receiver's main pipeline pay for a
-          # full clone it never reads.
-          #
-          # The depths are QUOTED. GitHub expressions treat the number 0 as FALSY, so the obvious
-          # `${{ cond && 0 || 1 }}` silently evaluates to 1 on the true branch — a shallow clone, and an
-          # attribution that then fails closed on every PR. The strings '0'/'1' are both truthy.
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-      - name: Checkout FS-GG/.github (canonical kit + roster)
+          # SHALLOW ON EVERY EVENT, including pull requests. The full clone existed solely for
+          # `--base-ref` attribution, which was merge-base arithmetic over the branch's history; the
+          # pin check reads files off disk and asks git nothing. See the asymmetry note in the header.
+          fetch-depth: 1
+      # The VERIFIER and the roster — NOT the comparand. This checkout supplies the program that runs
+      # and the roster row that decides whether this repo is checked at all. Being exact about the
+      # residue rather than reassuring: a hub commit can move a repo between "checked" and "skipped",
+      # and a hub commit that BREAKS the roster still reds every receiver, because that read fails
+      # CLOSED by design (.github#315) and lands on the INCONCLUSIVE/MISCONFIGURED steps below, which
+      # say plainly that nothing was verified. What is gone is the channel that mattered: a hub commit
+      # changing the VERDICT on a receiver tree it never touched. No hub byte reaches the comparison.
+      - name: Checkout FS-GG/.github (the verifier + the roster)
         uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
-      # Fetch the base branch's CURRENT tip. `github.event.pull_request.base.sha` is pinned to when the
-      # PR event fired, which would keep reporting a sync that has since landed — the phantom itself.
-      - name: Fetch the base branch tip (pull requests only)
-        if: github.event_name == 'pull_request'
+      - name: Verify the coordination kit matches the version this repo pins
+        id: verify
         env:
-          BASE: ${{ github.event.pull_request.base.ref }}
-        run: git -C caller fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
-      - name: Verify the coordination kit is coherent
-        env:
-          # Empty on every non-PR event, which is exactly the strict, unattributed check — the verdict
-          # of record that a receiver's push-to-main run performs on its own kit.
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || '' }}
           REPO: ${{ github.repository }}
           TARGET: caller/${{ inputs.target-path }}
-        # Two explicit invocations rather than one with a `${BASE_REF:+--base-ref "$BASE_REF"}` splice:
-        # that idiom yields two argv entries only by way of unquoted word-splitting, and reads as though
-        # it might pass one. Spelling both calls out costs a line and hides nothing.
+          PROJ: ${{ inputs.receiver-project }}
+        # Two explicit invocations rather than one with a `${BC:+--include-build-config}` splice: that
+        # idiom yields an argv entry only by way of unquoted word-splitting, and reads as though it
+        # might pass an empty one. Spelling both calls out costs a line and hides nothing.
+        #
+        # The exit code is GATHERED here and classified by the named steps below, so the step that goes
+        # red is the one that says what happened — the shape repos-audit.yml uses, for the same reason.
         run: |
-          if [ -n "$BASE_REF" ]; then
-            bash dotgithub/scripts/coordination-sync --check --repo "$REPO" --base-ref "$BASE_REF" "$TARGET"
+          rc=0
+          if [ "${{ inputs.include-build-config }}" = "true" ]; then
+            bash dotgithub/scripts/coordination-sync --check --against-pin --repo "$REPO" \
+              --receiver-project "$PROJ" --include-build-config "$TARGET" || rc=$?
           else
-            bash dotgithub/scripts/coordination-sync --check --repo "$REPO" "$TARGET"
+            bash dotgithub/scripts/coordination-sync --check --against-pin --repo "$REPO" \
+              --receiver-project "$PROJ" "$TARGET" || rc=$?
           fi
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: The committed kit matches this repo's pin
+        if: steps.verify.outputs.rc == '0'
+        run: |
+          {
+            echo "### ✅ coordination-kit: the committed kit matches the FS.GG.Kit version this repo pins"
+            echo "This verdict is about **this repo only** — FS-GG/.github's current state was not"
+            echo "consulted and cannot change it. It says nothing about whether the pin is CURRENT;"
+            echo "that is \`repos-audit\`'s daily kit-pin freshness sweep (FS-GG/.github#1540)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'DRIFT: the committed kit does not match this repo''s pin'
+        if: steps.verify.outputs.rc == '1'
+        run: |
+          {
+            echo "### ❌ coordination-kit: the committed kit does not match the FS.GG.Kit version this repo pins"
+            echo "The annotations on the verify step name every file. This is drift **inside this"
+            echo "repo**: the hub was not consulted, so nothing outside this repository caused it."
+            echo ""
+            echo "Fix it by re-running the materialize on this branch:"
+            echo '```'
+            echo "dotnet build ${{ inputs.receiver-project }} -t:FsggKitMaterialize"
+            echo '```'
+            echo "If this is a Renovate FS.GG.Kit bump PR, \`kit-materialize\` does that for you — it"
+            echo "re-materializes the kit onto the bump branch and pushes it back."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=coordination-kit: the committed kit does not match this repo's pin::A managed kit file is missing, altered, or left over from an older kit. This is a real finding about THIS repository and it is fixable in this branch."
+          exit 1
+
+      # INCONCLUSIVE is neither of the above, and it must not be collapsed into either (#266/#320). It
+      # goes RED — failing closed — but it says plainly that NOTHING was verified, so a reader does not
+      # go hunting through their own tree for a drift the gate never looked for.
+      #
+      # This is the cost the #1584 risk analysis named for putting a package feed in a required-check
+      # path: a feed outage can red every receiver at once on infrastructure unrelated to their code.
+      # The script already retries a RETRYABLE failure before reporting one, and the message says which
+      # kind this was — re-run a RETRYABLE, commit a fix for a PERMANENT.
+      - name: 'INCONCLUSIVE: nothing was verified'
+        if: steps.verify.outputs.rc == '3'
+        run: |
+          {
+            echo "### ⚠️ coordination-kit: INCONCLUSIVE — nothing was verified"
+            echo "The gate could not resolve this repo's FS.GG.Kit pin, or could not restore that"
+            echo "version from the feed. **No claim was made about this repo's kit** — this is neither"
+            echo "\"the kit is coherent\" nor \"the kit has drifted\"."
+            echo ""
+            echo "The annotation on the verify step says which kind it was:"
+            echo "* **RETRYABLE** — a feed outage. Re-run this job; the code did not cause it."
+            echo "* **PERMANENT** — the pin is missing, unparsable, ambiguous, or names a version the"
+            echo "  feed does not serve. A re-run reproduces it exactly; it needs a commit."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=coordination-kit: INCONCLUSIVE — nothing was verified::The pin could not be resolved or the pinned package could not be restored. This is NOT a drift finding and NOT a clean bill. See the ::error:: annotations on the verify step."
+          exit 1
+
+      # A misconfiguration (exit 2) or any code this workflow does not classify. Reported separately so
+      # a broken invocation never wears the drift step's message — a red that names the wrong subject is
+      # the defect this fabric's own comments exist to prevent (#327/#335).
+      - name: 'MISCONFIGURED: the gate could not run'
+        if: steps.verify.outputs.rc != '0' && steps.verify.outputs.rc != '1' && steps.verify.outputs.rc != '3'
+        run: |
+          {
+            echo "### ⚠️ coordination-kit: the gate could not run"
+            echo "\`coordination-sync\` exited \`${{ steps.verify.outputs.rc }}\`, which is a"
+            echo "misconfiguration or a crash — not a verdict about this repo's kit. Nothing was"
+            echo "verified. The verify step's output names the cause."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=coordination-kit: the gate could not run::coordination-sync exited ${{ steps.verify.outputs.rc }} without reaching a verdict. Nothing was verified."
+          exit 1
