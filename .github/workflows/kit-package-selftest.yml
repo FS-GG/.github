@@ -1,0 +1,64 @@
+# Self-test for src/FS.GG.Kit/stage-kit.sh — the PRODUCER of the FS.GG.Kit package (ADR-0062).
+#
+# Runs tests/kit-package/run.sh, which drives the real script over the real checkout (a complete kit,
+# exit 0) and then over a fake source root holding a stubbed scripts/repos.sh, proving every registry
+# read fails CLOSED: a reader that dies, an empty skill list, an empty client list, and a dead config
+# source/dest read are each an exit 2 naming the read that failed — not an empty loop that stages a kit
+# with no skills, no client and no engine manifest and reports success (.github#1614).
+#
+# WHY IT IS NOT COVERED BY THE TWO GATES THAT ALREADY RUN stage-kit.sh. Both require it to SUCCEED,
+# so between them they cover the happy path twice and the failure legs not at all — and the fail-open
+# lives entirely in the failure legs:
+#
+#   kit-package.yml            -> src/FS.GG.Kit/verify-package.sh: packs, materializes, and proves the
+#                                 package fails loud on a TAMPERED file. Its subject is the artifact a
+#                                 successful stage produced.
+#   coordination-sync-selftest -> tests/coordination-sync/run.sh invokes stage-kit.sh to build a real
+#                                 .nupkg for the --against-pin legs, and treats a non-zero exit as a
+#                                 broken fixture.
+#
+# This one is the other half: what stage-kit.sh does when the registry read it derives everything from
+# does not answer. Same subject, opposite side.
+#
+# The `paths:` are the script AND its inputs — the registry it derives the kit from, the reader it
+# derives it THROUGH, the sync-build-config.sh whose FILES=() set it re-derives, and the dist/dotnet
+# files that set names. An edit to any of them changes what this fixture stages. `.claude/skills/**` is
+# deliberately absent: coordination-sync-selftest already triggers on it and asserts the same
+# per-skill source shape, and adding it here would run this fixture on every skill edit for a leg that
+# only counts rows.
+name: kit-package-selftest
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Kit/stage-kit.sh"
+      - "tests/kit-package/**"
+      - "registry/repos.yml"
+      - "scripts/repos.sh"
+      - "scripts/sync-build-config.sh"
+      - "dist/dotnet/**"
+      - ".github/workflows/kit-package-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Kit/stage-kit.sh"
+      - "tests/kit-package/**"
+      - "registry/repos.yml"
+      - "scripts/repos.sh"
+      - "scripts/sync-build-config.sh"
+      - "dist/dotnet/**"
+      - ".github/workflows/kit-package-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the kit-package fixture (no network)
+        run: bash tests/kit-package/run.sh
