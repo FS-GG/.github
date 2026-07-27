@@ -186,10 +186,18 @@ now covers.
 
 [`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) implements
 #549's original question: point it at a repo and it proves every required status check is a context
-some `pull_request` workflow can produce, deriving the producible set statically from committed YAML
-(job `name:` else id; `<caller> / <callee>` nested to any depth; matrix suffixes). It also catches a
-plain **typo** in a protection setting for free — a misspelled required context is indistinguishable
+some workflow reports **on every pull request**, deriving the producible set statically from committed
+YAML (job `name:` else id; `<caller> / <callee>` nested to any depth; matrix suffixes). It also catches
+a plain **typo** in a protection setting for free — a misspelled required context is indistinguishable
 from a renamed one, and both deadlock identically.
+
+**"On every pull request", not merely "from a workflow that triggers on `pull_request`"**
+([#1508](https://github.com/FS-GG/.github/issues/1508)). The weaker phrasing is what this section used
+to say, and it is strictly wider: a workflow whose `pull_request` trigger carries a `paths:` filter
+does trigger on `pull_request` and still reports nothing on a PR that touches none of those paths.
+GitHub does not skip such a required check — it never creates the check run — so protection waits on
+it forever. The gate models `paths:`/`paths-ignore:` on both PR events; `branches:` and `types:` are
+the same class and are not modelled yet ([#1519](https://github.com/FS-GG/.github/issues/1519)).
 
 Reading protection needs a token with `administration: read`. A person with an admin token can run it
 by hand:
