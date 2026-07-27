@@ -26,6 +26,16 @@ exists to catch is worse than no fixture. The repo already pins `PyYAML==6.0.3` 
 `.github/actions/setup-policy-python` to supply it; sibling fixtures (tests/dispatch-preflight,
 tests/feed-coherence) parse workflow YAML the same way.
 
+AND THE READING ITSELF IS NOT KEPT HERE (.github#1530). `scripts/check-sparse-checkout-closure.py`
+reads the same three non-obvious rules out of the same block, and a second copy of a PARSING RULE is
+this repo's most-filed bug class — the very thing #1522's gate exists to close one level down. Both
+callers now take `scripts/lib/sparse.py`. That was not a tidy-up: the two copies had ALREADY drifted,
+and this file held the worse half of it. A bare `sparse-checkout:` with no value reached
+`params.get(...)` as `None`, indistinguishable from an ABSENT key, so this module reported a full
+clone for a workflow that fetches an EMPTY TREE — a fail-open, in the module whose header says a
+declared-but-unreadable block "is an error, never that". The shared module tests membership with
+`in`, which is the only way to tell those two apart.
+
 HOW THE SELECTION IS COMPUTED: with git, not with a re-implementation of gitignore semantics. A
 throwaway repo is built holding EMPTY placeholders at every tracked path of the subject repo — the
 path universe, and nothing else — then `git sparse-checkout set` is run with the workflow's own
@@ -59,6 +69,14 @@ import subprocess
 import sys
 import tempfile
 
+# `scripts/` on the path, so `lib.sparse` resolves — the same contract every gate in this repo uses
+# (see scripts/lib/gate.py's header). Anchored on THIS FILE rather than on --repo-root: the subject
+# being materialised is frequently a synthetic throwaway repo, and reading the shared parse out of
+# the tree under test would make the fixture assert whatever that tree happened to contain.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+
+from lib.sparse import SparseRefusal, cone_mode_of, patterns_of  # noqa: E402 (path shim first)
+
 AUTHORITY = "FS-GG/.github"
 
 
@@ -86,7 +104,11 @@ def parse_workflow(path: Path) -> tuple[list[str], bool]:
     """Return (patterns, cone_mode) for the workflow's FS-GG/.github checkout step.
 
     An empty pattern list means the step declares NO sparse-checkout — a full clone, which
-    under-fetches nothing. A declared-but-unreadable one is an error, never that.
+    under-fetches nothing. A declared-but-unreadable one is an error, never that, and since #1530
+    that sentence is finally TRUE of a bare `sparse-checkout:` too.
+
+    The block itself is read by `scripts/lib/sparse.py`; what stays here is finding the ONE authority
+    step to hand it, and translating its refusal into this module's own exit-2 contract.
     """
     try:
         import yaml
@@ -112,28 +134,16 @@ def parse_workflow(path: Path) -> tuple[list[str], bool]:
         )
     params = steps[0]
 
-    raw = params.get("sparse-checkout")
-    if raw is None:
-        patterns: list[str] = []
-    else:
-        # actions/checkout splits the input on newlines and drops blanks, so a block scalar and a
-        # plain one reach git the same way. Mirror that rather than special-casing the YAML shape:
-        # `>` folds its lines into ONE space-joined string, and reporting that as several clean
-        # patterns is precisely how a hand parser fails OPEN here.
-        entries = raw if isinstance(raw, list) else str(raw).split("\n")
-        patterns = [entry.strip() for entry in entries if str(entry).strip()]
-        if not patterns:
-            # Declared and yielded nothing. NOT the same fact as "no sparse-checkout declared":
-            # treating it as a full clone would make every coverage assertion below pass over a
-            # workflow that fetches an empty tree (#266 — "I could not tell" is not "it is fine").
-            raise SparseError(f"{path}: sparse-checkout is declared but yields no patterns")
-
-    # actions/checkout defaults sparse-checkout-cone-mode to true. An omitted flag IS that default,
-    # not "unknown" — and it changes what the patterns mean, so it is read rather than assumed.
-    cone_raw = params.get("sparse-checkout-cone-mode", True)
-    if not isinstance(cone_raw, bool):
-        raise SparseError(f"{path}: unreadable sparse-checkout-cone-mode: {cone_raw!r}")
-    return patterns, cone_raw
+    try:
+        # `None` from the shared reader means the key is ABSENT — a full clone. `[]` is not the same
+        # fact and is never returned: a DECLARED block that yields nothing is refused there, because
+        # treating it as a full clone would make every coverage assertion below pass over a workflow
+        # that fetches an empty tree (#266 — "I could not tell" is not "it is fine").
+        patterns = patterns_of(params, str(path))
+        cone = cone_mode_of(params, str(path))
+    except SparseRefusal as error:
+        raise SparseError(str(error)) from error
+    return (patterns if patterns is not None else []), cone
 
 
 def _git(*args: str, cwd: Path) -> str:

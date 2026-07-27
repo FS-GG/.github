@@ -675,6 +675,20 @@ YAML
 seal "$R"
 must_fail "a glob is not a directory and cannot be read off the file" "glob metacharacter" "$R"
 
+# ---- THE SHARED READING ITSELF (.github#1530) -------------------------------------------------------
+# Everything above grades the block THROUGH the gate. `scripts/lib/sparse.py` is where the reading now
+# lives, and it is read by a second caller (tests/lock-range-coherence/sparse_set.py) whose fixture
+# exercises a different subject entirely. A rule asserted only through its callers is a rule that can
+# drift the day a caller stops reaching it — which is how the two pre-hoist copies disagreed about a
+# bare `sparse-checkout:` without either fixture noticing. So it is asserted directly, once, here.
+lib_out=""; lib_rc=0
+lib_out="$(python3 "$HERE/sparse_lib_selftest.py" 2>&1)" || lib_rc=$?
+if [ "$lib_rc" -eq 0 ]; then
+  ok "scripts/lib/sparse.py's own selftest: $(printf '%s' "$lib_out" | tail -1)"
+else
+  bad "scripts/lib/sparse.py's own selftest failed (exit $lib_rc)" "$lib_out"
+fi
+
 # ---- THE SUBJECT ITSELF ------------------------------------------------------------------------------
 # The tree CI actually grades. Criterion 3 of #1522 asks for it explicitly.
 must_pass "the real FS-GG/.github tree is green" "$REPO_ROOT"

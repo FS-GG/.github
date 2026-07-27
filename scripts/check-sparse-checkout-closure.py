@@ -146,7 +146,7 @@ SHAPES THIS GATE REFUSES RATHER THAN SKIPS (exit 3 — a skip is how a coherence
     value. All four are refused ALIKE, because the runner cannot tell them apart either; giving them
     different verdicts would be this gate inventing a distinction its subject does not make.
   * An unreadable `sparse-checkout-cone-mode:` — an unevaluated `${{ }}`, say. It decides what the
-    patterns MEAN. A QUOTED boolean is not unreadable and is accepted; see `cone_mode_of`.
+    patterns MEAN. A QUOTED boolean is not unreadable and is accepted; see `lib/sparse.py`.
   * NO CROSS-REPO CHECKOUT ANYWHERE. A workflow-auditing gate that found not one has been pointed at
     the wrong tree. Note what this is NOT: a tree whose cross-repo checkouts are all FULL CLONES is
     coherent — that is the class permanently foreclosed, the best end state there is — and it exits
@@ -157,6 +157,14 @@ SHAPES THIS GATE REFUSES RATHER THAN SKIPS (exit 3 — a skip is how a coherence
 
   Refusals are COLLECTED, not raised on sight: one unreadable step must not suppress every real
   finding in the rest of the tree. Findings print first, then the refusals, then exit 3.
+
+  THE FIRST THREE OF THOSE REFUSALS ARE NOT THIS GATE'S ANY MORE (#1530). READING the block —
+  newline-splitting the patterns the way the action does, defaulting the cone flag the way the action
+  documents, refusing a declared-but-empty block — lives in `lib/sparse.py` and is shared with
+  `tests/lock-range-coherence/sparse_set.py`, which resolves the same block through real
+  `git sparse-checkout`. The two had each written that reading out independently and had already
+  drifted in two places; the fourth refusal (a NEGATED pattern) and all of the GRADING in rules
+  (1)-(4) are judgements about what was read, and stay here.
 
 EXIT CODES — THE CONTRACT (scripts/lib/gate.py)
   0  OK — every graded pattern is an anchored, literal directory that selects something.
@@ -188,6 +196,18 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
     report_ok,
     run,
     workflow_files,
+)
+
+# THE PARSE IS NOT THIS GATE'S (#1530). What patterns and cone flag a checkout step declares is read
+# by `lib/sparse.py`, which `tests/lock-range-coherence/sparse_set.py` also takes. The three readings
+# it holds — the newline split that makes a folded scalar visible, the omitted cone flag that IS
+# `true`, the declared-but-empty block that is an empty tree — were correct in two files only because
+# the second author had read the first, and they had ALREADY drifted apart in two places. What stays
+# here is the GRADING (rules 1-4), which is this gate's alone.
+from lib.sparse import (  # noqa: E402  (path shim above must run first)
+    SparseRefusal,
+    cone_mode_of,
+    patterns_of,
 )
 
 NAME = "check-sparse-checkout-closure"
@@ -348,66 +368,6 @@ def sparse_steps(document: object) -> list[tuple[str, dict]]:
     return found
 
 
-def patterns_of(params: dict, where: str) -> list[str] | None:
-    """The sparse patterns the runner would receive, or None when the key is absent entirely.
-
-    `actions/checkout` splits the input on newlines and drops blanks, so a block scalar and a plain
-    string reach git identically. Mirroring that rather than special-casing the YAML shape is what
-    keeps a FOLDED scalar (`sparse-checkout: >`) honest: it joins its lines with spaces, so the
-    runner gets ONE pattern containing a space that matches nothing.
-
-    A key that is PRESENT but supplies no pattern — `""`, `"   "`, `[]`, or a bare `sparse-checkout:`
-    with no value — is refused, and all four are refused ALIKE. They are indistinguishable to the
-    runner, so giving them different verdicts would be this gate inventing a distinction the thing it
-    grades does not make. (An earlier draft refused three of them and passed the fourth as a full
-    clone.) Refused rather than assumed either way: whether the action falls back to a full clone or
-    fetches nothing is not readable off the workflow file, and the two differ enormously.
-    """
-    if "sparse-checkout" not in params:
-        return None
-    raw = params.get("sparse-checkout")
-    entries = raw if isinstance(raw, list) else str(raw if raw is not None else "").split("\n")
-    patterns = [str(entry).strip() for entry in entries if str(entry).strip()]
-    if not patterns:
-        raise GateError(
-            f"{where}: `sparse-checkout` is present but supplies no pattern. Whether the runner then "
-            f"falls back to a full clone or fetches an empty tree is not readable off this file, and "
-            f"the two differ enormously — remove the key, or give it a directory."
-        )
-    return patterns
-
-
-TRUE_SPELLINGS = {"true", "1"}
-FALSE_SPELLINGS = {"false", "0"}
-
-
-def cone_mode_of(params: dict, where: str) -> bool:
-    """`sparse-checkout-cone-mode`, defaulted the way actions/checkout documents it.
-
-    An omitted flag IS `true` — the action's default — not "unknown". It changes what the patterns
-    MEAN, so an unreadable one is a no-verdict rather than a guess.
-
-    A QUOTED boolean is not unreadable. Every `with:` value reaches an action as a string, and the
-    action reads this one with `core.getBooleanInput`, so `false` and `"false"` are the same input;
-    refusing the quoted spelling would red a workflow that works. An unevaluated `${{ }}` expression
-    IS refused: its value is decided at run time, and this gate cannot grade a mode it cannot know.
-    """
-    if "sparse-checkout-cone-mode" not in params:
-        return True
-    raw = params.get("sparse-checkout-cone-mode")
-    if isinstance(raw, bool):
-        return raw
-    spelling = str(raw).strip().casefold()
-    if spelling in TRUE_SPELLINGS:
-        return True
-    if spelling in FALSE_SPELLINGS:
-        return False
-    raise GateError(
-        f"{where}: unreadable `sparse-checkout-cone-mode: {raw!r}`. It decides whether the patterns "
-        f"are gitignore expressions or rooted directory prefixes, so the gate will not guess it."
-    )
-
-
 def grade_pattern(pattern: str, *, cone: bool, where: str, tracked: set[str] | None) -> list[str]:
     """Findings for one pattern. Empty means every rule that COULD run did, and passed."""
     if pattern.startswith("!"):
@@ -512,13 +472,17 @@ def main(argv: list[str]) -> int:
             cross_repo_steps += 1
             # A refusal is COLLECTED rather than raised on sight, so one unreadable step cannot
             # suppress every real finding in the rest of the tree. The exit code is still 3.
+            #
+            # `SparseRefusal` is `lib/sparse.py`'s no-verdict, deliberately NOT a `GateError`: that
+            # module has no dependency on this harness, so the mapping from "unreadable block" to
+            # "this gate's exit 3" is made HERE, where the exit-code contract lives.
             try:
                 patterns = patterns_of(params, where)
                 if patterns is None:
                     full_clones += 1
                     continue
                 cone = cone_mode_of(params, where)
-            except GateError as error:
+            except SparseRefusal as error:
                 refusals.append(str(error))
                 continue
 

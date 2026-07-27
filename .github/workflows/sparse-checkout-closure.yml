@@ -13,8 +13,12 @@
 # its subjects — any `actions/checkout` with both a `repository:` and a `sparse-checkout:` — rather
 # than reading a list of workflow names, so a new reusable workflow is graded the day it is written.
 # A narrower filter would mean the gate does not run on the very file that introduces instance three.
-# `scripts/lib/gate.py` is in the filter because this gate IMPORTS it at load: the gate about
-# load-time dependency closure declares its own.
+# `scripts/lib/gate.py` and `scripts/lib/sparse.py` are in the filter because this gate IMPORTS them
+# at load: the gate about load-time dependency closure declares its own. `sparse.py` (#1530) is the
+# shared READING of a sparse-checkout block — the newline split, the cone default, the refusal of a
+# declared-but-empty block — which this gate and `tests/lock-range-coherence/sparse_set.py` both take.
+# A filter that omitted it would leave the gate's own parse editable without the gate running, which
+# is #266's shape in the file that exists to close it.
 #
 # The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
 # divergence, and a push-copy that quietly omits an entry is how a gate stops running on `main`.
@@ -25,6 +29,7 @@ on:
     paths:
       - "scripts/check-sparse-checkout-closure.py"
       - "scripts/lib/gate.py"
+      - "scripts/lib/sparse.py"
       - "tests/sparse-checkout-closure/**"
       - ".github/workflows/**"
   push:
@@ -32,6 +37,7 @@ on:
     paths:
       - "scripts/check-sparse-checkout-closure.py"
       - "scripts/lib/gate.py"
+      - "scripts/lib/sparse.py"
       - "tests/sparse-checkout-closure/**"
       - ".github/workflows/**"
   workflow_dispatch:
