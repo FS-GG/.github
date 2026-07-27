@@ -5,6 +5,7 @@
 - **Affects:** FS-GG/.github, every coordination-kit receiver, FS.GG.SDD, FS.GG.Rendering, and scaffolded product workspaces
 - **Amends:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5; interacts with [ADR-0019](0019-org-repo-roster-registry-and-coordination-kit.md) and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md)
 - **Clarifies:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 1 and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md): a skill is a directory transport unit, while runtime catalog exposure is a host policy over those materialized directories.
+- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) (2026-07-27) — **direction only; this record stays IN FORCE, the ordered root set is still three, and its transport contract still forbids deleting a mirror.** ADR-0067 decides that the *end state* is two roots — `.agents/skills` + `.claude/skills` — and that a runtime root becomes a checkout-time generated view rather than a committed copy. Executing that is a contract migration with the publication and re-materialization tail this record's own Consequences name, so it amends §Decision **in the change that lands the mechanism**, not here. See §Decision.
 
 ## Context
 
@@ -26,6 +27,13 @@ Every FS-GG skill materializer defaults to the ordered root set:
 .codex/skills
 .agents/skills
 ```
+
+> **2026-07-27 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5–§6):**
+> this ordered set is **unchanged and still governs**. The decided end state drops `.codex/skills`
+> — `.agents/skills` is Codex's own second native root (measured, Codex CLI 0.145.0), so the third
+> root has no runtime behind it and its only effect is the duplicate catalog entry this record's
+> §Runtime exposure has hosts suppress. Dropping it is a contract migration and lands with the
+> replacement mechanism, never before it (ADR-0067 §9).
 
 `Fsgg.Schemas.agentSkillRoots` remains the contract definition for product materialization. The
 coordination-kit package and its compatibility writer use the same ordered values. A checked-in

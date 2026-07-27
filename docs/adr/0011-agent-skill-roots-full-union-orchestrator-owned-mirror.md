@@ -3,6 +3,7 @@
 - **Status:** Accepted — **implementation superseded by [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md)** (2026-07-01): this ADR's five *invariants* stand, but where the two disagree on *mechanism* ADR-0014 wins — it replaces the four hand-maintained mirror mechanisms described here with one shared, content-addressed materialize-and-verify.
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD, FS.GG.Rendering (the `fs-gg-ui` template), FS.GG.Templates (provider pin), `.github` (registry)
+- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) (2026-07-27) — **direction only; this record stays IN FORCE and its three-root union is still the rule today.** Two things here are now known to be wrong about the *end state*: §Context's *"the generic agent convention"* is not a third runtime (`.agents/skills` is Codex's own second native root, measured on Codex CLI 0.145.0), and Decision 1's three roots become **two**. Nothing is retired until the phase that lands the replacement amends this record in the same change. §Context's symlink rejection is **re-affirmed**, on a new measurement.
 
 ## Context
 
@@ -43,6 +44,14 @@ canonical body per skill in its producer and **materializing** the union.
 1. **Full union, every root.** `.claude/skills/`, `.codex/skills/`, and `.agents/skills/`
    MUST each contain the **byte-identical union** of all skills produced for the product
    (SDD process skills ∪ provider UI skills). The three runtimes are interchangeable.
+
+   > **2026-07-27 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5):**
+   > *"the three runtimes"* is **false** — there are **two**. Every in-tree reader of
+   > `.agents/skills` across `.github` and all seven receivers is an FS-GG verifier, not an agent
+   > runtime, and Codex resolves `.agents/skills` natively with no configuration (measured, Codex
+   > CLI 0.145.0). `.codex/skills` carries no runtime the other two roots do not.
+   > **This clause still governs today** — the end state is two roots, and nothing is retired
+   > before its replacement is proven (ADR-0067 §9).
 
 2. **`fsgg-sdd` is the sole mirror authority.** As the orchestrator (ADR-0008), the CLI —
    after invoking the provider — computes the union and **materializes real files** into
