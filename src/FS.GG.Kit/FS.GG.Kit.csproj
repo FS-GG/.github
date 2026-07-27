@@ -39,7 +39,17 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Kit</PackageId>
-    <!-- 0.10.0 (.github#1586): the packed `scripts/fsgg-coord` shrinks to the resolver a receiver
+    <!-- 0.11.0 (.github#1658): republish for the fleet engine pin. The packed
+         `.config/dotnet-tools.json` advances `fs.gg.coord.cli` 0.11.0 -> 0.12.0, so a receiver that
+         materializes this kit restores a DIFFERENT ENGINE. MINOR, not patch: FS.GG.Coord.Cli 0.12.0 is
+         itself a BREAKING minor (#1523 scoped the projections — the `json` flag now exits 1 on 20 of the
+         40 verbs, the `text` flag on 4 of 40), so receiver behaviour changes and a patch would understate
+         it. Not major, because the 0.x line spells breaking as a minor org-wide and the kit's own member
+         SET and materialize contract are unchanged: still 25 members, same destinations, same modes.
+         This is the #1615 fan-out firing exactly as that item predicts — the pin is a kit row, so an
+         engine bump republishes the kit and stales every receiver. #1615 is the open decision about
+         whether it should; this republish does NOT pre-empt it.
+         PRIOR — 0.10.0 (.github#1586): the packed `scripts/fsgg-coord` shrinks to the resolver a receiver
          actually executes; the verb partition and the stale/dirty guards move to
          `scripts/fsgg-coord-guards.sh`, which has NO kit row and is therefore not packed at all.
          MINOR, not patch, and not major. Not major because receiver BEHAVIOUR is unchanged: the guards
@@ -49,7 +59,7 @@
          minor (0.7.0 -> 0.8.0) for the same class (a shim verb-partition republish), while a
          comment-only shim edit took a patch (0.8.0 -> 0.8.1, edc8404). The member SET is unchanged:
          still 25 members, and the guard module is not one of them. -->
-    <Version>0.10.0</Version>
+    <Version>0.11.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
