@@ -11,25 +11,32 @@ refused to merge:
 
 `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, and all 18 check runs that reported on that head were
 SUCCESS. The required context `skill-union / skill-union` had NO CHECK RUN AT ALL — the workflow that
-produces it was added to `main` AFTER that PR's head was pushed, so GitHub never created the run. A
+produces it was armed on `main` AFTER that PR's head was pushed, so GitHub never created the run. A
 context that never reports is not a context that fails, and an "is anything red?" rollup cannot see the
-difference (#606, arriving through the one set a caller cannot be expected to enumerate).
+difference (#606).
 
-`--require NAME` (#737) already covered exactly this hazard — but only for contexts the CALLER knows to
-name. Branch protection is machine-readable, so the must-have-reported set is derived from the BASE
-BRANCH instead. A caller who has to know the answer in advance to ask the question correctly is the shape
-this repo keeps closing (#1507, #1510/#1515, #1528).
+#1575 PRESCRIBED DERIVING THE REQUIRED SET FROM `branches/{b}/protection`, and that remedy is the one
+thing here that had to be corrected. That read needs `administration: read` — **not a valid
+`permissions:` scope for a workflow's GITHUB_TOKEN at all** — and `landable`'s unattended caller,
+`skill-registry-autofix.yml`, "runs entirely under GITHUB_TOKEN" by its own words. A verdict resting on
+it would return exit 4 there forever: #463 restored, where a protection probe 403'd on every receiver and
+stopped the kit landing anywhere. #463's ratified repair was to ask the PULL REQUEST instead.
 
-    950  every check green, the REQUIRED context absent    -> pending (7)
-    951  the SAME world, that context reported SUCCESS     -> green   (0)
-    952  branch protection we may not READ (403)           -> unknown (4) — never green (#266)
-    953  the RULESETS endpoint 404s                        -> unknown (4) — `[]` means "no rules", 404 does not
-    954  no classic protection; a RULESET requires it      -> pending (7) — two stores, both bind (#574)
-    955  a base that requires nothing                      -> green   (0) — the guard adds nothing of its own
+So the VERDICT is `mergeable_state`, which rides in the PR object the command already reads — no extra
+request, no extra scope — and the policy read is DIAGNOSIS that is allowed to fail.
 
-950/951 are the load-bearing pair: the SAME world, differing only in whether the required context
-reported. A fixture that only exercised a reported-and-FAILING context would prove nothing about this
-defect — a failing check is red on either side of the fix.
+    950  blocked; every reporting check green   -> pending (7)  the defect
+    951  the SAME world, clean                  -> green   (0)  work must still land
+    952  blocked; protection 403s               -> pending (7)  the refusal STANDS; only the reason is lost
+    953  blocked; a RULESET names the context   -> pending (7)  two stores, both diagnosed (#574)
+    954  unstable                               -> green   (0)  a NON-required check failed; GitHub merges
+    955  no mergeable_state at all              -> green   (0)  no opinion is not a refusal
+    956  behind                                 -> pending (7)
+    957  draft                                  -> pending (7)
+
+950/951 are the load-bearing pair: the SAME world, differing only in what GitHub says it will do with it.
+952 is the one that keeps the fleet alive — it is the leg that would go exit 4 under #1575's own
+prescription, and it must be a 7 with a degraded sentence instead.
 
 Engine exit codes (ADR-0040 §5): green 0, pending 7, red/conflicted 3, unknown 4.
 """
@@ -41,58 +48,66 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SUBJECT = "skill-union / skill-union"
 
+# Per PR: the `mergeable_state` GitHub reports, and the base branch it merges into. One branch per PR so
+# one fixture can serve several branch policies.
+STATE = {
+    950: "blocked",
+    951: "clean",
+    952: "forbidden",   # served as `blocked`; its BASE is what 403s — see BASE below
+    953: "blocked",
+    954: "unstable",
+    955: None,          # the field is absent entirely
+    956: "behind",
+    957: "draft",
+}
 
-def wf(pr, suite, rn):
+BASE = {950: "main", 951: "main", 952: "forbidden", 953: "ruleset",
+        954: "main", 955: "main", 956: "main", 957: "main"}
+
+# 952's state on the wire is an ordinary `blocked`; only its policy read fails.
+WIRE_STATE = dict(STATE)
+WIRE_STATE[952] = "blocked"
+
+
+def pull(n):
+    p = {"number": n, "state": "open", "mergeable": True,
+         "base": {"ref": BASE[n]}, "head": {"ref": f"item/{n}-x", "sha": f"sha{n}"}}
+    if WIRE_STATE[n] is not None:
+        p["mergeable_state"] = WIRE_STATE[n]
+    return p
+
+
+PULLS = {n: pull(n) for n in STATE}
+
+
+def wf(pr):
     """One green workflow_run — the concurrency-group key is path+event+branch+prs (#720)."""
     return {"path": ".github/workflows/gate.yml", "event": "pull_request", "head_branch": f"item/{pr}-x",
-            "run_number": rn, "check_suite_id": suite, "status": "completed",
+            "run_number": 1, "check_suite_id": 111, "status": "completed",
             "conclusion": "success", "pull_requests": [{"number": pr}]}
 
 
-def cr(name, suite=111):
-    """One green check_run. `name` is the context branch protection matches on."""
-    return {"name": name, "check_suite": {"id": suite}, "status": "completed",
+def cr(name):
+    """One green check_run."""
+    return {"name": name, "check_suite": {"id": 111}, "status": "completed",
             "conclusion": "success", "app": {"slug": "github-actions"}}
 
 
-# Each PR merges into a DIFFERENT base, so one fixture can serve six branch policies. Which branch a PR
-# merges INTO is what decides the policy that governs it, and the engine reads it rather than assuming.
-BASE = {950: "main", 951: "main", 952: "forbidden", 953: "norules", 954: "ruleset", 955: "bare"}
+RUNS = {f"sha{n}": [wf(n)] for n in STATE}
 
-# One branch per PR, so the branch TIP can agree with each head independently — otherwise the #995
-# stale-head guard demotes every leg to `pending` and this fixture would pass for the wrong reason.
-PULLS = {
-    n: {"number": n, "state": "open", "mergeable": True,
-        "base": {"ref": BASE[n]}, "head": {"ref": f"item/{n}-x", "sha": f"sha{n}"}}
-    for n in BASE
-}
+# Everything that REPORTED is green everywhere. 951 additionally carries the required context; every
+# other leg does not — which is the whole point: nothing here is red, and the naive rollup says so.
+CHECKS = {f"sha{n}": [cr("build"), cr("test")] for n in STATE}
+CHECKS["sha951"] = [cr("build"), cr("test"), cr(SUBJECT)]
 
-RUNS = {f"sha{n}": [wf(n, 111, 1)] for n in BASE}
+# CLASSIC protection, per base branch. A branch absent here 404s — a real answer about THIS store.
+PROTECTION = {"main": [SUBJECT]}
 
-CHECKS = {
-    # 950: everything that reported is GREEN, and the required context is simply NOT THERE. Green to any
-    # naive rollup, and refused by GitHub.
-    "sha950": [cr("build"), cr("test")],
-    # 951: the same world, one check richer — the required context reported, and it passed.
-    "sha951": [cr("build"), cr("test"), cr(SUBJECT)],
-    "sha952": [cr("build")],
-    "sha953": [cr("build")],
-    "sha954": [cr("build")],
-    "sha955": [cr("build")],
-}
-
-# CLASSIC branch protection, per base branch. A branch absent here 404s — which is a real answer about
-# THIS store ("no classic protection"), and says nothing about rulesets.
-PROTECTION = {
-    "main": [SUBJECT],
-    "bare": [],
-}
-
-# RULESETS, per base branch. `[]` is the answer for a branch with no rules; a 404 is NOT (it means "no
-# such repo or branch"), which is why `norules` below is served as one.
+# RULESETS, per base branch. `[]` is the answer for a branch with no rules; a 404 is not.
 RULESETS = {
     "ruleset": [{"type": "required_status_checks",
-                 "parameters": {"required_status_checks": [{"context": "coherence", "integration_id": 15368}]}}],
+                 "parameters": {"required_status_checks": [{"context": "coherence",
+                                                            "integration_id": 15368}]}}],
 }
 
 
@@ -145,8 +160,9 @@ class H(BaseHTTPRequestHandler):
         if m:
             branch = m.group(1)
             if branch == "forbidden":
-                # Reading required status checks needs `administration: read`. "I may not look" is not
-                # "there is nothing there" — and it must not become a green.
+                # Reading required status checks needs `administration: read`, which a workflow's
+                # GITHUB_TOKEN cannot hold. This is the shape #463 met on every receiver — and the
+                # verdict must NOT depend on it.
                 return self._send(403, {"message": "Resource not accessible by integration"})
             if branch not in PROTECTION:
                 return self._send(404, {"message": "Branch not protected"})
@@ -155,12 +171,7 @@ class H(BaseHTTPRequestHandler):
 
         m = re.match(r"^/repos/[^/]+/[^/]+/rules/branches/([^/]+)$", p)
         if m:
-            branch = m.group(1)
-            if branch == "norules":
-                # A branch with no rules answers `[]`. A 404 here means "no such repo or branch", and
-                # inferring "unprotected" from it would manufacture a green out of nothing (#574).
-                return self._send(404, {"message": "Not Found"})
-            return self._send(200, RULESETS.get(branch, []))
+            return self._send(200, RULESETS.get(m.group(1), []))
 
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})

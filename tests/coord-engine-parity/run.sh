@@ -4177,11 +4177,18 @@ fi
 # never created the run. A context that never reports is not a context that FAILS, and the rollup above
 # ("is anything red?") is structurally blind to the difference (#606).
 #
-# `--require` (case 32) closes exactly this hole — for contexts the CALLER already knows to name. Branch
-# protection is machine-readable, so the must-have-reported set is derived from the BASE BRANCH instead.
-# `landable_protection_server.py` serves six PRs, each into a different base branch, so one fixture holds
-# six branch policies. 950/951 are the load-bearing pair: the SAME world, differing only in whether the
-# required context reported.
+# #1575 PRESCRIBED DERIVING THE REQUIRED SET FROM `branches/{b}/protection` and resting the verdict on
+# it. That remedy had to be corrected: the read needs `administration: read`, which is NOT a valid
+# `permissions:` scope for a workflow's GITHUB_TOKEN, and this command's unattended caller
+# (`skill-registry-autofix.yml`) "runs entirely under GITHUB_TOKEN" by its own words — so the verdict
+# would 403 there forever. That is #463 restored: a protection probe that 403'd on every receiver, fell
+# through to the fail-closed arm, and stopped the kit landing anywhere. #463's ratified repair was to ask
+# the PULL REQUEST instead, and it is recorded as better on its merits.
+#
+# So the VERDICT is `mergeable_state` — GitHub's own answer, riding in the PR object the command already
+# reads, costing no request and no scope — and the policy read is DIAGNOSIS that is allowed to fail.
+# 950/951 are the load-bearing pair (the same world, clean vs blocked); leg 4 (952) is the one that keeps
+# the fleet alive.
 # ==================================================================================================
 PRO_OUT="$(mktemp)"; python3 "$HERE/landable_protection_server.py" >"$PRO_OUT" 2>/dev/null & PRO_SRV=$!; PRO_PORT=""
 for _ in $(seq 1 50); do PRO_PORT="$(head -n1 "$PRO_OUT" 2>/dev/null)"; [ -n "$PRO_PORT" ] && break; sleep 0.1; done
@@ -4196,14 +4203,15 @@ if [ -z "$PRO_PORT" ]; then bad "landable-protection fixture bound a port"; else
                 FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
                 "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
 
-  # 1. THE DEFECT. Everything that reported is green; the required context is simply not there.
+  # 1. THE DEFECT. Everything that reported is green; GitHub says it will refuse the merge anyway,
+  #    because a context its base branch requires has no check run at all.
   r="$(lndp 950)"
   [ "$r" = "pending" ] \
-    && ok "#1575: a branch-protection-required context with NO check run is PENDING, not green (case 33)" \
+    && ok "#1575: a PR GitHub reports as BLOCKED is PENDING, not green (case 33)" \
     || bad "#1575: 950 -> pending" "got: $r"
 
-  # ...and exit 7, which is what §5's poll loop reads. Exit 0 here IS the bug — it is the word that sent a
-  # worker to `gh pr merge` and a refusal.
+  # ...and exit 7, which is what §5's poll loop reads. Exit 0 here IS the bug — it is the word that sent
+  # a worker to `gh pr merge` and a refusal.
   r="$(lndp_rc 950)"
   [ "$r" = "7" ] \
     && ok "#1575: ...and it exits 7 (pending), never 0 — the exit code §5 merges on (case 33)" \
@@ -4213,61 +4221,81 @@ if [ -z "$PRO_PORT" ]; then bad "landable-protection fixture bound a port"; else
   #    demoted every green would satisfy leg 1 and stop the whole protocol.
   r="$(lndp 951)"
   [ "$r" = "green" ] \
-    && ok "#1575: the SAME world with that context REPORTED is GREEN — work must still land (case 33)" \
+    && ok "#1575: the SAME world reported CLEAN is GREEN — work must still land (case 33)" \
     || bad "#1575: 951 -> green" "got: $r"
 
-  # 3. AC2: the verdict must not send an operator to look at a red check that does not exist. It names the
-  #    context, names the branch that demands it, and says it has not REPORTED.
-  err="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
-           FSGG_COORD_CACHE="$(mktemp -d)" \
-           "$ENGINE" landable 950 --repo FS.GG.SDD 2>&1 >/dev/null || true)"
+  # 3. AC2: the verdict must not send an operator to look at a red check that does not exist. It names
+  #    GitHub's own refusal, names the context the base branch requires, and says it has not REPORTED.
+  perr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$1" --repo FS.GG.SDD 2>&1 >/dev/null || true; }
+  err="$(perr 950)"
   printf '%s' "$err" | grep -q 'skill-union / skill-union' \
     && ok "#1575: the pending NAMES the context that never reported (case 33)" \
     || bad "#1575: 950 stderr names the context" "got: $err"
   printf '%s' "$err" | grep -q 'REQUIRES' \
     && ok "#1575: ...and says the BASE BRANCH requires it — not that the caller asked for it (case 33)" \
     || bad "#1575: 950 stderr attributes the requirement" "got: $err"
-  printf '%s' "$err" | grep -qi 'none of them FAILED' \
-    && ok "#1575: ...and that nothing FAILED — no red check to go and read (AC2) (case 33)" \
+  printf '%s' "$err" | grep -q 'did not fail' \
+    && ok "#1575: ...and that it did NOT fail — there is no red check to go and read (AC2) (case 33)" \
     || bad "#1575: 950 stderr distinguishes absent from failed" "got: $err"
   printf '%s' "$err" | grep -q 'wait cannot help' \
     && ok "#1575: ...and says when --wait cannot help — a context that can never report (AC5) (case 33)" \
     || bad "#1575: 950 stderr explains the limit of waiting" "got: $err"
 
-  # 4. AC3, FAIL-CLOSED. Protection we may not READ is a no-verdict, never a green. This is the direction
-  #    #266 is about: "I could not check" may not render as "I checked, and it's fine".
+  # 4. THE LEG THAT KEEPS THE FLEET ALIVE. #1575 prescribed deriving the required set from
+  #    `branches/{b}/protection` and resting the verdict on it. That read needs `administration: read`,
+  #    which is not a valid `permissions:` scope for a workflow's GITHUB_TOKEN — and this command's
+  #    unattended caller runs entirely under one. Under the prescribed remedy this leg is exit 4 forever
+  #    (#463: a protection probe that 403'd on every receiver and stopped the kit landing anywhere).
+  #    It must be a 7 with a DEGRADED SENTENCE: the refusal is GitHub's own and stands without the read.
   r="$(lndp 952)"
-  [ "$r" = "unknown" ] \
-    && ok "#1575: branch protection we may NOT READ is unknown, never green (case 33)" \
-    || bad "#1575: 952 -> unknown" "got: $r"
-  r="$(lndp_rc 952)"
-  [ "$r" = "4" ] \
-    && ok "#1575: ...and exits 4 (no verdict), the fail-closed code (case 33)" \
-    || bad "#1575: 952 -> exit 4" "got: $r"
-
-  # 5. A 404 on the RULESETS endpoint is not "no rulesets" — that endpoint answers `[]` for that. Reading
-  #    it as "unprotected" would manufacture a green out of a read that established nothing (#574).
-  r="$(lndp 953)"
-  [ "$r" = "unknown" ] \
-    && ok "#1575: a 404 from the RULESETS endpoint is a no-verdict, not 'no rules' (case 33)" \
-    || bad "#1575: 953 -> unknown" "got: $r"
-
-  # 6. TWO STORES, BOTH BIND (#574). 954 has no classic protection at all — its `branches/<b>/protection`
-  #    404s, which IS the answer for that store — and a REPOSITORY RULESET requires `coherence`, which has
-  #    not reported. Reading one store alone is how the sibling gate came to report "requires NO status
-  #    checks" over a fully-protected repo.
-  r="$(lndp 954)"
   [ "$r" = "pending" ] \
-    && ok "#1575: a RULESET-required context binds exactly as a classic one does (case 33)" \
-    || bad "#1575: 954 -> pending" "got: $r"
+    && ok "#1575: a policy we may NOT READ still refuses — pending, never a no-verdict (#463) (case 33)" \
+    || bad "#1575: 952 -> pending" "got: $r"
+  r="$(lndp_rc 952)"
+  [ "$r" = "7" ] \
+    && ok "#1575: ...and exits 7, not 4 — the verdict never rested on the unreadable read (case 33)" \
+    || bad "#1575: 952 -> exit 7" "got: $r"
+  err="$(perr 952)"
+  printf '%s' "$err" | grep -q 'could not say WHICH' \
+    && ok "#1575: ...and SAYS the reason is missing rather than the verdict (case 33)" \
+    || bad "#1575: 952 stderr degrades the sentence" "got: $err"
 
-  # 7. THE OTHER COUNTERWEIGHT: a base that requires nothing is green. The guard enforces the branch's
-  #    policy; it invents none of its own.
+  # 5. TWO STORES, BOTH DIAGNOSED (#574). 953 has no classic protection at all — its
+  #    `branches/<b>/protection` 404s, which IS the answer for that store — and a REPOSITORY RULESET
+  #    requires `coherence`, which has not reported.
+  err="$(perr 953)"
+  printf '%s' "$err" | grep -q 'coherence' \
+    && ok "#1575: a RULESET-required context is named exactly as a classic one is (case 33)" \
+    || bad "#1575: 953 names the ruleset context" "got: $err"
+
+  # 6. `unstable` is NOT a refusal — it means a NON-required check failed, which GitHub merges. The
+  #    allow-list is of REFUSALS, not of permissions: a state GitHub adds tomorrow must not silently
+  #    start refusing every merge in the fleet.
+  r="$(lndp 954)"
+  [ "$r" = "green" ] \
+    && ok "#1575: UNSTABLE is not a refusal — GitHub takes that merge (case 33)" \
+    || bad "#1575: 954 -> green" "got: $r"
+
+  # 7. ...and an ABSENT mergeable_state is NO OPINION, not a refusal. The field is part of a body we
+  #    already hold, not a permission-gated read, so manufacturing a refusal from its absence would
+  #    demote every verdict against a payload that omits it.
   r="$(lndp 955)"
   [ "$r" = "green" ] \
-    && ok "#1575: a base branch that requires nothing is still GREEN (case 33)" \
+    && ok "#1575: an ABSENT mergeable_state is no opinion, not a refusal (case 33)" \
     || bad "#1575: 955 -> green" "got: $r"
+
+  # 8. The other two states GitHub will not merge.
+  r="$(lndp 956)"
+  [ "$r" = "pending" ] \
+    && ok "#1575: BEHIND refuses — a strict base the branch has fallen behind (case 33)" \
+    || bad "#1575: 956 -> pending" "got: $r"
+  r="$(lndp 957)"
+  [ "$r" = "pending" ] \
+    && ok "#1575: DRAFT refuses — no check set makes a draft mergeable (case 33)" \
+    || bad "#1575: 957 -> pending" "got: $r"
 
   kill "$PRO_SRV" 2>/dev/null
 fi

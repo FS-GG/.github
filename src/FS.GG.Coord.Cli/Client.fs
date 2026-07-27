@@ -2606,6 +2606,12 @@ module Client =
                             | Reads.Asserted reason -> Some reason
                             | _ -> None)
 
+                    let refused =
+                        missing
+                        |> List.choose (function
+                            | Reads.Refused(state, baseRef) -> Some(state, baseRef)
+                            | _ -> None)
+
                     let notReported =
                         missing
                         |> List.choose (function
@@ -2615,7 +2621,7 @@ module Client =
                     let unreadable =
                         missing
                         |> List.choose (function
-                            | Reads.ProtectionUnreadable why -> Some why
+                            | Reads.PolicyUnreadable why -> Some why
                             | _ -> None)
 
                     // Gated on `pending` exactly as before: a RED verdict already names a check that failed,
@@ -2627,29 +2633,30 @@ module Client =
                         eprint
                             "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
 
-                    if not notReported.IsEmpty then
-                        for context, baseRef in notReported do
+                    if not refused.IsEmpty then
+                        for state, baseRef in refused do
                             eprint
-                                $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — `%s{baseRef}` REQUIRES the status check `%s{context}`, and it has no check run on this head at all."
+                                $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — GitHub reports it as `%s{state}` against `%s{baseRef}`, so it will REFUSE this merge (`the base branch policy prohibits the merge`)."
 
                         // NOT "a check failed" (#1575 AC2). The operator must not be sent to look at a red
-                        // check that does not exist — the context has not reported, which is a different
-                        // fact with a different remedy.
-                        eprint
-                            "fsgg-coord-engine:   Nobody asked for these — the BASE BRANCH's protection does, and GitHub will refuse the merge until they report (`the base branch policy prohibits the merge`), whatever this command says. They have not REPORTED; none of them FAILED, so there is no red check to go and read."
+                        // check that does not exist: every check that REPORTED here is green, and the gap
+                        // is a requirement that has not reported — a different fact with a different
+                        // remedy. Only the named contexts below, if we could read them, say which.
+                        for context, baseRef in notReported do
+                            eprint
+                                $"fsgg-coord-engine:   `%s{baseRef}` REQUIRES the status check `%s{context}`, and it has NO CHECK RUN on this head — it has not reported, and it did not fail."
+
+                        for why in unreadable do
+                            // The policy read is DIAGNOSIS. Say plainly that the verdict stands without it,
+                            // so nobody reads a missing sentence as a missing verdict.
+                            eprint
+                                $"fsgg-coord-engine:   (could not say WHICH requirement is unmet: %s{why}. The refusal above is GitHub's own and stands regardless.)"
 
                         // AC5: say when waiting cannot help. A context whose producing workflow does not
                         // exist on this branch, or whose `paths:` filter excludes this PR, can never report
                         // without a NEW event — no amount of polling creates a check run.
                         eprint
-                            "fsgg-coord-engine:   Waiting fixes this ONLY if the run has yet to register. If the producing workflow does not exist on this branch (it was armed on the base AFTER this head was pushed), or its `paths:`/`branches:` filter excludes this PR, then no check run will EVER be created and --wait cannot help: rebase the branch onto the current base (or push a fresh commit) so the event fires, or stop requiring the context."
-
-                    if not unreadable.IsEmpty then
-                        for why in unreadable do
-                            eprint $"fsgg-coord-engine: landable: no verdict on PR #%d{pr} — %s{why}."
-
-                        eprint
-                            "fsgg-coord-engine:   This is NOT `green`, and it is not `red` either (#266). What the base branch requires is the premise of the whole verdict, so a required set we could not read means we cannot know whether anything is missing — and `I could not check` may never be rendered as `I checked, and it's fine`. Fix the read (a token with `administration: read`, or wait out the rate limit) and ask again."
+                            "fsgg-coord-engine:   Waiting fixes this ONLY if the missing run has yet to register. If the producing workflow does not exist on this branch (it was armed on the base AFTER this head was pushed), or a `paths:`/`branches:` filter excludes this PR, then no check run will EVER be created and --wait cannot help: rebase the branch onto the current base (or push a fresh commit) so the event fires, or stop requiring the context. `behind` needs a rebase; `draft` needs the PR marked ready."
 
                     match state with
                     | PrGreen -> ExitGreen
