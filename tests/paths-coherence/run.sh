@@ -777,11 +777,20 @@ fi
 # 6 -> 7: sparse-checkout-closure.yml (.github#1522) names scripts/check-sparse-checkout-closure.py
 # exactly and that gate declares a PATHS_SUBJECT, so rule (c) attaches. This leg fired on the new
 # gate's first local run — the tripwire doing its job, exactly as it did for repo-filter-monopoly.
+#
+# 7 -> 8: repos-audit-selftest.yml (.github#1529) ALSO names scripts/check-sparse-checkout-closure.py
+# exactly — the second workflow to name that one script, and the first surface here that is not a
+# workflow running its gate. #1529 gave that gate's rule roster-wide reach by having repos-audit.sh
+# IMPORT it, and the selftest must re-run when the imported rule changes or the sharing buys reach at
+# the price of a gate that never runs. So rule (c) attaches to an importer, and the census counts it.
+# The selftest carries a signed `allow-uncovered .github/workflows` for exactly that reason: the
+# script is named there as a library, not as a gate over this tree. This leg fired on the first CI
+# run of that PR — the tripwire doing its job for the third time.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "7" ]; then
+if [ "${s:-0}" = "8" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 7 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 8 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
