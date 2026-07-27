@@ -12,12 +12,19 @@
 # not build stay green — the two ways this guard would cry wolf and get deleted.
 #
 # Static: no SDK, no restore, no network. The fixture needs nothing but python3, git and bash.
+#
+# `scripts/lib/sparse.py` IS IN THE FILTER BECAUSE THE FIXTURE NOW IMPORTS IT (.github#1530). The
+# sparse-checkout block is read in one place and taken by two callers — this fixture's `sparse_set.py`
+# and `scripts/check-sparse-checkout-closure.py` — so editing that reading must re-run BOTH exercises,
+# or the shared module gains the one property it was created to remove: a change nobody's fixture sees.
+# The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
 name: lock-range-coherence-selftest
 
 on:
   pull_request:
     paths:
       - "scripts/check-lock-ranges.py"
+      - "scripts/lib/sparse.py"
       - "tests/lock-range-coherence/**"
       - ".github/workflows/lock-range-coherence.yml"
       - ".github/workflows/lock-range-coherence-selftest.yml"
@@ -25,6 +32,7 @@ on:
     branches: [main]
     paths:
       - "scripts/check-lock-ranges.py"
+      - "scripts/lib/sparse.py"
       - "tests/lock-range-coherence/**"
       - ".github/workflows/lock-range-coherence.yml"
       - ".github/workflows/lock-range-coherence-selftest.yml"
