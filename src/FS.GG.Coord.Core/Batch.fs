@@ -380,7 +380,8 @@ module Batch =
             [ $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})" ]
         | _ -> TouchSet.unmatchable r.Paths
 
-    let schedule
+    let scheduleWith
+        (boardCounts: Map<Ref, int>)
         (allowBacklog: bool)
         (limit: int option)
         (inFlight: Reservation list)
@@ -430,13 +431,25 @@ module Batch =
         // board moves, so a caller must not assume two `batch` calls return the same set (a risk this
         // item states rather than leaves to be discovered).
         //
-        // The ranks are computed ONCE, here, over the whole candidate set — `blockingCounts` needs the
-        // set, not the item — and travel on each `Decision` so the renderer prints the rank the fold used.
-        // The ranks travel WITH their items through the fold — never re-looked-up by ref. A `Map` keyed
-        // on `Ref` was the obvious spelling and it is the wrong one: it would silently collapse two board
-        // cards pointing at one issue into a single entry, and it forced an unreachable "rank not found"
-        // default, which is a branch nothing can ever test.
-        let ordered = Rank.ofItems candidates |> List.sortBy (snd >> Rank.key)
+        // The ranks are computed ONCE, here, and travel on each `Decision` so the renderer prints the rank
+        // the fold used. The ranks travel WITH their items through the fold — never re-looked-up by ref. A
+        // `Map` keyed on `Ref` was the obvious spelling for THAT and it is the wrong one: it would
+        // silently collapse two board cards pointing at one issue into a single entry, and it forced an
+        // unreachable "rank not found" default, which is a branch nothing can ever test.
+        //
+        // `boardCounts` IS keyed on `Ref`, and that is a different question with a different answer: a
+        // COUNT is a property of the blocked-upon ISSUE, so two cards pointing at one issue genuinely
+        // share one count. It is a lookup table, not the carrier.
+        //
+        // **THE COUNTS COME FROM THE CALLER, NOT FROM `candidates`** (.github#1628). They used to be
+        // derived here, from the candidate set, and `Scan.snapshot` scopes that set with `--repo` — so an
+        // item three items in another repo were `Blocked by` counted 0 under `batch --repo <its repo>`
+        // and 3 under a bare `batch`. Same board, same instant, two ranks, and the scoped spelling is the
+        // one every worker runs. The blocking GRAPH is a whole-board fact; the candidate LIST is a scoped
+        // projection of it, and deriving the former from the latter truncated it silently — no error, the
+        // batch still well-formed, still disjoint, still deterministic, and ordered by a count that was
+        // wrong in the direction that matters most.
+        let ordered = Rank.ofItemsWith boardCounts candidates |> List.sortBy (snd >> Rank.key)
 
         let mutable reserved = inFlight
         let mutable chosen = []
@@ -538,6 +551,26 @@ module Batch =
             { Chosen = List.rev chosen
               Decisions = List.rev decisions
               Truncated = truncated }
+
+    /// `scheduleWith` when the candidate list IS the whole board — the counts are derived from it.
+    ///
+    /// This is the honest answer for a caller holding no wider view, and there is one: `decide --snapshot`
+    /// is handed a document and nothing else, exactly as it is already handed no `Phase` and no age
+    /// (.github#1598). It is `Rank`'s no-priority-data direction — an undercount can only sort an item
+    /// LATER, never promote one — which is the same fail-open-downward posture every other unread rank
+    /// input takes.
+    ///
+    /// **THE WORKER LOOP MUST NOT USE THIS** (.github#1628). `batch`/`next`/`take` scope their candidates
+    /// with `--repo`, and a scoped list is a projection of the graph rather than the graph — see
+    /// `Rank.blockingCounts`. Those paths hold the unscoped scan rows already and pass whole-board counts
+    /// to `scheduleWith`.
+    let schedule
+        (allowBacklog: bool)
+        (limit: int option)
+        (inFlight: Reservation list)
+        (candidates: Item list)
+        : Verdict<BatchResult> =
+        scheduleWith (Rank.blockingCounts candidates) allowBacklog limit inFlight candidates
 
     /// How many candidates this batch member DISPLACED — passed over because they collided with IT, and
     /// with it specifically.

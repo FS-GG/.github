@@ -74,7 +74,15 @@ module Rank =
     /// Lexicographic tiers need none — each term only breaks the ties the term above it left.
     val key: r: Rank -> int * int * int * int * int * int
 
-    /// How many OPEN items name each ref in a still-holding `Blocked by` edge.
+    /// How many of the GIVEN `Blocked by` EDGES still hold against each ref — the one counting rule, over
+    /// whatever slice of the blocking graph the caller could see (.github#1628).
+    ///
+    /// **THE CALLER CHOOSES THE SOURCE SET.** Every edge handed in is counted; this knows nothing about
+    /// open-ness, scope, or issue-vs-PR, so the caller must hand it exactly the sources that should count.
+    /// The weaker contract is the fix, not a regression: .github#1628 was a counting function that took
+    /// the CANDIDATE LIST, so a `--repo`-scoped list silently truncated every cross-repo edge and a
+    /// cross-repo hub ranked as blocking nothing. Taking edges makes the source set a decision somebody
+    /// had to make out loud.
     ///
     /// UNPARSEABLE EDGES ARE SKIPPED, SAID SO HERE, AND THAT IS THE CORRECT FAILURE. Prose in a dependency
     /// field has no ref by construction, so there is no node to credit; inventing one would distort every
@@ -82,8 +90,18 @@ module Rank =
     /// deliberately does not guess on its behalf. RESOLVED edges are skipped too: a dependency that
     /// cleared is not a dependent.
     ///
-    /// Deduplicated per source item, so one item naming the same blocker twice counts once. Pure: the
-    /// entire graph is on the candidate list.
+    /// Deduplicated per source, so one source naming the same blocker twice counts once. Pure and total:
+    /// it reads nothing.
+    val blockingCountsOf: edges: (Ref * Blocker list) list -> Map<Ref, int>
+
+    /// How many OPEN items IN THE GIVEN LIST name each ref in a still-holding `Blocked by` edge.
+    ///
+    /// `blockingCountsOf` over the open items' own edges — one counting rule, not two.
+    ///
+    /// **A PROJECTION OF THE GRAPH, NOT THE GRAPH** (.github#1628). The list handed in is the entire
+    /// universe of dependents this can find, so a `--repo`-scoped list answers 0 where the board says 3.
+    /// Correct exactly when the list IS the board (`Batch.schedule`, `decide --snapshot`); when it is a
+    /// scoped projection of one, `Batch.scheduleWith` carries the whole-board counts instead.
     val blockingCounts: items: Item list -> Map<Ref, int>
 
     /// Whether an item is being STARVED: `Ready` (never `Backlog` — see the note below) and at least
@@ -100,7 +118,17 @@ module Rank =
     /// stale projection can never outrank what the item says about itself.
     val ofItem: counts: Map<Ref, int> -> item: Item -> Rank
 
+    /// Every candidate's rank against counts the CALLER derived — the spelling that lets the counts come
+    /// from a WIDER set than the candidates (.github#1628).
+    ///
+    /// `counts` is read by `Ref`, so an entry for a ref that is not a candidate is inert. That is what
+    /// makes a whole-board count map safe to hand a repo-scoped candidate list.
+    val ofItemsWith: counts: Map<Ref, int> -> items: Item list -> (Item * Rank) list
+
     /// Every candidate's rank in one pass — the blocking graph is walked once per batch, not once per item.
+    ///
+    /// Counts come from the candidate list itself; see `blockingCounts` for when that is the right
+    /// question and `ofItemsWith` for when it is not.
     val ofItems: items: Item list -> (Item * Rank) list
 
     /// TRUE when the rank carries no priority evidence at all. Such an item still schedules; it sorts last.

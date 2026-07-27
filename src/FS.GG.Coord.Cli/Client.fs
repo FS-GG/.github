@@ -387,6 +387,51 @@ module Client =
             Candidates = request.Candidates |> List.map enrich }
 
 
+    /// THE WHOLE BOARD'S BLOCKING COUNTS, from the scan rows the offer path already holds (.github#1628).
+    ///
+    /// **THE GRAPH IS A WHOLE-BOARD FACT; THE CANDIDATE LIST IS A SCOPED PROJECTION OF IT.** `Rank`'s
+    /// primary term used to be derived from the candidates, and `Scan.snapshot` scopes those with
+    /// `--repo` — so an item in `.github` that three open items in `FS.GG.SDD` are `Blocked by` counted 0
+    /// under `take --repo .github` and 3 under a bare org-wide `batch`. Same board, same instant, two
+    /// ranks. The repo-scoped spelling is the documented worker loop, so the wrong one was the one that
+    /// actually ran, and the item it under-ranked was by construction a cross-repo hub — the thing most
+    /// worth scheduling first.
+    ///
+    /// **IT COSTS NOTHING.** `Scan.blockerGraph` is pure and reads no transport (#1090): a board item's
+    /// OPEN/CLOSED state is already in `rows`, so an on-board blocker's resolution is free. `rows` is the
+    /// UNSCOPED scan the offer path already paid for — the same list `enrichBoardFacts` joins against.
+    ///
+    /// THE SOURCE SET IS THE SAME ONE `Scan.snapshot` DERIVES CANDIDATES FROM, minus the scope: OPEN,
+    /// non-PR rows. Both filters are load-bearing rather than tidy.
+    ///
+    /// - **OPEN** because a closed item is not waiting on anything; `Rank.blockingCounts` has always said
+    ///   "how many OPEN items name this one", and dropping that filter would keep promoting a hub whose
+    ///   dependents all shipped.
+    /// - **NON-PR** because `Scan.snapshot` drops PRs before it scopes, so counting a PR's `Blocked by`
+    ///   here would credit a dependent the candidate-set spelling never could — a NEW disagreement
+    ///   introduced by the fix for a disagreement.
+    ///
+    /// **THE GRAPH IS BUILT OVER ALL ROWS AND FILTERED AFTER, NEVER BEFORE.** `blockerGraph` resolves a
+    /// blocker's state by looking the target up in the rows it was handed, and treats a miss as
+    /// `BlockerUnknown` — which BLOCKS. Filtering the rows first would therefore turn every CLOSED target
+    /// into an unknown one and count edges that have long since resolved: the closed-blocker case would
+    /// silently start inflating exactly the term this item exists to make honest.
+    ///
+    /// Off-board and unparseable edges keep .github#1598's treatment, unchanged and for free —
+    /// `blockerGraph` marks an off-board ref `BlockerUnknown` and prose gets no `Ref` at all, and
+    /// `Rank.blockingCountsOf` credits only edges that carry a ref. An off-board ref that IS credited
+    /// names a node no candidate can be, so its entry is never read.
+    let boardBlockingCounts (rows: Scan.Row list) : Map<Ref, int> =
+        let counted =
+            rows
+            |> List.filter (fun r -> not r.IsPullRequest && r.State = Open)
+            |> List.map (fun r -> r.Ref)
+            |> Set.ofList
+
+        Scan.blockerGraph rows
+        |> List.filter (fun (source, _) -> Set.contains source counted)
+        |> Rank.blockingCountsOf
+
     /// THE OFFER PATH'S DECISION — and as of .github#1598 it ENRICHES before it schedules.
     ///
     /// `rows` is no longer discarded here. The scheduler's ordering reads `Class`, `Phase` and the issue's
@@ -398,7 +443,12 @@ module Client =
     /// It is the SAME `enrichBoardFacts` `reconcile` already ran, not a second join: one function, one set
     /// of rules for how a scan row reaches an item, so the ordering `batch` prints and the projection
     /// `reconcile` writes can never come from different readings of one board.
-    let private renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+    /// It also carries the WHOLE BOARD's blocking counts (.github#1628) — `rows` is unscoped and the
+    /// snapshot's candidates are not, so the counts must come from the wider list or the graph is
+    /// truncated. Not `private`, because AC2 asks for a fixture that ranks a cross-repo hub from a
+    /// `--repo`-scoped batch, and only this composition — real `Scan.snapshot` bytes, the real enrichment,
+    /// the real fold — can answer that. A fixture built on the pieces would pass while the wiring rotted.
+    let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
             for e in errors do
@@ -409,7 +459,8 @@ module Client =
             let request = enrichBoardFacts rows parsed
 
             match
-                Batch.schedule
+                Batch.scheduleWith
+                    (boardBlockingCounts rows)
                     request.AllowBacklog
                     request.Limit
                     request.InFlight

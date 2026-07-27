@@ -135,6 +135,41 @@ module Batch =
     ///
     /// (A CANDIDATE with unmatchable tokens is a different matter: it is merely `UnusableTouchSet`,
     /// passed over with a reason. It reserves nothing, but it also occupies nothing.)
+    /// **`boardCounts` IS THE WHOLE BOARD'S BLOCKING GRAPH, NOT THE CANDIDATES'** (.github#1628).
+    ///
+    /// It is a parameter for one reason: the blocking count — `Rank`'s primary term, and the one
+    /// .github#1598 calls "the single best signal available" — is a WHOLE-BOARD fact, while `candidates`
+    /// is a `--repo`-scoped projection of that board. Deriving the count from the candidates (which is
+    /// what this did) meant an item three items in another repo were `Blocked by` counted 0 under
+    /// `batch --repo <its own repo>` and 3 under a bare `batch`. Nothing errored: the batch stayed
+    /// well-formed, disjoint and deterministic, and was ordered by a count that was wrong in the one
+    /// direction that matters — a cross-repo hub, the thing most worth scheduling first, ranked as
+    /// though nothing depended on it. And the scoped spelling is the one every worker runs.
+    ///
+    /// It costs no read. `Scan.blockerGraph` builds the whole-board `Blocked by` graph from the scan rows
+    /// alone (#1090), and the worker paths already hold those rows unscoped — `Client.boardBlockingCounts`
+    /// is that composition.
+    ///
+    /// Counts for refs that are not candidates are INERT (`Rank.ofItemsWith` reads by ref), so passing the
+    /// whole board's map to a one-repo batch is safe by construction rather than by filtering.
+    ///
+    /// Everything above this note — disjointness, the priority-greedy pack, the `limit`, the reservations,
+    /// the `Red` refusal — is unchanged by it, and is this function's contract.
+    val scheduleWith:
+        boardCounts: Map<Ref, int> ->
+        allowBacklog: bool ->
+        limit: int option ->
+        inFlight: Reservation list ->
+        candidates: Item list ->
+            Verdict<BatchResult>
+
+    /// `scheduleWith` with the counts derived from `candidates` — its full contract, plus the assumption
+    /// that the candidate list IS the whole board.
+    ///
+    /// **NOT FOR THE WORKER LOOP** (.github#1628): `batch`/`next`/`take` scope their candidates, and a
+    /// scoped list truncates the blocking graph silently. Its caller is `decide --snapshot`, which is
+    /// handed a document and nothing wider — the same position it is already in for `Phase` and age
+    /// (.github#1598), and the same benign direction: an undercount sorts an item later, never earlier.
     val schedule:
         allowBacklog: bool ->
         limit: int option ->

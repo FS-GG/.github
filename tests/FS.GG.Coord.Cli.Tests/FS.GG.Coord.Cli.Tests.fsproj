@@ -12,6 +12,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="SnapshotTests.fs" />
     <Compile Include="ScanRoundTripTests.fs" />
+    <Compile Include="CrossRepoRankTests.fs" />
     <Compile Include="OptionsTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
