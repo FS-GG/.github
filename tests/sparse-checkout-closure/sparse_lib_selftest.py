@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Selftest for `scripts/lib/sparse.py` — the ONE reading of a sparse-checkout block (.github#1530).
+"""Selftest for `scripts/lib/sparse.py` — the ONE reading of a checkout step (.github#1530, #1553).
 
 WHY THIS EXISTS SEPARATELY FROM THE TWO CALLERS' FIXTURES. The rules in that module are the reason it
 exists: the newline split that makes a folded scalar visible, the omitted cone flag that IS `true`,
@@ -13,9 +13,17 @@ it, and refused a quoted `sparse-checkout-cone-mode: "false"` that the gate acce
 could see either, because neither caller's own subject contains those shapes. So the rules are
 asserted HERE, on the module, in both directions — the readings AND the refusals.
 
+THE STEP SELECTOR IS HERE FOR THE SAME REASON (#1553). #1530 hoisted the block PARSE and left the
+step SELECTOR in each caller. Underneath their different filters both had to answer one identical
+question — is this step an `actions/checkout` aimed at repository R — and they answered it
+differently: `sparse_set.py` never read `uses:` at all, and compared `repository:` case-sensitively
+where the gate casefolds and its own fixture asserts a case-variant spelling must still resolve.
+Again neither divergence was reachable from either caller's fixture, because neither caller's own
+subject contains those shapes. So the qualification is asserted HERE, on the module, on documents.
+
 This asserts the module's API directly rather than through a workflow file. `tests/sparse-checkout-
 closure/run.sh` covers the end-to-end path; what this covers is the reading itself, on the `with:`
-mappings the readers actually receive, including the shapes no live workflow has.
+mappings and job documents the readers actually receive, including the shapes no live workflow has.
 
 Exit 0 = every case held. Exit 1 = a case did not. Exit 2 = the module could not be imported at all,
 which is a tooling failure and is never reported as a pass (#266).
@@ -30,7 +38,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 try:
-    from lib.sparse import SparseRefusal, cone_mode_of, patterns_of
+    from lib.sparse import (
+        CHECKOUT_ACTION,
+        SparseRefusal,
+        checkout_steps,
+        cone_mode_of,
+        patterns_of,
+        repository_matches,
+    )
 except Exception as error:  # noqa: BLE001 — an import failure is a NO VERDICT, never a pass.
     print(f"FAIL  scripts/lib/sparse.py could not be imported: {error!r}", file=sys.stderr)
     sys.exit(2)
@@ -219,6 +234,169 @@ try:
     bad("...and asking about that cone flag SEPARATELY still refuses it")
 except SparseRefusal:
     ok("...and asking about that cone flag SEPARATELY still refuses it")
+
+# ---- READING 4: WHICH STEPS ARE SUBJECTS AT ALL (.github#1553) -----------------------------------
+# The qualification underneath both callers' filters. Two facts and no others: the step `uses:`
+# `actions/checkout`, and its `with:` names a non-empty `repository:`. Both are read the way GitHub
+# resolves them, and BOTH are places `sparse_set.py`'s private copy was wrong.
+
+
+def _wf(*steps: dict) -> dict:
+    """A parsed workflow document carrying these steps in one job, `a`.
+
+    Deliberately not parameterised by job name: the only leg that needs more than one job is the
+    document-order leg below, and it writes its document out in full because the ORDER is what it is
+    asserting — a builder that hid the job mapping would be hiding the thing under test.
+    """
+    return {"name": "x", "on": ["push"], "jobs": {"a": {"runs-on": "ubuntu-latest", "steps": list(steps)}}}
+
+
+def selects(name: str, document: object, expected: list[tuple[str, str]]) -> None:
+    """`checkout_steps` qualifies exactly these (job id, repository) pairs, in document order."""
+    try:
+        got = checkout_steps(document)
+    except Exception as error:  # noqa: BLE001 — a selector that raises on a document is a failure.
+        bad(name, f"raised instead of answering: {error!r}")
+        return
+    if [(step.job_id, step.repository) for step in got] == expected:
+        ok(name)
+    else:
+        bad(name, f"expected {expected!r}, got {[(s.job_id, s.repository) for s in got]!r}")
+
+
+selects(
+    "a plain cross-repo actions/checkout qualifies, with its job id and repository",
+    _wf({"uses": "actions/checkout@v7", "with": {"repository": "FS-GG/.github", "sparse-checkout": "/scripts/"}}),
+    [("a", "FS-GG/.github")],
+)
+# `uses:` IS READ, and casefolded with the ref stripped — all three spellings run the real action.
+for spelling in ("actions/checkout@v7", "actions/Checkout@v7", "ACTIONS/CHECKOUT", "actions/checkout@" + "d" * 40):
+    selects(
+        f"uses: {spelling!r} is the real action and qualifies",
+        _wf({"uses": spelling, "with": {"repository": "FS-GG/.github"}}),
+        [("a", "FS-GG/.github")],
+    )
+# THE DIVERGENCE THAT MATTERS IN THIS DIRECTION. `sparse_set.py` read no `uses:` at all, so ANY step
+# whose `with:` carried the authority repository qualified — a build action, a composite action,
+# anything — and the fixture would then grade a step that fetches no tree, or hard-fail on a count
+# inflated by decoys. Nothing in either caller's own subject could show it.
+for impostor in ("docker/build-push-action@v6", "./.github/actions/setup-policy-python", "actions/checkout-lite@v1"):
+    selects(
+        f"a NON-checkout step carrying repository: — {impostor!r} — does NOT qualify",
+        _wf({"uses": impostor, "with": {"repository": "FS-GG/.github", "sparse-checkout": "/scripts/"}}),
+        [],
+    )
+selects(
+    "a `run:` step with no `uses:` at all does not qualify",
+    _wf({"run": "git clone https://github.com/FS-GG/.github", "with": {"repository": "FS-GG/.github"}}),
+    [],
+)
+
+# A checkout with NO `repository:` is the caller's OWN tree: no second repository to under-fetch.
+selects(
+    "a checkout with no repository: is the caller's own and does not qualify",
+    _wf({"uses": "actions/checkout@v7", "with": {"sparse-checkout": "/scripts/"}}),
+    [],
+)
+selects("a checkout with no `with:` block at all does not qualify", _wf({"uses": "actions/checkout@v7"}), [])
+# `or ""`, not `str(params.get("repository", ""))`: PyYAML resolves a BARE `repository:` to None and
+# `str(None)` is the four-character string "None" — non-empty, and a repository name that exists
+# nowhere. `sparse_set.py`'s copy used `get` and would have qualified this step as `"None"`.
+for label, value in (("an empty string", ""), ("whitespace only", "   "), ("a BARE key (PyYAML: None)", None)):
+    selects(
+        f"repository: {label} names no repository and does not qualify",
+        _wf({"uses": "actions/checkout@v7", "with": {"repository": value, "sparse-checkout": "/scripts/"}}),
+        [],
+    )
+
+# The repository is handed back in the WORKFLOW's spelling, never casefolded: callers print it back
+# to an operator, and a message that rewrites the file's own text sends someone hunting for a line
+# that does not exist. Comparison is `repository_matches`'s job, asserted below.
+selects(
+    "the repository is returned in the file's own spelling, not casefolded",
+    _wf({"uses": "actions/checkout@v7", "with": {"repository": "  fs-gg/.GitHub  "}}),
+    [("a", "fs-gg/.GitHub")],
+)
+
+# Document order, across jobs and within one — `sparse_set` refuses any count but one, so a selector
+# that deduplicated or reordered would change which step it grades.
+selects(
+    "every qualifying step is returned, in document order, across jobs",
+    {
+        "jobs": {
+            "first": {
+                "steps": [
+                    {"uses": "actions/checkout@v7"},  # own repo: not a subject
+                    {"uses": "actions/checkout@v7", "with": {"repository": "FS-GG/FS.GG.SDD"}},
+                    {"uses": "actions/Checkout@v7", "with": {"repository": "FS-GG/.github"}},
+                ]
+            },
+            "second": {"steps": [{"uses": "actions/checkout@v7", "with": {"repository": "FS-GG/.github"}}]},
+        }
+    },
+    [("first", "FS-GG/FS.GG.SDD"), ("first", "FS-GG/.github"), ("second", "FS-GG/.github")],
+)
+
+# SHAPES A WORKFLOW DOES NOT HAVE contribute nothing and raise nothing. This is not a fail-open: the
+# question is "which steps are subjects", and a malformed region holds no readable checkout step. The
+# refusals in this module are about a step that IS a subject whose BLOCK cannot be read.
+selects("a job that `uses:` a reusable workflow has no steps and contributes none", {"jobs": {"a": {"uses": "o/r/.github/workflows/w.yml@main"}}}, [])
+selects("a `steps:` that is not a list contributes nothing", {"jobs": {"a": {"steps": "not-a-list"}}}, [])
+selects("a step that is not a mapping contributes nothing", {"jobs": {"a": {"steps": ["bare-string", None]}}}, [])
+selects("a `with:` that is not a mapping contributes nothing", _wf({"uses": "actions/checkout@v7", "with": "nope"}), [])
+selects("a job that is not a mapping contributes nothing", {"jobs": {"a": "nope"}}, [])
+selects("a `jobs:` that is not a mapping contributes nothing", {"jobs": ["a", "b"]}, [])
+selects("a document that is not a mapping contributes nothing", "name: x", [])
+selects("an empty document (PyYAML: None) contributes nothing", None, [])
+
+# The `with:` mapping handed back is the DOCUMENT'S OWN OBJECT, asserted by identity rather than by
+# `==`: two steps in one workflow can carry byte-identical `with:` blocks, so an equality check could
+# not tell a selector that returned the wrong one of them from a selector that worked. Both callers go
+# on to read `patterns_of`/`cone_mode_of` out of whatever object they are handed.
+_clean = {"repository": "FS-GG/.github", "sparse-checkout": "/scripts/"}
+_sneaky = {"repository": "FS-GG/.github", "sparse-checkout": "/scripts/"}
+_doc = _wf({"uses": "actions/checkout@v7", "with": _clean}, {"uses": "actions/checkout@v7", "with": _sneaky})
+_got = [step.params for step in checkout_steps(_doc)]
+if len(_got) == 2 and _got[0] is _clean and _got[1] is _sneaky:
+    ok("the `with:` mapping is the document's own object, so identical blocks stay distinguishable")
+else:
+    bad("the `with:` mapping is the document's own object, so identical blocks stay distinguishable")
+
+# ---- READING 4b: `repository_matches` — GitHub resolves `repository:` WITHOUT REGARD TO CASE -------
+# THE SECOND DIVERGENCE. `sparse_set.py` compared with `==`, so the case-variant spelling the closure
+# gate's `repo-casing` fixture leg asserts must still resolve (`repository: fs-gg/.GitHub`) yielded
+# ZERO authority steps and a hard failure on the count — a no-verdict over a workflow that works.
+AUTHORITY = "FS-GG/.github"
+for declared in ("FS-GG/.github", "fs-gg/.github", "fs-gg/.GitHub", "FS-GG/.GITHUB", "  FS-GG/.github  "):
+    if repository_matches(declared, AUTHORITY):
+        ok(f"repository: {declared!r} resolves to {AUTHORITY} — GitHub ignores case, so this must too")
+    else:
+        bad(f"repository: {declared!r} resolves to {AUTHORITY} — GitHub ignores case, so this must too")
+for declared in ("FS-GG/FS.GG.SDD", "FS-GG/.github-actions", "other/.github"):
+    if repository_matches(declared, AUTHORITY):
+        bad(f"repository: {declared!r} is a DIFFERENT repository and must not match {AUTHORITY}")
+    else:
+        ok(f"repository: {declared!r} is a DIFFERENT repository and must not match {AUTHORITY}")
+# An EMPTY side never matches, including empty against empty. `origin_repository()` returns None for a
+# tree whose remote cannot be read, and the gate asks this question with that None: "I cannot tell
+# which repository is ours" must not resolve rule (4) as if it had said yes (#266).
+for left, right, why in (
+    (None, AUTHORITY, "an unreadable `repository:` matches nothing"),
+    (AUTHORITY, None, "an unreadable `ours` (no origin remote) answers NO, never yes"),
+    ("", "", "empty against empty is still not a repository"),
+    ("   ", "   ", "whitespace against whitespace is still not a repository"),
+):
+    if repository_matches(left, right):
+        bad(f"{why} ({left!r} vs {right!r})")
+    else:
+        ok(f"{why} ({left!r} vs {right!r})")
+
+# The action literal is the shared module's, so the gate and sparse_set cannot disagree about what
+# they are looking for. Asserted as a value, because a constant nobody reads is one that can rot.
+if CHECKOUT_ACTION == "actions/checkout":
+    ok("CHECKOUT_ACTION is the action's published owner/name, shared by both callers")
+else:
+    bad("CHECKOUT_ACTION is the action's published owner/name, shared by both callers", repr(CHECKOUT_ACTION))
 
 # ---- THE REFUSAL IS THE MODULE'S OWN, so a caller can map it to its own no-verdict ----------------
 # `lib/sparse.py` deliberately does not import `lib/gate.py`: the gate collects SparseRefusal as an

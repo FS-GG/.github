@@ -204,10 +204,18 @@ from lib.gate import (  # noqa: E402  (path shim above must run first)
 # `true`, the declared-but-empty block that is an empty tree — were correct in two files only because
 # the second author had read the first, and they had ALREADY drifted apart in two places. What stays
 # here is the GRADING (rules 1-4), which is this gate's alone.
+#
+# AND SINCE #1553, SO IS THE STEP SELECTOR. "Is this step an `actions/checkout` aimed at repository R"
+# was still answered twice — and the second copy read no `uses:` at all and compared `repository:`
+# case-SENSITIVELY, where this gate's own `repo-casing` leg asserts a case-variant spelling must still
+# resolve. The qualification is now `lib/sparse.py`'s `checkout_steps` / `repository_matches`; what
+# stays here is which of those steps this gate wants (all of them) and the GRADING (rules 1-4).
 from lib.sparse import (  # noqa: E402  (path shim above must run first)
     SparseRefusal,
+    checkout_steps,
     cone_mode_of,
     patterns_of,
+    repository_matches,
 )
 
 NAME = "check-sparse-checkout-closure"
@@ -227,9 +235,10 @@ WORKFLOW_ROOT = ".github/workflows"
 # declarable and this comment covers the rest.
 PATHS_SUBJECT = (WORKFLOW_ROOT,)
 
-# The action whose `with:` block this gate grades. Steps name it as `actions/checkout@v7`,
-# `actions/checkout@<sha>`, or unversioned; match on the owner/name, casefolded, and ignore the ref.
-CHECKOUT_ACTION = "actions/checkout"
+# The action whose `with:` block this gate grades — `actions/checkout`, matched on owner/name,
+# casefolded, with the ref ignored — is `lib/sparse.py`'s `CHECKOUT_ACTION` since #1553. It is not
+# restated here: a constant retyped beside the reading that uses it is the duplicate this gate's whole
+# subject is about.
 
 # gitignore metacharacters. A pattern containing one is a MATCH EXPRESSION rather than a directory,
 # and rule (4) could not resolve it even in principle.
@@ -336,36 +345,19 @@ def selects_anything(relative: str, tracked: set[str]) -> bool:
 def sparse_steps(document: object) -> list[tuple[str, dict]]:
     """Every cross-repo `actions/checkout` step in the document, as (job id, `with:` mapping).
 
-    A step qualifies on TWO structural facts and no others: it uses `actions/checkout`, and its
-    `with:` names a `repository:`. Whether it declares a `sparse-checkout:` is decided by the caller,
-    because "no sparse-checkout" (a full clone, harmless) and "a key supplying nothing" differ.
+    A step qualifies on TWO structural facts and no others: it uses `actions/checkout` (casefolded,
+    ref ignored), and its `with:` names a non-empty `repository:`. That qualification is
+    `lib/sparse.py`'s (#1553) and is NOT restated here; this gate's own answer is the FILTER, which is
+    "all of them" — every cross-repo checkout is a subject, and rules 1-4 below do the grading.
+    Whether a step declares a `sparse-checkout:` is decided by the caller of this function, because
+    "no sparse-checkout" (a full clone, harmless) and "a key supplying nothing" differ.
+
+    KEPT AS A NAMED FUNCTION ON THIS MODULE ON PURPOSE. `scripts/repos-audit.sh` loads this file by
+    path and asserts `sparse_steps` among the seven names it borrows (#1529), so this is a published
+    interface with a caller that fails CLOSED — and loudly — if it disappears. Its shape is part of
+    the contract; the reading behind it is free to move, and did.
     """
-    found: list[tuple[str, dict]] = []
-    jobs = document.get("jobs") if isinstance(document, dict) else None
-    if not isinstance(jobs, dict):
-        return found
-    for job_id, job in jobs.items():
-        if not isinstance(job, dict):
-            continue
-        steps = job.get("steps")
-        if not isinstance(steps, list):
-            continue  # a `uses:`-a-reusable-workflow job has no steps; that workflow is walked itself
-        for step in steps:
-            if not isinstance(step, dict):
-                continue
-            # CASE-INSENSITIVELY. GitHub resolves an action's owner/name without regard to case, so
-            # `actions/Checkout@v7` runs the real action — and a subject this gate drops silently is
-            # a subject that left the set without anyone deciding to remove it.
-            uses = str(step.get("uses") or "").strip()
-            if uses.split("@", 1)[0].strip().casefold() != CHECKOUT_ACTION:
-                continue
-            params = step.get("with")
-            if not isinstance(params, dict):
-                continue
-            if not str(params.get("repository") or "").strip():
-                continue  # the caller's own checkout; there is no authority tree to under-fetch
-            found.append((str(job_id), params))
-    return found
+    return [(step.job_id, step.params) for step in checkout_steps(document)]
 
 
 def grade_pattern(pattern: str, *, cone: bool, where: str, tracked: set[str] | None) -> list[str]:
@@ -487,11 +479,11 @@ def main(argv: list[str]) -> int:
                 continue
 
             repository = str(params.get("repository") or "").strip()
-            resolvable = (
-                ours is not None
-                and tracked is not None
-                and repository.casefold() == ours.casefold()
-            )
+            # `repository_matches`, not a second `.casefold()` comparison here: the rule that
+            # `fs-gg/.GitHub` and `FS-GG/.github` are the same repository is `lib/sparse.py`'s, and it
+            # is the rule `sparse_set` got wrong (#1553). It answers False for an unreadable `ours`,
+            # so the `tracked` guard is what remains of "the gate can resolve this tree".
+            resolvable = tracked is not None and repository_matches(repository, ours)
             if not resolvable:
                 unresolved.append(
                     f"{where}: fetches {repository!r}, which is not the audited repository "
