@@ -114,10 +114,15 @@ jobs:
           # to build the self-contained dist/ artifact and skill-union-bundle.yml fails a bundle that
           # still sources a sibling. Do NOT narrow this back to named files.
           #
-          # Non-cone mode: `scripts/` is a gitignore-style pattern, so it takes scripts/ recursively
-          # (verified: scripts/lib/{args,roots}.sh land) and nothing else in the repo.
+          # ANCHOR THE PATTERN. Non-cone mode is gitignore-style, where a pattern with no leading or
+          # interior slash matches at ANY depth: a bare `scripts/` also drags in every nested scripts/
+          # dir, which here means the work-board and work-roadmap skills' copies under all three
+          # ADR-0011 skill roots. Harmless to the assertion, but this job has no business checking out
+          # the skill roots of the authority repo while auditing somebody else's. The leading slash
+          # pins it to the repo root. Verified against this repo: `/scripts/` yields scripts/
+          # recursively — scripts/lib/{args,roots,gate}.* all land — and not one file outside it.
           sparse-checkout: |
-            scripts/
+            /scripts/
           sparse-checkout-cone-mode: false
 
       - name: Assert the skill union is byte-identical across roots
