@@ -53,6 +53,116 @@
     "B1_CRLF_RAW": "ad7b23affae5627b789f0344349e614a91210750cd4fc5a777aa1b944a960b2b"
   },
 
+  "digestVectors": {
+    "_comment": [
+      "THE THREE-WAY DIGEST TABLE — FS-GG/.github#1547. The `fixtures` array above pins `verify`'s",
+      "three FACTS across two implementations; this pins the DIGEST across all THREE, which is the",
+      "surface #1547 exists because nobody covered.",
+      "",
+      "WHAT WAS UNCOVERED. The canonical skill digest has three implementations —",
+      "`Fsgg.SkillMirror.sha256` (the library, ADR-0014's one implementation), `skill_digest` in",
+      "scripts/skill-union-assert.sh, and `canonical_digest` in scripts/fsgg-skill-registry-check —",
+      "and they were pinned PAIRWISE by two mechanisms that both skipped the digest: conformance.sh",
+      "pins shell<->Python for the PREDICATE GRAMMAR only, and skillmirror-conformance.sh pinned",
+      "shell<->library for the THREE FACTS. Nothing anywhere ran one input through all three. CRLF is",
+      "the instance that surfaced (the library folded it, the two shells did not); the uncovered",
+      "surface was the finding.",
+      "",
+      "THE DECISION (2026-07-27, recorded on #1547): align the two shells to the library. Both now",
+      "strip a leading UTF-8 BOM and fold CRLF->LF before hashing. CONSEQUENCE, STATED RATHER THAN",
+      "INFERRED: a CRLF file and its LF twin now hash IDENTICALLY, so the digest checks are",
+      "deliberately slightly more permissive than a byte comparison. Cross-root byte-identity",
+      "(`divergent`) is untouched and still separates them.",
+      "",
+      "ONE EXPECTED VALUE PER VECTOR, NOT THREE COLUMNS, AND THAT IS THE POINT. `digest` is what all",
+      "three must return. There is deliberately no per-implementation column and no `divergence`",
+      "escape hatch here: re-introducing a disagreement cannot be done by editing one side's column,",
+      "it requires changing the single value every side is measured against — which the oracle then",
+      "rejects unless the LIBRARY moved. That is the asymmetry ADR-0014 asserts, expressed in the",
+      "table's shape instead of in a comment.",
+      "",
+      "`bytesBase64`, NOT A JSON STRING LITERAL. These vectors turn on a leading BOM, on lone CRs and",
+      "on exact trailing bytes — precisely the things an editor, a linter or a careless re-serialize",
+      "silently normalizes away. base64 makes the input bytes reviewable and tamper-evident, and",
+      "removes any question about what a `\\uFEFF` in a JSON string is supposed to encode.",
+      "",
+      "PROVENANCE. `digest` is MEASURED, exactly like the `library` column above: skillmirror-oracle.sh",
+      "decodes each vector, hands the body to the library's own `SkillMirror.sha256`, and reports any",
+      "vector whose recorded value differs. skillmirror-conformance.sh then drives the two SHELLS over",
+      "the same bytes hermetically, on every PR, via their `--digest` reference seams.",
+      "",
+      "EVERY VECTOR IS VALID UTF-8, AND THAT BOUNDARY IS DELIBERATE. The three agree for any body that",
+      "decodes cleanly; on INVALID UTF-8 they do not, and #1547 changed nothing there. The shells hash",
+      "raw bytes, while the library hashes text whose invalid sequences a decoder already replaced with",
+      "U+FFFD — so a file of 0xFF and a file of 0xFE are different files the LIBRARY gives one digest,",
+      "a collision the byte-hashing shells do not have. Pinning that here would mean recording a",
+      "library fail-open as an expectation, so it is filed instead (.github#1589) and this table stays",
+      "the statement of what is actually agreed."
+    ],
+    "vectors": [
+      {
+        "name": "lf",
+        "note": "The base case: an LF-authored, BOM-free body. Every other vector is this one perturbed, and they all collapse onto its digest except where a lone CR survives.",
+        "bytesBase64": "IyBiZXRhIHNraWxsCg==",
+        "digest": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1"
+      },
+      {
+        "name": "crlf",
+        "note": "#1547's subject. The SAME logical body on a CRLF checkout. Its digest equals `lf`'s — that equality IS the decision, and before #1547 the two shells disagreed with the library here.",
+        "bytesBase64": "IyBiZXRhIHNraWxsDQo=",
+        "digest": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1"
+      },
+      {
+        "name": "bom-lf",
+        "note": "A leading UTF-8 BOM must not enter the digest (.github#384). The library's callers decode as UTF-8 and the decoder consumes it; both shells strip it explicitly. Equals `lf`.",
+        "bytesBase64": "77u/IyBiZXRhIHNraWxsCg==",
+        "digest": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1"
+      },
+      {
+        "name": "bom-crlf",
+        "note": "BOTH normalizations at once, which is the combination a Windows editor actually produces. Equals `lf`. An implementation that applied only one of the two would fail HERE and pass `bom-lf` and `crlf` individually — which is why the combination is a vector and not an assumption.",
+        "bytesBase64": "77u/IyBiZXRhIHNraWxsDQo=",
+        "digest": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1"
+      },
+      {
+        "name": "empty",
+        "note": "An empty body. `SkillMirror.sha256` special-cases null/empty to \"\", which is the same value the general path would produce, so the vector pins that the special case is a no-op rather than a second behaviour. This is sha256 of zero bytes.",
+        "bytesBase64": "",
+        "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "lone-cr",
+        "note": "THE ANTI-`tr -d '\\r'` VECTOR. The library replaces the two-byte PAIR CR LF, not the CHARACTER CR, so a bare CR inside a line SURVIVES and this digest differs from `lf`'s. The obvious shell fix — piping through `tr -d '\\r'` — passes `crlf` and fails here, which is exactly why the obvious fix is wrong.",
+        "bytesBase64": "IyBiZXRhDXNraWxsCg==",
+        "digest": "bb1ab1aad80bc2b2015e4ba1a7c0a82fd37bc9ace09603260512c20e5e1cbcb8"
+      },
+      {
+        "name": "cr-cr-lf",
+        "note": "`a\\r\\r\\nb\\n`. Exactly ONE pair is folded, leaving `a\\r\\nb\\n` — so an implementation that folds repeatedly until no CR remains, or that scans right-to-left, lands somewhere else. Pins that the fold is a single non-overlapping pass, the semantics of .NET's String.Replace.",
+        "bytesBase64": "YQ0NCmIK",
+        "digest": "953bba9ac9726eaea07e844abcf144a0afe998039257c7a88b6665819597f39d"
+      },
+      {
+        "name": "trailing-lone-cr",
+        "note": "THE FAIL-OPEN THIS TABLE EXISTS TO CATCH. `# beta skill\\r`, a trailing CR with no LF. Under `tr -d '\\r'` this hashes IDENTICALLY to `no-trailing-newline` below — two distinct files sharing one digest, which is a missed drift (#266) rather than a spurious one. Under the library, and now under both shells, they differ.",
+        "bytesBase64": "IyBiZXRhIHNraWxsDQ==",
+        "digest": "919bf7d129df9c84534585fac09321cafa0707d02f931f322b4506f4f56752b2"
+      },
+      {
+        "name": "no-trailing-newline",
+        "note": "A body with no final newline. Its own digest, and the partner `trailing-lone-cr` must not collide with.",
+        "bytesBase64": "IyBiZXRhIHNraWxs",
+        "digest": "c12a7ea15c1153ddd813719ee42a27cba61e68146ea204acdd55d3853819a58a"
+      },
+      {
+        "name": "many-trailing-lf",
+        "note": "`# beta skill\\n\\n\\n`. Pins that trailing newlines are COUNTED, which is a live hazard for a shell implementation specifically: `$(cat f)` strips every trailing newline, so a `skill_digest` written without the `printf x` sentinel collapses this onto `lf` and reports a matching digest for a file that does not match.",
+        "bytesBase64": "IyBiZXRhIHNraWxsCgoK",
+        "digest": "3ad29abbfb67e5b21819fc0a8914be43820e45aaba5d52bfa3b45d6d0a0fa7f3"
+      }
+    ]
+  },
+
   "fixtures": [
     {
       "name": "whole-and-coherent-and-matching",
@@ -196,8 +306,8 @@
     },
 
     {
-      "name": "KNOWN-DIVERGENCE-crlf-body-against-an-lf-digest",
-      "note": "SkillMirror.sha256 replaces CRLF with LF BEFORE hashing (feature 070, so an LF-authored body does not spuriously drift on a Windows checkout). The shell's skill_digest does NOT, and neither does the Python registry checker's canonical_digest — two of the three implementations agree and the library is the odd one out. The shell therefore reports a drift the library does not. It fails CLOSED (a spurious [drifted], never a missed one), which is why this vector pins the difference rather than changing one implementation of three inside a fixture-scoped item.",
+      "name": "crlf-body-against-an-lf-digest-AGREES",
+      "note": "WAS the KNOWN-DIVERGENCE vector, and is now an agreement vector — .github#1547. SkillMirror.sha256 replaces CRLF with LF BEFORE hashing (feature 070, so an LF-authored body does not spuriously drift on a Windows checkout); the shell's skill_digest and the Python canonical_digest did NOT, so a CRLF checkout produced a spurious [drifted] the library never reported. The 2026-07-27 decision on #1547 aligned BOTH shells to the library — ADR-0014 names the library the one implementation and #120 records that the shells follow it, so the shells were the drifted copies. `hashMismatchRoots` is therefore now EMPTY here, equal to the library, and this vector's job flipped from pinning a difference to pinning its ABSENCE: if either shell ever stops folding CRLF, this vector reds. The digest-level triple is pinned separately and per-implementation by `digestVectors` below.",
       "id": "beta",
       "scope": "product",
       "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
@@ -211,13 +321,7 @@
       "shell": {
         "missingRoots": [],
         "divergent": false,
-        "hashMismatchRoots": [".claude/skills", ".codex/skills", ".agents/skills"]
-      },
-      "divergence": {
-        "fact": "hashMismatchRoots",
-        "direction": "shell is STRICTER (fails closed)",
-        "why": "SkillMirror.sha256 CRLF-normalizes; skill_digest and fsgg-skill-registry-check's canonical_digest do not.",
-        "decision": "documented and pinned here, not silently aligned — changing one of three implementations needs an org decision, filed as a follow-up."
+        "hashMismatchRoots": []
       }
     },
     {

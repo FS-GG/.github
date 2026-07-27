@@ -41,9 +41,10 @@
 # `Fsgg.SkillMirror` in FS.GG.Contracts 1.4.0 / SDD#61 and fs-gg-ui-template 0.1.61-preview.1 /
 # Rendering#43 are ADR-0014's "one implementation"; the assertion follows them):
 #   - digest: canonical-body sha256 of the skill's SKILL.md ONLY (equal to `sha256sum SKILL.md`
-#     for a BOM-free body; a leading UTF-8 BOM is stripped first, matching the producer algorithm).
-#     Multi-file skills (SKILL.md + references/**) are covered by the
-#     cross-root identity of checks 1-2, not by the digest.
+#     for a BOM-free, LF-only body; a leading UTF-8 BOM is stripped and CRLF is folded to LF first,
+#     matching the producer algorithm `Fsgg.SkillMirror.sha256` — .github#1547, which means a CRLF
+#     file and its LF twin have the SAME canonical digest). Multi-file skills (SKILL.md +
+#     references/**) are covered by the cross-root identity of checks 1-2, not by the digest.
 #   - set: the manifest is a superset CATALOG, an upper bound — emission is lifecycle/profile-
 #     conditioned, so declared∧present ⇒ digest must match; declared∧absent-everywhere ⇒ fine
 #     (skipped, counted); present∧undeclared ⇒ dangling UNLESS the id matches a --co-tenants
@@ -290,21 +291,50 @@ done
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found (required for content hashing)."
 
 # Per-skill digest (see header): canonical-body sha256 of SKILL.md only — the producers' shipped
-# algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; equal to `sha256sum SKILL.md` for a
-# BOM-free body, verified in .github#120). A leading UTF-8 BOM is stripped before hashing so it can
-# never enter the digest on the verifying side either — the exact invariant fsgg-skill-registry-check's
-# canonical_digest holds; without it a BOM'd SKILL.md would hash BOM-free in the Python registry check
-# but WITH the BOM here, a spurious [drifted] (.github#384). `--digest <skill-dir>` exposes it as a
-# reference generator so producers and this assertion never drift. Multi-file remainder is covered by
-# checks 1-2.
+# algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; verified in .github#120).
+#
+# TWO NORMALIZATIONS, AND BOTH ARE THE LIBRARY'S, NOT THIS SCRIPT'S (.github#1547):
+#   1. a leading UTF-8 BOM is stripped — the library's callers decode the file as UTF-8 and the
+#      decoder consumes the BOM, so it can never enter the digest on the producing side; without
+#      this a BOM'd SKILL.md would hash BOM-free in the Python registry check but WITH the BOM here,
+#      a spurious [drifted] (.github#384);
+#   2. CRLF is folded to LF — `Fsgg.SkillMirror.sha256` does `body.Replace("\r\n", "\n")` before
+#      hashing (feature 070), so an LF-authored body does not spuriously drift on a CRLF checkout.
+#
+# #1547 IS WHY (2) IS HERE. The canonical digest had THREE implementations — this one, the Python
+# `canonical_digest` in scripts/fsgg-skill-registry-check, and the library — and only the library
+# folded CRLF, so on a Windows/`eol=crlf` checkout the two shells reported a drift the library did
+# not. ADR-0014 names `Fsgg.SkillMirror` the ONE implementation and #120 records that this script
+# FOLLOWS it, so the shells were the drifted copies; the 2026-07-27 decision on #1547 aligned both to
+# the library. CONSEQUENCE, STATED RATHER THAN LEFT TO BE INFERRED: a CRLF file and its LF twin now
+# hash IDENTICALLY, so this check is deliberately slightly more permissive than a byte comparison.
+# Cross-root byte-identity (check 2) is unaffected — it compares raw bytes and still reports a
+# CRLF/LF pair as [divergent].
+#
+# IT REPLACES THE PAIR, NOT THE CHARACTER, and that distinction is the whole of the implementation.
+# `tr -d '\r'` would delete LONE carriage returns too, which the library keeps — and that is not a
+# theoretical difference: measured over the vector table, `# beta skill\r` and `# beta skill` hash
+# the SAME under `tr -d '\r'` and DIFFERENTLY under the library. Two distinct files sharing a digest
+# is a fail-OPEN (#266), so the fold is done with bash's own pair-wise substitution and pinned by the
+# `lone-cr`, `cr-cr-lf` and `trailing-lone-cr` vectors in tests/skill-union/skillmirror.fixtures.json.
+#
+# `--digest <skill-dir>` exposes it as a reference generator so producers and this assertion never
+# drift; `fsgg-skill-registry-check --digest <file>` is the Python seam's counterpart, and
+# tests/skill-union/skillmirror-conformance.sh drives BOTH plus the library's measured column over
+# one shared table. Multi-file remainder is covered by checks 1-2.
 skill_digest() {
-  local dir="$1"
+  local dir="$1" body
   [ -f "$dir/SKILL.md" ] || return 1
+  # The `x` sentinel, then `%x`, is what makes this read the file's REAL bytes: `$(...)` strips
+  # EVERY trailing newline, so without it a body ending "\n\n\n" would hash as one ending "\n" and
+  # the `many-trailing-lf` vector would be indistinguishable from the plain `lf` one.
   if [ "$(head -c 3 "$dir/SKILL.md" | od -An -tx1 | tr -d ' \n')" = efbbbf ]; then
-    tail -c +4 "$dir/SKILL.md" | sha256sum | cut -d' ' -f1
+    body="$(tail -c +4 "$dir/SKILL.md"; printf x)"
   else
-    sha256sum "$dir/SKILL.md" | cut -d' ' -f1
+    body="$(cat "$dir/SKILL.md"; printf x)"
   fi
+  body="${body%x}"
+  printf '%s' "${body//$'\r\n'/$'\n'}" | sha256sum | cut -d' ' -f1
 }
 
 # Does <id> match any --co-tenants glob?

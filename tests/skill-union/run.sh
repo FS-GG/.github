@@ -150,8 +150,15 @@ cat > "$V2_MANIFEST" <<EOF
 ] }
 EOF
 
-# The canonical digest must equal raw `sha256sum SKILL.md` — the producers' shipped algorithm
-# (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
+# The canonical digest must equal raw `sha256sum SKILL.md` FOR THIS FIXTURE — the producers' shipped
+# algorithm (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
+#
+# THE EQUALITY IS CONDITIONAL, AND THE CONDITION IS WHY THIS FIXTURE STILL HOLDS (.github#1547): the
+# canonical digest strips a leading BOM and folds CRLF->LF, so it equals `sha256sum` only for a
+# BOM-free, LF-only body. `alpha`'s SKILL.md is exactly that, deliberately — this vector's job is to
+# pin that the algorithm adds NOTHING for the ordinary case a producer actually ships. The cases
+# where the two DIVERGE are `digestVectors` in skillmirror.fixtures.json, measured against the
+# library itself; asserting them here against `sha256sum` would just re-hardcode the wrong answer.
 want_raw="$(sha256sum "$GOOD/.claude/skills/alpha/SKILL.md" | cut -d' ' -f1)"
 got_gen="$(digest "$GOOD/.claude/skills/alpha")"
 if [ "$got_gen" = "$want_raw" ]; then
