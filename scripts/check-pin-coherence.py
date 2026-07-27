@@ -569,7 +569,35 @@ SYNCED_RECEIVER_FILES = (
 # Renovate's matchRegexOrGlobList reads a leading `!` as a negation, so ONE rule can apply to every
 # repo except the source of truth. Measured against renovate 43.265.3's own matcher, not the docs.
 SOURCE_OF_TRUTH_REPO = "FS-GG/.github"
-_SANCTIONED_MATCH_REPOSITORIES = [f"!{SOURCE_OF_TRUTH_REPO}"]
+
+# THIS GATE ASSERTS ONE THING ABOUT `matchRepositories`: THE AUTHORITY IS NEVER CAUGHT BY IT.
+#
+# It used to assert the exact literal `["!FS-GG/.github"]`, and #1552 is why that had to change. The
+# negation says "every repo except the author", which is NOT the same set as "every repo that
+# RECEIVES these files" — and the two stopped being equal when FS.GG.Templates, FS.GG.Audio and
+# FS.GG.Net were onboarded WITHOUT build-config. The preset now carries a POSITIVE allow-list per
+# fabric, derived from registry/repos.yml and gated by check-preset-repo-scope-coherence.py.
+#
+# THE SPLIT IS DELIBERATE, and it is #1538's rule: one red must not carry two unrelated meanings.
+#   * THIS gate's subject is the ORG SOURCE OF TRUTH — that `.github`'s own authored pins and the
+#     dist/dotnet/ baseline stay managed here. That is the #576/#753 freeze, and it is a fact about
+#     ONE repo, checkable with no registry at all.
+#   * WHICH RECEIVERS the rule must name is a fact about the ROSTER, and it belongs to the gate that
+#     derives it. Re-spelling the receiver set here would put the same predicate in two files, which
+#     is the "computed in N places, agrees in N-1 at best" disease (#485) — and it is exactly how
+#     this gate came to block #1552's fix while the fix was correct.
+#
+# So the assertion below is a PREDICATE, not a literal: every entry must be a plain positive
+# `owner/repo`, and `FS-GG/.github` must not be among them. That refuses each way the authority gets
+# caught — an absent key (the rule applies everywhere, including here), a `*` or other glob that
+# matches everything, a `!`-negation of some OTHER repo (which matches `.github`), and the authority
+# listed outright — without pretending to know the roster.
+#
+# The repo half admits a LEADING DOT, because `.github` is a real repository name — this repo's. It
+# must be spellable here so that naming the authority outright is caught by the authority check and
+# reported as "you named the source of truth", rather than by the shape check as "that is not a
+# plain repo name". A finding that names the wrong cause is barely better than no finding.
+_AUTHORITY_SAFE_ENTRY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9.][A-Za-z0-9._-]*$")
 
 # The org source of truth for each synced file: the copy that lives HERE and must stay MANAGED, so
 # that Renovate keeps bumping the baseline (#660, #677). Every check below is ultimately about
@@ -805,28 +833,55 @@ def assert_synced_files_unmanaged(preset_path: str) -> None:
                 f"additional key NARROWS the rule, and a narrowed rule leaves the un-mergeable "
                 f"receiver PR proposing again for whatever it no longer covers — "
                 f"`matchUpdateTypes: ['major']` would still propose every minor bump — while this "
-                f"gate stayed green. The only sanctioned narrowing is "
-                f"`matchRepositories: {_SANCTIONED_MATCH_REPOSITORIES!r}` (.github#678, #794)."
+                f"gate stayed green. The only sanctioned narrowing is `matchRepositories`, and it "
+                f"must be a positive allow-list that does not name {SOURCE_OF_TRUTH_REPO} "
+                f"(.github#678, #794, #1552)."
             )
 
-        # The one sanctioned narrowing, asserted by VALUE. Both directions are silent failures that
+        # The one sanctioned narrowing, asserted as a PREDICATE about the AUTHORITY (see
+        # _AUTHORITY_SAFE_ENTRY). Every rejected shape is a silent failure that
         # renovate-config-validator calls valid:
-        #   absent      -> the rule applies HERE too, freezing this repo's own authored pins and the
-        #                  org baseline that every receiver is synced from (#576, #753).
-        #   any other   -> "!FS-GG/.github, !FS-GG/FS.GG.Game" quietly hands Game back the
-        #                  un-mergeable PR; a POSITIVE entry inverts the rule to apply nowhere else.
+        #   absent            -> the rule applies HERE too, freezing this repo's own authored pins
+        #                        and the org baseline every receiver takes (#576, #753).
+        #   a `!`-negation    -> matches every repo it does not name — including this one.
+        #   a glob / regex    -> `*` and `/^FS-GG/.*/ ` match the authority just as happily.
+        #   the authority     -> named outright.
+        # WHICH receivers it must name is NOT asserted here — that is
+        # check-preset-repo-scope-coherence.py's subject, derived from registry/repos.yml (#1552).
         got = rule.get("matchRepositories")
-        if got != _SANCTIONED_MATCH_REPOSITORIES:
+        if got is None:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] disables {rel} with NO `matchRepositories`. That "
+                f"path is a materialized copy in a receiver and this repo's OWN authored build "
+                f"config in {SOURCE_OF_TRUTH_REPO}, which dogfoods this preset — so an unscoped "
+                f"rule stops Renovate proposing bumps for this repo's own pins (FSharp.Core, "
+                f"Spectre.Console, xunit) AND for the dist/dotnet/ baseline every receiver takes: "
+                f"the #576 freeze, silent and valid. Declare a positive allow-list of the "
+                f"receivers (.github#678, #794, #1552)."
+            )
+        if not isinstance(got, list) or not got:
             raise GateError(
                 f"{preset_path} packageRules[{i}] disables {rel} with "
-                f"`matchRepositories = {got!r}`, not {_SANCTIONED_MATCH_REPOSITORIES!r}. That path "
-                f"is a SYNCED copy in a receiver and this repo's OWN authored build config in "
-                f"{SOURCE_OF_TRUTH_REPO}, which dogfoods this preset — so the rule must exclude the "
-                f"source of truth, and exclude nothing else. Omit it and Renovate stops proposing "
-                f"bumps for this repo's own pins (FSharp.Core, Spectre.Console, xunit) AND for the "
-                f"dist/dotnet/ baseline every receiver is synced from — the #576 freeze, silent and "
-                f"valid. Name any other repo and that receiver gets the un-mergeable PR back "
-                f"(.github#794)."
+                f"`matchRepositories = {got!r}`, which is not a non-empty list. An empty list "
+                f"matches nothing and silently re-enables the un-mergeable receiver PR (.github#794)."
+            )
+        unsafe = [r for r in got if not isinstance(r, str) or not _AUTHORITY_SAFE_ENTRY.match(r)]
+        if unsafe:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] disables {rel} with `matchRepositories = {got!r}`, "
+                f"which contains {unsafe!r}. Every entry must be a plain positive `owner/repo`: a "
+                f"`!`-negation matches every repo it does not name, and a glob or regex matches "
+                f"whatever it happens to match — both of which can catch {SOURCE_OF_TRUTH_REPO}, "
+                f"where these paths are AUTHORED rather than received. That is the #576 freeze, "
+                f"silent and valid (.github#794, #1552)."
+            )
+        if SOURCE_OF_TRUTH_REPO in got:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] disables {rel} and NAMES {SOURCE_OF_TRUTH_REPO} in "
+                f"`matchRepositories`. This repo AUTHORS that path — it does not receive it — and it "
+                f"dogfoods this preset, so listing it freezes this repo's own engine pins "
+                f"(FSharp.Core, Spectre.Console, xunit) and the dist/dotnet/ baseline every receiver "
+                f"takes (#576, #753, #1552)."
             )
 
 
@@ -1714,8 +1769,9 @@ def main(argv: list[str]) -> int:
         assert_synced_files_unmanaged(preset)
         print(
             f"ok: {', '.join(SYNCED_RECEIVER_FILES)} is disabled for receivers via matchFileNames "
-            f"+ matchRepositories {_SANCTIONED_MATCH_REPOSITORIES}, leaving dist/dotnet/ AND this "
-            f"repo's own authored copies managed here (#678, #794)."
+            f"+ a positive matchRepositories allow-list that does not name {SOURCE_OF_TRUTH_REPO}, "
+            f"leaving dist/dotnet/ AND this repo's own authored copies managed here (#678, #794, "
+            f"#1552)."
         )
 
         config_path, hosts = check_bump_mechanism(root, preset)

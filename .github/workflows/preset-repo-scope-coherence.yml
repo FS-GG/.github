@@ -1,0 +1,96 @@
+# Gate: the preset's repo scoping and registry/repos.yml's `receives:` rows are ONE fact (.github#1552).
+#
+# `default.json` disables Renovate for files a repo does not author, because a bump against a
+# materialized file is a PR that structurally cannot merge (#678, #794). WHICH repos those are is a
+# fact about the delivery fabrics, and it was a hand-written predicate — `!FS-GG/.github`, "every
+# repo except the author" — that stopped being the same set as "every repo that RECEIVES these" the
+# moment templates, audio and net were onboarded without build-config.
+#
+# A DRIFT HERE IS INVISIBLE, WHICH IS WHY IT NEEDS A GATE RATHER THAN CARE. Renovate detects the
+# package file, applies the rule, proposes nothing, and reports success. Nothing goes red. FS.GG.Net
+# and FS.GG.Audio had their ENTIRE NuGet surface disabled — feature and security updates alike — and
+# FS.GG.Audio sat two minors behind on FS.GG.Kit with no bump PR ever proposed. A bump that is never
+# proposed is not an error; it shows up nowhere.
+#
+# `registry/repos.yml` is in the filter because it is the OTHER HALF of the comparison, and it is the
+# half that moves: onboarding a repo is a roster edit, and this gate is what turns that edit into a
+# required decision about the preset instead of a silent wrong answer. `scripts/lib/gate.py` is there
+# because the gate IMPORTS it at load. Both are also declared in the gate's own `PATHS_SUBJECT`,
+# which `check-paths-coherence.py` rule (c) reds this file against.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence, and a push-copy that quietly omits an entry is how a gate stops running on `main`.
+name: preset-repo-scope-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-preset-repo-scope-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/preset-repo-scope-coherence/**"
+      - "default.json"
+      - "registry/repos.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-preset-repo-scope-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/preset-repo-scope-coherence/**"
+      - "default.json"
+      - "registry/repos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preset-repo-scope-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # PINNED, and it is the version every claim in this gate was MEASURED against — the real
+  # applyPackageRules in dist/util/package-rules/index.js, and the validator's blind spots. Taking
+  # `renovate@latest` would make the verdict f(tree, whatever Mend shipped this morning), which is
+  # the false-accusation this org refuses (#238). Kept equal to ignored-author-coherence.yml's pin:
+  # both gates read the same binary's behaviour, and two pins would eventually disagree about it.
+  RENOVATE_VERSION: 43.281.1
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-policy-python
+
+      # `renovate-config-validator` ships only inside the `renovate` package; there is no standalone
+      # distribution. `--no-save` so no lockfile or manifest is written into the checkout.
+      - name: Install the pinned renovate config validator
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "renovate@${RENOVATE_VERSION}"
+          echo "RENOVATE_CONFIG_VALIDATOR=$PWD/node_modules/.bin/renovate-config-validator" >> "$GITHUB_ENV"
+
+      # The schema run, FIRST because it is the cheapest real finding — and it is NOT this gate.
+      # Measured against this very binary: the wrong repo scope validates perfectly clean while
+      # zeroing two repos' entire NuGet surface, and the validator does not resolve presets at all
+      # (FS.GG.Net#33). A validator pass is evidence about SHAPE, and nothing else; the fixture
+      # asserts that blind spot with a negative control rather than assuming it.
+      - name: Validate the org-shared Renovate preset against its schema
+        run: |
+          set -euo pipefail
+          "$RENOVATE_CONFIG_VALIDATOR" --no-global default.json
+
+      # The gate on the real tree, before the fixture, so a genuine drift is not buried under
+      # fixture output.
+      - name: Assert every file-scoped disable rule names exactly its capability's receivers
+        run: python3 scripts/check-preset-repo-scope-coherence.py --root .
+
+      # The fixture drives the gate through every state it must tell apart — the pre-#1552 fused
+      # rule, the plausible-but-wrong narrowing that would re-enable a kit-managed file in three
+      # repos, a roster that grew without the preset, and the vacuous-pass family (no rules, no
+      # roster, an empty derivation), each of which is a tree where "the preset agrees with the
+      # roster" is TRUE and dependency management is broken org-wide.
+      - name: Run the preset-repo-scope-coherence fixture
+        run: bash tests/preset-repo-scope-coherence/run.sh

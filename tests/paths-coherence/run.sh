@@ -796,11 +796,18 @@ fi
 # counts it. This leg fired on that gate's first local run, the tripwire doing its job for the fifth
 # time; the entry it demanded was then DELETED again to watch rule (c) name the missing pattern, so
 # the coverage is measured in both directions rather than inferred from a green.
+# 10 -> 11: preset-repo-scope-coherence.yml (.github#1552) names
+# scripts/check-preset-repo-scope-coherence.py exactly and that gate declares a PATHS_SUBJECT —
+# `(default.json, registry/repos.yml)`, the two halves of the comparison it makes — so rule (c)
+# attaches and the census counts it. This leg fired on that gate's first CI run, the tripwire doing
+# its job for the sixth time; `registry/repos.yml` was then deleted from the workflow's filter to
+# watch rule (c) name the missing pattern, so the coverage is measured in both directions rather
+# than inferred from a green.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "10" ]; then
+if [ "${s:-0}" = "11" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 10 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 11 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
