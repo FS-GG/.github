@@ -2049,7 +2049,17 @@ module Client =
                         $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
 
                     eprint "  Finish or drop the item you hold:  scripts/fsgg-coord done <issue> --flip   (or: release <issue>)"
-                    eprint "  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
+
+                    // #1620: `--force` now carries a SECOND, destructive power — it STEALS a live claim.
+                    // This line points a worker at the flag for the #516 override alone, so it has to say
+                    // what else it will do, or it sends somebody to delete a lock they never meant to touch.
+                    // That is exactly the message-vs-behaviour disagreement #1620 exists to close, and it
+                    // would have been re-created here, in the one place that actively recommends the flag.
+                    eprint
+                        $"  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
+
+                    eprint
+                        $"  NOTE: --force ALSO STEALS a live claim — against an item another worker is holding it will DELETE their lock (#1620). On a FREE item it does nothing but lift this refusal."
                     ExitRed
                 | Ok [] ->
                     // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
@@ -2191,29 +2201,31 @@ module Client =
                         else
                             Writes.RefuseLiveHolder
 
-                    match Writes.claim ctx.Transport opts.LeaseMinutes force (WorkerId w.Id) session ref readPreviousStatus with
-                    | Error e -> fail e
-                    | Ok(Writes.Won(held, collected)) ->
-                        announceCollected collected
-                        emitClaimReceipt "claimed" held (setInProgress ())
-                    | Ok(Writes.Stolen(held, from, collected)) ->
-                        // #1620 — `--force` TOOK this item off a LIVE holder. Everything below is the
-                        // "loud accounting" half of that decision, and it is not optional: a silent
-                        // transfer is worse than a refusal, because the displaced worker is still RUNNING.
-                        //
-                        // The `say` is the load-bearing part. It posts a comment ON THE ITEM naming the
-                        // prior holder, the worker that took it, and (by the comment's own timestamp) when
-                        // — so a reader of the issue afterwards can see the theft, AND the displaced worker
-                        // finds it in `inbox`. Both obligations, one comment. It matters more here than on
-                        // a stale collection: an expired lease means its holder probably stopped, but a
-                        // STOLEN live claim means it probably did not.
-                        //
-                        // The evicted marker is DELETED by the CAS, so this comment is the only surviving
-                        // trace of the claim that was taken. `say` is best-effort — a failed comment does
-                        // not un-take the lock we hold — but the receipt below still reports the steal.
-                        for victim in from do
+                    // #1620 — THE THEFT NOTICE, POSTED THE MOMENT THE LOCK IS DESTROYED.
+                    //
+                    // Everything here is the "loud accounting" half of the decision, and it is not optional:
+                    // a silent transfer is worse than a refusal, because the displaced worker is still
+                    // RUNNING. It matters more than the courtesy on a stale collection — an expired lease
+                    // means its holder probably stopped; a stolen live claim means it probably did not.
+                    //
+                    // The `say` is the load-bearing part. It posts a comment ON THE ITEM naming the prior
+                    // holder, the worker that took it, and (by the comment's own timestamp) when — so a
+                    // reader of the issue afterwards can see the theft, AND the displaced worker finds it in
+                    // `inbox`. Both obligations, one comment. The evicted marker is DELETED, so this comment
+                    // is the only surviving trace of the claim that was taken.
+                    //
+                    // IT RUNS FROM THE EVICTION CALLBACK, NOT FROM THE `Stolen` ARM, because a lock can be
+                    // destroyed on paths that never produce a `Stolen`: the post can fail, the re-read can
+                    // fail, a newcomer can win the open race. Best-effort — a failed comment does not
+                    // un-take the lock — but it is ATTEMPTED on every execution that deleted a live marker.
+                    let mutable displaced: WorkerId list = []
+
+                    let announceTheft (victims: WorkerId list) =
+                        displaced <- victims
+
+                        for victim in victims do
                             match opts.Render with
-                            | Json -> eprint $"STOLE {ref.Short} from worker '{victim.Value}' (--force)"
+                            | Json -> eprint $"STOLE %s{ref.Short} from worker '%s{victim.Value}' (--force)"
                             | Text -> printfn "STOLE %s from worker '%s' (--force)" ref.Short victim.Value
 
                             Writes.say
@@ -2224,6 +2236,15 @@ module Client =
                                 $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
                             |> ignore
 
+                    match Writes.claim ctx.Transport opts.LeaseMinutes force announceTheft (WorkerId w.Id) session ref readPreviousStatus with
+                    | Error e -> fail e
+                    | Ok(Writes.Won(held, collected)) ->
+                        announceCollected collected
+                        emitClaimReceipt "claimed" held (setInProgress ())
+                    | Ok(Writes.Stolen(held, _, collected)) ->
+                        // `announceTheft` has already run — it fired from inside the CAS, the moment the
+                        // holder's marker went. All that is left here is the receipt, which reports the
+                        // steal as a steal so a scripted caller can tell it from an ordinary win.
                         announceCollected collected
                         emitClaimReceipt "stolen" held (setInProgress ())
                     | Ok(Writes.Renewed(held, collected)) ->
@@ -2250,14 +2271,18 @@ module Client =
 
                         emitClaimReceipt "renewed" held outcome
                     | Ok(Writes.Lost holder) ->
-                        // TWO DIFFERENT FACTS, ONE OUTCOME (#1620). Without `--force` the holder refused us
-                        // before we posted anything. WITH it, we evicted the live holder and then lost the
-                        // fresh race to a worker that arrived after the eviction — so "wait for the lease"
-                        // is the wrong advice (the lease we were waiting on is gone), and, more importantly,
-                        // the worker we set out to displace HAS been displaced even though we did not get
-                        // the item. Saying so is the difference between a retry and a worker quietly
-                        // assuming its force did nothing.
-                        if opts.Force then
+                        // TWO DIFFERENT FACTS, ONE OUTCOME (#1620). Ordinarily the holder refused us before
+                        // we posted anything. But a `--force` that EVICTED somebody and then lost the fresh
+                        // race to a worker arriving after the eviction is a different event: "wait for the
+                        // lease" is wrong advice (the lease we were waiting on is gone), and the worker we
+                        // set out to displace HAS been displaced even though we did not get the item.
+                        //
+                        // IT KEYS ON `displaced`, NOT ON `opts.Force`, and the difference is reachable:
+                        // `--force` against an item that turns out to be FREE evicts nobody and then loses
+                        // an ordinary race to a concurrent claimant. Keying on the flag would report a
+                        // displacement that never happened — and "you displaced someone" is not a sentence
+                        // to print on a guess.
+                        if not (List.isEmpty displaced) then
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
 

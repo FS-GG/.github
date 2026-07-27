@@ -608,8 +608,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // while `adopt`'s refusal and the usage line above both advertised it as the way to take another
         // worker's item. A flag can be documented as read by the right command and still be wired to the
         // wrong DECISION inside it, which is the shape a scope table cannot see. The steal in
-        // `Writes.claim`'s `Lost` arm is what made the advertisement true; `CommandSurfaceTests` pins the
-        // two meanings together so they cannot drift apart again.
+        // `Writes.claim`'s `Lost` arm is what made the advertisement true; `ForceStealTests` is what pins
+        // the two meanings together, by driving ONE board through argv twice — with the flag and without —
+        // and requiring different outcomes. (Not this table, and not `CommandSurfaceTests`: both were
+        // green throughout the defect's whole life.)
         | FForce -> Only [ Claim ]
 
         // Scheduling reads take their freshness from a `Cache.ReadIntent`, not from this flag, so

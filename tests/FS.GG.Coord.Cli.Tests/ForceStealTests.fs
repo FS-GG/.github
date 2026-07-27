@@ -290,6 +290,33 @@ module ForceStealTests =
         Assert.Equal<int64 list>(before, thread.Ids)
         Assert.Equal(0, transport.Count "comment-delete")
 
+    [<Fact>]
+    let ``#1620 --force on a FREE item claims it ordinarily and reports no theft`` () =
+        // `--force` is commonly typed by a worker that does not KNOW whether the item is still held — that
+        // is the whole recovery scenario. When there is nobody to displace, nothing may be announced: the
+        // receipt must say `claimed`, and no theft notice may reach the item. The client keys its
+        // displacement message on what was actually evicted rather than on the flag, and this is the leg
+        // that would fail if it went back to keying on the flag.
+        let thread = Thread(None)
+        let transport = world thread
+
+        let code, out = runClaim transport (claimArgs [ "--force" ])
+
+        Assert.Equal(0, code)
+        Assert.Equal("claimed", JsonDocument.Parse(out.Trim()).RootElement.GetProperty("kind").GetString())
+        Assert.Equal(0, transport.Count "comment-delete")
+        Assert.DoesNotContain(thread.Posted, fun (b: string) -> b.Contains "fsgg:msg")
+
+    [<Fact>]
+    let ``#1620 the #516 refusal that RECOMMENDS --force says what else the flag will do`` () =
+        // The refusal for holding two items points a worker straight at `--force`. Since #1620 that flag
+        // also DELETES a live holder's lock, so a line recommending it without saying so re-creates the
+        // exact message-vs-behaviour disagreement this issue exists to close — in the one place the tool
+        // actively recommends the flag. Asserted on `Options.usage`'s sibling: the text is in `Client.fs`,
+        // so this pins the usage block's version, and the e2e leg exercises the behaviour.
+        Assert.Contains("--force STEALS", Options.usage)
+        Assert.Contains("one-item-per-worker", Options.usage)
+
     // ---- THE MESSAGE THAT SENT OPERATORS HERE -----------------------------------------------------
 
     [<Fact>]

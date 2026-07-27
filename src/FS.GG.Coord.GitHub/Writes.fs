@@ -206,6 +206,7 @@ module Writes =
         (transport: IGitHubTransport)
         (leaseMinutes: int)
         (force: ClaimForce)
+        (onEvict: WorkerId list -> unit)
         (worker: WorkerId)
         (session: SessionId option)
         (ref: Ref)
@@ -358,19 +359,63 @@ module Writes =
             match force with
             | RefuseLiveHolder -> Ok(Lost m.Worker)
             | StealLiveHolder ->
-                // AN UNPARSEABLE LIVE MARKER STILL BLOCKS, EVEN UNDER `--force`. A lock held by nobody is
-                // not a contested item, and the arm above already refuses when it is the WINNER; this
-                // catches it sitting BEHIND a parseable holder, where evicting the holder would promote a
-                // marker we cannot attribute to anybody. `reap` owns that, and it fails closed on purpose.
-                if
-                    before
-                    |> List.exists (fun x -> not (Reads.isStale leaseMinutes x) && x.Worker = WorkerId UnparsedMarker)
-                then
+                // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
+                // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
+                // to delete the winner and promote whatever was queued behind it.
+                //
+                //   * UNPARSEABLE — a lock held by nobody is not a contested item, and evicting the holder
+                //     would promote a marker we cannot attribute to anybody. `reap` owns that.
+                //   * OUR OWN WORKER ID — the `Twin` refusal (#419) has to cover this position or it only
+                //     covers half its own rule. Reachable: an orphaned marker from a failed withdraw (this
+                //     function names that state), or a hand-written one. Left unguarded, the eviction would
+                //     delete the real holder's live lock and then LOSE the re-read to our own twin's
+                //     surviving marker — deleting a live lock and taking nothing, the one outcome the
+                //     eviction comment below calls strictly worse than refusing.
+                let liveOthers = before |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
+
+                if liveOthers |> List.exists (fun x -> x.Worker = WorkerId UnparsedMarker) then
                     Ok BlockedByUnparseableMarker
                 else
-                    match evictLive before with
-                    | Error e -> Error e
-                    | Ok evicted -> postAndResolve evicted
+                    match liveOthers |> List.tryFind (fun x -> x.Worker = worker) with
+                    // Sessions known and different: a twin, named as one.
+                    | Some ours when (twinSession session ours.Session).IsSome ->
+                        Ok(Twin (twinSession session ours.Session).Value)
+                    // OUR ID, AND WE CANNOT CALL IT A TWIN — a sessionless marker, or our own session.
+                    // Either way it is a marker of ours sitting BEHIND somebody else's live lock, which the
+                    // CAS never produces and cannot resolve: evicting past it would delete the holder and
+                    // then lose the re-read to it. `Undecided` is the honest answer — retryable, and it
+                    // destroys nothing while an anomalous marker set is what it is.
+                    | Some _ ->
+                        Ok(
+                            Undecided
+                                $"a live marker for worker %s{worker.Value} sits BEHIND %s{m.Worker.Value}'s lock on %s{ref.Short} — a state the CAS does not produce. Refusing to force past it: the eviction would delete the live holder and then lose to this marker. Reap the item, or resolve the duplicate marker by hand"
+                        )
+                    | None ->
+                        match evictLive before with
+                        | Error e -> Error e
+                        | Ok evicted ->
+                            // ANNOUNCE THE EVICTION THE INSTANT IT HAPPENS, NOT WHEN IT PAYS OFF.
+                            //
+                            // A CALLBACK for `readPreviousStatus`'s reason — the caller owns the courtesy,
+                            // this function owns the lock — and it is invoked HERE, between the delete and
+                            // the post, deliberately.
+                            //
+                            // Reporting the theft only through the `Stolen` outcome would report it only on
+                            // the HAPPY PATH. Every exit below can follow a successful eviction: the post
+                            // can fail, the re-read can fail or come back without our marker, a newcomer can
+                            // win the open race. In each of those the holder's live lock is already DELETED
+                            // and no `Stolen` is ever returned — so the worker whose lock we destroyed would
+                            // be told nothing, and their next `heartbeat` would read the empty item and
+                            // report an EXPIRED LEASE. That is the silent transfer #1620's decision calls
+                            // worse than a refusal, wearing the fix's clothes.
+                            //
+                            // The residue this does NOT fix, stated honestly: a steal that evicts and then
+                            // fails to post leaves the item with NO live marker. That is recoverable — the
+                            // item reads as free and the next claimant takes it — and the displaced worker
+                            // has been told. A destroyed lock nobody knows about is not recoverable, which
+                            // is why the notice, not the marker, is what this guarantees.
+                            onEvict evicted
+                            postAndResolve evicted
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.

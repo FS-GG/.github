@@ -146,12 +146,13 @@ module Writes =
         /// they are separate facts: one is a lapsed lease being tidied up, the other is a working worker
         /// being displaced.
         ///
-        /// IT IS A CASE OF ITS OWN RATHER THAN A `Won` WITH A LONGER LIST, because the caller owes something
-        /// here that it owes nowhere else: **a steal must be recorded on the ITEM, not just in a receipt.**
-        /// The prior holder, the stealing worker and the time have to be visible to somebody reading the
-        /// issue afterwards, and the displaced worker has to be able to find out — it is still running, and
-        /// a silent transfer leaves it building against a lock it no longer holds. A `Won` that quietly
-        /// meant "and I deleted someone's lock" is the silent-transfer bug, pre-installed.
+        /// IT IS A CASE OF ITS OWN RATHER THAN A `Won` WITH A LONGER LIST, because a caller that scripts
+        /// this needs to tell "I was handed a free item" from "I took a working worker's item" — the second
+        /// is a decision somebody may have to answer for. A `Won` that quietly meant "and I deleted
+        /// someone's lock" is the silent-transfer bug, pre-installed.
+        ///
+        /// The DUTY to announce the theft does not ride on this case, though: it rides on `onEvict` below,
+        /// because a lock can be destroyed on executions that never reach here.
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
 
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
@@ -205,10 +206,24 @@ module Writes =
     /// UNCHANGED, so a steal is not a second lock protocol racing the first: it clears the way, posts, and
     /// is resolved by the same comment order as everybody else. A worker that arrives between the eviction
     /// and our post can still win, and should.
+    ///
+    /// `onEvict` is called with the workers whose LIVE claim was just deleted, the moment it is deleted and
+    /// BEFORE the marker post that may fail — a thunk for `readPreviousStatus`'s reason (the caller owns the
+    /// courtesy; this function owns the lock). It is never called on the ordinary path, and never with an
+    /// empty list.
+    ///
+    /// **IT IS NOT THE SAME EVENT AS THE `Stolen` OUTCOME, AND THAT IS THE POINT.** `Stolen` says "we
+    /// evicted somebody AND got the item"; `onEvict` says "somebody's live lock is gone", which is true of
+    /// strictly more executions — the post can fail, the re-read can fail, a newcomer can win the open race,
+    /// and each of those returns `Lost`/`Undecided`/`Error` over an item whose holder has already been
+    /// deleted. Announcing only on `Stolen` would leave that worker uninformed in exactly the cases where it
+    /// most needs to stop, and its next `heartbeat` would find the empty item and report an EXPIRED LEASE —
+    /// a lock destroyed silently, and then misdescribed.
     val claim:
         transport: IGitHubTransport ->
         leaseMinutes: int ->
         force: ClaimForce ->
+        onEvict: (WorkerId list -> unit) ->
         worker: WorkerId ->
         session: SessionId option ->
         ref: Ref ->

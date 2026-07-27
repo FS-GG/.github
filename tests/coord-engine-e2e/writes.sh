@@ -99,8 +99,14 @@ fi
 
 # THE DISPLACED WORKER MUST FIND OUT. It is still running — that is the whole difference between a steal
 # and a stale collection — so a heartbeat that quietly succeeded would leave two workers on one item.
+#
+# It must also say WHY it might be held by someone else, or this asserts nothing the pre-existing
+# non-holder leg above does not already produce: `held by kite-461` is what a worker sees when it simply
+# never held the item. A worker that DID hold it needs to be told its claim was taken, not left to read a
+# generic non-holder refusal as its own mistake.
 hbs="$(run heartbeat FS.GG.SDD#42 2>&1)"; hbsrc=$?
-if [ "$hbsrc" -ne 0 ] && printf '%s' "$hbs" | grep -qi 'held by kite-461'; then
+if [ "$hbsrc" -ne 0 ] && printf '%s' "$hbs" | grep -qi 'held by kite-461' \
+     && printf '%s' "$hbs" | grep -q -- '--force'; then
   ok ".github#1620: the displaced holder's heartbeat FAILS LOUDLY and names the worker that took it"
 else
   bad ".github#1620: a displaced holder must not heartbeat successfully" "rc=$hbsrc: $hbs"
