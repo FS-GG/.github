@@ -4226,10 +4226,13 @@ if [ -z "$PRO_PORT" ]; then bad "landable-protection fixture bound a port"; else
 
   # 3. AC2: the verdict must not send an operator to look at a red check that does not exist. It names
   #    GitHub's own refusal, names the context the base branch requires, and says it has not REPORTED.
-  perr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
-             FSGG_COORD_CACHE="$(mktemp -d)" \
-             "$ENGINE" landable "$1" --repo FS.GG.SDD 2>&1 >/dev/null || true; }
+  # stderr ONLY: the verdict word goes to stdout and is asserted above, so this discards stdout FIRST
+  # and then redirects the group's stderr — the order SC2069 is about, and the only order that means
+  # what it reads as.
+  perr() { { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+               FSGG_COORD_CACHE="$(mktemp -d)" \
+               "$ENGINE" landable "$1" --repo FS.GG.SDD >/dev/null || true; } 2>&1; }
   err="$(perr 950)"
   printf '%s' "$err" | grep -q 'skill-union / skill-union' \
     && ok "#1575: the pending NAMES the context that never reported (case 33)" \
