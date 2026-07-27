@@ -64,13 +64,19 @@
 # GITHUB_TOKEN reads them cross-repo (exactly as contract-coherence.yml reads FS.GG.SDD). The gh
 # calls are isolated behind list_workflows/get_workflow so the fixture can stub them.
 #
+# IT ALSO CARRIES THE SPARSE-CHECKOUT CLOSURE RULE ACROSS THE ROSTER (#1529). That is a second
+# mandate rather than a second detector, and it lives here for one reason: it needs to read TEN
+# repositories, and this is the only tool in the org that already has a roster, a repo filter, a
+# retry ladder and a network budget. See THE SPARSE-CHECKOUT CLOSURE SWEEP below.
+#
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
 # Exit: 0 = every declared receiver is wired; 1 = at least one gap (a declared receiver is unwired,
-# or a repo adopted a capability it never rostered); 2 = no verdict, RETRYABLE — receiver evidence
-# could not be read (rate limit, auth, outage); 3 = no verdict, PERMANENT — a roster that
-# cannot be enumerated, a capability that names no receiver, a capability that is RECEIVED but has no
-# detector (#628), or a bad invocation.
+# or a repo adopted a capability it never rostered, or a cross-repo sparse-checkout enumerates a
+# file); 2 = no verdict, RETRYABLE — receiver evidence could not be read (rate limit, auth, outage);
+# 3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
+# receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo sparse-checkout
+# whose SHAPE the closure rule refuses to grade, or a bad invocation.
 #
 # "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
 # "I checked, and it's broken" (#320). The same argument applies one level in, which is why 2 and 3
@@ -85,6 +91,31 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOS_SH="$HERE/repos.sh"
 REGISTRY=""                       # empty => repos.sh default
 AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers call
+
+# THE SPARSE-CHECKOUT CLOSURE RULE, IMPORTED RATHER THAN RETYPED (#1529, closing #1522's reach).
+#
+# `check-sparse-checkout-closure.py` grades one repository's workflows — whichever `--root` names,
+# which in CI is FS-GG/.github and nothing else. Its own docstring says so, under THE REACH OF THIS
+# GATE, and names the hole: a sibling repo that hand-rolls `actions/checkout` + `sparse-checkout`
+# against the authority is a live instance of the class the gate was built to end, over which this
+# repo's CI stays green. "No sibling hand-rolls this" was true of the tree and enforced by nothing.
+#
+# The rule is IMPORTED FROM THAT FILE, never restated here. A second copy of it would be the same
+# defect one level up — a hand-maintained duplicate of a rule, in a file that cannot execute the
+# thing it duplicates — and #1522 exists because exactly that drifted. So `grade_pattern`,
+# `patterns_of`, `cone_mode_of`, `sparse_steps`, `origin_repository` and `tracked_paths` are loaded
+# out of the shipped gate and applied verbatim to workflows fetched from other repositories; the
+# helpers are already repo-agnostic, because the gate was written not to care where a workflow came
+# from. A rule change lands in ONE place and both readers move together, by construction.
+SPARSE_RULE="$HERE/check-sparse-checkout-closure.py"
+# The tree whose git INDEX resolves rule (4) — "does this pattern select any tracked path?". It is
+# the checkout this script is running out of, derived from the script's own location rather than
+# spelled, exactly as REPOS_SH is. That tree is the AUTHORITY's, so rule (4) runs for precisely the
+# checkouts that fetch the authority — which is the motivating case: a sibling naming
+# `scripts/check-foo.py` in the DEFAULT cone mode is invisible to rules (1)-(3) and caught only by
+# asking this index. For a fetch of any other repository the audit does not hold the tree, so rule
+# (4) does not run and the step is reported UNGRADED rather than ok (#266).
+AUTHORITY_TREE="$(cd "$HERE/.." && pwd)"
 
 # Every `die` is a PERMANENT no-verdict: a deterministic read of this checkout, or the way we were
 # invoked. Re-running it changes nothing, so it exits 3 and its caller must not retry it. The
@@ -122,6 +153,11 @@ command -v python3 >/dev/null 2>&1 \
 command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
   || die "need yq or python3+pyyaml to read a receiver's workflow YAML (the same ladder scripts/repos.sh uses)."
 [ -x "$REPOS_SH" ] || [ -f "$REPOS_SH" ] || die "repos.sh not found at $REPOS_SH."
+# The sweep's rule is a file, so its absence is a missing dependency and NOT a clean sweep. Asserted
+# up front for the same reason python3 is: a rule that cannot be loaded must be a permanent
+# no-verdict about the audit, never a silent "no repository enumerates anything" over ten repos.
+[ -f "$SPARSE_RULE" ] \
+  || die "the sparse-checkout closure rule is not at $SPARSE_RULE. It is IMPORTED, not restated here (#1529/#1522), so without it this audit cannot grade a single cross-repo checkout — and reporting that as a clean sweep is the fail-open both items exist to end."
 
 # The capabilities and their detectors come from the ROSTER (`capabilities:`), not from a constant
 # here. They used to be a `wf_for_cap` case statement plus an `AUDITED_CAPS` string — two
@@ -153,7 +189,13 @@ GH_ERR_FILE="$(mktemp)"
 # repo_calls PRINTS the workflows a repo calls, so its caller reads it through `$(…)` too — and its
 # failure reason is subject to the very same subshell trap. Same fix, for the same reason.
 CALLS_ERR_FILE="$(mktemp)"
-trap 'rm -f "$GH_ERR_FILE" "$CALLS_ERR_FILE"' EXIT
+# The sparse sweep's ledger, and a FILE for the same subshell reason: the grading happens inside
+# repo_calls, which every caller reads through `$(…)`, so a counter incremented there would never
+# reach the parent. One tab-separated record per event, ACCUMULATED across every repo (unlike the two
+# files above, which are per-call): `workflow`, `finding`, `refusal`, `ungraded`, `unresolved`,
+# `unparseable`, and one `counts` line per workflow read.
+SPARSE_FILE="$(mktemp)"
+trap 'rm -f "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE"' EXIT
 gh_last_err()    { tr -s '\n' ' ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
 calls_last_err() { cat "$CALLS_ERR_FILE"; }
 
@@ -501,6 +543,183 @@ caller_verdict() {
   python3 -c "$CALLER_VERDICT_PY" "$AUTHORITY" <<< "$json" 2>/dev/null || printf 'call=0 trigger=0'
 }
 
+# --- THE SPARSE-CHECKOUT CLOSURE SWEEP (#1529) ---------------------------------------------------
+#
+# WHAT IT ASSERTS. Exactly what `check-sparse-checkout-closure.py` asserts, over every rostered
+# repository's `.github/workflows/**` instead of just this one's: for every `actions/checkout` that
+# names a `repository:` AND declares a `sparse-checkout:`, every pattern must be an anchored, literal
+# directory that selects something. The four rules, their cone-mode exemptions, their refusals and
+# their wording all come from that file — this adds REACH and nothing else.
+#
+# WHY IT IS HERE AND NOT THERE. The local gate's virtue is that it is pure, offline and f(tree); a
+# gate that reaches the network is a different animal with different failure modes, and #1522 filed
+# the reach rather than smuggling it in. This script already owns the roster, the repo filter, the
+# retry ladder and the rate-limit budget, and — decisively — it ALREADY FETCHES every rostered
+# repo's workflows once, for the participation detectors. The sweep rides that existing pass and
+# costs no additional API call.
+#
+# WHAT IT CANNOT SEE, SAID OUT LOUD. Rule (4) asks a git index, and this audit holds exactly one
+# tree: the authority's. So a cross-repo checkout of any OTHER repository gets rules (1)-(3) only,
+# and if it is in CONE MODE — actions/checkout's default, where a file name is simply a directory
+# that turns out to be empty — rules (1)-(3) cannot detect enumeration at all. Such a step is counted
+# UNGRADED and named on its own line; it is never printed ok and never folded into the sweep's claim.
+# The motivating case is unaffected: a sibling hand-rolling a fetch of FS-GG/.github is a fetch of
+# the tree this audit DOES hold, so rule (4) runs and a cone-mode `scripts/check-foo.py` reds.
+#
+# WHAT IS SHARED, AND WHAT IS HONESTLY NOT. Every RULE is imported: the four graded rules and their
+# wording (`grade_pattern`), how the runner splits the input and which empty spellings are refused
+# (`patterns_of`), the cone-mode default (`cone_mode_of`), which steps are subjects at all
+# (`sparse_steps`), and how "ours" and the tracked set are derived (`origin_repository`,
+# `tracked_paths`). None of it is restated below — grep for the rule's own wording and it is not
+# here, which is what the fixture's first sparse leg pins.
+#
+# What IS restated is the per-step ORCHESTRATION — roughly fifteen lines deciding `resolvable` and
+# `enumeration_checked` and keeping counts — because the gate applies its rules inline in `main()`,
+# interleaved with argparse, its own tree walk and its own printing, and there is no seam to import.
+# That is a smaller instance of the same disease and it is not pretended otherwise: it is recorded as
+# a follow-up rather than fixed here, because hoisting a seam means editing
+# check-sparse-checkout-closure.py, which #1530 holds. This comment is the marker, not the excuse.
+#
+# Stdin: one workflow as JSON. Argv: the rule file, the authority tree, and the `where` prefix.
+# Stdout: tab-separated records, one per line. Every message is flattened to a single line, because
+# the ledger is line-oriented and a finding that spanned lines would be read as several records.
+SPARSE_VERDICT_PY="$(cat <<'PY'
+import importlib.util, json, sys
+
+RULE, TREE, WHERE = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# By PATH, not by name: the module's filename has hyphens, so it is not a legal `import` target, and
+# putting scripts/ on sys.path to reach it by some alias would be a second name for one file. Loading
+# it does not run its main() — it is guarded by `if __name__ == "__main__"` — and its own top-level
+# sys.path insert is what makes its `lib.gate` import resolve, wherever this is run from.
+spec = importlib.util.spec_from_file_location("sparse_closure_rule", RULE)
+rule = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(rule)
+
+# THE BORROWED SURFACE, NAMED. Importing across a file boundary makes these seven names an interface,
+# and an interface nobody wrote down is one the next refactor is entitled to break. #1530 is in
+# flight to hoist the PARSE (`patterns_of`, `cone_mode_of`) into scripts/lib/sparse.py, and its
+# criterion 2 is that neither caller retains a private copy — so this is not a hypothetical.
+#
+# Asserted up front, and by NAME, so the failure is a sentence an operator can act on rather than an
+# AttributeError from somewhere in the loop. It fails CLOSED: the caller records a refusal and the
+# audit exits 3, because a rule that cannot be loaded must never round to "no repository enumerates
+# anything" across ten repositories.
+BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern",
+            "origin_repository", "tracked_paths", "GateError")
+missing = [name for name in BORROWED if not hasattr(rule, name)]
+if missing:
+    sys.exit("%s no longer exposes %s. repos-audit.sh borrows the sparse-checkout closure rule from "
+             "it rather than restating it (#1529); if the rule moved — #1530 hoists the parse into "
+             "scripts/lib/sparse.py — retarget this loader at its new home. Refusing to grade, "
+             "because a missing rule must not look like a clean org."
+             % (RULE, ", ".join(missing)))
+
+
+def emit(kind, text):
+    print("%s\t%s" % (kind, " ".join(str(text).split())))
+
+
+try:
+    document = json.load(sys.stdin)
+except ValueError:
+    document = None
+
+# Resolved ONCE, and only if some step actually needs it: `git ls-files` per workflow across ten
+# repositories is a cost paid for nothing on the overwhelming majority of files, which contain no
+# cross-repo checkout at all.
+_tree = {}
+
+
+def tree():
+    if not _tree:
+        _tree["ours"] = rule.origin_repository(TREE)
+        _tree["tracked"] = rule.tracked_paths(TREE)
+    return _tree
+
+
+cross = graded = pattern_count = clones = ungraded = 0
+
+for job_id, params in rule.sparse_steps(document):
+    where = "%s (job `%s`)" % (WHERE, job_id)
+    cross += 1
+    # Refusals are COLLECTED, never raised on sight — the rule file's own discipline: one unreadable
+    # step must not suppress every real finding in the rest of the org.
+    try:
+        patterns = rule.patterns_of(params, where)
+        if patterns is None:
+            clones += 1          # a full clone under-fetches nothing, so it is not a subject
+            continue
+        cone = rule.cone_mode_of(params, where)
+    except rule.GateError as error:
+        emit("refusal", error)
+        continue
+
+    repository = str(params.get("repository") or "").strip()
+    resolved = tree()
+    resolvable = (
+        resolved["ours"] is not None
+        and resolved["tracked"] is not None
+        and repository.casefold() == resolved["ours"].casefold()
+    )
+    # Identical to the rule file's own reasoning: in non-cone mode the trailing-slash rule decides
+    # enumeration from the pattern alone; in cone mode ONLY rule (4) can, so a cone-mode fetch of a
+    # tree we do not hold has NOTHING asserted about it.
+    enumeration_checked = (not cone) or resolvable
+
+    step_findings = []
+    try:
+        for pattern in patterns:
+            pattern_count += 1
+            step_findings.extend(rule.grade_pattern(
+                pattern, cone=cone, where=where,
+                tracked=resolved["tracked"] if resolvable else None))
+    except rule.GateError as error:
+        emit("refusal", error)
+        continue
+
+    for finding in step_findings:
+        emit("finding", finding)
+    if enumeration_checked:
+        graded += 1
+    else:
+        ungraded += 1
+        emit("ungraded", "%s: cone mode against %r, a tree this audit does not hold — NOTHING was "
+                         "asserted about whether these patterns name files or directories"
+                         % (where, repository))
+    if not resolvable:
+        emit("unresolved", "%s: fetches %r, which is not the tree this audit holds (%s) — rule (4), "
+                           "the existence of its directories, was NOT checked"
+                           % (where, repository, resolved["ours"] or "origin unreadable"))
+
+print("counts\t%d\t%d\t%d\t%d\t%d" % (cross, graded, pattern_count, clones, ungraded))
+PY
+)"
+
+# sparse_grade <repo> <workflow filename>; workflow TEXT on stdin. Appends to $SPARSE_FILE.
+#
+# An UNPARSEABLE workflow is recorded and not graded, on the same reading of #320 that caller_verdict
+# states one function up: GitHub will not run a workflow it cannot parse, so it cannot fetch anything
+# and cannot under-fetch anything either. "It cannot run" is an ANSWER about it, not a failure to
+# look — and it is recorded rather than dropped, so the summary's arithmetic still adds up.
+#
+# A verdict program that DIES, by contrast, is a genuine failure to look, and is recorded as a
+# refusal so it cannot round to a clean sweep.
+sparse_grade() {
+  local json
+  local where="$1/.github/workflows/$2"
+  printf 'workflow\t%s\n' "$where" >> "$SPARSE_FILE"
+  json="$(yaml_text2json)" || json=""
+  if [ -z "$json" ] || [ "$json" = "null" ]; then
+    printf 'unparseable\t%s\n' "$where" >> "$SPARSE_FILE"
+    return 0
+  fi
+  python3 -c "$SPARSE_VERDICT_PY" "$SPARSE_RULE" "$AUTHORITY_TREE" "$where" <<< "$json" \
+      >> "$SPARSE_FILE" \
+    || printf 'refusal\t%s: the shared sparse-checkout closure rule could not be evaluated against this workflow\n' \
+         "$where" >> "$SPARSE_FILE"
+}
+
 # Which of the AUTHORITY's reusable workflows does <repo> call? Prints one filename per line (the set
 # may legitimately be empty). 0 = read it, 2 = could not determine (reason in $CALLS_ERR_FILE).
 #
@@ -553,6 +772,14 @@ repo_calls() {
       return 2
     fi
     [ "$frc" -eq 0 ] || continue          # 404: listed, then gone. It calls nothing.
+
+    # THE SPARSE-CHECKOUT CLOSURE SWEEP (#1529) rides this pass. It is graded for EVERY rostered
+    # repo, the authority included: the class is "a cross-repo checkout that under-fetches", and it
+    # does not care which repository wrote the workflow. It is also deliberately OUTSIDE the
+    # `$repo != $AUTHORITY` guard below — that guard exists so the authority is not counted as a
+    # phantom ADOPTER of its own fabrics, which is a statement about participation and has nothing
+    # to say about whether a checkout under-fetches.
+    sparse_grade "$repo" "$f" <<< "$text"
     # Only a call to the AUTHORITY's copy counts. A repo's own local `uses: ./.github/workflows/x.yml`
     # is deliberately NOT matched: .github runs contract-coherence.yml on itself exactly that way, and
     # running your own workflow is not participating in somebody else's fabric. Matching it would make
@@ -885,14 +1112,24 @@ all_repos="$(all_repos_list)" \
   || die "cannot enumerate the roster — repos.sh list --all failed. The roster is unreadable, which is not the same as empty."
 
 audited=0; wired=0; gaps=0; drift=0; undetermined=0
+# The sparse sweep's own denominators (#1529, criterion 5). They are counted HERE, in the parent,
+# because "did this repo's workflow walk complete?" is the parent's answer — repo_calls runs in a
+# subshell and its rc is the only thing that crosses back. `rostered` is what the sweep was asked to
+# cover, `sparse_repos` what it actually covered, and `sparse_unread` the difference: a roster that
+# silently collapses is then legible in the report rather than indistinguishable from a clean one.
+rostered=0; sparse_repos=0; sparse_unread=0
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
+  rostered=$((rostered + 1))
   crc=0; calls="$(repo_calls "$repo")" || crc=$?
   if [ "$crc" -ne 0 ]; then
     # We could not read this repo, so we know neither what it declares-but-skips nor what it
-    # adopts-without-saying. Both directions are unexamined; the run is not a verdict.
+    # adopts-without-saying. Both directions are unexamined; the run is not a verdict. The sparse
+    # sweep is unexamined for it too — whatever it graded before the API failed is a PARTIAL read of
+    # this repo, so the repo counts as NOT audited even though some of its findings are real.
     echo "::error::repos-audit: $repo — $(calls_last_err)"
     undetermined=$((undetermined + 1))
+    sparse_unread=$((sparse_unread + 1))
     # Charge the miss to every capability this repo was supposed to be audited FOR, so the per-capability
     # line below still adds up to its rostered count. Without this it reports "6 rostered receiver(s):
     # 5 wired, 0 gap(s)" and simply loses the sixth — a summary that reads like a complete accounting
@@ -906,6 +1143,7 @@ while IFS= read -r repo; do
     done
     continue
   fi
+  sparse_repos=$((sparse_repos + 1))
 
   for cap in $CAPS_ORDER; do
     # A PUSH capability has no receiver-side artifact, so BOTH directions are meaningless for it: it
@@ -1001,6 +1239,42 @@ for cap in $CAPS_ORDER; do
 done
 echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps gap(s), $drift unrostered adopter(s), $undetermined undetermined"
 
+# --- the sparse-checkout closure sweep's report (#1529) ------------------------------------------
+# Read back from the ledger, because the grading happened inside a subshell. `grep -c` exits 1 on no
+# match, which `set -e` would take as fatal, so every count is guarded — and the guard must not
+# swallow the number, which is why it is `|| true` on the pipeline rather than a conditional.
+sparse_count() { grep -cE "^$1"$'\t' "$SPARSE_FILE" 2>/dev/null || true; }
+sparse_findings="$(sparse_count finding)"
+sparse_refusals="$(sparse_count refusal)"
+sparse_workflows="$(sparse_count workflow)"
+sparse_unparseable="$(sparse_count unparseable)"
+IFS=' ' read -r sp_cross sp_graded sp_patterns sp_clones sp_ungraded <<< "$(
+  awk -F'\t' '$1 == "counts" { c += $2; g += $3; p += $4; f += $5; u += $6 }
+              END { printf "%d %d %d %d %d", c, g, p, f, u }' "$SPARSE_FILE")"
+
+# Findings and refusals are ::error:: annotations — the operator reads the annotation list, not the
+# log. The UNGRADED and note lines are not: they say what was NOT asserted, which is information, not
+# a defect in anyone's tree.
+while IFS=$'\t' read -r kind message; do
+  case "$kind" in
+    finding)     echo "::error::repos-audit: sparse-checkout closure — $message" ;;
+    refusal)     echo "::error::repos-audit: sparse-checkout closure REFUSED a shape it cannot grade — $message" ;;
+    ungraded)    echo "  UNGRADED $message" ;;
+    unresolved)  echo "  note $message" ;;
+    unparseable) echo "  note $message: this workflow would not parse, so GitHub cannot run it and it cannot fetch anything — not graded" ;;
+  esac
+done < "$SPARSE_FILE"
+
+# The sweep NEVER claims a green it did not earn. When it found no cross-repo checkout at all it says
+# that it asserted nothing, rather than reporting the same "clean" a real audit would print — the
+# distinction #1522's own gate draws, and the one criterion (3) of #1529 asks for. The repository
+# count is in both spellings, so a roster that silently collapsed is legible either way.
+if [ "$sp_cross" -eq 0 ]; then
+  echo "repos-audit: sparse-checkout closure (#1529) — read $sparse_workflows workflow(s) across $sparse_repos of $rostered rostered repo(s) ($sparse_unread NOT audited, $sparse_unparseable unparseable) and found NO cross-repo \`actions/checkout\` at all. NOTHING was asserted about this class; that is not a clean bill."
+else
+  echo "repos-audit: sparse-checkout closure (#1529) — $sp_patterns sparse pattern(s) over $sp_graded of $sp_cross cross-repo checkout(s) fully graded, in $sparse_workflows workflow(s) across $sparse_repos of $rostered rostered repo(s) ($sparse_unread NOT audited, $sparse_unparseable unparseable); $sp_clones full clone(s) not graded; $sp_ungraded step(s) UNGRADED; $sparse_findings finding(s), $sparse_refusals refusal(s). Rule (4) — do the named directories exist? — ran only for checkouts of the ONE tree this audit holds, its own; every other repository's is named above as unresolved, and in cone mode that leaves the step UNGRADED."
+fi
+
 # Undetermined outranks a gap: this run is not a verdict, so it must not be read as one. Any genuine
 # gap found alongside it was still printed above as its own ::error::, and survives the next run.
 #
@@ -1011,14 +1285,36 @@ if [ "$undetermined" -ne 0 ]; then
   echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   exit 2
 fi
+
+# A REFUSED SHAPE is a PERMANENT no-verdict, and it outranks a finding for the same reason exit 2
+# outranks one: "I could not grade this" must share a code with neither "it is fine" (#266) nor "it
+# is broken" (#320). It sits BELOW the exit-2 check deliberately — an incomplete run may not have
+# reached the rest of the org yet, and a caller that retries on 2 alone must be allowed to finish the
+# read before being told a file needs editing. Any finding alongside it was still printed above as
+# its own ::error::, exactly as a gap survives an undetermined run.
+#
+# This mirrors `check-sparse-checkout-closure.py`, which refuses the same three shapes (a negated
+# pattern, a `sparse-checkout:` key supplying nothing, an unreadable cone-mode flag) with the same
+# code, for reasons its docstring gives at length. A skip is how a coherence gate fails open.
+if [ "$sparse_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $sparse_refusals cross-repo sparse-checkout step(s) have a SHAPE the closure rule refuses to grade, so nothing was asserted about them. Not a wiring gap, and not transient: a re-run reproduces it. The annotations above name each one." >&2
+  exit 3
+fi
+
 # A gap and an unrostered adopter are one exit code because they are one CLASS: the audit ran to
 # completion and found the roster and the real wiring disagreeing. Both are deterministic, neither is
 # transient, and both are fixed by a commit — they differ only in WHICH side is wrong, and the
 # ::error:: annotations above say which. Splitting them into two codes would buy a caller nothing it
 # cannot read, at the cost of a fourth branch in every consumer of this contract.
-if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ]; then
+#
+# A sparse-checkout finding joins them on the same argument, one subject across: the audit ran to
+# completion and found a receiver's cross-repo checkout under-fetching. Deterministic, not transient,
+# fixed by a commit. Splitting it out would buy a caller a fifth branch to read what the annotation
+# already says.
+if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
+  [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
   exit 1
 fi
 echo "repos-audit: OK — every declared receiver is wired."

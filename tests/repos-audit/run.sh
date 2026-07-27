@@ -846,6 +846,13 @@ else:
 for trigger in ("pull_request", "push"):
     if ".github/workflows/repos-audit.yml" not in st[True][trigger]["paths"]:
         bad.append(f"repos-audit-selftest {trigger} paths: does not cover repos-audit.yml — this check would not run on an edit to it")
+    # ...and the same argument for the rule the audit IMPORTS (#1529). Sharing the sparse-checkout
+    # closure rule with check-sparse-checkout-closure.py is what keeps the two readers from drifting,
+    # but it also means an edit THERE changes what the roster sweep asserts about ten repositories.
+    # If that file is outside this filter, the legs below can be invalidated by a commit that never
+    # re-runs them — reach bought at the price of an unarmed gate, which is #332/#334's shape.
+    if "scripts/check-sparse-checkout-closure.py" not in st[True][trigger]["paths"]:
+        bad.append(f"repos-audit-selftest {trigger} paths: does not cover scripts/check-sparse-checkout-closure.py, whose rule repos-audit.sh imports — an edit to it would not re-run the legs that pin its verdicts")
 
 print("\n".join(bad))
 PY
@@ -1485,6 +1492,235 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADCALLER" --repos-sh "$REP
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'unsupported caller detector'; } \
   && ok "caller: an unsupported caller id -> exit 3 (permanent), never a fabricated gap" \
   || bad "an unknown caller detector must be a permanent no-verdict" "rc=$rc: $out"
+
+# --- THE SPARSE-CHECKOUT CLOSURE SWEEP, ACROSS THE ROSTER (#1529, closing #1522's reach) ---------
+#
+# #1522 shipped a gate that reds on a cross-repo `sparse-checkout` which ENUMERATES files instead of
+# taking an anchored directory — for ONE repository, whichever `--root` names. A sibling that
+# hand-rolls the same checkout against FS-GG/.github is a live instance of the class the gate was
+# built to end, and this repo's CI stays green over it. #1529 gave the rule reach; these legs are
+# what make that claim checkable.
+#
+# EVERY LEG FAILS ON ITS SUBJECT. A fixture whose synthetic roster contains only well-formed
+# checkouts proves nothing at all — it is green before the feature exists and green after it is
+# deleted — which is the criterion #1529 wrote down and the reason each mode below is asserted RED
+# with its own message, not merely "rc != 0".
+#
+# wire_sparse <repo> <mode> — the repo wires coordination-kit in `coord.yml` (so the participation
+# audit stays CLEAN and any exit 1 is attributable to the sweep alone) and hand-rolls a cross-repo
+# checkout in `fetch.yml`.
+#
+# The default is CONE MODE, because that is `actions/checkout`'s default and therefore what a sibling
+# would really write. Under cone mode a file name is simply a directory that turns out to be empty,
+# so no rule that reads the pattern STRING can see it — only rule (4), by asking a git index. The
+# audit holds exactly one index, the authority's, which is why the `cone-file` leg below is the
+# motivating case and not a curiosity: it is the shape a sibling reaches for, against the one
+# repository this sweep can still resolve.
+wire_sparse() {
+  clearfail "$1"; local slug="${1//\//__}" mode="$2"
+  mkdir -p "$FIX/$slug"; printf '%s\n%s\n' "coord.yml" "fetch.yml" > "$FIX/$slug.list"
+  printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' \
+    > "$FIX/$slug/coord.yml"
+  local head='jobs:
+  fetch:
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+'
+  case "$mode" in
+    # --- NON-CONE. The patterns are gitignore expressions, so rules (1)-(3) all apply.
+    clean)       printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/\n' "$head" ;;
+    enumerated)  printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/check-foo.py\n' "$head" ;;
+    unanchored)  printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            scripts/\n' "$head" ;;
+    globbed)     printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/check-*.py\n' "$head" ;;
+    # A FOLDED block scalar joins its lines with a space, so the runner receives ONE pattern
+    # containing whitespace and git matches nothing. Written as the folded scalar itself, not as a
+    # pre-joined string, so the leg fails if the audit ever stops mirroring how the action splits.
+    folded)      printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: >\n            /scripts/\n            /docs/\n' "$head" ;;
+
+    # --- CONE MODE (the action's default; no flag at all). Rules (1)-(2) do not apply — git reads
+    #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
+    cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
+    cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
+    # Cone mode against a repository whose tree this audit does NOT hold. Nothing can be asserted, so
+    # it must be reported UNGRADED — never printed ok, never counted toward the sweep's claim (#266).
+    cone-foreign) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n' ;;
+
+    # --- SHAPES THE RULE REFUSES rather than grades. A skip is how a coherence gate fails open.
+    negated)     printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/\n            !/scripts/lib/\n' "$head" ;;
+    blank)       printf '%s          sparse-checkout: ""\n' "$head" ;;
+
+    # A checkout with no `sparse-checkout:` at all is a FULL CLONE. It under-fetches nothing, so it
+    # is not a subject — and redding it would be the sweep arguing for its own subject's survival.
+    fullclone)   printf '%s' "$head" ;;
+    *) echo "wire_sparse: unknown mode '$mode'" >&2; return 1 ;;
+  esac > "$FIX/$slug/fetch.yml"
+}
+
+# THE RULE IS SHARED, NOT RETYPED (#1529 criterion 2) — and this is how that is proven rather than
+# asserted in a comment. The diagnostic wording below is UNIQUE to
+# scripts/check-sparse-checkout-closure.py: if repos-audit.sh ever grows its own copy of the rule,
+# either this leg fails (the phrase appears in both files) or the wording drifts apart and the legs
+# that grep for it fail. A second copy of a rule is the defect #1522 exists to end, one level up.
+RULE_PHRASE='ENUMERATES A FILE'
+{ grep -qF "$RULE_PHRASE" "$HERE/../../scripts/check-sparse-checkout-closure.py" \
+    && ! grep -qF "$RULE_PHRASE" "$AUDIT"; } \
+  && ok "sparse: the rule's wording lives ONLY in check-sparse-checkout-closure.py — the audit imports it" \
+  || bad "the sparse rule must not be retyped into repos-audit.sh" \
+         "'$RULE_PHRASE' must appear in the rule file and NOT in $AUDIT"
+
+# The clean baseline. It must be green AND must say what it examined: a sweep that reports the same
+# "ok" whether it graded ten repos or zero is indistinguishable from a collapsed roster (criterion 5).
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering clean
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'sparse-checkout closure (#1529)' \
+    && printf '%s' "$out" | grep -q 'across 3 of 3 rostered repo(s) (0 NOT audited' \
+    && printf '%s' "$out" | grep -q '0 finding(s), 0 refusal(s)'; } \
+  && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
+  || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
+
+# The three findings #1529 names, each asserted on its own message. `rc -eq 1` alone would be
+# satisfied by an unrelated wiring gap, so every leg pins the sentence AND the repo/workflow it names.
+#
+#   enumerated  the defect itself: a hand-maintained copy of the fetched script's dependency list,
+#               in a file that cannot execute the thing it lists (#1510 killed every receiver at load)
+#   unanchored  gitignore semantics: a bare `scripts/` matches a directory of that name AT ANY DEPTH
+#   globbed     a MATCH EXPRESSION whose result nobody can read off the workflow file
+#   folded      a `>` scalar joins its lines, so the runner gets one pattern that matches nothing
+for spec in \
+  "enumerated:ENUMERATES A FILE" \
+  "unanchored:is NOT ANCHORED" \
+  "globbed:glob metacharacter" \
+  "folded:contains whitespace"
+do
+  mode="${spec%%:*}"; phrase="${spec#*:}"
+  wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering "$mode"
+  out="$(run 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -qF "$phrase" \
+      && printf '%s' "$out" | grep -q 'FS.GG.Rendering/.github/workflows/fetch.yml' \
+      && printf '%s' "$out" | grep -q '0 gap(s)'; } \
+    && ok "sparse: '$mode' in a SIBLING repo is a finding, named at its own workflow" \
+    || bad "sparse '$mode' must red on the sibling, not on a wiring gap" "rc=$rc: $out"
+done
+
+# THE MOTIVATING CASE. Cone mode is the action's default, so the obvious hand-rolled fetch of one
+# script names it with no flags at all — and nothing about the pattern STRING says it is a file.
+# Rule (4) is the only thing that can see it, and it can only run against a tree this audit holds.
+# The authority's is that tree, which is exactly the repository a sibling would be fetching.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'selects no tracked path' \
+    && printf '%s' "$out" | grep -q 'FS.GG.Rendering/.github/workflows/fetch.yml'; } \
+  && ok "sparse: a CONE-mode file name against the authority reds — rule (4) reaches across repos" \
+  || bad "the cone-mode enumeration a sibling would really write must red" "rc=$rc: $out"
+
+# ...and its mirror, so the leg above is not passing because everything reds. A real directory in
+# cone mode is the correct spelling and must be graded, not merely tolerated.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-dir
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 finding(s)' \
+    && printf '%s' "$out" | grep -q '0 step(s) UNGRADED'; } \
+  && ok "sparse: a cone-mode DIRECTORY against the authority is graded and clean" \
+  || bad "a correct cone-mode directory must not be reported as a finding" "rc=$rc: $out"
+
+# "I could not look" is not "I looked and it is fine" (#266). A cone-mode fetch of a repository whose
+# index this audit does not hold has NOTHING asserted about it — so it is UNGRADED and named, never
+# folded into the green claim, and never printed as a finding either.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'UNGRADED' \
+    && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'rule (4), the existence of its directories, was NOT checked' \
+    && printf '%s' "$out" | grep -q '0 finding(s)'; } \
+  && ok "sparse: a cone fetch of an unheld tree is UNGRADED and named, not green and not a finding" \
+  || bad "an unresolvable cone-mode fetch must be reported as ungraded" "rc=$rc: $out"
+
+# A REFUSED SHAPE is a PERMANENT no-verdict (exit 3), not a finding (1) and not a rate limit (2).
+# Negation makes ORDER significant, so "every pattern is a directory" stops being a sound reading of
+# what gets fetched; a `sparse-checkout:` key that supplies no pattern is indistinguishable to the
+# runner from three other spellings whose behaviours differ enormously. Both are refused by the
+# shared rule, and the sweep must not launder either into a verdict it did not reach.
+for spec in "negated:negated sparse pattern" "blank:supplies no pattern"; do
+  mode="${spec%%:*}"; phrase="${spec#*:}"
+  wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering "$mode"
+  out="$(run 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qF "$phrase" \
+      && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade'; } \
+    && ok "sparse: '$mode' is a PERMANENT no-verdict (exit 3), not a finding and not a retry" \
+    || bad "a refused sparse shape must be exit 3" "rc=$rc: $out"
+done
+
+# A cross-repo checkout with no `sparse-checkout:` is a full clone. It under-fetches nothing, so it
+# is the class permanently foreclosed — the best end state there is — and redding it would be the
+# sweep arguing for its own subject's survival.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering fullclone
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 full clone(s) not graded' \
+    && printf '%s' "$out" | grep -q '0 finding(s)'; } \
+  && ok "sparse: a full cross-repo clone is counted, not graded, and never a finding" \
+  || bad "a full clone must not be reported as under-fetching" "rc=$rc: $out"
+
+# A REPO THAT COULD NOT BE READ IS A NO VERDICT, NEVER A GREEN (#266/#320, criterion 3). The audit
+# already exits 2 for it; what this pins is that the sweep's own REPORT does not quietly count the
+# unread repo as audited — "3 of 3, clean" over a run that read two is the fail-open in miniature.
+wire FS-GG/FS.GG.SDD; unreachable FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'across 2 of 3 rostered repo(s) (1 NOT audited'; } \
+  && ok "sparse: an unreadable repo is excluded from the swept count, not counted as clean" \
+  || bad "the sweep must distinguish 'audited, clean' from 'could not audit'" "rc=$rc: $out"
+
+# AND THE SWEEP NEVER CLAIMS A GREEN IT DID NOT EARN. When the roster contains no cross-repo
+# `actions/checkout` at all, the sweep examined nothing — and a report that reads the same as a real
+# audit is the #266 shape this whole item is about. It must say so in its own words. (It is not an
+# ERROR: every rostered repo genuinely reaching the authority through reusable workflows is a
+# legitimate, and desirable, state of the org.)
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'found NO cross-repo' \
+    && printf '%s' "$out" | grep -q 'that is not a clean bill'; } \
+  && ok "sparse: a roster with no cross-repo checkout reports that it asserted NOTHING" \
+  || bad "an empty subject set must not render as a clean sweep" "rc=$rc: $out"
+
+# AND THE BORROWED RULE FAILS CLOSED WHEN IT IS NOT THERE. Importing across a file boundary makes
+# `sparse_steps`/`patterns_of`/`cone_mode_of`/`grade_pattern`/`origin_repository`/`tracked_paths`/
+# `GateError` an interface, and #1530 is IN FLIGHT to hoist the parse out of that file — its
+# criterion 2 is that neither caller keeps a private copy. So the interesting question is not whether
+# sharing works today; it is what happens on the day the far side moves.
+#
+# The answer must be a loud no-verdict, never a quiet green over ten repositories — a gate that
+# reports clean because its rule went missing is #266 in its purest form. Both legs run a COPY of the
+# shipped script from a sandbox `scripts/`, because the rule's location is derived from the script's
+# own (there is no flag to point it elsewhere, deliberately: a flag would be a second place to say
+# where the rule lives).
+SPARSEBOX="$WORK/sparsebox"; mkdir -p "$SPARSEBOX/scripts/lib"
+cp "$AUDIT" "$SPARSEBOX/scripts/repos-audit.sh"
+cp "$HERE/../../scripts/lib/args.sh" "$SPARSEBOX/scripts/lib/args.sh"
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+
+# (a) the rule file is GONE. Caught up front, beside the `gh` and `python3` checks, because a missing
+#     dependency is a permanent no-verdict about the audit and not a fact about anybody's tree.
+out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
+        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'sparse-checkout closure rule is not at' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "sparse: a MISSING rule file is a permanent no-verdict, not a clean org" \
+  || bad "the borrowed rule's absence must fail closed" "rc=$rc: $out"
+
+# (b) the rule file is THERE but no longer exposes what the audit borrows — #1530's hoist, modelled.
+#     The diagnostic must NAME the missing symbols and the file, so whoever lands that refactor gets a
+#     sentence rather than an AttributeError from inside a loop.
+printf '"""A rule module that no longer exposes the borrowed names (models #1530s hoist)."""\n' \
+  > "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
+out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
+        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'no longer exposes' \
+    && printf '%s' "$out" | grep -q 'grade_pattern' \
+    && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "sparse: a rule that lost the borrowed symbols reds and names them, never greens" \
+  || bad "a moved rule must fail closed and say which symbols went" "rc=$rc: $out"
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }

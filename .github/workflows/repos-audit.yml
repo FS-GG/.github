@@ -15,10 +15,16 @@
 # The script distinguishes four outcomes, and this workflow must not collapse them (#327, #335):
 #   0  every declared receiver is wired
 #   1  a real finding — the roster and the real wiring disagree. Either a declared receiver is not
-#      wired (a gap), or a repo wires a fabric it never declared (an unrostered adopter, #503)
+#      wired (a gap), or a repo wires a fabric it never declared (an unrostered adopter, #503) — or a
+#      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529)
 #   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage)
-#   3  no verdict, PERMANENT — the roster will not parse, or a capability names no receiver
-#      (#316, #320, #503)
+#   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, or a
+#      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade
+#      (#316, #320, #503, #1529)
+#
+# The audit also carries #1522's sparse-checkout closure rule across the whole roster (#1529), which
+# is why 1 and 3 each gained a cause. The rule is IMPORTED from scripts/check-sparse-checkout-
+# closure.py rather than restated, so the two readers cannot drift.
 #
 # Both no-verdicts stay RED: "I could not check" must never render as "I checked, and it's fine"
 # (#266). Neither may render as "I checked, and it's broken", so each outcome gets its own, and
@@ -121,24 +127,32 @@ jobs:
       # cannot help, because every cause is a deterministic property of this checkout or this runner.
       # Naming them alike would send an operator to the re-run button for a defect only a commit fixes.
       #
-      # Do NOT name a single cause here. Exit 3 is every `die()`: an unparseable roster, a roster that
-      # names no receiver, a missing `gh`, a missing repos.sh, a bad flag. Announcing "fix the roster"
-      # for a missing binary is this item's own defect — a red step that names the wrong subject —
-      # relocated into the step that reports it. The annotation from `die()` names the actual cause;
+      # Do NOT name a single cause here. Exit 3 is every `die()` — an unparseable roster, a roster
+      # that names no receiver, a missing `gh`, a missing repos.sh, a bad flag — AND, since #1529, a
+      # cross-repo `sparse-checkout` whose SHAPE the closure rule refuses to grade. Announcing "fix
+      # the roster" for a missing binary is this item's own defect — a red step that names the wrong
+      # subject — relocated into the step that reports it. The annotation names the actual cause;
       # this step's job is to say the class, and to say it is not a wiring gap.
-      - name: 'INCONCLUSIVE: the audit could not run (permanent — a re-run will not help)'
+      #
+      # NOR MAY IT SAY *WHEN* THE AUDIT STOPPED. It used to open "the audit never examined a
+      # receiver", which was true of every `die()` (they all fire while reading the roster, before
+      # the first API call) and became false the moment exit 3 gained a cause that is COLLECTED
+      # across a completed sweep. What the two causes share is the verdict — nothing was proven, and
+      # a re-run reproduces it — so that is what this says.
+      - name: 'INCONCLUSIVE: the audit reached no verdict (permanent — a re-run will not help)'
         if: steps.audit.outputs.rc == '3'
         run: |
           {
-            echo "### ⚠️ repos-audit: inconclusive — the audit could not run"
-            echo "The audit never examined a receiver, so **no wiring gap was found, and none was"
-            echo "ruled out.** The cause is deterministic — an unparseable \`registry/repos.yml\`, an"
-            echo "audited capability that names no receiver (roster its real adopters, or record"
-            echo "\`receivers: none\` with a reason), a missing \`gh\`, or a bad invocation — so"
-            echo "re-running this workflow will reproduce it exactly. **The"
-            echo "\`::error::repos-audit:\` annotation on the audit step names the actual cause.**"
+            echo "### ⚠️ repos-audit: inconclusive — the audit reached no verdict"
+            echo "**No wiring gap was found, and none was ruled out.** The cause is deterministic —"
+            echo "an unparseable \`registry/repos.yml\`, an audited capability that names no receiver"
+            echo "(roster its real adopters, or record \`receivers: none\` with a reason), a missing"
+            echo "\`gh\`, a bad invocation, or a cross-repo \`sparse-checkout\` whose shape the"
+            echo "closure rule refuses to grade (#1529) — so re-running this workflow will reproduce"
+            echo "it exactly. **The \`::error::repos-audit:\` annotations on the audit step name the"
+            echo "actual cause.**"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repos-audit: INCONCLUSIVE — the audit could not run::The audit never reached a verdict, so its result means nothing. This is NOT a wiring gap, and NOT transient: a re-run reproduces it. See the ::error::repos-audit: annotation above for the cause."
+          echo "::error title=repos-audit: INCONCLUSIVE — the audit reached no verdict::The audit did not reach a verdict, so its result means nothing. This is NOT a wiring gap, and NOT transient: a re-run reproduces it. See the ::error::repos-audit: annotations above for the cause."
           exit 1
 
       # The `if:` conditions above are a scoping predicate, and an ungated one fails open: an exit code

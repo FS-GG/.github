@@ -3,8 +3,22 @@
 # proves a wired receiver passes, an unwired one (or one with no workflows) fails and is named, and
 # the authority is never audited. It also asserts the shape of repos-audit.yml itself: that the
 # audit's three outcomes (wired / gap / no verdict) reach a reader as three distinguishable things
-# (#327). Mirrors repos-registry-selftest.yml / fsgg-coord-selftest.yml.
+# (#327). It also drives the roster-wide sparse-checkout closure sweep (#1529) against synthetic
+# receivers — an enumerated file, an unanchored pattern, a glob, and the cone-mode fetch of the
+# authority that ONLY rule (4) can see — and proves an unreadable repo is a no-verdict rather than a
+# clean one. Mirrors repos-registry-selftest.yml / fsgg-coord-selftest.yml.
 name: repos-audit-selftest
+
+# paths-coherence: allow-uncovered .github/workflows — the filter below names
+# scripts/check-sparse-checkout-closure.py, whose PATHS_SUBJECT is `.github/workflows`, so rule (c)
+# asks this filter to cover that tree too. It is named here as a LIBRARY, not as a gate: repos-audit.sh
+# imports its rule functions, and the fixture drives them against a SYNTHETIC roster and a stubbed
+# `gh`. The only workflows this fixture reads from the local tree are repos-audit.yml and this file,
+# and both are already covered. Rule (c)'s premise — "an edit to what that script reads changes what
+# this workflow depends on" — holds for `sparse-checkout-closure.yml`, which RUNS the gate over that
+# tree and covers it correctly; it does not hold for an importer. Signed rather than papered over
+# with `.github/workflows/**`, which would re-run this fixture on every workflow edit in the repo
+# while asserting nothing new.
 
 on:
   pull_request:
@@ -17,6 +31,13 @@ on:
       # no-verdict as different things (#327). An edit there must re-run it, or that assertion is a
       # gate that never runs.
       - ".github/workflows/repos-audit.yml"
+      # The audit IMPORTS its sparse-checkout closure rule from this file rather than restating it
+      # (#1529, closing #1522's one-repo reach). That is a real load-time dependency: an edit to
+      # `grade_pattern`, `patterns_of`, `cone_mode_of` or `sparse_steps` changes what the roster
+      # sweep asserts about ten repositories, and — the whole reason the rule is shared — it is
+      # SUPPOSED to. So the fixture that pins those verdicts has to re-run on it, or the sharing
+      # buys reach at the price of an unarmed gate. The fixture asserts this entry is here.
+      - "scripts/check-sparse-checkout-closure.py"
   push:
     branches: [main]
     paths:
@@ -25,6 +46,7 @@ on:
       - "tests/repos-audit/**"
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-audit.yml"
+      - "scripts/check-sparse-checkout-closure.py"
   workflow_dispatch:
 
 permissions:
