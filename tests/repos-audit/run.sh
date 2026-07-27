@@ -57,6 +57,32 @@ XML
 }
 mkpin "$KIT_PUBLISHED" "$FIX/_default.pin"
 
+# --- the roster's git trees (#1556) --------------------------------------------------------------
+#
+# What `GET /repos/{o}/{r}/git/trees/HEAD?recursive=1` returns, so rule (4) — *does this pattern
+# select any tracked path?* — can be asked about a repository whose checkout the audit does not hold.
+#
+# The shape is the API's, not a convenience: `tree` entries alongside `blob` entries, because the
+# real endpoint emits both and the audit must drop the directories. A fixture that listed only blobs
+# would be green whether or not the audit filtered them — and if it did not, a cone-mode FILE name
+# would be answered by the `tree` entry for the directory of that name and the finding would vanish,
+# which is the one thing rule (4) is carrying alone in cone mode.
+#
+# `src/FS.GG.Contracts/` and `scripts/` are real directories here; `scripts/check-foo.py` and
+# `src/FS.GG.Contracts/Contracts.fs` are files. That is what lets one roster express both sides of
+# the pair: a cone-mode fetch of the directory is correct, and of the file is the defect.
+mktree() { cat > "$2" <<JSON
+{"sha": "0000000000000000000000000000000000000000", "truncated": $1, "tree": [
+  {"path": "scripts", "type": "tree", "mode": "040000"},
+  {"path": "scripts/check-foo.py", "type": "blob", "mode": "100755"},
+  {"path": "src", "type": "tree", "mode": "040000"},
+  {"path": "src/FS.GG.Contracts", "type": "tree", "mode": "040000"},
+  {"path": "src/FS.GG.Contracts/Contracts.fs", "type": "blob", "mode": "100644"}
+]}
+JSON
+}
+mktree false "$FIX/_default.tree"
+
 # pin <repo> <version> [local|root]  — this repo pins the kit in a CPM props file, at <version>.
 pin() { local slug="${1//\//__}" file="Directory.Packages.${3:-local}.props"
         [ "${3:-local}" = root ] && file="Directory.Packages.props"
@@ -138,6 +164,12 @@ REG="$WORK/repos.yml"; mkreg "$REG"
 #   $FIX/<slug>.failfile   only *file* reads fail; the directory still lists
 #   $FIX/<slug>.failreceiver only the package receiver-project read fails
 #   $FIX/<slug>.gone       the repo itself 404s — private, renamed, or deleted
+#   $FIX/<slug>.failtree   only the git TREE read fails (#1556); everything else still answers
+#   $FIX/<slug>.tree       the git tree JSON this repo serves (default: $FIX/_default.tree)
+#
+# EVERY CALL IS LOGGED when $GH_CALL_LOG names a file. #1556 criterion 5 is a claim about API TRAFFIC
+# — "no extra call when no step fetches a non-authority repo" — and a claim about traffic cannot be
+# checked by reading the audit's output. It is checked by counting what the stub was asked for.
 cat > "$STUB/gh" <<'STUB'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -159,9 +191,15 @@ case "$path" in
                                   kind=pinlocal; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   */contents/Directory.Packages.props)
                                   kind=pinroot; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
+  # The git TREE endpoint (#1556) — how rule (4) reaches a repository whose checkout the audit does
+  # not hold. The real path carries a query string (`?recursive=1`), which is part of the request the
+  # audit makes and is therefore matched here rather than stripped: a call that forgot `recursive=1`
+  # would fetch only the root directory, and every nested pattern would read as selecting nothing.
+  */git/trees/*recursive=1)       kind=tree; repo="${path#repos/}"; repo="${repo%%/git/trees/*}" ;;
   *)                              kind=repo; repo="${path#repos/}" ;;
 esac
 slug="${repo//\//__}"
+[ -n "${GH_CALL_LOG:-}" ] && printf '%s\t%s\n' "$kind" "$repo" >> "$GH_CALL_LOG"
 
 notfound() { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 apifail()  { echo "gh: API rate limit exceeded for installation (HTTP $1)" >&2; exit 1; }
@@ -186,6 +224,9 @@ fi
 # looks answerable on the evidence we got, and is not.
 { [ "$kind" = pinlocal ] || [ "$kind" = pinroot ]; } \
   && [ -f "$FIX/$slug.failpinprops" ] && apifail 403
+# Only the TREE read fails: the repo still lists and its workflows still read, so the audit gets all
+# the way to grading a real cross-repo checkout and THEN loses the index it needs (#1556 criterion 2).
+[ "$kind" = tree ] && [ -f "$FIX/$slug.failtree" ] && apifail 403
 
 case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
@@ -206,6 +247,11 @@ case "$kind" in
             else cat "$FIX/_default.pin"; fi ;;
   pinroot)  [ -f "$FIX/$slug/Directory.Packages.props" ] || notfound
             cat "$FIX/$slug/Directory.Packages.props" ;;
+  # A repo with no explicit tree fixture serves the DEFAULT one, for the same reason the default pin
+  # exists: the ~130 legs that predate #1556 must not each have to declare a tree. `<slug>.gonetree`
+  # suppresses it — that is how a leg models a repository whose tree the API says is not there.
+  tree)     [ -f "$FIX/$slug.gonetree" ] && notfound
+            if [ -f "$FIX/$slug.tree" ]; then cat "$FIX/$slug.tree"; else cat "$FIX/_default.tree"; fi ;;
 esac
 STUB
 chmod +x "$STUB/gh"
@@ -219,7 +265,10 @@ chmod +x "$STUB/gh"
 # detector's evidence and (in the Templates shape) a pin file, so a leg that left one behind would
 # contribute a second, contradictory version literal to the next leg and turn a deliberate finding
 # into a refusal. Every writer of it — wire_materializer, pin_inline — runs after this.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
+# The TREE shaping is cleared here too (#1556), for exactly the reason the pin shaping is: a leg that
+# made a repository's git tree unreadable must not leave it unreadable for the next leg, which would
+# turn one deliberate no-verdict into a run-wide exit 2 and mask whatever that leg was really about.
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -503,6 +552,22 @@ invisible()      { noflows "$1"; local slug="${1//\//__}"; : > "$FIX/$slug.gone"
 # forwarded to the audit, which is a fixture that lies about what it ran. #648
 run() { PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
           bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" "$@"; }
+
+# run, with every gh call the stub served recorded to <logfile> (#1556 criterion 5, which is a claim
+# about API TRAFFIC and cannot be checked from the audit's output).
+#
+# A FUNCTION OF ITS OWN, rather than `GH_CALL_LOG=… run`. Two reasons, both of which would have made
+# the legs lie. A variable assignment prefixing a FUNCTION persists in the calling shell in bash, so
+# the log would leak into every later leg and the counts would be of some other run; and it is not
+# exported to the function's children, so the stub — two processes down — would never see it. Setting
+# it on the `bash` invocation itself is what actually reaches the stub. The log is TRUNCATED here, so
+# a leg counts its own calls and not the ones before it.
+run_logged() {
+  local log="$1" rc=0; shift; : > "$log"
+  GH_CALL_LOG="$log" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
+    bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" "$@" || rc=$?
+  return "$rc"
+}
 
 echo "repos-audit fixture"
 
@@ -1640,9 +1705,22 @@ wire_sparse() {
     #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
     cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
     cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
-    # Cone mode against a repository whose tree this audit does NOT hold. Nothing can be asserted, so
-    # it must be reported UNGRADED — never printed ok, never counted toward the sweep's claim (#266).
-    cone-foreign) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n' ;;
+    # --- CONE MODE ACROSS TWO SIBLINGS, NEITHER OF WHICH IS THE AUTHORITY (#1556). This is the pair
+    #     #1529 left ungraded and #1556 closes: the audit holds neither tree, so rule (4) can only
+    #     run by FETCHING the fetched repository's index from the API. Both sides are expressed,
+    #     because a fixture that only had the clean one would be green before the feature existed.
+    cone-foreign)      printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n' ;;
+    cone-foreign-file) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    # A sibling that spells the repository in a DIFFERENT CASE fetches the same repository GitHub
+    # does, so it must be graded the same way. If the roster match were case-sensitive this would
+    # silently fall off the roster and lose rule (4) over a capitalisation.
+    cone-foreign-case) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: fs-gg/fs.gg.sdd\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    # OFF THE ROSTER. The roster is the boundary of what this audit may claim to know, so this is
+    # UNGRADED and says so — not a finding, and not a no-verdict either: nothing FAILED.
+    cone-offroster)    printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/Not.On.The.Roster\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    # An EXPRESSION. The runner resolves it from values this audit cannot see, so there is no
+    # repository to ask for a tree — a permanent boundary, never a read to retry.
+    cone-expression)   printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: ${{ inputs.upstream }}\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
 
     # --- SHAPES THE RULE REFUSES rather than grades. A skip is how a coherence gate fails open.
     negated)     printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/\n            !/scripts/lib/\n' "$head" ;;
@@ -1721,17 +1799,167 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "sparse: a cone-mode DIRECTORY against the authority is graded and clean" \
   || bad "a correct cone-mode directory must not be reported as a finding" "rc=$rc: $out"
 
-# "I could not look" is not "I looked and it is fine" (#266). A cone-mode fetch of a repository whose
-# index this audit does not hold has NOTHING asserted about it — so it is UNGRADED and named, never
-# folded into the green claim, and never printed as a finding either.
+# --- RULE (4) FOR A REPOSITORY THIS AUDIT DOES NOT HOLD (#1556) ----------------------------------
+#
+# #1529's residue, and the DEFAULT shape of the defect: a sibling cone-fetching from another sibling.
+# The local gate cannot see it (wrong repo) and, until now, neither could the sweep (no index). Rule
+# (4) is the only rule that can, because in cone mode nothing about the pattern STRING distinguishes
+# a file from a directory — so the audit fetches the fetched repository's tree from the API.
+#
+# CRITERION 1. A cone-mode cross-repo `sparse-checkout` naming a FILE in a rostered repo other than
+# the authority is a FINDING, not an UNGRADED note. This is the leg the whole item exists for, and it
+# is asserted on the rule's own sentence — which lives in check-sparse-checkout-closure.py, so a
+# repos-audit.sh that grew a private copy of rule (4) would break the sharing leg above instead.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'selects no tracked path' \
+    && printf '%s' "$out" | grep -q 'FS.GG.Rendering/.github/workflows/fetch.yml' \
+    && printf '%s' "$out" | grep -q '0 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'ran for 1 of 1 graded cross-repo step(s)' \
+    && printf '%s' "$out" | grep -q '0 gap(s)'; } \
+  && ok "sparse: a cone-mode FILE fetched from one sibling by another is a FINDING (#1556)" \
+  || bad "the cross-repo cone-mode enumeration must red, not go ungraded" "rc=$rc: $out"
+
+# ...and its mirror, so the leg above is not passing because everything reds. The same fetch of the
+# containing DIRECTORY is the correct spelling and must be GRADED — the number that says rule (4)
+# actually ran is pinned, because "0 finding(s)" alone is also what an ungraded step produces.
 wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign
 out="$(run 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'UNGRADED' \
-    && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
-    && printf '%s' "$out" | grep -q 'rule (4), the existence of its directories, was NOT checked' \
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 finding(s)' \
+    && printf '%s' "$out" | grep -q '0 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'ran for 1 of 1 graded cross-repo step(s)' \
+    && ! printf '%s' "$out" | grep -q 'UNGRADED FS-GG'; } \
+  && ok "sparse: the same cross-repo fetch of a real DIRECTORY is graded and clean (#1556)" \
+  || bad "a correct cross-repo cone-mode directory must be graded, not merely tolerated" "rc=$rc: $out"
+
+# GitHub resolves `owner/name` case-insensitively, so a sibling that lower-cases the repository
+# fetches the very same tree. Losing rule (4) over a capitalisation would be a silent fail-open.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-case
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'selects no tracked path' \
+    && printf '%s' "$out" | grep -q 'ran for 1 of 1 graded cross-repo step(s)'; } \
+  && ok "sparse: a differently-CASED repository is still on the roster and still graded (#1556)" \
+  || bad "the roster match must be case-insensitive, as GitHub's own resolution is" "rc=$rc: $out"
+
+# CRITERION 2. A tree that cannot be READ leaves those steps UNGRADED with the API's reason named,
+# and makes the RUN a no-verdict (exit 2) rather than a green. "I could not look" is not "I looked
+# and it is fine" (#266) — and note the repo still LISTS and its workflows still read, so the audit
+# reaches the grading and only then loses the index: the partial-read shape, not an outage.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+: > "$FIX/FS-GG__FS.GG.SDD.failtree"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'HTTP 403' \
+    && printf '%s' "$out" | grep -q 'ran for 0 of 1 graded cross-repo step(s)' \
+    && printf '%s' "$out" | grep -q 'could not read the git tree behind 1 cross-repo' \
     && printf '%s' "$out" | grep -q '0 finding(s)'; } \
-  && ok "sparse: a cone fetch of an unheld tree is UNGRADED and named, not green and not a finding" \
-  || bad "an unresolvable cone-mode fetch must be reported as ungraded" "rc=$rc: $out"
+  && ok "sparse: an unreadable git tree is UNGRADED and a NO-VERDICT (exit 2), never a green (#1556)" \
+  || bad "an unreadable tree must not round to a clean cross-repo checkout" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.SDD.failtree"
+
+# ...and the same, from the other direction: a tree the API says is not there at all. A 404 is
+# grouped with the unreachable deliberately — there is no such thing as a repository with no index we
+# may then reason about, so "the tree is not there" is only ever "we do not have the tree".
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+: > "$FIX/FS-GG__FS.GG.SDD.gonetree"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'could not read the git tree behind 1 cross-repo'; } \
+  && ok "sparse: a 404 on the git tree is a no-verdict too, not an answer about the tree (#1556)" \
+  || bad "a missing tree must fail closed like an unreachable one" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.SDD.gonetree"
+
+# THE TRUNCATED TREE — the failure that arrives at HTTP 200 and looks like success. The endpoint
+# returns a PARTIAL array for a large repository and sets `truncated`. Believing it would make
+# directories that DO exist read as selecting nothing, manufacturing findings against innocent
+# receivers; so it is refused, and refused in the no-verdict direction rather than the finding one.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign
+mktree true "$FIX/FS-GG__FS.GG.SDD.tree"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'TRUNCATED' \
+    && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q '0 finding(s)'; } \
+  && ok "sparse: a TRUNCATED tree is a no-verdict, never a fabricated 'selects nothing' (#1556)" \
+  || bad "a partial tree must not be graded against" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.SDD.tree"
+
+# THE ROSTER IS THE BOUNDARY. A fetch of a repository that is not rostered stays UNGRADED and says
+# so — and it is NOT a no-verdict: nothing failed, the audit was simply never given that subject.
+# That distinction is the leg: exit 0 with an UNGRADED line, not exit 2.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-offroster
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'not on this audit' \
+    && printf '%s' "$out" | grep -q 'ran for 0 of 1 graded cross-repo step(s)' \
+    && printf '%s' "$out" | grep -q '0 finding(s)' \
+    && ! printf '%s' "$out" | grep -q 'could not read the git tree'; } \
+  && ok "sparse: an OFF-ROSTER fetch is UNGRADED and named — a boundary, not a failure (#1556)" \
+  || bad "an unrostered repository must be ungraded without making the run a no-verdict" "rc=$rc: $out"
+
+# ...and it must not have cost an API call either. The roster is checked BEFORE the fetcher, so a
+# workflow that reaches past the org does not spend the audit's rate budget proving it.
+out="$(run_logged "$WORK/calls.offroster" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && ! grep -q '^tree' "$WORK/calls.offroster"; } \
+  && ok "sparse: an off-roster fetch costs NO tree call — the roster is checked first (#1556)" \
+  || bad "an unrostered repository must not be fetched" "rc=$rc: $(cat "$WORK/calls.offroster" 2>&1)"
+
+# AN EXPRESSION IS A PERMANENT BOUNDARY, NOT A READ TO RETRY. `repository: ${{ inputs.upstream }}` is
+# resolved by the runner from values this file cannot see. Ungraded, exit 0, and no fetch attempted —
+# inventing a repository name out of an expression is how rule (4) would get run against the wrong
+# tree entirely, which is worse than not running it.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-expression
+out="$(run_logged "$WORK/calls.expr" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'not a literal `owner/name`' \
+    && printf '%s' "$out" | grep -q '0 finding(s)' \
+    && ! grep -q '^tree' "$WORK/calls.expr"; } \
+  && ok "sparse: an EXPRESSION repository is ungraded, costs no call, and is not a no-verdict (#1556)" \
+  || bad "a non-literal repository must be a boundary, not a fetch" "rc=$rc: $out"
+
+# CRITERION 5. NO EXTRA API CALL WHEN NO STEP FETCHES A NON-AUTHORITY REPO. A weekly audit must not
+# gain ten round-trips for a hole that is usually empty, and the only honest way to check a claim
+# about TRAFFIC is to count what the stub was asked for. `cone-file` fetches the AUTHORITY, whose
+# tree this audit already holds — so it is graded (rule (4) ran, 1 of 1) and yet zero trees are
+# fetched. Both halves matter: a lazy fetcher that never fires is also "zero calls".
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-file
+out="$(run_logged "$WORK/calls.authority" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'ran for 1 of 1 graded cross-repo step(s)' \
+    && ! grep -q '^tree' "$WORK/calls.authority"; } \
+  && ok "sparse: a fetch of the AUTHORITY still costs no tree call — the fetch is lazy (#1556)" \
+  || bad "the tree fetcher must not fire for a repository the audit already holds" \
+         "rc=$rc: $(cat "$WORK/calls.authority" 2>&1)"
+
+# ...and the same for a roster with no cross-repo checkout at all, which is the ordinary state of the
+# org and the run that must stay cheapest.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run_logged "$WORK/calls.none" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && ! grep -q '^tree' "$WORK/calls.none"; } \
+  && ok "sparse: a roster with no cross-repo checkout fetches no tree at all (#1556 criterion 5)" \
+  || bad "an empty subject set must cost nothing" "rc=$rc: $(cat "$WORK/calls.none" 2>&1)"
+
+# ONE TREE PER REPOSITORY, NOT ONE PER WORKFLOW. The cache is what makes the reach affordable: three
+# workflows in one repo all fetching the same sibling must produce exactly ONE tree call, or a roster
+# of ten repos with a handful of cross-repo steps each quietly becomes dozens of round-trips.
+#
+# AND IT IS THE LEG THAT CAUGHT THE WORST BUG IN #1556, which is why it asserts the WORKFLOW COUNT
+# and not just the call count. bash locals are dynamically scoped, and `sparse_grade`'s loop over the
+# trees it wants sits inside `repo_calls`'s loop over a repository's workflows — so a bare
+# `while read -r repo` assigned straight through to the repository being walked, and `read` leaves it
+# EMPTY at EOF. Every workflow after the first cross-repo fetch was then requested from the empty
+# repository, 404ed, and silently dropped: the sweep read two of four workflows and still reported
+# success. Nothing about the call count would have shown it. `3 of 3 graded cross-repo step(s)` does,
+# because steps two and three live in the workflows that went missing.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+cp "$FIX/FS-GG__FS.GG.Rendering/fetch.yml" "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml"
+cp "$FIX/FS-GG__FS.GG.Rendering/fetch.yml" "$FIX/FS-GG__FS.GG.Rendering/fetch3.yml"
+printf '%s\n%s\n%s\n%s\n' coord.yml fetch.yml fetch2.yml fetch3.yml > "$FIX/FS-GG__FS.GG.Rendering.list"
+out="$(run_logged "$WORK/calls.cache" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && [ "$(grep -c '^tree' "$WORK/calls.cache")" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'ran for 3 of 3 graded cross-repo step(s)'; } \
+  && ok "sparse: the tree is fetched ONCE per repository, not once per workflow (#1556)" \
+  || bad "the tree cache must survive across workflows" \
+         "rc=$rc calls=$(grep -c '^tree' "$WORK/calls.cache" 2>/dev/null): $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml" "$FIX/FS-GG__FS.GG.Rendering/fetch3.yml"
 
 # A REFUSED SHAPE is a PERMANENT no-verdict (exit 3), not a finding (1) and not a rate limit (2).
 # Negation makes ORDER significant, so "every pattern is a directory" stops being a sound reading of
