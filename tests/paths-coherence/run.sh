@@ -790,11 +790,17 @@ fi
 # exactly and that gate declares a PATHS_SUBJECT — `(.github/workflows, default.json)`, the two halves
 # of the comparison it makes — so rule (c) attaches and the census counts it. This leg fired on that
 # gate's first CI run, the tripwire doing its job for the fourth time.
+# 9 -> 10: skillmirror-freshness.yml (.github#1546) names scripts/check-skillmirror-freshness.py
+# exactly and that gate declares a PATHS_SUBJECT — `(tests/skill-union/skillmirror.fixtures.json,)`,
+# the conformance table whose freshness IS its whole subject — so rule (c) attaches and the census
+# counts it. This leg fired on that gate's first local run, the tripwire doing its job for the fifth
+# time; the entry it demanded was then DELETED again to watch rule (c) name the missing pattern, so
+# the coverage is measured in both directions rather than inferred from a green.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "9" ]; then
+if [ "${s:-0}" = "10" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 9 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 10 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
