@@ -115,8 +115,14 @@ module ApplicationServiceTests =
         else
             None
 
-    let private boardItem (number: int) (title: string) =
-        $"""{{"status":{{"name":"In progress"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+    /// One board row, in the COLUMN the caller names. The column is a parameter because it is the whole of
+    /// the difference between a queue that schedules something and one that does not: `Ready` is the only
+    /// startable column, so every fixture built on the `In progress` default below is — by construction —
+    /// a queue whose empty arm is under test (.github#1562 needed the OTHER arm as well).
+    let private boardItemIn (status: string) (number: int) (title: string) =
+        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+    let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title
 
     /// One live claim marker, timestamped NOW so the lease is fresh. Sessionless, exactly as
     /// `kit_server.py` serves it: a marker carrying no session is indistinguishable from ours, which is
@@ -139,11 +145,11 @@ module ApplicationServiceTests =
     /// A transport serving one board. `bodies` is issue number → issue body (its `Paths:` declaration),
     /// `holders` is issue number → the worker whose claim marker sits on it, and `sayFails` makes the
     /// courtesy-notice POST fail so the receipt's `notified:false` leg can be pinned.
-    let private world (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) sayFails =
         let items =
             bodies
             |> Map.toList
-            |> List.map (fun (n, _) -> boardItem n $"item %d{n}")
+            |> List.map (fun (n, _) -> boardItemIn status n $"item %d{n}")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -193,6 +199,9 @@ module ApplicationServiceTests =
                     ok (JsonSerializer.Serialize {| number = n; body = body |})
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private world (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+        worldIn "In progress" bodies holders sayFails
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -849,8 +858,10 @@ module ApplicationServiceTests =
     // at parse time, pinned by `OptionsTests`' ``#1523 --json is REFUSED on a command with no machine
     // projection``. Reaching AC 3 would mean reopening that classification and editing an options surface
     // this item does not declare. The residual `next` hazard — the same prose line on STDOUT, at exit 0,
-    // from a verb whose stdout contract is a bare ref read with `$(…)` — is pinned below as the behaviour
-    // of record, and filed apart.
+    // from a verb whose stdout contract is a bare ref read with `$(…)` — was pinned below as the behaviour
+    // of record and filed apart as `.github#1562`, which CLOSED it without giving `next` a machine
+    // projection: the line moved to stderr, and stdout is now the ref or nothing at all. Those pins carry
+    // the old assertion's history; see the `.github#1562` block below.
 
     /// Run a queue verb against a THROWAWAY cache root, capturing stdout and stderr APART. The split IS
     /// the assertion rather than a convenience: the skip reasons and #428's starved banner belong on
@@ -987,18 +998,55 @@ module ApplicationServiceTests =
         Assert.Equal(5, code)
         Assert.Contains("FS.GG.SDD#74", err)
 
+    // ---- .github#1562 — `next`'s EMPTY arm keeps its hands off the `$(…)` ref contract ---------------
+    //
+    // WHAT WAS HERE, AND WHY IT IS EDITED RATHER THAN DELETED (AC 5). This block was one test named
+    // ``next is UNCHANGED by 1525 — its empty arm still prints prose on stdout at exit 0``. It was not an
+    // endorsement: #1525's AC 5 froze `take`/`next`'s un-flagged bytes, so #1525 could not be the item
+    // that changed this, and pinning the defect made it a deliberate disposition rather than an oversight.
+    // It is the record of what the behaviour WAS, so the assertions below inherit its subject and its
+    // argument and invert the one line it pinned. Deleting it would delete the only place the org states
+    // that `ref="$(fsgg-coord next --repo X)"` once yielded the STRING "nothing schedulable right now.".
+    //
+    // STDOUT AND STDERR APART, NOT MERGED — the property AC 4 is about, and the reason this stood. Every
+    // assertion that could see this arm captured the streams TOGETHER (`tests/coord-engine-parity`'s
+    // `ge()` helper is `2>&1`), and a merged capture cannot tell a machine contract from prose printed
+    // beside it: the defect and the fix render identically through it. `runQueue` above returns the two
+    // separately, so "stdout carries the ref and NOTHING else" is assertable here.
+
     [<Fact>]
-    let ``next is UNCHANGED by 1525 — its empty arm still prints prose on stdout at exit 0`` () =
-        // NOT an endorsement. This is the behaviour of record after `.github#1523` removed `next --json`,
-        // and pinning it is what makes the residual defect a deliberate disposition rather than an
-        // oversight. `next`'s stdout is documented in `Client.fs` as "one line, the chosen item's ref,
-        // which a caller reads with `$(…)`" — so `ref=$(fsgg-coord next)` yields the STRING
-        // "nothing schedulable right now." at exit 0, which no caller can tell from a ref. Changing that
-        // means changing a byte contract this item's AC 5 freezes, so it is filed rather than reached for.
-        let code, out, _ =
+    let ``#1562 next's empty arm puts NOTHING on stdout — the ref contract is not prose`` () =
+        let code, out, err =
             runQueue (busyQueue ()) [ "next"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21" ]
 
-        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        // AC 1, AS AN EQUALITY OVER THE WHOLE STREAM rather than a `DoesNotContain` of the old sentence.
+        // The subject is not that one phrase moved; it is that `$(…)` captures an EMPTY ref, so ANY byte
+        // arriving here later — a second headline, a courtesy line, a future banner — fails this.
+        Assert.Equal("", out)
+
+        // ...and the answer was not DROPPED to buy that. #440's headline and the OBSERVED per-item reason
+        // (never a guessed list of causes) are both still emitted, one stream over.
+        Assert.Contains("nothing schedulable right now.", err)
+        Assert.Contains("FS.GG.SDD#74", err)
+
+        // EXIT 0, and the disagreement it refuses to invent. `next` is `batch` capped at one; `batch`
+        // answers this same board at 0, and #1535 made `batch --text -n 1` the documented substitute for
+        // `next` when a caller wants the decision without the chore offer. `take`'s EX_NONE means "I
+        // CLAIMED NOTHING" — a fact about a write `next` never attempts.
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#1562 next over a NON-empty queue is byte-identical: one line, the short ref, exit 0`` () =
+        // AC 3, AND THE LEG THAT MAKES AC 1 A FIX RATHER THAN A MUTE BUTTON. An engine that printed
+        // nothing on stdout ever would satisfy the assertion above perfectly. This is the arm the contract
+        // exists for, held to the exact bytes a caller substitutes into `$(…)`.
+        let startable =
+            worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
+
+        let code, out, _ =
+            runQueue startable [ "next"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21" ]
+
+        Assert.Equal("FS.GG.SDD#74" + Environment.NewLine, out)
         Assert.Equal(0, code)
 
     [<Fact>]

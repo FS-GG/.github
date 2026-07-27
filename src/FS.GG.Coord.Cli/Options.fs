@@ -213,7 +213,11 @@ DECISION (pure — no board, no network):
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
                                              read the board and emit the snapshot `decide` consumes
-  next   [--repo NAME]                       the next single schedulable item — AND IT WRITES (#1535):
+  next   [--repo NAME]                       the next single schedulable item — one line, the ref, on
+                                             stdout, and NOTHING on stdout when there is none
+                                             (.github#1562: the "nothing schedulable" headline and the
+                                             per-item reasons are stderr, so `ref="$(… next)"` reads an
+                                             empty ref instead of that sentence). AND IT WRITES (#1535):
                                              after printing that answer it offers a #733 chore, which
                                              POSTs a claim marker TAKING this repo's chore lock. For the
                                              same decision WITHOUT the offer use `batch --text -n 1` —
@@ -351,6 +355,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   3 red     ·   4 no-verdict   ·   75 EX_RATE (budget exhausted — back off, try again later)
   `take` (#585): 0 ONLY when it claimed an item · 5 EX_NONE (nothing startable) · 6 EX_CONTENDED
   (lost every race) · 75 EX_RATE · any other non-zero, could not read (never EX_NONE, #266)
+  `next`/`batch` (.github#1562): 0 whether or not anything was schedulable — DELIBERATELY not `take`'s
+  EX_NONE. `next` is `batch` capped at one and `batch --text -n 1` is its documented substitute (#1535),
+  so an EX_NONE here would make that substitution change a caller's exit status; `take`'s 5 means "I
+  CLAIMED NOTHING", a fact about a write neither of these attempts. Read the ANSWER, not the code:
+  `next`'s stdout is the ref and is EMPTY when there is none, `batch --json`'s is `[]`
   `landable` (#720/#724): 0 green · 7 pending (the ONE verdict worth retrying) · 3 red or conflicted
   (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
