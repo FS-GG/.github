@@ -39,7 +39,18 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Kit</PackageId>
-    <!-- 0.11.0 (.github#1658): republish for the fleet engine pin. The packed
+    <!-- 0.12.0 (.github#1594): the packed `pnext-item` skill gains an ENGINE-CURRENCY step — the worker
+         checks the SHARED checkout's engine against `origin/main` under the engine's own source trees
+         before its first board write, and escalates when it cannot repair it. MINOR, not patch. Not
+         patch because this is not the prose repair 0.8.1 (edc8404) was: it adds a REQUIRED step to the
+         protocol a receiver materializes and its agents execute, so the content a consumer restores
+         instructs different behaviour than 0.11.0's did. Not major because it is additive — no step is
+         removed or reordered, nothing a 0.11.0 reader was told to do stops being true, and the member
+         SET is unchanged (still 25 members; the change is confined to two files inside an existing
+         one). Only `.claude/skills/pnext-item` moves in `registry/repos.lock`. 0.11.0 rather than
+         0.10.0 is the predecessor because #1658 landed its engine-pin republish first, mid-item; the
+         two were coordinated over `say` and this took the next minor rather than reusing theirs.
+         PRIOR — 0.11.0 (.github#1658): republish for the fleet engine pin. The packed
          `.config/dotnet-tools.json` advances `fs.gg.coord.cli` 0.11.0 -> 0.12.0, so a receiver that
          materializes this kit restores a DIFFERENT ENGINE. MINOR, not patch: FS.GG.Coord.Cli 0.12.0 is
          itself a BREAKING minor (#1523 scoped the projections — the `json` flag now exits 1 on 20 of the
@@ -59,7 +70,7 @@
          minor (0.7.0 -> 0.8.0) for the same class (a shim verb-partition republish), while a
          comment-only shim edit took a patch (0.8.0 -> 0.8.1, edc8404). The member SET is unchanged:
          still 25 members, and the guard module is not one of them. -->
-    <Version>0.11.0</Version>
+    <Version>0.12.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
