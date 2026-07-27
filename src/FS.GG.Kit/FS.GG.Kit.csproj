@@ -39,7 +39,17 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Kit</PackageId>
-    <Version>0.9.0</Version>
+    <!-- 0.10.0 (.github#1586): the packed `scripts/fsgg-coord` shrinks to the resolver a receiver
+         actually executes; the verb partition and the stale/dirty guards move to
+         `scripts/fsgg-coord-guards.sh`, which has NO kit row and is therefore not packed at all.
+         MINOR, not patch, and not major. Not major because receiver BEHAVIOUR is unchanged: the guards
+         were only ever reachable from tiers 2/2b (a source build), which only the repo owning coord's
+         source can have — every receiver resolves at tier 1/3/4 and reaches identical code. Not patch
+         because the packed member's content changes structurally rather than in prose; e24b0bc took a
+         minor (0.7.0 -> 0.8.0) for the same class (a shim verb-partition republish), while a
+         comment-only shim edit took a patch (0.8.0 -> 0.8.1, edc8404). The member SET is unchanged:
+         still 25 members, and the guard module is not one of them. -->
+    <Version>0.10.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
