@@ -23,6 +23,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
 SHIM="$REPO_ROOT/scripts/fsgg-coord"          # D.2 swap: the entrypoint IS the shim now
+# THE GUARD MODULE — sourced by the shim at tiers 2/2b, and NOT kit content (.github#1586). The verb
+# partition and both guards live here now, so the legs below that read the partition's TEXT read this
+# file; the legs that drive the guards' BEHAVIOUR are unchanged, because behaviour did not change.
+GUARDS="$REPO_ROOT/scripts/fsgg-coord-guards.sh"
 
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
@@ -30,6 +34,7 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 [ -x "$SHIM" ]   || { echo "FAIL  the shim is missing or not executable: $SHIM" >&2; exit 1; }
+[ -f "$GUARDS" ] || { echo "FAIL  the guard module is missing: $GUARDS" >&2; exit 1; }
 
 # ---- 1. THE WHOLE D.1 CORPUS, THROUGH THE SHIM ---------------------------------------------------
 # run.sh drives its engine from FSGG_COORD_ENGINE_BIN. Point it at a wrapper that hands the shim the
@@ -232,13 +237,18 @@ fi
 # this buys is that the decision must be MADE, by a person, before the build goes green. §3c below then
 # makes each decision executable.
 #
-# THE EXTRACTION REFUSES ANYTHING BUT A LITERAL. The three assignments are lifted from the shim and eval'd,
-# so the pattern is anchored to a plain double-quoted literal with no `$`, backtick or `(` inside it: a
+# THE EXTRACTION REFUSES ANYTHING BUT A LITERAL. The three assignments are lifted and eval'd, so the
+# pattern is anchored to a plain double-quoted literal with no `$`, backtick or `(` inside it: a
 # future spelling that used a substitution or a line continuation reds this leg instead of being executed.
+#
+# LIFTED FROM THE GUARD MODULE, NOT THE SHIM (.github#1586). The sets moved to
+# `scripts/fsgg-coord-guards.sh` — same three literals, same bijection, same gate. §3f below asserts they
+# are no longer kit content, which is the whole reason they moved; this leg is unchanged in substance and
+# reads the file that now holds them.
 partition_ok=1
-PART="$(grep -E '^BOARD_(WRITES|WRITES_CONDITIONAL|READS)="[^"$`(]*"$' "$SHIM")"
+PART="$(grep -E '^BOARD_(WRITES|WRITES_CONDITIONAL|READS)="[^"$`(]*"$' "$GUARDS")"
 if [ "$(printf '%s\n' "$PART" | grep -c .)" -ne 3 ]; then
-  bad "partition: the shim must declare exactly 3 literal verb sets (BOARD_WRITES, BOARD_WRITES_CONDITIONAL, BOARD_READS)" "$PART"
+  bad "partition: scripts/fsgg-coord-guards.sh must declare exactly 3 literal verb sets (BOARD_WRITES, BOARD_WRITES_CONDITIONAL, BOARD_READS)" "$PART"
   partition_ok=0
 else
   BOARD_WRITES=""; BOARD_WRITES_CONDITIONAL=""; BOARD_READS=""
@@ -631,6 +641,87 @@ else
 fi
 rm -rf "$NOSUBJ_UP" "$NOSUBJ_CL"
 
+
+# ---- 3f. THE GUARD MODULE IS NOT KIT CONTENT, AND ITS ABSENCE IS A REFUSAL (.github#1586) ---------
+# #1586's whole subject: `scripts/fsgg-coord` is a `coordination-kit` row, so every edit to it is
+# mirrored byte-identical into seven receivers and obliges a kit republish that stales all seven. Three
+# of the six churn events measured in one day (#1528, #1534, #1535) changed nothing but the verb
+# partition — code no receiver can reach, because the guards load only where a source build resolved and
+# only the repo owning coord's source has one.
+#
+# So the partition moved to `scripts/fsgg-coord-guards.sh`, which has no kit row. These legs assert the
+# two properties that make that true and safe, and they MEASURE the payoff rather than asserting it
+# (#1586 criterion 5): (a) it is genuinely not packable; (b) its absence REFUSES rather than silently
+# un-guarding. (c) pins what is deliberately NOT fixed.
+#
+# ITS OWN FIXTURE, NOT `$FIX`. These legs delete an engine and drive a shim copy; reusing the shared
+# fixture would leave §4 and §5 asserting against a tree this section had quietly rearranged.
+
+# a. NOT PACKABLE — asked of the roster the packer itself reads. `src/FS.GG.Kit/stage-kit.sh` stages
+#    exactly the `kit:` rows of `registry/repos.yml` through `scripts/repos.sh` (ADR-0058: derive, don't
+#    restate), so "is it kit content?" IS "does a kit row name it?" and nothing else. Asking the roster
+#    rather than diffing a staged tree keeps the leg honest without a `dotnet pack` on every run.
+KITSRC="$(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --registry "$REPO_ROOT/registry/repos.yml" 2>/dev/null)"
+if [ -z "$KITSRC" ]; then
+  bad "#1586: could not read the kit rows from registry/repos.yml (is PyYAML present?) — this leg cannot decide, and that is NOT a verdict about the split"
+else
+  if printf '%s\n' "$KITSRC" | grep -qx 'scripts/fsgg-coord'; then
+    ok "#1586: 'scripts/fsgg-coord' IS a kit row — the split's premise still holds (if this ever flips the split is moot, not passing)"
+  else
+    bad "#1586: 'scripts/fsgg-coord' is no longer a kit row — re-read this section's premise before trusting it" "$KITSRC"
+  fi
+  if printf '%s\n' "$KITSRC" | grep -qx 'scripts/fsgg-coord-guards.sh'; then
+    bad "#1586: the guard module was GIVEN a kit row — the partition is kit content again, and editing it stales seven receivers once more" "$KITSRC"
+  else
+    ok "#1586: the guard module has NO kit row, so the packer cannot stage it — a partition edit is now a .github commit, not a republish + 7-receiver fan-out"
+  fi
+fi
+
+# b. ITS ABSENCE IS A REFUSAL, NOT A SILENT SKIP — the leg that makes the split safe rather than merely
+#    tidy. `[ -f ] && source` would turn a missing module into "no guards": silence indistinguishable
+#    from a clean tree, which is precisely the #266 shape the module warns about three times over
+#    `find -quit`, `status.showUntrackedFiles` and `--no-optional-locks`. Rebuilding that hole while
+#    moving the file would trade a churn problem for a correctness one.
+#
+#    The module is resolved from `${BASH_SOURCE[0]}`'s directory, so copying the shim ALONE into an empty
+#    directory is exactly the "module missing" state. The verb is a board WRITE and the source is STALE,
+#    so the pass condition is the strong one: non-zero, the module named, and the fixture engine unrun.
+M86="$(mktemp -d)"; fixture "$M86"; stale "$M86"
+NOMOD="$(mktemp -d)"
+cp "$SHIM" "$NOMOD/fsgg-coord"; chmod +x "$NOMOD/fsgg-coord"
+out="$(cd "$M86" && env -u FSGG_COORD_ENGINE_BIN "$NOMOD/fsgg-coord" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$out" | grep -q 'fsgg-coord-guards.sh'; then
+  ok "#1586: a source build with NO guard module beside the shim REFUSES the board write (exit $rc) and NAMES the module — an absent guard is not a clean bill of health (#266)"
+else
+  bad "#1586: a missing guard module must refuse a board write, never exec unguarded" "rc=$rc out=$out"
+fi
+
+#    ...AND THE RECEIVERS' SHAPE IS UNAFFECTED BY THAT REFUSAL, which is the other half of the trade. A
+#    receiver has no source build, so it never asks for the module and must not be broken by its absence.
+#    Same module-less shim, same tree with its engine removed: tier 2 misses and resolution proceeds
+#    exactly as it did before this change.
+find "$M86/src" -name 'fsgg-coord-engine*' -delete 2>/dev/null
+err="$(cd "$M86" && env -u FSGG_COORD_ENGINE_BIN "$NOMOD/fsgg-coord" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+if printf '%s' "$err" | grep -qi 'no fsgg-coord engine found'; then
+  ok "#1586: with NO source build, the missing guard module is never asked for — the receivers' shape resolves (or refuses) exactly as before"
+else
+  bad "#1586: a source-less checkout must not be broken by the absent guard module" "rc=$rc err=$err"
+fi
+rm -rf "$NOMOD" "$M86"
+
+# c. THE KNOWN THAT IS NOT FIXED, PINNED SO IT CANNOT BE MISREAD AS FIXED. The engine's tool manifest is
+#    still a kit row, so an ENGINE version bump still republishes the kit and still stales every
+#    receiver — the other three of the six churn events (#1507, #1517, #1523). #1586's filer corrected
+#    the issue's own premise on exactly this point, and criterion 5 as filed ("no kit republish and no
+#    receiver fan-out") is unmeetable without moving that row, which overturns #1077. The ownership
+#    question is filed separately rather than smuggled in here. If this leg ever flips, that follow-up
+#    landed, and the "reduced, not removed" wording in both shim files should be revisited with it.
+if printf '%s\n' "$KITSRC" | grep -qx 'dist/dotnet/.config/dotnet-tools.json'; then
+  ok "#1586: KNOWN — the engine tool manifest is STILL a kit row (#1077), so an engine bump still republishes: this change REDUCES the fan-out, it does not remove it"
+else
+  bad "#1586: the engine tool manifest left the kit without this gate's prose being updated — re-read #1077 and #1586's filer correction" "$KITSRC"
+fi
 # ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
 # EVERY LEG IN §3 DRIVES THE SHIM WITH `env -u FSGG_COORD_ENGINE_BIN`, WHICH UNSETS TIER 1 AND NOTHING
 # ELSE — and that was never enough. Under the old order a global tool on PATH exec'd BEFORE the source
