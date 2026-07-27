@@ -48,7 +48,17 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
-    <Version>0.11.0</Version>
+    <!-- 0.11.0 to 0.12.0 is a MINOR, and under 0.x SemVer that is the BREAKING signal (.github#1596).
+         It is not a patch: #1523 scoped the render flags, so a spelling that exited 0 on 20 of the 40
+         verbs now exits 1. PackageReleaseNotes below states that where a consumer meets it, the
+         nuget.org listing, because a consumer who first learns of it from a failing exit code in their
+         own pipeline has been failed by this release rather than informed by it.
+
+         This property is the RELEASE ACT (see scripts/check-engine-freshness.py): the engine's version
+         moves only at release time, by hand, and release-coord-engine.yml evaluates it with
+         `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
+         disagrees. The tag is a coherence check against this line and never its source. -->
+    <Version>0.12.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -59,6 +69,59 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Coord.Cli</PackageProjectUrl>
+
+    <!-- THE RELEASE NOTES ARE WHERE THE BREAK IS ANNOUNCED, and that is the point of them here.
+         nuget.org renders this on the package listing and `dotnet tool` consumers read it there. A
+         changelog that said only "fixes" while a previously-accepted flag started exiting 1 would be
+         the #266 shape in its purest form: the org knowing a thing, and the consumer discovering it
+         from a broken script. Criterion 5 of .github#1596 asks for exactly this.
+
+         The counts below were MEASURED against this project's own parser rather than copied from the
+         issue: `fsgg-coord-engine command-contract` emits one row per verb with the flags it accepts,
+         and the two lists were derived from it over all 40 rows. -->
+    <PackageReleaseNotes>0.12.0 — BREAKING on the 0.x line (minor bump is the 0.x breaking signal).
+
+BREAKING: `--json` and `--text` are now scoped to the commands that HAVE those projections
+(.github#1523). They used to be global, and on the verbs with no machine projection they were
+accepted and IGNORED — same prose, exit 0. They now REFUSE with exit 1 and a message naming the
+verb. Measured against this build's own `command-contract`, over all 40 verbs:
+
+  * `--json` is refused on 20 of 40: add, bootstrap, child, done, field-id, flush, followup,
+    heartbeat, item-id, landable, next, option-id, overlap, reap, release, room open, say,
+    set-field, verify-paths, whoami.
+  * `--text` is refused on 4 of 40: board, command-contract, issues, scan — the verbs that emit a
+    machine document and have no prose form to ask for.
+
+WHO THIS BREAKS: any script that appended `--json` for uniformity to a verb that never emitted JSON.
+On 0.11.0 the PARSER accepted it on all twenty and handed control to the verb; on 0.12.0 the parser
+refuses it before the verb runs. Observed side by side, 0.11.0 from nuget.org against this build:
+
+  $ fsgg-coord-engine whoami --json     # 0.11.0: prints the human text, exit 0
+                                        # 0.12.0: "--json is not a flag of `whoami`", exit 1
+
+`flush --json` and `reap --json` behave the same way. The other seventeen also reached their verb on
+0.11.0 and are stopped at the parser here; their exit code on 0.11.0 then depended on the verb's own
+arguments and board access, so treat the parse-level acceptance as the thing that changed.
+
+THE REMEDY IS TO DROP THE FLAG. Every BARE form is unchanged: all forty verbs were run bare against
+0.11.0 and against this build, and the only outputs that differ are `command-contract` (below) and
+the `--help` text, which #1535 rewrote to say that `next` takes the chore lock.
+
+ALSO CHANGED, for tooling that parses it: `command-contract` keeps schema id
+`fsgg.coord.commands/1` (the addition is additive) but its content moves twice — every row gains a
+`writes` key (.github#1534), and the twenty rows above no longer list `--json` among their flags.
+It is the machine-readable answer to "which verbs really take the flag", and it is now correct.
+
+NOT BREAKING, and the reason to take this release: 0.11.0 corrupts touch-set declarations.
+`widen REF --paths TOKENS --json` swallowed `--json` INTO the declaration and exited 0 under a
+DISJOINT receipt (.github#1507), writing a junk token into the one line the scheduler reserves files
+by. Fixed here, along with `widen`/`set-paths` honouring `--json` (#1517), `reconcile --apply --json`
+emitting ONE document (#1524), `take --json`'s empty arm emitting a receipt instead of prose (#1525),
+`command-contract` carrying per-verb write-ness (#1534), and `next` being declared a board WRITE
+because it takes the chore lock (#1535).
+
+The wire surface (src/FS.GG.Coord.Core/Protocol.fs) is UNCHANGED across all seven commits: the exit
+codes and verb contract this repo's skills document are the ones this build enforces.</PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
