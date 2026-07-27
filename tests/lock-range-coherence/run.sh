@@ -671,6 +671,188 @@ must_fail "the stale tree reds…" "do not match the version" "$regenerated"
 lockfile "$regenerated" tests/Game.Render.Tests/packages.lock.json fs.gg.game.render FS.GG.Game.Core "[0.5.0, )"
 must_pass "…and regenerating the lock clears it WITHOUT a commit — the gate is usable pre-commit" "$regenerated"
 
+# ---- .github#1515: THE WORKFLOW MUST BE ABLE TO LOAD THE SCRIPT IT FETCHES -------------------------
+#
+# Everything above this line runs the gate out of a FULL checkout, where every file it could possibly
+# need is already on disk. That is precisely why this suite — and every other suite in this repo —
+# structurally could not have caught .github#1510.
+#
+# #1510: skill-union-assert.yml sparse-checked-out its script plus ONE of the two libs the script
+# sources. #525 hoisted the second. The list was never updated. Every receiver caller of that reusable
+# workflow then died at load in about seven seconds having asserted nothing, and it was found from two
+# other repositories (FS.GG.SDD#718, FS.GG.Governance#327) rather than from here. `skill-roots-selfcheck`
+# ran the same script green the entire time, from a full checkout.
+#
+# lock-range-coherence.yml carried the identical construction, unsprung: a sparse-checkout naming ONE
+# file. It is a hand-maintained duplicate of a dependency list, kept in a file that cannot execute the
+# thing it lists, so nothing compares it to the script's real import lines. It happened to be correct,
+# because check-lock-ranges.py imports stdlib only — and scripts/lib/gate.py's staged migration (#1159)
+# has this gate on its list, so "happened to be correct" had an expiry date.
+#
+# So these legs do not run the gate from the repo. They ask git which files the workflow's OWN patterns
+# select, materialise exactly those, and run the gate out of THAT. A leg that passes on a full tree
+# proves nothing here; every assertion below is made against the sparse tree.
+echo
+WF="$REPO_ROOT/.github/workflows/lock-range-coherence.yml"
+SPARSE="$HERE/sparse_set.py"
+[ -f "$WF" ]     || { echo "FAIL  workflow not found at $WF"; exit 1; }
+[ -f "$SPARSE" ] || { echo "FAIL  sparse_set.py not found at $SPARSE"; exit 1; }
+
+# materialise <out> <args…> — the file set the runner would actually get, into <out>. Echoes the paths,
+# and propagates sparse_set.py's own exit code (2 == SparseError) rather than flattening it. Every
+# caller tests it, so `set -e` never fires on it and a broken materialisation is REPORTED as a failed
+# leg instead of aborting the suite midway with the remaining legs unrun and unaccounted for.
+materialise() { local out="$1"; shift; python3 "$SPARSE" --out "$out" "$@"; }
+
+# PyYAML is how the workflow is read (see sparse_set.py's header — the hand-rolled scanner it replaced
+# failed OPEN on a folded block scalar). CI installs it via .github/actions/setup-policy-python. If it
+# is absent this suite CANNOT check its subject, and that is reported as a failure rather than skipped:
+# a tooling gap is not a verdict, but neither is it a green one (#266).
+if ! python3 -c "import yaml" >/dev/null 2>&1; then
+  bad "PyYAML is missing, so the sparse-checkout legs cannot run" \
+      "install it with: python3 -m pip install -r requirements-test.txt"
+fi
+
+DG="$WORK/dotgithub"
+selected=""
+if selected="$(materialise "$DG" --repo-root "$REPO_ROOT" --from-workflow "$WF" 2>"$WORK/sparse.err")"; then
+  ok "the workflow's authority checkout is parseable, and git resolves its patterns"
+  # Surfaced even on success: sparse_set warns here about tracked paths absent from the working tree,
+  # and a warning only printed on failure is a warning nobody reads.
+  if [ -s "$WORK/sparse.err" ]; then sed 's/^/    | /' "$WORK/sparse.err"; fi
+else
+  bad "the workflow's authority checkout could not be resolved" "$(cat "$WORK/sparse.err")"
+  selected=""
+fi
+
+# has <name> <path> — the runner got this file.
+has() {
+  if printf '%s\n' "$selected" | grep -qxF -- "$2"; then ok "$1"
+  else bad "$1 (not in the checked-out set)" "$(printf '%s\n' "$selected" | head -20)"; fi
+}
+
+has "the checkout contains the gate script it is about to run" "scripts/check-lock-ranges.py"
+
+# THE PROPERTY THAT FIXES THE CLASS, ASSERTED STRUCTURALLY: the checked-out set is EXACTLY the repo's
+# tracked contents of scripts/. Both directions matter and this one assertion carries both.
+#
+#   * Narrow the pattern back to named files and the set shrinks — which is the #1510 regression, and
+#     it reds HERE rather than in a receiver's pipeline weeks later.
+#   * Unanchor it to `scripts/` and the set GROWS: these are gitignore-style patterns under
+#     `sparse-checkout-cone-mode: false`, so a bare `scripts/` also matches the six directories of
+#     that name in the skill bundles. Harmless to the gate, but the workflow comment claims the
+#     checkout is scoped to scripts/, and only the anchored form makes that sentence true.
+#
+# Deliberately NOT a list of expected filenames. A leg that names scripts/lib/roots.sh would red on a
+# legitimate rename of a file this gate does not even use — a false accusation against the checkout —
+# and `scripts/lib/**` is not in this selftest's `paths:` filter, so that red would surface on some
+# unrelated PR. Comparing two computed sets needs no maintenance and cannot go stale: this is the same
+# objection the item itself is about, and a fixture for it should not keep an enumeration of its own.
+expected="$(git -C "$REPO_ROOT" ls-files -- 'scripts/*' | sort)"
+if [ -z "$expected" ]; then
+  bad "could not enumerate scripts/ in the subject repo — refusing to grade against an empty set"
+elif [ "$(printf '%s\n' "$selected" | sort)" = "$expected" ]; then
+  ok "…and the set is EXACTLY the tracked contents of scripts/ — nothing missing, nothing stray"
+else
+  bad "the checked-out set is not the tracked contents of scripts/" \
+    "$(diff <(printf '%s\n' "$selected" | sort) <(printf '%s\n' "$expected") | head -20)"
+fi
+
+# And say out loud that the siblings came along unnamed — the actual point of taking the directory.
+# Counted, not named, so a rename cannot turn this into a false accusation.
+libs="$(printf '%s\n' "$selected" | grep -c '^scripts/lib/' || true)"
+if [ "${libs:-0}" -gt 0 ]; then
+  ok "…including $libs file(s) under scripts/lib/, which the workflow names NONE of (#1510's blind spot)"
+else
+  bad "no scripts/lib/ sibling was fetched — the hoist target #1510 died on is absent"
+fi
+
+# A REAL VERDICT FROM THE SPARSE TREE, both directions (acceptance criterion 2; epic #266). Loading is
+# necessary but not sufficient: the gate must still reach the same answers it reaches from a full
+# checkout, or the checkout shape has quietly changed behaviour.
+SPARSE_GATE="$DG/scripts/check-lock-ranges.py"
+if [ -f "$SPARSE_GATE" ]; then
+  out=""; rc=0
+  out="$(python3 "$SPARSE_GATE" --root "$audio" --min-ranges 1 2>&1)" || rc=$?
+  # "all 1 project-reference range", not merely "range": the gate prints that word in its ERROR text
+  # too, so the loose pattern would accept a run that inspected nothing. Same phrasing the `must_say`
+  # legs above use, and the same reason (#545).
+  if [ "$rc" -ne 0 ]; then bad "the sparsely-fetched gate reaches a real green verdict (exit $rc)" "$out"
+  elif printf '%s' "$out" | grep -qF "all 1"; then ok "the sparsely-fetched gate reaches a real green verdict, min-ranges satisfied"
+  else bad "the sparsely-fetched gate exited 0 but inspected nothing it will name" "$out"; fi
+
+  rc=0
+  out="$(python3 "$SPARSE_GATE" --root "$stale" 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then bad "the sparsely-fetched gate still REDS the stale tree (got 0)" "$out"
+  elif printf '%s' "$out" | grep -qF "do not match the version"; then
+    ok "…and still REDS the stale tree, for the same reason — behaviour is unchanged by the fetch shape"
+  else bad "…the sparse gate failed, but not for the claimed reason" "$out"; fi
+else
+  bad "the sparsely-fetched gate is not on disk, so no verdict could be taken" "$selected"
+fi
+
+# ---- CAN THIS FIXTURE ACTUALLY SEE A GAP? -----------------------------------------------------------
+#
+# The legs above pass today, and they would ALSO have passed against the one-file checkout this item
+# replaced, because check-lock-ranges.py has no siblings to lose yet. A regression leg that cannot fail
+# on its subject is not a regression leg (epic #266), so the detector is exercised on a subject that
+# HAS the defect: a synthetic authority repo whose script imports a sibling, fetched both ways.
+#
+# This is #1510 in miniature, and the third leg is the whole point — it reproduces why nobody noticed.
+toy="$(newrepo toy)"
+# Imports a sibling at LOAD time, the way skill-union-assert.sh sources its libs and the way any gate
+# migrated onto scripts/lib/gate.py would import the harness. Python puts the script's OWN directory on
+# sys.path, so `lib.helper` resolves iff the checkout brought the sibling along — which is the whole
+# question.
+w "$toy" scripts/toy-gate.py <<'EOF'
+from lib.helper import VERDICT
+
+print(VERDICT)
+EOF
+w "$toy" scripts/lib/helper.py <<'EOF'
+VERDICT = "toy-gate: ok"
+EOF
+w "$toy" src/Unrelated.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk" />
+EOF
+seal "$toy"
+
+# load <name> <tree> — run the toy gate from <tree>, the way a runner would. Reports load success.
+load() {
+  local n="$1" tree="$2" expect="$3" out rc=0
+  out="$(cd "$tree/scripts" && python3 ./toy-gate.py 2>&1)" || rc=$?
+  case "$expect" in
+    ok)   if [ "$rc" -eq 0 ]; then ok "$n"; else bad "$n (expected it to load, exit $rc)" "$out"; fi ;;
+    dead) if [ "$rc" -eq 0 ]; then bad "$n (expected a load failure, got exit 0)" "$out"
+          elif printf '%s' "$out" | grep -qF "No module named 'lib'"; then ok "$n"
+          else bad "$n (failed, but not at the missing sibling)" "$out"; fi ;;
+    # A typo'd expectation must not vanish as neither a pass nor a fail — that is one fewer leg than
+    # the summary line claims, which is the accounting version of this suite's whole subject.
+    *)    bad "$n (unknown expectation '$expect')" ;;
+  esac
+}
+
+# 1. The enumeration shape, with the drift that #1510 actually suffered: the script is named, the
+#    sibling it imports is not. The detector must SEE this.
+enum="$WORK/toy-enumerated"
+if materialise "$enum" --repo-root "$toy" --pattern '/scripts/toy-gate.py' --no-cone >/dev/null 2>&1
+then load "an enumerated checkout that misses a sibling import DIES at load — the fixture sees the gap" \
+       "$enum" dead
+else bad "could not materialise the enumerated toy checkout"; fi
+
+# 2. The directory shape this item adopted. Same script, same import, nothing named — and it loads.
+dirshape="$WORK/toy-directory"
+if materialise "$dirshape" --repo-root "$toy" --pattern '/scripts/' --no-cone >/dev/null 2>&1
+then load "…and the directory checkout loads it, without naming the sibling at all" "$dirshape" ok
+else bad "could not materialise the directory toy checkout"; fi
+
+# 3. WHY NO EXISTING SUITE CAUGHT #1510, stated as an assertion rather than as a claim in a comment.
+#    The identical script, run from the identical repo, is perfectly healthy on a FULL tree. Any test
+#    that invokes a gate from the repo root is blind to this entire defect class by construction — so
+#    the sparse materialisation above is not thoroughness, it is the only thing being tested.
+load "…while the SAME script from a full checkout is green, which is why no existing suite saw #1510" \
+  "$toy" ok
+
 echo
 echo "lock-range-coherence fixture: $pass passed, $failcount failed."
 [ "$failcount" -eq 0 ] || exit 1
