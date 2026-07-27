@@ -261,3 +261,103 @@ let ``#1086: the SAME rows offer when the board is WHOLE — the refusal above i
     | Some(chore, got) ->
         Assert.Equal(ref' 733, chore.Subject)
         Assert.Equal(lockRef, got)
+
+// ---- #1649: THE OFFER PATH READS THE COLUMN IT IS ABOUT TO ASK SOMEBODY TO WRITE --------------------
+//
+// Eight offers across three repos on ONE fan-out, seven of them for a chore that was ALREADY SATISFIED —
+// and the eighth genuinely owed, arriving through the same channel, which is what made the ratio dangerous
+// rather than merely wasteful. Three cheap explanations were measured and refuted before this was found:
+// the 90s scan cache (the read was fresh, and a fresh `ready` contradicted the offer at the same instant),
+// a caller reusing an old snapshot (the offers came from `AfterDone`, which buys its OWN scan for exactly
+// this purpose), and duplication (one measured offer's premise was independently FALSE, not a repeat).
+//
+// The cause was none of those. `Client.wholeBoard` DISCARDED the scan rows and built the offer's board from
+// `Snapshot.parse` alone — and that parser sets `BoardClass = None` meaning "I did not look", because the
+// board's `Class` column is a SCAN fact the pure document cannot carry. `CLASS-PROJECTION-LAG` fires on
+// `BoardClass <> Some declared`, so against an unjoined board it fired for EVERY open classed item, forever,
+// and `Chore.isRetired` re-derived the same "still owed" after the write that satisfied it.
+//
+// THESE DRIVE THE REAL WRITER. `Scan.snapshot` produces the bytes and `Client.offerBoardOf` consumes them
+// with the rows beside them, so what is pinned is the JOIN — the one thing a hand-built fixture board (every
+// other leg in this file) structurally cannot check, because a hand-built `Item` has already been TOLD what
+// its `BoardClass` is.
+
+let private classedBody = "Paths: src/FS.GG.Coord.Cli/Client.fs\n\nClass: hardening\n"
+
+/// A scan row for `.github#1524` — the item eight offers named — with the `Class` COLUMN under our control.
+let private classRow (boardClass: ItemClass option) : Scan.Row =
+    { Ref = ref' 1524
+      Title = "an item whose body declares a class"
+      Status = Ready
+      BlockedByRaw = ""
+      State = Open
+      IsPullRequest = false
+      BoardClass = boardClass
+      Phase = None
+      CreatedAt = None }
+
+/// The scan's OWN document for those rows, written by the engine's writer rather than by this test.
+let private snapshotOf (rows: Scan.Row list) =
+    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then ok "[]"
+            elif req.Path.EndsWith "/comments" then ok "[]"
+            else ok $"""{{"number":1524,"body":"%s{body}"}}""")
+
+    match Scan.snapshot transport rows None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) -> document
+
+/// The offer path's board, built the way the engine builds it.
+let private offerBoard (rows: Scan.Row list) =
+    match Client.offerBoardOf rows (snapshotOf rows) with
+    | None -> failwith "the offer path must build a board from a document its own writer produced"
+    | Some board -> board
+
+[<Fact>]
+let ``#1649: a chore ALREADY DISCHARGED is not offered again — and costs no lock to decline`` () =
+    // Worker A discharged `CLASS-PROJECTION-LAG` on #1524: the column now says `hardening` and so does the
+    // body. Worker B completes an item in the same repo immediately after and must be offered NOTHING.
+    //
+    // `unreachable` is the second half of the claim and the more valuable half. #1649's measured cost was
+    // eight NEEDLESS REPO-LOCK ACQUISITIONS — the chore lock is per repo, so a stale offer serialises
+    // against every other worker in it. A green here says the decline never reached the network at all, so
+    // no lock was taken. `Assert.Equal(None, ...)` on its own could not say that.
+    let board = offerBoard [ classRow (Some Hardening) ]
+
+    Assert.Equal(None, Chores.offer unreachable Chore.AfterDone me None [] "FS-GG" ".github" board)
+
+[<Fact>]
+let ``#1649: the SAME item IS offered while the column genuinely lags — the silence above is the read`` () =
+    // THE CONTROL, and the leg above is worth nothing without it: that assertion would pass just as well
+    // against an offer mechanism deleted outright, which #1649 forbids in as many words — the mechanism is
+    // good, and one of the eight offers was real work correctly assigned. Same body, same worker, same
+    // boundary; the board's `Class` column is the ONE thing that differs, and it is now what decides.
+    let transport =
+        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
+
+    let board = offerBoard [ classRow None ]
+
+    match Chores.offer transport Chore.AfterDone me None [] "FS-GG" ".github" board with
+    | None -> failwith "a genuinely lagging Class column must still be offered — the fix is freshness, not removal"
+    | Some(chore, got) ->
+        Assert.Equal(ref' 1524, chore.Subject)
+        Assert.Equal(lockRef, got)
+        Assert.Equal("CLASS-PROJECTION-LAG:FS-GG/.github#1524", chore.Id)
+
+[<Fact>]
+let ``#1649: the board the offer path builds CARRIES the scanned column — the join, not its consequence`` () =
+    // The two legs above are the behaviour; this is the fact underneath them, asserted directly so a future
+    // regression names itself instead of surfacing as a mystery offer. Before #1649 this read `None` for
+    // BOTH rows, which is how an offer came to assert a disagreement it had never read either side of.
+    let observed (boardClass: ItemClass option) =
+        match offerBoard [ classRow boardClass ] with
+        | Chore.Whole [ item ] -> item.BoardClass, item.Class
+        | other -> failwith $"expected one whole-board item — got %A{other}"
+
+    Assert.Equal((Some Hardening, Some Hardening), observed (Some Hardening))
+    // And an ABSENT column still travels as absent, so a genuinely unset one reads as a real disagreement
+    // rather than a suppressed projection — the fail-closed direction `Chore.fs` argues for by name.
+    Assert.Equal((None, Some Hardening), observed None)

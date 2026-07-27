@@ -737,14 +737,68 @@ module Client =
     let private wholeOf (request: Snapshot.Request) : Chore.Board =
         Chore.Whole(request.Candidates |> List.map (fun c -> c.Item))
 
-    let private wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
-        match scanAndDecide ctx { opts with Repo = None } Cache.Scheduling with
-        | Error _ -> None
+    /// THE OFFER PATH'S BOARD — the scan's bytes AND the scan's rows, joined the way `reconcile` joins them
+    /// (.github#1649).
+    ///
+    /// **THE DEFECT THIS FIXES.** This composition was `Snapshot.parse doc |> Option.map (enrichPredicates >>
+    /// wholeOf)`, and the `rows` the scan had already paid for were DISCARDED at the match. `Snapshot.parse`
+    /// says what that costs, in the field's own comment: `BoardClass = None` means *"this parser did not
+    /// look"*, not *"the column is unset"* — the board's `Class` column is a SCAN fact and the pure document
+    /// structurally cannot carry it. So every item reaching `Chore.derive` through the OFFER path carried
+    /// `BoardClass = None`, and `CLASS-PROJECTION-LAG`'s guard (`board <> Some declared`) was therefore
+    /// UNCONDITIONALLY TRUE for every open item whose body declares a class. The offer named a disagreement
+    /// it had never read either side of.
+    ///
+    /// **WHY THE CHEAPER EXPLANATIONS WERE ALL REFUTED, AND WHY THIS ONE ISN'T.** #1649 accumulated eight
+    /// offers across three repos and three measurements that each rule out a suspect. Every one of them is
+    /// this defect and only this defect:
+    ///
+    /// - *"It is the 90s scan cache."* Refuted by measurement, and correctly: the scan reaching here is
+    ///   fresh. A fresh `ready` contradicting the offer at the same instant is the EXPECTED reading, because
+    ///   `ready` renders `Scan.Row.BoardClass` — the value this function was discarding.
+    /// - *"The caller reuses an old snapshot; make `AtNext` re-read."* Refuted: the offers arrived from
+    ///   `AfterDone`, which buys a dedicated fresh scan for exactly this purpose. The staleness was never in
+    ///   the read. `offerChoreAfterDone` paid for the scan and this join threw away the half it paid for.
+    /// - *"It is a duplicate offer; dedupe it, or hold the lock harder."* Refuted: one measured offer's
+    ///   predicate was independently false, not duplicated. With `BoardClass` pinned at `None` an item whose
+    ///   body and column AGREE still derives the chore, so no dedupe or lock fix could have suppressed it.
+    ///
+    /// Two further observations fall out of the same line. It never RETIRED across repeated `done --flip`s
+    /// because `Chore.isRetired` re-derives, and a re-derivation over an unjoined board answers "still owed"
+    /// against a write that landed; and because `CLASS-PROJECTION-LAG` is `rank` 5, LAST, a repo whose queue
+    /// is otherwise drained hands out the same lowest-`Id` item again and again — the observed shape exactly.
+    /// Finally `reconcile` proposed NOTHING for the same item at the same moment: the two paths run the SAME
+    /// `Chore.derive` over DIFFERENT joins, `reconcile` having always run `enrichBoardFacts` and this never.
+    /// That divergence was the defect, visible from outside as the engine contradicting itself.
+    ///
+    /// It is the same `enrichBoardFacts` in the same order `reconcile` uses — `enrichPredicates` first, then
+    /// the board join — so there is now ONE reading of a board behind the chore the queue OFFERS and the
+    /// chore `reconcile --apply` WRITES, and they cannot drift apart again.
+    ///
+    /// `Phase` and `AgeDays` ride along and derive nothing here; they are `Rank`'s inputs and the offer sorts
+    /// by `Chore.rank`. Joining them costs nothing and keeps this the SAME function `reconcile` calls rather
+    /// than a second, narrower one that could disagree — which is the whole failure being repaired.
+    ///
+    /// NOT PRIVATE, deliberately, on `badTouchSetDetail`'s terms: this join IS the correctness argument, and
+    /// a defect whose entire content was "one call site skipped it" must be assertable by a test rather than
+    /// re-argued in a comment. `ChoresTests` drives it from the REAL `Scan.snapshot` bytes.
+    let offerBoardOf (rows: Scan.Row list) (doc: string) : Chore.Board option =
         // Resolve the flip-time predicate before building the board (ADR-0050 call-site B, .github#1213):
         // `Snapshot.parse` lifted the declared assertion off each body, `enrichPredicates` resolves it to
         // `Item.Predicate` against the owning manifest, and the gate in `Chore.derive` reads that. A parse
         // failure keeps the board `None`, exactly as before.
-        | Ok(_, doc, _) -> Snapshot.parse doc |> Result.toOption |> Option.map (enrichPredicates >> wholeOf)
+        Snapshot.parse doc
+        |> Result.toOption
+        |> Option.map (enrichPredicates >> enrichBoardFacts rows >> wholeOf)
+
+    let private wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
+        match scanAndDecide ctx { opts with Repo = None } Cache.Scheduling with
+        | Error _ -> None
+        // The scan ROWS, no longer discarded — see `offerBoardOf` for what discarding them cost. The shape of
+        // the bug is worth keeping in view AT the call site: the `_` that used to sit here was not an
+        // omission a compiler could ever have flagged, it was a board fact silently defaulted to "did not
+        // look" and then compared as though it had been read.
+        | Ok(rows, doc, _) -> offerBoardOf rows doc
 
     let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (observed: Chore.Board) : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that

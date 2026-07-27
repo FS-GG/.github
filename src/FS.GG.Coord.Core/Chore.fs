@@ -287,6 +287,15 @@ module Chore =
               // and a projection that silently no-opped when its column was missing is the fail-open shape
               // #1575 and #266 already cost this repo twice.
               //
+              // THAT CHOICE PUTS AN OBLIGATION ON THE CALLER, AND .github#1649 IS WHAT IT COSTS WHEN THE
+              // CALLER SKIPS IT. `None` here means "no such column"; in `Snapshot.parse` the SAME value
+              // means "this parser did not look", because the column is a scan fact no pure document can
+              // carry. A caller that derives over parsed candidates WITHOUT joining the scan rows therefore
+              // hands this rule a permanent, unretirable disagreement for every open classed item — eight
+              // offers across three repos before it was found, one of them naming a discrepancy that
+              // measurably did not exist. The rule is right and is unchanged; `Client.offerBoardOf` is the
+              // join that owes it a real answer, and `ChoresTests`' #1649 legs pin it from the real writer.
+              //
               // OPEN items only. A closed row is out of the burn-down's scope, and classing it would spend
               // a board write on the one population no stopping rule consults.
               match item.State, item.Class, item.BoardClass with
