@@ -3,7 +3,7 @@
 Org-wide Coordination burn-down. Operator: @EHotwagner. Host: `drive-board`, up to 6 concurrent
 disposable workers, publish authorization granted mid-run.
 
-**The board did not shrink, and that is the headline finding — not a footnote.** 76 non-Done rows at
+**The board did not shrink, and that is the headline finding — not a footnote.** 74 non-Done rows at the time of this revision, against 34 rows reaching Done during the run. This report explains why that is the expected result and what would actually change it.
 end, against 34 rows reaching Done during the run. This report explains why that is the expected
 result and what would actually change it.
 
@@ -50,9 +50,24 @@ Counted from the board (`ready --all --json`, rows `Done` with `closed_at` after
 
 ### Releases published and verified on both feeds
 
-FS.GG.Contracts **7.3.0** and **7.4.0**; FS.GG.Kit **0.11.0** and **0.12.0**.
-`coord-engine 0.13.0` was authorized and **still in flight** when this was written — merged and tagged
-(`bf5509a`), publish and flips outstanding, `#1667` folded into it and closed.
+FS.GG.Contracts **7.3.0** and **7.4.0**; FS.GG.Kit **0.11.0**, **0.12.0** and **0.13.0**;
+**coord-engine 0.13.0**.
+
+`#1673` completed after the first draft: coord-engine 0.13.0 (PR #1678 → `bf5509a`) and the registry +
+pin + kit chain (PR #1682 → `3b2d03f`), with `#1667` folded in. Both artifacts verified by **downloading
+and comparing archive SHA-256 on each feed** — 31 and 35 payload entries byte-identical respectively,
+nuget.org differing only by `.signature.p7s`. All five gates green on `main` by run id
+(`engine-pin-coherence` 30309433996, `engine-freshness` 30309433948, `feed-coherence` 30309433951,
+`source-coherence` 30309434053, `kit-published-coherence` 30309433960). Both predicted transient reds
+occurred and neither was filed. nuget.org's index lagged ~4 minutes on both.
+
+**That release produced evidence that independently validates the `#1615` decision.** The kit republish
+was owed **twice over**: `#1667`'s regenerated `pnext-item` projection had already moved the kit tree
+digest at `bf5509a`, *before the pin was touched*. So an engine release would have obliged a kit
+republish **even if the pin lived somewhere else entirely** — option (a) or (b) would not have avoided
+the fan-out. Also measured: **0 of 7 receivers were current** before this republish (newest pin anywhere
+0.10.0 against a kit at 0.12.0; Audio at 0.6.0), and three kit releases today moved no receiver at all.
+The bottleneck is discharge, not coupling.
 
 ---
 
@@ -217,9 +232,17 @@ explicit call on whether the interim need survives ADR-0067 §9).
 **Deliberately parked, with reasons on the row:** `Rendering#815`, `.github#1613`.
 
 **Not established:**
-- **The board is not defect-free.** 25 startable `defect` rows remain.
+- **The board is not defect-free.** 24 startable `defect` rows remain at the time of this revision.
 - **`Rendering#928` is unclassed and structurally cannot be classed** until `#1103` lands — the sweep
-  rewrites its body every run. It is the sole `CLASS-UNSET`; its severity is **unknown**, not minor.
+  rewrites its body every run, so a `Class:` line added by hand is erased and the column cannot be
+  hand-edited. Its severity is **unknown**, not minor.
+
+  **`lint` now reports 0 findings, and that does not mean what it looks like.** `#928` was moved to
+  `Blocked` behind a real `Blocked by: FS.GG.Rendering#1103` edge — correct sequencing, and the honest
+  column, since it cannot be scheduled until its fix lands. But `CLASS-UNSET` fires on *`Ready` without
+  a `Class:`*, so a clean lint here means **no unclassed `Ready` rows**, not no unclassed rows. The row
+  is still unclassed. Recorded because it is the same shape as everything in §4, one level up at the
+  reporting layer: a green signal whose scope is narrower than its reading.
 - **The starting count of 68 is unverifiable** — no snapshot survives, and the arithmetic does not
   close (68 − 34 + ~33 filed + 13 swept ≠ 76). Treat the *end* state as measured and the delta as
   approximate.
