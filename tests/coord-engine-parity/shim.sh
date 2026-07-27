@@ -149,12 +149,19 @@ fi
 
 # STALE + a READ verb: WARN, but still run. A stale read misinforms one worker; blocking it would halt
 # the fleet the moment anyone touches src/, on a repo whose premise is N workers in one checkout.
+#
+# THE VERB HERE WAS `next`, AND `next` IS NOT A READ (.github#1528). After printing its answer it makes the
+# #733 chore offer — `offerChoreAtNext` → `Chores.offer` → `Writes.claim` — which POSTs a claim marker for
+# the repo's chore lock (`.github`'s is #1033, so it fires in this very repo). This leg therefore certified
+# "a stale engine may take a chore lock" while reading as the guard's read-side proof. `who` is the
+# replacement because it is the same shape — a board read an operator runs to diagnose — with no write
+# anywhere in its handler and no application of one; `next` now belongs to the refusal set below.
 stale "$FIX"
-out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>/dev/null)"; rc=$?
-err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" who 2>/dev/null)"; rc=$?
+err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" who 2>&1 >/dev/null)"
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' \
    && printf '%s' "$err" | grep -qi 'stale'; then
-  ok "staleness: a stale engine WARNS on a read verb ('next') — and still runs, exit code intact"
+  ok "staleness: a stale engine WARNS on a read verb ('who') — and still runs, exit code intact"
 else
   bad "staleness: a read must warn and still run" "rc=$rc out=$out err=$err"
 fi
@@ -193,6 +200,194 @@ if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'
   ok "staleness: an explicit FSGG_COORD_ENGINE_BIN is honoured silently — an instruction, not a hint"
 else
   bad "staleness: tier 1 must not consult staleness" "rc=$rc out=$out err=$err"
+fi
+
+# ---- 3b. THE VERB PARTITION IS TOTAL AND EXACT (.github#1528) ------------------------------------
+# §3 proves the guard REFUSES the verbs the shim calls writes. It cannot prove the shim calls the right
+# verbs writes, and for most of the guard's life it did not: `set-paths` reached the same `Writes.widen`
+# PATCH as `widen`, through the same `updateTouchSet` helper, and was absent from the list — so the guard
+# covered one of two verbs that are literally one function, and the RECOVERY verb was the uncovered one.
+# `room` and `reconcile` were absent too.
+#
+# THE DEFECT IS THE ENUMERATION, NOT THE FOUR MISSING WORDS. A hand-kept list of a property of the engine,
+# with nothing comparing the two, is wrong the moment somebody adds a verb and does not remember. Adding
+# the missing words fixes today and guarantees tomorrow. Deriving the list instead is the repair that ends
+# the class — and it cannot be done in the shim, for a reason that is worth stating rather than assuming
+# (the shim's own header carries the long form): the engine that would answer "which verbs write?" is the
+# STALE one under suspicion, an engine built before such a field existed answers with nothing, and "nothing
+# writes" permits everything. A guard that needs a current engine to decide whether the engine is current
+# is circular, and it fails OPEN on the oldest artifacts — the dangerous ones.
+#
+# SO THE DERIVATION MOVES HERE, WHERE IT IS SOUND. At test time both halves are available and neither is
+# suspect: a FRESHLY BUILT engine ($ENGINE, which the top of this file requires) and the shim's text. The
+# engine's verb surface is itself derived — `command-contract` reflects over the `Command` union — so it
+# needs no maintenance and a new verb appears in it the moment it is added. This section asserts a BIJECTION
+# between that surface and the shim's three sets. A verb added to the engine lands in no set and reds; a set
+# naming a verb the engine dropped reds; a verb in two sets reds. The list stays hand-written and stops
+# being able to be quietly incomplete, which is the property the four missing words could not buy.
+#
+# WHAT IT DOES NOT PROVE, said plainly: that each verb is in the RIGHT set. Nothing here can — write-ness is
+# a fact about F# control flow, and a text analysis of it over-approximates badly (advice strings in `who`
+# and `lint` name `claim`, `reap` and `done`, so a naive reachability pass calls those verbs writes). What
+# this buys is that the decision must be MADE, by a person, before the build goes green. §3c below then
+# makes each decision executable.
+#
+# THE EXTRACTION REFUSES ANYTHING BUT A LITERAL. The three assignments are lifted from the shim and eval'd,
+# so the pattern is anchored to a plain double-quoted literal with no `$`, backtick or `(` inside it: a
+# future spelling that used a substitution or a line continuation reds this leg instead of being executed.
+partition_ok=1
+PART="$(grep -E '^BOARD_(WRITES|WRITES_CONDITIONAL|READS)="[^"$`(]*"$' "$SHIM")"
+if [ "$(printf '%s\n' "$PART" | grep -c .)" -ne 3 ]; then
+  bad "partition: the shim must declare exactly 3 literal verb sets (BOARD_WRITES, BOARD_WRITES_CONDITIONAL, BOARD_READS)" "$PART"
+  partition_ok=0
+else
+  BOARD_WRITES=""; BOARD_WRITES_CONDITIONAL=""; BOARD_READS=""
+  eval "$PART"
+fi
+
+if [ "$partition_ok" -eq 1 ]; then
+  # `awk '{print $1}'` — the shim dispatches on `$1`, and `room open` is the engine's one two-word verb, so
+  # the token this guard can ever see is `room`. Comparing the full contract name would leave `room open`
+  # permanently "unclassified" and this gate permanently red for a reason that is not a bug.
+  #
+  # `jq` IS CHECKED FOR BY NAME, not inferred from an empty result. Without this, a machine with no `jq`
+  # produces an empty `$CONTRACT` and the leg below reports "the engine answered nothing" — a cause it
+  # structurally cannot observe, blaming the engine for the toolchain. That is the #266 shape this whole
+  # file exists to refuse, and `run.sh` (which §1 already ran) needs `jq` 151 times, so a missing one is a
+  # fact worth naming rather than a condition worth tolerating.
+  CONTRACT=""
+  if ! command -v jq >/dev/null 2>&1; then
+    bad "partition: jq is not installed — this leg cannot read the engine's command contract, and that is NOT a verdict about the shim"
+  else
+    CONTRACT="$("$ENGINE" command-contract --json 2>/dev/null | jq -r '.commands[].name' | awk '{print $1}' | sort -u)"
+  fi
+  CLASSIFIED="$(printf '%s %s %s' "$BOARD_WRITES" "$BOARD_WRITES_CONDITIONAL" "$BOARD_READS" \
+                 | tr ' ' '\n' | grep -v '^$' | sort)"
+
+  if [ -z "$CONTRACT" ]; then
+    command -v jq >/dev/null 2>&1 \
+      && bad "partition: could not read the engine's command surface — 'command-contract --json' answered nothing"
+  else
+    unclassified="$(comm -13 <(printf '%s\n' "$CLASSIFIED" | sort -u) <(printf '%s\n' "$CONTRACT"))"
+    phantom="$(comm -23 <(printf '%s\n' "$CLASSIFIED" | sort -u) <(printf '%s\n' "$CONTRACT"))"
+    dupes="$(printf '%s\n' "$CLASSIFIED" | uniq -d)"
+
+    if [ -z "$unclassified" ]; then
+      ok "partition: every verb the engine advertises ($(printf '%s\n' "$CONTRACT" | grep -c .)) is classified by the shim — a new verb cannot slip in unguarded"
+    else
+      bad "partition: the engine has verb(s) the shim classifies NOWHERE — decide whether each writes, then add it to BOARD_WRITES, BOARD_WRITES_CONDITIONAL or BOARD_READS" "$unclassified"
+    fi
+
+    if [ -z "$phantom" ]; then
+      ok "partition: every verb the shim classifies is a verb the engine actually has — no set has rotted past the surface it describes"
+    else
+      bad "partition: the shim classifies verb(s) the engine does not have — a renamed or removed verb left its name behind" "$phantom"
+    fi
+
+    if [ -z "$dupes" ]; then
+      ok "partition: the three sets are DISJOINT — no verb is classified twice, so there is one answer per verb"
+    else
+      bad "partition: verb(s) appear in more than one set" "$dupes"
+    fi
+  fi
+fi
+
+# ---- 3c. THE PARTITION IS BEHAVIOUR, NOT A STRING (.github#1528) ---------------------------------
+# §3b proves the sets are total; this proves the guard OBEYS them, verb by verb, against a stale engine.
+# Two directions, and the second matters as much as the first: refusing a genuine READ under a stale engine
+# would be a worse bug than the omission being fixed — it would halt diagnosis at the moment the fleet most
+# needs it — so every read is asserted to warn AND still run, not merely "not refused".
+#
+# `$FIXREF` on the refusal legs, for §3's reason (#1008): a ref that cannot resolve anywhere, so if the
+# fixture isolation ever breaks the write fails on the ref rather than landing on somebody's work. The read
+# legs need no such belt now that `next` has moved out of them — no verb in `BOARD_READS` can write even
+# if a real engine were resolved, which is exactly the claim `BOARD_READS` is making.
+if [ "$partition_ok" -eq 1 ]; then
+  fixture "$FIX"; stale "$FIX"
+
+  # ONE `ok` PER DIRECTION, and it is claimed only when the whole loop held. A summary line printed
+  # unconditionally beside per-verb `bad`s would assert "every write verb is refused" in the same run that
+  # just proved one is not — a green sentence over a red result is how a suite stops being read.
+  refused=""; permitted=""; wfail=0; rfail=0
+  for verb in $BOARD_WRITES $BOARD_WRITES_CONDITIONAL; do
+    out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" "$FIXREF" 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+       && printf '%s' "$out" | grep -qi 'refused'; then
+      refused="$refused $verb"
+    else
+      wfail=1
+      bad "staleness: '$verb' writes shared state and MUST be refused on a stale engine — the engine must never run" "rc=$rc out=$out"
+    fi
+  done
+  [ "$wfail" -eq 0 ] && ok "staleness: every write verb the shim declares is refused on a stale engine —$refused"
+
+  for verb in $BOARD_READS; do
+    out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" 2>/dev/null)"; rc=$?
+    err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" 2>&1 >/dev/null)"
+    if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' \
+       && printf '%s' "$err" | grep -qi 'stale'; then
+      permitted="$permitted $verb"
+    else
+      rfail=1
+      bad "staleness: '$verb' is a READ and must WARN and still run — refusing it halts diagnosis for nothing" "rc=$rc out=$out err=$err"
+    fi
+  done
+  [ "$rfail" -eq 0 ] && ok "staleness: every read verb the shim declares still runs (with a warning) on a stale engine —$permitted"
+
+  # THE PAIR THAT STARTED IT (.github#1528). `widen` and `set-paths` are one function — both reach
+  # `Writes.widen` through `updateTouchSet` — and the guard covered only `widen`. Asserted by NAME as well
+  # as by the loop above, because the loop's subject is whatever the shim says and this leg's subject is the
+  # bug: if a future edit drops `set-paths` from every set, §3b reds; if it moves it to `BOARD_READS`, the
+  # loop above happily certifies the wrong answer and only this leg says so.
+  for verb in widen set-paths; do
+    out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+       && printf '%s' "$out" | grep -qi 'refused'; then
+      ok "staleness: '$verb' is REFUSED on a stale engine (exit $rc) — the touch-set pair cannot drift apart again"
+    else
+      bad "staleness: '$verb' rewrites a live touch-set and must be refused on a stale engine" "rc=$rc out=$out"
+    fi
+  done
+
+  # AN UNCLASSIFIED VERB IS REFUSED — the runtime half of §3b, and the leg that makes the partition worth
+  # more than a CI report. §3b reds when a verb is added to the engine and not to the shim, but it reds on
+  # the NEXT CI run; between the two the fleet is running the verb. So the shim refuses a first token it
+  # does not classify, and this asserts it with a token no engine has.
+  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" not-a-real-verb "$FIXREF" 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+     && printf '%s' "$out" | grep -q 'does not classify'; then
+    ok "staleness: a verb the shim classifies NOWHERE is REFUSED on a stale engine (exit $rc) — unknown write-ness fails closed"
+  else
+    bad "staleness: an unclassified verb must be refused, not permitted — that is the omission this partition exists to stop" "rc=$rc out=$out"
+  fi
+
+  # ...AND THE FLAG SPELLINGS ARE STILL EXEMPT, by grammar rather than by a list. `--help`/`-h`/`--version`
+  # are not verbs and are in no set, so the refusal above would swallow them if its exemption were a list
+  # somebody has to remember. It asks whether the token begins with `-`, which is the same question the
+  # engine's own dispatch asks, so a fourth spelling needs no edit here.
+  for flag in --help -h --version; do
+    out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$flag" 2>&1)"; rc=$?
+    if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' && ! printf '%s' "$out" | grep -q 'REFUSED'; then
+      ok "staleness: '$flag' is not a verb and is not refused — the exemption is the grammar, not a list"
+    else
+      bad "staleness: '$flag' must reach the engine on a stale checkout" "rc=$rc out=$out"
+    fi
+  done
+
+  # A BARE INVOCATION IS NOT A BOARD WRITE. `${1:-}` is EMPTY here, and the guard matches `*" $verb "*` —
+  # so a set concatenation that introduced a double space would make the empty verb match and refuse
+  # `scripts/fsgg-coord` with no arguments (which the engine parses as `--help`). Cheap to assert, invisible
+  # to every other leg, and the exact failure a second verb set invites.
+  # `grep -q 'REFUSED'` CASE-SENSITIVELY, and that is the assertion, not a typo. The stale WARNING ends
+  # "Board writes are refused until you do." — so the `-qi 'refused'` the refusal legs above use (sound
+  # there, because they also require a non-zero exit and no `ENGINE RAN`) matches the permitted path too.
+  # Here the exit IS zero and the engine DID run, so only the die()'s own upper-case word separates them.
+  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' && ! printf '%s' "$out" | grep -q 'REFUSED'; then
+    ok "staleness: a BARE invocation (empty verb) is not matched as a board write — it warns and reaches the engine"
+  else
+    bad "staleness: an empty verb must not be refused as a board write" "rc=$rc out=$out"
+  fi
 fi
 
 # ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
