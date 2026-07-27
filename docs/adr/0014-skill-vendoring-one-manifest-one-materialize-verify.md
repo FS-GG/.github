@@ -103,6 +103,45 @@ one shared algorithm across every lane.**
    what P9 promised; ADR-0014 makes it real. `doctor` reports divergence; `upgrade`
    re-materializes to repair it; the **composition gate asserts it end-to-end**.
 
+   > **Amendment (2026-07-27, [.github#1589](https://github.com/FS-GG/.github/issues/1589)) — the
+   > canonical digest is defined over DECODED TEXT, and a body that does not decode is REFUSED, not
+   > hashed.**
+   >
+   > The canonical digest this clause rests on is `Fsgg.SkillMirror.sha256`, whose signature is
+   > `body: string -> string` — it takes text that a caller has already decoded. For a body that is
+   > **not valid UTF-8** the caller's decoder substitutes `U+FFFD` *before* hashing, so the library
+   > hashes something the file does not contain, and **two different files collide**: a `SKILL.md`
+   > holding the single byte `0xFF` and one holding `0xFE` both digest to
+   > `83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097`. Under (c) above — "hash
+   > matches the manifest" — that is a **fail-open on the producing side**: two distinct bodies are
+   > recorded under one digest and nothing downstream can tell them apart.
+   >
+   > A **UTF-16/UTF-32 BOM** is a *separate* disagreement with the opposite polarity, tracked alongside
+   > this one: `File.ReadAllText` detects those BOMs and decodes accordingly, while both shells
+   > special-case only the UTF-8 BOM `EF BB BF` — so there the library is the permissive side and the
+   > file decodes rather than mangling. Refusal does not fire on it; it is not the fail-open above.
+   >
+   > **Decided: refuse.** A skill body whose bytes are not valid UTF-8 is rejected with its own
+   > diagnostic and its own exit code — an unreadable body is **not** a digest mismatch and must not be
+   > reported as one. The alternative considered and rejected was redefining the digest over **raw
+   > bytes**: arguably the more principled definition for a content address, but it changes the digest
+   > of *every* file, so every recorded manifest digest in every repo would need regenerating in one
+   > coordinated act, and it is a behaviour change on the published `FS.GG.Contracts` surface.
+   > **Refusing costs no digest change for any valid file, so no manifest migration anywhere.**
+   >
+   > **Where the refusal belongs.** At the authority — `Fsgg.SkillMirror` is this ADR's *one*
+   > implementation (§Decision 2), so the shells and producers inherit the refusal through the callable
+   > seam rather than each growing their own check. `sha256` itself cannot host it: by the time it is
+   > called the bytes are already gone, so the refusal belongs at the **read seam** that decodes the
+   > file, reached additively (a byte-level entry point) rather than by breaking
+   > `val sha256: body: string -> string`.
+   >
+   > **Measured before deciding, not after:** across all 756 tracked files in `.github` — including all
+   > 39 `SKILL.md` — **zero** contain invalid UTF-8, zero carry a BOM and zero contain a CR. So the
+   > refusal turns no currently-green tree red; it closes the fail-open at its actual edge. This
+   > repository's own producers (`scripts/fsgg-skill-registry-check`, `scripts/generate-driver-manifest`)
+   > hash **raw bytes** and so never had the collision; the divergence is the library's alone.
+
 4. **A declared product/dev boundary + a no-dangling-route guard.** A producer ships **only**
    skills whose `scope: product` — never its internal developer surface. Emitted skill bodies
    must be **self-contained**: a guard rejects any shipped skill whose body references a path
