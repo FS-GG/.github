@@ -54,11 +54,11 @@ def cr(name, suite, status, concl):
 
 # 905's PR names shaOld — the stale head a force-push leaves behind for a moment. Every other PR is settled.
 PULLS = {
-    901: {"number": 901, "state": "open", "mergeable": True, "head": {"ref": "auto/registry", "sha": "sha901"}},
-    902: {"number": 902, "state": "open", "mergeable": True, "head": {"ref": "auto/registry", "sha": "sha902"}},
-    903: {"number": 903, "state": "open", "mergeable": True, "head": {"ref": "auto/registry", "sha": "sha903"}},
-    904: {"number": 904, "state": "open", "mergeable": True, "head": {"ref": "auto/registry", "sha": "sha904"}},
-    905: {"number": 905, "state": "open", "mergeable": True, "head": {"ref": "auto/registry", "sha": "shaOld"}},
+    901: {"number": 901, "state": "open", "mergeable": True, "base": {"ref": "main"}, "head": {"ref": "auto/registry", "sha": "sha901"}},
+    902: {"number": 902, "state": "open", "mergeable": True, "base": {"ref": "main"}, "head": {"ref": "auto/registry", "sha": "sha902"}},
+    903: {"number": 903, "state": "open", "mergeable": True, "base": {"ref": "main"}, "head": {"ref": "auto/registry", "sha": "sha903"}},
+    904: {"number": 904, "state": "open", "mergeable": True, "base": {"ref": "main"}, "head": {"ref": "auto/registry", "sha": "sha904"}},
+    905: {"number": 905, "state": "open", "mergeable": True, "base": {"ref": "main"}, "head": {"ref": "auto/registry", "sha": "shaOld"}},
 }
 
 RUNS = {
@@ -124,6 +124,18 @@ class H(BaseHTTPRequestHandler):
             if pr in PULLS:
                 return self._send(200, PULLS[pr])
             return self._send(404, {"message": "Not Found"})
+
+        # THE BASE BRANCH'S REQUIRED CONTEXTS (#1575). `landable` reads BOTH stores GitHub keeps required
+        # status checks in — classic branch protection and rulesets — on an otherwise-green verdict, and a
+        # store it cannot read is a NO-VERDICT by construction (#266). This world requires nothing, so every
+        # verdict below is unchanged; a fixture that answered neither would score `unknown`.
+        if re.match(r"^/repos/[^/]+/[^/]+/branches/[^/]+/protection$", p):
+            return self._send(200, {"required_status_checks": {"strict": False, "checks": []}})
+
+        # `[]`, NOT 404. This endpoint reserves 404 for "no such repo or branch"; a branch with no rules
+        # answers an empty list, and the engine refuses to read a 404 here as "unprotected".
+        if re.match(r"^/repos/[^/]+/[^/]+/rules/branches/[^/]+$", p):
+            return self._send(200, [])
 
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})

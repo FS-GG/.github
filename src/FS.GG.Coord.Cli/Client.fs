@@ -2575,7 +2575,7 @@ module Client =
                             let tries = defaultArg opts.Tries 30
                             let interval = defaultArg opts.Interval 20
 
-                            let rec poll (i: int) (prev: int) : PrState * string list =
+                            let rec poll (i: int) (prev: int) : PrState * Reads.Unmet list =
                                 let v, n, missing = read ()
 
                                 if Landable.settled v n prev then v, missing
@@ -2590,16 +2590,66 @@ module Client =
 
                     printfn "%s" (Landable.name state)
 
-                    // WHY it is pending, when the reason is an assertion the CALLER added. `pending` alone is
+                    // WHY the verdict is not green, when the reason is not a red check. `pending` alone is
                     // honest but useless on the case that does not resolve: a required check absent because
                     // its job was RENAMED polls for the whole budget and then refuses, leaving the operator
                     // one word and no thread to pull. stdout — the verdict — is untouched; this is stderr.
-                    if state = PrPending && not missing.IsEmpty then
-                        for reason in missing do
+                    //
+                    // THE THREE REASONS ARE SPOKEN APART (#1575). An assertion the caller added, a context
+                    // the BASE BRANCH requires, and a required set we could not read at all have opposite
+                    // remedies, and the old single banner ("These are assertions you asked for") is simply
+                    // FALSE of the second and third — it would send an operator to look at a flag they did
+                    // not pass instead of at the branch policy that is holding their PR.
+                    let asserted =
+                        missing
+                        |> List.choose (function
+                            | Reads.Asserted reason -> Some reason
+                            | _ -> None)
+
+                    let notReported =
+                        missing
+                        |> List.choose (function
+                            | Reads.NotReported(context, baseRef) -> Some(context, baseRef)
+                            | _ -> None)
+
+                    let unreadable =
+                        missing
+                        |> List.choose (function
+                            | Reads.ProtectionUnreadable why -> Some why
+                            | _ -> None)
+
+                    // Gated on `pending` exactly as before: a RED verdict already names a check that failed,
+                    // and listing an absent one beneath it buries the finding under a "not yet".
+                    if state = PrPending && not asserted.IsEmpty then
+                        for reason in asserted do
                             eprint $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — %s{reason}."
 
                         eprint
                             "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
+
+                    if not notReported.IsEmpty then
+                        for context, baseRef in notReported do
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — `%s{baseRef}` REQUIRES the status check `%s{context}`, and it has no check run on this head at all."
+
+                        // NOT "a check failed" (#1575 AC2). The operator must not be sent to look at a red
+                        // check that does not exist — the context has not reported, which is a different
+                        // fact with a different remedy.
+                        eprint
+                            "fsgg-coord-engine:   Nobody asked for these — the BASE BRANCH's protection does, and GitHub will refuse the merge until they report (`the base branch policy prohibits the merge`), whatever this command says. They have not REPORTED; none of them FAILED, so there is no red check to go and read."
+
+                        // AC5: say when waiting cannot help. A context whose producing workflow does not
+                        // exist on this branch, or whose `paths:` filter excludes this PR, can never report
+                        // without a NEW event — no amount of polling creates a check run.
+                        eprint
+                            "fsgg-coord-engine:   Waiting fixes this ONLY if the run has yet to register. If the producing workflow does not exist on this branch (it was armed on the base AFTER this head was pushed), or its `paths:`/`branches:` filter excludes this PR, then no check run will EVER be created and --wait cannot help: rebase the branch onto the current base (or push a fresh commit) so the event fires, or stop requiring the context."
+
+                    if not unreadable.IsEmpty then
+                        for why in unreadable do
+                            eprint $"fsgg-coord-engine: landable: no verdict on PR #%d{pr} — %s{why}."
+
+                        eprint
+                            "fsgg-coord-engine:   This is NOT `green`, and it is not `red` either (#266). What the base branch requires is the premise of the whole verdict, so a required set we could not read means we cannot know whether anything is missing — and `I could not check` may never be rendered as `I checked, and it's fine`. Fix the read (a token with `administration: read`, or wait out the rate limit) and ask again."
 
                     match state with
                     | PrGreen -> ExitGreen

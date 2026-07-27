@@ -4168,6 +4168,111 @@ if [ -z "$REQ_PORT" ]; then bad "landable-require fixture bound a port"; else
 fi
 
 # ==================================================================================================
+# case 33 (#1575) — A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT A PASSING ONE.
+#
+# `landable` returned `green`, exit 0, for FS.GG.Rendering#1027 — which GitHub then REFUSED to merge
+# ("the base branch policy prohibits the merge"). `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all
+# 18 reporting check runs SUCCESS, and the required context `skill-union / skill-union` had no check run
+# at all: the workflow that produces it was armed on `main` AFTER that PR's head was pushed, so GitHub
+# never created the run. A context that never reports is not a context that FAILS, and the rollup above
+# ("is anything red?") is structurally blind to the difference (#606).
+#
+# `--require` (case 32) closes exactly this hole — for contexts the CALLER already knows to name. Branch
+# protection is machine-readable, so the must-have-reported set is derived from the BASE BRANCH instead.
+# `landable_protection_server.py` serves six PRs, each into a different base branch, so one fixture holds
+# six branch policies. 950/951 are the load-bearing pair: the SAME world, differing only in whether the
+# required context reported.
+# ==================================================================================================
+PRO_OUT="$(mktemp)"; python3 "$HERE/landable_protection_server.py" >"$PRO_OUT" 2>/dev/null & PRO_SRV=$!; PRO_PORT=""
+for _ in $(seq 1 50); do PRO_PORT="$(head -n1 "$PRO_OUT" 2>/dev/null)"; [ -n "$PRO_PORT" ] && break; sleep 0.1; done
+rm -f "$PRO_OUT"
+if [ -z "$PRO_PORT" ]; then bad "landable-protection fixture bound a port"; else
+  lndp() { local pr="$1"; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t \
+             FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" 2>/dev/null || true; }
+  lndp_rc() { local pr="$1" rc=0; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t \
+                FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+                FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+
+  # 1. THE DEFECT. Everything that reported is green; the required context is simply not there.
+  r="$(lndp 950)"
+  [ "$r" = "pending" ] \
+    && ok "#1575: a branch-protection-required context with NO check run is PENDING, not green (case 33)" \
+    || bad "#1575: 950 -> pending" "got: $r"
+
+  # ...and exit 7, which is what §5's poll loop reads. Exit 0 here IS the bug — it is the word that sent a
+  # worker to `gh pr merge` and a refusal.
+  r="$(lndp_rc 950)"
+  [ "$r" = "7" ] \
+    && ok "#1575: ...and it exits 7 (pending), never 0 — the exit code §5 merges on (case 33)" \
+    || bad "#1575: 950 -> exit 7" "got: $r"
+
+  # 2. THE COUNTERWEIGHT, and the one that matters most: this arm is how every item merges. A guard that
+  #    demoted every green would satisfy leg 1 and stop the whole protocol.
+  r="$(lndp 951)"
+  [ "$r" = "green" ] \
+    && ok "#1575: the SAME world with that context REPORTED is GREEN — work must still land (case 33)" \
+    || bad "#1575: 951 -> green" "got: $r"
+
+  # 3. AC2: the verdict must not send an operator to look at a red check that does not exist. It names the
+  #    context, names the branch that demands it, and says it has not REPORTED.
+  err="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$PRO_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+           FSGG_COORD_CACHE="$(mktemp -d)" \
+           "$ENGINE" landable 950 --repo FS.GG.SDD 2>&1 >/dev/null || true)"
+  printf '%s' "$err" | grep -q 'skill-union / skill-union' \
+    && ok "#1575: the pending NAMES the context that never reported (case 33)" \
+    || bad "#1575: 950 stderr names the context" "got: $err"
+  printf '%s' "$err" | grep -q 'REQUIRES' \
+    && ok "#1575: ...and says the BASE BRANCH requires it — not that the caller asked for it (case 33)" \
+    || bad "#1575: 950 stderr attributes the requirement" "got: $err"
+  printf '%s' "$err" | grep -qi 'none of them FAILED' \
+    && ok "#1575: ...and that nothing FAILED — no red check to go and read (AC2) (case 33)" \
+    || bad "#1575: 950 stderr distinguishes absent from failed" "got: $err"
+  printf '%s' "$err" | grep -q 'wait cannot help' \
+    && ok "#1575: ...and says when --wait cannot help — a context that can never report (AC5) (case 33)" \
+    || bad "#1575: 950 stderr explains the limit of waiting" "got: $err"
+
+  # 4. AC3, FAIL-CLOSED. Protection we may not READ is a no-verdict, never a green. This is the direction
+  #    #266 is about: "I could not check" may not render as "I checked, and it's fine".
+  r="$(lndp 952)"
+  [ "$r" = "unknown" ] \
+    && ok "#1575: branch protection we may NOT READ is unknown, never green (case 33)" \
+    || bad "#1575: 952 -> unknown" "got: $r"
+  r="$(lndp_rc 952)"
+  [ "$r" = "4" ] \
+    && ok "#1575: ...and exits 4 (no verdict), the fail-closed code (case 33)" \
+    || bad "#1575: 952 -> exit 4" "got: $r"
+
+  # 5. A 404 on the RULESETS endpoint is not "no rulesets" — that endpoint answers `[]` for that. Reading
+  #    it as "unprotected" would manufacture a green out of a read that established nothing (#574).
+  r="$(lndp 953)"
+  [ "$r" = "unknown" ] \
+    && ok "#1575: a 404 from the RULESETS endpoint is a no-verdict, not 'no rules' (case 33)" \
+    || bad "#1575: 953 -> unknown" "got: $r"
+
+  # 6. TWO STORES, BOTH BIND (#574). 954 has no classic protection at all — its `branches/<b>/protection`
+  #    404s, which IS the answer for that store — and a REPOSITORY RULESET requires `coherence`, which has
+  #    not reported. Reading one store alone is how the sibling gate came to report "requires NO status
+  #    checks" over a fully-protected repo.
+  r="$(lndp 954)"
+  [ "$r" = "pending" ] \
+    && ok "#1575: a RULESET-required context binds exactly as a classic one does (case 33)" \
+    || bad "#1575: 954 -> pending" "got: $r"
+
+  # 7. THE OTHER COUNTERWEIGHT: a base that requires nothing is green. The guard enforces the branch's
+  #    policy; it invents none of its own.
+  r="$(lndp 955)"
+  [ "$r" = "green" ] \
+    && ok "#1575: a base branch that requires nothing is still GREEN (case 33)" \
+    || bad "#1575: 955 -> green" "got: $r"
+
+  kill "$PRO_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
 # case 24 — THE LOCK FAILS CLOSED UNDER ADVERSARIAL INTERLEAVINGS.
 #
 # Case 24's hardest legs are the interleavings in which two workers could end up believing they hold ONE

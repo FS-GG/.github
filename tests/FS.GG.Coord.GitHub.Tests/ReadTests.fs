@@ -645,6 +645,31 @@ let ``issues fails closed on a 200 that is not a JSON array - a proxy error page
 // we hold is current, and that the validator is only ever stored where it can stand for the WHOLE answer:
 // a single resource, or a page with headroom (`Reads.memoisable`). These tests hold both lines.
 
+// ---- what the BASE BRANCH requires (#1575) ---------------------------------------------------------
+//
+// The green path also reads the two stores GitHub keeps required status checks in, so EVERY landable
+// fixture that reaches a green verdict must answer both. That is not fixture bookkeeping — it is the
+// contract: a store this tool cannot read is a NO-VERDICT by construction (#266), so a fixture that
+// stayed silent about protection would score `unknown`, which is exactly what a real repo does when the
+// token cannot see its branch policy.
+
+/// A classic branch-protection payload requiring exactly these contexts.
+let private protectionRequiring (contexts: string list) =
+    let checks =
+        contexts
+        |> List.map (fun c -> $"""{{"context":"%s{c}","app_id":15368}}""")
+        |> String.concat ","
+
+    $"""{{"required_status_checks":{{"strict":false,"checks":[%s{checks}]}}}}"""
+
+/// A branch with no rulesets. `[]` — NOT 404, which this endpoint reserves for "no such repo or branch".
+let private noRulesets = "[]"
+
+let private isProtectionRead (path: string) =
+    path.Contains "/branches/" && path.EndsWith "/protection"
+
+let private isRulesetRead (path: string) = path.Contains "/rules/branches/"
+
 /// A per-path ETag server. 200 + a path-derived validator on an unconditional read; 304 when the caller
 /// sends that validator back — how GitHub answers `If-None-Match`. It RECORDS the validator every request
 /// carried, per path, which is the one fact the fake's log grammar does not carry for these paths.
@@ -665,12 +690,16 @@ type private LandableServer(sha: string, ?runs: int, ?nextLink: string) =
 
     let bodies =
         [ "repos/FS-GG/FS.GG.SDD/pulls/801",
-          "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\""
+          "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"base\":{\"ref\":\"main\"},\"head\":{\"ref\":\"item/42-x\",\"sha\":\""
           + sha
           + "\"}}"
           "repos/FS-GG/FS.GG.SDD/actions/runs", runsBody
           "repos/FS-GG/FS.GG.SDD/commits/" + sha + "/check-runs",
-          """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}""" ]
+          """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+          // `main` requires nothing, so the #1575 guard finds nothing missing and these tests stay about
+          // caching. Both stores answer — a silent one would score `unknown`, not green.
+          "repos/FS-GG/FS.GG.SDD/branches/main/protection", protectionRequiring []
+          "repos/FS-GG/FS.GG.SDD/rules/branches/main", noRulesets ]
 
     /// The validator is derived from the path AND the sha, so a test can prove one subject's body is never
     /// served as another's — a WRONG answer, not merely a stale one, feeding a decision to merge.
@@ -878,9 +907,13 @@ type private MergeablePrServer(tokenFor: int -> string) =
                 if req.Path.EndsWith "pulls/801" then
                     prReads <- prReads + 1
 
-                    $"""{{"number":801,"state":"open","mergeable":%s{tokenFor prReads},"head":{{"ref":"item/42-x","sha":"sha-x"}}}}"""
+                    $"""{{"number":801,"state":"open","mergeable":%s{tokenFor prReads},"base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-x"}}}}"""
                 elif req.Path.EndsWith "actions/runs" then
                     """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                elif isProtectionRead req.Path then
+                    protectionRequiring []
+                elif isRulesetRead req.Path then
+                    noRulesets
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
@@ -970,9 +1003,13 @@ type private MergeablePrAtSha(token: string, headSha: string) =
                 if req.Path.EndsWith "pulls/801" then
                     prReads <- prReads + 1
 
-                    $"""{{"number":801,"state":"open","mergeable":%s{token},"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
+                    $"""{{"number":801,"state":"open","mergeable":%s{token},"base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
                 elif req.Path.EndsWith "actions/runs" then
                     """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                elif isProtectionRead req.Path then
+                    protectionRequiring []
+                elif isRulesetRead req.Path then
+                    noRulesets
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
@@ -1008,7 +1045,13 @@ let ``a CONFLICTED about the commit you replaced is pending, not a verdict — t
 
     // `--sha` is an assertion the CALLER added, so — unlike the #950 arm — it earns a reason on the unmet
     // channel. A `pending` that never resolves is otherwise one honest word and no thread to pull.
-    Assert.Contains(unmet, fun (r: string) -> r.Contains "sha-OLD" && r.Contains "sha-NEW")
+    Assert.Contains(
+        unmet,
+        fun (r: Reads.Unmet) ->
+            match r with
+            | Reads.Asserted reason -> reason.Contains "sha-OLD" && reason.Contains "sha-NEW"
+            | _ -> false
+    )
 
 [<Fact>]
 let ``a CONFLICTED about the commit you ASKED to gate is still terminal — the guard widens reach, not claim`` () =
@@ -1192,9 +1235,13 @@ let ``the green path reconciles ONCE — #989's bound, as #995 revised it`` () =
                     refReads <- refReads + 1
                     """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-x","type":"commit"}}"""
                 elif req.Path.EndsWith "pulls/801" then
-                    """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                    """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-x"}}"""
                 elif req.Path.EndsWith "actions/runs" then
                     """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                elif isProtectionRead req.Path then
+                    protectionRequiring []
+                elif isRulesetRead req.Path then
+                    noRulesets
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
@@ -1221,9 +1268,13 @@ type private GreenPrWithBranch(headSha: string, tipSha: string, conclusion: stri
                     refReads <- refReads + 1
                     $"""{{"ref":"refs/heads/item/42-x","object":{{"sha":"%s{tipSha}","type":"commit"}}}}"""
                 elif req.Path.EndsWith "pulls/801" then
-                    $"""{{"number":801,"state":"open","mergeable":true,"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
+                    $"""{{"number":801,"state":"open","mergeable":true,"base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
                 elif req.Path.EndsWith "actions/runs" then
                     $"""{{"total_count":1,"workflow_runs":[{{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"%s{conclusion}","check_suite_id":1,"pull_requests":[{{"number":801}}]}}]}}"""
+                elif isProtectionRead req.Path then
+                    protectionRequiring []
+                elif isRulesetRead req.Path then
+                    noRulesets
                 else
                     $"""{{"total_count":1,"check_runs":[{{"name":"build","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{conclusion}"}}]}}"""
 
@@ -1319,7 +1370,7 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
                 Ok
                     { Status = 200
                       Body =
-                        """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                        """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-x"}}"""
                       ETag = None
                       NextLink = None }
             elif req.Path.EndsWith "actions/runs" then
@@ -1327,6 +1378,233 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
                     { Status = 200
                       Body =
                         """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                      ETag = None
+                      NextLink = None }
+            elif isProtectionRead req.Path then
+                Ok { Status = 200; Body = protectionRequiring []; ETag = None; NextLink = None }
+            elif isRulesetRead req.Path then
+                Ok { Status = 200; Body = noRulesets; ETag = None; NextLink = None }
+            else
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                      ETag = None
+                      NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+
+// ---- #1575: a REQUIRED context that never REPORTED is not a passing one ----------------------------
+//
+// `landable` returned `green`, exit 0, for FS.GG.Rendering#1027 — which GitHub then refused to merge
+// ("the base branch policy prohibits the merge"). `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all
+// 18 reporting check runs SUCCESS, and the required context `skill-union / skill-union` had NO CHECK RUN
+// AT ALL: the workflow that produces it was added to `main` after that PR's head was pushed, so GitHub
+// never created the run. A context that never reports is not a context that fails, and an "is anything
+// red?" rollup cannot see the difference — #606's lesson, arriving through the one set the caller cannot
+// be expected to enumerate.
+//
+// The pair below is the whole test. THE SAME WORLD, differing only in whether the required context
+// reported: pending, then green. A fixture that only exercised a reported-and-FAILING context would prove
+// nothing about this defect — a failing check is red on either side of the fix.
+
+/// A green, mergeable PR into `main`, whose head carries exactly `reported` check runs (all successful),
+/// and whose base branch requires `demanded`. The branch tip agrees with the PR head, so the #995 guard is
+/// satisfied and the only thing left to decide is #1575's question.
+type private ProtectedBaseServer(demanded: string list, reported: string list, ?rules: string, ?protection: IoError) =
+    let mutable protectionReads = 0
+
+    member _.ProtectionReads = protectionReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if isProtectionRead req.Path then
+                protectionReads <- protectionReads + 1
+
+                match protection with
+                | Some e -> Error e
+                | None -> Ok { Status = 200; Body = protectionRequiring demanded; ETag = None; NextLink = None }
+            elif isRulesetRead req.Path then
+                Ok { Status = 200; Body = defaultArg rules noRulesets; ETag = None; NextLink = None }
+            else
+
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                else
+                    let runs =
+                        reported
+                        |> List.map (fun n ->
+                            $"""{{"name":"%s{n}","check_suite":{{"id":1}},"status":"completed","conclusion":"success"}}""")
+                        |> String.concat ","
+
+                    $"""{{"total_count":%d{List.length reported},"check_runs":[%s{runs}]}}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``#1575 a branch-protection-required context with NO check run is pending — the green GitHub refused`` () =
+    // THE DEFECT, reproduced. Everything that reported is green; the required context simply is not there.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(demanded = [ "skill-union / skill-union" ], reported = [ "build"; "test" ])
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+
+    // AC2: the reason must not read as a failing check. It is typed apart from `--require`'s assertions,
+    // because an operator sent to look at a red check that does not exist is being sent nowhere.
+    match unmet with
+    | [ Reads.NotReported(context, baseRef) ] ->
+        Assert.Equal("skill-union / skill-union", context)
+        Assert.Equal("main", baseRef)
+    | other -> failwith $"expected one NotReported naming the context and the base branch — got %A{other}"
+
+    // AC5: `--wait` must WAIT here. `pending` never settles, so the poll loop rides out the registration
+    // case and refuses the permanent one when its tries run out — where the defect returned immediately,
+    // because from the rollup's point of view nothing was pending.
+    Assert.False(
+        Landable.settled state 2 2,
+        "a required context that has not reported must NEVER settle — --wait must poll it"
+    )
+
+[<Fact>]
+let ``#1575 ...and the SAME world with that context REPORTED is green — the gate must still let work land`` () =
+    // THE COUNTERWEIGHT, and the one that matters most: this arm is how every item merges. A guard that
+    // demoted every green would satisfy the test above and stop the whole protocol.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(
+            demanded = [ "skill-union / skill-union" ],
+            reported = [ "build"; "test"; "skill-union / skill-union" ]
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Empty unmet
+
+[<Fact>]
+let ``#1575 a branch that requires nothing is green — the guard adds no requirement of its own`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ProtectedBaseServer(demanded = [], reported = [ "build" ])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+
+[<Fact>]
+let ``#1575 a RULESET's required check counts too — protection and rulesets are two stores, and both bind`` () =
+    // #574's lesson, on this gate. `branches/<b>/protection` does not report ruleset rules and
+    // `rules/branches/<b>` does not report classic protection; GitHub enforces BOTH. Reading one store
+    // alone is how the sibling gate came to report "requires NO status checks" over a fully-protected repo
+    // (FS.GG.Governance, which is ruleset-protected and answers 404 on the classic endpoint).
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(
+            demanded = [],
+            reported = [ "build" ],
+            rules =
+                """[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"coherence","integration_id":15368}]}}]"""
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+
+    match unmet with
+    | [ Reads.NotReported("coherence", "main") ] -> ()
+    | other -> failwith $"a ruleset-required context must bind exactly as a classic one does — got %A{other}"
+
+[<Fact>]
+let ``#1575 protection we may not READ is unknown, never green — I could not check is not I checked`` () =
+    // AC3, and the direction INVERTS from the stale-tip guard. There, an unreadable ref leaves the green
+    // alone, because that read looks for a reason to DOUBT a verdict we already have. Here the read is the
+    // verdict's premise: not knowing what the branch requires is not knowing whether anything is missing.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(
+            demanded = [],
+            reported = [ "build" ],
+            protection = Unauthorized "FS-GG/FS.GG.SDD branch main protection"
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrUnknown, state)
+
+    // And it must SAY which it was, rather than emitting a bare `unknown`.
+    match unmet with
+    | [ Reads.ProtectionUnreadable why ] ->
+        Assert.Contains("administration: read", why)
+        Assert.Contains("protection", why)
+    | other -> failwith $"an unreadable required set must name itself — got %A{other}"
+
+[<Fact>]
+let ``#1575 a RATE-LIMITED protection read is unknown too — the other half of fail-closed`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(
+            demanded = [],
+            reported = [ "build" ],
+            protection = RateLimited(RestBudget, None)
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrUnknown, state)
+    Assert.NotEmpty unmet
+
+[<Fact>]
+let ``#1575 a 404 on the RULESETS endpoint is not 'no rulesets' — that endpoint answers [] for that`` () =
+    // The fail-open this closes twice over. `rules/branches/<b>` answers `[]` for a branch with no rules,
+    // so a 404 means "no such repo or branch" — inferring "unprotected" from it would manufacture a green
+    // out of a read that established nothing.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if isRulesetRead req.Path then
+                Error(NotFound req.Path)
+            elif isProtectionRead req.Path then
+                Ok { Status = 200; Body = protectionRequiring []; ETag = None; NextLink = None }
+            elif req.Path.Contains "git/ref/heads/" then
+                Ok
+                    { Status = 200
+                      Body = """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "pulls/801" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "actions/runs" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
                       ETag = None
                       NextLink = None }
             else
@@ -1339,4 +1617,81 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
+    Assert.Equal(PrUnknown, state)
+
+[<Fact>]
+let ``#1575 a 404 on CLASSIC protection is a real answer — an unprotected branch still merges`` () =
+    // The counterweight to the leg above, and the reason the two stores' 404s are read differently. A
+    // branch with no classic protection genuinely answers 404 there, and it says nothing about rulesets —
+    // which are read separately. Collapsing this into "unreadable" would make every unprotected repo
+    // permanently unlandable.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(demanded = [], reported = [ "build" ], protection = NotFound "branch not protected")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
     Assert.Equal(PrGreen, state)
+
+[<Fact>]
+let ``#1575 a RED never reads protection — a PR that is not merging need not prove its policy`` () =
+    // The cost bound. Both stores are read ONLY on an otherwise-green verdict: `--wait` stops at the first
+    // settling verdict, so this is one pair of REST requests per merge, never one per poll. A red PR is
+    // already not merging.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        ProtectedBaseServer(demanded = [ "skill-union / skill-union" ], reported = [ "build" ])
+
+    // Re-point the fixture at a FAILING check by asking for a verdict over a red check-run set instead.
+    let red =
+        Fake.Recorder(fun (req: Request) ->
+            if isProtectionRead req.Path || isRulesetRead req.Path then
+                failwith "a red verdict must never read the base branch's policy"
+            elif req.Path.EndsWith "pulls/801" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "actions/runs" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"failure","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                      ETag = None
+                      NextLink = None }
+            else
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"failure"}]}"""
+                      ETag = None
+                      NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire red "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(0, server.ProtectionReads)
+
+[<Fact>]
+let ``#1575 --require still binds a context branch protection does NOT require`` () =
+    // The flag keeps its whole reason for existing (#737): `registry-coherence` decides the autofix bot's
+    // PR and branch protection cannot require it, so nothing but this assertion will ever look at it. The
+    // derived set ADDS to that; it does not replace it.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ProtectedBaseServer(demanded = [], reported = [ "build" ])
+
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [ "registry-coherence" ] None
+
+    Assert.Equal(PrPending, state)
+
+    match unmet with
+    | [ Reads.Asserted reason ] -> Assert.Contains("registry-coherence", reason)
+    | other -> failwith $"a --require the caller named stays an ASSERTION, not a branch policy — got %A{other}"

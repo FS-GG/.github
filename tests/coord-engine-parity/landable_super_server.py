@@ -61,6 +61,7 @@ def cr(suite, status, concl, app="github-actions", **extra):
 
 # Every leg's PR is mergeable; the verdict comes entirely from the runs + checks on its head SHA.
 PULLS = {n: {"number": n, "state": "open", "mergeable": True,
+             "base": {"ref": "main"},
              "head": {"ref": "item/1-x", "sha": f"sha{n}"}}
          for n in range(801, 810)}
 
@@ -142,6 +143,18 @@ class H(BaseHTTPRequestHandler):
             if pr in PULLS:
                 return self._send(200, PULLS[pr])
             return self._send(404, {"message": "Not Found"})
+
+        # THE BASE BRANCH'S REQUIRED CONTEXTS (#1575). `landable` reads BOTH stores GitHub keeps required
+        # status checks in — classic branch protection and rulesets — on an otherwise-green verdict, and a
+        # store it cannot read is a NO-VERDICT by construction (#266). This world requires nothing, so every
+        # verdict below is unchanged; a fixture that answered neither would score `unknown`.
+        if re.match(r"^/repos/[^/]+/[^/]+/branches/[^/]+/protection$", p):
+            return self._send(200, {"required_status_checks": {"strict": False, "checks": []}})
+
+        # `[]`, NOT 404. This endpoint reserves 404 for "no such repo or branch"; a branch with no rules
+        # answers an empty list, and the engine refuses to read a 404 here as "unprotected".
+        if re.match(r"^/repos/[^/]+/[^/]+/rules/branches/[^/]+$", p):
+            return self._send(200, [])
 
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})

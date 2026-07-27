@@ -248,6 +248,21 @@ module Reads =
     /// `prLandable`.
     val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
 
+    /// Why a verdict that is not `red` is nonetheless not `green` — the diagnostic channel `prLandableRequire`
+    /// returns beside its verdict. The arms are held APART because their remedies are opposite: one is a
+    /// preference the caller expressed, one is a fact about what GitHub will refuse, and one is the absence
+    /// of any observation at all. One sentence for all three sends the operator to the wrong place (#1575).
+    type Unmet =
+        /// An assertion the CALLER added (`--require NAME`, `--sha SHA`). Branch protection has no opinion
+        /// about it and nothing else will ever look at it.
+        | Asserted of string
+        /// A context the BASE BRANCH REQUIRES which has no check run on the gated head. Nobody asked for
+        /// this one: GitHub will refuse the merge whatever this tool says.
+        | NotReported of context: string * baseRef: string
+        /// The required set itself could not be read, so whether anything is missing is UNKNOWABLE — a
+        /// no-verdict, never a green (#266).
+        | ProtectionUnreadable of string
+
     /// `prLandableN`, plus the two assertions a caller may add to it (#737). `prLandableN` is this with
     /// `required = []` and `expected = None`.
     ///
@@ -261,9 +276,27 @@ module Reads =
     /// say so; a disagreement is `PrPending` (a read taken too early — never a verdict about the wrong
     /// commit), which `--wait` rides out. Callers that did not just push should omit it.
     ///
-    /// The third element is the caller's assertions that are NOT met, each as a human phrase — DIAGNOSTICS
-    /// ONLY, so a `pending` can say what it is waiting for instead of being one word with no thread to pull.
-    /// The verdict never depends on it. Same single-page caveat as `prLandable`.
+    /// IT ALSO READS WHAT THE BASE BRANCH REQUIRES (#1575), and a required context with NO CHECK RUN on the
+    /// gated head is `PrPending`, never `PrGreen`. The rollup asks "is anything red?", which is blind to a
+    /// subject that is ABSENT — so this command answered `green`, exit 0, for a PR GitHub then refused to
+    /// merge ("the base branch policy prohibits the merge"), because a required context whose workflow was
+    /// added to `main` after the PR's head was pushed had never reported at all. `--require` covered exactly
+    /// this hazard but only for contexts the CALLER already knew to name; branch protection is
+    /// machine-readable, so the must-have-reported set is derived from the base branch instead.
+    ///
+    /// The required set is the UNION of BOTH stores GitHub keeps it in — classic branch protection and
+    /// rulesets — because it enforces both, and a branch may be governed by either, both, or neither (#574).
+    /// If either store cannot be read (permissions, rate limit, a payload we do not understand), the verdict
+    /// is `PrUnknown` and NOT green: not knowing what the branch requires is not knowing whether anything is
+    /// missing, and "I could not check" may never render as "I checked, and it's fine" (#266).
+    ///
+    /// Both reads are paid ONLY on an otherwise-green verdict — a red or pending PR is already not merging —
+    /// and both are conditional, so a `--wait` poll that finds no change costs a free 304.
+    ///
+    /// The third element is every unmet reason, TYPED (`Unmet`) — DIAGNOSTICS ONLY, so a `pending` can say
+    /// what it is waiting for instead of being one word with no thread to pull, and so an operator is not
+    /// told that a context the BASE BRANCH demands is "an assertion you asked for". The verdict never
+    /// depends on it. Same single-page caveat as `prLandable`.
     val prLandableRequire:
         transport: IGitHubTransport ->
         owner: string ->
@@ -271,7 +304,7 @@ module Reads =
         pr: int ->
         required: string list ->
         expected: string option ->
-            PrState * int * string list
+            PrState * int * Unmet list
 
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///
