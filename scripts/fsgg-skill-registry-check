@@ -23,8 +23,10 @@ Over each row the registry ALREADY declares:
   2. DIGEST MATCHES  sha256(canonical body) == the declared `sha256:`.
   3. FROZEN MIRROR   for a row the owner DECLARES `mirrored: true`, FS.GG.Rendering's frozen copy at
                      `template/product-skills/<id>/SKILL.md` -- the accepted two-copies cost
-                     (ADR-0022 §6, retired at P6) -- exists and is byte-identical to the canonical
-                     body. A declared obligation with NO copy is a finding too: see check 7.
+                     (ADR-0022 §6, retired at P6) -- exists and has the same CANONICAL DIGEST as the
+                     canonical body. Not "is byte-identical": the digest is BOM- and CRLF-normalized
+                     (.github#384, #1547), so a copy differing only in those respects is deliberately
+                     NOT a finding. A declared obligation with NO copy is a finding too: see check 7.
 
 Over the SET of rows -- the converse direction, and the reason this file grew (.github#289, epic
 #266 "coherence gates that fail open"). Checks 1-3 are each a predicate over a row that is already
@@ -734,9 +736,14 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
         if raw is None:
             continue  # `source-exists` already fired; a mirror has nothing to be compared against.
 
-        # Compared on the CANONICAL digest, not on the raw bytes — i.e. on the same body text every
-        # other reader of these files hashes (`Fsgg.SkillMirror`, `repos.sh digest`, both producer
-        # generators). The raw-byte comparison this replaces disagreed with the digest it PRINTED: a
+        # Compared on the CANONICAL digest, not on the raw bytes — i.e. on the body text as
+        # `Fsgg.SkillMirror.sha256` defines it, which this checker and `skill-union-assert.sh` now
+        # both follow (.github#1547). NOT every reader of these files agrees: `repos.sh digest` and
+        # `generate-driver-manifest`'s own `canonical_digest` still hash CRLF raw, which is a real
+        # remaining split and is filed as .github#1585 rather than asserted away here — this comment
+        # named them as agreeing while they no longer do, and a false comment is exactly the kind of
+        # evidence the paragraph below is about. The raw-byte comparison this replaces disagreed with
+        # the digest it PRINTED: a
         # copy differing only by a leading BOM was reported as "not byte-identical (d1833a67… vs
         # d1833a67…)" — the same digest, twice, offered as proof that they differ. A finding that
         # contradicts its own evidence is one the next reader learns to wave through.

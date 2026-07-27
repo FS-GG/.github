@@ -99,6 +99,30 @@
       "library fail-open as an expectation, so it is filed instead (.github#1589) and this table stays",
       "the statement of what is actually agreed."
     ],
+    "measuredAgainst": {
+      "_comment": [
+        "THIS BLOCK EXISTS BECAUSE THE TABLE'S TOP-LEVEL `derivedFrom` IS CURRENTLY STALE, AND SAYING",
+        "SO IS CHEAPER THAN LETTING A READER ASSUME OTHERWISE. `derivedFrom` records the revision the",
+        "`fixtures[].library` column was measured at (`b1c7e94d…`, commit a066e0bc). The library has",
+        "since moved to `2742eb73…` (FS.GG.SDD#717/#725 added multi-file support), `#1546`'s freshness",
+        "gate is red on `main` about exactly that, and re-deriving the whole table is .github#1576's",
+        "item, not this one's — so #1547 deliberately did not touch `derivedFrom`.",
+        "",
+        "But `digestVectors` is a NEW measured column, and stamping it under a provenance record it",
+        "was not measured against would be the same defect one field over. So it carries its own, and",
+        "it names the revision actually used.",
+        "",
+        "THE TWO REVISIONS ARE INTERCHANGEABLE FOR THESE VALUES, MEASURED RATHER THAN ASSUMED: the",
+        "diff b1c7e94d -> 2742eb73 is PURELY ADDITIVE (zero removed lines) and `sha256`'s own body is",
+        "byte-identical between them, and the oracle run at 2742eb73 reports all ten pre-existing",
+        "`fixtures` vectors still agreeing. So no digest here depends on which of the two is used."
+      ],
+      "repo": "FS-GG/FS.GG.SDD",
+      "path": "src/FS.GG.Contracts/SkillMirror.fs",
+      "skillMirrorFsSha256": "2742eb7310fdc26e93016f098963ba9dc370a4dd787ff8fe83743211eb5708a0",
+      "measuredOn": "2026-07-27",
+      "howToRedrive": "bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts"
+    },
     "vectors": [
       {
         "name": "lf",
@@ -153,6 +177,12 @@
         "note": "A body with no final newline. Its own digest, and the partner `trailing-lone-cr` must not collide with.",
         "bytesBase64": "IyBiZXRhIHNraWxs",
         "digest": "c12a7ea15c1153ddd813719ee42a27cba61e68146ea204acdd55d3853819a58a"
+      },
+      {
+        "name": "nul-byte",
+        "note": "`a\\0b\\r\\nc\\n`. THE VECTOR THAT CAUGHT A FAIL-OPEN THIS ITEM ITSELF SHIPPED (.github#1547). The first cut of `skill_digest` slurped the body with `$(cat …)`, and bash DISCARDS NUL bytes in a command substitution — so `a\\0b` and `ab` hashed IDENTICALLY while the library and the Python checker told them apart: two distinct files, one digest, a MISSED drift. The fold is now streamed through `sed -z`, where NUL is a record separator and every byte survives. A shell implementation that goes back to slurping fails HERE and passes all nine other vectors.",
+        "bytesBase64": "YQBiDQpjCg==",
+        "digest": "f77a7a45e139c391812ad20236aa600852c09fc6faa6933c9bf1b798ebea85d6"
       },
       {
         "name": "many-trailing-lf",

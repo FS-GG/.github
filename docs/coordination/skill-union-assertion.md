@@ -543,11 +543,21 @@ The `fixtures` table pins `verify`'s three facts across **two** implementations.
 **digest** has **three**, and until [#1547](https://github.com/FS-GG/.github/issues/1547) nothing
 compared them all:
 
-| implementation | where |
-| --- | --- |
-| `Fsgg.SkillMirror.sha256` | FS.GG.Contracts — ADR-0014's **one implementation** |
-| `skill_digest` | `scripts/skill-union-assert.sh` |
-| `canonical_digest` | `scripts/fsgg-skill-registry-check` |
+| implementation | role | folds CRLF? |
+| --- | --- | --- |
+| `Fsgg.SkillMirror.sha256` | FS.GG.Contracts — ADR-0014's **one implementation** | yes |
+| `skill_digest` (`scripts/skill-union-assert.sh`) | verifier | yes, since #1547 |
+| `canonical_digest` (`scripts/fsgg-skill-registry-check`) | verifier | yes, since #1547 |
+| `canonical_digest` (`scripts/generate-driver-manifest`) | **producer** | **no** — [#1585](https://github.com/FS-GG/.github/issues/1585) |
+| `digest` (`scripts/repos.sh`) | **producer** | **no** (nor BOM) — [#1585](https://github.com/FS-GG/.github/issues/1585) |
+
+**The heading says three because #1547 did; the honest count is five.** #1547 was scoped to the two
+**verifiers**, and aligning them is what its decision comment settled. The two **producers** that
+emit the `sha256` values those verifiers check were found afterwards, by an adversarial review of the
+implementing PR, and are filed rather than folded in — changing a producer changes what gets written
+into a shipped manifest, which is a different blast radius needing its own call. Today they agree
+anyway, because no tracked `SKILL.md` in this repo contains a CR; the split is latent, and it fails
+*closed* (a producer's raw digest is one no verifier reproduces, so it reads as `[drifted]`).
 
 The two pins that existed were **pairwise, and both skipped the digest**: `conformance.sh` pins
 shell↔Python for the *predicate grammar* only, and `skillmirror-conformance.sh` pinned shell↔library
@@ -584,6 +594,23 @@ latent collision. It is out of this repo's hands — the lossy decode is `FS.GG.
 and it is filed rather than implied: [#1589](https://github.com/FS-GG/.github/issues/1589). The
 `digestVectors` table is deliberately all valid UTF-8, so it pins what is actually agreed rather than
 freezing a disagreement into an expectation.
+
+The same boundary covers a **UTF-16/UTF-32 BOM**: `File.ReadAllText` detects those and decodes
+accordingly, while both shells special-case only the UTF-8 BOM `EF BB BF`, so a UTF-16LE `SKILL.md`
+gets three different answers. Also pre-existing, also fails closed, and tracked with the invalid-UTF-8
+case in [#1589](https://github.com/FS-GG/.github/issues/1589) — a `SKILL.md` that is not UTF-8 is the
+single underlying condition.
+
+**One implementation detail worth knowing before you edit `skill_digest`.** It streams the body
+through `sed -z` rather than slurping it into a shell variable, and all three reasons are fail-open
+defects that the *first* cut of #1547 actually shipped and an adversarial review caught: `$(cat …)`
+silently **discards NUL bytes** (so `a\0b` and `ab` hashed identically — two files, one digest); a
+command substitution reports its **last** command's status, so `$(cat f; printf x)` swallowed a read
+failure and returned sha256("") with exit 0 for an unreadable file; and bash's pattern substitution is
+**superlinear**, taking 215 s on a 4 MB CRLF body that `sed -z` handles in milliseconds — a cost that
+is zero on LF and unbounded on exactly the CRLF checkout this change exists to support. All three are
+now pinned: the `nul-byte` vector, the unreadable-`SKILL.md` case in `tests/skill-union/run.sh`, and
+a start-up self-test of the `sed -z` fold itself.
 
 ## Adoption — wiring it into a consumer repo's CI
 

@@ -181,6 +181,35 @@ else
   echo "FAIL  --digest BOM handling: got $got_bom, want BOM-free $want_raw (raw-with-BOM $raw_bom)"; failcount=$((failcount+1))
 fi
 
+# AN UNREADABLE SKILL.md IS A FAILURE, NEVER A DIGEST (.github#1547, epic #266).
+#
+# THIS PINS A FAIL-OPEN #1547 ITSELF SHIPPED AND AN ADVERSARIAL REVIEW CAUGHT. The first cut of the
+# CRLF fold read the body with `body="$(cat "$f"; printf x)"`. A command substitution's exit status is
+# that of its LAST command, so `printf`'s success MASKED `cat`'s failure: a SKILL.md the gate could not
+# read produced sha256("") — e3b0c442… — and exit 0. A confident digest for bytes nobody read is the
+# #266 shape exactly, and it silently killed the `if ! got="$(skill_digest …)"` arm that reports
+# `[drifted] … has no SKILL.md to digest`. `--digest` must exit non-zero and print no digest.
+UNREADABLE="$WORK/unreadable/skill"; mkdir -p "$UNREADABLE"
+printf '# alpha skill\n' > "$UNREADABLE/SKILL.md"
+chmod 000 "$UNREADABLE/SKILL.md"
+if [ "$(id -u)" = "0" ]; then
+  # root reads anything, so the case cannot be staged — say so rather than printing a PASS that
+  # exercised nothing (a skip reported as a pass is the same disease one level up).
+  echo "SKIP  --digest on an unreadable SKILL.md (running as root; chmod 000 is not a barrier)"
+else
+  # `|| unreadable_rc=$?`, not a bare assignment then `$?`: this file runs under `set -e`, so a
+  # failing command substitution aborts the suite before the check can grade it — which would read as
+  # the fixture vanishing rather than as the refusal it is testing for.
+  unreadable_rc=0
+  unreadable_out="$(digest "$UNREADABLE" 2>/dev/null)" || unreadable_rc=$?
+  if [ "$unreadable_rc" -ne 0 ] && [ -z "$unreadable_out" ]; then
+    echo "PASS  (expected fail) --digest refuses an unreadable SKILL.md (rc=$unreadable_rc, no digest)"; pass=$((pass+1))
+  else
+    echo "FAIL  --digest on an unreadable SKILL.md returned rc=$unreadable_rc out='$unreadable_out' — a digest for bytes it never read"; failcount=$((failcount+1))
+  fi
+fi
+chmod 644 "$UNREADABLE/SKILL.md"
+
 # --- 1. coherent union, no manifest → PASS ---
 expect_pass "coherent union (content-equality only)" "$GOOD"
 

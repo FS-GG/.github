@@ -290,6 +290,17 @@ done
 
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found (required for content hashing)."
 
+# THE CRLF FOLD IS SELF-TESTED, NOT ASSUMED (.github#1547). `skill_digest` folds CRLF->LF with
+# `sed -z`, which is a GNU extension — consistent with this script's existing `sha256sum`/`od`
+# assumptions, but not universal. A `sed` without `-z` would not silently do nothing: it would error
+# per invocation and, with `pipefail`, turn every digest into a failure. That is already fail-closed,
+# but it is an obscure way to learn it, so the primitive is exercised ONCE here against a known
+# answer. This catches both a missing `-z` and a `sed` whose `\r`/`\n` escapes differ, before any
+# verdict is computed rather than as a wall of per-skill noise.
+if [ "$(printf 'a\r\nb\rc' | sed -z 's/\r\n/\n/g' | od -An -c | tr -d ' \n')" != 'a\nb\rc' ]; then
+  die "sed -z 's/\\r\\n/\\n/g' did not fold CRLF exactly (GNU sed required). Refusing to compute digests with a normalizer that does not match Fsgg.SkillMirror.sha256 — a wrong digest is worse than no digest (.github#1547)."
+fi
+
 # Per-skill digest (see header): canonical-body sha256 of SKILL.md only — the producers' shipped
 # algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; verified in .github#120).
 #
@@ -322,19 +333,36 @@ command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found (required for c
 # drift; `fsgg-skill-registry-check --digest <file>` is the Python seam's counterpart, and
 # tests/skill-union/skillmirror-conformance.sh drives BOTH plus the library's measured column over
 # one shared table. Multi-file remainder is covered by checks 1-2.
+# IT IS A STREAM, NOT A SHELL VARIABLE, AND THAT IS A CORRECTNESS DECISION — NOT A STYLE ONE.
+# The obvious way to fold in bash is to slurp the body and use `${body//$'\r\n'/$'\n'}`. It is wrong
+# three separate ways, each measured rather than argued:
+#   1. FAIL-OPEN ON NUL. `$(cat …)` DISCARDS NUL bytes (bash cannot hold one in a variable). So
+#      `a\0b` and `ab` slurp to the same string and hash IDENTICALLY, while the library and the
+#      Python checker tell them apart. Two distinct files sharing a digest is a MISSED drift (#266) —
+#      the exact fail-open direction this whole item exists to keep out of the digest.
+#   2. FAIL-OPEN ON AN UNREADABLE FILE. A command substitution's status is that of its LAST command,
+#      so `$(cat f; printf x)` reports `printf`'s success and swallows `cat`'s failure: an
+#      unreadable SKILL.md yielded sha256("") and exit 0 — a confident digest for bytes never read.
+#   3. QUADRATIC. Bash's pattern substitution is superlinear in the number of replacements: a 4 MB
+#      CRLF body took 215s (and 13s at 1 MB) versus a flat ~0s here. That cost is ZERO on an LF
+#      checkout and unbounded on the CRLF one this change exists to support, per id, per root.
+# Streaming through `sed -z` fixes all three: NUL is a record separator rather than a terminator so
+# every byte survives, `pipefail` (set at the top) makes a failed read a failed digest, and it is a
+# single linear pass. `-z` is why the fold can be written as a plain `s/\r\n/\n/g` at all — with
+# NUL-delimited records a literal newline is an ordinary character sed can match.
 skill_digest() {
-  local dir="$1" body
-  [ -f "$dir/SKILL.md" ] || return 1
-  # The `x` sentinel, then `%x`, is what makes this read the file's REAL bytes: `$(...)` strips
-  # EVERY trailing newline, so without it a body ending "\n\n\n" would hash as one ending "\n" and
-  # the `many-trailing-lf` vector would be indistinguishable from the plain `lf` one.
-  if [ "$(head -c 3 "$dir/SKILL.md" | od -An -tx1 | tr -d ' \n')" = efbbbf ]; then
-    body="$(tail -c +4 "$dir/SKILL.md"; printf x)"
+  local file="$1/SKILL.md"
+  [ -f "$file" ] || return 1
+  # Readability is checked BEFORE reading so the failure is this explicit `return 1` rather than a
+  # digest-shaped string plus a status the caller has to be careful about.
+  [ -r "$file" ] || return 1
+  # BOM strip, then the CRLF fold, then the hash — one pipeline, so nothing is buffered into a
+  # variable that could drop a byte on the way.
+  if [ "$(head -c 3 -- "$file" | od -An -tx1 | tr -d ' \n')" = efbbbf ]; then
+    tail -c +4 -- "$file"
   else
-    body="$(cat "$dir/SKILL.md"; printf x)"
-  fi
-  body="${body%x}"
-  printf '%s' "${body//$'\r\n'/$'\n'}" | sha256sum | cut -d' ' -f1
+    cat -- "$file"
+  fi | sed -z 's/\r\n/\n/g' | sha256sum | cut -d' ' -f1
 }
 
 # Does <id> match any --co-tenants glob?

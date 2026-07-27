@@ -103,14 +103,10 @@ let derive (fx: JsonElement) =
 // surface #1547 exists because nothing covered: the canonical digest has three implementations and
 // the pairwise pins that existed skipped it, so CRLF drifted unnoticed until a person read the code.
 //
-// The library is fed the way its real callers feed it — a decoded BODY STRING, not bytes. That is
-// the whole reason a BOM never reaches `sha256`: the caller's UTF-8 decoder consumes it. Decoding it
-// here rather than pre-stripping the BOM by hand keeps this an observation of the library's actual
-// contract instead of a re-implementation of the shells' half of it.
-// The vector's bytes, decoded the way the library's REAL callers decode a file — with a
-// BOM-detecting reader, which is the only reason a BOM never reaches `sha256`. Doing it here rather
-// than pre-stripping the BOM by hand keeps this an observation of the library's actual contract
-// instead of a re-implementation of the shells' half of it.
+// The library is fed the way its real callers feed it — a decoded BODY STRING, not bytes, via a
+// BOM-detecting reader. That is the whole reason a BOM never reaches `sha256`: the caller's decoder
+// consumes it. Decoding here rather than pre-stripping the BOM by hand keeps this an observation of
+// the library's actual contract instead of a re-implementation of the shells' half of it.
 let decodeBody (base64Bytes: string) =
     use stream = new MemoryStream(Convert.FromBase64String base64Bytes)
     use reader = new StreamReader(stream, Text.Encoding.UTF8, detectEncodingFromByteOrderMarks = true)
@@ -230,6 +226,30 @@ printfn "sha256 in table:  %s" declared
 if got <> declared then
     disagreements <- disagreements + 1
     eprintfn "DISAGREES  derivedFrom.skillMirrorFsSha256 is stale — this table was derived from a DIFFERENT library revision."
+
+// `digestVectors` carries its OWN provenance, because it was added (.github#1547) while the
+// top-level `derivedFrom` was already stale about a revision #1576 owns re-deriving. A measured
+// column whose provenance record is decorative is worth nothing, so it is GRADED here rather than
+// merely written down — and separately from `derivedFrom`, so the two can legitimately differ while
+// each stays honest about itself.
+match doc.RootElement.GetProperty("digestVectors").TryGetProperty "measuredAgainst" with
+| true, block ->
+    let declaredDigest = block.GetProperty("skillMirrorFsSha256").GetString()
+
+    printfn "digestVectors measuredAgainst: %s" declaredDigest
+
+    if got <> declaredDigest then
+        disagreements <- disagreements + 1
+
+        eprintfn
+            "DISAGREES  digestVectors.measuredAgainst.skillMirrorFsSha256 (%s) is not the library measured here (%s) — re-run the oracle and reconcile the digest column."
+            declaredDigest
+            got
+| _ ->
+    disagreements <- disagreements + 1
+
+    eprintfn
+        "DISAGREES  digestVectors has no `measuredAgainst` block — its `digest` column would be a measurement with no record of what it was measured against."
 
 // BOTH POPULATIONS, EACH WITH ITS OWN COUNT (.github#1506's rule, applied to this script's own
 // summary): one merged "vectors: N" would let a run that measured every `verify` vector and ZERO
