@@ -23,7 +23,20 @@ module Scan =
           /// or the project has no `Class` field at all — and all three mean the same thing to the only
           /// consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
           /// which is the authority, so nothing downstream has to guess which of the three this was.
-          BoardClass: ItemClass option }
+          BoardClass: ItemClass option
+
+          /// The `Phase` column as OBSERVED (.github#1598). `None` covers the same three facts
+          /// `BoardClass` does — unset, a word this engine does not speak, or no such field on the
+          /// project — and they collapse for the same reason: to the one consumer (`Rank`) all three mean
+          /// "no phase evidence", and an item with none sorts last.
+          Phase: Phase option
+
+          /// When the ISSUE was created — the board's only usable age timestamp (.github#1598).
+          ///
+          /// Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
+          /// to disk today and read tomorrow must not report yesterday's age. The count is derived where
+          /// the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
+          CreatedAt: DateTimeOffset option }
 
     [<Literal>]
     let OffBoardCap = 60
@@ -89,6 +102,11 @@ module Scan =
     ///
     /// Measured on the live 640-item board: this document is 7 pages × 1 point = **7 points**.
     /// `gh project item-list` costs **6 points to read five items**.
+    ///
+    /// `class` and `phase` are both `fieldValueByName` RESOLVER fields and `createdAt` is a SCALAR on a
+    /// node already selected, so none of the three multiplies nodes and the 7 points above is unchanged
+    /// by .github#1588 or .github#1598. A `fieldValues(first: N)` connection would not have been free,
+    /// which is the whole reason this query does not use one.
     [<Literal>]
     let private BoardDoc =
         "query($owner: String!, $number: Int!, $cursor: String) { \
@@ -100,10 +118,11 @@ module Scan =
                  status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
                  class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
-                   ... on Issue { number title state repository { nameWithOwner } } \
-                   ... on PullRequest { number title state repository { nameWithOwner } } \
+                   ... on Issue { number title state createdAt repository { nameWithOwner } } \
+                   ... on PullRequest { number title state createdAt repository { nameWithOwner } } \
                  } \
                } \
              } \
@@ -130,6 +149,26 @@ module Scan =
         match e.TryGetProperty name with
         | true, o when o.ValueKind = JsonValueKind.Object -> str o inner
         | _ -> None
+
+    /// An ISO-8601 instant, or `None`.
+    ///
+    /// `RoundtripKind` so a `Z` suffix stays UTC instead of being reinterpreted as local time — an age in
+    /// DAYS would survive that, but a rank input that silently shifts by a timezone on one machine and
+    /// not another is exactly the kind of non-determinism the batch may not have. `None` on anything
+    /// unparseable: an age we could not read is unknown, never zero (`Item.AgeDays`).
+    let private instant (s: string option) : DateTimeOffset option =
+        match s with
+        | None -> None
+        | Some raw ->
+            match
+                DateTimeOffset.TryParse(
+                    raw,
+                    Globalization.CultureInfo.InvariantCulture,
+                    Globalization.DateTimeStyles.RoundtripKind
+                )
+            with
+            | true, v -> Some v
+            | _ -> None
 
     let private parseRow (node: JsonElement) : Row option =
         match node.TryGetProperty "content" with
@@ -176,7 +215,12 @@ module Scan =
                       // that the query's own comment measures. `Option.bind` on the resolved name, so a
                       // project with no `Class` field (every board before .github#1588, and every parity
                       // fixture) reads `None` rather than failing the scan.
-                      BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName }
+                      BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName
+                      // Same shape, same cost, same fail-soft as `class` above: a project with no `Phase`
+                      // field (every parity fixture, and any board but the live one) reads `None` rather
+                      // than failing the scan.
+                      Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
+                      CreatedAt = str content "createdAt" |> instant }
 
             | _ -> None
 
@@ -216,6 +260,19 @@ module Scan =
             // `None` covers "no such field on this project", which is not a value at all.
             match r.BoardClass with
             | Some c -> w.WriteString("class", itemClassWireName c)
+            | None -> ()
+
+            // OMITTED when absent, on `class`'s terms and for its reason: an empty string would be a
+            // cache entry asserting a value for a column nobody read.
+            match r.Phase with
+            | Some p -> w.WriteString("phase", phaseWireName p)
+            | None -> ()
+
+            // THE INSTANT, ROUND-TRIPPED — never a precomputed age. `"o"` is the round-trip format, so
+            // this is the one field on the entry whose meaning does not decay while the entry sits on
+            // disk; a cached `ageDays` would be wrong by exactly the cache's own lifetime.
+            match r.CreatedAt with
+            | Some t -> w.WriteString("createdAt", t.ToString("o", Globalization.CultureInfo.InvariantCulture))
             | None -> ()
 
             w.WriteString(
@@ -269,7 +326,13 @@ module Scan =
                               // projection chore that rewrites the column it already holds, which costs
                               // one idempotent board write; the opposite default would suppress a real
                               // projection because an old cache said nothing.
-                              BoardClass = s "class" |> Option.bind itemClassOfWireName }
+                              BoardClass = s "class" |> Option.bind itemClassOfWireName
+                              // Absent on every cache entry written before .github#1598, and that reads
+                              // as `None` — which ranks the row LAST rather than promoting it. A stale
+                              // cache therefore under-prioritises for at most one cache lifetime; the
+                              // opposite default would let an unread entry outrank the whole board.
+                              Phase = s "phase" |> Option.bind phaseOfWireName
+                              CreatedAt = s "createdAt" |> instant }
                     | _ -> None)
                 |> List.ofSeq
                 |> Some

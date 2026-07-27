@@ -290,14 +290,116 @@ module Client =
     let private sayRepoAdvisory (receipt: Scan.Receipt) =
         receipt.RepoAdvisory |> Option.iter eprint
 
-    let private renderDecision (opts: Options) (doc: string) : Result<Batch.BatchResult, int> =
+    /// Populate `Item.Class` with the TITLE half of the derivation, `Item.BoardClass` with what the scan
+    /// observed in the board column (.github#1588, ADR-0066), and `Item.Phase`/`Item.AgeDays` with the two
+    /// remaining rank inputs the snapshot document cannot carry (.github#1598).
+    ///
+    /// `Phase` and the age join here for exactly the reason `BoardClass` does: both are SCAN facts. `Phase`
+    /// is a board COLUMN, and the age comes off the issue's `createdAt` — neither is derivable from an item
+    /// body, so neither can live on the pure snapshot. A `decide --snapshot` run therefore ranks on
+    /// blocking-count alone, which is `Rank`'s no-priority-data case and behaves exactly as it did before.
+    ///
+    /// **THE CLOCK IS READ HERE, ONCE.** `Scan.Row` carries the INSTANT so the cache cannot serve a stale
+    /// age; this is the only place it becomes a number of days, so every candidate in one batch is aged
+    /// against one `now` and a rank cannot shift underneath its own comparison. A `createdAt` in the
+    /// FUTURE (clock skew) floors at 0 rather than going negative — a negative age would sort as the
+    /// OLDEST item on the board.
+    ///
+    /// THE IMPURE HALF, on `enrichPredicates`' terms exactly. `Snapshot.parse` already lifted the pure,
+    /// body-only `Class:` declaration off each item; two facts are not on that document and cannot be:
+    ///
+    /// - the TITLE, which AC3 names as evidence via the `[decision]` prefix the board already uses. It is
+    ///   a scan fact, not a snapshot one.
+    /// - the board's `Class` COLUMN, which is the projection this engine writes and must therefore READ
+    ///   before it writes — `CLASS-PROJECTION-LAG` fires on disagreement, and a chore that could not see
+    ///   the current value could never retire.
+    ///
+    /// The body WINS over the title, so this never overwrites a `Class:` line somebody wrote: it fills in
+    /// only where the pure parse found nothing. That ordering is `Class.derive`'s and it is asserted there
+    /// rather than re-decided here.
+    ///
+    /// A row the scan did not carry keeps what the parser gave it. That is the fail-closed direction: an
+    /// item we could not join is an item whose column we do not claim to know, and `BoardClass = None`
+    /// costs at most one idempotent re-write rather than suppressing a projection that is genuinely owed.
+    let private enrichBoardFacts (rows: Scan.Row list) (request: Snapshot.Request) : Snapshot.Request =
+        let byRef =
+            rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
+
+        // ONE `now` FOR THE WHOLE BATCH. Reading the clock per item would let two candidates a millisecond
+        // apart be aged against two different instants, which is a comparison whose inputs move while it
+        // runs — and the batch's determinism (#418) is the property that cannot be given up.
+        let now = System.DateTimeOffset.UtcNow
+
+        let ageDaysOf (row: Scan.Row) =
+            row.CreatedAt
+            |> Option.map (fun created ->
+                // FLOORED AT ZERO. A `createdAt` ahead of `now` is clock skew, not a negative age, and a
+                // negative age sorts as the oldest work on the board — the one direction a skewed clock
+                // must not be able to push priority.
+                let days = (now - created).TotalDays
+                if days <= 0.0 then 0 else int (floor days))
+
+        // WAS THE BODY READ AT ALL? `Snapshot.parse` renders an unreadable body as `Class = None` — the
+        // same value as "the body declares no class" — because `ItemClass option` has nowhere to put
+        // "I could not look". That collapse is safe there and lethal HERE, at the one place a SECOND source
+        // is consulted: an item whose body says `Class: defect` and whose read failed would fall through to
+        // a `[decision]` title prefix and be projected as `decision`, a SEVERITY DOWNGRADE PRODUCED BY A
+        // FAILED READ — on the one value that means "no driver may ever schedule this". That is #266
+        // exactly, and #496's `Undeclared`-vs-`Unreadable` collapse one axis over.
+        //
+        // The engine already records the fact: `TouchSet.Unreadable` IS "we did not read the body" (see
+        // `Types.fsi`), parsed off the same body on the same terms. So this asks rather than adding a
+        // second flag that could disagree with it.
+        let bodyWasRead (c: Snapshot.Candidate) =
+            match c.Item.TouchSet with
+            | Unreadable _ -> false
+            | _ -> true
+
+        let enrich (c: Snapshot.Candidate) : Snapshot.Candidate =
+            match Map.tryFind c.Item.Ref byRef with
+            | None -> c
+            | Some row ->
+                { c with
+                    Item =
+                        { c.Item with
+                            Class =
+                                match c.Item.Class with
+                                | Some _ as declared -> declared
+                                // No title fallback over an unread body: `None` there is "unknown", and
+                                // deriving a WEAKER class from a title we could read, to stand in for a
+                                // body we could not, is a confident answer built on a failed read. `None`
+                                // yields no chore, which is the fail-closed direction.
+                                | None when bodyWasRead c -> Class.fromTitle row.Title
+                                | None -> None
+                            BoardClass = row.BoardClass
+                            Phase = row.Phase
+                            AgeDays = ageDaysOf row } }
+
+        { request with
+            Candidates = request.Candidates |> List.map enrich }
+
+
+    /// THE OFFER PATH'S DECISION — and as of .github#1598 it ENRICHES before it schedules.
+    ///
+    /// `rows` is no longer discarded here. The scheduler's ordering reads `Class`, `Phase` and the issue's
+    /// age, and two of those three are SCAN facts that the snapshot document structurally cannot carry (a
+    /// board column and `createdAt`). Scheduling straight off `Snapshot.parse` therefore ranked every item
+    /// as having no phase and no age — the exact "no priority data" case — so the rewrite would have
+    /// compiled, passed its unit tests, and changed nothing about the live board.
+    ///
+    /// It is the SAME `enrichBoardFacts` `reconcile` already ran, not a second join: one function, one set
+    /// of rules for how a scan row reaches an item, so the ordering `batch` prints and the projection
+    /// `reconcile` writes can never come from different readings of one board.
+    let private renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
             for e in errors do
                 eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
 
             Result.Error ExitError
-        | Ok request ->
+        | Ok parsed ->
+            let request = enrichBoardFacts rows parsed
+
             match
                 Batch.schedule
                     request.AllowBacklog
@@ -361,13 +463,27 @@ module Client =
         for line in Batch.starvedBanner leaseMinutes result do
             eprint line
 
+    /// `batch --explain` (.github#1598 AC5) — STDERR, on `sayWhyNothing`'s terms and for its reason.
+    ///
+    /// `batch`'s stdout is a machine contract (`["FS.GG.SDD#70",…]`) that `take` parses, so an explanation
+    /// printed there would corrupt the answer it explains. It rides beside the per-item refusal prose and
+    /// #428's banner, which is where every other "why" this verb produces already goes — and it means
+    /// `batch --json --explain` is a legitimate spelling rather than a contradiction.
+    ///
+    /// Silent without the flag: this is a wall of lines proportional to the board, and a driver who did not
+    /// ask for the ranking is a driver reading refusal prose it would bury.
+    let private sayRanking (opts: Options) (result: Batch.BatchResult) =
+        if opts.Explain then
+            for line in Batch.explainRanking result do
+                eprint line
+
     let batch (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, receipt) ->
+        | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts doc with
+            match renderDecision opts rows doc with
             | Error code -> code
             | Ok result ->
                 match opts.Render with
@@ -391,6 +507,11 @@ module Client =
                         printfn "schedulable in parallel (%d):" (List.length result.Chosen)
 
                     printChosen opts.LeaseMinutes result
+
+                // AFTER the verdict, in BOTH renderings — the ranking explains the answer above it, and a
+                // flag that worked in one projection and silently did nothing in the other is the #1523
+                // defect this repo already paid for once.
+                sayRanking opts result
 
                 ExitGreen
 
@@ -590,66 +711,6 @@ module Client =
             { request with
                 Candidates = request.Candidates |> List.map enrich }
 
-    /// Populate `Item.Class` with the TITLE half of the derivation, and `Item.BoardClass` with what the
-    /// scan observed in the board column (.github#1588, ADR-0066).
-    ///
-    /// THE IMPURE HALF, on `enrichPredicates`' terms exactly. `Snapshot.parse` already lifted the pure,
-    /// body-only `Class:` declaration off each item; two facts are not on that document and cannot be:
-    ///
-    /// - the TITLE, which AC3 names as evidence via the `[decision]` prefix the board already uses. It is
-    ///   a scan fact, not a snapshot one.
-    /// - the board's `Class` COLUMN, which is the projection this engine writes and must therefore READ
-    ///   before it writes — `CLASS-PROJECTION-LAG` fires on disagreement, and a chore that could not see
-    ///   the current value could never retire.
-    ///
-    /// The body WINS over the title, so this never overwrites a `Class:` line somebody wrote: it fills in
-    /// only where the pure parse found nothing. That ordering is `Class.derive`'s and it is asserted there
-    /// rather than re-decided here.
-    ///
-    /// A row the scan did not carry keeps what the parser gave it. That is the fail-closed direction: an
-    /// item we could not join is an item whose column we do not claim to know, and `BoardClass = None`
-    /// costs at most one idempotent re-write rather than suppressing a projection that is genuinely owed.
-    let private enrichClasses (rows: Scan.Row list) (request: Snapshot.Request) : Snapshot.Request =
-        let byRef =
-            rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
-
-        // WAS THE BODY READ AT ALL? `Snapshot.parse` renders an unreadable body as `Class = None` — the
-        // same value as "the body declares no class" — because `ItemClass option` has nowhere to put
-        // "I could not look". That collapse is safe there and lethal HERE, at the one place a SECOND source
-        // is consulted: an item whose body says `Class: defect` and whose read failed would fall through to
-        // a `[decision]` title prefix and be projected as `decision`, a SEVERITY DOWNGRADE PRODUCED BY A
-        // FAILED READ — on the one value that means "no driver may ever schedule this". That is #266
-        // exactly, and #496's `Undeclared`-vs-`Unreadable` collapse one axis over.
-        //
-        // The engine already records the fact: `TouchSet.Unreadable` IS "we did not read the body" (see
-        // `Types.fsi`), parsed off the same body on the same terms. So this asks rather than adding a
-        // second flag that could disagree with it.
-        let bodyWasRead (c: Snapshot.Candidate) =
-            match c.Item.TouchSet with
-            | Unreadable _ -> false
-            | _ -> true
-
-        let enrich (c: Snapshot.Candidate) : Snapshot.Candidate =
-            match Map.tryFind c.Item.Ref byRef with
-            | None -> c
-            | Some row ->
-                { c with
-                    Item =
-                        { c.Item with
-                            Class =
-                                match c.Item.Class with
-                                | Some _ as declared -> declared
-                                // No title fallback over an unread body: `None` there is "unknown", and
-                                // deriving a WEAKER class from a title we could read, to stand in for a
-                                // body we could not, is a confident answer built on a failed read. `None`
-                                // yields no chore, which is the fail-closed direction.
-                                | None when bodyWasRead c -> Class.fromTitle row.Title
-                                | None -> None
-                            BoardClass = row.BoardClass } }
-
-        { request with
-            Candidates = request.Candidates |> List.map enrich }
-
     /// A parsed snapshot's rows as a `Chore.Whole` — the ONE construction of that case, so the label is
     /// never spelled twice (#485) and never asserted by a caller who only believes the board is whole. The
     /// argument is a `Request` the caller must have parsed from an UNFILTERED read; that obligation is the
@@ -825,10 +886,10 @@ module Client =
 
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, receipt) ->
+        | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts doc with
+            match renderDecision opts rows doc with
             | Error code -> code
             | Ok result ->
                 match result.Chosen with
@@ -887,7 +948,7 @@ module Client =
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
         | Error e -> fail e
-        // The scan ROWS, no longer discarded: `enrichClasses` joins the board's `Class` column and each
+        // The scan ROWS, no longer discarded: `enrichBoardFacts` joins the board's `Class` column and each
         // item's title onto the parsed candidates (.github#1588). Both are scan facts that the snapshot
         // document does not carry, and the projection chore needs the column it is about to write.
         | Ok(rows, doc, receipt) ->
@@ -903,7 +964,7 @@ module Client =
                 let items =
                     request
                     |> enrichPredicates
-                    |> enrichClasses rows
+                    |> enrichBoardFacts rows
                     |> fun r -> r.Candidates
                     |> List.map (fun c -> c.Item)
 
@@ -2645,10 +2706,10 @@ module Client =
             // different codes (#266). bash's hard board-read failure exits the same way (#344's fatal
             // die), so the two engines agree.
             | Error e -> fail e
-            | Ok(_, doc, receipt) ->
+            | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 
-                match renderDecision { opts with Limit = Some 1 } doc with
+                match renderDecision { opts with Limit = Some 1 } rows doc with
                 | Error code -> code
                 | Ok result ->
                     match result.Chosen with

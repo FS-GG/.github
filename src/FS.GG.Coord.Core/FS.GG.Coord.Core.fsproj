@@ -55,6 +55,8 @@
     <Compile Include="Blockers.fs" />
     <Compile Include="Schedulability.fsi" />
     <Compile Include="Schedulability.fs" />
+    <Compile Include="Rank.fsi" />
+    <Compile Include="Rank.fs" />
     <Compile Include="Protocol.fsi" />
     <Compile Include="Protocol.fs" />
     <Compile Include="Batch.fsi" />

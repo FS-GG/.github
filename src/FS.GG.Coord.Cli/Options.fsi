@@ -203,6 +203,11 @@ module Options =
           /// `--batch` (`set-field`) — write the remaining `Field=Value` args in ONE aliased mutation
           /// document (#448): N fields, one GraphQL request, one point at the floor.
           Batch: bool
+          /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
+          /// in the order the scheduler considered it, the rank inputs that produced that order, and how
+          /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
+          /// `batch --json --explain` keeps stdout a clean machine document.
+          Explain: bool
 
           /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
           Strict: bool

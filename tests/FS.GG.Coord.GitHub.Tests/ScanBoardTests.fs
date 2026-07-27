@@ -408,7 +408,9 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       BlockedByRaw = ""
       State = IssueState.Open
       IsPullRequest = false
-      BoardClass = None }
+      BoardClass = None
+      Phase = None
+      CreatedAt = None }
 
 let private scopeBoard =
     [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
@@ -517,3 +519,104 @@ let ``#979 snapshot says NOTHING for a --repo that matches — no noise on the h
     match Scan.snapshot transport scopeBoard (Some "FS.GG.SDD") false None 120 with
     | Error _ -> ()
     | Ok(_, receipt) -> Assert.True(receipt.RepoAdvisory.IsNone, "a matched --repo must say nothing")
+
+// ---- the Phase column and the issue's age (.github#1598) ----------------------------------------------
+//
+// Two facts the board has always held and the scheduler never read. `Phase` is a single-select column; the
+// age comes off `content.createdAt`. Both ride the same 7-point full scan the cost model measures — a
+// resolver field and a scalar on a node already selected — and both must survive the cache codec, because
+// a fact that round-trips wrong ranks the whole board wrong for the cache's lifetime.
+
+/// An issue node carrying the two new facts, spelled exactly as GitHub answers them.
+let private rankedNode (number: int) (phase: string) (createdAt: string) =
+    let phaseField =
+        if phase = "" then "" else $""""phase":{{"name":"%s{phase}"}},"""
+
+    $"""{{"status":{{"name":"Ready"}},
+          "blockedBy":{{"text":""}},
+          %s{phaseField}
+          "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
+                      "state":"OPEN","createdAt":"%s{createdAt}",
+                      "repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+[<Fact>]
+let ``#1598 the Phase column and createdAt are READ off the board`` () =
+    use _sandbox = new Sandbox()
+
+    let transport =
+        scripted [ ok (page (rankedNode 1 "P2 SDD" "2026-01-02T03:04:05Z") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] ->
+        Assert.Equal(Some P2Sdd, row.Phase)
+        Assert.True(row.CreatedAt.IsSome, "createdAt was on the node and did not reach the row")
+        Assert.Equal(2026, row.CreatedAt.Value.Year)
+        // UTC, not the runner's local time. An age in days survives a timezone shift, but a rank input
+        // that moves by a timezone on one machine and not another is non-determinism in the batch.
+        Assert.Equal(TimeSpan.Zero, row.CreatedAt.Value.Offset)
+    | other -> failwith $"expected one row carrying both rank inputs — got %A{other}"
+
+[<Fact>]
+let ``#1598 a board with NO Phase field reads as None and does not fail the scan`` () =
+    use _sandbox = new Sandbox()
+
+    // Every board but the live one, and every parity fixture. `Option.bind` on the resolved name, exactly
+    // as `class` does — a project that has never heard of `Phase` must scan, not die.
+    let transport =
+        scripted [ ok (page (rankedNode 1 "" "2026-01-02T03:04:05Z") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] -> Assert.Equal(None, row.Phase)
+    | other -> failwith $"a phase-less board must still scan — got %A{other}"
+
+[<Fact>]
+let ``#1598 a Phase value this engine does not speak is None, never the nearest phase`` () =
+    use _sandbox = new Sandbox()
+
+    // `P0 Decisions` outranks every other phase, so resolving an unknown option onto it would make a board
+    // edit nobody told the engine about the highest-priority work there is. `None` sorts LAST.
+    let transport =
+        scripted [ ok (page (rankedNode 1 "P9 Something" "2026-01-02T03:04:05Z") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] -> Assert.Equal(None, row.Phase)
+    | other -> failwith $"an unknown phase must read as None — got %A{other}"
+
+[<Fact>]
+let ``#1598 both rank inputs survive the cache codec`` () =
+    use _sandbox = new Sandbox()
+
+    // THE ROUND-TRIP IS THE POINT. The cache serves the whole fleet for its TTL, so a `phase` that renders
+    // and does not parse back would silently de-rank every item on the board — with no error anywhere, and
+    // a batch that still looks perfectly well-formed.
+    let transport =
+        scripted [ ok (page (rankedNode 1 "P0 Decisions" "2025-12-31T23:59:59Z") false "") ]
+
+    let first = Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12
+    let second = Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12
+
+    match first, second with
+    | Ok [ a ], Ok [ b ] ->
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.Equal(Some P0Decisions, a.Phase)
+        Assert.Equal(a.Phase, b.Phase)
+        // The INSTANT round-trips, not a precomputed age — an `ageDays` written to disk would be wrong by
+        // the cache's own lifetime the moment it was read back.
+        Assert.Equal(a.CreatedAt, b.CreatedAt)
+    | other -> failwith $"the rank inputs did not survive the cache — got %A{other}"
+
+[<Fact>]
+let ``#1598 an entry written before this existed reads as None, never as a zero age`` () =
+    use _sandbox = new Sandbox()
+
+    // A pre-#1598 cache entry has neither key. `None` under-prioritises the row for at most one cache
+    // lifetime; a zero age would make it the YOUNGEST possible item, which is the one reading that can
+    // never trigger starvation escalation.
+    let transport =
+        scripted [ ok (page (issueNode 1 "Ready" "" "OPEN") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] ->
+        Assert.Equal(None, row.Phase)
+        Assert.Equal(None, row.CreatedAt)
+    | other -> failwith $"expected a row with neither rank input — got %A{other}"

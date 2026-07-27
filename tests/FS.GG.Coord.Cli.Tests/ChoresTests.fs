@@ -73,7 +73,9 @@ let private item n status state blockers claim =
       HumanBlock = None
       Predicate = None
       Class = None
-      BoardClass = None }
+      BoardClass = None
+      Phase = None
+      AgeDays = None }
 
 let private blocker n state =
     { Ref = Some(ref' n)

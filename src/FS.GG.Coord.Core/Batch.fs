@@ -20,7 +20,11 @@ module Batch =
     type Decision =
         { Item: Item
           Result: Schedulability
-          CollidedWith: Holder option }
+          CollidedWith: Holder option
+          /// The derived priority this candidate was ORDERED by (.github#1598). Carried on the decision
+          /// rather than recomputed by the renderer: `--explain` must print the rank the fold actually
+          /// used, and a second derivation is a second answer waiting to disagree with the first.
+          Rank: Rank.Rank }
 
     type BatchResult =
         { Chosen: Item list
@@ -412,10 +416,27 @@ module Batch =
 
         | [] ->
 
-        // Greedy by issue number. DETERMINISM IS THE POINT: the scan is cached and shared across the
-        // fleet (#418), so two workers reading the same window must compute the same batch — an
-        // order-dependent scheduler would hand them different answers from identical input.
-        let ordered = candidates |> List.sortBy (fun i -> i.Ref.Number)
+        // PRIORITY-GREEDY, not merely maximal (.github#1598). The disjointness guarantee is unchanged —
+        // this still admits a candidate only if it clears everything already reserved — but the ORDER the
+        // fold walks is now the derived rank, so the highest-ranked schedulable item is ALWAYS admitted
+        // rather than losing its lane to whichever lower-value item happened to have a smaller number.
+        // That is the exact failure this replaces: on 2026-07-27 three P0 items were refused as
+        // "overlaps batch member #1560" while #1560 was hardening, and the only remedy available was to
+        // park nineteen rows in `Backlog`.
+        //
+        // DETERMINISM IS STILL THE POINT, and it survives: every rank term is a fact about the board, and
+        // the issue NUMBER is the final term, so two workers reading one cached window (#418) still
+        // compute one batch. What is NOT stable is the batch across DIFFERENT windows — rank moves as the
+        // board moves, so a caller must not assume two `batch` calls return the same set (a risk this
+        // item states rather than leaves to be discovered).
+        //
+        // The ranks are computed ONCE, here, over the whole candidate set — `blockingCounts` needs the
+        // set, not the item — and travel on each `Decision` so the renderer prints the rank the fold used.
+        // The ranks travel WITH their items through the fold — never re-looked-up by ref. A `Map` keyed
+        // on `Ref` was the obvious spelling and it is the wrong one: it would silently collapse two board
+        // cards pointing at one issue into a single entry, and it forced an unreachable "rank not found"
+        // default, which is a branch nothing can ever test.
+        let ordered = Rank.ofItems candidates |> List.sortBy (snd >> Rank.key)
 
         let mutable reserved = inFlight
         let mutable chosen = []
@@ -446,7 +467,7 @@ module Batch =
             | Some(c, _) -> c.AgeSeconds
             | None -> 0
 
-        let step (item: Item) =
+        let step (item: Item, rank: Rank.Rank) =
             let owner, repo = item.Ref.Owner, item.Ref.Repo
 
             // Only this repo's reservations. The ORDER is part of the contract: `inFlight` precedes
@@ -469,7 +490,8 @@ module Batch =
             decisions <-
                 { Item = item
                   Result = result
-                  CollidedWith = collidedWith }
+                  CollidedWith = collidedWith
+                  Rank = rank }
                 :: decisions
 
             match result with
@@ -508,11 +530,69 @@ module Batch =
                 // not handed out (which is what stops the duplicate implementation).
                 ()
 
-        for item in ordered do
+        for ranked in ordered do
             if not stop then
-                step item
+                step ranked
 
         Green
             { Chosen = List.rev chosen
               Decisions = List.rev decisions
               Truncated = truncated }
+
+    /// How many candidates this batch member DISPLACED — passed over because they collided with IT, and
+    /// with it specifically.
+    ///
+    /// This is the number `--explain` owes a reader, and it is the cost side of priority-greedy packing:
+    /// one wide high-rank item can exclude several narrow ones that a maximal pack would have run
+    /// together. That is the correct trade — priority means the important thing runs — but a trade nobody
+    /// is told about is indistinguishable from a regression in parallelism, so it is REPORTED.
+    ///
+    /// A refused candidate names exactly one holder (`schedule` resolves the FIRST colliding reserved
+    /// token), so nothing is double counted.
+    let displacedBy (result: BatchResult) (member': Ref) : int =
+        result.Decisions
+        |> List.filter (fun d ->
+            match d.Result, d.CollidedWith with
+            | OverlapsInFlight _, Some(BatchMember m) -> m = member'
+            | _ -> false)
+        |> List.length
+
+    /// `batch --explain` (.github#1598 AC5) — the ordering, made INSPECTABLE.
+    ///
+    /// Before this the only way to learn why a P0 item was absent from a batch was to read refusal prose
+    /// and infer; there was no way at all to learn what ORDER the candidates were considered in, because
+    /// the order was the issue number and the issue number is not a priority. A scheduler whose ordering
+    /// cannot be inspected is one nobody trusts, and the driver that filed this item spent an afternoon
+    /// proving exactly that.
+    ///
+    /// One line per candidate IN DECISION ORDER — which is rank order, so the list itself is the ranking
+    /// — carrying the verdict, every rank input that produced its position, and for an admitted item the
+    /// number of lanes it displaced. Deliberately not a table: these lines are read on a terminal beside
+    /// stderr refusal prose, and a column layout that wraps is worse than a sentence that does not.
+    let explainRanking (result: BatchResult) : string list =
+        let header =
+            [ "RANKING (.github#1598) — candidates in the order the scheduler considered them."
+              "  rank inputs, in lexicographic order: starvation escalation, blocking count, Class, Phase, age, issue number." ]
+
+        let lines =
+            result.Decisions
+            |> List.map (fun d ->
+                let id = d.Item.Ref.Short
+                let inputs = Rank.explain d.Rank
+
+                match d.Result with
+                | Startable ->
+                    match displacedBy result d.Item.Ref with
+                    | 0 -> $"  ADMITTED %s{id} — %s{inputs}"
+                    | n -> $"  ADMITTED %s{id} — %s{inputs}; displaced %d{n} lower-ranked candidate(s) from a lane"
+                | _ when Rank.isUnranked d.Rank ->
+                    // SAID OUT LOUD, because it is the safety property AC1 turns on: an item with no
+                    // priority evidence is not being punished, it simply has nothing to sort on, and a
+                    // board of such items schedules exactly as it did before this existed.
+                    $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last)"
+                | _ -> $"  refused  %s{id} — %s{inputs}")
+
+        // Silent on an empty candidate set rather than printing a header over nothing.
+        match lines with
+        | [] -> []
+        | _ -> header @ lines

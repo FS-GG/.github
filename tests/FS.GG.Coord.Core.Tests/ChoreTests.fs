@@ -52,7 +52,9 @@ module ChoreTests =
           HumanBlock = None
           Predicate = None
           Class = None
-          BoardClass = None }
+          BoardClass = None
+          Phase = None
+          AgeDays = None }
 
     /// Every case of a union, by reflection — the sweep's axes are DERIVED, never typed out.
     ///
@@ -475,7 +477,9 @@ module ChoreTests =
                                         Claim = cl
                                         Blockers = bs
                                         Class = declared
-                                        BoardClass = board }
+                                        BoardClass = board
+                                        Phase = None
+                                        AgeDays = None }
 
                                 let derived = derive [ i ]
                                 derivedSomething <- derivedSomething + derived.Length
@@ -534,7 +538,9 @@ module ChoreTests =
                 State = Open
                 Blockers = [ blocker 2 BlockerOpen ]
                 Class = Some Defect
-                BoardClass = None }
+                BoardClass = None
+                Phase = None
+                AgeDays = None }
 
         let derived = derive [ i ]
 
