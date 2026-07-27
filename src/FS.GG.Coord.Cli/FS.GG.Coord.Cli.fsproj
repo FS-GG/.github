@@ -58,7 +58,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.12.0</Version>
+    <Version>0.13.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
