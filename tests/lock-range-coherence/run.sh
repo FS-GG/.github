@@ -853,6 +853,132 @@ else bad "could not materialise the directory toy checkout"; fi
 load "…while the SAME script from a full checkout is green, which is why no existing suite saw #1510" \
   "$toy" ok
 
+# ---- WHICH STEP IS THE AUTHORITY CHECKOUT AT ALL (.github#1553) --------------------------------------
+#
+# Everything above hands sparse_set THIS repo's real workflow, which carries exactly one checkout,
+# spelled `FS-GG/.github`, with a `uses:` nobody disputes. So the legs above cannot see the two ways
+# this file's private step selector disagreed with the closure gate's, both of them found by reading
+# rather than by a red:
+#
+#   * it never read `uses:` — ANY step whose `with:` carried `repository: FS-GG/.github` qualified;
+#   * it compared the repository case-SENSITIVELY, where GitHub resolves it casefolded and the closure
+#     gate's own `repo-casing` fixture leg asserts a case-variant spelling must still resolve.
+#
+# Both directions are fail-CLOSED (a wrong count is a hard error, never a wrong tree), which is exactly
+# why they survived unnoticed — and why they are asserted here on SYNTHETIC workflows rather than left
+# to the subject, which will never contain either shape. Since #1553 the qualification is
+# `scripts/lib/sparse.py`'s `checkout_steps`; what stays this fixture's is the demand for exactly one.
+echo
+sel="$(newrepo selector)"
+w "$sel" scripts/toy-gate.py <<'EOF'
+print("selector-toy: ok")
+EOF
+w "$sel" scripts/lib/helper.py <<'EOF'
+VERDICT = "selector-toy: ok"
+EOF
+seal "$sel"
+
+selcase=0
+# sel_pass <name> <workflow> — sparse_set resolves the workflow to the ONE authority checkout, and
+# that checkout is the one that actually fetches scripts/. BOTH files are asserted, not just the
+# named one: the whole point of a directory pattern is that the sibling comes along unnamed, and a
+# run that resolved the wrong step would exit 0 having materialised an empty tree — which a bare
+# exit-0 assertion would call a pass (epic #266). `/nope/` is the decoy's pattern, so resolving the
+# impostor selects neither file.
+sel_pass() {
+  local n="$1" wf="$2" out rc=0
+  selcase=$((selcase+1))
+  out="$(materialise "$WORK/selout-$selcase" --repo-root "$sel" --from-workflow "$wf" 2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ]; then bad "$n (expected sparse_set to resolve it, exit $rc)" "$out"
+  elif ! printf '%s\n' "$out" | grep -qxF 'scripts/toy-gate.py'; then
+    bad "$n (resolved, but fetched nothing from the authority tree)" "$out"
+  elif ! printf '%s\n' "$out" | grep -qxF 'scripts/lib/helper.py'; then
+    bad "$n (fetched the named script, but not the sibling the directory pattern exists for)" "$out"
+  else ok "$n"; fi
+}
+
+# sel_fail <name> <required-pattern> <workflow> — and exit 2, sparse_set's own SparseError code, so a
+# crash or an argparse rejection cannot be laundered into a catch.
+sel_fail() {
+  local n="$1" pat="$2" wf="$3" out rc=0
+  selcase=$((selcase+1))
+  out="$(materialise "$WORK/selout-$selcase" --repo-root "$sel" --from-workflow "$wf" 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then bad "$n (expected a non-zero exit, got 0)" "$out"
+  elif [ "$rc" -ne 2 ]; then bad "$n (expected exit 2 SparseError, got $rc)" "$out"
+  elif printf '%s' "$out" | grep -qF -- "$pat"; then ok "$n"
+  else bad "$n (failed, but not for the claimed reason: no '$pat')" "$out"; fi
+}
+
+# 1. THE CASE-VARIANT SPELLING. `fs-gg/.GitHub` and `FS-GG/.github` are the same repository on a real
+#    runner, and tests/sparse-checkout-closure/run.sh's `repo-casing` leg already requires the closure
+#    gate to say so. Before #1553 this file found ZERO authority steps here and hard-failed on the
+#    count — a no-verdict over a workflow that works.
+w "$WORK" selectors/case.yml <<'YAML'
+name: casevariant
+on: [push]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: fs-gg/.GitHub
+          path: dotgithub
+          sparse-checkout: |
+            /scripts/
+          sparse-checkout-cone-mode: false
+YAML
+sel_pass "a case-variant repository: still names the authority repo, as GitHub resolves it" \
+  "$WORK/selectors/case.yml"
+
+# 2. THE IMPOSTOR, BESIDE THE REAL ONE. A step that is not `actions/checkout` cannot be an authority
+#    checkout however its `with:` block is spelled. Before #1553 this counted TWO authority steps and
+#    refused the workflow; the count is right only because `uses:` is read.
+w "$WORK" selectors/decoy.yml <<'YAML'
+name: decoy
+on: [push]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/build-push-action@v6
+        with:
+          repository: FS-GG/.github
+          sparse-checkout: |
+            /nope/
+          sparse-checkout-cone-mode: false
+      - uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          path: dotgithub
+          sparse-checkout: |
+            /scripts/
+          sparse-checkout-cone-mode: false
+YAML
+sel_pass "a non-checkout step carrying repository: is not an authority checkout, so the count is one" \
+  "$WORK/selectors/decoy.yml"
+
+# 3. AND THE SAME IMPOSTOR ALONE IS NOT A CHECKOUT EITHER — the direction that would have been a
+#    QUIET wrong answer rather than a loud one. Before #1553 this workflow resolved to the impostor's
+#    `with:` block, materialised whatever it happened to name, and exited 0 having fetched no
+#    authority tree at all. A step set with no real checkout in it must be a refusal (#266).
+w "$WORK" selectors/decoy-only.yml <<'YAML'
+name: decoyonly
+on: [push]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/build-push-action@v6
+        with:
+          repository: FS-GG/.github
+          sparse-checkout: |
+            /scripts/
+          sparse-checkout-cone-mode: false
+YAML
+sel_fail "a workflow whose ONLY repository: FS-GG/.github step is not a checkout is refused, not graded" \
+  "found 0" "$WORK/selectors/decoy-only.yml"
+
 echo
 echo "lock-range-coherence fixture: $pass passed, $failcount failed."
 [ "$failcount" -eq 0 ] || exit 1

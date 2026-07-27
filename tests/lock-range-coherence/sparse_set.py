@@ -36,6 +36,12 @@ clone for a workflow that fetches an EMPTY TREE — a fail-open, in the module w
 declared-but-unreadable block "is an error, never that". The shared module tests membership with
 `in`, which is the only way to tell those two apart.
 
+AND SO IS THE STEP SELECTOR (.github#1553). #1530 shared the PARSE and left "which step's `with:`
+block am I about to read" in each caller. Underneath their different filters both had to answer one
+identical question — *is this step an `actions/checkout` aimed at repository R* — and this file
+answered it twice wrong: it never read `uses:` at all, and it compared `repository:` case-sensitively
+where GitHub resolves it casefolded. See `_authority_steps`.
+
 HOW THE SELECTION IS COMPUTED: with git, not with a re-implementation of gitignore semantics. A
 throwaway repo is built holding EMPTY placeholders at every tracked path of the subject repo — the
 path universe, and nothing else — then `git sparse-checkout set` is run with the workflow's own
@@ -75,7 +81,13 @@ import tempfile
 # the tree under test would make the fixture assert whatever that tree happened to contain.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from lib.sparse import SparseRefusal, cone_mode_of, patterns_of  # noqa: E402 (path shim first)
+from lib.sparse import (  # noqa: E402 (path shim first)
+    SparseRefusal,
+    checkout_steps,
+    cone_mode_of,
+    patterns_of,
+    repository_matches,
+)
 
 AUTHORITY = "FS-GG/.github"
 
@@ -85,19 +97,37 @@ class SparseError(Exception):
 
 
 def _authority_steps(document: object) -> list[dict]:
-    """Every `actions/checkout` step in the document aimed at the authority repo."""
-    found: list[dict] = []
-    jobs = document.get("jobs") if isinstance(document, dict) else None
-    for job in (jobs or {}).values():
-        if not isinstance(job, dict):
-            continue
-        for step in job.get("steps") or []:
-            if not isinstance(step, dict):
-                continue
-            params = step.get("with")
-            if isinstance(params, dict) and str(params.get("repository", "")).strip() == AUTHORITY:
-                found.append(params)
-    return found
+    """The `with:` mapping of every `actions/checkout` in the document aimed at the authority repo.
+
+    QUALIFICATION IS `lib/sparse.py`'S, FILTERING IS THIS FIXTURE'S (.github#1553). What remains here
+    is the one thing that is genuinely this caller's: it wants the SINGLE authority checkout, and
+    `parse_workflow` refuses any other count. The two facts that make a step a candidate at all — the
+    `uses:` and the `repository:` — are the shared reading, and this file had BOTH of them wrong:
+
+      * it never read `uses:`, so any step carrying `repository: FS-GG/.github` in its `with:` block
+        qualified, including one that is not a checkout and fetches nothing;
+      * it compared the repository case-SENSITIVELY, so `repository: fs-gg/.GitHub` — which GitHub
+        resolves to the same repo, and which the closure gate's `repo-casing` fixture leg asserts must
+        still resolve — yielded zero authority steps and a hard failure on the count.
+
+    Both were fail-CLOSED (a wrong count is an error, never a wrong selection), which is why they
+    survived to be filed rather than found in production. Neither is reachable from this fixture's own
+    subject, which is why they are asserted in `tests/lock-range-coherence/run.sh` against synthetic
+    workflows instead.
+
+    ONE BEHAVIOUR CHANGE #1553 DID NOT ASK FOR, TAKEN DELIBERATELY. The old copy walked
+    `(jobs or {}).values()` and `job.get("steps") or []`, so a document whose `jobs:` or `steps:` is
+    a truthy NON-mapping died with an uncaught `AttributeError`/`TypeError` — a traceback and exit 1.
+    The shared selector type-guards both, so the same document now reaches this function as zero
+    steps and leaves as a clean exit-2 `SparseError` naming the count. Fail-closed before and after,
+    unreachable from a valid workflow, and the second shape is the one an operator can act on — but
+    it is a change, so it is written down rather than discovered.
+    """
+    return [
+        step.params
+        for step in checkout_steps(document)
+        if repository_matches(step.repository, AUTHORITY)
+    ]
 
 
 def parse_workflow(path: Path) -> tuple[list[str], bool]:
@@ -107,8 +137,9 @@ def parse_workflow(path: Path) -> tuple[list[str], bool]:
     under-fetches nothing. A declared-but-unreadable one is an error, never that, and since #1530
     that sentence is finally TRUE of a bare `sparse-checkout:` too.
 
-    The block itself is read by `scripts/lib/sparse.py`; what stays here is finding the ONE authority
-    step to hand it, and translating its refusal into this module's own exit-2 contract.
+    The block itself, and which steps are candidates at all, are read by `scripts/lib/sparse.py`;
+    what stays here is the demand for EXACTLY ONE authority step, and translating the shared module's
+    refusal into this module's own exit-2 contract.
     """
     try:
         import yaml

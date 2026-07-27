@@ -13,10 +13,12 @@
 #
 # Static: no SDK, no restore, no network. The fixture needs nothing but python3, git and bash.
 #
-# `scripts/lib/sparse.py` IS IN THE FILTER BECAUSE THE FIXTURE NOW IMPORTS IT (.github#1530). The
+# `scripts/lib/sparse.py` IS IN THE FILTER BECAUSE THE FIXTURE IMPORTS IT (.github#1530, #1553). The
 # sparse-checkout block is read in one place and taken by two callers — this fixture's `sparse_set.py`
 # and `scripts/check-sparse-checkout-closure.py` — so editing that reading must re-run BOTH exercises,
 # or the shared module gains the one property it was created to remove: a change nobody's fixture sees.
+# Since #1553 that module also decides WHICH STEP either caller reads the block out of, so an edit
+# there can change this fixture's authority checkout without touching a line of `sparse_set.py`.
 # The two `paths:` lists are identical on purpose; `check-paths-coherence.py` rule (a) reds a divergence.
 name: lock-range-coherence-selftest
 
