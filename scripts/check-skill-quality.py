@@ -213,9 +213,9 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
     if contract.get("schema") != CONTRACT_SCHEMA:
         fail(
             errors,
-            f"semantic polarity gate cannot run: command contract schema "
+            "semantic polarity gate cannot run: command contract schema "
             f"{contract.get('schema')!r} is not {CONTRACT_SCHEMA}; the --paths/--apply/--dry-run "
-            f"polarity assertions were NOT made — port them before moving the schema id",
+            "polarity assertions were NOT made — port them before moving the schema id",
         )
         return
     commands = {row["name"]: set(row["flags"]) for row in contract["commands"]}
