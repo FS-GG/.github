@@ -496,7 +496,7 @@ a fix for it. It also verifies the `SkillMirror.fs` digest recorded in the table
 so a table derived from a *different* library revision cannot claim to have been derived from this one.
 
 **The residual gap, and what now watches it.** This closes shell-drifts-from-table (a gate on every
-PR) and table-drifts-from-library-at-`a066e0b` (a re-runnable derivation). Neither notices a **future**
+PR) and table-drifts-from-library-at-`5debf6e` (a re-runnable derivation). Neither notices a **future**
 library change: this repo's CI holds neither the source nor the package. That third leg landed as
 [#1546](https://github.com/FS-GG/.github/issues/1546) (`f3a6d15`) — a scheduled cross-repo freshness
 check, [`skillmirror-freshness.yml`](../../.github/workflows/skillmirror-freshness.yml) plus
@@ -511,13 +511,22 @@ never says whether the move altered `verify`'s behaviour — only re-running the
 `Schemas.fs` can move `verify` while this gate stays green:
 [#1577](https://github.com/FS-GG/.github/issues/1577). A freshness gate is a tripwire on one file, not a
 proof of alignment, and calling it the latter would re-create the fail-open #1513 was filed about.
+**#1577 is not hypothetical**: across the very span re-derived below, `Schemas.fs` moved
+`skillManifestVersion` from `1` to `2` (FS.GG.SDD#727 — the manifest now content-addresses a skill's
+whole file set), and no digest this gate watches covered that line.
 
-**The table is dated right now — and the point is that this is measured, not feared.** As of
-2026-07-27, `derivedFrom` records `b1c7e94d…` (4371 B) at `a066e0b`, while `SkillMirror.fs` on
-`FS-GG/FS.GG.SDD` `main` hashes `2742eb73…` (18807 B). Re-deriving the table is tracked as
-[#1576](https://github.com/FS-GG/.github/issues/1576). So `#120`'s claim is still pinned in one
-direction and dated in the other — the difference from before is that the drift is now **announced by a
-gate** on a schedule instead of waiting to be found by hand for a fourth time.
+**The gate found the table dated, and the table was re-derived — the full loop, measured at each
+step.** `derivedFrom` recorded `b1c7e94d…` (4371 B) at `a066e0b`; the scheduled check read
+`SkillMirror.fs` on `FS-GG/FS.GG.SDD` `main` and reported a different digest, which was filed as
+[#1576](https://github.com/FS-GG/.github/issues/1576) and closed by re-running the oracle against a
+checkout at **`5debf6e`** (`95af075b…`, 27817 B) — every one of the 10 `verify` vectors and 11
+`digestVectors` still agreeing with the live library, and `derivedFrom` plus
+`digestVectors.measuredAgainst` updated **in the same change** as the re-derivation that justified
+them. That is what closing the loop looks like, and it is worth naming which leg did which: the gate
+said the library *moved* and could not say more; the **oracle** is what established that `verify`'s
+answers were unchanged. `#120`'s claim is pinned in one direction on every PR and re-measured in the
+other on demand, and drift is now **announced by a gate** on a schedule instead of waiting to be found
+by hand for a fourth time.
 
 ### Intentional differences are asserted, not commented
 
