@@ -531,7 +531,9 @@ module ProtocolTests =
           HumanBlock = None
           Predicate = None
           Class = None
-          BoardClass = None }
+          BoardClass = None
+          Phase = None
+          AgeDays = None }
 
     /// REFLECTION CAN SEE THE UNION — so the guards below are not vacuous (#266), and the count is
     /// asserted against `BoardStatus` rather than against `6`.

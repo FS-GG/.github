@@ -32,7 +32,9 @@ module BatchTests =
           HumanBlock = None
           Predicate = None
           Class = None
-          BoardClass = None }
+          BoardClass = None
+          Phase = None
+          AgeDays = None }
 
     let private held w ageSeconds it =
         { it with
@@ -791,3 +793,190 @@ module BatchTests =
                 Assert.True(
                     sentence.Contains d.Item.Ref.Short,
                     $"the reason for %A{d.Result} does not name the item it is about: %s{sentence}")
+
+    // ================================================================================================
+    // PRIORITY-GREEDY LANE PACKING (.github#1598)
+    // ================================================================================================
+    // The fold used to walk candidates in ISSUE-NUMBER order and admit whatever maximal disjoint set fell
+    // out. That is not a priority, and on 2026-07-27 it cost the board its whole afternoon: three `P0
+    // Decisions` items were refused as "overlaps batch member .github#1560" while #1560 was hardening, and
+    // the only lever left to the driver was to park nineteen rows in `Backlog` to force the queue.
+    //
+    // The disjointness guarantee is UNCHANGED here and that is the point — what changed is the ORDER the
+    // fold walks, so the highest-ranked schedulable item is always the one that gets the contested lane.
+
+    let private classed c it = { it with Class = Some c }
+    let private phased p it = { it with Phase = Some p }
+    let private aged d it = { it with AgeDays = Some d }
+
+    [<Fact>]
+    let ``#1598 AC2 THE 2026-07-27 CASE — a P0 defect and a hardening item on one path: the P0 wins`` () =
+        // The fixture the acceptance criterion asks for, reproduced exactly: one contended path, a
+        // structural P0 item and a lower-value one, and the P0 carries the LARGER issue number — which is
+        // precisely why it used to lose. Under the old ordering this returned [ 1 ]; there is no board
+        // state that made it return [ 2 ].
+        let hardening =
+            item 1 [ "scripts/coordination-sync" ] |> classed Hardening |> phased P0Decisions
+
+        let p0 =
+            item 2 [ "scripts/coordination-sync" ] |> classed Defect |> phased P0Decisions
+
+        let r = run [] [ hardening; p0 ]
+
+        Assert.Equal<int list>([ 2 ], chosenNumbers r)
+
+        match verdictOf r 1 with
+        | Some(OverlapsInFlight _) -> ()
+        | other -> failwithf "expected the hardening item to be the one displaced, got %A" other
+
+    [<Fact>]
+    let ``#1598 the highest-ranked schedulable item is ALWAYS admitted, never merely usually`` () =
+        // The property, over a board where the top-ranked item collides with several others. Whatever the
+        // pack does with the rest, the head of the ranking must be in it.
+        let hub =
+            item 90 [ "src/Shared" ] |> classed Defect |> phased P0Decisions
+
+        let r =
+            run
+                []
+                [ item 1 [ "src/Shared/A.fs" ]
+                  item 2 [ "src/Shared/B.fs" ]
+                  item 3 [ "src/Shared/C.fs" ]
+                  hub ]
+
+        Assert.Contains(90, chosenNumbers r)
+
+    [<Fact>]
+    let ``#1598 disjointness is UNCHANGED — priority reorders lanes, it never overlaps them`` () =
+        // The one guarantee that may not be traded for priority. A high-rank item does not get to run
+        // alongside something it collides with; it gets to be the one that wins the collision.
+        let r =
+            run
+                []
+                [ item 1 [ "src/A.fs" ] |> classed Hardening
+                  item 2 [ "src/A.fs" ] |> classed Defect
+                  item 3 [ "src/B.fs" ] ]
+
+        Assert.Equal<int list>([ 2; 3 ], List.sort (chosenNumbers r))
+
+    [<Fact>]
+    let ``#1598 lanes narrow items would have shared are still BOTH admitted — parallelism is not sacrificed`` () =
+        // Priority-greedy is not "one item at a time". Where nothing collides, everything still runs, and
+        // the only observable difference from the old scheduler is the order of `Chosen`.
+        let r =
+            run
+                []
+                [ item 1 [ "src/A.fs" ] |> classed Hardening
+                  item 2 [ "src/B.fs" ] |> classed Defect ]
+
+        Assert.Equal<int list>([ 2; 1 ], chosenNumbers r)
+
+    [<Fact>]
+    let ``#1598 a cap hands the ONE lane to the top-ranked item, not to the lowest number`` () =
+        // `next` and `take` are this fold capped at one, so this is the assertion that actually decides
+        // what a worker is handed. Every candidate here is disjoint — nothing collides — so under the old
+        // ordering the cap always yielded #1.
+        let r =
+            schedule
+                false
+                (Some 1)
+                []
+                [ item 1 [ "src/A.fs" ]
+                  item 2 [ "src/B.fs" ] |> classed Defect
+                  item 3 [ "src/C.fs" ] ]
+            |> ok
+
+        Assert.Equal<int list>([ 2 ], chosenNumbers r)
+
+    [<Fact>]
+    let ``#1598 AC4 an item displaced by better-ranked work eventually wins a lane by starving`` () =
+        // THE STARVATION CRITERION, as a before/after over ONE board. The only thing that changes between
+        // the two runs is the passage of time on the displaced item — no field is set, no edge is drawn,
+        // nothing is triaged. If escalation did not exist, an item whose touch-set permanently collides
+        // with a better-classed one would never run again.
+        let contendedPath = [ "src/Contended.fs" ]
+
+        let winner =
+            item 1 contendedPath |> classed Defect |> phased P0Decisions |> aged 0
+
+        let displaced fresh =
+            item 2 contendedPath |> aged (if fresh then 1 else Rank.StarvationDays + 1)
+
+        // Day one: the defect takes the lane, exactly as it should.
+        Assert.Equal<int list>([ 1 ], chosenNumbers (run [] [ winner; displaced true ]))
+
+        // Weeks later, nothing else having changed: the starved item takes it.
+        Assert.Equal<int list>([ 2 ], chosenNumbers (run [] [ winner; displaced false ]))
+
+    // ================================================================================================
+    // `batch --explain` (.github#1598 AC5)
+    // ================================================================================================
+
+    [<Fact>]
+    let ``#1598 AC5 explainRanking prints every candidate, its verdict, and its rank inputs`` () =
+        let r =
+            run
+                []
+                [ item 1 [ "src/A.fs" ] |> classed Hardening
+                  item 2 [ "src/A.fs" ] |> classed Defect |> phased P0Decisions ]
+
+        let lines = explainRanking r
+        let text = String.concat "\n" lines
+
+        // The ADMITTED item leads the list, because the list IS the ranking.
+        Assert.Contains("ADMITTED", List.item 2 lines)
+        Assert.Contains("#2", List.item 2 lines)
+
+        // Both candidates appear, with the inputs that produced their positions.
+        Assert.Contains("defect", text)
+        Assert.Contains("P0 Decisions", text)
+        Assert.Contains("hardening", text)
+        Assert.Contains("refused", text)
+
+    [<Fact>]
+    let ``#1598 AC5 an admitted item reports how many lanes it DISPLACED`` () =
+        // The stated risk, made countable: one wide high-rank item can exclude several narrow ones a
+        // maximal pack would have run together. That trade must be reported, or a drop in parallelism is
+        // indistinguishable from a regression.
+        let wide = item 9 [ "src" ] |> classed Defect
+
+        let r =
+            run
+                []
+                [ item 1 [ "src/A.fs" ]
+                  item 2 [ "src/B.fs" ]
+                  item 3 [ "src/C.fs" ]
+                  wide ]
+
+        Assert.Equal(3, displacedBy r wide.Ref)
+
+        let admitted =
+            explainRanking r |> List.find (fun l -> l.Contains "ADMITTED")
+
+        Assert.Contains("displaced 3", admitted)
+
+    [<Fact>]
+    let ``#1598 AC5 an item with no priority evidence is told it SORTS LAST, not that it was penalised`` () =
+        let r =
+            run [] [ item 1 [ "src/A.fs" ] |> classed Defect; item 2 [ "src/A.fs" ] ]
+
+        let refused =
+            explainRanking r |> List.find (fun l -> l.Contains "refused")
+
+        Assert.Contains("no priority evidence: sorts last", refused)
+
+    [<Fact>]
+    let ``#1598 explainRanking is SILENT over an empty candidate set`` () =
+        Assert.Empty(explainRanking (run [] []))
+
+    [<Fact>]
+    let ``#1598 every decision carries the rank the FOLD used, not one a renderer re-derived`` () =
+        let r =
+            run [] [ item 1 [ "src/A.fs" ] |> classed Defect |> phased P3Governance |> aged 12 ]
+
+        let d = List.exactlyOne r.Decisions
+
+        Assert.Equal(Some Defect, d.Rank.Class)
+        Assert.Equal(Some P3Governance, d.Rank.Phase)
+        Assert.Equal(Some 12, d.Rank.AgeDays)
+        Assert.Equal(1, d.Rank.Number)

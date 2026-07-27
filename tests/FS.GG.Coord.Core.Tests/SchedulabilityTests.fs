@@ -27,7 +27,9 @@ module SchedulabilityTests =
           HumanBlock = None
           Predicate = None
           Class = None
-          BoardClass = None }
+          BoardClass = None
+          Phase = None
+          AgeDays = None }
 
     let private claim w =
         { Worker = WorkerId w

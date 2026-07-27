@@ -148,6 +148,7 @@ module OptionsTests =
           [ "--flip" ], "done", "claim"
           [ "--force" ], "claim", "release"
           [ "--include-backlog" ], "take", "who"
+          [ "--explain" ], "batch", "take"
           [ "--fresh" ], "scan", "batch"
           [ "--wait" ], "landable", "next"
           [ "--paths"; "src/A.fs" ], "widen", "claim"
@@ -979,3 +980,28 @@ module OptionsTests =
             for order in [ [ "--json"; "--text" ]; [ "--text"; "--json" ] ] do
                 let e = parse ([ verb ] @ args @ order) |> rejected
                 Assert.Contains($"%s{offending} is not a flag of", e)
+
+    [<Fact>]
+    let ``#1598 batch --explain is READ, and it is scoped to the ONE verb that can answer it`` () =
+        // Same shape as #636's `--include-backlog` pin above and for the same reason: the usage block is a
+        // prescribing site nothing else gates, so a flag it advertises must be provably threaded.
+        Assert.True((parse [ "batch"; "--explain" ] |> ok).Explain)
+        Assert.False((parse [ "batch" ] |> ok).Explain)
+
+        // `next` and `take` are `batch` capped at one and print a single ref — a ranking of one candidate
+        // answers nothing — and `decide`'s snapshot carries no `Phase` and no age to rank on. So the flag
+        // is refused there BY NAME rather than silently accepted and dropped, which is the `release
+        // --status` defect (#867/#991) this table exists to prevent.
+        for nonReader in [ "next"; "take"; "decide"; "scan" ] do
+            let e = parse [ nonReader; "--explain" ] |> rejected
+            Assert.Contains("--explain", e)
+            Assert.Contains("batch", e)
+
+    [<Fact>]
+    let ``#1598 --explain composes with both projections — it is not a third rendering`` () =
+        // `--explain` writes to STDERR, so it is orthogonal to `--json`/`--text` rather than a competing
+        // output mode. Both spellings must parse, or `batch --json --explain` — the spelling a driver
+        // consuming the array actually wants — would be refused for no reason.
+        Assert.True((parse [ "batch"; "--json"; "--explain" ] |> ok).Explain)
+        Assert.True((parse [ "batch"; "--text"; "--explain" ] |> ok).Explain)
+        Assert.Equal(Json, (parse [ "batch"; "--json"; "--explain" ] |> ok).Render)

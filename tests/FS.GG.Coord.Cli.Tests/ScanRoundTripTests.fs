@@ -37,7 +37,9 @@ let private aRow: Scan.Row =
       BlockedByRaw = ""
       State = Open
       IsPullRequest = false
-      BoardClass = None }
+      BoardClass = None
+      Phase = None
+      CreatedAt = None }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the

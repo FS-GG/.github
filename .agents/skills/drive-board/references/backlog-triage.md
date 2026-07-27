@@ -36,6 +36,30 @@ future milestone or deliberate parking decision. Record the ref and that reason 
 Do not invent a priority or edit vague prose merely to manufacture a reason. A row without an evidenced
 reason is untriaged and therefore becomes an awaiting-human judgement, not silently retained work.
 
+**Never park a row to reorder a wave.** On 2026-07-27 a driver moved nineteen actionable hardening rows
+into `Backlog` for no reason except to push five structural items to the front of the lane pack. It
+worked, and it left nineteen rows whose only recorded reason lived in a session transcript — which is
+exactly the untriaged state the paragraph above refuses. It also conflated two different facts the board
+must keep apart: "not now" and "not until a human decides".
+
+That workaround existed because the scheduler ignored `Phase` and ordered candidates by issue number, so
+`Status` was the only priority lever there was. It no longer is. `batch` and `take` pack lanes
+priority-greedily by a rank derived from blocking count, `Class`, `Phase` and age
+([.github#1598](https://github.com/FS-GG/.github/issues/1598)), and the highest-ranked schedulable item
+is always admitted. To raise an item's priority, fix the input that makes it important:
+
+| you want | set this |
+|---|---|
+| this unblocks other work | the real `Blocked by` edges on the items waiting for it |
+| this is broken now | `Class` = `defect` (via its `Class:` body line, then `reconcile --apply`) |
+| this comes early in the plan | `Phase` |
+| this has waited too long | nothing — a `Ready` row escalates above class and phase on its own |
+
+`scripts/fsgg-coord batch --repo <repo> --explain` prints the ranking, every candidate's inputs, and how
+many lanes each admitted item displaced. If an item is not where you expect, that output names the input
+to fix. Two `batch` calls over a moving board may legitimately return different sets — rank moves as the
+board moves — so size a wave from one read rather than diffing two.
+
 ### Set Blocked
 
 Set `Blocked` only when a parseable issue reference names a live implementation dependency and the

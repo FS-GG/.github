@@ -25,7 +25,9 @@ module BlockerGraphTests =
           BlockedByRaw = blockedBy
           State = state
           IsPullRequest = false
-          BoardClass = None }
+          BoardClass = None
+          Phase = None
+          CreatedAt = None }
 
     // A `.github` open item blocked by a bare-`#n` list — the spelling the board actually uses.
     let private gh n (blockedBy: string) =

@@ -265,3 +265,84 @@ module TypesTests =
         Assert.Equal(None, itemClassOfWireName "P1")
         Assert.Equal(None, itemClassOfWireName "")
         Assert.Equal(None, itemClassOfWireName null)
+
+    // ================================================================================================
+    // THE PHASE VOCABULARY (.github#1598) — `everyItemClass`'s pattern, one column over.
+    // ================================================================================================
+    // `Phase` is TWO wires, not three: the live Projects v2 option name, and the `repo-phase-map` table in
+    // `docs/coordination/board-schema.md`. There is no body-line grammar — `Phase` is a column a human
+    // sets, and no item text declares it.
+    //
+    // NOTHING GATES THE SECOND WIRE. `scripts/project-field-options check` has a `Repo Scope` leg and a
+    // `Class` leg and no `Phase` leg, so the nine strings below are transcribed by hand from a documented
+    // table with no tool comparing them. That is exactly the situation the exact-spelling pins are for.
+
+    /// Every `Phase` case, by reflection. A hand-written list is the copy this pattern exists to refuse.
+    let private everyPhase: (string * Phase) list =
+        FSharpType.GetUnionCases typeof<Phase>
+        |> Array.map (fun c -> c.Name, FSharpValue.MakeUnion(c, [||]) :?> Phase)
+        |> Array.toList
+
+    [<Fact>]
+    let ``reflection can actually see Phase - the guards below are not vacuous`` () =
+        Assert.Equal(9, List.length everyPhase)
+
+    [<Fact>]
+    let ``#1598 every phase round-trips through the wire`` () =
+        for name, p in everyPhase do
+            let wire = phaseWireName p
+
+            Assert.True(
+                phaseOfWireName wire = Some p,
+                $"{name} renders as '{wire}' and does not parse back — the scan would read the board's own column as no phase at all"
+            )
+
+    [<Fact>]
+    let ``#1598 no two phases share a wire name, and none renders blank or padded`` () =
+        let names = everyPhase |> List.map (snd >> phaseWireName)
+        Assert.Equal<string list>(List.distinct names, names)
+
+        for name, p in everyPhase do
+            let w = phaseWireName p
+            Assert.False(System.String.IsNullOrWhiteSpace w, $"case {name} renders blank on the wire")
+            Assert.Equal(w.Trim(), w)
+
+    [<Fact>]
+    let ``#1598 phaseOrder is a TOTAL ORDER over the union — no two phases tie`` () =
+        // A tie would make the third rank term silently stop discriminating between two phases, which is
+        // invisible: the batch would still be produced, just ordered by the term below it.
+        let orders = everyPhase |> List.map (snd >> phaseOrder)
+        Assert.Equal<int list>(List.distinct orders, orders)
+        Assert.Equal<int list>(List.sort orders, orders)
+
+    [<Fact>]
+    let ``#1598 the phase wire spellings are pinned to the documented board options`` () =
+        // Written down twice ON PURPOSE, exactly as the `Class` and blocker-state pins are. The round-trip
+        // above proves the engine agrees with ITSELF and stays green through a rename; these nine
+        // assertions are the ONLY place a rename is observed, and here that matters more than it does for
+        // `Class` — there is no `project-field-options` leg for `Phase` to catch it downstream.
+        Assert.Equal("P0 Decisions", phaseWireName P0Decisions)
+        Assert.Equal("P1 Rendering", phaseWireName P1Rendering)
+        Assert.Equal("P2 SDD", phaseWireName P2Sdd)
+        Assert.Equal("P3 Governance", phaseWireName P3Governance)
+        Assert.Equal("P4 Templates", phaseWireName P4Templates)
+        Assert.Equal("P5 Versioning", phaseWireName P5Versioning)
+        Assert.Equal("P6 Game", phaseWireName P6Game)
+        Assert.Equal("P7 Audio", phaseWireName P7Audio)
+        Assert.Equal("P8 Net", phaseWireName P8Net)
+
+    [<Fact>]
+    let ``#1598 the phase parser is forgiving about surrounding space and case`` () =
+        Assert.Equal(Some P0Decisions, phaseOfWireName "  p0 decisions  ")
+        Assert.Equal(Some P2Sdd, phaseOfWireName "P2 sdd")
+
+    [<Fact>]
+    let ``#1598 an unrecognised column value is None, and emphatically not P0`` () =
+        // P0 outranks every other phase, so resolving an unknown word onto it would make a typo — or a
+        // board option somebody adds without touching this engine — the highest-priority work on the
+        // board. `None` ranks the row LAST, which is the direction that cannot hurt.
+        Assert.Equal(None, phaseOfWireName "P9 Something")
+        Assert.Equal(None, phaseOfWireName "P0")
+        Assert.Equal(None, phaseOfWireName "Decisions")
+        Assert.Equal(None, phaseOfWireName "")
+        Assert.Equal(None, phaseOfWireName null)

@@ -338,7 +338,17 @@ module Snapshot =
                       // (.github#1588). `None` here means "this parser did not look", and the projection
                       // chore reads it as a disagreement — so a context that never enriches writes the
                       // column it already holds, an idempotent write, rather than suppressing a real one.
-                      BoardClass = None }
+                      BoardClass = None
+                      // The board's `Phase` COLUMN and the issue's `createdAt` are not on this document
+                      // either, and for `BoardClass`'s exact reason: both are SCAN facts, and this parser
+                      // is pure (.github#1598). `Client.enrichBoardFacts` joins them on the offer path.
+                      //
+                      // `None` here is what makes a bare `decide --snapshot` rank on blocking-count alone
+                      // — `Rank`'s documented no-priority-data case, which orders by issue number exactly
+                      // as this engine did before #1598. A snapshot-only context therefore loses priority,
+                      // never correctness, and never invents a phase it did not read.
+                      Phase = None
+                      AgeDays = None }
                   BashPaths = bp
                   DeclaredPredicate = dp }
         | a, b, c, d, e, f, g, h, i, j, k ->

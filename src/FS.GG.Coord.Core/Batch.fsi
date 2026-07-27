@@ -67,10 +67,18 @@ module Batch =
           Result: Schedulability
           /// When `Result` is `OverlapsInFlight`, who holds the tokens it collided with. `None` for
           /// every other verdict.
-          CollidedWith: Holder option }
+          CollidedWith: Holder option
+          /// The derived priority the fold ORDERED this candidate by (.github#1598).
+          ///
+          /// Carried on the decision, never recomputed by a renderer. `--explain` exists to show the
+          /// ordering the scheduler actually used, and a rank derived a second time downstream is a
+          /// second answer with nothing asserting it matches the first — which is the drift this repo
+          /// closed five times in one day.
+          Rank: Rank.Rank }
 
     type BatchResult =
-        { /// The items that may run in parallel, in issue order.
+        { /// The items that may run in parallel, in the order they were ADMITTED — which is derived-rank
+          /// order (.github#1598), not issue order.
           Chosen: Item list
 
           /// Every candidate the scheduler EVALUATED, with its verdict — including the ones it chose.
@@ -93,10 +101,22 @@ module Batch =
     /// Repo-scoped by contract: a reservation in another repo names a different file (#312).
     val holderOf: reservations: Reservation list -> owner: string -> repo: string -> token: string -> Holder option
 
-    /// The maximal set of `candidates` that may run at once, given `inFlight`.
+    /// A disjoint set of `candidates` that may run at once, given `inFlight` — packed PRIORITY-GREEDILY.
     ///
-    /// Greedy by issue number, so it is DETERMINISTIC: two workers scheduling the same board in the
-    /// same window compute the same batch, which is what makes the answer safe to cache and share.
+    /// **NOT AN ARBITRARY MAXIMAL SET** (.github#1598). Candidates are walked in derived-`Rank` order and
+    /// each is admitted if it clears everything already reserved, so the highest-ranked schedulable item
+    /// is ALWAYS in the batch. It previously walked in issue order and packed whatever maximal set fell
+    /// out, which is how three `P0 Decisions` items lost their lanes to a hardening item with a smaller
+    /// number, and why a driver's only remaining priority lever was to park nineteen rows in `Backlog`.
+    ///
+    /// TOTAL PARALLELISM MAY DROP, and that is the intended trade rather than a regression: one wide
+    /// high-rank item can exclude several narrow ones a maximal pack would have run together. It is
+    /// reported, not silent — see `displacedBy` and `explainRanking`.
+    ///
+    /// STILL DETERMINISTIC on identical input: every rank term is a board fact and the issue NUMBER is
+    /// the final term, so two workers reading one cached window (#418) compute one batch. It is NOT
+    /// stable across DIFFERENT windows — rank moves as the board moves — so no caller may assume two
+    /// `batch` calls return the same set.
     ///
     /// `limit` caps the batch (`batch -n`). `None` is unlimited. Reaching the cap stops the fold, so
     /// the candidates after it are neither chosen nor explained — see `BatchResult.Truncated`.
@@ -153,3 +173,20 @@ module Batch =
     /// blockers that will clear / withheld at a column the caller did not ask for. A banner on a healthy
     /// queue is noise, so there is deliberately none. Each string is one stderr line.
     val starvedBanner: leaseMinutes: int -> result: BatchResult -> string list
+
+    /// How many candidates a given batch member DISPLACED — passed over specifically because they
+    /// collided with it (.github#1598).
+    ///
+    /// The cost side of priority-greedy packing, made countable. A trade nobody is told about is
+    /// indistinguishable from a regression in parallelism.
+    val displacedBy: result: BatchResult -> member': Ref -> int
+
+    /// `batch --explain` — THE ORDERING, MADE INSPECTABLE (.github#1598 AC5).
+    ///
+    /// One line per candidate in DECISION order, which is rank order — so the list is itself the ranking.
+    /// Each line carries the verdict, every rank input that produced the candidate's position, and, for an
+    /// admitted item, how many lanes it displaced. An item with no priority evidence says so explicitly,
+    /// because "sorts last" and "was penalised" are different facts and only one of them is true.
+    ///
+    /// Returns [] for an empty candidate set — a header over nothing is noise. Each string is one line.
+    val explainRanking: result: BatchResult -> string list

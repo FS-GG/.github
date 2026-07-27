@@ -128,6 +128,11 @@ module Options =
           /// `set-field --batch` — the remaining `Field=Value` args are written in ONE aliased mutation
           /// document (#448): N fields, one GraphQL request, one point at the floor.
           Batch: bool
+          /// `batch --explain` — print the DERIVED RANKING beside the batch (.github#1598): every candidate
+          /// in the order the scheduler considered it, the rank inputs that produced that order, and how
+          /// many lanes each admitted item displaced. Stderr, like every other "why" this verb prints, so
+          /// `batch --json --explain` keeps stdout a clean machine document.
+          Explain: bool
           /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
           /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
           Strict: bool
@@ -213,11 +218,16 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              POSTs a claim marker TAKING this repo's chore lock. For the
                                              same decision WITHOUT the offer use `batch --text -n 1` —
                                              that is the read, and what a STALE engine still permits
-  batch  [--repo NAME] [-n N] [--include-backlog]
+  batch  [--repo NAME] [-n N] [--include-backlog] [--explain]
                                              every item schedulable in parallel right now — `next`
                                              uncapped, and the READ half of that pair: it makes no
                                              chore offer and takes no lock (#1535). Defaults to JSON;
-                                             --text prints what `next` prints, minus the offer
+                                             --text prints what `next` prints, minus the offer.
+                                             Candidates are packed PRIORITY-GREEDILY by a derived rank
+                                             (blocking count, Class, Phase, age — #1598), so the
+                                             highest-ranked schedulable item is always admitted;
+                                             --explain prints that ranking and why each item won or
+                                             lost its lane
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)
@@ -508,6 +518,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FMint
         | FFlip
         | FLimit
+        | FExplain
         | FLocal
         | FAllRepos
         | FOver
@@ -594,6 +605,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | FIncludeBacklog -> Only [ Scan; Next; BatchCmd; Take ]
 
+        // `batch` ONLY (.github#1598). `--explain` prints the derived RANKING — every candidate in the
+        // order the scheduler considered it, with the rank inputs that put it there. `next` and `take`
+        // are `batch` capped at one and print a single ref; a ranking of one candidate answers nothing,
+        // and `decide` has no board columns to rank on (its snapshot carries no `Phase` and no age).
+        | FExplain -> Only [ BatchCmd ]
+
     /// EVERY flag's argv spelling — the CANONICAL one a machine consumer matches on, and its aliases.
     ///
     /// Lifted out of `renderCommandContract` by #1534, which needed the same Flag → spelling map to name
@@ -630,6 +647,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FStatus -> "--status", []
         | FAll -> "--all", []
         | FBatch -> "--batch", []
+        | FExplain -> "--explain", []
         | FStrict -> "--strict", []
         | FActive -> "--active", []
         | FApply -> "--apply", []
@@ -887,6 +905,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Flip then FFlip, "--flip"
           if not (List.isEmpty o.Over) then FOver, "--over"
           if o.Limit.IsSome then FLimit, "-n"
+          if o.Explain then FExplain, "--explain"
 
           // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
           // head changed the message for inputs that were already wrong for another reason:
@@ -1379,6 +1398,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
+            | "--explain" :: t -> flags { acc with Explain = true } t
             | "--strict" :: t -> flags { acc with Strict = true } t
             | "--active" :: t -> flags { acc with Active = true } t
             | "--apply" :: t -> flags { acc with Apply = true } t
@@ -1497,6 +1517,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Status = None
               All = false
               Batch = false
+              Explain = false
               Strict = false
               Active = false
               Apply = false

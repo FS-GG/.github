@@ -103,6 +103,23 @@ module Types =
         /// A human must choose before any work is authorable.
         | Decision
 
+    /// WHICH PART OF THE PLAN an item belongs to — the board's `Phase` column (.github#1598).
+    ///
+    /// A CLOSED, ORDERED vocabulary. The order is the whole reason this is a union and not a string:
+    /// `P0 Decisions` is earlier in the plan than `P8 Net`, and "earlier in the plan" is the third rank
+    /// input. A string carries no order, and `List.sortBy` over one would sort `P10` before `P2` the day
+    /// a tenth phase existed.
+    type Phase =
+        | P0Decisions
+        | P1Rendering
+        | P2Sdd
+        | P3Governance
+        | P4Templates
+        | P5Versioning
+        | P6Game
+        | P7Audio
+        | P8Net
+
     type Claim =
         { Worker: WorkerId
           Session: SessionId option
@@ -159,7 +176,19 @@ module Types =
           ///
           /// Resolved at the impure edge (the scan reads the column), never by `Chore.derive` — the same
           /// split, for the same reason, as `Predicate` above.
-          BoardClass: ItemClass option }
+          BoardClass: ItemClass option
+
+          /// The board's `Phase` COLUMN as OBSERVED (.github#1598) — the third rank input. Resolved at the
+          /// impure edge on `BoardClass`'s exact terms; `None` means this reader did not look, or the row
+          /// carries no phase, and it ranks LAST rather than defaulting to a phase.
+          Phase: Phase option
+
+          /// How many whole days ago the ISSUE was created, as measured at the impure edge (.github#1598).
+          ///
+          /// An `int`, not a timestamp, for the reason `Claim.AgeSeconds` is one: the pure core must not
+          /// own a clock. `None` means the reader did not learn it — never "brand new", which would make
+          /// an unread age the highest-priority age under starvation escalation.
+          AgeDays: int option }
 
     type Verdict<'a> =
         | Green of 'a
@@ -253,3 +282,66 @@ module Types =
         else
             let t = s.Trim().ToLowerInvariant()
             everyItemClass |> List.tryFind (fun c -> itemClassWireName c = t)
+
+    // THE PHASE WIRE VOCABULARY, as a PAIR on day one — `itemClassWireName`'s rule, and for the reason
+    // #1012 measured: a render/parse pair in two places with nothing asserting they are inverse stays
+    // green while it is wrong. These strings are the live Projects v2 option NAMES and the rows of the
+    // `repo-phase-map` table in `docs/coordination/board-schema.md`; the engine reads them and nothing
+    // else writes them.
+    //
+    // A TOTAL match, no wildcard, so a tenth phase must fail the BUILD here rather than render as "" and
+    // rank as no-phase-at-all. There is no empty case: an item with no phase carries `None`.
+    let phaseWireName (p: Phase) =
+        match p with
+        | P0Decisions -> "P0 Decisions"
+        | P1Rendering -> "P1 Rendering"
+        | P2Sdd -> "P2 SDD"
+        | P3Governance -> "P3 Governance"
+        | P4Templates -> "P4 Templates"
+        | P5Versioning -> "P5 Versioning"
+        | P6Game -> "P6 Game"
+        | P7Audio -> "P7 Audio"
+        | P8Net -> "P8 Net"
+
+    /// THE PLAN ORDER, and the only place it is a number.
+    ///
+    /// Deliberately NOT parsed back out of the wire name's `P<n>` prefix. That would be a second grammar
+    /// — one the renderer never promised to keep — and the day a phase is named without a numeric prefix
+    /// the parse would silently answer 0, which is the HIGHEST priority. A total match cannot do that.
+    let phaseOrder (p: Phase) =
+        match p with
+        | P0Decisions -> 0
+        | P1Rendering -> 1
+        | P2Sdd -> 2
+        | P3Governance -> 3
+        | P4Templates -> 4
+        | P5Versioning -> 5
+        | P6Game -> 6
+        | P7Audio -> 7
+        | P8Net -> 8
+
+    /// Every `Phase`, as the subject `phaseOfWireName` searches — `everyItemClass`'s caveat, one
+    /// vocabulary over: a case missing here renders fine and no longer PARSES, so a board column a
+    /// human set would read as no phase at all and rank last.
+    let private everyPhase =
+        [ P0Decisions
+          P1Rendering
+          P2Sdd
+          P3Governance
+          P4Templates
+          P5Versioning
+          P6Game
+          P7Audio
+          P8Net ]
+
+    // THE INVERSE, DERIVED — never a second list of the strings (#1012).
+    //
+    // `None` means the string is not a phase this engine speaks. Deliberately not a nearest match and
+    // deliberately not `P0`: a word we do not know must not resolve to the phase that outranks every
+    // other, which is the guess with a parser's authority behind it that #1588's AC3 forbids.
+    let phaseOfWireName (s: string) =
+        if isNull s then
+            None
+        else
+            let t = s.Trim().ToLowerInvariant()
+            everyPhase |> List.tryFind (fun p -> (phaseWireName p).ToLowerInvariant() = t)

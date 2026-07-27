@@ -59,7 +59,30 @@ module Scan =
           /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
           /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
           /// looked at. Here the source is the body, and `lint` reads it directly.
-          BoardClass: ItemClass option }
+          BoardClass: ItemClass option
+
+          /// The `Phase` column as OBSERVED (.github#1598) — the third rank input, and the column whose
+          /// invisibility to the scheduler is the whole subject of that item.
+          ///
+          /// It costs nothing, on `BoardClass`'s terms exactly: another `fieldValueByName` resolver field
+          /// on a node already selected, so the 7-point full scan is unchanged.
+          ///
+          /// `None` collapses the same three facts for the same reason — unset, an unspoken word, or no
+          /// such field on this project. Here the collapse is safe because the consumer is an ORDERING,
+          /// not a verdict: all three mean "no phase evidence", and `Rank` sorts such a row last. Nothing
+          /// is refused, reported or written on the strength of this being `None`.
+          Phase: Phase option
+
+          /// When the ISSUE was created — the only age the board can supply (.github#1598).
+          ///
+          /// THE INSTANT, NOT A DAY COUNT, and the distinction is load-bearing because this record is
+          /// CACHED. An `ageDays` written to disk is wrong by the cache's own lifetime the moment it is
+          /// read back; an instant is not. The count is derived once, where the clock is actually read
+          /// (`Client.enrichBoardFacts`), and only then does it reach `Item.AgeDays`.
+          ///
+          /// `None` when the field was absent or did not parse — never a zero age, which would be the
+          /// YOUNGEST possible answer and the one that can never trigger starvation escalation.
+          CreatedAt: System.DateTimeOffset option }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///

@@ -170,6 +170,30 @@ module Types =
         /// would make the machine answer the question the item exists to escalate.
         | Decision
 
+    /// WHICH PART OF THE PLAN an item belongs to — the board's `Phase` column (.github#1598).
+    ///
+    /// A CLOSED, ORDERED vocabulary, and the ORDER is why this is a union rather than the string the
+    /// column holds. "Earlier in the plan" is the third rank input, and a string carries no order: sorted
+    /// lexically, a tenth phase would sort between `P1` and `P2` the day it existed.
+    ///
+    /// The values are the live board options, documented in the `repo-phase-map` table of
+    /// `docs/coordination/board-schema.md`. `P0 Decisions` and `P5 Versioning` are board-wide; every other
+    /// phase is the home of exactly one rostered product repo.
+    ///
+    /// THERE IS NO `unphased` CASE, on `ItemClass`'s terms: an item whose column is empty carries `None`,
+    /// and `None` ranks LAST. A case meaning "no phase" would be a value a comparison could match, and the
+    /// only safe answer for an unknown priority is the lowest one.
+    type Phase =
+        | P0Decisions
+        | P1Rendering
+        | P2Sdd
+        | P3Governance
+        | P4Templates
+        | P5Versioning
+        | P6Game
+        | P7Audio
+        | P8Net
+
     /// A live claim on an item.
     type Claim =
         { Worker: WorkerId
@@ -292,7 +316,36 @@ module Types =
           /// `Predicate`'s terms: the pure derivation reads FACTS and cannot mistake a failed read for a
           /// verdict. A context that never resolves it keeps `None` and derives no projection chore,
           /// which is the fail-closed answer — a projection we could not observe is not one we may write.
-          BoardClass: ItemClass option }
+          BoardClass: ItemClass option
+
+          /// **WHAT THE BOARD'S `Phase` COLUMN CURRENTLY RENDERS** (.github#1598) — observed, never derived.
+          ///
+          /// The board has carried `Phase` since the project existed and NOTHING IN THE SCHEDULER READ IT:
+          /// `batch` and `take` sorted by issue number, so the only lever a driver had for priority was
+          /// `Status`, and on 2026-07-27 that meant parking nineteen items in `Backlog` to move five to the
+          /// front. This field is what makes the column mean something to a scheduler.
+          ///
+          /// Resolved at the impure edge on `BoardClass`'s exact terms — the scan reads the column, the
+          /// pure core never does. `None` means this reader did not look, or the row genuinely has no
+          /// phase, and the two collapse deliberately: both mean "no priority evidence here", and
+          /// `Rank.ofItem` sorts such an item LAST. That is the direction that cannot hurt — an unread
+          /// column deprioritises an item, it never promotes one over work somebody did classify.
+          Phase: Phase option
+
+          /// **HOW MANY WHOLE DAYS AGO THE ISSUE WAS CREATED**, measured at the impure edge (.github#1598).
+          ///
+          /// An `int` rather than a timestamp, for exactly the reason `Claim.AgeSeconds` is one: the pure
+          /// core owns no clock, so a rank computed here is reproducible from its inputs and a test can
+          /// state an age instead of mocking a clock.
+          ///
+          /// It is TWO rank inputs at once, and they pull the same way: the stable oldest-first tie-break,
+          /// and the starvation escalation that lifts a long-displaced item above the class and phase terms
+          /// entirely (`Rank.StarvationDays`).
+          ///
+          /// `None` means the reader did not learn it — never "created just now". A zero default would make
+          /// every unread age the YOUNGEST, which is the one reading that can never trigger escalation: an
+          /// item starving because nothing could read its timestamp would starve silently forever.
+          AgeDays: int option }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///
@@ -391,3 +444,29 @@ module Types =
     /// the nearest of three would be a guess carrying a parser's authority, which is exactly what
     /// .github#1588's AC3 forbids; `lint` reports the item as unclassed instead, and a human decides.
     val itemClassOfWireName: s: string -> ItemClass option
+
+    /// **THE PHASE WIRE VOCABULARY: a `Phase` as the Projects v2 OPTION NAME, spelled ONCE.**
+    ///
+    /// Two wires, not three — unlike `Class` there is no body-line grammar, because `Phase` is a board
+    /// column a human sets and no item text declares. The two are the live single-select option name and
+    /// the `repo-phase-map` table in `docs/coordination/board-schema.md`.
+    ///
+    /// A TOTAL match, no wildcard, on `statusWireName`'s terms: a tenth phase must fail the BUILD rather
+    /// than render as "" and rank as unphased.
+    val phaseWireName: p: Phase -> string
+
+    /// **THE PLAN ORDER, and the only place a `Phase` is a number.**
+    ///
+    /// Not derived from the `P<n>` prefix of the wire name. That prefix is a rendering convention, not a
+    /// contract, and parsing it back would answer 0 — the HIGHEST priority — for any phase ever named
+    /// without one. A total match cannot fail that way; it fails the build instead.
+    val phaseOrder: p: Phase -> int
+
+    /// The INVERSE, DERIVED from `phaseWireName` (#1012) — case- and space-forgiving on input, exact on
+    /// output, exactly as `itemClassOfWireName` is.
+    ///
+    /// `None` means the string is not a phase this engine speaks, and it is emphatically not `P0Decisions`:
+    /// resolving an unknown column value onto the phase that outranks every other would make a typo the
+    /// highest-priority work on the board. An unphased item ranks LAST (`Rank.of`), which is the direction
+    /// that cannot hurt.
+    val phaseOfWireName: s: string -> Phase option
