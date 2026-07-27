@@ -352,10 +352,12 @@ def sparse_steps(document: object) -> list[tuple[str, dict]]:
     Whether a step declares a `sparse-checkout:` is decided by the caller of this function, because
     "no sparse-checkout" (a full clone, harmless) and "a key supplying nothing" differ.
 
-    KEPT AS A NAMED FUNCTION ON THIS MODULE ON PURPOSE. `scripts/repos-audit.sh` loads this file by
-    path and asserts `sparse_steps` among the seven names it borrows (#1529), so this is a published
-    interface with a caller that fails CLOSED — and loudly — if it disappears. Its shape is part of
-    the contract; the reading behind it is free to move, and did.
+    KEPT AS A NAMED FUNCTION ON THIS MODULE ON PURPOSE, AND `main()` BELOW DOES NOT CALL IT.
+    `scripts/repos-audit.sh` loads this file by path and asserts `sparse_steps` among the seven names
+    it borrows (#1529), so this is a published interface with a caller that fails CLOSED — and loudly,
+    naming the symbol — if it disappears. Its two-tuple shape is part of that contract. `main()` takes
+    `checkout_steps` directly instead, because it needs the `repository:` the qualification read and
+    this shape drops it; deleting this delegate as "unused" is what the borrower's check is for.
     """
     return [(step.job_id, step.params) for step in checkout_steps(document)]
 
@@ -459,7 +461,12 @@ def main(argv: list[str]) -> int:
     for path in workflows:
         document = load_yaml(read_text(path, "workflow"), f"workflow {path}")
         relative = os.path.relpath(path, root)
-        for job_id, params in sparse_steps(document):
+        # `checkout_steps`, not this file's own `sparse_steps` delegate: it hands back the
+        # `repository:` the qualification actually read, so the string this gate PRINTS and COMPARES
+        # below is the same string that decided the step was a subject. Re-deriving it from `params`
+        # here would be a second reading of the field the shared selector just read — #1553's own
+        # shape, one level down, in the file that closed it.
+        for job_id, repository, params in checkout_steps(document):
             where = f"{relative} (job `{job_id}`)"
             cross_repo_steps += 1
             # A refusal is COLLECTED rather than raised on sight, so one unreadable step cannot
@@ -478,7 +485,6 @@ def main(argv: list[str]) -> int:
                 refusals.append(str(error))
                 continue
 
-            repository = str(params.get("repository") or "").strip()
             # `repository_matches`, not a second `.casefold()` comparison here: the rule that
             # `fs-gg/.GitHub` and `FS-GG/.github` are the same repository is `lib/sparse.py`'s, and it
             # is the rule `sparse_set` got wrong (#1553). It answers False for an unreadable `ours`,
