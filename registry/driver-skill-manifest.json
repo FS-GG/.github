@@ -119,12 +119,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "4ccacf65786b14ad5917981f0fb0a6a4d17aa62bb2fda65fbd1cef00fda3bac6",
-      "tree-sha256": "7d1f9a7dccd66f03d0ee5b140c6bc21b36cd69d699ba05d9ded1eabdfa4bdbe2",
+      "sha256": "de5f3e07122951cf24bf31ddc3b4e750401bf793ea3bfd0672b2b22eb405bee9",
+      "tree-sha256": "489f0fc0d15be637183121547932f0fad8ef34806df276d34c18e8a9ce5ab763",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "4ccacf65786b14ad5917981f0fb0a6a4d17aa62bb2fda65fbd1cef00fda3bac6",
+          "sha256": "de5f3e07122951cf24bf31ddc3b4e750401bf793ea3bfd0672b2b22eb405bee9",
           "executable": false
         },
         {
@@ -134,17 +134,17 @@
         },
         {
           "path": "references/backlog-triage.md",
-          "sha256": "46350ee8fa5bf496ab59ad578cbaa7e31ae3835b3016fc62d9e027adc04e27b2",
+          "sha256": "3facdc4fbbf0f11a3e9ca569a4a51c25c9641d020aa9057dbaf5e5b3075cfde2",
           "executable": false
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "e1f3513bf025b5303afbfeaa82c92711d247b2f812bdfcca3fd23fec82af00a2",
+          "sha256": "f5ed78faf12754242d97662ab3f5c892c746ab3ba26d4f9b3efa46ed3feb7484",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "329881f431c13b9b30a67f20f1c8e13fe523c091141dac8b20be2e94f8be19fa",
+          "sha256": "59d8bc6da8ac571f9ee14166c7d2e13b07b833210e15fede899921b97613e80e",
           "executable": false
         },
         {
