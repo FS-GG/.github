@@ -114,6 +114,7 @@ before the write, not after the refusal:
 git fetch origin
 SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"       # the path, for the repair
 SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"     # the commit it is sitting on
+[ -n "$SHARED_HEAD" ] || { echo "cannot read the shared checkout's HEAD — that is not freshness"; exit 1; }
 git rev-list --count "$SHARED_HEAD..origin/main" -- \
   src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub
 ```
@@ -140,6 +141,12 @@ Every line of that has a reason, and skipping one costs the thing it protects:
   git operations *against the shared checkout* refused outright by its host (measured, this run), and
   a check spelled `git -C "$SHARED" rev-list …` would be unavailable to exactly the worker it exists
   to protect. Spelled this way, the CHECK always runs; only the repair needs reach.
+- **An empty `SHARED_HEAD` REFUSES, and that guard is not decoration.** `--porcelain`'s second line is
+  `bare` rather than `HEAD <sha>` for a bare main working tree, and `git rev-list --count
+  "..origin/main"` is *valid git* that silently means `HEAD..origin/main` — i.e. it would measure YOUR
+  worktree, which is current by construction, and answer `0`. That is a check reporting fresh about a
+  subject it could not see: the same fail-open `upstream_drift` refuses three times over
+  (`.github#266`), so this one refuses too. Cannot look ≠ nothing to find.
 - **The `git fetch origin` is the one §2 already tells you to run**, and it does double duty — a
   linked worktree shares the common dir's refs, so your fetch advances the *shared* checkout's
   `origin/main` from the outside. That is why the check needs no network of its own, and why the

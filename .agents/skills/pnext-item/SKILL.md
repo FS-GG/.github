@@ -29,6 +29,7 @@ local, reads already-fetched refs, and costs milliseconds; the rebuild runs only
 git fetch origin
 SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"
 SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"
+[ -n "$SHARED_HEAD" ] || { echo "cannot read the shared checkout's HEAD — that is not freshness"; exit 1; }
 git rev-list --count "$SHARED_HEAD..origin/main" -- \
   src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub
 ```
