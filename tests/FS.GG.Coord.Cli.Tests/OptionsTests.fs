@@ -120,11 +120,15 @@ module OptionsTests =
         Assert.True(apply.Apply)
         Assert.Equal(Text, apply.Render)
 
-        let mixed = parse [ "reconcile"; "--apply"; "--json" ]
-        Assert.Equal(
-            Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode.",
-            mixed
-        )
+        // .github#1541 — THE MUTATING FORM HAS A MACHINE PROJECTION. This pair parsed to a refusal from
+        // #1429 until #1541, which deleted the machine projection of the one verb that WRITES to the
+        // board: a caller applying a reconciliation could not learn which writes landed and which QUEUED
+        // against an exhausted budget without scraping prose. Asserted as a parsed `Options`, not merely
+        // as "not an error", because both fields have to survive the funnel together.
+        let mixed = parse [ "reconcile"; "--apply"; "--json" ] |> ok
+        Assert.Equal(Reconcile, mixed.Command)
+        Assert.True(mixed.Apply)
+        Assert.Equal(Json, mixed.Render)
 
     // ================================================================================================
     // #991 — THE RESIDUE RULE, GENERALISED. The rule was always general; its enforcement was one arm.
@@ -924,11 +928,12 @@ module OptionsTests =
             Assert.Equal(Json, (parse ([ verb ] @ args @ [ "--json" ]) |> ok).Render)
             Assert.Equal(Text, (parse ([ verb ] @ args @ [ "--text" ]) |> ok).Render)
 
-        // `reconcile` honours both too, but `--apply --json` is a refusal of its own (and it is checked
-        // BEFORE the residue rule, so scoping must not have swallowed its message).
+        // `reconcile` honours both too, and since .github#1541 `--apply` does not take that away: the
+        // scoping table is what makes the pair legal, so this is the row that would notice if scoping
+        // ever narrowed `--json` back off the mutating verb.
         Assert.Equal(Json, (parse [ "reconcile"; "--json" ] |> ok).Render)
         Assert.Equal(Text, (parse [ "reconcile"; "--text" ] |> ok).Render)
-        Assert.Contains("mutually exclusive", parse [ "reconcile"; "--apply"; "--json" ] |> rejected)
+        Assert.Equal(Json, (parse [ "reconcile"; "--apply"; "--json" ] |> ok).Render)
 
     [<Fact>]
     let ``#1523 RenderGiven separates the ACT from the EFFECT`` () =

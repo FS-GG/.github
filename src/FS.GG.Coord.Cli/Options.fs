@@ -387,7 +387,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
         | BatchCmd -> Both Json // Client.fs `batch`
         | Ready -> Both Json // Client.fs `ready`
-        | Reconcile -> Both Text // and `--apply --json` is refused outright, below
+        // Client.fs `reconcile` — and `--apply --json` is a REAL combination (.github#1541): the apply
+        // outcome rides in the same document as the findings, so the mutating form has a machine
+        // projection. `Text` stays the bare default; nothing about `--apply` changes it.
+        | Reconcile -> Both Text
         // `who`, `budget` and `inbox` share one polarity, and it is the mirror of `ready`/`batch`: the
         // human table is what an operator or a worker reads, and `--json` opts into the machine contract
         // (case 20/25's rows, `pendingBoardWrites` — #862).
@@ -1270,9 +1273,30 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | Only readers when List.contains o.Command readers -> None
                     | Only readers -> Some(f, spelling, readers))
 
-            if o.Command = Reconcile && o.Apply && o.Render = Json then
-                Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode."
-            elif o.AllRepos && o.Repo.IsSome then
+            // `reconcile --apply --json` USED TO BE REFUSED HERE, and it is not any more (.github#1541).
+            //
+            // The refusal arrived in 897b83d (PR #1429) — a skills refactor whose subject said nothing
+            // about the options surface — and it was a WORKAROUND for a handler defect, never a contract.
+            // `reconcile --apply` is the org's MUTATING reconciliation verb, and deleting its machine
+            // projection left a caller only one way to learn which writes landed and which were QUEUED
+            // against an exhausted budget: scraping `applied`/`queued` prose off stdout. A queued write is
+            // not lost — `flush` replays it — but nothing replays it ON ITS OWN, so a driver that never
+            // learns the write deferred is a driver that never runs `flush`. The guard's own remedy
+            // ("inspect the JSON dry run, then apply in human-readable mode") is two passes over a board
+            // that can change between them, and the second pass is the one whose result cannot be read.
+            //
+            // WHAT MADE IT SAFE TO LIFT, and why it was not lifted sooner. Until PR #1537 the `--apply`
+            // phase printed its per-write outcome to stdout PAST a JSON document that had already ended,
+            // so opening the gate would have shipped an unparseable stream the moment it opened. #1537
+            // moved the outcome INTO the document (`field`/`value`/`outcome`/`error`), put the deferred-
+            // write remedy on stderr, and stopped the `reap` child's stdout leaking into it. The handler
+            // was correct first; only the gate remained. `.github#1523` then held `Options.fs` while it
+            // redesigned the very `Render` field this guard read — it has since landed, and its scoping
+            // work is what makes the surface self-consistent: `renderSupport` says `Reconcile -> Both`,
+            // so `command-contract` and the `--help` usage block have ADVERTISED `[--apply] [--json]`
+            // together the whole time. Lifting this is what stops the advertised surface and the parser
+            // disagreeing.
+            if o.AllRepos && o.Repo.IsSome then
                 Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
             else
                 match residue with

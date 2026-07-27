@@ -608,38 +608,18 @@ module ApplicationServiceTests =
     /// Run a command line as written.
     let private runReconcile (transport: Fake.Recorder) (args: string list) = runReconcileWith transport args id
 
-    /// Drive the handler in the `--apply --json` combination THE PARSER CURRENTLY REFUSES.
+    /// Drive `reconcile --apply --json` AS A COMMAND LINE (.github#1541).
     ///
-    /// **THE ISSUE AS FILED RESTS ON A FALSE PREMISE, AND THIS IS WHERE IT SHOWS.** `.github#1524` was
-    /// derived by READING `Client.fs`, not by running the verb — and `Options.parse` has refused
-    /// `reconcile --apply --json` outright since #1429 ("--apply and --json are mutually exclusive"). So
-    /// the interleaved stream the issue reports is real IN THE CODE and unreachable THROUGH THE CLI: the
-    /// command exits 1 with a refusal instead.
-    ///
-    /// That refusal is a WORKAROUND, not a fix — it deletes the machine projection of a MUTATING verb, and
-    /// it is exactly what leaves `reconcile --apply` with no way to report which writes queued. Lifting it
-    /// is a one-line change in `src/FS.GG.Coord.Cli/Options.fs`, which this item does not declare and which
-    /// `.github#1523` holds while it redesigns that very field. So the handler is fixed here, the guard is
-    /// filed separately, and the two land in that order — a guard lifted over the UNFIXED handler would
-    /// ship the defect the moment it opened.
-    ///
-    /// Setting the two fields directly is therefore not a shortcut around a check: it is the only way to
-    /// reach the handler contract this item owns. `parseRefusal` below pins the guard itself, so lifting it
-    /// is a conscious edit rather than an accident.
+    /// **THIS USED TO SET `Apply`/`Render` ON A PARSED `Options` DIRECTLY, AND THAT WAS A REAL LIMIT, not
+    /// a shortcut.** `.github#1524` fixed the handler while `Options.parse` still refused this exact pair
+    /// (#1429's "--apply and --json are mutually exclusive"), so the contract it pinned was reachable only
+    /// from inside — correct in the code and unreachable through the CLI. A companion test pinned that
+    /// refusal so lifting it would be a conscious edit rather than an accident; .github#1541 made the edit
+    /// and this is its other half. Everything below now asserts on the stream a caller actually gets:
+    /// `runReconcileWith`'s `options` helper parses this argv for real and fails loudly if the guard ever
+    /// comes back, so the tripwire survives the pin it replaced.
     let private runApplyJson (transport: Fake.Recorder) =
-        runReconcileWith transport (reconcileArgs []) (fun o ->
-            { o with
-                Apply = true
-                Render = Options.Json })
-
-    [<Fact>]
-    let ``the parser still refuses --apply --json, which is why the handler is driven directly`` () =
-        // THE PREMISE, PINNED. When `.github#1523` lifts this guard, this test fails and its replacement is
-        // a deliberate decision — which is the point. It is also the record that the interleaving defect
-        // was never reachable from a command line, so nobody re-derives it from the code a third time.
-        match Options.parse (reconcileArgs [ "--apply"; "--json" ]) with
-        | Ok _ -> failwith "the guard is gone — lift the handler tests to a real command line (.github#1524)"
-        | Error message -> Assert.Contains("mutually exclusive", message)
+        runReconcile transport (reconcileArgs [ "--apply"; "--json" ])
 
     [<Fact>]
     let ``reconcile --apply --json puts the whole stream in ONE document`` () =
@@ -739,8 +719,8 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#1588 the --json write object agrees with the text receipt about the field`` () =
-        // `runApplyJson`, not `--apply --json` on argv: the parser refuses that pair deliberately, and
-        // this helper is how every other apply-JSON test here reaches the same internal state.
+        // `runApplyJson` is now `--apply --json` on argv itself (.github#1541) — the same command line a
+        // caller runs, not an internal state this fixture reaches around the parser.
         let code, out, _ = runApplyJson (classWorld ())
 
         // The machine projection was CORRECT the whole time the human one was wrong, which is what made
