@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-07-26"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-27"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -98,7 +98,53 @@ contracts:
           derived value fills namespace/module/open positions; nameParameter keeps the raw name in
           string/path/.fsproj/.slnx. See coherence id `scaffold-provider-identifier`.
   - id: fsgg-contracts
-    version: "7.2.0"
+    version: "7.4.0"
+    # → 7.4.0 (2026-07-27, SemVer MINOR/additive; FS.GG.SDD#742 / PR SDD#753, merge
+    # 4383b820e8bf8046e24780f3323edd0659200db4; write-up SDD docs/release/contracts-7.4.0.md): the
+    # `.nupkg` now packs `api-surface/*.fsi` — FS.GG.Rendering#782's producer half, which
+    # FS.GG.Contracts had never done. The fsproj gains the packing (+42/-1); no `.fsi` moved.
+    # ONE FLIP COVERS TWO SOURCE BUMPS, AND 7.3.0 IS THE ONE IT SUBSUMES — .github#1659 was FILED
+    # for 7.2.0 → 7.3.0 and RETARGETED to 7.4.0 (`smew-7cf6`) because 7.4.0 published while the
+    # request was open. Flipping to 7.3.0 would have landed this row on a version that is no longer
+    # newest and re-red `registry-feed-coherence` immediately, the same shape the 4.0.0 → 5.0.1 row
+    # (subsuming 5.0.0) and the 7.0.0 → 7.2.0 row (subsuming 7.1.0) already record. THE RETARGET WAS
+    # RE-VERIFIED HERE, NOT TAKEN ON TRUST: both local gates were run against `main` before the edit
+    # and both named 7.4.0 unprompted — `check-source-coherence.py` "version is '7.2.0' but the
+    # SOURCE on FS-GG/FS.GG.SDD is '7.4.0'", `check-feed-coherence.py` "BEHIND the feed — declares
+    # '7.2.0' but newest on the org feed is '7.4.0'". 7.3.0 would have satisfied neither.
+    # → 7.3.0 (2026-07-27, SemVer MINOR/additive; FS.GG.SDD#737 / PR SDD#749, merge
+    # da07830c3cb3cafd9118fc5b6b8e2c68ab388d03; write-up SDD docs/release/contracts-7.3.0.md): the
+    # invalid-UTF-8 REFUSAL. `Fsgg.SkillMirror.sha256` took text a caller had already decoded, and
+    # every caller decodes with `File.ReadAllText`, whose UTF-8 decoder substitutes `U+FFFD` for an
+    # invalid sequence BEFORE the body is hashed — so two different files collided under one digest
+    # (`0xFF` and `0xFE` both hash to `83d544cc…`), a fail-open on ADR-0014 §Decision 3 clause (c).
+    # 7.3.0 adds the byte-level seam: the NEW DU `BodyRefusalReason` (`NotDecodable of byteOffset`),
+    # `val decodeBody: byte array -> Result<string, BodyRefusalReason>`, and `val sha256Bytes`.
+    # The digest is NOT redefined (`sha256Bytes = decodeBody >> Result.map sha256`), so no recorded
+    # manifest digest changes and no consumer migration is owed. It reached both feeds and was
+    # superseded there by 7.4.0 before this row ever moved, so 7.3.0 is recorded here as history,
+    # not as a pin — exactly as 7.1.0 is below.
+    # MINOR IS CORRECT FOR BOTH, AND MEASURED HERE FROM THE PUBLISH POINT rather than inherited from
+    # either cross-repo note — this row's own #1010 rule, applied to its own retarget for the second
+    # time. Across the WHOLE range, 7.2.0's publish point 67253fa6a54d34cb54a526a92c84ae9ae7b302b3 →
+    # 7.4.0's 4383b820e8bf8046e24780f3323edd0659200db4, restricted to `src/FS.GG.Contracts/**.fsi`
+    # (the package's own surface, not the whole solution's): SkillMirror.fsi +42/-0 and NOTHING ELSE.
+    # INSERTION-ONLY, zero deletions on any `.fsi` — not one signature removed or retyped, no
+    # existing public DU gained a case, no public record gained a field. Those are the two rows of
+    # SDD's change-class table (docs/release/contracts-version-bump-checklist.md) that force a MAJOR;
+    # neither fires across either bump. Split by bump: the entire +42/-0 belongs to 7.3.0, and
+    # 7.3.0 → 7.4.0 changes NO `.fsi` at all (only the fsproj, `ContractVersion.fs` +2/-2 carrying
+    # the literal, and tests). So 7.4.0's minor is NOT a row of that table and does not pretend to
+    # be: `api-surface/` is a consumer-observable CAPABILITY that FS.GG.Rendering#1101 pins as a
+    # FLOOR — its generator hard-fails on a pin without it — which is why it is a minor and not a
+    # patch. A capability a consumer can hard-fail on is a surface in the sense that matters here,
+    # even when the .NET public API does not move by one member.
+    # MIRRORS SDD source (fsproj <Version> == Fsgg.ContractVersion.value == 7.4.0, BOTH read at
+    # 4383b820e8bf8046e24780f3323edd0659200db4 == FS.GG.SDD@main, verified at flip time — a stale
+    # branch would have flipped this row BACKWARDS and left `source-coherence` red) and lands
+    # TOGETHER with the `package-version` flip below; the feed already serves 7.4.0, so neither
+    # leads (FR-007). THIS IS PUBLISH-BEFORE-FLIP STEP 2 ONLY — no publish is owed by this item, and
+    # none was made.
     # → 7.2.0 (2026-07-27, SemVer MINOR/additive; FS.GG.SDD#727 / PR SDD#738, merge
     # 67253fa6a54d34cb54a526a92c84ae9ae7b302b3; write-up SDD docs/release/contracts-7.2.0.md): the
     # ADR-0017 producer manifest now content-addresses a skill's COMPLETE FILE SET rather than its
@@ -169,7 +215,34 @@ contracts:
     # Fsgg.ContractVersion.value at 6.0.0. This source flip lands atomically with the package flip below
     # and fs-gg-net 0.5.0 because the aggregate source/feed gates cannot be green for a proper subset.
     # → 5.0.1 (2026-07-20, SemVer PATCH; #1261 = epic #1259 P2 / ADR-0061 Option (b) / FS.GG.SDD#613; no separate write-up — a clarifying patch on the 5.0.0 major, SDD docs/release/contracts-5.0.0.md): the STRUCTURAL VALIDATOR. `Fsgg.Registry.validateSkillRegistry` now validates skill `scope` STRUCTURALLY — the compiled-in `skillScopes` enum and its rejection branch are GONE; a non-blank scope token validates as an opaque string, a blank scope is still a MissingField. No `.fsi` surface change (no member added/removed/retyped, no DU case), so it is a Clarifying → PATCH per SDD docs/release/contracts-version-bump-checklist.md, ApiCompat verdict `none` on both axes (SDD#613). P2 (epic #1259): it removes the two-repo schema/validator split's additive-is-still-growth tax (#686) so adding an enum value is no longer schema growth at all. MIRRORS SDD source (fsproj <Version> == Fsgg.ContractVersion.value == 5.0.1 on FS.GG.SDD@main, verified) and lands TOGETHER with the `package-version` flip below; source is already 5.0.1 and the feed already serves it, so neither leads — this greens `source-coherence` (RED on main: registry `version` 4.0.0 != source 5.0.1). THIS FLIP SUBSUMES 5.0.0, never separately pinned here (4.0.0 → 5.0.1 directly): 5.0.0 (2026-07-20, SemVer MAJOR; FS.GG.SDD#610 = epic #1259 P3; write-up SDD docs/release/contracts-5.0.0.md) is the DECLARED binary break — declared, NOT suppressed (no CompatibilitySuppressions.xml) — that reshapes `Fsgg.Registry.ContractEntry` from a positional F# record into a NON-POSITIONAL CLASS, so future additive fields on it stop forcing a SemVer major; it is the LAST major that record forces (the 2.0.0/3.0.0/4.0.0 run was three majors in a week, each the same record gaining or retyping a field). .github consumes fsgg-contracts only as registry bookkeeping — it is not in `consumers:` (sdd, governance, templates) and does not compile against the package — so the class reshape is transparent to this repo; this row is the version/package-version pin only. PRIOR: 4.0.0 (2026-07-19, SemVer MAJOR; write-up SDD docs/release/contracts-4.0.0.md): the WIRE-CONTRACT dimension (ADR-0052, FS.GG.SDD#589/#592). Adds field `WireContract: WireContractDeclaration` to the public record `Fsgg.Registry.ContractEntry` — a new field on a public F# record changes the positional primary-ctor arity and DELETES the old ctor (CP0002), so it is a MAJOR with no additive spelling, exactly as the 2.0.0 and 3.0.0 rows below record; declared, NOT suppressed (there is no CompatibilitySuppressions.xml). The two new union types (`WireContract`, `WireContractDeclaration`) are additive on their own; it is the record field that forces the major. MIRRORS SDD source (fsproj <Version> == 4.0.0 on FS.GG.SDD@main, verified) and lands TOGETHER with the `package-version` flip below; source is already 4.0.0, so `version` is not leading it. The wire dimension is OPTIONAL — an absent `wire-contract:` is `WireUnspecified` and validates clean — so 4.0.0 rejects NOTHING the current document does (ADR-0037 precondition). NOTE — the .github-side SCHEMA ADOPTION is DEFERRED, not done here: recording FS.GG.Net's SC2/BAR wire contracts + bumping `schemaVersion`/`registry-schema.version` + advancing the contract-coherence pin all need a PUBLISHED FS.GG.SDD.Cli that carries 4.0.0's Fsgg.Registry, and NONE exists yet — the newest published CLI (0.16.0, org feed 2026-07-19T18:41Z) was cut ~2h BEFORE #592 merged (20:34Z) and is wire-contract-BLIND (measured: it silently accepts `provenance: grpc`). Adopting the schema against a blind pinned validator is the exact H2 silent-drift ADR-0015/ADR-0037 forbid. Tracked on .github#1231 (Blocked by the SDD CLI publish). PRIOR: 3.0.0 (2026-07-17, SemVer MAJOR; write-up SDD docs/release/contracts-3.0.0.md): a DECLARED binary break — declared, NOT suppressed (there is no CompatibilitySuppressions.xml, and there will not be one). Retypes the public member `Fsgg.Registry.ContractEntry.Consumers` from `string list` to the three-state DU `ConsumerDeclaration` (`ConsumersUnspecified | ConsumersDeclared of string list | ConsumersMalformed of raw`). Retyping a public member is a MAJOR by SDD's change-class rule (docs/release/contracts-version-bump-checklist.md), and there is NO additive spelling: a new field on a public F# record changes the positional primary-ctor arity and deletes the old ctor (CP0002) — the same break the 2.0.0 row below records, so both spellings are majors and the direct retype is the honest one. WHY A MAJOR WAS SPENT: the two-state `string list` could not distinguish an ABSENT `consumers:` from an explicitly EMPTY `[]` — `Internal.scalarList` ends in `Option.defaultValue []`, so a missing key and a present `[]` both arrived as `[]`, and `validateDocument` therefore had to refuse the pair (`"missing a non-empty 'consumers'"`). That made a real published package UNREGISTERABLE — `FS.GG.NewSddWorkspace`, a `dotnet new` template whose only true value is `consumers: []`, which ADR-0039 §5 requires registered (the #1067 CHANGELOG entry recorded that exact gap, blocker FS.GG.SDD#508). This `version` flip MIRRORS SDD source (fsproj `<Version>` == 3.0.0 on SDD main) and lands TOGETHER with the `package-version` flip below; source is already 3.0.0, so `version` is not leading it. PRIOR: 2.1.0 (2026-07-17, SemVer MINOR/additive; FS.GG.SDD#491, FS.GG.SDD#426, write-up SDD docs/release/contracts-2.1.0.md): a CORRECTIVE minor that ADDS NO CODE. Its public surface is byte-identical to 2.0.1's; what it corrects is 2.0.1's LABEL. FS.GG.SDD#426 grew `Fsgg.Registry`'s public surface by +78 lines (`SkillRegistryEntry`, `SkillRegistryDocument`, `MirrorDeclaration`, `validateSkillRegistry`, and the `MalformedField` case on the public DU `RegistryRule`) and moved no version — so that surface reached the feed INSIDE 2.0.1, a PATCH. Additive → minor by SDD's own change-class rule (docs/release/contracts-version-bump-checklist.md), so 2.1.0 is the number that surface always owed. PRIOR: 2.0.1 (2026-07-16 full-platform release, PATCH: governanceHandoffContractVersion value 1.0.0→1.1.0 reconciling three drifted hand-copies; ApiCompat-clean; SDD v0.12.0 published to both feeds). THIS ROW USED TO SAY "`.fsi` surface unchanged" OF 2.0.1 AND THAT WAS FALSE (.github#1010): measured against the PUBLISHED artifacts, `git diff 04dd742 v0.12.0 -- src/FS.GG.Contracts/Registry.fsi` is +78/-1. The error was a WRONG BASELINE, not a wrong detector — diffed TAG-TO-TAG (v0.11.0 → v0.12.0) the surface really IS unchanged, but 2.0.0 was PUBLISHED from 04dd742 (07-12) while v0.11.0 was cut 07-14 12:16, and #426 merged 07-14 11:14 — landing the growth in the gap BETWEEN the publish point and the next tag, exactly where a tag-to-tag diff cannot see it. ApiCompat was green and also correct: additions are binary-compatible and a DU case doubly so. Neither detector was broken; both were looking somewhere true, and neither was looking at the published artifact. THE RULE: a package's surface delta is measured from the PUBLISH POINT of the previous version, not from the previous TAG — the two diverge whenever a tag is cut after a publish. PRIOR: 2.0.0 (2026-07-12, SemVer MAJOR; FS.GG.SDD#393, PR SDD#394): the DECLARED binary break. `Fsgg.Provider.ProviderDescriptor` gained `IdentifierParameter` MID-RECORD in SDD 4e6f8b7 (feature 080) with NO version bump; an F# record generates a POSITIONAL PRIMARY CONSTRUCTOR, so its arity went 11 → 12 and the 11-arg .ctor CEASED TO EXIST (CP0002). SDD f18877f then shipped that break as the 1.4.1 PATCH and deleted the CompatibilitySuppressions.xml recording it — the file that said, verbatim, that the honest resolution is "a Contracts MAJOR bump (1.x -> 2.0.0) + republish". 2.0.0 IS that bump. There is NO additive way to add a field to a public F# record — every field changes the generated ctor arity — so a new field on a public record is ALWAYS a major (the change-class rule now lives in SDD docs/release/contracts-version-bump-checklist.md; the break declaration + consumer adaptation in SDD docs/release/contracts-2.0.0.md). 2.0.0's public surface is IDENTICAL to 1.4.1's, so for a consumer already on 1.4.1 this is a version-number change and no source edit. PRIOR — 1.4.1 (SDD f18877f, ADR-0032 adoption): patch bump that moved the fsproj <Version> and left `Fsgg.ContractVersion.value` at 1.4.0, an internal incoherence that red `contract-coherence` and BLOCKED EVERY .github PR until SDD#386/#387 carried the constant; SDD#387 also put the coupling assertion (fsproj <Version> == ContractVersion.value, via AssemblyInformationalVersion) in SDD itself, so the break is caught by the PR that causes it rather than by a downstream repo's gate (the coherence-gate-in-the-wrong-place shape, epic #266). The authority is FS.GG.SDD (fsproj <Version> == Fsgg.ContractVersion.value). 1.4.0: minor/additive — ADR-0014 P1 (SDD#61): the pure BCL-only `Fsgg.SkillMirror` library. 1.3.0: ADR-0014 P0.D0.2 (SDD#60). 1.2.0: SDD Feature 052 (3be5513) — and note this one ALSO added a ProviderDescriptor field (`MinimumCliVersion`, appended at the END) and was ALSO a CP0002 break that shipped as a minor; end-of-record placement rescues nothing.
-    package-version: "7.2.0"
+    package-version: "7.4.0"
+    # → 7.4.0 PUBLISHED before this flip by FS.GG.SDD `release` run 30299196197 (`workflow_dispatch`,
+    # version=7.4.0, conclusion success, created 2026-07-27T19:39:32Z). FR-007 publish-before-flip
+    # satisfied — the PACKAGE LED THIS ROW; `package-version` leads the feed nowhere.
+    # RE-CONFIRMED AT FLIP TIME ON BOTH FEEDS, NOT CARRIED OVER FROM THE ISSUE OR THE RETARGET NOTE,
+    # AND NOT FROM A CACHED READ. Org feed: `check-feed-coherence.py`'s own live read of
+    # /orgs/FS-GG/packages/nuget/FS.GG.Contracts/versions reports newest == 7.4.0 (full list ends
+    # …, 7.1.0, 7.2.0, 7.3.0, 7.4.0). nuget.org: the FLAT CONTAINER
+    # (api.nuget.org/v3-flatcontainer/fs.gg.contracts/index.json) ends 7.4.0, re-read with
+    # `Cache-Control: no-cache` and a cache-busting query so a cached hit could not stand in for the
+    # fact; the registration hive independently reports `upper: 7.4.0`, `listed: true`, published
+    # 2026-07-27T19:40:57Z. The flat container is the read of record — the hive lags validation by
+    # minutes (it sat at `upper: 7.0.0` after the 7.1.0 push) and reading the wrong endpoint defers a
+    # flip already owed, while reading a stale index as a MISSING package defers it twice.
+    # THE PUBLISHED ARTIFACT WAS OPENED, NOT INFERRED FROM THE RUN BEING GREEN. The 7.4.0 `.nupkg`
+    # was downloaded from nuget.org's flat container (archive sha256
+    # 6016fe371d638735036b13277df7bc91fb02b6f2b5f2232bc32f059dca2500e7 — the org-feed archive hashes
+    # differently only because nuget.org appends `.signature.p7s`) and read: it carries the six
+    # `api-surface/` entries this minor exists for — ContractVersion, Provider, Registry, Schemas,
+    # SkillMirror, Version — alongside `lib/net10.0/`, and its nuspec records
+    # `<repository … commit="4383b820e8bf8046e24780f3323edd0659200db4">`, binding the served package
+    # to the merge this row's `version` names. That binding is why the two scalars can move together.
+    # `feed-coherence` WAS RED on `main` before this flip — "registry `package-version` is BEHIND the
+    # feed — declares '7.2.0' but FS.GG.Contracts newest on the org feed is '7.4.0'" — the
+    # publish-before-flip step-2 drift (#1110) this flip closes, landing on THIS REPO ONLY (#741).
+    # No bot flipped it: `feed-autofix` is hardcoded to `CONTRACT = "fs-gg-ui-template"` and will
+    # never touch this row (#1067/#1081). The intervening 7.3.0 (run 30296723600) was superseded on
+    # the feed by 7.4.0; this row pinned neither until now.
     # → 7.2.0 PUBLISHED before this flip by FS.GG.SDD `release` run 30270222811 (conclusion success,
     # created 2026-07-27T13:25:37Z) from source head 67253fa6a54d34cb54a526a92c84ae9ae7b302b3.
     # PUBLISH-BEFORE-FLIP (FR-007) VERIFIED AT FLIP TIME on BOTH feeds INDEPENDENTLY, not taken from
@@ -212,7 +285,10 @@ contracts:
       surface SHIPPED IN THE 2.0.1 PATCH and 2.1.0 is the corrective relabel; see the `version`
       comment above) / Fsgg.SkillMirror (1.4.0, ADR-0014 P1 / SDD#61: the pure BCL-only
       materialize-and-verify library — `mirror`/`verify` over the single `agentSkillRoots` constant,
-      the one skill-fan-out code path for scaffold/refresh/doctor/upgrade) / Fsgg.ContractVersion (= 7.0.0).
+      the one skill-fan-out code path for scaffold/refresh/doctor/upgrade) / Fsgg.ContractVersion (= 7.4.0).
+      As of 7.4.0 the `.nupkg` also packs `api-surface/*.fsi` — six files, one per public module — so the
+      signature surface described here is readable from the PACKAGE and not only from SDD's source tree
+      (FS.GG.Rendering#782's producer half; FS.GG.Rendering#1101 pins that capability as a floor).
     consumers: [sdd, governance, templates]   # re-type LANDED: SDD#9 / Governance#14 / Templates#13 (all closed)
     notes: >
       The reusable contract-coherence workflow (#18, LANDED) asserts this registry's declared
