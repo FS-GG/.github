@@ -773,11 +773,15 @@ fi
 #
 # 5 -> 6: recipe-followup.yml (.github#1073) names scripts/check-recipe-followup.py exactly, the same way
 # recipe-landable.yml names its own gate — so rule (c) attaches and the census counts the new surface.
+#
+# 6 -> 7: sparse-checkout-closure.yml (.github#1522) names scripts/check-sparse-checkout-closure.py
+# exactly and that gate declares a PATHS_SUBJECT, so rule (c) attaches. This leg fired on the new
+# gate's first local run — the tripwire doing its job, exactly as it did for repo-filter-monopoly.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "6" ]; then
+if [ "${s:-0}" = "7" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 6 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 7 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
