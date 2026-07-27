@@ -87,8 +87,10 @@
 # package's INTERNAL disagreement (payload vs its own manifest, below) but it cannot see a package
 # whose payload disagrees with CANONICAL. That question belongs to check-kit-published-coherence.py,
 # on the hub side. The end-to-end invariant "a receiver's files are canonical's files" holds only in
-# COMPOSITION with that gate, and only while that gate is healthy (it is red as of #1583). A future
-# reader must not mistake a green here for end-to-end proof.
+# COMPOSITION with that gate, and only for as long as that gate is HEALTHY — which is a live condition,
+# not a constant. It went red on 2026-07-27 when FS.GG.Kit 0.8.0 fell behind canonical (#1583, repaired
+# the same day by the 0.9.0 bump in #1605), and every hour it is red is an hour a green here is worth
+# less than it looks. Check that gate before treating a green here as end-to-end proof; it is not one.
 #
 # Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default
 #                         ".claude/skills .codex/skills .agents/skills").

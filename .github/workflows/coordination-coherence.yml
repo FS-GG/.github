@@ -47,7 +47,9 @@
 # producer defect that would otherwise blame a healthy receiver), but it cannot see a package whose
 # payload disagrees with CANONICAL. That question belongs to `check-kit-published-coherence.py` on the
 # hub side. The invariant "a receiver's committed kit is canonical's kit" holds only in COMPOSITION
-# with that gate, and only while that gate is healthy — it is RED as of .github#1583. A green here is a
+# with that gate, and only for as long as that gate is HEALTHY — a live condition, not a constant. It
+# went red on 2026-07-27 when FS.GG.Kit 0.8.0 fell behind canonical (.github#1583, repaired the same
+# day), and every hour it is red is an hour a green here is worth less than it looks. A green here is a
 # statement about this repo and its pin, and nothing more.
 #
 # THE PR-ARM / main-ARM ASYMMETRY IS GONE (#1584 criterion 6), AND HERE IS WHY
