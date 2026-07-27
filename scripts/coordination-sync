@@ -584,6 +584,26 @@ def manifest_rows(blob, url):
     return rows, archive
 
 
+def contained(target, path, what):
+    """`path` resolved, asserted to sit inside the receiver root.
+
+    Every destination this gate touches comes from the package's manifest, and the manifest is data —
+    so a row naming `../../somewhere` would send the sha256 read, and the closed-set walk below, outside
+    the tree under test. Nothing here writes, so the blast radius is a confusing verdict rather than a
+    clobbered file; that is still a verdict about the wrong subject, which is the failure this fabric's
+    comments keep coming back to. Assert containment instead of trusting the row.
+    """
+    resolved = os.path.realpath(path)
+    root = os.path.realpath(target)
+    if resolved != root and not resolved.startswith(root + os.sep):
+        raise Inconclusive(
+            f"the {PACKAGE} package's manifest names {what} {os.path.relpath(path, target)!r}, which "
+            f"resolves outside the tree under test. Nothing was verified — a manifest that points out "
+            f"of the receiver is a PRODUCER defect, not this tree's."
+        )
+    return resolved
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -633,11 +653,13 @@ def verify(target, roots, rows, archive, include_build_config):
 
         for rel, skill_dir in placements:
             path = os.path.join(target, rel)
+            resolved = contained(target, path, "a destination")
             if skill_dir is not None:
                 # Registered whether or not the file is present: a MISSING file must not also silence
                 # the closed-set sweep over the directory it belongs to.
-                expected = managed_skill_dirs.setdefault(os.path.realpath(skill_dir), set())
-                expected.add(os.path.realpath(path))
+                expected = managed_skill_dirs.setdefault(
+                    contained(target, skill_dir, "a skill directory"), set())
+                expected.add(resolved)
             if not os.path.isfile(path):
                 emit("drift", "missing", rel)
                 continue

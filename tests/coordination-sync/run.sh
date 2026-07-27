@@ -920,6 +920,28 @@ expect_rc "pin roots: ...and a root the receiver does not declare is not verifie
 bash "$SYNC" "$PRECV" >/dev/null
 write_proj 'Version="0.9.0"'
 
+# A manifest destination that escapes the receiver root is a PRODUCER defect, not this tree's drift.
+# Nothing here writes, so the cost is a verdict about the wrong subject rather than a clobbered file —
+# which is still the failure this fabric keeps returning to, so it is asserted rather than trusted.
+ESCSTAGE="$PINW/stage-escape"
+cp -r "$STAGE" "$ESCSTAGE"
+python3 - "$ESCSTAGE/kit-manifest.tsv" <<'PY'
+import sys
+path = sys.argv[1]
+rows = []
+for line in open(path, encoding="utf-8").read().splitlines():
+    fields = line.split("\t")
+    if fields and fields[0] == "client":
+        fields[2] = "../../escaped-fsgg-coord"
+    rows.append("\t".join(fields))
+open(path, "w", encoding="utf-8").write("\n".join(rows) + "\n")
+PY
+pack_kit 0.9.4 "$ESCSTAGE"
+write_proj 'Version="0.9.4"'
+expect_out "pin: a manifest dest escaping the receiver root is INCONCLUSIVE (rc 3), not drift" 3 \
+  'resolves outside the tree under test' pin_check "$PRECV"
+write_proj 'Version="0.9.0"'
+
 # The roster gate still SKIPS a non-receiver before any of this runs — it is the one hub read left, and
 # it can only ever skip, never red.
 expect_out "pin: the roster gate still skips a non-receiver (rc 0) before any pin is resolved" 0 \
