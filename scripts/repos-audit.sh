@@ -815,17 +815,25 @@ spec = importlib.util.spec_from_file_location("sparse_closure_rule", RULE)
 rule = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rule)
 
-# THE BORROWED SURFACE, NAMED. Importing across a file boundary makes these seven names an interface,
-# and an interface nobody wrote down is one the next refactor is entitled to break. #1530 is in
-# flight to hoist the PARSE (`patterns_of`, `cone_mode_of`) into scripts/lib/sparse.py, and its
-# criterion 2 is that neither caller retains a private copy — so this is not a hypothetical.
+# THE BORROWED SURFACE, NAMED. Importing across a file boundary makes these eight names an interface,
+# and an interface nobody wrote down is one the next refactor is entitled to break. #1530 hoisted the
+# PARSE (`patterns_of`, `cone_mode_of`) into scripts/lib/sparse.py, and its criterion 2 was that
+# neither caller retains a private copy — so this was never a hypothetical.
+#
+# BOTH NO-VERDICT TYPES ARE NAMED, and that is the lesson of #1599 rather than a tidiness. A name
+# check that lists only `GateError` cannot see the drift that actually happened: no symbol
+# DISAPPEARED, the EXCEPTION `patterns_of` raises changed identity — from `GateError` to
+# `lib.sparse.SparseRefusal`, which is deliberately not a subclass of it — and the handler written to
+# catch it stopped catching anything. Listing `SparseRefusal` here does not by itself catch that
+# class of drift, but it makes the NEXT move of the no-verdict type a refusal to grade instead of a
+# traceback out of the middle of the loop.
 #
 # Asserted up front, and by NAME, so the failure is a sentence an operator can act on rather than an
 # AttributeError from somewhere in the loop. It fails CLOSED: the caller records a refusal and the
 # audit exits 3, because a rule that cannot be loaded must never round to "no repository enumerates
 # anything" across ten repositories.
 BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern",
-            "origin_repository", "tracked_paths", "GateError")
+            "origin_repository", "tracked_paths", "GateError", "SparseRefusal")
 missing = [name for name in BORROWED if not hasattr(rule, name)]
 if missing:
     sys.exit("%s no longer exposes %s. repos-audit.sh borrows the sparse-checkout closure rule from "
@@ -923,13 +931,25 @@ for job_id, params in rule.sparse_steps(document):
     cross += 1
     # Refusals are COLLECTED, never raised on sight — the rule file's own discipline: one unreadable
     # step must not suppress every real finding in the rest of the org.
+    #
+    # BOTH NO-VERDICT TYPES, and `SparseRefusal` is the one that matters here (#1599). Since #1530 the
+    # PARSE lives in scripts/lib/sparse.py, which has no dependency on the gate harness and therefore
+    # cannot raise the gate's `GateError`; it raises `SparseRefusal`, deliberately NOT a subclass, so
+    # that the mapping from "unreadable block" to an exit code is made by each caller where its own
+    # exit-code contract lives. `check-sparse-checkout-closure.py` makes that mapping. This borrower
+    # did not, and the refusal escaped the handler written to catch it — killing the subprocess before
+    # the `counts` line, so the sweep lost `cross` and reported "found NO cross-repo `actions/checkout`
+    # at all" over a roster that demonstrably had one, while the sentence the shared module wrote
+    # reached the operator only as traceback text on stderr. `GateError` is kept because the interface
+    # is what is DECLARED, not what happens to be raised today: a future parse refusal of the gate's
+    # own is caught here too, rather than becoming this bug a second time.
     try:
         patterns = rule.patterns_of(params, where)
         if patterns is None:
             clones += 1          # a full clone under-fetches nothing, so it is not a subject
             continue
         cone = rule.cone_mode_of(params, where)
-    except rule.GateError as error:
+    except (rule.GateError, rule.SparseRefusal) as error:
         emit("refusal", error)
         continue
 

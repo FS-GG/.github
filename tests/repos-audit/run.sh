@@ -1966,15 +1966,46 @@ rm -f "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml" "$FIX/FS-GG__FS.GG.Rendering/fetc
 # what gets fetched; a `sparse-checkout:` key that supplies no pattern is indistinguishable to the
 # runner from three other spellings whose behaviours differ enormously. Both are refused by the
 # shared rule, and the sweep must not launder either into a verdict it did not reach.
+#
+# THE STREAMS ARE READ SEPARATELY, AND THAT SEPARATION IS THE ASSERTION (#1599). The refusal SENTENCE
+# belongs to the shared rule, so grepping for it proves only that some copy of it was printed; what
+# proves the sweep CAUGHT the refusal rather than DIED on it is WHERE it comes out — the audit's own
+# `::error:: … REFUSED a shape it cannot grade` annotation, on STDOUT. This leg merged the streams
+# until #1599, and the `blank` case passed on the phrase as it appeared inside a Python TRACEBACK: the
+# borrower caught `GateError` while the hoisted parse raised `lib.sparse.SparseRefusal`, the verdict
+# program died mid-loop, and the leg stayed green for the entire life of the defect. That is the #266
+# vacuous failure, in the fixture asserting a #266 rule — so three things are pinned, not one.
+#
+#   1. the phrase is ON the refusal annotation, not merely somewhere in the output
+#   2. `sparse_grade`'s generic laundering line — the one a dead subprocess produces — is ABSENT
+#   3. stderr carries no traceback at all
+#
+# Any one of them alone can be satisfied by the broken shape; together they cannot.
 for spec in "negated:negated sparse pattern" "blank:supplies no pattern"; do
   mode="${spec%%:*}"; phrase="${spec#*:}"
   wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering "$mode"
-  out="$(run 2>&1)" && rc=0 || rc=$?
-  { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qF "$phrase" \
-      && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade'; } \
-    && ok "sparse: '$mode' is a PERMANENT no-verdict (exit 3), not a finding and not a retry" \
-    || bad "a refused sparse shape must be exit 3" "rc=$rc: $out"
+  out="$(run 2>"$WORK/refusal.err")" && rc=0 || rc=$?
+  err="$(cat "$WORK/refusal.err")"
+  { [ "$rc" -eq 3 ] \
+      && printf '%s' "$out" | grep -F 'REFUSED a shape it cannot grade' | grep -qF "$phrase" \
+      && ! printf '%s' "$out" | grep -qF 'could not be evaluated against this workflow' \
+      && ! printf '%s' "$err" | grep -qF 'Traceback (most recent call last)'; } \
+    && ok "sparse: '$mode' is a PERMANENT no-verdict (exit 3) whose REASON reaches the operator as a refusal record, never as a traceback" \
+    || bad "a refused sparse shape must be exit 3 and carry the shared rule's own sentence on its refusal annotation" \
+           "rc=$rc: out=$out ||| err=$err"
 done
+
+# AND THE REFUSED WORKFLOW WAS STILL EXAMINED (#1599 criterion 2). A refusal is a step the sweep
+# LOOKED AT and could not read, which is not the same fact as a roster with no cross-repo checkout in
+# it — #266 exists to keep those two apart. When the verdict program died, the `counts` record never
+# printed, `cross` was lost, and the sweep reported "found NO cross-repo `actions/checkout` at all"
+# over a roster that demonstrably had one. The exit code was right and the LEDGER was false, which is
+# the harder half to notice; this pins the sentence that gave it away.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering blank
+out="$(run 2>/dev/null)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && ! printf '%s' "$out" | grep -qF 'NO cross-repo'; } \
+  && ok "sparse: a REFUSED step is one the sweep examined — the roster ledger never reports it as nothing found" \
+  || bad "a refused step must still be counted as a cross-repo checkout the sweep examined" "rc=$rc: $out"
 
 # A cross-repo checkout with no `sparse-checkout:` is a full clone. It under-fetches nothing, so it
 # is the class permanently foreclosed — the best end state there is — and redding it would be the
@@ -2009,9 +2040,15 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 
 # AND THE BORROWED RULE FAILS CLOSED WHEN IT IS NOT THERE. Importing across a file boundary makes
 # `sparse_steps`/`patterns_of`/`cone_mode_of`/`grade_pattern`/`origin_repository`/`tracked_paths`/
-# `GateError` an interface, and #1530 is IN FLIGHT to hoist the parse out of that file — its
-# criterion 2 is that neither caller keeps a private copy. So the interesting question is not whether
-# sharing works today; it is what happens on the day the far side moves.
+# `GateError`/`SparseRefusal` an interface, and #1530 HAS SINCE hoisted the parse out of that file —
+# its criterion 2 was that neither caller keeps a private copy. So the interesting question was never
+# whether sharing works today; it is what happens on the day the far side moves.
+#
+# It moved, and #1599 is what that cost: `SparseRefusal` was not on this list, the borrower kept
+# catching `GateError`, and the drift was invisible to the name check because no symbol DISAPPEARED —
+# only the exception's identity changed. The list cannot catch that shape on its own, but a
+# no-verdict type that is not even NAMED is one nothing downstream is obliged to keep working, so it
+# is named now and asserted below.
 #
 # The answer must be a loud no-verdict, never a quiet green over ten repositories — a gate that
 # reports clean because its rule went missing is #266 in its purest form. Both legs run a COPY of the
@@ -2043,11 +2080,15 @@ printf '"""A rule module that no longer exposes the borrowed names (models #1530
   > "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
 out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
         --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+#     `SparseRefusal` is named explicitly alongside `grade_pattern` (#1599 criterion 3): the
+#     no-verdict type the borrower must catch is part of the borrowed interface, and a leg that only
+#     greps for a GRADING symbol would go on passing if it silently dropped off the list again.
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'no longer exposes' \
     && printf '%s' "$out" | grep -q 'grade_pattern' \
+    && printf '%s' "$out" | grep -q 'SparseRefusal' \
     && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
-  && ok "sparse: a rule that lost the borrowed symbols reds and names them, never greens" \
+  && ok "sparse: a rule that lost the borrowed symbols reds and names them — including the no-verdict type" \
   || bad "a moved rule must fail closed and say which symbols went" "rc=$rc: $out"
 
 # --- THE KIT-PIN FRESHNESS SWEEP (#1540, #1560 criterion 4) --------------------------------------
