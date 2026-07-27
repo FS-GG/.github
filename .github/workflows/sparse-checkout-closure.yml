@@ -1,0 +1,67 @@
+# Gate: no cross-repo `sparse-checkout` may ENUMERATE files (.github#1522, epic #266).
+#
+# Closes the class behind #1510 and #1515. A reusable workflow that fetches its check script from
+# FS-GG/.github and NAMES THE FILES it wants is keeping a hand-maintained copy of that script's
+# dependency list in a file that cannot execute the thing it lists — so it drifts the moment the
+# script gains a sibling, and it drifts INVISIBLY, because every suite in this repo runs its gate
+# from a full checkout. #1510 was found by receivers in FS.GG.SDD and FS.GG.Governance, at load,
+# after ~7 seconds, having asserted nothing. `scripts/lib/gate.py`'s staged migration of ~25
+# `check-*.py` gates gives every one of them a new load-time import, so the third instance is
+# scheduled rather than hypothetical.
+#
+# THE SUBJECT IS EVERY WORKFLOW, WHICH IS WHY THE FILTER IS `.github/workflows/**`. The gate derives
+# its subjects — any `actions/checkout` with both a `repository:` and a `sparse-checkout:` — rather
+# than reading a list of workflow names, so a new reusable workflow is graded the day it is written.
+# A narrower filter would mean the gate does not run on the very file that introduces instance three.
+# `scripts/lib/gate.py` is in the filter because this gate IMPORTS it at load: the gate about
+# load-time dependency closure declares its own.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence, and a push-copy that quietly omits an entry is how a gate stops running on `main`.
+name: sparse-checkout-closure
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-sparse-checkout-closure.py"
+      - "scripts/lib/gate.py"
+      - "tests/sparse-checkout-closure/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-sparse-checkout-closure.py"
+      - "scripts/lib/gate.py"
+      - "tests/sparse-checkout-closure/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sparse-checkout-closure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # The gate reads workflow YAML with PyYAML rather than scanning it by indentation. That is not
+      # a preference: a folded block scalar (`sparse-checkout: >`) joins its lines with spaces, so
+      # the runner receives ONE pattern that matches nothing, and a hand parser reports two clean
+      # patterns and goes green over a checkout that would fetch an empty tree.
+      - uses: ./.github/actions/setup-policy-python
+
+      # The gate first, so a real finding in the tree is not buried under fixture output.
+      - name: Assert no cross-repo sparse-checkout enumerates files
+        run: python3 scripts/check-sparse-checkout-closure.py --root .
+
+      # The fixture retro-applies the gate to the PRE-FIX shapes of skill-union-assert.yml (#1510)
+      # and lock-range-coherence.yml (#1515) and asserts it reds on both, and on an unanchored
+      # `scripts/`. A gate only ever exercised on the fixed workflows proves nothing (#266).
+      - name: Run the sparse-checkout-closure fixture
+        run: bash tests/sparse-checkout-closure/run.sh
