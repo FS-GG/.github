@@ -587,71 +587,104 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | FIncludeBacklog -> Only [ Scan; Next; BatchCmd; Take ]
 
-    /// EVERY scoped flag and the argv spelling(s) it is written as — the ONE spelling table.
+    /// EVERY flag's argv spelling — the CANONICAL one a machine consumer matches on, and its aliases.
     ///
-    /// Hoisted out of `renderCommandContract` by #1534, which needed the same Flag → spelling map to name
+    /// Lifted out of `renderCommandContract` by #1534, which needed the same Flag → spelling map to name
     /// the flag a CONDITIONAL write is gated on (`writeSurface` below). A second copy inside the emitter
     /// would be free to spell `--apply` one way in a command's `flags` array and another in its
     /// `writesWhen`, which is the two-copies-of-one-fact shape #1507/#1510/#1515/#1523/#1528 have each
-    /// cost this board an item. There is one table, and both readers project it.
+    /// cost this board an item.
     ///
-    /// NOT total over `Flag`, and it cannot be: `FRepo`/`FWorker` are `Global`, and this list carries only
-    /// what `renderCommandContract` advertises per row. `spellingOf` below therefore fails LOUDLY rather
-    /// than answering `""` for a flag nobody added here — a blank spelling in an emitted contract is a
-    /// consumer reading `has("")`, which is the silent shape (#266).
-    let private scopedFlags: (Flag * string list) list =
-        [ FSnapshot, [ "--snapshot" ]
-          FRepo, [ "--repo" ]
-          FWorker, [ "--worker" ]
-          FEvidence, [ "--evidence" ]
-          FPartial, [ "--partial" ]
-          FTo, [ "--to" ]
-          FMessage, [ "--message" ]
-          FPaths, [ "--paths" ]
-          FPr, [ "--pr" ]
-          FWarn, [ "--warn" ]
-          FIssue, [ "--issue" ]
-          FStatus, [ "--status" ]
-          FAll, [ "--all" ]
-          FBatch, [ "--batch" ]
-          FStrict, [ "--strict" ]
-          FActive, [ "--active" ]
-          FApply, [ "--apply" ]
-          FPeek, [ "--peek" ]
-          FDryRun, [ "--dry-run" ]
-          FWait, [ "--wait" ]
-          FTries, [ "--tries" ]
-          FInterval, [ "--interval" ]
-          FRequire, [ "--require" ]
-          FSha, [ "--sha" ]
-          FLabel, [ "--label" ]
-          FState, [ "--state" ]
-          FFresh, [ "--fresh"; "--refresh" ]
-          FIncludeBacklog, [ "--include-backlog" ]
-          FForce, [ "--force" ]
-          FMint, [ "--mint" ]
-          FFlip, [ "--flip" ]
-          FLimit, [ "-n" ]
-          FLocal, [ "--local" ]
-          FAllRepos, [ "--all-repos" ]
-          FOver, [ "--over" ]
-          // #1523 — these two used to be spliced in unconditionally below, onto every row, which is how
-          // the emitted contract came to promise `--json` on 20 commands that print prose. They are
-          // ordinary scoped flags now, so the contract and `scopeOf` agree BY CONSTRUCTION rather than
-          // by a test noticing later.
-          FJson, [ "--json" ]
-          FText, [ "--text" ] ]
+    /// A TOTAL MATCH RATHER THAN A LOOKUP LIST, and the difference is a crash path that does not exist.
+    /// The list form this replaced could not answer for a `Flag` nobody had added to it, so it needed a
+    /// runtime `failwith` — and a comment claiming the gap was unreachable. It was: the list was in fact
+    /// total over `Flag`, so the comment justified a fallback against data that contradicted it. Written
+    /// as a match, FS0025 under `TreatWarningsAsErrors` makes a new `Flag` with no spelling a BUILD ERROR,
+    /// exactly as `scopeOf` above and `writeSurface` below are — and there is nothing left to fail at.
+    ///
+    /// The CANONICAL spelling is returned separately from the aliases because the two are read for
+    /// different jobs: `writesWhen` names one flag a consumer must look for on argv, while the emitted
+    /// `flags` array advertises every spelling the parser accepts. `--fresh`/`--refresh` is the one flag
+    /// where they differ, and flattening them would make the contract advertise a canonical spelling it
+    /// picked arbitrarily.
+    let private spellingsOf (f: Flag) : string * string list =
+        match f with
+        | FSnapshot -> "--snapshot", []
+        | FRepo -> "--repo", []
+        | FWorker -> "--worker", []
+        | FEvidence -> "--evidence", []
+        | FPartial -> "--partial", []
+        | FTo -> "--to", []
+        | FMessage -> "--message", []
+        | FPaths -> "--paths", []
+        | FPr -> "--pr", []
+        | FWarn -> "--warn", []
+        | FIssue -> "--issue", []
+        | FStatus -> "--status", []
+        | FAll -> "--all", []
+        | FBatch -> "--batch", []
+        | FStrict -> "--strict", []
+        | FActive -> "--active", []
+        | FApply -> "--apply", []
+        | FPeek -> "--peek", []
+        | FDryRun -> "--dry-run", []
+        | FWait -> "--wait", []
+        | FTries -> "--tries", []
+        | FInterval -> "--interval", []
+        | FRequire -> "--require", []
+        | FSha -> "--sha", []
+        | FLabel -> "--label", []
+        | FState -> "--state", []
+        | FFresh -> "--fresh", [ "--refresh" ]
+        | FIncludeBacklog -> "--include-backlog", []
+        | FForce -> "--force", []
+        | FMint -> "--mint", []
+        | FFlip -> "--flip", []
+        | FLimit -> "-n", []
+        | FLocal -> "--local", []
+        | FAllRepos -> "--all-repos", []
+        | FOver -> "--over", []
+        // #1523 — these two used to be spliced onto every emitted row unconditionally, which is how the
+        // contract came to promise `--json` on 20 commands that print prose. They are ordinary scoped
+        // flags now, so the contract and `scopeOf` agree BY CONSTRUCTION rather than by a test noticing.
+        | FJson -> "--json", []
+        | FText -> "--text", []
 
-    /// The FIRST spelling of a flag — the one a machine consumer matches on. `--fresh`/`--refresh` are one
-    /// flag with two spellings and the head is the canonical one.
-    let private spellingOf (f: Flag) : string =
-        match scopedFlags |> List.tryFind (fst >> (=) f) with
-        | Some(_, spelling :: _) -> spelling
-        | _ ->
-            // Unreachable while `scopedFlags` covers every flag `writeSurface` names, and it is a `failwith`
-            // rather than a `""` on purpose: a contract that emitted an empty flag name would be READ, and
-            // read as "gated on nothing".
-            failwith $"Options.spellingOf: %A{f} has no argv spelling in `scopedFlags`"
+    /// The one spelling a consumer matches on argv. Total, because `spellingsOf` is.
+    ///
+    /// NOT YET THE ONLY SPELLING TABLE IN THIS FILE, and saying otherwise here would be the overclaim this
+    /// change exists to stop making. `flagsGiven` below carries its own literal per flag — the spelling a
+    /// REFUSAL names — and nothing compares the two, so `--fresh` is free to be spelled one way here and
+    /// another there. That is the same emitter-versus-gate split #1523 found, one table along. Filed as
+    /// #1573 rather than folded in: rewording a refusal is a change to what every caller reads, and it
+    /// does not belong in a passing edit to `command-contract`.
+    let private spellingOf (f: Flag) : string = fst (spellingsOf f)
+
+    /// Every `Flag` case, by reflection — the same move `allCommands` makes for the `Command` union, and
+    /// for the same reason: an enumeration written by hand is one a new case can be left out of. Paired
+    /// with `spellingsOf`'s totality this makes the emitted flag surface unable to omit a flag silently.
+    ///
+    /// THE BINDING FLAGS ARE LOAD-BEARING, unlike `allCommands`'s. `Command` is public and reflects with
+    /// the defaults; `Flag` is `private`, and without `NonPublic` both calls below refuse — `GetUnionCases`
+    /// returns nothing and `MakeUnion` throws, inside a module-level `let`, which surfaces as a
+    /// `TypeInitializationException` on the FIRST parse of ANY argv. Measured while writing this: every
+    /// verb exited 2 with a stack trace. Copying `allCommands`'s spelling here looks right and is not.
+    let private allFlags: Flag list =
+        let binding =
+            System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Public
+
+        Microsoft.FSharp.Reflection.FSharpType.GetUnionCases(typeof<Flag>, binding)
+        |> Array.toList
+        |> List.map (fun case ->
+            Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||], binding) :?> Flag)
+
+    /// EVERY flag and all its spellings — what `renderCommandContract` advertises per row, derived rather
+    /// than listed. The emitter sorts each row's flags, so this list's order is not observable.
+    let private scopedFlags: (Flag * string list) list =
+        allFlags
+        |> List.map (fun f ->
+            let canonical, aliases = spellingsOf f
+            f, canonical :: aliases)
 
     /// WHEN A CONDITIONAL WRITE IS ON — carried as a typed `Flag`, never a string, so the spelling emitted
     /// in the contract is the SAME spelling the command's `flags` array advertises (`spellingOf`), and a
@@ -710,10 +743,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// write is permitted on precisely the oldest artifacts. The consumer is the parity GATE, where a
     /// freshly built engine and the shim's text are both present and neither is suspect.
     ///
-    /// LOCAL WRITES ARE NOT WRITES HERE. `inbox` advances a per-worker cursor (`Cache.putInboxCursor`),
-    /// `board`/`bootstrap`/`field-id`/`option-id`/`item-id` write a cache file under `$XDG_CACHE_HOME`, and
-    /// `followup` is a local queue file. None of that is state a second worker can observe, which is the
-    /// only thing a stale engine can corrupt for somebody else.
+    /// LOCAL WRITES ARE NOT WRITES HERE, AND "LOCAL" DOES NOT MEAN "PRIVATE". `inbox` advances a cursor
+    /// (`Cache.putInboxCursor`), `board`/`bootstrap`/`field-id`/`option-id`/`item-id` write a board-map or
+    /// item-id cache, and `followup` is a queue file — all under `$XDG_CACHE_HOME`. Only the inbox cursor
+    /// is keyed on the WORKER; the board map and item-id caches are keyed on owner/repo, so every worker on
+    /// one machine shares them (`Cache.fs` says so, and #881 is filed against the sibling queue file for
+    /// exactly that). The line this field draws is not "nobody else sees it" — it is THE BOARD: a cache is
+    /// re-derivable from a read, and what a stale engine corrupts there costs a re-fetch, not a claim.
     ///
     /// A DRY RUN THAT MISREPORTS IS NOT WHAT THIS FIELD GUARDS. `reap` bare is `Reads`-shaped in its
     /// effects and is still classified `OnlyWhenGiven FApply` rather than `Reads`, because the QUESTION is
@@ -960,11 +996,18 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             // that flattened it into "reads" would let a stale engine collect live claims.
             //
             // ADDITIVE, AND THE SCHEMA ID DOES NOT MOVE. `fsgg.coord.commands/1` promises the keys it names;
-            // it does not promise their absence. Every consumer in the tree reads `name` and `flags` by key
-            // (`scripts/check-skill-quality.py`, `tests/coord-engine-parity/shim.sh` §3b via `jq`) and is
-            // unaffected by a new one. Bumping to `/2` would red both of them — they compare the id for
-            // EQUALITY and fail closed — for a change that removes nothing, so the bump would be an outage
-            // bought to describe a compatible edit.
+            // it does not promise their absence. The three consumers in the tree all read by key and are
+            // unaffected by a new one: `scripts/check-skill-quality.py` (`name` + `flags`),
+            // `tests/coord-engine-parity/shim.sh` §3b (`.commands[].name` via `jq`, and nothing else), and
+            // `CommandSurfaceTests` in this repo's own suite.
+            //
+            // A BUMP TO `/2` WOULD BE WORSE THAN NOISY, and the reason is worth stating rather than
+            // assuming a clean failure. Two of the three compare the id for equality — but they do not
+            // agree on what to do about a mismatch: `check-skill-quality.py`'s first reader FAILS, while
+            // its second returns bare, which would silently disarm every semantic assertion it makes
+            // (the `--paths`/`--apply` polarity gate) instead of reporting anything. So the cost of the
+            // bump is one loud error plus one gate that quietly stops auditing — bought to describe an
+            // edit that removes nothing. Filed as #1574.
             let writes, gate =
                 match writeSurface command with
                 | Writes -> "always", None

@@ -303,15 +303,26 @@ module CommandSurfaceTests =
     /// and `writesWhen` together, and reading the row once keeps them talking about the same object.
     let private emittedRows () =
         let doc = JsonDocument.Parse(renderCommandContract ())
+        let rows = doc.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-        doc.RootElement.GetProperty("commands").EnumerateArray()
-        |> Seq.map (fun row -> row.GetProperty("name").GetString(), row.Clone())
-        |> Map.ofSeq
+        let byName =
+            rows |> List.map (fun row -> row.GetProperty("name").GetString(), row.Clone()) |> Map.ofList
+
+        // `Map.ofList` KEEPS THE LAST OF A DUPLICATE KEY AND SAYS NOTHING, so two rows named `widen` — a
+        // botched rebase in the emitter, or a `commandName` collision — would be invisible to every
+        // assertion built on this. That is the same swallow `no verb is declared twice` above guards
+        // `surface` against; the emitted document deserves it too.
+        Assert.Equal(List.length rows, Map.count byName)
+        byName
 
     [<Fact>]
     let ``#1534 every verb on the Command union declares write-ness — no verb defaults to READ`` () =
-        // TOTAL OVER THE DU, NOT OVER A LIST, and that is the point of reflecting here rather than mapping
-        // `surface`: a verb the union has and `surface` does not is a verb nothing emits, and this names it.
+        // TOTAL OVER THE DU. The emitter reflects over the `Command` union itself and excludes only
+        // `Help`/`Version`, so the row set is the union's — which is why this walks the union rather than
+        // `surface`. The two outer arms below are belt-and-braces and are unreachable today: the DU
+        // cross-check above already pins `surface ∪ flagDispatched == the union`, and the coverage test
+        // already pins the emitted names against `surface`. They are kept because they cost a line and
+        // name the right thing if either of those is ever relaxed; the LIVE assertion is the `writes` key.
         //
         // WHAT ENFORCES THE "no verb defaults to READ" HALF IS THE COMPILER, NOT THIS TEST, and the
         // distinction is worth stating rather than blurring. `writeSurface` is a total match with NO
@@ -455,16 +466,18 @@ module CommandSurfaceTests =
         )
 
     [<Fact>]
-    let ``#1534 the four classifications #1528 found WRONG stay decided`` () =
-        // NOT a restatement of the emitter. These are the exact rows a person got wrong in the shim's bash
-        // copy and nobody noticed for months (#1528): `set-paths` reached the same `Writes.widen` PATCH as
-        // `widen` through the same `updateTouchSet` helper and was called a read; `room` and `reconcile`
-        // were called reads; and `bootstrap` was called a WRITE, which would have refused a pair of GraphQL
-        // queries on a stale engine for nothing. Moving one of them now costs a line in a diff.
+    let ``#1534 the five classifications #1528 found WRONG stay decided`` () =
+        // NOT a restatement of the emitter. FIVE of these are the exact rows a person got wrong in the
+        // shim's bash copy, unnoticed for months (#1528): `set-paths` reached the same `Writes.widen` PATCH
+        // as `widen` through the same `updateTouchSet` helper and was called a read; `room` and `reconcile`
+        // were called reads; `next` was called a read, and takes the #733 chore lock AFTER printing, so the
+        // name is not the evidence; and `bootstrap` was called a WRITE, which would have refused a pair of
+        // GraphQL queries on a stale engine for nothing. Moving one now costs a line in a diff.
         //
-        // `next` is here for the same reason one layer along: #1528 found it takes the #733 chore lock
-        // AFTER printing, so the name is not the evidence — and a later reader who "tidies" it into `never`
-        // because a scheduler read is obviously a read reds instead.
+        // `widen`, `reap` and `batch` are CONTRAST ANCHORS rather than corrections, and each is one edit
+        // away from its neighbour's wrong answer: `widen` is `set-paths`'s twin, `reap` is the dry-run
+        // polarity `reconcile` shares, and `batch` is `next` uncapped — the pair that proves "scheduler
+        // verbs read" is not the rule `next` breaks.
         let rows = emittedRows ()
         let writes verb = rows.[verb].GetProperty("writes").GetString()
 
