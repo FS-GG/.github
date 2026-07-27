@@ -326,13 +326,15 @@ fi
 # `tr -d '\r'` would delete LONE carriage returns too, which the library keeps — and that is not a
 # theoretical difference: measured over the vector table, `# beta skill\r` and `# beta skill` hash
 # the SAME under `tr -d '\r'` and DIFFERENTLY under the library. Two distinct files sharing a digest
-# is a fail-OPEN (#266), so the fold is done with bash's own pair-wise substitution and pinned by the
-# `lone-cr`, `cr-cr-lf` and `trailing-lone-cr` vectors in tests/skill-union/skillmirror.fixtures.json.
+# is a fail-OPEN (#266), so the fold matches the PAIR — `sed -z 's/\r\n/\n/g'`, see the next
+# paragraph for why a stream and not a shell variable — and is pinned by the `lone-cr`, `cr-cr-lf`
+# and `trailing-lone-cr` vectors in tests/skill-union/skillmirror.fixtures.json.
 #
 # `--digest <skill-dir>` exposes it as a reference generator so producers and this assertion never
 # drift; `fsgg-skill-registry-check --digest <file>` is the Python seam's counterpart, and
 # tests/skill-union/skillmirror-conformance.sh drives BOTH plus the library's measured column over
 # one shared table. Multi-file remainder is covered by checks 1-2.
+#
 # IT IS A STREAM, NOT A SHELL VARIABLE, AND THAT IS A CORRECTNESS DECISION — NOT A STYLE ONE.
 # The obvious way to fold in bash is to slurp the body and use `${body//$'\r\n'/$'\n'}`. It is wrong
 # three separate ways, each measured rather than argued:
