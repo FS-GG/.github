@@ -182,6 +182,123 @@ module CommandSurfaceTests =
 
         Assert.Equal<Set<string>>(surface |> List.map fst |> Set.ofList, emitted)
 
+    /// The emitted contract, as `{command -> flag set}` — the shape every gate downstream reads it in
+    /// (`scripts/check-skill-quality.py` builds exactly this to audit documented invocations).
+    let private emittedFlags () =
+        let doc = JsonDocument.Parse(renderCommandContract ())
+
+        doc.RootElement.GetProperty("commands").EnumerateArray()
+        |> Seq.map (fun row ->
+            row.GetProperty("name").GetString(),
+            (row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq))
+        |> Map.ofSeq
+
+    /// Every command the contract is emitted for, paired with its declared render support.
+    let private contractCommands =
+        surface |> List.map (fun (verb, command) -> verb, command, renderSupport command)
+
+    [<Fact>]
+    let ``#1523 the contract advertises --json exactly where a JSON projection EXISTS`` () =
+        // THE DEFECT THIS PINS, and it is the one nothing in this file could see. `--json` was `Global` in
+        // `scopeOf` and `renderCommandContract` spliced it onto EVERY row unconditionally, so the emitted
+        // surface promised a machine projection on all 40 commands. Fourteen branched on `opts.Render`;
+        // four printed JSON regardless; the other TWENTY printed the same prose with the flag as without,
+        // exited 0, and told the caller by that exit that a thing had happened which had not. That is
+        // #867/#991's "accepted and ignored" — the very defect the residue rule exists to end — surviving
+        // inside the one flag the rule exempted itself from.
+        //
+        // WHY THIS IS DERIVED AND NOT A LIST. `renderSupport` is the single hand-written fact about the
+        // renderers; `scopeOf`, the contract emitter and the bare-form default all read it. A second copy
+        // of the honouring set here — the obvious way to write this test — would be free to drift from the
+        // engine exactly as the three copies it replaces drifted from each other, which is the shape five
+        // separate items on this board have now been filed against (#1507, #1510, #1515, #1528). So the
+        // assertion compares the EMITTED contract against the DECLARATION, and the only way to change what
+        // is advertised is to change what the engine says it can do.
+        let emitted = emittedFlags ()
+
+        let wrong =
+            contractCommands
+            |> List.choose (fun (verb, _, support) ->
+                let advertised = emitted.[verb].Contains "--json"
+                let hasProjection = support <> TextOnly
+
+                if advertised = hasProjection then
+                    None
+                elif advertised then
+                    Some $"%s{verb}: advertises --json and has NO JSON projection (%A{support})"
+                else
+                    Some $"%s{verb}: has a JSON projection (%A{support}) and does not advertise --json")
+
+        Assert.True(
+            List.isEmpty wrong,
+            "the emitted surface and the renderers disagree about `--json` (#1523):\n  "
+            + String.concat "\n  " wrong
+        )
+
+    [<Fact>]
+    let ``#1523 the contract advertises --text exactly where a HUMAN projection EXISTS`` () =
+        // The mirror, and it is not symmetry for its own sake. `--json` and `--text` are two promises, and
+        // a command can keep one without the other: `issues` and `board` emit a raw machine document
+        // whatever you ask for, so `--text` on them was the same broken promise pointing the other way.
+        // Modelling them as one flag would have forced one of the two halves to keep lying.
+        let emitted = emittedFlags ()
+
+        let wrong =
+            contractCommands
+            |> List.choose (fun (verb, _, support) ->
+                let advertised = emitted.[verb].Contains "--text"
+                let hasProjection = support <> JsonOnly
+
+                if advertised = hasProjection then
+                    None
+                else
+                    Some $"%s{verb}: --text advertised=%b{advertised}, projection exists=%b{hasProjection} (%A{support})")
+
+        Assert.True(
+            List.isEmpty wrong,
+            "the emitted surface and the renderers disagree about `--text` (#1523):\n  "
+            + String.concat "\n  " wrong
+        )
+
+    [<Fact>]
+    let ``#1523 what the contract advertises is exactly what the parser ACCEPTS`` () =
+        // The round trip, and the reason the two tests above are worth anything. They compare the emitted
+        // document to `renderSupport`; this one compares it to the PARSER, so a contract that agreed with
+        // the declaration while the residue rule refused something else — an emitter and a gate reading
+        // two different tables, which is precisely the state #1523 found them in — cannot pass.
+        //
+        // Every command, both spellings, both directions: advertised ⇒ parses, unadvertised ⇒ REFUSED.
+        let emitted = emittedFlags ()
+
+        // STRICT IN BOTH DIRECTIONS, and deliberately not "any error that is not the residue message
+        // counts as acceptance". That weaker predicate is sound today only because `parse` checks arity
+        // nowhere in the bare form — so the moment a command gains one (the natural next step for
+        // `landable`, `field-id`, `issues`, all of which currently parse bare with no positionals), that
+        // command's row would silently stop testing anything in the advertised direction. A gate that
+        // quietly narrows its own subject is the #266 shape. So: advertised MUST parse `Ok`, and
+        // unadvertised MUST produce the residue refusal by name. Anything else is a finding.
+        let disagreements =
+            [ for verb, _, _ in contractCommands do
+                  for flag in [ "--json"; "--text" ] do
+                      let advertised = emitted.[verb].Contains flag
+                      let result = parse ((verb.Split(' ') |> Array.toList) @ [ flag ])
+
+                      match advertised, result with
+                      | true, Ok _ -> ()
+                      | true, Error e -> yield $"%s{verb} %s{flag}: advertised, but parse REFUSED it: %s{e}"
+                      | false, Error e when e.Contains $"%s{flag} is not a flag of" -> ()
+                      | false, Ok _ -> yield $"%s{verb} %s{flag}: NOT advertised, and the parser accepted it"
+                      | false, Error e ->
+                          yield
+                              $"%s{verb} %s{flag}: NOT advertised, and the refusal is about something else "
+                              + $"— the flag went unjudged: %s{e}" ]
+
+        Assert.True(
+            List.isEmpty disagreements,
+            "the emitted contract and the parser disagree about the render flags (#1523):\n  "
+            + String.concat "\n  " disagreements
+        )
+
     [<Fact>]
     let ``the machine contract preserves dangerous option polarities`` () =
         use doc = JsonDocument.Parse(renderCommandContract ())

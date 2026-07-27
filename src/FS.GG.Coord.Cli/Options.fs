@@ -50,9 +50,47 @@ module Options =
         | Json
         | Text
 
+    /// WHICH STDOUT PROJECTIONS A COMMAND ACTUALLY HAS (#1523).
+    ///
+    /// This is the ONE hand-written fact about the renderers, and everything else about `--json`/`--text`
+    /// is derived from it: which commands may be GIVEN the flag (`scopeOf FJson`/`scopeOf FText`), what
+    /// `command-contract` advertises, and — the part that matters most — what `Render` a BARE invocation
+    /// is left at. Before #1523 those were three independent copies: `scopeOf` said `Global` (all 40),
+    /// `renderCommandContract` hard-coded `--json` onto every row, and each parse arm chose its own default
+    /// or forgot to. Fourteen commands honoured the flag.
+    ///
+    /// It is a TOTAL function over `Command` and this project sets `TreatWarningsAsErrors`, so a new verb
+    /// with no row here is a BUILD ERROR, not a silently-unguarded flag — the same structural property #991
+    /// bought for the other 38 flags.
+    type RenderSupport =
+        /// BOTH projections exist: the handler branches on `opts.Render`, so `--json` and `--text` each
+        /// mean something. Carries the mode a BARE invocation renders in — the default is part of the same
+        /// declaration as the capability, because honouring a flag means honouring its ABSENCE too (#1517).
+        | Both of ``default``: Render
+        /// stdout is ALWAYS a machine document. `--json` keeps its promise; `--text` cannot be kept, so it
+        /// is refused rather than accepted and ignored.
+        | JsonOnly
+        /// stdout is ALWAYS human text. `--text` keeps its promise; `--json` cannot be kept, so it is
+        /// refused. This is the bucket that carried the #1523 defect: 20 verbs advertised `--json` and
+        /// printed prose regardless.
+        | TextOnly
+
     type Options =
         { Command: Command
           Render: Render
+          /// EVERY render flag GIVEN — empty when neither `--json` nor `--text` appeared on argv.
+          ///
+          /// `Render` alone cannot answer "was the flag given?", because it has a non-optional default:
+          /// "given" and "defaulted" are the same state, which is the exemption that kept `--json` `Global`
+          /// and unguardable (#991's own note, quoted at `scopeOf`). This field is the missing bit, and it
+          /// is what lets `flagsGiven` report `--json` so the residue rule can refuse it (#1523).
+          ///
+          /// A SET, NOT THE LAST ONE. `Render` keeps last-wins, and a field that only remembered the
+          /// winner would leave the loser invisible: `done --json --text` would resolve to `Text`, report
+          /// only `--text` — which `done` legitimately takes — and let the `--json` it cannot honour
+          /// through unnamed. That is the accepted-and-ignored silence this whole change exists to end,
+          /// rebuilt inside the guard against it. Every spelling that was typed is refusable.
+          RenderGiven: Set<Render>
           SnapshotFile: string option
           Repo: string option
           Fresh: bool
@@ -292,6 +330,123 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
+    /// Which stdout projections each command HAS — see `RenderSupport`. Derived by tracing every
+    /// `opts.Render` read in `Client.fs`/`Program.fs` to the handler that reaches it, exactly as `scopeOf`
+    /// below was derived, and NOT from the usage prose.
+    ///
+    /// The `Both` default of each row is the mode that command renders in TODAY with no flag. It is not a
+    /// preference and it is not adjustable in passing: `#1517` shipped `widen` honouring `opts.Render`
+    /// while its parse arm still inherited the module default of `Json`, which would have flipped the BARE
+    /// `widen` — the form every recipe runs — from its human receipt to a JSON object. Changing a `Both`
+    /// default here changes what an existing caller's un-flagged invocation prints.
+    let renderSupport (c: Command) : RenderSupport =
+        match c with
+        // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
+        | Decide -> Both Json // Program.fs `decide`
+        | LanesView -> Both Json // Program.fs `lanes`
+        | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
+        | BatchCmd -> Both Json // Client.fs `batch`
+        | Ready -> Both Json // Client.fs `ready`
+        | Reconcile -> Both Text // and `--apply --json` is refused outright, below
+        // `who`, `budget` and `inbox` share one polarity, and it is the mirror of `ready`/`batch`: the
+        // human table is what an operator or a worker reads, and `--json` opts into the machine contract
+        // (case 20/25's rows, `pendingBoardWrites` — #862).
+        | Who -> Both Text
+        | Budget -> Both Text
+        | Claim -> Both Text
+        // `adopt` and `take` produce no stdout of their own — both delegate to `claim`, passing `opts`
+        // through, so `claim`'s receipt is theirs. CAVEAT, and it is a real one: `take`'s EMPTY-QUEUE arm
+        // prints prose regardless of `Render`, so `take --json` is honoured only when it actually claims
+        // something. That is a defect in the handler, not in this row — it is #1525, and this item's
+        // touch-set is the options surface, not `Client.fs`.
+        | Adopt -> Both Text
+        | Take -> Both Text
+        | Widen -> Both Text // both reach the shared `updateTouchSet` (#1517)
+        | SetPaths -> Both Text
+        | Inbox -> Both Text
+        | Predicate -> Both Text
+        | LintCmd -> Both Text
+
+        // ---- JSON ONLY: stdout is a machine document whatever the flag says ----------------------------
+        // `scan` DOES match on `opts.Render` (`Program.fs`), and both arms print the same document —
+        // deliberately, because the snapshot IS the contract and `scan | decide` must keep working. So the
+        // match decides nothing on stdout, and `--text` was a no-op rather than a rendering: there is no
+        // human projection of a snapshot to ask for. The PIPELINE is unaffected either way (`scan` bare and
+        // `scan --text` printed identical bytes); what is refused is only the flag that never did anything.
+        //
+        // The now-unreachable `Text` arm and its comment live in `Program.fs`, which is outside this item's
+        // touch-set. Filed as a follow-up rather than reached into.
+        | Scan -> JsonOnly
+        | CommandContractCmd -> JsonOnly
+        | BoardCmd -> JsonOnly
+        | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
+
+        // ---- TEXT ONLY: prose, an id, or one verdict word — there is no machine projection to ask for ---
+        // THIS IS THE #1523 BUCKET. Every row here advertised `--json` on all 40 commands and printed the
+        // same prose with it as without. Two are load-bearing for the fleet and say why refusal beats
+        // "make the handler honour it": `whoami --mint` prints `export FSGG_WORKER=…` for `eval`, and
+        // `done` prints the `FSGG-DONE` stamp every driver greps. A JSON projection nobody consumes, on
+        // either of those, is a fleet outage bought for nothing.
+        | WhoAmI -> TextOnly
+        | Next -> TextOnly
+        // `reap` reports what it WOULD collect; the destructive collect is gated behind `--apply`, so the
+        // bare form is a DRY RUN and the thing an operator reads before deciding is prose.
+        | Reap -> TextOnly
+        | Landable -> TextOnly // one verdict word; the decision is the exit code
+        | Release -> TextOnly
+        | Heartbeat -> TextOnly
+        | SetField -> TextOnly
+        | Child -> TextOnly
+        | Overlap -> TextOnly
+        | Say -> TextOnly
+        | RoomOpen -> TextOnly
+        | DoneCmd -> TextOnly
+        | VerifyPaths -> TextOnly
+        | Followup -> TextOnly
+        | Bootstrap -> TextOnly
+        | FieldId -> TextOnly // a bare id
+        | OptionId -> TextOnly
+        | ItemId -> TextOnly
+        | Add -> TextOnly
+        // `flush` REPLAYS by default (the opposite polarity to `reap --apply`, see `DryRun`), and what it
+        // prints is a report an operator reads after the `EX_RATE` back-off.
+        | Flush -> TextOnly
+        | Help -> TextOnly
+        | Version -> TextOnly
+
+    /// The render mode a BARE invocation of a command is left at — derived from the same declaration that
+    /// decides whether the flag may be given at all, so the two can no longer disagree.
+    ///
+    /// For a `JsonOnly`/`TextOnly` command this is simply what it already prints, which makes the declared
+    /// default TRUE of the handler rather than an accident of the module `defaults` record. That is what
+    /// disarms the trap: a future edit that teaches one of those handlers to read `opts.Render` finds the
+    /// field already set to the mode it has always printed in.
+    let private defaultRender (c: Command) : Render =
+        match renderSupport c with
+        | Both d -> d
+        | JsonOnly -> Json
+        | TextOnly -> Text
+
+    /// Every nullary `Command` case, by reflection — the one enumeration that cannot drift from the DU.
+    let private allCommands: Command list =
+        Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
+        |> Array.toList
+        |> List.choose (fun case ->
+            if case.GetFields().Length <> 0 then
+                None
+            else
+                Some(Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Command))
+
+    /// The commands each render flag may be given to, DERIVED from `renderSupport` and computed ONCE.
+    ///
+    /// A hand-written pair of lists here would be the same defect one level along — a second copy of
+    /// `renderSupport`, free to drift from it — and this board has spent five items on exactly that shape.
+    /// Module-level `let` rather than a filter inside `scopeOf`, because `renderCommandContract` calls
+    /// `scopeOf` once per (command, flag) pair and would otherwise rebuild both lists ~1,400 times.
+    let private jsonReaders = allCommands |> List.filter (fun c -> renderSupport c <> TextOnly)
+
+    let private textReaders = allCommands |> List.filter (fun c -> renderSupport c <> JsonOnly)
+
     /// THE FLAG SURFACE (#991) — every global flag, and the commands that READ it.
     ///
     /// The parser is one flat pass, so EVERY command accepts EVERY flag, and `unknown argument` — the
@@ -346,12 +501,25 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FLocal
         | FAllRepos
         | FOver
+        /// `--json` and `--text` are TWO flags, not one spelling of one (#1523). They make DIFFERENT
+        /// promises — "give me a machine document" and "give me a human one" — and a command can keep one
+        /// without the other, which is exactly what `issues` (always JSON) and `done` (always prose) do.
+        /// Collapsing them into a single row would force one of those two commands to advertise a promise
+        /// it cannot keep, which is the defect being repaired.
+        | FJson
+        | FText
 
     type private FlagScope =
         /// Every command honours it. Named deliberately — the flags here are the ones whose readers really
         /// are the whole surface (`--repo`), or whose "was it given?" cannot be observed at all because the
-        /// field has a non-optional default (`--json`/`--text` land in `Render`, `--lease` in `LeaseMinutes`):
-        /// an unset flag is indistinguishable from its default, so there is nothing here to refuse.
+        /// field has a non-optional default (`--lease` lands in `LeaseMinutes`): an unset flag is
+        /// indistinguishable from its default, so there is nothing here to refuse.
+        ///
+        /// `--json`/`--text` USED TO BE HERE for that second reason, and #1523 measured what it cost: the
+        /// exemption was true of the PARSER and silent about the RENDERER, so `command-contract` advertised
+        /// `--json` on all 40 commands while 20 of them printed the same prose with it as without. The
+        /// remedy is not a new checker — it is `RenderGiven`, which makes "given" observable, so the flag
+        /// can leave `Global` and `scopeOf` can be the gate it already is for the other 38.
         | Global
         /// Only these commands READ it. Every other command refuses it rather than swallowing it.
         | Only of Command list
@@ -362,6 +530,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match f with
         | FRepo -> Global
         | FWorker -> Global
+
+        // DERIVED, never listed (#1523) — see `jsonReaders`/`textReaders`.
+        | FJson -> Only jsonReaders
+        | FText -> Only textReaders
+
         | FSnapshot -> Only [ Decide; LanesView ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
@@ -412,8 +585,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FIncludeBacklog -> Only [ Scan; Next; BatchCmd; Take ]
 
     /// The flags actually GIVEN, with the spelling to name in a refusal. A flag whose field has a
-    /// non-optional default (`Render`, `LeaseMinutes`) cannot appear: "given" and "defaulted" are the same
-    /// state, so it is `Global` above and there is nothing to detect.
+    /// non-optional default and no record of having been given (`LeaseMinutes`) cannot appear: "given" and
+    /// "defaulted" are the same state, so it is `Global` above and there is nothing to detect.
+    ///
+    /// `--json`/`--text` were in that sentence until #1523. They are detectable now because `RenderGiven`
+    /// records the ACT of giving them separately from the `Render` they set — the smallest change that
+    /// turns an unguardable flag into a guarded one.
     let private flagsGiven (o: Options) : (Flag * string) list =
         [ if o.SnapshotFile.IsSome then FSnapshot, "--snapshot"
           if o.Repo.IsSome then FRepo, "--repo"
@@ -449,7 +626,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Mint then FMint, "--mint"
           if o.Flip then FFlip, "--flip"
           if not (List.isEmpty o.Over) then FOver, "--over"
-          if o.Limit.IsSome then FLimit, "-n" ]
+          if o.Limit.IsSome then FLimit, "-n"
+
+          // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
+          // head changed the message for inputs that were already wrong for another reason:
+          // `next --snapshot x --json` used to name `--snapshot` and point at `decide`/`lanes`, which is
+          // the more useful answer. Adding a guard should not re-word an existing refusal.
+          //
+          // BOTH spellings are reported when both were typed — see `RenderGiven`. One command can hold a
+          // legal `--text` and an illegal `--json` at the same time, and only one of them is a finding.
+          if o.RenderGiven.Contains Json then FJson, "--json"
+          if o.RenderGiven.Contains Text then FText, "--text" ]
 
     /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
     /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
@@ -549,7 +736,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               FLimit, [ "-n" ]
               FLocal, [ "--local" ]
               FAllRepos, [ "--all-repos" ]
-              FOver, [ "--over" ] ]
+              FOver, [ "--over" ]
+              // #1523 — these two used to be spliced in unconditionally below, onto every row, which is how
+              // the emitted contract came to promise `--json` on 20 commands that print prose. They are
+              // ordinary scoped flags now, so the contract and `scopeOf` agree BY CONSTRUCTION rather than
+              // by a test noticing later.
+              FJson, [ "--json" ]
+              FText, [ "--text" ] ]
 
         use stream = new System.IO.MemoryStream()
         use writer =
@@ -568,7 +761,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             writer.WriteStartArray("flags")
 
             let flags =
-                [ "--json"; "--lease"; "--text" ]
+                // `--lease` is still spliced in for every command: it lands in `LeaseMinutes`, which has a
+                // non-optional default and no `RenderGiven`-style record of the act, so it remains `Global`
+                // and unguardable for the reason `--json` no longer is. Filed as a follow-up, not fixed here.
+                [ "--lease" ]
                 @
                 (scopedFlags
                  |> List.collect (fun (flag, spellings) ->
@@ -762,7 +958,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     match scopeOf f with
                     | Global -> None
                     | Only readers when List.contains o.Command readers -> None
-                    | Only readers -> Some(spelling, readers))
+                    | Only readers -> Some(f, spelling, readers))
 
             if o.Command = Reconcile && o.Apply && o.Render = Json then
                 Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode."
@@ -770,7 +966,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
             else
                 match residue with
-                | Some(spelling, readers) ->
+                // `--json`/`--text` get their own sentence, and it is not stylistic (#1523). Naming the
+                // readers is the right answer for `--status` (two commands) and useless for these two
+                // (twenty), and the caller's real question is not "who else takes this?" but "why can I not
+                // have it here?" — which has a one-line answer that the list would bury.
+                | Some(FJson, _, _) ->
+                    Error
+                        $"--json is not a flag of `%s{commandName o.Command}` — it has no machine projection: its stdout is human text whatever you ask for. It would have been ACCEPTED and IGNORED before #1523; this refusal is the flag telling you the truth. Run `command-contract` for the commands that do emit JSON."
+                | Some(FText, _, _) ->
+                    Error
+                        $"--text is not a flag of `%s{commandName o.Command}` — it has no human projection: its stdout is a machine document whatever you ask for, so asking for text would change nothing (#1523). Drop the flag, or project the document yourself."
+                | Some(_, spelling, readers) ->
                     // NAME THE READERS, not just the refusal. The caller reached for this flag because they
                     // wanted something; the useful answer is where that something lives, which is why #867's
                     // original message named `ready` and `release` rather than only saying no.
@@ -986,15 +1192,31 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 | _ -> Error $"--lease needs a number of minutes (got '%s{value}')"
             | [ "--lease" ] -> Error "--lease needs a value"
 
-            | "--json" :: t -> flags { acc with Render = Json } t
-            | "--text" :: t -> flags { acc with Render = Text } t
+            // Both the EFFECT (`Render`) and the ACT (`RenderGiven`) are recorded. The second is what the
+            // residue rule reads: without it, a `--json` on a command with no JSON projection is
+            // indistinguishable from that command's default and cannot be refused (#1523).
+            | "--json" :: t ->
+                flags
+                    { acc with
+                        Render = Json
+                        RenderGiven = acc.RenderGiven.Add Json }
+                    t
+            | "--text" :: t ->
+                flags
+                    { acc with
+                        Render = Text
+                        RenderGiven = acc.RenderGiven.Add Text }
+                    t
 
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 
         let defaults =
             { Command = Decide
+              // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
+              // constructible; NOTHING should read this field's value here.
               Render = Json
+              RenderGiven = Set.empty
               SnapshotFile = None
               Repo = None
               Fresh = false
@@ -1033,92 +1255,84 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               AllRepos = false
               Over = [] }
 
+        /// THE DEFAULT COMES FROM THE DECLARATION, NOT FROM THE ARM (#1523).
+        ///
+        /// Every verb starts here, and its bare-form render mode is `defaultRender` of the command — the
+        /// same `renderSupport` row that decides whether `--json` may be given at all. That is the whole
+        /// structural repair on this side of the file.
+        ///
+        /// It used to be per-arm, and the arms disagreed with themselves: seventeen left `Render` at the
+        /// module default of `Json` while what they printed was prose (fifteen verbs, plus `--help` and
+        /// `--version`, which are reached by flag). The DECLARED default and the PRINTED one were
+        /// opposites on two-fifths of the surface, in the exact configuration #1517 described. `widen` is
+        /// the proof that this matters and not the exception: honouring `opts.Render` in the renderer
+        /// while the arm still said `Json` would have flipped the bare `widen` — the form every recipe,
+        /// skill and driver in the corpus runs — from its human receipt to a JSON object. With one
+        /// derivation there is no arm left to forget, and all seventeen traps are disarmed at once.
+        ///
+        /// IT TAKES THE PARTIALLY-BUILT RECORD, not the `Command`, so each arm still spells
+        /// `Command = Landable` at its own call site. That is not style. `recipe-landable.yml` and
+        /// `recipe-followup.yml` gate this file with `grep -qE 'Command[[:space:]]*=[[:space:]]*Landable'`
+        /// — a source-level assertion that the verb every recipe names is still ROUTED — and a `start
+        /// Landable` form passes the token through a helper where that grep cannot see it. The gate is
+        /// right to look: a recipe naming a verb the parser dropped is a lie told to every worker. Reading
+        /// the default off `o.Command` keeps the derivation total either way — an arm cannot name one
+        /// command and get another's default.
+        let start (o: Options) =
+            { o with Render = defaultRender o.Command }
+
         match args with
         | []
         | "--help" :: _
-        | "-h" :: _ -> Ok { defaults with Command = Help }
+        | "-h" :: _ -> Ok(start { defaults with Command = Help })
 
-        | "--version" :: _ -> Ok { defaults with Command = Version }
+        | "--version" :: _ -> Ok(start { defaults with Command = Version })
 
-        | "scan" :: rest -> flags { defaults with Command = Scan } rest
-        | "decide" :: rest -> flags { defaults with Command = Decide } rest
-        | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
-        | "facts" :: rest -> flags { defaults with Command = Facts } rest
-        | "command-contract" :: rest -> flags { defaults with Command = CommandContractCmd } rest
+        | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
+        | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+        | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
+        | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
+        | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
 
-        | "whoami" :: rest -> flags { defaults with Command = WhoAmI } rest
-        // `budget` reports as text — the operator's free pre-flight read — and `--json` opts into the
-        // machine contract (`pendingBoardWrites`, #862), the same polarity as `who`/`inbox`. It ALWAYS
-        // rendered text; pinning `Render` here is what makes that the DECLARED default rather than a
-        // record field the command quietly ignored, so `--json` now means something.
-        | "budget" :: rest -> flags { defaults with Command = Budget; Render = Text } rest
-        | "next" :: rest -> flags { defaults with Command = Next } rest
-        | "batch" :: rest -> flags { defaults with Command = BatchCmd } rest
-        | "ready" :: rest -> flags { defaults with Command = Ready } rest
-        | "reconcile" :: rest -> flags { defaults with Command = Reconcile; Render = Text } rest
-        // `who` is a HUMAN truth read by default (the table case 20 asserts), and `--json` opts into the
-        // machine contract cases 20/25 consume — the mirror of `ready`/`batch`, where JSON is the default.
-        | "who" :: rest -> flags { defaults with Command = Who; Render = Text } rest
-        // `reap` reports as text (the operator reads it before deciding); its collect is gated behind
-        // `--apply`, so the bare form is a DRY RUN.
-        | "reap" :: rest -> flags { defaults with Command = Reap; Render = Text } rest
-        | "claim" :: rest -> flags { defaults with Command = Claim; Render = Text } rest
-        // `adopt` reports as text (a precondition report the operator reads); it gates the `claim` transfer.
-        | "adopt" :: rest -> flags { defaults with Command = Adopt; Render = Text } rest
-        // `landable` prints ONE verdict word on stdout and puts the decision in the exit code — a query, not
-        // a table, so no `Render` flip.
-        | "landable" :: rest -> flags { defaults with Command = Landable } rest
-        | "take" :: rest -> flags { defaults with Command = Take; Render = Text } rest
-        | "release" :: rest -> flags { defaults with Command = Release } rest
-        | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest
-        | "set-field" :: rest -> flags { defaults with Command = SetField } rest
-        | "child" :: rest -> flags { defaults with Command = Child } rest
-        // `widen`/`set-paths` report as TEXT by default — a receipt a worker reads — and `--json` opts into
-        // the machine contract, the same way `who` and `inbox` do.
-        //
-        // THIS LINE IS PART OF #1517'S FIX AND IS NOT COSMETIC. Until then `updateTouchSet` never read
-        // `opts.Render` at all, so what these two arms left the field at could not be observed: both verbs
-        // printed prose on `--json` and without it. The module `defaults` are `Render = Json`, so the moment
-        // the renderer STARTED honouring the field, the missing `Render = Text` here would have flipped the
-        // BARE `widen` — the form every recipe, skill and driver in the corpus runs — from its human receipt
-        // to a JSON object. That is the fix breaking the thing it was careful not to touch, and the reason
-        // the repair is two edits in two files rather than the one it looks like: honouring a flag means
-        // honouring its ABSENCE too, and the default is where absence is spelled.
-        | "widen" :: rest -> flags { defaults with Command = Widen; Render = Text } rest
-        | "set-paths" :: rest -> flags { defaults with Command = SetPaths; Render = Text } rest
-        | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
-        | "say" :: rest -> flags { defaults with Command = Say } rest
-        // `inbox` reports as a human table by default (a worker reads it), `--json` for a machine consumer —
-        // the mirror of `who`.
-        | "inbox" :: rest -> flags { defaults with Command = Inbox; Render = Text } rest
-        | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
-        | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest
-        | "bootstrap" :: rest -> flags { defaults with Command = Bootstrap } rest
-        | "board" :: rest -> flags { defaults with Command = BoardCmd } rest
-        | "field-id" :: rest -> flags { defaults with Command = FieldId } rest
-        | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
-        | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
-        | "add" :: rest -> flags { defaults with Command = Add } rest
-        // `flush` REPLAYS by default — see `DryRun`. It reports as text: an operator reads it after the
-        // back-off `EX_RATE` told them to take.
-        | "flush" :: rest -> flags { defaults with Command = Flush; Render = Text } rest
-        | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
-        // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
-        // with jq, so the default Json render stands.
-        | "issues" :: rest -> flags { defaults with Command = Issues } rest
-        // `followup` prints the REF on stdout and nothing else — a query whose caller is `widen`/`claim`,
-        // not a reader. Text, for `whoami`'s reason: there is no board document here to be the contract.
-        | "followup" :: rest -> flags { defaults with Command = Followup; Render = Text } rest
-        // `predicate` runs the ADR-0050 registry oracle over LOCAL files (no board, no token) and prints
-        // one verdict word — `agrees`/`contradicts`/`unknown` — with the decision in the exit code, the
-        // `landable` shape. Text by default; `--json` opts into the structured verdict. Assertion is
-        // POSITIONAL (`predicate <id> <field> <value>`) or read from a `cross-repo-request` body on stdin.
-        | "predicate" :: rest -> flags { defaults with Command = Predicate; Render = Text } rest
+        | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
+        | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest
+        | "next" :: rest -> flags (start { defaults with Command = Next }) rest
+        | "batch" :: rest -> flags (start { defaults with Command = BatchCmd }) rest
+        | "ready" :: rest -> flags (start { defaults with Command = Ready }) rest
+        | "reconcile" :: rest -> flags (start { defaults with Command = Reconcile }) rest
+        | "who" :: rest -> flags (start { defaults with Command = Who }) rest
+        | "reap" :: rest -> flags (start { defaults with Command = Reap }) rest
+        | "claim" :: rest -> flags (start { defaults with Command = Claim }) rest
+        | "adopt" :: rest -> flags (start { defaults with Command = Adopt }) rest
+        | "landable" :: rest -> flags (start { defaults with Command = Landable }) rest
+        | "take" :: rest -> flags (start { defaults with Command = Take }) rest
+        | "release" :: rest -> flags (start { defaults with Command = Release }) rest
+        | "heartbeat" :: rest -> flags (start { defaults with Command = Heartbeat }) rest
+        | "set-field" :: rest -> flags (start { defaults with Command = SetField }) rest
+        | "child" :: rest -> flags (start { defaults with Command = Child }) rest
+        | "widen" :: rest -> flags (start { defaults with Command = Widen }) rest
+        | "set-paths" :: rest -> flags (start { defaults with Command = SetPaths }) rest
+        | "overlap" :: rest -> flags (start { defaults with Command = Overlap }) rest
+        | "say" :: rest -> flags (start { defaults with Command = Say }) rest
+        | "inbox" :: rest -> flags (start { defaults with Command = Inbox }) rest
+        | "done" :: rest -> flags (start { defaults with Command = DoneCmd }) rest
+        | "verify-paths" :: rest -> flags (start { defaults with Command = VerifyPaths }) rest
+        | "bootstrap" :: rest -> flags (start { defaults with Command = Bootstrap }) rest
+        | "board" :: rest -> flags (start { defaults with Command = BoardCmd }) rest
+        | "field-id" :: rest -> flags (start { defaults with Command = FieldId }) rest
+        | "option-id" :: rest -> flags (start { defaults with Command = OptionId }) rest
+        | "item-id" :: rest -> flags (start { defaults with Command = ItemId }) rest
+        | "add" :: rest -> flags (start { defaults with Command = Add }) rest
+        | "flush" :: rest -> flags (start { defaults with Command = Flush }) rest
+        | "lint" :: rest -> flags (start { defaults with Command = LintCmd }) rest
+        | "issues" :: rest -> flags (start { defaults with Command = Issues }) rest
+        | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
+        | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
 
         // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
         // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
-        // is named and refused rather than swallowed. Text, like `add`: it reports the room it created.
-        | "room" :: "open" :: rest -> flags { defaults with Command = RoomOpen; Render = Text } rest
+        // is named and refused rather than swallowed.
+        | "room" :: "open" :: rest -> flags (start { defaults with Command = RoomOpen }) rest
         | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
         | [ "room" ] -> Error "room needs a subcommand (open)"
 

@@ -118,9 +118,31 @@ module Options =
         | Json
         | Text
 
+    /// WHICH STDOUT PROJECTIONS A COMMAND ACTUALLY HAS (#1523) — the one hand-written fact about the
+    /// renderers. `scopeOf`'s `--json`/`--text` rows, what `command-contract` advertises, and the `Render`
+    /// a BARE invocation is left at are all DERIVED from it, so they cannot disagree.
+    ///
+    /// PUBLIC so the surface tests can assert the emitted contract against it rather than against a second
+    /// copy of the same list. Total over `Command` under `TreatWarningsAsErrors`, so a new verb cannot be
+    /// born advertising a projection it does not have.
+    type RenderSupport =
+        /// Both projections exist — the handler branches on `opts.Render`. Carries the mode a BARE
+        /// invocation renders in, because honouring a flag means honouring its ABSENCE too (#1517).
+        | Both of ``default``: Render
+        /// stdout is ALWAYS a machine document: `--json` is kept, `--text` is refused.
+        | JsonOnly
+        /// stdout is ALWAYS human text: `--text` is kept, `--json` is refused. The #1523 bucket.
+        | TextOnly
+
     type Options =
         { Command: Command
           Render: Render
+          /// EVERY render flag GIVEN — empty when neither appeared on argv. `Render` alone cannot say,
+          /// because it has a non-optional default; this is what makes the flag guardable at all (#1523).
+          ///
+          /// A SET rather than the winner: `Render` is last-wins, and remembering only the winner would
+          /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
+          RenderGiven: Set<Render>
           SnapshotFile: string option
           Repo: string option
           Fresh: bool
@@ -248,6 +270,11 @@ module Options =
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]
     val DefaultLeaseMinutes: int = 120
+
+    /// Which stdout projections a command HAS. Derived by tracing every `opts.Render` read in
+    /// `Client.fs`/`Program.fs` to the handler that reaches it — NOT from the usage prose, which
+    /// under-advertised four of the fourteen honouring commands while `scopeOf` over-advertised twenty.
+    val renderSupport: c: Command -> RenderSupport
 
     /// A `--repo` token → the repo NAME board rows carry: a registry short-id maps (`sdd` → `FS.GG.SDD`), an
     /// `owner/repo` keeps its repo part, a literal name passes through. `parse` applies this to `--repo`, so
