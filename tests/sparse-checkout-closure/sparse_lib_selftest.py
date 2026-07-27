@@ -269,7 +269,7 @@ selects(
     _wf({"uses": "actions/checkout@v7", "with": {"repository": "FS-GG/.github", "sparse-checkout": "/scripts/"}}),
     [("a", "FS-GG/.github")],
 )
-# `uses:` IS READ, and casefolded with the ref stripped — all three spellings run the real action.
+# `uses:` IS READ, and casefolded with the ref stripped — every spelling below runs the real action.
 for spelling in ("actions/checkout@v7", "actions/Checkout@v7", "ACTIONS/CHECKOUT", "actions/checkout@" + "d" * 40):
     selects(
         f"uses: {spelling!r} is the real action and qualifies",
@@ -301,7 +301,12 @@ selects(
 selects("a checkout with no `with:` block at all does not qualify", _wf({"uses": "actions/checkout@v7"}), [])
 # `or ""`, not `str(params.get("repository", ""))`: PyYAML resolves a BARE `repository:` to None and
 # `str(None)` is the four-character string "None" — non-empty, and a repository name that exists
-# nowhere. `sparse_set.py`'s copy used `get` and would have qualified this step as `"None"`.
+# nowhere, so a non-emptiness test written the other way QUALIFIES this step.
+#
+# `sparse_set.py`'s pre-#1553 copy did spell it with `get`, and it was harmless there: it compared
+# `== "FS-GG/.github"`, which "None" fails. So this leg pins the gate's spelling because that is the
+# correct one, NOT because the other one was a live divergence — it was not, and saying so would be
+# an overstated claim in a repo whose whole subject is claims that outlived their code.
 for label, value in (("an empty string", ""), ("whitespace only", "   "), ("a BARE key (PyYAML: None)", None)):
     selects(
         f"repository: {label} names no repository and does not qualify",
@@ -341,7 +346,13 @@ selects(
 # question is "which steps are subjects", and a malformed region holds no readable checkout step. The
 # refusals in this module are about a step that IS a subject whose BLOCK cannot be read.
 selects("a job that `uses:` a reusable workflow has no steps and contributes none", {"jobs": {"a": {"uses": "o/r/.github/workflows/w.yml@main"}}}, [])
+# A STRING `steps:` would be dropped anyway — iterating it yields characters, which the
+# `isinstance(step, dict)` guard below rejects — so it does not distinguish the `isinstance(steps,
+# list)` guard from its absence. A NON-ITERABLE one does: without the guard this raises TypeError,
+# and `selects` reports a raise as a failure. Both spellings, so the leg is load-bearing rather than
+# merely true. (`sparse_set`'s pre-#1553 copy wrote `job.get("steps") or []` and DID raise here.)
 selects("a `steps:` that is not a list contributes nothing", {"jobs": {"a": {"steps": "not-a-list"}}}, [])
+selects("...including one that is not even iterable", {"jobs": {"a": {"steps": 5}}}, [])
 selects("a step that is not a mapping contributes nothing", {"jobs": {"a": {"steps": ["bare-string", None]}}}, [])
 selects("a `with:` that is not a mapping contributes nothing", _wf({"uses": "actions/checkout@v7", "with": "nope"}), [])
 selects("a job that is not a mapping contributes nothing", {"jobs": {"a": "nope"}}, [])

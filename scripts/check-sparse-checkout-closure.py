@@ -117,7 +117,9 @@ NOTHING HERE IS A HAND-MAINTAINED LIST — that would be the same disease one le
       A checkout of some OTHER repository cannot have its directories resolved from this tree, and
       the gate says so per step instead of quietly passing.
   The only literal in the subject definition is `actions/checkout` itself, which is the action's
-  name and cannot drift without the workflows drifting with it.
+  name and cannot drift without the workflows drifting with it. Since #1553 that literal, and the
+  qualification it serves, are `lib/sparse.py`'s and are shared with `sparse_set.py` — which had been
+  answering the same question with no `uses:` check at all and a case-SENSITIVE `repository:`.
 
 CONE MODE IS EXEMPT FROM (1)-(2), BY GIT'S SEMANTICS RATHER THAN BY INDULGENCE
   Under `sparse-checkout-cone-mode: true` (actions/checkout's DEFAULT) the patterns are not

@@ -54,6 +54,13 @@ in opposite directions, and neither divergence was reachable from either fixture
   * ``sparse_set`` NEVER READ ``uses:``. Any step whose ``with:`` carried ``repository:
     FS-GG/.github`` qualified — a ``docker/build-push-action``, a composite action, anything — so the
     workflow's real checkout could be crowded out by a step that fetches nothing.
+
+    Those are the TWO divergences, and there is a third difference that is NOT one: ``sparse_set``
+    spelled the field read ``str(params.get("repository", "")).strip()`` where the gate spells it
+    ``str(params.get(...) or "")``. On a bare ``repository:`` the first yields the string ``"None"``
+    — which is why the gate's spelling is the one kept here — but ``sparse_set`` then compared
+    ``== "FS-GG/.github"``, which ``"None"`` fails, so it changed no verdict. Recorded because an
+    overstated divergence is its own kind of wrong comment.
   * ``sparse_set`` COMPARED ``repository:`` CASE-SENSITIVELY, where GitHub resolves it without regard
     to case and the gate's own fixture asserts as much (``tests/sparse-checkout-closure/run.sh``'s
     ``repo-casing`` leg writes ``repository: fs-gg/.GitHub`` and requires rule (4) to still run).
@@ -208,7 +215,10 @@ def checkout_steps(document: object) -> list[CheckoutStep]:
                 continue
             # `or ""`, not `get("repository", "")`: PyYAML resolves a bare `repository:` to None, and
             # `str(None)` is the four-character string "None" — a repository name that matches
-            # nothing but is not empty either. That was live in `sparse_set`'s copy.
+            # nothing but is NOT empty, so a non-emptiness test written the other way qualifies the
+            # step. `sparse_set`'s pre-#1553 copy did spell it `get("repository", "")`, and that was
+            # HARMLESS there — it compared `== "FS-GG/.github"`, which "None" fails — so this is the
+            # gate's spelling kept because it is the correct one, not a divergence being repaired.
             repository = str(params.get("repository") or "").strip()
             if not repository:
                 continue

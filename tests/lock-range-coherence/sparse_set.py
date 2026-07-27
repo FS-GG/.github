@@ -114,6 +114,14 @@ def _authority_steps(document: object) -> list[dict]:
     survived to be filed rather than found in production. Neither is reachable from this fixture's own
     subject, which is why they are asserted in `tests/lock-range-coherence/run.sh` against synthetic
     workflows instead.
+
+    ONE BEHAVIOUR CHANGE #1553 DID NOT ASK FOR, TAKEN DELIBERATELY. The old copy walked
+    `(jobs or {}).values()` and `job.get("steps") or []`, so a document whose `jobs:` or `steps:` is
+    a truthy NON-mapping died with an uncaught `AttributeError`/`TypeError` — a traceback and exit 1.
+    The shared selector type-guards both, so the same document now reaches this function as zero
+    steps and leaves as a clean exit-2 `SparseError` naming the count. Fail-closed before and after,
+    unreachable from a valid workflow, and the second shape is the one an operator can act on — but
+    it is a change, so it is written down rather than discovered.
     """
     return [
         step.params

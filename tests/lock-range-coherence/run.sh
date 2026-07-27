@@ -880,16 +880,21 @@ seal "$sel"
 
 selcase=0
 # sel_pass <name> <workflow> — sparse_set resolves the workflow to the ONE authority checkout, and
-# that checkout is the one that actually fetches scripts/. Naming the file matters: a run that
-# resolved the wrong step would exit 0 having materialised an empty tree, and a bare exit-0 assertion
-# would call that a pass (epic #266).
+# that checkout is the one that actually fetches scripts/. BOTH files are asserted, not just the
+# named one: the whole point of a directory pattern is that the sibling comes along unnamed, and a
+# run that resolved the wrong step would exit 0 having materialised an empty tree — which a bare
+# exit-0 assertion would call a pass (epic #266). `/nope/` is the decoy's pattern, so resolving the
+# impostor selects neither file.
 sel_pass() {
   local n="$1" wf="$2" out rc=0
   selcase=$((selcase+1))
   out="$(materialise "$WORK/selout-$selcase" --repo-root "$sel" --from-workflow "$wf" 2>&1)" || rc=$?
   if [ "$rc" -ne 0 ]; then bad "$n (expected sparse_set to resolve it, exit $rc)" "$out"
-  elif printf '%s\n' "$out" | grep -qxF 'scripts/toy-gate.py'; then ok "$n"
-  else bad "$n (resolved, but fetched nothing from the authority tree)" "$out"; fi
+  elif ! printf '%s\n' "$out" | grep -qxF 'scripts/toy-gate.py'; then
+    bad "$n (resolved, but fetched nothing from the authority tree)" "$out"
+  elif ! printf '%s\n' "$out" | grep -qxF 'scripts/lib/helper.py'; then
+    bad "$n (fetched the named script, but not the sibling the directory pattern exists for)" "$out"
+  else ok "$n"; fi
 }
 
 # sel_fail <name> <required-pattern> <workflow> — and exit 2, sparse_set's own SparseError code, so a
