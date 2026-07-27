@@ -2680,7 +2680,7 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   d435="$(jq -r '.[] | select(.code=="CLASS-INVALID" and (.id|test("435"))) | .detail' <<<"$ljson")"
   printf '%s' "$d435" | grep -q 'records no `Class:`' \
     && bad "#1651: a row that DID write a Class: line must never be told it records none" "$d435" \
-    || ok "#1651: the invalid-value diagnostic does not claim the row records no \`Class:\`"
+    || ok "#1651: the invalid-value diagnostic does not claim the row records no Class: line"
 
   # AC3: quote the offending value back AND list the legal set. Both measured authors believed they were
   # classing the row correctly, so "invalid" alone sends them to the ADR to find out what was wanted.
@@ -2703,14 +2703,16 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   # BOTH details name every word a filer must choose between, and neither spells them by hand: they are
   # rendered from `Class.legalClasses` (the union, by reflection) through `Types.itemClassWireName`
   # (.github#1651 AC5, on #916's receipt that agreeing copies are still copies).
+  names3() { printf '%s' "$1" | grep -q 'Class: defect' && printf '%s' "$1" | grep -q 'Class: hardening' \
+             && printf '%s' "$1" | grep -q 'Class: decision'; }
+
   dcu420="$(jq -r '.[] | select(.code=="CLASS-UNSET" and (.id|test("420"))) | .detail' <<<"$ljson")"
-  for d in "$dcu420" "$d435"; do
-    printf '%s' "$d" | grep -q 'Class: defect' \
-      && printf '%s' "$d" | grep -q 'Class: hardening' \
-      && printf '%s' "$d" | grep -q 'Class: decision' \
-      || bad "#1588/#1651: every class diagnostic must name all three body-line values" "$d"
-  done
-  ok "#1588/#1651: both class diagnostics name all three body-line values by name"
+  names3 "$dcu420" \
+    && ok "#1588: CLASS-UNSET's detail names all three body-line values by name" \
+    || bad "#1588: CLASS-UNSET detail must name the three values" "$dcu420"
+  names3 "$d435" \
+    && ok "#1651 AC3: ...and so does CLASS-INVALID's — both render the same derived menu" \
+    || bad "#1651 AC3: CLASS-INVALID detail must name the three values" "$d435"
 
   kill "$LINT_SRV" 2>/dev/null
 fi
