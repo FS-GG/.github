@@ -335,13 +335,15 @@ must_fail "an unreadable roster is a no-verdict" "cannot read the kit roster"
 
 # The canned inputs are LOCKED, exactly like --fixture-manifest. Each one, left open, is a way to make
 # the arm answer without reading its subject.
-for flag_pair in "--changed-files $CHANGED" "--kit-sources $SRC" "--published-version 0.8.1"; do
-  # shellcheck disable=SC2086
+for flag_pair in "--changed-files=$CHANGED" "--kit-sources=$SRC" "--published-version=0.8.1"; do
+  flag="${flag_pair%%=*}"
+  value="${flag_pair#*=}"
   set +e
-  out="$(env -u FSGG_KIT_COHERENCE_FIXTURE_OK python3 "$GATE" --pr-arm --csproj "$CSPROJ" $flag_pair 2>&1)"
+  out="$(env -u FSGG_KIT_COHERENCE_FIXTURE_OK python3 "$GATE" --pr-arm --csproj "$CSPROJ" \
+    "$flag" "$value" 2>&1)"
   rc=$?
   set -e
-  must_fail "${flag_pair%% *} is refused without the fixture opt-in" "Refusing to run"
+  must_fail "$flag is refused without the fixture opt-in" "Refusing to run"
 done
 
 set +e
