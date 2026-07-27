@@ -587,6 +587,256 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | FIncludeBacklog -> Only [ Scan; Next; BatchCmd; Take ]
 
+    /// EVERY flag's argv spelling — the CANONICAL one a machine consumer matches on, and its aliases.
+    ///
+    /// Lifted out of `renderCommandContract` by #1534, which needed the same Flag → spelling map to name
+    /// the flag a CONDITIONAL write is gated on (`writeSurface` below). A second copy inside the emitter
+    /// would be free to spell `--apply` one way in a command's `flags` array and another in its
+    /// `writesWhen`, which is the two-copies-of-one-fact shape #1507/#1510/#1515/#1523/#1528 have each
+    /// cost this board an item.
+    ///
+    /// A TOTAL MATCH RATHER THAN A LOOKUP LIST, and the difference is a crash path that does not exist.
+    /// The list form this replaced could not answer for a `Flag` nobody had added to it, so it needed a
+    /// runtime `failwith` — and a comment claiming the gap was unreachable. It was: the list was in fact
+    /// total over `Flag`, so the comment justified a fallback against data that contradicted it. Written
+    /// as a match, FS0025 under `TreatWarningsAsErrors` makes a new `Flag` with no spelling a BUILD ERROR,
+    /// exactly as `scopeOf` above and `writeSurface` below are — and there is nothing left to fail at.
+    ///
+    /// The CANONICAL spelling is returned separately from the aliases because the two are read for
+    /// different jobs: `writesWhen` names one flag a consumer must look for on argv, while the emitted
+    /// `flags` array advertises every spelling the parser accepts. `--fresh`/`--refresh` is the one flag
+    /// where they differ, and flattening them would make the contract advertise a canonical spelling it
+    /// picked arbitrarily.
+    let private spellingsOf (f: Flag) : string * string list =
+        match f with
+        | FSnapshot -> "--snapshot", []
+        | FRepo -> "--repo", []
+        | FWorker -> "--worker", []
+        | FEvidence -> "--evidence", []
+        | FPartial -> "--partial", []
+        | FTo -> "--to", []
+        | FMessage -> "--message", []
+        | FPaths -> "--paths", []
+        | FPr -> "--pr", []
+        | FWarn -> "--warn", []
+        | FIssue -> "--issue", []
+        | FStatus -> "--status", []
+        | FAll -> "--all", []
+        | FBatch -> "--batch", []
+        | FStrict -> "--strict", []
+        | FActive -> "--active", []
+        | FApply -> "--apply", []
+        | FPeek -> "--peek", []
+        | FDryRun -> "--dry-run", []
+        | FWait -> "--wait", []
+        | FTries -> "--tries", []
+        | FInterval -> "--interval", []
+        | FRequire -> "--require", []
+        | FSha -> "--sha", []
+        | FLabel -> "--label", []
+        | FState -> "--state", []
+        | FFresh -> "--fresh", [ "--refresh" ]
+        | FIncludeBacklog -> "--include-backlog", []
+        | FForce -> "--force", []
+        | FMint -> "--mint", []
+        | FFlip -> "--flip", []
+        | FLimit -> "-n", []
+        | FLocal -> "--local", []
+        | FAllRepos -> "--all-repos", []
+        | FOver -> "--over", []
+        // #1523 — these two used to be spliced onto every emitted row unconditionally, which is how the
+        // contract came to promise `--json` on 20 commands that print prose. They are ordinary scoped
+        // flags now, so the contract and `scopeOf` agree BY CONSTRUCTION rather than by a test noticing.
+        | FJson -> "--json", []
+        | FText -> "--text", []
+
+    /// The one spelling a consumer matches on argv. Total, because `spellingsOf` is.
+    ///
+    /// NOT YET THE ONLY SPELLING TABLE IN THIS FILE, and saying otherwise here would be the overclaim this
+    /// change exists to stop making. `flagsGiven` below carries its own literal per flag — the spelling a
+    /// REFUSAL names — and nothing compares the two, so `--fresh` is free to be spelled one way here and
+    /// another there. That is the same emitter-versus-gate split #1523 found, one table along. Filed as
+    /// #1573 rather than folded in: rewording a refusal is a change to what every caller reads, and it
+    /// does not belong in a passing edit to `command-contract`.
+    let private spellingOf (f: Flag) : string = fst (spellingsOf f)
+
+    /// Every `Flag` case, by reflection — the same move `allCommands` makes for the `Command` union, and
+    /// for the same reason: an enumeration written by hand is one a new case can be left out of. Paired
+    /// with `spellingsOf`'s totality this makes the emitted flag surface unable to omit a flag silently.
+    ///
+    /// THE BINDING FLAGS ARE LOAD-BEARING, unlike `allCommands`'s. `Command` is public and reflects with
+    /// the defaults; `Flag` is `private`, and without `NonPublic` both calls below refuse — `GetUnionCases`
+    /// returns nothing and `MakeUnion` throws, inside a module-level `let`, which surfaces as a
+    /// `TypeInitializationException` on the FIRST parse of ANY argv. Measured while writing this: every
+    /// verb exited 2 with a stack trace. Copying `allCommands`'s spelling here looks right and is not.
+    let private allFlags: Flag list =
+        let binding =
+            System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Public
+
+        Microsoft.FSharp.Reflection.FSharpType.GetUnionCases(typeof<Flag>, binding)
+        |> Array.toList
+        |> List.map (fun case ->
+            Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||], binding) :?> Flag)
+
+    /// EVERY flag and all its spellings — what `renderCommandContract` advertises per row, derived rather
+    /// than listed. The emitter sorts each row's flags, so this list's order is not observable.
+    let private scopedFlags: (Flag * string list) list =
+        allFlags
+        |> List.map (fun f ->
+            let canonical, aliases = spellingsOf f
+            f, canonical :: aliases)
+
+    /// WHEN A CONDITIONAL WRITE IS ON — carried as a typed `Flag`, never a string, so the spelling emitted
+    /// in the contract is the SAME spelling the command's `flags` array advertises (`spellingOf`), and a
+    /// gate naming a flag the command cannot even be given is catchable rather than plausible-looking.
+    type private WriteGate =
+        /// Writing is OFF until the flag is GIVEN. `reap --apply`, `reconcile --apply` — the bare form is a
+        /// DRY RUN, which is the case #1534 asked not to be flattened away.
+        | OnlyWhenGiven of Flag
+        /// Writing is ON until the flag is given — the OPPOSITE polarity, and it is real: `flush` REPLAYS
+        /// the deferred board writes by default and `--dry-run` only lists them. Modelling this as
+        /// `OnlyWhenGiven` inverted, or as an unconditional write, are both lies in a field whose whole
+        /// purpose is that a guard can trust it.
+        | UnlessGiven of Flag
+        /// The condition is not on argv AT ALL, so no parse of the command line can decide it. Carries the
+        /// reason, because a consumer that cannot see the condition needs to know it is not looking in the
+        /// wrong place.
+        ///
+        /// RESERVED FOR A WRITE THAT IS NOT WHAT THE VERB IS FOR, and that line has to be drawn or this
+        /// case swallows the surface: `take` on an empty queue, `add` on an already-boarded item and
+        /// `child` on an existing sub-issue all decline to write on runtime state too, and all three are
+        /// `Writes` — mutation is their PURPOSE, and a consumer must treat them as writers. `next` is the
+        /// one verb where it is not: it is a scheduling READ that, after printing its answer, makes the
+        /// #733 chore OFFER and POSTs a claim marker — to the repo's chore-LOCK issue, which is not even
+        /// the issue it just named. That is why the shim's #1528 note calls names "not evidence".
+        | NotOnArgv of because: string
+
+    /// DOES THIS COMMAND MUTATE STATE THE FLEET SHARES? (#1534)
+    ///
+    /// The engine has always known this and has never SAID it. `command-contract` emits a name and a flag
+    /// list per verb, derived from the type system, and nothing about write-ness — so the one consumer that
+    /// needs the fact, the stale-engine guard in `scripts/fsgg-coord`, kept its own hand-written copy in
+    /// bash. #1528 measured what that cost: `set-paths` reached the same `Writes.widen` PATCH as `widen`
+    /// through the same helper and was absent; `room` and `reconcile` were absent; and `bootstrap`, believed
+    /// to create the project, is a pair of GraphQL QUERIES that adding would have refused for nothing.
+    ///
+    /// TOTAL, WITH NO WILDCARD ARM, AND THAT IS THE STRUCTURAL PART. This project sets
+    /// `TreatWarningsAsErrors`, so FS0025 (incomplete match) is a BUILD ERROR — the same property
+    /// `renderSupport` and `scopeOf` already buy for the renderers and the flag surface. A verb added to the
+    /// `Command` union does not default to `Reads`; it does not compile. A `| _ -> Reads` arm added here
+    /// would silently give that guarantee back, which is the single most damaging edit this file accepts.
+    ///
+    /// WHAT IT IS AND IS NOT DERIVED FROM, stated plainly because the honest limit matters more than the
+    /// claim. The GATE — which flag turns a conditional write on — is typed and cross-checked: it is a
+    /// `Flag`, spelled through `scopedFlags`, and `CommandSurfaceTests` asserts `scopeOf` really gives that
+    /// flag to that command. The BASE read/write split is not derivable here at all: it is a property of
+    /// `Client.fs` control flow, `Options.fs` compiles BEFORE `Client.fs` and cannot reference it, and a
+    /// text analysis over-approximates badly (advice strings in `who` and `lint` name `claim`, `reap` and
+    /// `done`). So the rows below are a person's reading of `Client.fs`, held total by the compiler and
+    /// carrying their evidence in the comment beside them. That is strictly better than a bash string with
+    /// nothing comparing it to anything — it is not the same thing as proof, and the follow-on that would
+    /// make it executable (drive every verb at a fake GitHub and fail on any mutating request) is filed.
+    ///
+    /// DELIBERATELY NOT READ AT RUN TIME BY THE SHIM, and the issue that asked for this field said so first.
+    /// The engine that would answer "am I stale?" is the stale one; an engine built before this field
+    /// existed emits no field, a shim deriving its write-set from that derives an EMPTY one, and every board
+    /// write is permitted on precisely the oldest artifacts. The consumer is the parity GATE, where a
+    /// freshly built engine and the shim's text are both present and neither is suspect.
+    ///
+    /// LOCAL WRITES ARE NOT WRITES HERE, AND "LOCAL" DOES NOT MEAN "PRIVATE". `inbox` advances a cursor
+    /// (`Cache.putInboxCursor`), `board`/`bootstrap`/`field-id`/`option-id`/`item-id` write a board-map or
+    /// item-id cache, and `followup` is a queue file — all under `$XDG_CACHE_HOME`. Only the inbox cursor
+    /// is keyed on the WORKER; the board map and item-id caches are keyed on owner/repo, so every worker on
+    /// one machine shares them (`Cache.fs` says so, and #881 is filed against the sibling queue file for
+    /// exactly that). The line this field draws is not "nobody else sees it" — it is THE BOARD: a cache is
+    /// re-derivable from a read, and what a stale engine corrupts there costs a re-fetch, not a claim.
+    ///
+    /// A DRY RUN THAT MISREPORTS IS NOT WHAT THIS FIELD GUARDS. `reap` bare is `Reads`-shaped in its
+    /// effects and is still classified `OnlyWhenGiven FApply` rather than `Reads`, because the QUESTION is
+    /// "could this verb, as invoked, mutate?" — and a consumer that wants to permit the bare form must
+    /// decide that for itself, from a condition this field now hands it.
+    type private WriteSurface =
+        /// Every invocation may mutate shared state. A no-op because there was nothing to do — `take` on an
+        /// empty queue, `add` on an item already boarded — is still this: mutation is what the verb is FOR,
+        /// and no argv shape avoids it.
+        | Writes
+        /// No invocation mutates shared state. Local files and GraphQL/REST QUERIES are not mutation.
+        | Reads
+        /// Some invocations mutate it and some do not; the gate says which.
+        | WritesIf of WriteGate
+
+    let private writeSurface (c: Command) : WriteSurface =
+        match c with
+        // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
+        | Decide -> Reads
+        | LanesView -> Reads
+        | Facts -> Reads
+        | CommandContractCmd -> Reads
+
+        // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
+        | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
+        | Followup -> Reads // the #1063 queue is a FILE, which is the whole reason it survives EX_RATE
+        | Predicate -> Reads // ADR-0050 oracle: registry + producer manifests off disk
+
+        // ---- READ THE BOARD — GraphQL/REST QUERIES, plus a per-user cache file -------------------------
+        | Scan -> Reads // POSTs to `graphql`, which is how a GraphQL READ is spelled
+        | BatchCmd -> Reads // `next` uncapped; makes NO chore offer, which is what separates the two
+        | Ready -> Reads
+        | Who -> Reads
+        | Budget -> Reads
+        | Landable -> Reads
+        | Overlap -> Reads
+        | VerifyPaths -> Reads
+        | LintCmd -> Reads
+        | Issues -> Reads
+        | Inbox -> Reads // the cursor it advances is `Cache.putInboxCursor` — per-worker, local
+        | Bootstrap -> Reads // `Board.bootstrap`: two GraphQL queries, then day-cached
+        | BoardCmd -> Reads
+        | FieldId -> Reads
+        | OptionId -> Reads
+        | ItemId -> Reads
+
+        // ---- WRITE THE BOARD, EVERY INVOCATION ---------------------------------------------------------
+        | Claim -> Writes // POSTs the `fsgg:claim` marker comment and writes Status
+        | Take -> Writes // schedules, then delegates to `claim`
+        | Adopt -> Writes // transfers a claim, also via `claim`
+        | Release -> Writes
+        | Heartbeat -> Writes
+        | Add -> Writes // idempotent — `AlreadyOnBoard` skips the mutation, which is state, not argv
+        | SetField -> Writes
+        | Child -> Writes // idempotent the same way; an existing sub-issue is not POSTed twice
+        | Say -> Writes // no lock required, and every invocation POSTs
+        // Up to FIVE independent writes: board Status, the `--flip` ancestor roll-up (which also CLOSES
+        // issues over REST), the room close, its own marker release (#533) — and the #733 chore offer, the
+        // SECOND `Chores.offer` site after `next`. None of that changes the row; it is why the row is here.
+        | DoneCmd -> Writes
+        | RoomOpen -> Writes // `Writes.createRoom` + a `Rooms: #room` back-reference onto each named item
+        // Both reach the same `Writes.widen` PATCH through the same `updateTouchSet` helper. `set-paths`
+        // being the RECOVERY verb is exactly why its absence from the shim's list mattered (#1528).
+        | Widen -> Writes
+        | SetPaths -> Writes
+
+        // ---- WRITE UNDER A CONDITION -------------------------------------------------------------------
+        | Reap -> WritesIf(OnlyWhenGiven FApply)
+        | Reconcile -> WritesIf(OnlyWhenGiven FApply)
+        // AND THIS ROW IS NOT THE SHIM'S ROW — read before wiring the #1534 follow-on gate. The shim puts
+        // `flush` in BOARD_WRITES (unconditional) and this says `conditional`, and BOTH are right about
+        // different questions: the shim's two write sets are REFUSED IDENTICALLY under staleness, so its
+        // split records "is this flag-dependent?" for the reader, while this records "could this invocation
+        // mutate?" for a consumer. A gate asserting `BOARD_WRITES == {always}` set-for-set therefore reds on
+        // `flush` over no defect at all. The sound assertion is over the UNION —
+        // `BOARD_WRITES ∪ BOARD_WRITES_CONDITIONAL == {always} ∪ {conditional}` and
+        // `BOARD_READS == {never}` — which is exactly the fact the guard acts on.
+        | Flush -> WritesIf(UnlessGiven FDryRun)
+        | Next ->
+            WritesIf(
+                NotOnArgv "after printing its answer it makes the #733 chore offer, which POSTs a claim marker"
+            )
+
+        // ---- NOT VERBS — reached by flag, and excluded from the emitted contract entirely ---------------
+        | Help -> Reads
+        | Version -> Reads
+
     /// The flags actually GIVEN, with the spelling to name in a refusal. A flag whose field has a
     /// non-optional default and no record of having been given (`LeaseMinutes`) cannot appear: "given" and
     /// "defaulted" are the same state, so it is `Global` above and there is nothing to detect.
@@ -704,49 +954,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | _ -> Some command)
             |> Array.sortBy commandName
 
-        let scopedFlags =
-            [ FSnapshot, [ "--snapshot" ]
-              FRepo, [ "--repo" ]
-              FWorker, [ "--worker" ]
-              FEvidence, [ "--evidence" ]
-              FPartial, [ "--partial" ]
-              FTo, [ "--to" ]
-              FMessage, [ "--message" ]
-              FPaths, [ "--paths" ]
-              FPr, [ "--pr" ]
-              FWarn, [ "--warn" ]
-              FIssue, [ "--issue" ]
-              FStatus, [ "--status" ]
-              FAll, [ "--all" ]
-              FBatch, [ "--batch" ]
-              FStrict, [ "--strict" ]
-              FActive, [ "--active" ]
-              FApply, [ "--apply" ]
-              FPeek, [ "--peek" ]
-              FDryRun, [ "--dry-run" ]
-              FWait, [ "--wait" ]
-              FTries, [ "--tries" ]
-              FInterval, [ "--interval" ]
-              FRequire, [ "--require" ]
-              FSha, [ "--sha" ]
-              FLabel, [ "--label" ]
-              FState, [ "--state" ]
-              FFresh, [ "--fresh"; "--refresh" ]
-              FIncludeBacklog, [ "--include-backlog" ]
-              FForce, [ "--force" ]
-              FMint, [ "--mint" ]
-              FFlip, [ "--flip" ]
-              FLimit, [ "-n" ]
-              FLocal, [ "--local" ]
-              FAllRepos, [ "--all-repos" ]
-              FOver, [ "--over" ]
-              // #1523 — these two used to be spliced in unconditionally below, onto every row, which is how
-              // the emitted contract came to promise `--json` on 20 commands that print prose. They are
-              // ordinary scoped flags now, so the contract and `scopeOf` agree BY CONSTRUCTION rather than
-              // by a test noticing later.
-              FJson, [ "--json" ]
-              FText, [ "--text" ] ]
-
         use stream = new System.IO.MemoryStream()
         use writer =
             new System.Text.Json.Utf8JsonWriter(
@@ -782,6 +989,47 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 writer.WriteStringValue flag
 
             writer.WriteEndArray()
+
+            // WRITE-NESS (#1534) — the fact the shim's stale-engine guard duplicated by hand in bash, said
+            // out loud by the engine that owns it. Three values, and the third is not a hedge: a consumer
+            // that flattened `reap` into "writes" would refuse a dry run it could have permitted, and one
+            // that flattened it into "reads" would let a stale engine collect live claims.
+            //
+            // ADDITIVE, AND THE SCHEMA ID DOES NOT MOVE. `fsgg.coord.commands/1` promises the keys it names;
+            // it does not promise their absence. The three consumers in the tree all read by key and are
+            // unaffected by a new one: `scripts/check-skill-quality.py` (`name` + `flags`),
+            // `tests/coord-engine-parity/shim.sh` §3b (`.commands[].name` via `jq`, and nothing else), and
+            // `CommandSurfaceTests` in this repo's own suite.
+            //
+            // A BUMP TO `/2` WOULD BE WORSE THAN NOISY, and the reason is worth stating rather than
+            // assuming a clean failure. Two of the three compare the id for equality — but they do not
+            // agree on what to do about a mismatch: `check-skill-quality.py`'s first reader FAILS, while
+            // its second returns bare, which would silently disarm every semantic assertion it makes
+            // (the `--paths`/`--apply` polarity gate) instead of reporting anything. So the cost of the
+            // bump is one loud error plus one gate that quietly stops auditing — bought to describe an
+            // edit that removes nothing. Filed as #1574.
+            let writes, gate =
+                match writeSurface command with
+                | Writes -> "always", None
+                | Reads -> "never", None
+                | WritesIf gate -> "conditional", Some gate
+
+            writer.WriteString("writes", writes)
+
+            match gate with
+            | None -> ()
+            | Some gate ->
+                // Emitted ONLY for `conditional`, so `has("writesWhen")` and `writes == "conditional"` are
+                // the same question asked twice rather than two facts that can disagree.
+                writer.WriteStartObject "writesWhen"
+
+                match gate with
+                | OnlyWhenGiven flag -> writer.WriteString("flagGiven", spellingOf flag)
+                | UnlessGiven flag -> writer.WriteString("flagAbsent", spellingOf flag)
+                | NotOnArgv because -> writer.WriteString("argvCannotSay", because)
+
+                writer.WriteEndObject()
+
             writer.WriteEndObject()
 
         writer.WriteEndArray()
