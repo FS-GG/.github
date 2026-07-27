@@ -603,11 +603,19 @@ module OptionsTests =
     let ``#1507 --paths LAST does not swallow the trailing flag`` () =
         for verb in pathsVerbs do
             let o = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
-
             Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], o.Paths)
+
             // The other half of acceptance criterion 1: the flag is not merely absent from the touch-set,
             // it is HONOURED. Dropping it silently would trade one ignored argument for another.
-            Assert.Equal(Json, o.Render)
+            //
+            // ASSERT THAT WITH `--text`, NOT `--json`. Both these verbs default to `Render = Json`, so
+            // `Assert.Equal(Json, ...)` after a trailing `--json` passes whether the flag was read or
+            // thrown away — a vacuous assertion of exactly the kind #266 is about, sitting inside the
+            // regression test for a flag that was being thrown away. `--text` is the only spelling whose
+            // effect is distinguishable from the default.
+            let t = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--text" ] |> ok
+            Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], t.Paths)
+            Assert.Equal(Text, t.Render)
 
     [<Fact>]
     let ``#1507 --paths MID-ARGLIST keeps parsing the flags after it`` () =

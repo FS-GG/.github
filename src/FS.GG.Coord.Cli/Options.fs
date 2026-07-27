@@ -840,6 +840,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             //    It falls through to the arms below and reaches either its own handler (where the #991
             //    residue rule names it: "--status is not a flag of `widen`") or `unknown argument`. Both are
             //    loud; being written into a `Paths:` line is not.
+            //
             // Fully qualified deliberately: `open FS.GG.Coord` here would bring the core's `Landable` module
             // into scope beside this module's `Landable` COMMAND case, and the name a `--paths` guard
             // resolves to is not a thing to leave to resolution order. It also keeps the call site honest —

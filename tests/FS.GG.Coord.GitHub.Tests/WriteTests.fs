@@ -631,7 +631,10 @@ let ``#1507 a FLAG-SHAPED token is refused at the write, even though the parser 
         // Name the offending token and ONLY it. The five real paths were fine; a refusal that blamed them
         // too would send the worker rewriting a declaration that was already correct.
         Assert.Contains("--json", message)
-        Assert.DoesNotContain("src/Audio/**.", message)
+        // `src/Audio` appears nowhere in the refusal: not in the offending-token list, and not in the
+        // grammar blurb the message quotes (which uses `src/Foo`). A trailing-period spelling of this
+        // assertion would have been vacuous — it can never match regardless of which tokens were blamed.
+        Assert.DoesNotContain("src/Audio", message)
     | Ok _ -> failwith "a flag must never validate as a touch-set token — this is how `--json` reached a live `Paths:` line"
 
 [<Fact>]
