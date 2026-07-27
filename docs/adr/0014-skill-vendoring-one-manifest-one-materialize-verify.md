@@ -6,6 +6,7 @@
 - **Relationship:** **Extends and amends [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md).** ADR-0011's five *invariants* stand (byte-identical union in every root; single mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, not symlinks). ADR-0014 replaces its *implementation* — which fragmented into four hand-maintained mirror mechanisms and shipped **no content verification** — with one shared, content-addressed algorithm, and draws the missing product/dev-surface boundary. Where the two disagree on mechanism, ADR-0014 wins.
 - **Extended by:** [ADR-0017](0017-skill-registry-condition-aware-materialization.md) — §Decision 1's manifest entry `{ id, scope, sha256 }` is **no longer the whole schema**: ADR-0017 adds `materializes-when` + `supplied-by`, and the org catalog it introduces ([`registry/skills.yml`](../../registry/skills.yml)) carries `owner`, `source` and `mirrored` on top. See §Decision 1.
 - **Amended by:** [ADR-0065](0065-one-agent-skill-root-contract.md) — Decision 5's three-root default now applies to coordination-kit receivers as well as scaffolded products; ownership and lane-specific triggers remain separate.
+- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) (2026-07-27) — **direction only; this record stays IN FORCE.** Decision 5's declared root set becomes **two** in the end state (`.agents/skills` + `.claude/skills`), because `.agents/skills` is Codex's own second native root rather than a third runtime's. **Decision 6 is untouched and re-affirmed:** a *committed* symlink is still rejected, now on a measurement — under `core.symlinks=false` it checks out as a regular text file and both runtimes then exit 0 with zero skills and no diagnostic. See §Decision 5.
 
 ## Context
 
@@ -156,6 +157,12 @@ one shared algorithm across every lane.**
    **computed**, never hand-written per source — so a provider *cannot* accidentally target an
    SDD-owned root, and the `isSddTree` guard becomes a backstop rather than the primary
    defense.
+
+   > **2026-07-27 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5):**
+   > the constant's *value* is now decided to become **two** roots in the end state — `.agents/skills`
+   > and `.claude/skills`. This clause's own design is what makes that a one-line change rather than
+   > an N-place edit, and **the constant is unchanged today**: the flip carries a package-publication
+   > and receiver-re-materialization tail and lands with the mechanism, not before it (ADR-0067 §9).
 
 6. **Invariants retained from ADR-0011.** Single mirror authority per lane; providers write
    only `.agents/skills/` in the orchestrated lane; strict `isSddTree`; materialized copies
