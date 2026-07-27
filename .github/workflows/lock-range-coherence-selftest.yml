@@ -40,5 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The fixture reads lock-range-coherence.yml's REAL sparse-checkout patterns rather than a
+      # re-typed copy of them (.github#1515), so it needs the pinned YAML parser — the same reason
+      # tests/dispatch-preflight and tests/feed-coherence take this action. Parsing the workflow by
+      # hand is what it replaced: the hand-rolled scanner failed OPEN on a folded block scalar,
+      # reporting clean patterns for a checkout that would have fetched an empty tree.
+      - uses: ./.github/actions/setup-policy-python
+
       - name: Run the lock-range coherence fixture
         run: bash tests/lock-range-coherence/run.sh

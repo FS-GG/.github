@@ -17,12 +17,25 @@ and then hands back a tree containing only those, so the script can be loaded fr
 that runs the script from the repo root proves nothing about a sparse-checkout; a test that runs it
 from the output of this module proves the thing that broke.
 
+HOW THE PATTERNS ARE READ: with PyYAML, not with a hand-rolled scanner. This module's first draft
+scanned the file by indentation, and it was WRONG in the one direction that matters — a folded block
+scalar (`sparse-checkout: >`) joins its lines with spaces, so the runner would receive ONE pattern
+containing a space, match nothing, and fetch an empty tree, while the hand parser reported two clean
+patterns and the fixture went green over it. A fixture that fails open on the exact defect class it
+exists to catch is worse than no fixture. The repo already pins `PyYAML==6.0.3` and ships
+`.github/actions/setup-policy-python` to supply it; sibling fixtures (tests/dispatch-preflight,
+tests/feed-coherence) parse workflow YAML the same way.
+
 HOW THE SELECTION IS COMPUTED: with git, not with a re-implementation of gitignore semantics. A
 throwaway repo is built holding EMPTY placeholders at every tracked path of the subject repo — the
-path universe, and nothing else, so the pattern match is decided by the same matcher `actions/checkout`
-drives — then `git sparse-checkout set` is run with the workflow's own patterns and cone flag, and
-whatever survives in that working tree is the selection. Re-deriving the rules by hand here would make
-this fixture assert my reading of gitignore rather than git's.
+path universe, and nothing else — then `git sparse-checkout set` is run with the workflow's own
+patterns and cone flag, and whatever survives in that working tree is the selection. Re-deriving the
+rules by hand would make this fixture assert my reading of gitignore rather than git's.
+
+    Fidelity note: `actions/checkout` writes the pattern lines into `.git/info/sparse-checkout` and
+    checks out, where this drives the porcelain `git sparse-checkout set --no-cone`. Same patterns,
+    same matcher, same result — but the invocation differs, and `--no-cone` is deprecated (not
+    removed) from git 2.37, so this is a divergence to know about rather than one to rely on.
 
 CONTENT COMES FROM THE WORKING TREE, not from HEAD. The subject of this check is the workflow file and
 the script as they are RIGHT NOW: a fixture that read committed state would silently grade the previous
@@ -41,94 +54,86 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
 
-AUTHORITY = re.compile(r"^(\s*)repository:\s*FS-GG/\.github\s*$")
-KEY = re.compile(r"^(\s*)([A-Za-z0-9_.-]+):(.*)$")
-BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*$")
+AUTHORITY = "FS-GG/.github"
 
 
 class SparseError(Exception):
     pass
 
 
-def _indent(line: str) -> int:
-    return len(line) - len(line.lstrip(" "))
-
-
-def _is_skippable(line: str) -> bool:
-    stripped = line.strip()
-    return not stripped or stripped.startswith("#")
+def _authority_steps(document: object) -> list[dict]:
+    """Every `actions/checkout` step in the document aimed at the authority repo."""
+    found: list[dict] = []
+    jobs = document.get("jobs") if isinstance(document, dict) else None
+    for job in (jobs or {}).values():
+        if not isinstance(job, dict):
+            continue
+        for step in job.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            params = step.get("with")
+            if isinstance(params, dict) and str(params.get("repository", "")).strip() == AUTHORITY:
+                found.append(params)
+    return found
 
 
 def parse_workflow(path: Path) -> tuple[list[str], bool]:
     """Return (patterns, cone_mode) for the workflow's FS-GG/.github checkout step.
 
-    An empty pattern list means the step takes a full checkout, which under-fetches nothing.
+    An empty pattern list means the step declares NO sparse-checkout — a full clone, which
+    under-fetches nothing. A declared-but-unreadable one is an error, never that.
     """
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        import yaml
+    except ModuleNotFoundError as error:  # pragma: no cover - environment, not logic
+        raise SparseError(
+            "PyYAML is not installed, so the workflow cannot be read. This is a TOOLING GAP, not a "
+            "verdict about the workflow: install it with `pip install -r requirements-test.txt` "
+            "(CI gets it from .github/actions/setup-policy-python)."
+        ) from error
+
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
     except OSError as error:
         raise SparseError(f"cannot read {path}: {error}") from error
+    except yaml.YAMLError as error:
+        raise SparseError(f"{path} is not parseable YAML: {error}") from error
 
-    anchors = [i for i, line in enumerate(lines) if AUTHORITY.match(line)]
-    if len(anchors) != 1:
+    steps = _authority_steps(document)
+    if len(steps) != 1:
         raise SparseError(
-            f"{path}: expected exactly one `repository: FS-GG/.github` checkout, found {len(anchors)}. "
+            f"{path}: expected exactly one `repository: {AUTHORITY}` checkout step, found {len(steps)}. "
             "This fixture grades that step; it will not guess which one."
         )
-    anchor = anchors[0]
-    width = _indent(lines[anchor])
+    params = steps[0]
 
-    # The `with:` mapping is the run of lines at this indent or deeper, blanks and comments included.
-    start = anchor
-    while start > 0 and (_is_skippable(lines[start - 1]) or _indent(lines[start - 1]) >= width):
-        start -= 1
-    end = anchor + 1
-    while end < len(lines) and (_is_skippable(lines[end]) or _indent(lines[end]) >= width):
-        end += 1
-
-    values: dict[str, str | list[str]] = {}
-    index = start
-    while index < end:
-        line = lines[index]
-        match = KEY.match(line)
-        if _is_skippable(line) or not match or len(match.group(1)) != width:
-            index += 1
-            continue
-        key, inline = match.group(2), match.group(3).strip()
-        if BLOCK_SCALAR.match(inline):
-            collected: list[str] = []
-            index += 1
-            while index < end and (_is_skippable(lines[index]) or _indent(lines[index]) > width):
-                if not _is_skippable(lines[index]):
-                    collected.append(lines[index].strip())
-                index += 1
-            values[key] = collected
-            continue
-        values[key] = inline.strip("\"'")
-        index += 1
-
-    raw = values.get("sparse-checkout")
+    raw = params.get("sparse-checkout")
     if raw is None:
         patterns: list[str] = []
-    elif isinstance(raw, list):
-        patterns = [entry for entry in raw if entry]
     else:
-        patterns = [raw] if raw else []
+        # actions/checkout splits the input on newlines and drops blanks, so a block scalar and a
+        # plain one reach git the same way. Mirror that rather than special-casing the YAML shape:
+        # `>` folds its lines into ONE space-joined string, and reporting that as several clean
+        # patterns is precisely how a hand parser fails OPEN here.
+        entries = raw if isinstance(raw, list) else str(raw).split("\n")
+        patterns = [entry.strip() for entry in entries if str(entry).strip()]
+        if not patterns:
+            # Declared and yielded nothing. NOT the same fact as "no sparse-checkout declared":
+            # treating it as a full clone would make every coverage assertion below pass over a
+            # workflow that fetches an empty tree (#266 — "I could not tell" is not "it is fine").
+            raise SparseError(f"{path}: sparse-checkout is declared but yields no patterns")
 
-    # `actions/checkout` defaults sparse-checkout-cone-mode to true. An omitted flag is that default,
+    # actions/checkout defaults sparse-checkout-cone-mode to true. An omitted flag IS that default,
     # not "unknown" — and it changes what the patterns mean, so it is read rather than assumed.
-    cone_raw = values.get("sparse-checkout-cone-mode", "true")
-    if isinstance(cone_raw, list):
-        raise SparseError(f"{path}: sparse-checkout-cone-mode must be a scalar")
-    if cone_raw.lower() not in {"true", "false"}:
+    cone_raw = params.get("sparse-checkout-cone-mode", True)
+    if not isinstance(cone_raw, bool):
         raise SparseError(f"{path}: unreadable sparse-checkout-cone-mode: {cone_raw!r}")
-    return patterns, cone_raw.lower() == "true"
+    return patterns, cone_raw
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -181,20 +186,31 @@ def select(repo_root: Path, patterns: list[str], cone: bool) -> list[str]:
     return sorted(selected)
 
 
-def materialise(repo_root: Path, out: Path, selected: list[str]) -> None:
+MARKER = ".sparse-set-owns-this-directory"
+
+
+def materialise(repo_root: Path, out: Path, selected: list[str]) -> list[str]:
+    # This recursively deletes --out, so it deletes only directories it made. A test helper that
+    # rm -rf's whatever path it is handed is one typo away from eating someone's work.
     if out.exists():
+        if not (out / MARKER).is_file():
+            raise SparseError(f"refusing to overwrite {out}: it exists and sparse_set did not create it")
         shutil.rmtree(out)
     out.mkdir(parents=True)
+    (out / MARKER).touch()
+
+    notes: list[str] = []
     for rel in selected:
         source = repo_root / rel
         if not source.is_file():
             # Tracked but absent from the working tree (a staged deletion). The runner would not get
             # it either, so leaving it out is the faithful answer — but say so rather than eliding it.
-            print(f"sparse_set: tracked but missing from the working tree: {rel}", file=sys.stderr)
+            notes.append(f"tracked but missing from the working tree: {rel}")
             continue
         target = out / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+    return notes
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -210,6 +226,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if bool(args.from_workflow) == bool(args.pattern):
         parser.error("give exactly one of --from-workflow or --pattern")
+    # Cone mode decides what the patterns MEAN, so it is never defaulted silently on the --pattern
+    # path. --from-workflow gets its default from the workflow, where an omitted key genuinely is
+    # actions/checkout's documented `true`.
+    if args.pattern and args.cone is None:
+        parser.error("--pattern requires an explicit --cone or --no-cone")
 
     try:
         if args.from_workflow:
@@ -219,7 +240,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             patterns, cone_mode = list(args.pattern), bool(args.cone)
         selected = select(args.repo_root.resolve(), patterns, cone_mode)
-        materialise(args.repo_root.resolve(), args.out, selected)
+        for note in materialise(args.repo_root.resolve(), args.out, selected):
+            print(f"sparse_set: {note}", file=sys.stderr)
     except SparseError as error:
         print(f"sparse_set: {error}", file=sys.stderr)
         return 2

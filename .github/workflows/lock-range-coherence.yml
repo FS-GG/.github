@@ -33,6 +33,44 @@
 # reference and is checked; one that does not is a consumption pin (#263's question, not this gate's) and
 # is ignored. A project reference that resolves to none of your project files is DRIFT and goes red: it
 # used to be skipped in silence, which let subjects vanish one at a time behind a green tick (.github#545).
+#
+# WHY THIS FETCHES A DIRECTORY AND NOT A LIST OF FILES (.github#1515). The authority checkout below used
+# to name ONE file, `scripts/check-lock-ranges.py`, and that enumeration was CORRECT the day it was
+# written — the script imports stdlib only. That is what made it a trap rather than a bug: a
+# sparse-checkout is a HAND-MAINTAINED COPY OF A DEPENDENCY LIST, kept in a file that cannot execute the
+# thing it lists, so nothing compares it to the script's real import lines. It drifts silently the moment
+# the script gains a sibling, and this repo has hoisted shared helpers into scripts/lib/ three times
+# already (#358, #524, #525).
+#
+# .github#1510 is the same list one language over, after the drift had already happened:
+# skill-union-assert.yml enumerated its script plus ONE of the two libs it sources, #525 hoisted the
+# second, the list was never updated, and EVERY receiver caller died at load in ~7s having asserted
+# nothing — confirmed independently from FS.GG.SDD#718 and FS.GG.Governance#327. It went unseen because
+# no receiver existed until one did. This was the unsprung version of the same trap, closed before it
+# fired; the remedy shape is #1510's, deliberately, so that the two do not diverge into two dialects.
+#
+# AND THE TRIGGER WAS ALREADY SCHEDULED, which is what moved this off "someday". scripts/lib/ holds
+# `gate.py`, the shared gate harness (#1158/#1159), which shipped with a STAGED MIGRATION of this repo's
+# ~25 `scripts/check-*.py` gates onto it — pin-coherence first (it already does
+# `sys.path.insert(0, dirname(__file__))` and imports `lib`), "the rest opportunistically".
+# check-lock-ranges.py is one of the rest. The day it takes that import, a one-file checkout kills every
+# receiver of this workflow at load while this repo's own CI stays green, because the migration would be
+# exercised from a full checkout.
+#
+# Taking the DIRECTORY fixes the CLASS rather than one entry: any future `import`, `from lib … import`,
+# sourced helper or data file the script grows under scripts/ arrives with no edit here, because there is
+# no longer a list to keep in step. The invariant it rests on is one the script already obeys — every
+# load-time dependency of a scripts/ gate lives under scripts/ — and unlike the enumeration, that
+# invariant is ASSERTED: tests/lock-range-coherence/run.sh materialises this pattern set with real git
+# and loads the script out of the result, so a narrowing reds the selftest here instead of a receiver's
+# CI months from now.
+#
+# THE LEADING SLASH IS LOAD-BEARING. Under `sparse-checkout-cone-mode: false` these are gitignore-style
+# patterns, so an unanchored `scripts/` matches a directory of that name at ANY depth — and this repo has
+# six, in the skill bundles (`.agents|.claude|.codex/skills/work-{board,roadmap}/scripts/`). Both forms
+# fix the bug; only `/scripts/` makes the claim "this checkout is scoped to scripts/" a true one.
+# Measured: `/scripts/` selects exactly the repo's tracked contents of scripts/, scripts/lib/* included,
+# and nothing else.
 name: lock-range-coherence
 
 on:
@@ -86,46 +124,9 @@ jobs:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
-          # FETCH THE DIRECTORY, NEVER A LIST OF FILES (.github#1515; shape adopted from #1510's
-          # skill-union-assert.yml repair). This line used to name ONE file,
-          # `scripts/check-lock-ranges.py`, and that enumeration was CORRECT the day it was written —
-          # the script imports stdlib only. That is exactly what makes it a trap rather than a bug: a
-          # sparse-checkout is a HAND-MAINTAINED COPY OF A DEPENDENCY LIST, kept in a file that cannot
-          # execute the thing it lists, so nothing compares it to the script's real import lines. It
-          # drifts silently the moment the script gains a sibling — and this repo has hoisted shared
-          # helpers into scripts/lib/ three times already (#358, #524, #525).
-          #
-          # #1510 is this same list, one language over, after the drift had already happened:
-          # skill-union-assert.yml enumerated its script plus ONE of the two libs it sources, #525
-          # hoisted the second, the list was never updated, and EVERY receiver caller died at load in
-          # ~7s having asserted nothing — confirmed independently from FS.GG.SDD#718 and
-          # FS.GG.Governance#327. It went unseen because there was no receiver until there was one.
-          # Ours was the unsprung version of the same trap; it is closed here BEFORE it fires.
-          #
-          # AND THE TRIGGER IS ALREADY SCHEDULED, which is what moves this off "someday". scripts/lib/
-          # holds `gate.py`, the shared gate harness (#1158/#1159), and it shipped with a STAGED
-          # MIGRATION of this repo's ~25 `scripts/check-*.py` gates onto it — pin-coherence first (it
-          # already does `sys.path.insert(0, dirname(__file__))` and imports `lib`), "the rest
-          # opportunistically". check-lock-ranges.py is one of the rest. The day it takes that import,
-          # a one-file checkout kills every receiver of THIS workflow at load, and this repo's own CI
-          # stays green throughout — the migration is exercised from a full checkout.
-          #
-          # Taking the DIRECTORY fixes the CLASS, not one entry: any future `import`, `from lib …
-          # import`, sourced helper or data file the script grows under scripts/ arrives with no edit
-          # here, because there is no longer a list to keep in step. The invariant it rests on is the
-          # one the script already obeys — every load-time dependency of a scripts/ gate lives under
-          # scripts/ — and unlike the enumeration, that invariant is now ASSERTED:
-          # tests/lock-range-coherence/run.sh materialises THIS pattern set with real git and loads the
-          # script out of the result, so a narrowing back to named files reds the selftest here instead
-          # of a receiver's CI months from now.
-          #
-          # Non-cone mode: the patterns are gitignore-style, and the LEADING SLASH is load-bearing.
-          # Unanchored `scripts/` matches a directory of that name at ANY depth, and this repo has six
-          # (`.agents|.claude|.codex/skills/work-{board,roadmap}/scripts/`), so it would drag in files
-          # from the skill bundles that have nothing to do with the gate. `/scripts/` is anchored at the
-          # repo root and still recursive: measured 66 paths, all under scripts/, scripts/lib/* among
-          # them, nothing else. Both halves are asserted by the fixture. Do NOT narrow this back to
-          # named files.
+          # THE DIRECTORY, NEVER A LIST OF FILES, and the leading slash is load-bearing. The argument
+          # is in the file header under "WHY THIS FETCHES A DIRECTORY"; both halves are asserted by
+          # tests/lock-range-coherence/run.sh. Do NOT narrow this back to named files (.github#1515).
           sparse-checkout: |
             /scripts/
           sparse-checkout-cone-mode: false

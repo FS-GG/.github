@@ -698,15 +698,28 @@ SPARSE="$HERE/sparse_set.py"
 [ -f "$WF" ]     || { echo "FAIL  workflow not found at $WF"; exit 1; }
 [ -f "$SPARSE" ] || { echo "FAIL  sparse_set.py not found at $SPARSE"; exit 1; }
 
-# materialise <out> <args…> — the file set the runner would actually get, into <out>. Echoes the paths.
-# `|| return` rather than letting `set -e` fire: a materialisation that breaks must be REPORTED as a
-# failed leg, not abort the suite midway and leave the remaining legs unrun and unaccounted for.
-materialise() { local out="$1"; shift; python3 "$SPARSE" --out "$out" "$@" || return 1; }
+# materialise <out> <args…> — the file set the runner would actually get, into <out>. Echoes the paths,
+# and propagates sparse_set.py's own exit code (2 == SparseError) rather than flattening it. Every
+# caller tests it, so `set -e` never fires on it and a broken materialisation is REPORTED as a failed
+# leg instead of aborting the suite midway with the remaining legs unrun and unaccounted for.
+materialise() { local out="$1"; shift; python3 "$SPARSE" --out "$out" "$@"; }
+
+# PyYAML is how the workflow is read (see sparse_set.py's header — the hand-rolled scanner it replaced
+# failed OPEN on a folded block scalar). CI installs it via .github/actions/setup-policy-python. If it
+# is absent this suite CANNOT check its subject, and that is reported as a failure rather than skipped:
+# a tooling gap is not a verdict, but neither is it a green one (#266).
+if ! python3 -c "import yaml" >/dev/null 2>&1; then
+  bad "PyYAML is missing, so the sparse-checkout legs cannot run" \
+      "install it with: python3 -m pip install -r requirements-test.txt"
+fi
 
 DG="$WORK/dotgithub"
 selected=""
 if selected="$(materialise "$DG" --repo-root "$REPO_ROOT" --from-workflow "$WF" 2>"$WORK/sparse.err")"; then
   ok "the workflow's authority checkout is parseable, and git resolves its patterns"
+  # Surfaced even on success: sparse_set warns here about tracked paths absent from the working tree,
+  # and a warning only printed on failure is a warning nobody reads.
+  if [ -s "$WORK/sparse.err" ]; then sed 's/^/    | /' "$WORK/sparse.err"; fi
 else
   bad "the workflow's authority checkout could not be resolved" "$(cat "$WORK/sparse.err")"
   selected=""
@@ -720,24 +733,38 @@ has() {
 
 has "the checkout contains the gate script it is about to run" "scripts/check-lock-ranges.py"
 
-# THE PROPERTY THAT FIXES THE CLASS: siblings arrive without being named. scripts/lib/ is where this
-# repo hoists shared code — three times so far (#358, #524, #525) — and gate.py there is the harness
-# this gate is slated to import. If these are present, the next hoist needs no edit to the workflow.
-# If a future worker narrows the pattern back to named files, these are the legs that go red, here,
-# instead of a receiver's pipeline going red somewhere else weeks later.
-has "…and scripts/lib/args.sh, which nothing in the workflow names" "scripts/lib/args.sh"
-has "…and scripts/lib/roots.sh — the exact file #1510 died on" "scripts/lib/roots.sh"
-has "…and scripts/lib/gate.py, the harness this gate's migration would import (#1159)" "scripts/lib/gate.py"
-
-# ...and it stays BOUNDED. The pattern is gitignore-style under `sparse-checkout-cone-mode: false`, so
-# an UNANCHORED `scripts/` would also match the six nested directories of that name in the skill
-# bundles. Over-fetching is harmless to the gate, but a comment claiming the checkout is scoped to
-# scripts/ should be true, and only the anchored form makes it so.
-stray="$(printf '%s\n' "$selected" | grep -v '^scripts/' || true)"
-if [ -n "$selected" ] && [ -z "$stray" ]; then
-  ok "…and NOTHING outside scripts/ — the anchored pattern is bounded as the comment claims"
+# THE PROPERTY THAT FIXES THE CLASS, ASSERTED STRUCTURALLY: the checked-out set is EXACTLY the repo's
+# tracked contents of scripts/. Both directions matter and this one assertion carries both.
+#
+#   * Narrow the pattern back to named files and the set shrinks — which is the #1510 regression, and
+#     it reds HERE rather than in a receiver's pipeline weeks later.
+#   * Unanchor it to `scripts/` and the set GROWS: these are gitignore-style patterns under
+#     `sparse-checkout-cone-mode: false`, so a bare `scripts/` also matches the six directories of
+#     that name in the skill bundles. Harmless to the gate, but the workflow comment claims the
+#     checkout is scoped to scripts/, and only the anchored form makes that sentence true.
+#
+# Deliberately NOT a list of expected filenames. A leg that names scripts/lib/roots.sh would red on a
+# legitimate rename of a file this gate does not even use — a false accusation against the checkout —
+# and `scripts/lib/**` is not in this selftest's `paths:` filter, so that red would surface on some
+# unrelated PR. Comparing two computed sets needs no maintenance and cannot go stale: this is the same
+# objection the item itself is about, and a fixture for it should not keep an enumeration of its own.
+expected="$(git -C "$REPO_ROOT" ls-files -- 'scripts/*' | sort)"
+if [ -z "$expected" ]; then
+  bad "could not enumerate scripts/ in the subject repo — refusing to grade against an empty set"
+elif [ "$(printf '%s\n' "$selected" | sort)" = "$expected" ]; then
+  ok "…and the set is EXACTLY the tracked contents of scripts/ — nothing missing, nothing stray"
 else
-  bad "the checkout reaches outside scripts/" "$stray"
+  bad "the checked-out set is not the tracked contents of scripts/" \
+    "$(diff <(printf '%s\n' "$selected" | sort) <(printf '%s\n' "$expected") | head -20)"
+fi
+
+# And say out loud that the siblings came along unnamed — the actual point of taking the directory.
+# Counted, not named, so a rename cannot turn this into a false accusation.
+libs="$(printf '%s\n' "$selected" | grep -c '^scripts/lib/' || true)"
+if [ "${libs:-0}" -gt 0 ]; then
+  ok "…including $libs file(s) under scripts/lib/, which the workflow names NONE of (#1510's blind spot)"
+else
+  bad "no scripts/lib/ sibling was fetched — the hoist target #1510 died on is absent"
 fi
 
 # A REAL VERDICT FROM THE SPARSE TREE, both directions (acceptance criterion 2; epic #266). Loading is
@@ -747,8 +774,11 @@ SPARSE_GATE="$DG/scripts/check-lock-ranges.py"
 if [ -f "$SPARSE_GATE" ]; then
   out=""; rc=0
   out="$(python3 "$SPARSE_GATE" --root "$audio" --min-ranges 1 2>&1)" || rc=$?
+  # "all 1 project-reference range", not merely "range": the gate prints that word in its ERROR text
+  # too, so the loose pattern would accept a run that inspected nothing. Same phrasing the `must_say`
+  # legs above use, and the same reason (#545).
   if [ "$rc" -ne 0 ]; then bad "the sparsely-fetched gate reaches a real green verdict (exit $rc)" "$out"
-  elif printf '%s' "$out" | grep -qF "range"; then ok "the sparsely-fetched gate reaches a real green verdict, min-ranges satisfied"
+  elif printf '%s' "$out" | grep -qF "all 1"; then ok "the sparsely-fetched gate reaches a real green verdict, min-ranges satisfied"
   else bad "the sparsely-fetched gate exited 0 but inspected nothing it will name" "$out"; fi
 
   rc=0
@@ -796,6 +826,9 @@ load() {
     dead) if [ "$rc" -eq 0 ]; then bad "$n (expected a load failure, got exit 0)" "$out"
           elif printf '%s' "$out" | grep -qF "No module named 'lib'"; then ok "$n"
           else bad "$n (failed, but not at the missing sibling)" "$out"; fi ;;
+    # A typo'd expectation must not vanish as neither a pass nor a fail — that is one fewer leg than
+    # the summary line claims, which is the accounting version of this suite's whole subject.
+    *)    bad "$n (unknown expectation '$expect')" ;;
   esac
 }
 
