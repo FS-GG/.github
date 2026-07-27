@@ -61,3 +61,9 @@ repo-directed `batch`/`take`; parked or ambiguous work is reported.
 An empty Ready batch is not completion while any Backlog row is actionable or untriaged. Conversely,
 when a fresh pass leaves only deliberately parked rows with evidenced reasons or awaiting-human rows,
 report them and allow the unattended run to stop. Do not spin on the same unchanged classification.
+
+Triage the **class** alongside the status. A row whose text carries no `Class:` line is untriaged in the
+sense that matters to the stopping rule, and `lint` reports it as `CLASS-UNSET`; a row classed `hardening`
+is triaged and deliberately retained, which is a different state and must be reported as one. Class from
+evidence — the item's own text, a `[decision]` prefix, a `Blocked on: human/decision` sentinel — and never
+from a guess about how bad it looks.

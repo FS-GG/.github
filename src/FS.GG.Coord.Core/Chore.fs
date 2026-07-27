@@ -19,6 +19,7 @@ module Chore =
         | ClosedIssueNotDone of column: BoardStatus
         | BlockerCleared of resolved: string list
         | StatusNotBlocked of blockers: string list
+        | ClassProjectionLag of declared: ItemClass
 
         member this.RuleId =
             match this with
@@ -27,6 +28,22 @@ module Chore =
             | ClosedIssueNotDone _ -> "CLOSED-ISSUE-NOT-DONE"
             | BlockerCleared _ -> "BLOCKER-CLEARED"
             | StatusNotBlocked _ -> "STATUS-NOT-BLOCKED"
+            | ClassProjectionLag _ -> "CLASS-PROJECTION-LAG"
+
+        /// The board write this kind's remedy performs — see Chore.fsi for why it lives HERE.
+        member this.Write: (string * string) option =
+            match this with
+            // STALE-CLAIM writes no field: its remedy is a marker collection, delegated to `reap`, which
+            // owns the CAS and restores `PreviousStatus` (#481). `None` is "there is no field write",
+            // never "we could not work one out".
+            | StaleClaim _ -> None
+            | ClaimStatusLag _ -> Some("Status", statusWireName InProgress)
+            | ClosedIssueNotDone _ -> Some("Status", statusWireName Done)
+            | BlockerCleared _ -> Some("Status", statusWireName Ready)
+            | StatusNotBlocked _ -> Some("Status", statusWireName Blocked)
+            // The ONLY kind that writes a field other than `Status` (.github#1588), which is exactly why
+            // `Write` had to move into this type — see the .fsi.
+            | ClassProjectionLag c -> Some("Class", itemClassWireName c)
 
     /// The column, for PROSE. Deliberately not the four private `statusName`s in `Scan`/`Writes`/`Client`/
     /// `Snapshot`: those render the Projects v2 OPTION NAME, where an unset column is legitimately the empty
@@ -88,6 +105,8 @@ module Chore =
                 $"%s{subject.Short}: every blocker is resolved (%s{nameList resolved}) but the board still says Blocked — set Status to Ready."
             | StatusNotBlocked blockers ->
                 $"%s{subject.Short}: %s{nameList blockers} is still open, but the board advertises it as startable — set Status to Blocked."
+            | ClassProjectionLag c ->
+                $"%s{subject.Short}: the item's own text declares `Class: %s{itemClassWireName c}` but the board's Class column does not say so — set Class to %s{itemClassWireName c}."
 
     type Boundary =
         | AtNext
@@ -249,6 +268,29 @@ module Chore =
                       | _ -> false)
                   ->
                   Chore(item.Ref, StatusNotBlocked(openOnes |> List.map (fun b -> b.Display)), Quick)
+              | _ -> ()
+
+              // CLASS-PROJECTION-LAG (.github#1588). The item's own text declares a class and the board's
+              // `Class` column does not agree — so the projection is stale and this writes it.
+              //
+              // DERIVED, NEVER GUESSED, and the direction is the whole item: the body line is the
+              // AUTHORITY (ADR-0066, keeping ADR-0045 intact) and the column is a rendering of it. An item
+              // whose text declares nothing derives NOTHING here — `Item.Class = None` produces no chore,
+              // so a row nobody has triaged is never stamped with a class this engine made up. `lint`'s
+              // `CLASS-UNSET` reports that gap to a human instead, which is #1588's AC3 exactly.
+              //
+              // It fires only where the two DISAGREE, which is what lets it retire: once the write lands,
+              // the next scan reads `BoardClass = Class` and derives nothing. An unconditional write would
+              // leave `Chore.isRetired` answering "still owed" forever against a write that succeeded.
+              // `BoardClass = None` on a board with no `Class` field therefore reads as a real
+              // disagreement and the write is attempted — deliberately: the field is the thing #1588 adds,
+              // and a projection that silently no-opped when its column was missing is the fail-open shape
+              // #1575 and #266 already cost this repo twice.
+              //
+              // OPEN items only. A closed row is out of the burn-down's scope, and classing it would spend
+              // a board write on the one population no stopping rule consults.
+              match item.State, item.Class, item.BoardClass with
+              | Open, Some declared, board when board <> Some declared -> Chore(item.Ref, ClassProjectionLag declared, Quick)
               | _ -> () ]
 
     /// How much a chore unwedges the QUEUE. Lower sorts first.
@@ -264,6 +306,12 @@ module Chore =
         | StatusNotBlocked _ -> 2
         | ClosedIssueNotDone _ -> 3
         | ClaimStatusLag _ -> 4
+        // LAST, and it is the one kind that unwedges nothing: every rule above changes the board's answer
+        // to "what can I start?", where this one changes the board's answer to "how bad is it". A worker
+        // offered a chore at a safe point should be handed the queue-freeing one first — and #1588's own
+        // argument is that severity is a stopping-rule input, consulted after the queue is drained rather
+        // than to drain it.
+        | ClassProjectionLag _ -> 5
 
     let derive (items: Item list) : Chore list = items |> List.collect choresFor
 

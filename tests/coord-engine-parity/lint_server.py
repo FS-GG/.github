@@ -23,6 +23,15 @@ with no bash in sight. The board lives in FS-GG/FS.GG.SDD, plus one clean FS-GG/
     #423  SDD   In progress   (n/a)                      -> clean (already claimed, not a candidate)
     #424  SDD   Ready/CLOSED  (n/a)                      -> clean (closed, nobody needs to pick it up)
     #500  Game  Ready         Paths: src/game/**         -> clean (a second repo, for --repo scope)
+
+    The CLASS axis (.github#1588). CLASS-UNSET fires on a Ready/Backlog OPEN row whose own TEXT records no
+    class, so it fires on every row above except #423 (In progress), #424 (closed) and #500 (classed, so
+    that the --repo game clean-scope leg stays clean). These four exercise the derivations and the refusal:
+
+    #432  SDD   Ready         Class: hardening           -> clean of CLASS-UNSET (an explicit body line)
+    #433  SDD   Ready         [decision] title prefix    -> clean of CLASS-UNSET (derived from the TITLE)
+    #434  SDD   Ready         Blocked on: human/decision -> clean of CLASS-UNSET (derived, ADR-0045, AC5)
+    #435  SDD   Ready         Class: bug                 -> CLASS-UNSET (an unknown word is NO declaration)
 """
 
 import json
@@ -53,6 +62,10 @@ NODES = [
     node(423, "In progress", SDD, title="Already being worked"),
     node(424, "Ready", SDD, state="CLOSED", title="Closed, nobody needs it"),
     node(500, "Ready", GAME, title="Clean game work"),
+    node(432, "Ready", SDD, title="Declares its class in the body"),
+    node(433, "Ready", SDD, title="[decision] should we do X or Y"),
+    node(434, "Ready", SDD, title="Parked on a human decision"),
+    node(435, "Ready", SDD, title="Declares a class word nobody speaks"),
 ]
 
 # #421's ONLY `Paths:` line is fenced — the scheduler cannot see it, so it declares nothing (#277).
@@ -76,7 +89,22 @@ BODIES = {
     400: "An umbrella epic.\n\nPaths: none",
     422: "Should we do X or Y? A decision.\n\nPaths: none",
     407: "Paths: src/Real/**",
-    500: "Paths: src/game/**",
+    # CLASSED, and it has to be: this is the ONLY row in the `--repo game` scope, and case14 asserts that
+    # scope is clean AND empty. An unclassed row here would make CLASS-UNSET fire and turn the corpus's one
+    # "a real item, really scanned, and nothing wrong with it" leg into a finding — the assertion would then
+    # be certifying the wrong thing rather than failing honestly.
+    500: "Paths: src/game/**\n\nClass: hardening",
+    # The three derivations (.github#1588 AC3/AC5) and the one refusal.
+    432: "Paths: src/Real/**\n\nClass: hardening",
+    # No `Class:` line at all — the `[decision]` TITLE prefix is the whole declaration. `Paths: none`
+    # keeps NO-TOUCH-SET quiet so the row isolates the class axis.
+    433: "Paths: none",
+    # Neither a `Class:` line nor a title prefix: ADR-0045's sentinel is read as evidence, so an item that
+    # already says "a human must choose" does not have to say it twice.
+    434: "Paths: none\n\nBlocked on: human/decision",
+    # An unknown word is NOT a declaration. Mapping `bug` onto `defect` would be a guess wearing a parser's
+    # authority, and the row would look triaged — so CLASS-UNSET must still fire here.
+    435: "Paths: src/Real/**\n\nClass: bug",
     # 423 (In progress) and 424 (closed) are NOT candidates, so the engine must never read their bodies.
 }
 

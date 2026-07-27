@@ -20,7 +20,8 @@ module ApplicationServiceTests =
           Status = status
           BlockedByRaw = ""
           State = state
-          IsPullRequest = isPullRequest }
+          IsPullRequest = isPullRequest
+          BoardClass = None }
 
     [<Fact>]
     let ``ready application service preserves the exact JSON projection contract`` () =
@@ -34,8 +35,29 @@ module ApplicationServiceTests =
 
         Assert.Equal(1, List.length selected.Rows)
         Assert.Equal(
-            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","state":"OPEN"}]""",
+            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"state":"OPEN"}]""",
             Render.renderReadyJson selected.Rows
+        )
+
+    [<Fact>]
+    let ``#1588 ready --json renders a SET class, not only the null case`` () =
+        // THE WIRE GREW ONE KEY, DELIBERATELY: `class`, between `status` and `state`. It is pinned above
+        // as an equality over the whole document so it cannot grow again by accident — that document is
+        // the contract `/check-board` and `next` read, and `drive-board`'s stopping rule is not
+        // executable without this key, because nothing else emits an item's class to a machine. `null`
+        // rather than omitted, on `status`'s terms: an unset column is a modelled fact (#437).
+        //
+        // This case exists because the `null` above would ALSO pass against a renderer that hardcoded
+        // `WriteNull("class")` — a key always present and always empty, off which every consumer would
+        // read "no defects anywhere". That is the vacuity #266 is an epic about, and the stopping rule
+        // turns on this value being real.
+        let classed =
+            { row 1 ".github" "a defect" BoardStatus.Ready IssueState.Open false with
+                BoardClass = Some Defect }
+
+        Assert.Equal(
+            """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","state":"OPEN"}]""",
+            Render.renderReadyJson [ classed ]
         )
 
     [<Fact>]
@@ -463,6 +485,51 @@ module ApplicationServiceTests =
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    /// A board with ONE OPEN item that declares `Class: defect` in its body and carries NO `Class`
+    /// column — so `CLASS-PROJECTION-LAG` is the single chore (.github#1588).
+    ///
+    /// THIS FIXTURE EXISTS BECAUSE ITS ABSENCE HID A DEFECT. The new chore had thorough coverage in
+    /// `ChoreTests` — the derivation, the retirement, the never-default rule — and none at all through
+    /// `reconcile`, which is the only thing that RUNS it. The apply phase then printed
+    /// `applied <item> Status=defect`: a receipt naming a column never touched, with a value `Status` has
+    /// no option for, three lines under a table that correctly said `Class=defect`. Every test passed,
+    /// because the four older kinds all write `Status` and so the hardcoded word was right for all of them.
+    /// A rule exercised only where it is DERIVED is a rule nobody has watched run.
+    let private classWorld () =
+        let item =
+            """{"status":{"name":"Ready"},"blockedBy":null,"class":null,"content":{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        // The `Class` field, with its three options — a single-select write resolves its
+                        // value to an option id before it is attempted, so the write cannot even be tried
+                        // against a project that does not declare it.
+                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            // OPEN, so its body IS read — that is where the class is declared. A real touch-set too, or the
+            // item would not be a candidate at all.
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/301" ->
+                ok """{"number":301,"body":"Paths: src/Real/**\n\nClass: defect"}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
     /// Run `reconcile` against a throwaway cache root, capturing stdout AND stderr separately.
     ///
     /// Separately, because the whole question here is WHICH STREAM a fact went out on. A helper that merged
@@ -632,6 +699,49 @@ module ApplicationServiceTests =
             + "queued   FS.GG.SDD#102  Status=Done (run scripts/fsgg-coord flush)" + nl
 
         Assert.Equal(expected, out)
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#1588 reconcile --apply names the FIELD it wrote, not the literal Status`` () =
+        let code, out, _ = runReconcile (classWorld ()) (reconcileArgs [ "--apply" ])
+
+        // THE ASSERTION THAT WAS MISSING. Both projections of one write — the finding table and the
+        // apply receipt — must name `Class`, because that is the column `boardWrite` was handed. The
+        // receipt used to interpolate the literal "Status" beside a value taken from `Kind.Write`, so the
+        // two lines of one document described two different writes. That is the exact failure
+        // `Client.write`'s own comment says it exists to prevent, and it does not get a pass for being
+        // prose: a reader checking this receipt would go auditing a Status column nothing had touched.
+        let nl = Environment.NewLine
+
+        let expected =
+            "applying (1 mechanical finding(s))" + nl
+            + "  CLASS-PROJECTION-LAG     FS.GG.SDD#301            Class=defect" + nl
+            + "judgement findings are report-only: scripts/fsgg-coord lint --repo FS.GG.SDD" + nl
+            + "applied  FS.GG.SDD#301  Class=defect" + nl
+
+        Assert.Equal(expected, out)
+        Assert.Equal(0, code)
+
+        // Stated separately as well, because the equality above would also pass if BOTH lines said
+        // `Status` — it pins the bytes, and this pins the meaning.
+        Assert.DoesNotContain("Status=defect", out)
+
+    [<Fact>]
+    let ``#1588 the --json write object agrees with the text receipt about the field`` () =
+        // `runApplyJson`, not `--apply --json` on argv: the parser refuses that pair deliberately, and
+        // this helper is how every other apply-JSON test here reaches the same internal state.
+        let code, out, _ = runApplyJson (classWorld ())
+
+        // The machine projection was CORRECT the whole time the human one was wrong, which is what made
+        // the defect survivable long enough to reach a live board: `--json` said `Class`, the text said
+        // `Status`, and nothing compared them. This is that comparison.
+        let rows = parsedArray out
+        Assert.Single rows |> ignore
+        let row = rows.[0]
+        Assert.Equal("CLASS-PROJECTION-LAG", row.GetProperty("rule").GetString())
+        Assert.Equal("Class", row.GetProperty("field").GetString())
+        Assert.Equal("defect", row.GetProperty("value").GetString())
+        Assert.Equal("Class=defect", row.GetProperty("remedy").GetString())
         Assert.Equal(0, code)
 
     [<Fact>]

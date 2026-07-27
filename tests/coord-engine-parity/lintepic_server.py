@@ -64,17 +64,23 @@ SUBS = {
     470: (1, [(471, "CLOSED", SDD)]),                            # complete; body declares only #471
 }
 
+# Every Ready/OPEN row here declares a `Class:` line (.github#1588). These fixtures exist to certify the
+# EPIC rules, and their assertions are stated as "#470 yields no ERROR" and "--repo rendering yields only
+# EPIC-CHILDREN-TRUNCATED" — sentences about the whole finding set, not about the epic rules alone. Without
+# a class, CLASS-UNSET fires on each and those sentences stop being about epics at all. Declaring one keeps
+# each row a negative control for the rule it was built to control, which is what the assertions read.
 BODIES = {
-    440: "Paths: none",
-    404: "Umbrella epic.\n\nPaths: none\n\n- [ ] #499 the missing child",
-    450: "Paths: none",
+    440: "Paths: none\n\nClass: hardening",
+    404: "Umbrella epic.\n\nPaths: none\n\nClass: hardening\n\n- [ ] #499 the missing child",
+    450: "Paths: none\n\nClass: hardening",
     409: ("Paths: none\n\n"
+          "Class: hardening\n\n"
           "- [x] #413 done\n"
           "- [ ] #414 still open\n"
           "- [x] PR #418 landed the plumbing\n"
           "\n"
           "See also #415 in prose — a mention, not a child.\n"),
-    470: "Paths: none\n\n- [x] #471 done",
+    470: "Paths: none\n\nClass: hardening\n\n- [x] #471 done",
     413: "", 414: "", 471: "", 451: "", 452: "", 405: "", 406: "", 499: "",
 }
 

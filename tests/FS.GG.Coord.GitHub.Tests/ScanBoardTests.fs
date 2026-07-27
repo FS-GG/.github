@@ -407,7 +407,8 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       Status = BoardStatus.Ready
       BlockedByRaw = ""
       State = IssueState.Open
-      IsPullRequest = false }
+      IsPullRequest = false
+      BoardClass = None }
 
 let private scopeBoard =
     [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]

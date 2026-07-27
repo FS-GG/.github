@@ -28,9 +28,18 @@ cross-repo allocation, not item implementation.
    and follow-up items against GitHub—not its narrative.
 7. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
    parked rows from that wave enter the next plan.
-8. Stop only when a fresh reconcile and backlog triage have no startable item, untriaged/actionable
-   backlog, live claim, unresolved repair, queued write, or actionable follow-up. Surface deliberately
-   parked and human-blocked backlog instead of spinning or declaring it completed.
+8. Stop only when a fresh reconcile and backlog triage leave **no startable `Class: defect`**, and no
+   live claim, unresolved repair, queued write, or actionable follow-up. `hardening` accumulates as
+   ordinary backlog and is drained deliberately — it is not a reason to keep running. `decision` is
+   surfaced to a human and never dispatched. Surface deliberately parked and human-blocked backlog
+   instead of spinning or declaring it completed.
+9. **An unclassed row counts as a possible defect.** Read classes from `ready --json`'s `class` field
+   *after* a `reconcile --apply` (it is the projection, current only as of the last reconcile), and
+   read `lint`'s `CLASS-UNSET` for the rows that column cannot speak for. An unclassed row's severity
+   is unknown, not minor — never count one as "no defect left". You may still **stop** with unclassed
+   rows outstanding: report them by number as unresolved, and say the run ended without establishing
+   the board is defect-free. Fixing one thing legitimately files two, so a wave producing only
+   `hardening` and `decision` is completion, not a stall.
 
 Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.

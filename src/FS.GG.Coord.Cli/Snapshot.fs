@@ -267,6 +267,20 @@ module Snapshot =
                 | None, Ok Closed -> Ok None
                 | _ -> stringField path "body" el |> Result.map RegistryPredicate.parseAssertion
 
+        // The `Class:` the body declares (.github#1588, ADR-0066) — parsed off the SAME body as the
+        // touch-set and the human-block sentinel, on identical terms. PURE, and BODY-ONLY: the `[decision]`
+        // title convention is also evidence (AC3) but the snapshot document carries no `title`, so that
+        // half is added at the impure edge by `Client.enrichClasses` — exactly the split `DeclaredPredicate`
+        // above already runs. Body-only here is the fail-SAFE half: a missed derivation yields no chore,
+        // never a wrong one.
+        let itemClass =
+            match optProp "bodyUnreadable" el with
+            | Some _ -> Ok None
+            | None ->
+                match optProp "body" el, state with
+                | None, Ok Closed -> Ok None
+                | _ -> stringField path "body" el |> Result.map Class.fromBody
+
         let blockers =
             match optProp "blockers" el with
             | None -> Ok []
@@ -300,8 +314,8 @@ module Snapshot =
             | None -> Ok None
             | Some _ -> intField path "itemPr" el |> Result.map Some
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock, declaredPredicate with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb, Ok dp ->
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock, declaredPredicate, itemClass with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb, Ok dp, Ok ic ->
             Ok
                 { Item =
                     { Ref = r
@@ -317,10 +331,17 @@ module Snapshot =
                       // .github#1203). `None` is the ungated common case; the offer path resolves it from the
                       // `DeclaredPredicate` assertion below (`Client.enrichPredicates`, .github#1213), and a
                       // context that never resolves one (a plain `parse`, a receiver) flips as today.
-                      Predicate = None }
+                      Predicate = None
+                      Class = ic
+                      // The board's `Class` COLUMN is not on this document and is never inferred from the
+                      // body: it is what the scan OBSERVED, resolved at the impure edge like `Predicate`
+                      // (.github#1588). `None` here means "this parser did not look", and the projection
+                      // chore reads it as a disagreement — so a context that never enriches writes the
+                      // column it already holds, an idempotent write, rather than suppressing a real one.
+                      BoardClass = None }
                   BashPaths = bp
                   DeclaredPredicate = dp }
-        | a, b, c, d, e, f, g, h, i, j ->
+        | a, b, c, d, e, f, g, h, i, j, k ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
@@ -330,7 +351,8 @@ module Snapshot =
               g |> Result.map ignore
               h |> Result.map ignore
               i |> Result.map ignore
-              j |> Result.map ignore ]
+              j |> Result.map ignore
+              k |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 

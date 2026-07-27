@@ -186,3 +186,82 @@ module TypesTests =
         // the renderer stays exact on output.
         Assert.Equal(Some BlockerMerged, blockerStateOfWireName "  MERGED  ")
         Assert.Equal(Some BlockerOpen, blockerStateOfWireName "Open")
+
+    // ---- ItemClass: the same pin, on a vocabulary that is THREE wires at birth (.github#1588) ---------
+    //
+    // `BlockerState` earned these guards the hard way — a render/parse pair in two modules, nothing
+    // asserting they were inverse, 775 tests green while every merged blocker read as still-holding
+    // (#1012). `ItemClass` gets them on day one, and it needs them MORE: the same three strings are the
+    // Projects v2 option names, the values a filer writes in a `Class:` body line, and the rows of the
+    // options table in `docs/coordination/board-schema.md`. Only the first two are reachable from here;
+    // the third is gated by `scripts/project-field-options check --field Class`, which compares that table
+    // against this vocabulary. The exact-spelling pins below are what make that cross-tool check meaningful
+    // — without them a rename here would leave the engine agreeing with itself and disagreeing with the
+    // documented board.
+
+    /// Every `ItemClass` case, by reflection. A hand-written list is the copy this pattern exists to refuse.
+    let private everyClass: (string * ItemClass) list =
+        FSharpType.GetUnionCases typeof<ItemClass>
+        |> Array.map (fun c -> c.Name, FSharpValue.MakeUnion(c, [||]) :?> ItemClass)
+        |> Array.toList
+
+    [<Fact>]
+    let ``reflection can actually see ItemClass - the guards below are not vacuous`` () =
+        Assert.Equal(3, List.length everyClass)
+
+    [<Fact>]
+    let ``#1588 every item class round-trips through the wire`` () =
+        for name, c in everyClass do
+            let wire = itemClassWireName c
+
+            Assert.True(
+                itemClassOfWireName wire = Some c,
+                $"{name} renders as '{wire}' and does not parse back — reconcile would write what lint cannot read"
+            )
+
+    [<Fact>]
+    let ``#1588 no two item classes share a wire name`` () =
+        // Two cases spelling one string would make the body line AMBIGUOUS: there would be no fact about
+        // which class an author declared, and `defect` vs `hardening` is the entire distinction a driver's
+        // stopping rule turns on.
+        let names = everyClass |> List.map (snd >> itemClassWireName)
+        Assert.Equal<string list>(List.distinct names, names)
+
+    [<Fact>]
+    let ``#1588 no item class renders blank or padded`` () =
+        // No case may render empty. Unlike `BoardStatus`, there is no "unset" class — that is `None`, the
+        // ABSENCE of a class — and a blank would parse back as "not a class at all", so an item would be
+        // reported untriaged while carrying a case that renders to nothing.
+        for name, c in everyClass do
+            let w = itemClassWireName c
+            Assert.False(System.String.IsNullOrWhiteSpace w, $"case {name} renders blank on the wire")
+            Assert.Equal(w.Trim(), w)
+
+    [<Fact>]
+    let ``#1588 the class wire spellings are pinned to the documented board options`` () =
+        // Written down twice ON PURPOSE, exactly as the blocker-state pins are and for the identical
+        // reason: the round-trip proves the engine agrees with ITSELF, and a RENAME leaves it green.
+        // Rename `defect` to `bug` here and the round-trip still passes — while the board's `Class` field,
+        // the `Class:` lines in ~50 issue bodies, and the options table `project-field-options check
+        // --field Class` gates would all silently stop matching. These three assertions are the only place
+        // that rename is observed.
+        Assert.Equal("defect", itemClassWireName Defect)
+        Assert.Equal("hardening", itemClassWireName Hardening)
+        Assert.Equal("decision", itemClassWireName Decision)
+
+    [<Fact>]
+    let ``#1588 the class parser is forgiving about surrounding space and case`` () =
+        // A parser reading a line a HUMAN typed into an issue body, so it is liberal on input while the
+        // renderer stays exact on output — `blockerStateOfWireName`'s rule, one vocabulary over.
+        Assert.Equal(Some Defect, itemClassOfWireName "  DEFECT  ")
+        Assert.Equal(Some Decision, itemClassOfWireName "Decision")
+
+    [<Fact>]
+    let ``#1588 an unrecognised word is None, never the nearest class`` () =
+        // AC3, at the parser. Resolving `Class: bug` onto `defect` would be a GUESS carrying a parser's
+        // authority — and it would be invisible, because the item would then look triaged. `None` sends it
+        // back to `lint`'s CLASS-UNSET and to a human.
+        Assert.Equal(None, itemClassOfWireName "bug")
+        Assert.Equal(None, itemClassOfWireName "P1")
+        Assert.Equal(None, itemClassOfWireName "")
+        Assert.Equal(None, itemClassOfWireName null)

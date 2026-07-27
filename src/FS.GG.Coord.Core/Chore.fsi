@@ -177,8 +177,53 @@ module Chore =
         /// being advertised, so there is nothing to correct.
         | StatusNotBlocked of blockers: string list
 
+        /// `CLASS-PROJECTION-LAG` (.github#1588) — the item's own text declares a `Class` and the board's
+        /// `Class` column does not agree. Remedy: `Class = <the declared class>`.
+        ///
+        /// **THE ONLY KIND THAT WRITES A FIELD OTHER THAN `Status`**, and the reason `Write` below exists.
+        ///
+        /// The direction is an ADR, not a preference. #1588's prose proposed making the board field the
+        /// AUTHORITY and deriving ADR-0045's `Blocked on: human/decision` sentinel from it; its own
+        /// acceptance criteria say the reverse, and the criteria are right — ADR-0045 decided this exact
+        /// axis, rejecting a Projects v2 field in favour of a body line. Field-as-authority would reverse
+        /// an Accepted ADR by rewriting ~50 issue bodies. So the body declares and this projects, which is
+        /// also the only reading under which the column is not the fourth hand-maintained copy AC5 forbids.
+        ///
+        /// DERIVES NOTHING FROM AN ITEM THAT DECLARES NOTHING. `Item.Class = None` produces no chore —
+        /// never a default class. Untriaged severity is reported by `lint`'s `CLASS-UNSET` and settled by
+        /// a human; a default here would be #266's fail-open one axis over.
+        ///
+        /// Fires only on DISAGREEMENT, which is what lets it RETIRE. An unconditional write would leave
+        /// `isRetired` answering "still owed" forever against a write that landed.
+        ///
+        /// Never on a RESERVED item, on the shared rule below — deference DEFERS, and the projection costs
+        /// nothing to derive one pass later. OPEN items only: a closed row is outside the burn-down's
+        /// scope, so classing it spends a write on the one population no stopping rule reads.
+        | ClassProjectionLag of declared: ItemClass
+
         /// The `/check-board` rule id — the anchor a report cites and a reader greps back to this code.
         member RuleId: string
+
+        /// **THE BOARD WRITE THIS KIND'S REMEDY PERFORMS — the field and the value, spelled ONCE.**
+        ///
+        /// `None` is `STALE-CLAIM`, whose remedy is a MARKER COLLECTION rather than a field write and is
+        /// delegated to `reap`. It means "there is no field write", never "we could not work one out".
+        ///
+        /// **IT LIVES HERE, IN THE CORE, BECAUSE THE INVARIANT THAT GUARDS IT LIVES HERE.** This was a
+        /// private `write` in `Client.fs`, correctly documented there as the single source for the write,
+        /// the receipt's `field`/`value` pair, and the human table's remedy column. That was true while
+        /// every kind wrote `Status` — and `ChoreTests`' "an item derives AT MOST ONE chore" rests on
+        /// exactly that coincidence, its own comment saying "every one of the five kinds has a remedy that
+        /// writes `Status`, so 'at most one chore that writes the column' and 'at most one chore' are the
+        /// same sentence". `CLASS-PROJECTION-LAG` breaks the coincidence: a `Status` repair and a `Class`
+        /// projection on one item are two independent repairs, not a contradiction.
+        ///
+        /// So the invariant has to be restated as what it always MEANT — at most one chore per FIELD — and
+        /// a Core test cannot state that while the field mapping is in the Cli. Copying the mapping into
+        /// the test would be the second hand-maintained `match` over `ChoreKind` that `Client.fs`'s own
+        /// comment forbids, and a test asserting a partition it defines itself asserts nothing. Moving it
+        /// keeps one source and puts it where it can be gated.
+        member Write: (string * string) option
 
     // THE RESERVER OWNS THE SCHEDULING COLUMN.
     //

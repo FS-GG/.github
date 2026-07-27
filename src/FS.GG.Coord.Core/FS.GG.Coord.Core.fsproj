@@ -41,6 +41,12 @@
     <Compile Include="TouchSet.fs" />
     <Compile Include="HumanBlock.fsi" />
     <Compile Include="HumanBlock.fs" />
+    <!-- Class READS HumanBlock (an ADR-0045 `human/decision` sentinel is evidence of a `decision` class,
+         .github#1588) rather than re-matching `Blocked on:` for itself, so it must compile after it. That
+         edge is the whole of AC5: deriving the class from a line the board already carries, instead of
+         adding a second line meaning the same thing. -->
+    <Compile Include="Class.fsi" />
+    <Compile Include="Class.fs" />
     <Compile Include="Rooms.fsi" />
     <Compile Include="Rooms.fs" />
     <Compile Include="EpicBody.fsi" />

@@ -111,5 +111,59 @@ else
   pass "partial restore fails closed and leaves the snapshot recoverable"
 fi
 
+# --- Class: a closed vocabulary, gated offline (.github#1588) ---------------------------------
+# These cases run against the REAL docs/coordination/board-schema.md and temp mutations of it,
+# because the drift being gated is between that file and the vocabulary hardcoded in the tool.
+# A fixture copy would only ever prove the tool agrees with itself.
+
+if run_tool check --field Class --schema "$SCHEMA" >/dev/null; then
+  pass "documented Class options match the closed ItemClass vocabulary"
+else
+  fail "Class schema check" "$(run_tool check --field Class --schema "$SCHEMA" 2>&1 || true)"
+fi
+
+# Drift direction 1: the table lost a vocabulary value.
+grep -v '^| `hardening`' "$SCHEMA" >"$WORK/class-short.md"
+if run_tool check --field Class --schema "$WORK/class-short.md" >/dev/null 2>&1; then
+  fail "Class drift (missing)" "a documented table missing hardening was accepted"
+else
+  pass "Class check refuses a documented table missing a vocabulary value"
+fi
+
+# Drift direction 2: the table grew a value the engine cannot parse. Both directions matter — a
+# board option with no `ItemClass` case is an option `reconcile` can never write.
+awk '{ print } /^\| `decision` \|/ { print "| `blocker` | not an ItemClass case |" }' \
+  "$SCHEMA" >"$WORK/class-extra.md"
+if run_tool check --field Class --schema "$WORK/class-extra.md" >/dev/null 2>&1; then
+  fail "Class drift (unexpected)" "a documented table with a bogus option was accepted"
+else
+  pass "Class check refuses a documented table with an option outside the vocabulary"
+fi
+
+# The whole point of the tool: finding nothing must never read as finding no drift.
+awk '/<!-- class-options:start -->/{skip=1} !skip{print} /<!-- class-options:end -->/{skip=0}' \
+  "$SCHEMA" >"$WORK/class-unmarked.md"
+if run_tool check --field Class --schema "$WORK/class-unmarked.md" >/dev/null 2>&1; then
+  fail "Class marker fence" "an absent marker block passed as a clean result"
+else
+  pass "Class check refuses an absent marker block rather than passing on nothing"
+fi
+
+if run_tool check --field Class --schema "$WORK/absent-schema.md" >/dev/null 2>&1; then
+  fail "Class unreadable schema" "a nonexistent schema file passed"
+else
+  pass "Class check refuses an unreadable schema file"
+fi
+
+# An unrecognised --field must not fall through to Repo Scope, which would pass against the real
+# roster and print green about a field nothing examined.
+if unknown_field_out="$(run_tool check --field Severity --schema "$SCHEMA" 2>&1)"; then
+  fail "unknown field fence" "--field Severity was gated as Repo Scope: $unknown_field_out"
+elif printf '%s' "$unknown_field_out" | grep -Fq "no check is defined for field 'Severity'"; then
+  pass "an unrecognised --field refuses instead of falling through to Repo Scope"
+else
+  fail "unknown field fence" "$unknown_field_out"
+fi
+
 echo "$ok passed; $bad failed"
 [ "$bad" -eq 0 ]

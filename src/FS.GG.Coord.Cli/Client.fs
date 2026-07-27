@@ -590,6 +590,66 @@ module Client =
             { request with
                 Candidates = request.Candidates |> List.map enrich }
 
+    /// Populate `Item.Class` with the TITLE half of the derivation, and `Item.BoardClass` with what the
+    /// scan observed in the board column (.github#1588, ADR-0066).
+    ///
+    /// THE IMPURE HALF, on `enrichPredicates`' terms exactly. `Snapshot.parse` already lifted the pure,
+    /// body-only `Class:` declaration off each item; two facts are not on that document and cannot be:
+    ///
+    /// - the TITLE, which AC3 names as evidence via the `[decision]` prefix the board already uses. It is
+    ///   a scan fact, not a snapshot one.
+    /// - the board's `Class` COLUMN, which is the projection this engine writes and must therefore READ
+    ///   before it writes — `CLASS-PROJECTION-LAG` fires on disagreement, and a chore that could not see
+    ///   the current value could never retire.
+    ///
+    /// The body WINS over the title, so this never overwrites a `Class:` line somebody wrote: it fills in
+    /// only where the pure parse found nothing. That ordering is `Class.derive`'s and it is asserted there
+    /// rather than re-decided here.
+    ///
+    /// A row the scan did not carry keeps what the parser gave it. That is the fail-closed direction: an
+    /// item we could not join is an item whose column we do not claim to know, and `BoardClass = None`
+    /// costs at most one idempotent re-write rather than suppressing a projection that is genuinely owed.
+    let private enrichClasses (rows: Scan.Row list) (request: Snapshot.Request) : Snapshot.Request =
+        let byRef =
+            rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
+
+        // WAS THE BODY READ AT ALL? `Snapshot.parse` renders an unreadable body as `Class = None` — the
+        // same value as "the body declares no class" — because `ItemClass option` has nowhere to put
+        // "I could not look". That collapse is safe there and lethal HERE, at the one place a SECOND source
+        // is consulted: an item whose body says `Class: defect` and whose read failed would fall through to
+        // a `[decision]` title prefix and be projected as `decision`, a SEVERITY DOWNGRADE PRODUCED BY A
+        // FAILED READ — on the one value that means "no driver may ever schedule this". That is #266
+        // exactly, and #496's `Undeclared`-vs-`Unreadable` collapse one axis over.
+        //
+        // The engine already records the fact: `TouchSet.Unreadable` IS "we did not read the body" (see
+        // `Types.fsi`), parsed off the same body on the same terms. So this asks rather than adding a
+        // second flag that could disagree with it.
+        let bodyWasRead (c: Snapshot.Candidate) =
+            match c.Item.TouchSet with
+            | Unreadable _ -> false
+            | _ -> true
+
+        let enrich (c: Snapshot.Candidate) : Snapshot.Candidate =
+            match Map.tryFind c.Item.Ref byRef with
+            | None -> c
+            | Some row ->
+                { c with
+                    Item =
+                        { c.Item with
+                            Class =
+                                match c.Item.Class with
+                                | Some _ as declared -> declared
+                                // No title fallback over an unread body: `None` there is "unknown", and
+                                // deriving a WEAKER class from a title we could read, to stand in for a
+                                // body we could not, is a confident answer built on a failed read. `None`
+                                // yields no chore, which is the fail-closed direction.
+                                | None when bodyWasRead c -> Class.fromTitle row.Title
+                                | None -> None
+                            BoardClass = row.BoardClass } }
+
+        { request with
+            Candidates = request.Candidates |> List.map enrich }
+
     /// A parsed snapshot's rows as a `Chore.Whole` — the ONE construction of that case, so the label is
     /// never spelled twice (#485) and never asserted by a caller who only believes the board is whole. The
     /// argument is a `Request` the caller must have parsed from an UNFILTERED read; that obligation is the
@@ -827,7 +887,10 @@ module Client =
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
         | Error e -> fail e
-        | Ok(_, doc, receipt) ->
+        // The scan ROWS, no longer discarded: `enrichClasses` joins the board's `Class` column and each
+        // item's title onto the parsed candidates (.github#1588). Both are scan facts that the snapshot
+        // document does not carry, and the projection chore needs the column it is about to write.
+        | Ok(rows, doc, receipt) ->
             receipt.RepoAdvisory |> Option.iter eprint
 
             match Snapshot.parse doc with
@@ -840,6 +903,7 @@ module Client =
                 let items =
                     request
                     |> enrichPredicates
+                    |> enrichClasses rows
                     |> fun r -> r.Candidates
                     |> List.map (fun c -> c.Item)
 
@@ -847,14 +911,16 @@ module Client =
 
                 // The field write a chore implies — the SINGLE source for the write this phase performs,
                 // the `field`/`value` the receipt reports, AND the `remedy`/human-table prose below.
-                // `STALE-CLAIM` writes no field: its remedy is a marker collection, delegated to `reap`.
-                let write (chore: Chore.Chore) =
-                    match chore.Kind with
-                    | Chore.StaleClaim _ -> None
-                    | Chore.ClaimStatusLag _ -> Some("Status", "In progress")
-                    | Chore.ClosedIssueNotDone _ -> Some("Status", "Done")
-                    | Chore.BlockerCleared _ -> Some("Status", "Ready")
-                    | Chore.StatusNotBlocked _ -> Some("Status", "Blocked")
+                //
+                // IT IS THE CORE'S NOW, ASKED RATHER THAN RESTATED (.github#1588). This was a local `match`
+                // over `ChoreKind` here, correct and single-sourced for as long as every kind wrote
+                // `Status`. `CLASS-PROJECTION-LAG` writes `Class`, so the partition by FIELD became a fact
+                // a Core invariant has to state — `ChoreTests`' "at most one chore" rests on all kinds
+                // writing one column — and a Core test cannot state it against a mapping that lives here.
+                // The mapping moved; this stayed the single source by ASKING for it. Note the values are
+                // now `statusWireName`'s output rather than four more string literals, which is the same
+                // #983 argument one call deeper.
+                let write (chore: Chore.Chore) = chore.Kind.Write
 
                 // DERIVED from `write`, not matched a second time. These are the same fact in two
                 // renderings — the `remedy` key and the `field`/`value` pair of the SAME JSON object, plus
@@ -1052,13 +1118,23 @@ module Client =
                                               w.Id
                                       with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
-                                      // and they are unchanged, byte for byte — every recipe reads them.
-                                      // Under `--json` the same two facts ride in the row instead, which is
-                                      // the whole fix: `opts.Render` was consulted for the report above and
-                                      // then ignored here, so the document ended and the prose kept going.
+                                      // and every recipe reads them.
+                                      //
+                                      // THEY NAME `field` NOW, NOT THE LITERAL "Status" (.github#1588). Both
+                                      // lines hardcoded the word while `field` — the name of the column
+                                      // actually being written, already bound right here — sat unused two
+                                      // lines above. That was invisible for as long as every chore wrote
+                                      // `Status`, and it is the same defect `write`'s own comment warns
+                                      // about: "one object comes to describe two different writes". MEASURED
+                                      // on the live board: `CLASS-PROJECTION-LAG` applied cleanly and
+                                      // reported `applied .github#1547 Status=decision` — a receipt naming a
+                                      // column that was never touched, for a value `Status` has no option
+                                      // for. A reader checking that receipt would go looking for a corrupt
+                                      // Status column, and `--json`'s `write` object said `Class` the whole
+                                      // time, so the two projections of one fact disagreed.
                                       | Ok Board.Written ->
                                           match opts.Render with
-                                          | Text -> printfn "applied  %s  Status=%s" chore.Subject.Short value
+                                          | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
                                           | Json -> ()
 
                                           reconcileRow chore (Some Written)
@@ -1066,8 +1142,9 @@ module Client =
                                           match opts.Render with
                                           | Text ->
                                               printfn
-                                                  "queued   %s  Status=%s (run scripts/fsgg-coord flush)"
+                                                  "queued   %s  %s=%s (run scripts/fsgg-coord flush)"
                                                   chore.Subject.Short
+                                                  field
                                                   value
                                           | Json -> ()
 
@@ -1080,7 +1157,12 @@ module Client =
                                           reconcileRow chore (Some NotOnBoard)
                                       | Error e ->
                                           eprint
-                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} failed: %s{Errors.explain e}"
+                                              // `field`, not the literal "Status" — the third of the three
+                                              // lines .github#1588 caught. This one is the worst of them:
+                                              // it is the DIAGNOSTIC, read by whoever is working out why a
+                                              // write failed, and naming the wrong column sends them to
+                                              // audit a field nothing touched.
+                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} %s{field}=%s{value} failed: %s{Errors.explain e}"
 
                                           failed <- true
                                           reconcileRow chore (Some(Failed(Errors.explain e))) ]
@@ -4677,6 +4759,15 @@ module Client =
 
                 let items = scoped.Rows
 
+                // "A WORKER COULD BE HANDED THIS ROW" — the population two rules share, spelled once.
+                //
+                // `NO-TOUCH-SET`/`BAD-TOUCH-SET` ask whether such a row is SCHEDULABLE; `CLASS-UNSET` asks
+                // whether it is TRIAGED (.github#1588). Same set, two questions, and it also decides
+                // `bodyNeeded` below — so a copy that drifted would leave one rule reading a body the pass
+                // never fetched.
+                let isSchedulableCandidate (r: Scan.Row) =
+                    r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+
                 let mk code severity (r: Scan.Row) detail =
                     { Code = code
                       Severity = severity
@@ -4688,7 +4779,7 @@ module Client =
 
                 // The schedulability rules (#496): a Ready/Backlog OPEN item no worker can pick up.
                 let touchSetFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog) then
+                    if isSchedulableCandidate r then
                         match TouchSet.parse body with
                         | Undeclared ->
                             [ mk
@@ -4742,6 +4833,42 @@ module Client =
                     else
                         []
 
+                // CLASS-UNSET (.github#1588 AC2/AC3). A `Ready`/`Backlog` OPEN item whose own text says
+                // nothing about HOW BAD it is — no `Class:` line, no `[decision]` title prefix, and no
+                // ADR-0045 `Blocked on: human/decision` sentinel to derive one from.
+                //
+                // UNTRIAGED SEVERITY IS EXACTLY AS INVISIBLE AS AN UNTRIAGED STATUS, which is why this is
+                // an `error` on `NO-TOUCH-SET`'s terms rather than a note. The board went from 5 non-Done
+                // rows to 34 in one burn-down and the driver could not tell a RED `main` from a stale
+                // comment in a test file, because `batch`, `ready` and the stopping rule see the same row
+                // for both. A human sorted the same titles in seconds; the fact was knowable and nowhere.
+                //
+                // IT REPORTS; IT NEVER DEFAULTS. The remedy is a body line a human writes, and `reconcile`
+                // then projects it onto the board column — the field is never the input. That direction is
+                // ADR-0066, and it is what keeps ADR-0045 (which rejected a board field for exactly this
+                // kind of fact) intact.
+                //
+                // AND IT DOES NOT ASK WHETHER THE BOARD HAS A `Class` FIELD. Gating the rule on the field
+                // existing would make it no-op against any project without one — convenient, and the third
+                // instance of the shape this repo has already been bitten by twice: `landable` greening a
+                // required context that never reported (#1575), and #266's rule that a gate which could
+                // not read an item must never report it clean. `lint` FAILS CLOSED. The subject of this
+                // rule is the ITEM's text, which is present on every board.
+                let classFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    // `isSchedulableCandidate`, NOT a third spelling of `Open && (Ready || Backlog)`. The
+                    // two rules genuinely share this population, and a restated copy drifts in one quiet
+                    // direction: narrowing the shared predicate would make `bodyNeeded` false while this
+                    // rule kept firing over `body = ""`, reporting rows as untriaged whose bodies nobody
+                    // read. That is the #266 shape again — a finding produced by a read that did not happen.
+                    if isSchedulableCandidate r && (Class.derive r.Title body).IsNone then
+                        [ mk
+                              "CLASS-UNSET"
+                              "error"
+                              r
+                              $"%s{statusWireName r.Status} but its text records no `Class:` — so a driver cannot tell a live defect from deliberate hardening, and a burn-down keying on severity cannot terminate (#1588). Declare one body line: `Class: defect` (something is broken now), `Class: hardening` (nothing is broken; this removes a way it could break), or `Class: decision` (a human must choose first). A `[decision]` title prefix or a `Blocked on: human/decision` sentinel already derives `decision` — no second line needed." ]
+                    else
+                        []
+
                 // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read; the VERDICT over what
                 // it reads is the pure `epicVerdict` (#1050, on #945's `badTouchSetDetail` precedent).
                 let epicFindings (r: Scan.Row) (body: string) : Errors.IoResult<LintFinding list> =
@@ -4780,8 +4907,7 @@ module Client =
                         let isEpic =
                             r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
 
-                        let isTouchSetCandidate =
-                            r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+                        let isTouchSetCandidate = isSchedulableCandidate r
 
                         // A Blocked item with an empty `Blocked by` needs its body read too — the sentinel
                         // that would make the park deliberate lives there (#1103 leg 2).
@@ -4813,12 +4939,14 @@ module Client =
 
                             let hbFindings = humanBlockFindings r body
 
+                            let clsFindings = classFindings r body
+
                             let epicResult =
                                 if isEpic then epicFindings r body else Ok []
 
                             match epicResult with
                             | Error e -> Error e
-                            | Ok epic -> classify (acc @ tsFindings @ hbFindings @ doneOpenNote @ epic) rest
+                            | Ok epic -> classify (acc @ tsFindings @ hbFindings @ clsFindings @ doneOpenNote @ epic) rest
 
                 // The BLOCKER-CYCLE rule (#1090) — the one lint rule that is NOT per-item, and could not be.
                 // A `Blocked by` ring passes every per-item blocker check (#343/#476/#602/#620), because
