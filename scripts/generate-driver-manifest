@@ -11,10 +11,16 @@ rather than hand-authored.
 WHAT IT EMITS: `registry/driver-skill-manifest.json`, the additive `skill-manifest` v2 shape the reconcile
 (`scripts/fsgg-skill-registry-check`) and the union gate (`scripts/skill-union-assert.sh`) already
 read — `{ "schemaVersion": 2, "skills": [ {id, scope, sha256, tree-sha256, files, ...} ] }`.
-The legacy `sha256` remains the `Fsgg.SkillMirror` canonical-body digest of the authored SKILL.md (BOM stripped, then
-sha256 over the UTF-8 bytes) — byte-equal to `sha256sum SKILL.md` for a BOM-free body, and equal to
-what `scripts/skill-union-assert.sh --digest` and `fsgg-skill-registry-check` compute, so the three
-never drift. New readers use `files` (normalized relative path, raw content digest, executable bit)
+The legacy `sha256` remains the `Fsgg.SkillMirror` canonical-body digest of the authored SKILL.md (BOM
+stripped, CRLF folded to LF, then sha256 over the UTF-8 bytes) — byte-equal to `sha256sum SKILL.md` for
+a BOM-free, CR-free body, and equal to what `scripts/skill-union-assert.sh --digest` and
+`fsgg-skill-registry-check --digest` compute. THAT EQUALITY IS NOW MEASURED, NOT ASSERTED (.github#1585):
+this emitter exposes `--digest PATH` as its own reference seam and
+`tests/skill-union/skillmirror-conformance.sh` drives it over the shared vector table alongside both
+verifiers, each compared to the library's measured answer. Before #1585 this sentence was a claim
+nothing ran — and it was FALSE: #1547 folded CRLF in the two verifiers and left this PRODUCER raw, so a
+CRLF checkout would have emitted a `sha256` no verifier could reproduce (a fail-closed `[drifted]`, but
+a real split). New readers use `files` (normalized relative path, raw content digest, executable bit)
 and `tree-sha256`; old readers safely ignore those additive fields during the publish-before-flip
 window. `supplied-by` is the authored skill dir under the repo root, so the reconcile derives
 `source: .github/<supplied-by>/SKILL.md` (completeness() in fsgg-skill-registry-check).
@@ -43,6 +49,13 @@ Usage:
                                               #   (ADR-0044), so verify-paths subtracts the artifact
   scripts/generate-driver-manifest --catalog-report
                                               # validate routing metadata and print catalog budgets
+  scripts/generate-driver-manifest --digest PATH
+                                              # reference seam: print canonical_digest(PATH's bytes)
+                                              #   and exit — the counterpart of
+                                              #   `skill-union-assert.sh --digest` and
+                                              #   `fsgg-skill-registry-check --digest`, so this
+                                              #   PRODUCER is pinned to the same measured table as the
+                                              #   two verifiers (.github#1585). Touches nothing.
   scripts/generate-driver-manifest            # default: --check
 
 Pure stdlib; no network, no tokens.
@@ -352,10 +365,52 @@ def print_catalog_report(report: dict[str, object]) -> None:
 
 
 def canonical_digest(raw: bytes) -> str:
-    """sha256 over the body text's UTF-8 bytes, BOM-free (Fsgg.SkillMirror.sha256)."""
+    """sha256 over the body text's UTF-8 bytes, BOM-free and CRLF-folded (Fsgg.SkillMirror.sha256).
+
+    THE PRODUCER FOLLOWS THE LIBRARY, LIKE THE VERIFIERS DO (.github#1585). This value is written
+    into `registry/driver-skill-manifest.json`'s `sha256`, which the reconcile
+    (`fsgg-skill-registry-check`) copies into `registry/skills.yml` and then re-derives from the
+    authored SKILL.md, and which the union gate (`skill-union-assert.sh` check 3) compares against
+    its own `skill_digest`. So this function's answer is CONSUMED BY BOTH VERIFIERS: if it computes a
+    different function from theirs, the manifest it emits is one they cannot reproduce. That is not a
+    style question — it is the same-function requirement ADR-0014 states and .github#120 records this
+    repo's copies as FOLLOWING.
+
+    WHY IT WAS RAW UNTIL NOW. .github#1547 aligned the two VERIFIERS to the library's CRLF fold and
+    was scoped to them; this producer and `scripts/repos.sh` were found afterwards, by an adversarial
+    review, and filed as .github#1585. The split was latent — no tracked SKILL.md in this repo
+    contains a CR, so on today's content the fold is a no-op and
+    `registry/driver-skill-manifest.json` is byte-unchanged by this change (verified: `--check` is
+    green without regenerating). It failed CLOSED (a raw producer digest is one no verifier
+    reproduces, so it reads as `[drifted]`), which is why it was filed rather than smuggled into
+    #1547 — changing what a PRODUCER writes into a shipped manifest is a different blast radius from
+    changing what a verifier accepts.
+
+    TWO NORMALIZATIONS, BOTH THE LIBRARY'S. The BOM strip mirrors the library's callers, which decode
+    the file as UTF-8 and whose decoder consumes the BOM. The CRLF fold mirrors
+    `Fsgg.SkillMirror.sha256` itself, which does `body.Replace("\\r\\n", "\\n")` before hashing
+    (feature 070), so an LF-authored body does not spuriously drift on a CRLF checkout. CONSEQUENCE,
+    STATED RATHER THAN LEFT TO BE INFERRED: a CRLF body and its LF twin now emit the SAME `sha256`,
+    so this field is deliberately slightly more permissive than a byte comparison. The per-file
+    `files[].sha256` and `tree-sha256` below are UNAFFECTED and stay RAW on purpose — they are
+    byte-integrity records for a materialized tree, not canonical-body digests, and normalizing them
+    would let a CRLF-mangled delivery verify as intact.
+
+    IT FOLDS THE PAIR, NOT THE CHARACTER. Deleting every ``\\r`` would also drop LONE carriage
+    returns, which the library keeps — collapsing ``b"x\\r"`` and ``b"x"`` onto one digest. Two
+    distinct bodies sharing a value is a fail-open (#266). Done on BYTES rather than decoded text
+    because CR and LF cannot occur inside a multi-byte UTF-8 sequence, so the byte-wise replace is
+    exactly the library's string-wise one without this emitter having to decode.
+
+    PINNED, NOT PROMISED. `--digest PATH` exposes this as a reference seam and
+    tests/skill-union/skillmirror-conformance.sh drives it over the shared vector table against the
+    library's MEASURED answer, alongside both verifiers — so re-introducing a disagreement reds on
+    every PR instead of waiting for someone to read the code.
+    """
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
-    return hashlib.sha256(raw).hexdigest()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
+
 
 def directory_manifest(path: str) -> tuple[list[dict[str, object]], str]:
     """Return a deterministic, symlink-free manifest and its aggregate digest."""
@@ -452,6 +507,7 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
 def main(argv: list[str]) -> int:
     mode = "check"
     catalog_root = REPO_ROOT
+    digest_path: str | None = None
     index = 0
     while index < len(argv):
         arg = argv[index]
@@ -463,6 +519,12 @@ def main(argv: list[str]) -> int:
                 sys.stderr.write("generate-driver-manifest: --catalog-root requires a path\n")
                 return 1
             catalog_root = os.path.abspath(argv[index])
+        elif arg == "--digest":
+            index += 1
+            if index >= len(argv):
+                sys.stderr.write("generate-driver-manifest: --digest requires a path\n")
+                return 1
+            digest_path = argv[index]
         elif arg in ("-h", "--help"):
             sys.stdout.write(__doc__ or "")
             return 0
@@ -470,6 +532,26 @@ def main(argv: list[str]) -> int:
             sys.stderr.write(f"generate-driver-manifest: unknown argument: {arg}\n")
             return 1
         index += 1
+
+    # THE REFERENCE SEAM (.github#1585), answered before anything else reads the tree — like `--list`,
+    # it is a question a conformance harness must be able to ask this emitter without it touching, or
+    # even being able to read, the repository it normally emits for.
+    #
+    # AN UNREADABLE FILE IS AN ERROR, NEVER A PRINTED DIGEST. This seam is the reference a conformance
+    # table is measured against, and the one thing it must never do is answer confidently about bytes
+    # it did not read (#266) — the exact fail-open `skill-union-assert.sh`'s own `--digest` notes for
+    # the `$(cat f; printf x)` shape. Same rule, same exit, as `fsgg-skill-registry-check --digest`.
+    if digest_path is not None:
+        try:
+            with open(digest_path, "rb") as handle:
+                raw = handle.read()
+        except OSError as exc:
+            sys.stderr.write(
+                f"generate-driver-manifest: --digest '{digest_path}' is not a readable file: {exc}\n"
+            )
+            return 2
+        sys.stdout.write(canonical_digest(raw) + "\n")
+        return 0
 
     # --list is the generated-paths roster contract (ADR-0044): one `kind<TAB>path<TAB>marker` row per
     # emitted artifact, touch nothing, exit 0. The manifest is a WHOLE generated file (no embedded

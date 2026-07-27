@@ -35,8 +35,10 @@
 #                                                           # whole file is generated, so verify-paths may
 #                                                           # subtract it. The generator answers what it
 #                                                           # generates; nothing downstream keeps a copy.
-#   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
-#                                                           # SKILL.md; file -> sha256 of the file
+#   repos.sh digest <path>                                  # RAW content digest: skill dir -> sha256 of its
+#                                                           # SKILL.md's bytes; file -> sha256 of the file.
+#                                                           # NOT Fsgg.SkillMirror.sha256 — deliberately (see
+#                                                           # the `digest()` header, .github#1585)
 #   repos.sh -h | --help
 #
 # Exit: 0 = ok; 1 = a validation violation (each printed with ::error::); 2 = misconfiguration.
@@ -89,9 +91,38 @@ yaml2json() {
   fi
 }
 
-# Reference digest generator (shared rule so the sync/coherence gate and the registry never drift):
-# a skill directory digests its SKILL.md only (byte-equivalent to skill-union-assert's skill_digest);
-# a plain file digests the file.
+# RAW CONTENT DIGEST — the shared rule so the sync/coherence gate and the registry never drift: a skill
+# directory digests its SKILL.md only; a plain file digests the file. Bytes in, sha256 out, no
+# normalization of any kind.
+#
+# THIS IS NOT `Fsgg.SkillMirror.sha256`, AND THAT IS A DECISION, NOT AN OVERSIGHT (.github#1585).
+# This header used to say "byte-equivalent to skill-union-assert's `skill_digest`". That sentence was
+# true when it was written, was falsified by .github#1547 — which folded CRLF into both VERIFIERS to
+# follow the library — and was left standing because it sat outside #1547's touch-set. It is removed
+# rather than repaired, because repairing it would mean folding here, and folding here would be wrong:
+#
+#   1. WHAT THIS DIGEST IS FOR IS BYTE INTEGRITY, NOT BODY IDENTITY. It writes `registry/repos.lock`
+#      and, through `src/FS.GG.Kit/stage-kit.sh` (which calls this very command), the `sha256` column
+#      of the packed `kit-manifest.tsv`. A receiver checks a MATERIALIZED FILE against that column at
+#      restore. A normalizing digest would report a CRLF-mangled delivery as intact — it would answer
+#      "the same body" to a question that asked "the same bytes".
+#   2. IT WOULD BREAK A LIVE CONTAINMENT CHECK. `scripts/check-kit-published-coherence.py` requires
+#      every `repos.lock` digest to appear among the canonical `kit-manifest.tsv` digests. Those are
+#      per-file RAW digests taken by the plain-file arm below. Folding only the skill-dir arm would
+#      make a lock row for a CRLF SKILL.md a value no manifest row carries — a gate failure invented
+#      by the fix.
+#   3. IT IS NOT ONLY A SKILL DIGEST. The `kit:` roster's `client` and `config` rows
+#      (`scripts/fsgg-coord`, `dist/dotnet/.config/dotnet-tools.json`) come through the plain-file arm.
+#      "Canonical body" is not a defined notion for a shell script or a tool manifest.
+#
+# So the two producers .github#1585 found split APART here: `scripts/generate-driver-manifest` adopted
+# the library's normalization, because the `sha256` it emits is re-derived by both verifiers; this one
+# stays raw, because nothing re-derives it as a canonical body and two consumers depend on it being the
+# bytes. The difference is PINNED, not promised: tests/skill-union/skillmirror-conformance.sh drives
+# `repos.sh digest` over the shared vector table, asserts it equals the raw sha256 of each vector, and
+# asserts that at least one vector makes it DIFFER from the library's measured canonical digest — so a
+# silent convergence reds exactly as loudly as a silent divergence (the both-directions rule the
+# `divergence` blocks in skillmirror.fixtures.json already apply to `verify`).
 digest() {
   local path="$1"
   if [ -d "$path" ]; then

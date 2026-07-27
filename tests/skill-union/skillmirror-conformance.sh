@@ -170,12 +170,13 @@ done < <(jq -c '.fixtures[]' "$FIXTURES")
 [ "$n" -eq "$total" ] || { echo "skillmirror-conformance: ran $n of $total vectors — the table did not stream fully" >&2; exit 2; }
 
 # ================================================================================================
-# THE THREE-WAY DIGEST LEG — FS-GG/.github#1547.
+# THE DIGEST LEG — FS-GG/.github#1547 (three implementations), #1585 (all FIVE).
 # ================================================================================================
 # Everything above pins `verify`'s three FACTS across TWO implementations. This pins the DIGEST
-# across THREE, which is the surface #1547 exists because nothing covered.
+# across FIVE, which is the surface #1547 exists because nothing covered — and which #1547 itself
+# covered only three fifths of.
 #
-# WHAT WAS UNPINNED. The canonical skill digest has three implementations — `Fsgg.SkillMirror.sha256`
+# WHAT WAS UNPINNED. The canonical skill digest had three KNOWN implementations — `Fsgg.SkillMirror.sha256`
 # (the library), `skill_digest` here in scripts/skill-union-assert.sh, and `canonical_digest` in
 # scripts/fsgg-skill-registry-check — and the two pins that existed were PAIRWISE and both skipped
 # the digest: conformance.sh pins shell<->Python for the PREDICATE GRAMMAR only, and the loop above
@@ -184,19 +185,56 @@ done < <(jq -c '.fixtures[]' "$FIXTURES")
 # both shells and nothing noticed until a person read the code. #1547's decision (2026-07-27) aligned
 # both shells to the library.
 #
-# HOW THE THREE ARE REACHED FROM A HERMETIC SHELL. The two shells are run directly, through the
-# `--digest` reference seams they expose for exactly this purpose. The LIBRARY cannot be run here —
-# it is F# in a sibling repository, and #1513's criterion 3 settled that a conformance leg a missing
-# dependency can SKIP is the fail-open it exists to prevent — so its answer is the table's `digest`
-# value, MEASURED by skillmirror-oracle.sh running the library's own source. Same division of labour
-# as the `library` column above: measured there, asserted here, on every PR, with no dotnet.
+# THE COUNT WAS WRONG, WHICH IS WHY #1585 EXISTS. #1547 was scoped to the two VERIFIERS. The two
+# PRODUCERS that EMIT the values those verifiers check were outside its touch-set and stayed raw:
+# `canonical_digest` in scripts/generate-driver-manifest and `digest` in scripts/repos.sh. Both
+# additionally carried header sentences #1547 falsified and did not update. An implementation nothing
+# runs against the table is exactly the state this leg exists to end, so both are driven here now —
+# and, per #1585's finding, they resolve DIFFERENTLY:
 #
-# ONE EXPECTED VALUE, NOT THREE COLUMNS. `digest` is what all three must return, so re-introducing a
-# disagreement cannot be done by editing one implementation's column — there isn't one.
+#   * generate-driver-manifest FOLLOWS the library. Its `sha256` lands in
+#     registry/driver-skill-manifest.json, which the reconcile copies into registry/skills.yml and
+#     re-derives, and which skill-union-assert.sh check 3 compares to its own `skill_digest`. A
+#     producer of a value two verifiers re-derive must compute the verifiers' function. It is asserted
+#     against `digest`, exactly like the two verifiers.
+#   * repos.sh DELIBERATELY DIFFERS, and is asserted against the RAW sha256 instead. It is a
+#     byte-integrity digest, not a canonical body digest: it writes registry/repos.lock and (through
+#     src/FS.GG.Kit/stage-kit.sh, which shells out to this same command) the `sha256` column a
+#     receiver checks a MATERIALIZED FILE against at restore. Normalizing it would report a
+#     CRLF-mangled delivery as intact, and would break the containment check in
+#     scripts/check-kit-published-coherence.py. See the `digest()` header in scripts/repos.sh.
+#
+# A DOCUMENTED DIFFERENCE IS ASSERTED IN BOTH DIRECTIONS, exactly as a `divergence` block is above: it
+# is not enough that repos.sh matches the raw value, it must also still DIFFER from the library's on at
+# least one vector. A deliberate difference that quietly disappears is as much an unreviewed change as
+# one that grows, and neither may be discovered by reading a comment.
+#
+# HOW THE FIVE ARE REACHED FROM A HERMETIC SHELL. The four in-repo implementations are run directly,
+# through the `--digest` reference seams they expose for exactly this purpose (repos.sh's is its
+# `digest` subcommand, which predates this leg). The LIBRARY cannot be run here — it is F# in a sibling
+# repository, and #1513's criterion 3 settled that a conformance leg a missing dependency can SKIP is
+# the fail-open it exists to prevent — so its answer is the table's `digest` value, MEASURED by
+# skillmirror-oracle.sh running the library's own source. Same division of labour as the `library`
+# column above: measured there, asserted here, on every PR, with no dotnet.
+#
+# ONE EXPECTED VALUE, NOT FIVE COLUMNS. `digest` is what all four canonical implementations must
+# return, so re-introducing a disagreement cannot be done by editing one implementation's column —
+# there isn't one. repos.sh's expectation is likewise not a column: it is the raw sha256 of the
+# vector's own bytes, recomputed here by `sha256sum` rather than transcribed, so the table never has to
+# carry a second set of values that could go stale under it.
 DIGEST_SUBJECT="${FSGG_SKILL_REGISTRY_CHECK:-$HERE/../../scripts/fsgg-skill-registry-check}"
 [ -f "$DIGEST_SUBJECT" ] || { echo "skillmirror-conformance: no registry checker at $DIGEST_SUBJECT" >&2; exit 2; }
+DRIVER_GEN="${FSGG_GENERATE_DRIVER_MANIFEST:-$HERE/../../scripts/generate-driver-manifest}"
+[ -f "$DRIVER_GEN" ] || { echo "skillmirror-conformance: no driver-manifest generator at $DRIVER_GEN" >&2; exit 2; }
+REPOS_SH="${FSGG_REPOS_SH:-$HERE/../../scripts/repos.sh}"
+[ -f "$REPOS_SH" ] || { echo "skillmirror-conformance: no repos.sh at $REPOS_SH" >&2; exit 2; }
 command -v base64 >/dev/null 2>&1 || { echo "skillmirror-conformance: base64 required" >&2; exit 2; }
+command -v sha256sum >/dev/null 2>&1 || { echo "skillmirror-conformance: sha256sum required for repos.sh's raw expectation" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "skillmirror-conformance: python3 required for the registry checker's --digest seam" >&2; exit 2; }
+
+# Counts the vectors on which repos.sh's raw rule and the library's canonical one actually disagree.
+# The documented difference is asserted in BOTH directions, and this is the second one (see above).
+raw_differs=0
 
 # The same fail-open guard the vector table gets: a missing, empty or malformed digest table must be
 # a hard exit 2, never a quiet zero-iteration pass. This leg's entire subject arrives through it.
@@ -227,22 +265,44 @@ while IFS= read -r dv; do
     continue
   fi
 
+  # The RAW sha256 of the vector's own bytes — repos.sh's declared rule, RECOMPUTED rather than
+  # transcribed into the table (same discipline as the `digest` column being measured by the oracle
+  # instead of hand-written). Taken from the file that just round-tripped, so it is the same bytes
+  # every implementation below is handed.
+  raw_want="$(sha256sum "$vdir/SKILL.md" | cut -d' ' -f1)"
+
   sh_got="$(bash "$ASSERT" --digest "$vdir" 2>&1)" || {
     bad "[digest $dn] $dname — skill-union-assert.sh --digest failed: $sh_got"; continue; }
   py_got="$(python3 "$DIGEST_SUBJECT" --digest "$vdir/SKILL.md" 2>&1)" || {
     bad "[digest $dn] $dname — fsgg-skill-registry-check --digest failed: $py_got"; continue; }
+  gen_got="$(python3 "$DRIVER_GEN" --digest "$vdir/SKILL.md" 2>&1)" || {
+    bad "[digest $dn] $dname — generate-driver-manifest --digest failed: $gen_got"; continue; }
+  # repos.sh's seam takes the skill DIRECTORY (its dir arm resolves SKILL.md itself) — driving it at
+  # the same granularity a `kit:` skill row uses, so the leg exercises the arm that writes repos.lock
+  # rather than a path shape nothing in production takes.
+  repos_got="$(bash "$REPOS_SH" digest "$vdir" 2>&1)" || {
+    bad "[digest $dn] $dname — repos.sh digest failed: $repos_got"; continue; }
 
   # EACH IMPLEMENTATION AGAINST THE MEASURED VALUE, SEPARATELY. Comparing the two shells to EACH
   # OTHER and stopping there is the precise mistake #1547 documents: before the fix they agreed with
   # one another perfectly and BOTH disagreed with the library, so a shell-vs-shell assertion was
-  # green over the whole defect. Both are therefore compared to the library's measured answer, and a
-  # message naming which one drifted.
+  # green over the whole defect. All THREE canonical in-repo implementations are therefore compared to
+  # the library's measured answer, and a message naming which one drifted.
   d_ok=1
   [ "$sh_got" = "$want" ] \
     || { bad "[digest $dn] $dname — skill-union-assert.sh: '$sh_got' != library-measured '$want'"; d_ok=0; }
   [ "$py_got" = "$want" ] \
     || { bad "[digest $dn] $dname — fsgg-skill-registry-check: '$py_got' != library-measured '$want'"; d_ok=0; }
-  [ "$d_ok" -eq 1 ] && ok "[digest $dn] $dname — all three agree: $want"
+  [ "$gen_got" = "$want" ] \
+    || { bad "[digest $dn] $dname — generate-driver-manifest: '$gen_got' != library-measured '$want'"; d_ok=0; }
+
+  # repos.sh: the DOCUMENTED DIFFERENCE, first direction. Its rule is "the bytes", so it is held to
+  # the raw sha256 — a fold, a BOM strip, or a digest taken over the wrong file all red here.
+  [ "$repos_got" = "$raw_want" ] \
+    || { bad "[digest $dn] $dname — repos.sh digest: '$repos_got' != raw sha256 '$raw_want' (its declared rule is the BYTES; see scripts/repos.sh digest())"; d_ok=0; }
+  [ "$raw_want" = "$want" ] || raw_differs=$((raw_differs+1))
+
+  [ "$d_ok" -eq 1 ] && ok "[digest $dn] $dname — canonical trio agree: $want; repos.sh raw: $raw_want"
 done < <(jq -c '.digestVectors.vectors[]' "$FIXTURES")
 
 [ "$dn" -eq "$dtotal" ] || { echo "skillmirror-conformance: ran $dn of $dtotal digest vectors — the table did not stream fully" >&2; exit 2; }
@@ -258,6 +318,18 @@ if [ "$ddistinct" -lt 2 ]; then
 fi
 if [ "$ddistinct" -eq "$dtotal" ]; then
   echo "::error::skillmirror-conformance: no two of the $dtotal digest vectors share a digest — nothing pins the CRLF/LF equality .github#1547 decided" >&2
+  failcount=$((failcount+1))
+fi
+
+# THE DOCUMENTED DIFFERENCE, SECOND DIRECTION (.github#1585). Above, every vector held `repos.sh
+# digest` to the raw sha256. That alone is satisfiable by a table on which raw and canonical happen to
+# coincide everywhere — and then repos.sh could silently ADOPT the library's normalization, or the
+# vectors that distinguish them could be tidied away, and this leg would stay green over the very
+# convergence it is meant to notice. A deliberate difference must be asserted to EXIST, not merely to
+# be tolerated: at least one vector must actually separate the two rules. (Today the crlf, bom-lf,
+# bom-crlf, cr-cr-lf and nul-byte vectors each do.)
+if [ "$raw_differs" -lt 1 ]; then
+  echo "::error::skillmirror-conformance: on all $dtotal digest vectors the raw sha256 equals the library-measured canonical digest, so repos.sh's DELIBERATE difference (.github#1585) is not exercised — either repos.sh has silently adopted the library's normalization, or the vectors that distinguished them were removed" >&2
   failcount=$((failcount+1))
 fi
 
