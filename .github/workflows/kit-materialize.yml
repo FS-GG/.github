@@ -120,6 +120,25 @@ jobs:
           # account ONLY via `<BOT_USER_ID>+<slug>[bot]@users.noreply.github.com`, and BOT_USER_ID is the
           # id of the `[bot]` USER (297630107), NOT the App id — the same trap #514 fixed in
           # skill-registry-autofix.yml and lockfile-sync.yml. Literal, because no step output carries it.
+          #
+          # THIS ADDRESS IS ALSO LOAD-BEARING FOR RENOVATE, AND CHANGING IT HERE ALONE SILENTLY BREAKS
+          # EVERY RECEIVER (.github#1533). A commit on Renovate's branch authored by anyone else is read
+          # as "the user edited this PR": Renovate renames the PR `... - abandoned`, parks it under
+          # PR Edited (Blocked), and NEVER updates that branch again. Since `renovate/<dep>-<major>.x` is
+          # long-lived, the FIRST bump lands and every later one freezes — silently, because a bump that
+          # is never proposed is not an error. That is what froze FS.GG.Kit 0.3.0-0.7.0 across the org and
+          # cost a day of hand-advancing (FS.GG.Governance#315/#331/#332, FS.GG.Game#512).
+          #
+          # What stops it is `gitIgnoredAuthors` in the org-shared preset (default.json), which must name
+          # this EXACT string. Renovate matches it by Set.delete on the commit author/committer email —
+          # an exact match, not a login, not a regex, not case-insensitive — so `fs-gg-cross-repo-dispatch[bot]`
+          # would match nothing and look identical to a working fix until the next kit release froze.
+          # If you change this line, change default.json's gitIgnoredAuthors IN THE SAME PR. Nothing in CI
+          # compares them yet; .github#1538 is the gate that will.
+          #
+          # Note this is NOT a fight with Renovate: once ignored, Renovate force-pushes the branch on
+          # update, this job re-runs on the new head, and its second pass materializes 0 files -> no diff
+          # -> no commit. The loop is the designed one and it terminates.
           git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git add -A
