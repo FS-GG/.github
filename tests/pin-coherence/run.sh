@@ -826,29 +826,61 @@ for r in d["packageRules"]:
         del r["matchRepositories"]
 '
 must_fail "dropping matchRepositories is refused (it would freeze this repo's own pins)" \
-  "$NOEXCL" "$FEED" "must exclude the source of truth"
+  "$NOEXCL" "$FEED" "NO \`matchRepositories\`"
 
-# Excluding a RECEIVER hands that receiver back the un-mergeable PR — the exact bug, for one repo,
-# spelled as if it were the sanctioned exclusion.
-EXTRA="$(make_repo extra-repo-excluded)"
+# WHAT THIS GATE ASSERTS ABOUT `matchRepositories` CHANGED IN #1552, AND THE LEGS BELOW ARE THE
+# CHANGE. It used to require the exact literal `["!FS-GG/.github"]`. That negation says "every repo
+# except the author", which is NOT "every repo that RECEIVES these files" — and the two stopped
+# being equal once FS.GG.Templates, FS.GG.Audio and FS.GG.Net were onboarded without build-config,
+# zeroing two repos' entire NuGet surface. The preset now carries a POSITIVE per-fabric allow-list
+# derived from registry/repos.yml, gated by check-preset-repo-scope-coherence.py.
+#
+# This gate's subject narrowed to the one thing it can answer with no registry at all: THE AUTHORITY
+# IS NEVER CAUGHT. Which receivers the list must name is the other gate's red, so that one red does
+# not carry two unrelated meanings (#1538).
+
+# A `!`-NEGATION MATCHES EVERY REPO IT DOES NOT NAME — including this one. That is how the old
+# spelling could not express "only these four", and it is why any negation is now refused outright
+# rather than pattern-matched for safety.
+EXTRA="$(make_repo negated-repo-match)"
 edit_json "$EXTRA/default.json" '
 for r in d["packageRules"]:
     if "Directory.Packages.props" in (r.get("matchFileNames") or []):
         r["matchRepositories"] = ["!FS-GG/.github", "!FS-GG/FS.GG.Game"]
 '
-must_fail "excluding a receiver as well is refused (Game gets the un-mergeable PR back)" \
-  "$EXTRA" "$FEED" "exclude nothing else"
+must_fail "a \`!\`-negation in matchRepositories is refused (it matches whatever it does not name)" \
+  "$EXTRA" "$FEED" "must be a plain positive"
 
-# A POSITIVE entry inverts the rule: matchRegexOrGlobList requires a positive pattern to match, so
-# this disables the files ONLY in .github — precisely backwards, and it reads like a fix.
-INV="$(make_repo inverted-repo-match)"
+# A GLOB MATCHES THE AUTHORITY TOO, and `*` is the shape that reads most like "all the receivers".
+GLOB="$(make_repo glob-repo-match)"
+edit_json "$GLOB/default.json" '
+for r in d["packageRules"]:
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
+        r["matchRepositories"] = ["FS-GG/*"]
+'
+must_fail "a GLOB in matchRepositories is refused (it catches the source of truth)" \
+  "$GLOB" "$FEED" "must be a plain positive"
+
+# NAMING THE AUTHORITY OUTRIGHT. This repo AUTHORS the .props; listing it freezes its own pins.
+INV="$(make_repo authority-listed)"
 edit_json "$INV/default.json" '
 for r in d["packageRules"]:
     if "Directory.Packages.props" in (r.get("matchFileNames") or []):
-        r["matchRepositories"] = ["FS-GG/.github"]
+        r["matchRepositories"] = ["FS-GG/.github", "FS-GG/FS.GG.Game"]
 '
-must_fail "a positive matchRepositories is refused (it inverts the rule)" \
-  "$INV" "$FEED" "not ['!FS-GG/.github']"
+must_fail "naming FS-GG/.github in matchRepositories is refused (it AUTHORS these paths)" \
+  "$INV" "$FEED" "AUTHORS that path"
+
+# AN EMPTY LIST MATCHES NOTHING — the un-mergeable receiver PR comes back everywhere, and it looks
+# like a scoping that simply has not been filled in yet.
+EMPTY="$(make_repo empty-repo-match)"
+edit_json "$EMPTY/default.json" '
+for r in d["packageRules"]:
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
+        r["matchRepositories"] = []
+'
+must_fail "an EMPTY matchRepositories is refused (it matches nothing)" \
+  "$EMPTY" "$FEED" "not a non-empty list"
 
 # Each .props dropped from the list — the un-mergeable receiver PR returns for that file. This is
 # the leg that keeps the list COMPLETE against sync-build-config.sh's FILES.
