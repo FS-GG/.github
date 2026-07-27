@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Fixture for scripts/check-required-contexts.py (.github#549, epic #266).
 #
-# check-required-contexts.py cannot be wired into CI — reading branch protection needs
-# `administration: read`, which is not a valid GITHUB_TOKEN `permissions:` scope and which the org's
-# dispatch App does not hold either (.github#463). It is therefore an ADMIN-RUN VERIFIER, and a tool
-# nothing runs is a tool that rots. Per epic #266's ratified rule, A GATE THAT CANNOT FAIL ON ITS
-# SUBJECT IS NOT A GATE — so this fixture drives it against the shapes the org actually has, on every
-# PR that touches it, and asserts BOTH directions.
+# check-required-contexts.py cannot run from a RECEIVER's own CI — reading branch protection needs
+# `administration: read`, which is not a valid GITHUB_TOKEN `permissions:` scope, so no repo can read
+# its own protection from its own workflow. It is NOT, however, an admin-run-only verifier any more:
+# the org dispatch App was granted `administration: read` on 2026-07-17, and .github#1138 wired
+# required-context-coherence.yml to sweep the roster nightly with a per-receiver installation token.
+# (This header claimed the opposite for as long as that was false — .github#463's finding outlived the
+# grant that reversed it. See #1138: fix the premise-rot in the same change that creates it.)
+#
+# What that sweep cannot do is fail on the PR that BREAKS the script, and a tool nothing exercises is a
+# tool that rots. Per epic #266's ratified rule, A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE —
+# so this fixture drives it against the shapes the org actually has, on every PR that touches it, and
+# asserts BOTH directions.
 #
 # The gate that DOES run in CI, without any credential, is reusable-job-id-coherence.yml
 # (tests/reusable-job-ids/): it catches the rename here, on the PR that would cause the outage.
@@ -331,8 +337,9 @@ expect "a required context produced only on \`push\` never reports on a PR — c
 # Found while wiring the skill-union receiver caller for FS.GG.Governance#326. The documented caller in
 # docs/coordination/skill-union-assertion.md was `paths:`-filtered to the three ADR-0011 skill roots
 # AND told the receiver to make the resulting context required, and seven rostered receivers were
-# queued behind that instruction. Two receivers declined to arm it by hand; nothing mechanical would
-# have stopped the other five.
+# queued behind that instruction. Per #1508: Governance reached the wiring step first and caught it,
+# and SDD declined to arm the context although it held the admin rights to do so. Both were human
+# judgement — nothing mechanical would have stopped the other five, which is why this leg exists.
 # =============================================================================================
 # THE REGRESSION, in the exact shape the doc used to prescribe: the skill-union receiver caller.
 RFP="$WORK/r-filtered"; WFP="$WORK/w-filtered"
@@ -358,8 +365,11 @@ expect "REGRESSION #1508: a required context whose only producer is \`paths:\`-f
   1 "REQUIRES the status check 'skill-union'" "$WFP" "$RFP" FS-GG/R
 expect "REGRESSION #1508: ...and it blames the FILTER, not a missing or misnamed workflow" \
   1 "PATH-FILTERED" "$WFP" "$RFP" FS-GG/R
-expect "REGRESSION #1508: ...and it names the filtered workflow and the filter it carries" \
-  1 ".github/workflows/skill-union.yml" "$WFP" "$RFP" FS-GG/R
+# The needle is the DERIVED `on.<event>.<key>:` locator, not the workflow filename — the filename also
+# appears inside the filter's own entry list here, so grepping for it would pass even if the message
+# never named the producer at all. (A vacuous needle is the trap this file's header warns about.)
+expect "REGRESSION #1508: ...and it names the filtered workflow, the EVENT and the KEY" \
+  1 "skill-union.yml \`on.pull_request.paths:\`" "$WFP" "$RFP" FS-GG/R
 expect "REGRESSION #1508: ...and it states the GitHub mechanic — a filtered required check is never created, not skipped" \
   1 "GitHub does not skip a filtered required check" "$WFP" "$RFP" FS-GG/R
 expect "REGRESSION #1508: ...and it names the consequence: the PR waits for a status that never arrives" \
@@ -401,6 +411,13 @@ jobs:
 YML
 expect "a \`paths-ignore:\` filter is the same deadlock — a docs-only PR never gets the check run" \
   1 "PATH-FILTERED" "$WFP" "$RFI" FS-GG/R
+# ...and the message must name the OPPOSITE excluded set. `paths:` withholds the check from a PR that
+# touches NONE of the paths; `paths-ignore:` withholds it from one that touches ONLY them. One message
+# written for both tells half its readers the exact inverse of which PRs deadlock.
+expect "...and it names the set \`paths-ignore:\` excludes, which is the INVERSE of \`paths:\`'s" \
+  1 "a pull request that touches only those paths" "$WFP" "$RFI" FS-GG/R
+expect "...while the \`paths:\` leg names its own, opposite, excluded set" \
+  1 "a pull request that touches none of those paths" "$WFP" "$RFP" FS-GG/R
 
 # A filtered producer must NOT condemn a context that some OTHER workflow reports on every PR. The
 # question is whether the context always reports, not whether some producer of it is filtered — and
@@ -443,6 +460,170 @@ jobs:
 YML
 expect "a \`paths: [\"**\"]\` filter excludes no PR, so it is NOT reported — the gate does not cry wolf" \
   0 "ok: every required context is producible" "$WFP" "$RFW" FS-GG/R
+
+# ...but a universal entry that also SUBTRACTS is not universal. GitHub supports `!`-negated entries,
+# and this is precisely the shape a receiver reaches for when told to widen its filter — so blessing
+# it would score the #1508 deadlock green in the most likely way to arrive at it.
+RFNEG="$WORK/r-paths-negated"
+mkwf "$RFNEG/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths:
+      - "**"
+      - "!docs/**"
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "a \`!\`-negated entry SUBTRACTS, so \`paths: [\"**\", \"!docs/**\"]\` is still a deadlock for a docs-only PR" \
+  1 "REQUIRES the status check 'skill-union'" "$WFP" "$RFNEG" FS-GG/R
+
+# `**/*` is NOT universal: `*` does not span `/`, so it requires at least one slash and misses a
+# root-level file. Treating it as universal would leave a README-only PR with no check run.
+RFSS="$WORK/r-paths-starslash"
+mkwf "$RFSS/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: ["**/*"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "\`paths: [\"**/*\"]\` is NOT universal — it misses a root-level file, so it is still a finding" \
+  1 "REQUIRES the status check 'skill-union'" "$WFP" "$RFSS" FS-GG/R
+
+# GITHUB'S OWN DOCUMENTED REMEDY ("Handling skipped but required checks") must be green. A real job
+# filtered `paths: P` beside a no-op job reporting the SAME context filtered `paths-ignore: P` covers
+# every pull request between them — no single producer is unfiltered, and the context always reports.
+# Calling that a deadlock would be the confident, alarming, WRONG finding this file refuses elsewhere.
+RFC="$WORK/r-complementary"
+mkwf "$RFC/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".claude/skills/**", ".codex/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'bash scripts/skill-union-assert.sh' }]
+YML
+mkwf "$RFC/.github/workflows/skill-union-noop.yml" <<'YML'
+name: skill-union (no-op)
+on:
+  pull_request:
+    paths-ignore: [".claude/skills/**", ".codex/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'echo "no skill change; required check satisfied"' }]
+YML
+expect "GitHub's documented complementary twin (\`paths: P\` + \`paths-ignore: P\`) covers every PR — green" \
+  0 "ok: every required context is producible" "$WFP" "$RFC" FS-GG/R
+
+# ...and the complement is matched as a SET, so declaration order must not change the verdict.
+RFC2="$WORK/r-complementary-reordered"
+mkwf "$RFC2/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".codex/skills/**", ".claude/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+mkwf "$RFC2/.github/workflows/skill-union-noop.yml" <<'YML'
+name: skill-union (no-op)
+on:
+  pull_request:
+    paths-ignore: [".claude/skills/**", ".codex/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "...and the complement is a SET comparison — reordering the twin's entries is still green" \
+  0 "ok: every required context is producible" "$WFP" "$RFC2" FS-GG/R
+
+# Two filtered producers that are NOT complements: whether they jointly cover every PR is glob-set
+# coverage this gate cannot compute. Exit 3 — a no-verdict, not a guess in either direction.
+RFU2="$WORK/r-two-filtered"
+mkwf "$RFU2/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".claude/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+mkwf "$RFU2/.github/workflows/skill-union-other.yml" <<'YML'
+name: skill-union (other)
+on:
+  pull_request:
+    paths: ["src/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "two filtered producers that are not complements is exit 3 — joint coverage is not computable" \
+  3 "no verdict" "$WFP" "$RFU2" FS-GG/R
+expect "...and it says WHY it refused rather than guessing green or red" \
+  3 "glob-set coverage" "$WFP" "$RFU2" FS-GG/R
+
+# A filter shape the gate cannot read is a no-verdict too, never a silent green. `repos-audit.sh`
+# reads an empty `paths:` as matching NOTHING; guessing the opposite here would be a vacuous pass.
+RFE="$WORK/r-paths-empty"
+mkwf "$RFE/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: []
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "an EMPTY \`paths:\` is a shape the gate cannot model — exit 3, never a silent green" \
+  3 "a shape this gate cannot model" "$WFP" "$RFE" FS-GG/R
+
+# `pull_request_target` puts a check run on a PR exactly as `pull_request` does, so a filter on it
+# starves a required context identically — and the message must name the event it actually found.
+RFPT="$WORK/r-pr-target"
+mkwf "$RFPT/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request_target:
+    paths: [".claude/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "a filtered \`pull_request_target\` is the same deadlock, and the message names THAT event" \
+  1 "\`on.pull_request_target.paths:\`" "$WFP" "$RFPT" FS-GG/R
+
+# Declaring BOTH PR events, with only one filtered, reports on every PR — the unfiltered one suffices.
+RFBOTH="$WORK/r-both-events"
+mkwf "$RFBOTH/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".claude/skills/**"]
+  pull_request_target:
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "one unfiltered PR event alongside a filtered one is enough — not a finding" \
+  0 "ok: every required context is producible" "$WFP" "$RFBOTH" FS-GG/R
 
 # The filtered context is still DERIVED correctly — including through a reusable call, which is the
 # shape every skill-union receiver actually has (`skill-union / skill-union`).

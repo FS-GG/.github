@@ -357,7 +357,9 @@ apart from a check that has not reported yet, so it holds the pull request at *"
 status to be reported"*, indefinitely. Filtering the trigger and requiring the context are therefore
 **incompatible instructions**, and a receiver that did both would block **every PR that does not touch
 a skill root** — which is most of them, in a repo whose protection is typically `enforce_admins: true`
-with no bypass. Including the PR that removes the filter.
+with no bypass. (The repair PR itself would squeak through, because the old filter listed
+`.github/workflows/skill-union.yml` and so fires on a PR editing that file — but only a PR that edits
+*that* file, which is a narrow escape hatch to be holding a whole repository open with.)
 
 This section used to prescribe exactly that pair ([#1504](https://github.com/FS-GG/.github/issues/1504)),
 and seven rostered receivers were queued behind it. Governance reached the wiring step first and
@@ -376,13 +378,17 @@ the second half of that fix, below.
    credentials; which contexts are *required* needs `administration: read`, so that half is #1508's
    report rather than a re-measurement here.) `repos-audit`'s detector reads an absent `paths:` as
    armed (Half 2), so this costs nothing in capability terms either.
-2. Keep the filter and add a second, always-running job that reports the **same context name** for the
-   excluded paths. This is the standard GitHub workaround, and **it does not work for this contract**:
-   the required context is the nested `skill-union / skill-union`, which GitHub derives from
-   `<caller job id> / <callee job id>`. Reproducing that string needs a second job whose id is also
-   `skill-union` in the same file — YAML forbids the duplicate key — and any other job id yields a
-   different context, which does not satisfy the requirement. So for a `uses:`-shaped required check,
-   option 1 is the only one available.
+2. Keep the filter and add a **no-op twin** reporting the same context for the excluded paths — a
+   second workflow filtered by the exact complement (`paths-ignore:` naming the same roots), whose job
+   id and callee job id match, so it derives the byte-identical `skill-union / skill-union`. This is
+   GitHub's own documented remedy ("Handling skipped but required checks") and **it does work here**,
+   including for a nested `uses:`-shaped context: the duplicate job id lives in a *second file*, so
+   nothing forbids it. It is rejected on cost, not on possibility — it needs a second caller, a no-op
+   callee added to *this* repo, and two filter lists that must stay exact complements forever, across
+   seven receivers, or the gate silently stops covering some PRs. Option 1 needs none of that.
+
+   Do not read "possible" as "supported": nothing in this repo ships that no-op callee, so a receiver
+   choosing option 2 is building and maintaining it themselves.
 
 Keeping the filter on `push:` is deliberate and safe: a `push` filter has no bearing on what a pull
 request reports, and the required context is a PR check.
@@ -396,10 +402,17 @@ un-arming PR down with it.
 
 **This is now asserted, not remembered.**
 [`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) reports a required
-context whose only producer is path-filtered, naming the workflow and the filter. It previously asked
-only whether a producing workflow *triggers on* `pull_request` — a strictly wider question than
-whether the context *reports on every* pull request, and the filtered-and-required combination sat in
-the gap. `required-context-coherence.yml` sweeps the roster nightly with it.
+context whose only producer is path-filtered, naming the workflow, the event and the filter key. It
+previously asked only whether a producing workflow *triggers on* `pull_request` — a strictly wider
+question than whether the context *reports on every* pull request, and the filtered-and-required
+combination sat in the gap. `required-context-coherence.yml` sweeps the roster nightly with it.
+
+It is deliberately conservative about option 2: the complementary `paths: P` / `paths-ignore: P` twin
+above is recognised and passes, and any *other* all-filtered arrangement is a no-verdict (exit 3)
+rather than a guess, because general glob coverage is not computable from the YAML. What it does not
+yet model is `branches:` and `types:`, which starve a required context the same way — tracked as
+[#1519](https://github.com/FS-GG/.github/issues/1519), and named in the checker's own docstring so the
+gap is not mistaken for coverage.
 
 **`FS-GG/.github` is not a receiver.** It is the *source* of the assertion and asserts its own roots with
 [`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml), running the bare

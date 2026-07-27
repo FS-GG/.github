@@ -180,10 +180,14 @@ jobs:
 
           case "$rc" in
             0) echo "::notice::$REPO: every required context is producible."; exit 0 ;;
-            1) echo "::error::$REPO: a required status check names a context NO pull_request workflow"
-               echo "::error::can produce — this repo is (or will be) deadlocked: GitHub holds every PR"
-               echo "::error::at 'Expected — waiting for status to be reported'. Fix the protection"
-               echo "::error::setting or the job name it points at. Detail is in the log above."
+            1) echo "::error::$REPO: a required status check names a context that does NOT report on"
+               echo "::error::every pull request — this repo is (or will be) deadlocked: GitHub holds"
+               echo "::error::the PR at 'Expected — waiting for status to be reported'. Either no"
+               echo "::error::pull_request workflow produces the context at all (fix the protection"
+               echo "::error::setting or the job name it points at), or its only producer is"
+               echo "::error::PATH-FILTERED, so the check run is never created on a PR the filter"
+               echo "::error::excludes (.github#1508 — drop the paths: filter, or stop requiring it)."
+               echo "::error::The log above says which, and names the workflow and filter."
                exit 1 ;;
             2) echo "::error::$REPO: the protection/rulesets read kept failing (exit 2, retryable) after"
                echo "::error::3 attempts — a rate limit or outage, not a verdict. This self-heals on the"
