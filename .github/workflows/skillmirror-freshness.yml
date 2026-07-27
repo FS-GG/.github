@@ -1,0 +1,113 @@
+# Has `Fsgg.SkillMirror`'s own source moved out from under this repo's conformance table? (.github#1546)
+#
+# #1513 pinned `scripts/skill-union-assert.sh` to the library with a shared vector table whose
+# `library` column is MEASURED by running the library's source. That pins one direction and DATES the
+# other: `skillmirror-conformance.sh` proves shell == table on every PR, and the table proves
+# table == library ONLY at the revision recorded in `derivedFrom`. Nothing noticed when that revision
+# stopped being current. This workflow is the thing that notices.
+#
+# WHY THE LIVE JOB IS NOT A PR GATE, AND NOT A PUSH GATE EITHER (#1546 criterion 2). The subject is a
+# file in ANOTHER repository, moving on someone else's schedule. NO event in this repository is
+# evidence about it: a PR here cannot cause the divergence and cannot fix it, and neither can a push
+# to main. Wiring the live read to either would red diffs that did not cause it — the false accusation
+# this org refuses (#238), and the surest way to get a scheduled gate muted (#698). It is fixed by
+# re-running the oracle against a checkout of the new revision and reconciling the table, which is a
+# command the finding prints. `workflow_dispatch` is the re-ask path for whoever just did that; the
+# schedule is what catches a library change nobody here will ever see an event for.
+#
+# THE `fixture` JOB DOES GATE PRS AND MAIN, because that one's subject IS the diff — it is the proof
+# that the gate reds on a real divergence and refuses rather than passes on every unreadable-subject
+# condition, and it must not be able to rot unnoticed.
+#
+# KNOWN RED AT MERGE TIME, AND SAID OUT LOUD RATHER THAN ENGINEERED AROUND. Measured against the live
+# API on 2026-07-27, while this gate was written:
+#     recorded  a066e0bc…  b1c7e94d0fa6a1cc8c7ff7e9aa3043cd570632425d3f76bb85982e0ee82afeed   4371 B
+#     live      main       2742eb7310fdc26e93016f098963ba9dc370a4dd787ff8fe83743211eb5708a0  18807 B
+# The library ALREADY moved (FS.GG.SDD#717 added multi-file skill support). So the first scheduled run
+# of the `freshness` job below is expected to be RED, on a genuine finding, and that red is this
+# gate's whole reason to exist rather than a defect in it. Re-deriving the table is a separate act
+# with a separate touch-set and is filed as its own item — see the `freshness` job's remedy line.
+#
+# The gate FAILS CLOSED (epic #266): an unreadable subject is exit 2 or 3, never "fresh". So this
+# workflow must never gain a `continue-on-error`, and the `freshness` job's `if:` must never be
+# widened into one that lets it be skipped on its OWN triggers — "I could not look" and "I looked,
+# and it is fine" must not share an exit code.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence — and they select `tests/skill-union/skillmirror.fixtures.json` because that is the
+# checker's declared `PATHS_SUBJECT`, which rule (c) reds this file against. Both were verified by
+# DELETING the entry and watching rule (c) go red, not by reading the rule and believing it.
+name: skillmirror-freshness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-skillmirror-freshness.py"
+      - "scripts/lib/gate.py"
+      - "tests/skillmirror-freshness/**"
+      - "tests/skill-union/skillmirror.fixtures.json"
+      - ".github/workflows/skillmirror-freshness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-skillmirror-freshness.py"
+      - "scripts/lib/gate.py"
+      - "tests/skillmirror-freshness/**"
+      - "tests/skill-union/skillmirror.fixtures.json"
+      - ".github/workflows/skillmirror-freshness.yml"
+  schedule:
+    # Daily, offset from the 06:xx cluster (feed-coherence 06:17, engine-pin-coherence 06:29,
+    # kit-published-coherence 06:37, engine-freshness/pin-coherence 06:43, paths/publish 06:47/06:53)
+    # so the API reads do not contend. This is the trigger that catches a library change nobody here
+    # will ever see an event for: it touches no file in this repository at all.
+    - cron: "11 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skillmirror-freshness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate reds on a mutated digest and on a moved path, and REFUSES rather than
+  # passes on every unreadable-subject condition, before anyone trusts its green. `gh` is stubbed on
+  # PATH and fails like the real one, so the fail-closed legs exercise the real transport.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the skillmirror-freshness fixture (no network)
+        run: bash tests/skillmirror-freshness/run.sh
+
+  # Online. The actual freshness signal: one read of one file, and a digest comparison.
+  #
+  # A RED HERE IS NOT ABOUT THIS REPOSITORY'S CODE. It means the conformance table's `library` column
+  # was measured against a library revision that no longer exists. The repair is to re-run
+  # `bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts` against the new
+  # revision, reconcile any vector it disagrees with, and update `derivedFrom` in the same change. The
+  # finding prints all of that; this comment exists so a reader who lands on the run first sees it too.
+  freshness:
+    name: freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: fixture
+    # SCHEDULE AND DEMAND ONLY (#1546 criterion 2). Not `!= 'pull_request'`: a push to main is no more
+    # evidence about another repository's file than a PR is, and running it there would red main for a
+    # divergence no commit here caused or can fix. On a PR or a push, the fixture above is the whole
+    # subject.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Is the SkillMirror conformance table still derived from the current library source?
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern. `gh` reads GH_TOKEN; the run-scoped token needs only `contents: read`, and the
+          # subject repository is public.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/check-skillmirror-freshness.py --root .
