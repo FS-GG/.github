@@ -58,8 +58,12 @@ import sys
 
 # Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MANIFEST_PATH = os.path.join("registry", "driver-skill-manifest.json")
-KIT_MANIFEST_PATH = os.path.join("registry", "coordination-kit-skill-manifest.json")
+# Repo-relative and LITERAL, not `os.path.join`ed. These are the strings `--list` prints (the
+# ADR-0044 roster contract) and the strings PATHS_SUBJECT below is composed from, and a static
+# reader — check-paths-coherence.py's `declared_subject()`, the fixture — folds a literal and
+# refuses a call. Forward slashes are what the roster and every `paths:` filter already speak.
+MANIFEST_PATH = "registry/driver-skill-manifest.json"
+KIT_MANIFEST_PATH = "registry/coordination-kit-skill-manifest.json"
 
 # skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
 MANIFEST_SCHEMA_VERSION = 2
@@ -73,8 +77,30 @@ DESCRIPTION_MAX = 220
 DESCRIPTION_CEILING = 2700
 ROOT_CATALOG_CEILING = 3200
 CODEX_EFFECTIVE_CEILING = 6400
-TRIGGER_FIXTURES = os.path.join("tests", "skill-registry", "catalog-triggers.json")
+TRIGGER_FIXTURES = "tests/skill-registry/catalog-triggers.json"
 TRIGGER_KINDS = ("positive", "indirect", "incomplete", "negative", "boundary")
+# The `kit:` roster `build_kit_manifest()` derives the coordination-kit rows from. Named here rather
+# than inline for the same reason as the two manifests: a surface this script WALKS must be readable
+# without running it, or the trigger set that watches it is maintained by memory (.github#1606).
+KIT_ROSTER = "registry/repos.yml"
+
+# WHAT THIS EMITTER READS AND WRITES — the `check-paths-coherence.py` rule (c) convention (#996),
+# COMPOSED from the constants above rather than retyped beside them. Widening what the script walks
+# widens this, and a filter that has not kept up reds.
+#
+# Both directions are in it on purpose. The INPUTS answer "did this PR stale a manifest?"; the
+# OUTPUTS answer "did this PR fix one?" — .github#1606 paid for both halves, the first when
+# `edc8404b` staled the manifest and no workflow asked, the second when #1605 repaired it and the
+# gate it repaired never ran.
+#
+# RULE (c) CANNOT READ THIS TODAY, AND SAYING SO IS THE POINT. `named_scripts()` links a workflow to
+# a gate script only when the filter names a path ending in `.py`; this emitter is extensionless (so
+# is `scripts/fsgg-skill-registry-check`), so the linkage never forms and a declaration nobody reads
+# is worse than none. `tests/skill-registry/run.sh` therefore reads it — with the gate's OWN
+# `declared_subject()` and `selects()`, so there is still exactly one reader of this shape — and the
+# `.py`-suffix blind spot is `.github#1639`. When that lands, rule (c) picks this up for free and the
+# fixture leg becomes redundant rather than wrong.
+PATHS_SUBJECT = SKILL_ROOTS + (TRIGGER_FIXTURES, KIT_ROSTER, MANIFEST_PATH, KIT_MANIFEST_PATH)
 
 # The `.github`-authored non-kit skills this repo emits into registry/skills.yml — two scopes:
 #   * `scope: driver`   (ADR-0054) — product-materialized; runs in a scaffolded product tree.
@@ -392,7 +418,7 @@ def build_manifest(repo_root: str = REPO_ROOT) -> str:
 
 def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
     """Render the coordination-kit directory index from repos.yml's skill rows."""
-    roster = os.path.join(repo_root, "registry", "repos.yml")
+    roster = os.path.join(repo_root, KIT_ROSTER)
     try:
         roster_text = open(roster, encoding="utf-8").read()
     except OSError as exc:

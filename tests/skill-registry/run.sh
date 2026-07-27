@@ -1486,4 +1486,122 @@ grep -qF "owner: -github" "$DREG" && { echo "FAIL: owner_of(.github) produced th
 grep -qF "source: .github/.claude/skills/work-roadmap-two/SKILL.md" "$DREG" || { echo "FAIL: driver source not derived from supplied-by"; cat "$DREG"; exit 1; }
 echo "   ok"
 
+# =================================================================================================
+# THE TRIGGER SET (.github#1606) — this workflow's OTHER gate must be reachable from its own filter.
+#
+# `skill-registry-coherence.yml` runs `generate-driver-manifest --check`, and it is the ONLY
+# workflow anywhere that does. Its `paths:` filter was authored around the reconcile and named none
+# of that check's inputs and neither of its outputs, so:
+#   * `edc8404b` staled the manifest by editing `.claude/skills/pnext-item/references/…` — four
+#     workflows ran on it and not one asked the question;
+#   * the red landed 107 minutes later on #1590, a PR touching no skill, purely because #1590
+#     matched `registry/skills.yml`;
+#   * and #1605, which REPAIRED the manifest, did not run the gate it repaired either.
+#
+# So this leg asserts the TRIGGER SET, not the check. A fixture that exercises `--check` directly
+# closes nothing here: `--check` was correct throughout, and every earlier instance of this class
+# (#332, #334, #508, #1519, #1593) had a working gate behind an unreachable filter.
+#
+# NOTHING BELOW IS RETYPED. The subject comes from the emitter's own `PATHS_SUBJECT`, folded by
+# `check-paths-coherence.py`'s `declared_subject()`, and the match is that gate's own `selects()` —
+# the same reader, the same matcher, one shape. Widen what the emitter walks and this leg reds the
+# filter until it is widened to match.
+#
+# THIS LIVES HERE RATHER THAN IN `check-paths-coherence.py`'s rule (c), which is its natural home
+# and cannot reach: `named_scripts()` links a workflow to a gate script only via a `.py` suffix, and
+# this emitter is extensionless. That is `.github#1639`; when it lands, rule (c) subsumes this leg.
+#
+# The fixture job runs under `setup-policy-python`, so PyYAML is present — the same dependency
+# `catalog-metadata.py` above already assumes.
+# =================================================================================================
+echo "== trigger set: skill-registry-coherence.yml reaches generate-driver-manifest --check"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)" python3 - <<'PY'
+import importlib.util, os, sys
+import yaml
+
+root = os.environ["REPO_ROOT"]
+gate = os.path.join(root, "scripts", "check-paths-coherence.py")
+emitter = "scripts/generate-driver-manifest"
+workflow = ".github/workflows/skill-registry-coherence.yml"
+
+spec = importlib.util.spec_from_file_location("paths_coherence", gate)
+cpc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cpc)
+
+fail = []
+
+# A DECLARATION THAT VANISHED IS A FAILURE, NOT A SKIP. rule (c) is opt-in and silently ignores a
+# script that declares nothing — correct for a rule that must not blanket-red unmigrated workflows,
+# and exactly wrong here, where the absence would take this whole leg with it (#266).
+subject = cpc.declared_subject(os.path.join(root, emitter), workflow)
+if not subject:
+    sys.exit(f"FAIL: {emitter} declares no PATHS_SUBJECT — this leg would audit nothing (#266)")
+
+doc = yaml.safe_load(open(os.path.join(root, workflow), encoding="utf-8"))
+# `on:` is the YAML 1.1 boolean True after safe_load; the gate next door normalises the same way.
+on = doc.get("on", doc.get(True))
+if not isinstance(on, dict):
+    sys.exit(f"FAIL: {workflow} declares no readable `on:` mapping")
+
+filters = {}
+for trigger in ("pull_request", "push"):
+    raw = (on.get(trigger) or {}).get("paths")
+    if not isinstance(raw, list) or not raw:
+        sys.exit(f"FAIL: {workflow} declares no `{trigger}.paths` — the gate cannot be reached")
+    filters[trigger] = [str(p) for p in raw]
+
+def uncovered(patterns):
+    """Subject entries a push under which would NOT trigger this filter."""
+    out = []
+    for entry in subject:
+        # A directory is covered when its CONTENTS are, never by its own name — the same probe
+        # rule (c) makes, because a bare `docs` pattern triggers on nothing.
+        probe = entry if os.path.isfile(os.path.join(root, entry)) else f"{entry}/x"
+        if not cpc.selects(probe, patterns):
+            out.append(entry)
+    return out
+
+for trigger, patterns in filters.items():
+    for entry in uncovered(patterns):
+        fail.append(
+            f"{workflow}: `{trigger}.paths` does not select {entry!r}, which {emitter} "
+            f"declares it reads or writes — the check runs nowhere when that path changes"
+        )
+    # The LINKAGE itself: an edit to the emitter changes its own output, and is the one path that
+    # must re-ask the question on every shape of this defect.
+    if not cpc.selects(emitter, patterns):
+        fail.append(f"{workflow}: `{trigger}.paths` does not select {emitter!r} itself")
+
+# THE HISTORICAL LEG — the exact file `edc8404b` edited. The general assertion above would pass on a
+# filter that covered the subject by accident through some unrelated glob; this one names the commit
+# that paid for the rule, so a future narrowing has to walk past it.
+STALER = ".claude/skills/pnext-item/references/command-contracts.md"
+for trigger, patterns in filters.items():
+    if not cpc.selects(STALER, patterns):
+        fail.append(
+            f"{workflow}: `{trigger}.paths` would not have selected {STALER!r} — the edc8404b "
+            f"staling commit would go unchecked again, and red a stranger's PR instead"
+        )
+
+# TEETH. A green above is worth having only if a red is reachable: drop the root that carries the
+# authored bodies and the assertion must name it. Measured, not assumed (#266).
+blinded = [p for p in filters["pull_request"] if p != ".claude/skills/**"]
+if ".claude/skills" not in uncovered(blinded):
+    fail.append(
+        "the coverage assertion is VACUOUS: removing `.claude/skills/**` from the filter did not "
+        "produce a finding, so a green above proves nothing. Either PATHS_SUBJECT no longer names "
+        "that root, or some BROADER pattern now selects it and this probe must name that one "
+        "instead — fail closed and say so rather than let the leg quietly stop measuring (#266)"
+    )
+
+if fail:
+    for line in fail:
+        sys.stderr.write(f"FAIL: {line}\n")
+    raise SystemExit(1)
+print(
+    f"   ok  both filters select all {len(subject)} declared subject path(s), the emitter itself, "
+    f"and the edc8404b staling path; the assertion has teeth"
+)
+PY
+
 echo "skill-registry fixture: all checks passed"
