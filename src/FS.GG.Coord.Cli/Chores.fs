@@ -106,7 +106,16 @@ module Chores =
                     //    column here to restore. That stub IS the chore-lock configuration — and
                     //    `WriteTests` has driven `claim` this way, against an arbitrary ref, for the
                     //    whole of its life.
-                    match Writes.claim transport LeaseMinutes worker session lockRef (fun () -> None) with
+                    //
+                    //    `RefuseLiveHolder`, and there is no flag that changes it (#1620). The steal is a
+                    //    RECOVERY route for an item whose holder died with written work stranded on it; a
+                    //    chore lock holds no work, so there is nothing to recover and a live holder simply
+                    //    means somebody else is already draining this repo. Forcing it would put two
+                    //    reconcilers on one board — the one thing this lock exists to prevent.
+                    match
+                        Writes.claim transport LeaseMinutes Writes.RefuseLiveHolder ignore worker session lockRef (fun () ->
+                            None)
+                    with
                     | Ok(Writes.Won _)
                     | Ok(Writes.Renewed _) -> Some(chore, lockRef)
 

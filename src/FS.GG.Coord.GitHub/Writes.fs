@@ -26,9 +26,14 @@ module Writes =
         member _.Session = session
         member _.PreviousStatus = previousStatus
 
+    type ClaimForce =
+        | RefuseLiveHolder
+        | StealLiveHolder
+
     type ClaimOutcome =
         | Won of held: Held * collected: WorkerId list
         | Renewed of held: Held * collected: WorkerId list
+        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
         | Lost of WorkerId
         | Twin of theirs: SessionId
         | Undecided of reason: string
@@ -200,6 +205,8 @@ module Writes =
     let claim
         (transport: IGitHubTransport)
         (leaseMinutes: int)
+        (force: ClaimForce)
+        (onEvict: WorkerId list -> unit)
         (worker: WorkerId)
         (session: SessionId option)
         (ref: Ref)
@@ -234,6 +241,106 @@ module Writes =
             // — `say`ing to "unparsed-marker" addresses no worker and posts a comment nobody reads.
             |> List.filter (fun w -> w <> worker && w <> WorkerId UnparsedMarker)
 
+        // STEPS 2 AND 3 OF THE CAS — POST OUR MARKER, RE-READ, TAKE THE LOWEST LIVE ID AS THE WINNER.
+        //
+        // A FUNCTION because TWO paths reach it: an item with no live holder, and the #1620 steal, which
+        // EVICTS the live holder first and then takes the item. The steal is deliberately not a second,
+        // parallel lock protocol — it clears the way and then races exactly like every other claimant, so a
+        // third worker arriving mid-steal is still resolved by comment order rather than by who forced.
+        // `evicted` is empty on the ordinary path, and it is the only thing that separates `Won` from
+        // `Stolen`: the outcome names the theft because a silent transfer is worse than a refusal.
+        let postAndResolve (evicted: WorkerId list) : IoResult<ClaimOutcome> =
+            // THIS is the linearisation point, and the only place the pre-claim column is worth a point
+            // (#481): we have decided to post, no live marker stands in the way, and one line further on
+            // the board will say `In progress` and the answer will be gone. A lost race or a re-claim
+            // never reaches here, so neither pays the read.
+            let previousStatus = readPreviousStatus ()
+            let body = markerBody worker session leaseMinutes previousStatus
+
+            match postComment transport ref body with
+            | Error e -> Error e
+            | Ok myId ->
+
+            // FROM HERE ON, OUR MARKER IS POSTED. Every exit below must either KEEP it (we won) or REMOVE
+            // it (we lost, or we cannot tell) — never abort in between and leave it orphaned. An orphaned
+            // marker is a lock held by a worker who does not know they hold it, and nothing will ever
+            // release it.
+            let withdraw (reason: string) =
+                match deleteComment transport ref myId with
+                | Ok() -> Ok(Undecided reason)
+                | Error e ->
+                    // WE CANNOT WIN AND WE CANNOT WITHDRAW. This is the one genuinely bad outcome, and it
+                    // must be reported as itself: the marker is on the issue, we do not hold the item, and
+                    // a human has to reap it.
+                    Error(
+                        Transport
+                            $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
+                    )
+
+            match Reads.markers transport ref.Owner ref.Repo ref.Number with
+            | Error e -> withdraw $"the re-read failed (%s{explain e})"
+            | Ok after ->
+
+            match Reads.winner leaseMinutes after with
+            // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot
+            // tell" is a LOSS**. Reading it as a win would be a lock granted on the strength of an
+            // observation we did not make.
+            | None -> withdraw "our marker vanished from the re-read"
+
+            | Some w when w.Id = myId ->
+                // WE WON. The lowest live marker id is ours, and every racer computing the same total
+                // order reaches the same conclusion. Now collect the stale debris this win claimed over —
+                // including our OWN just-superseded stale marker, so a renew ends with exactly one marker,
+                // not two. `session` is what we posted into the marker (`body`, above), so the `Held`
+                // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
+                let held = Held(ref, worker, myId, session, previousStatus)
+                let collected = collectStale myId after
+
+                match evicted with
+                | [] -> Ok(Won(held, collected))
+                | _ -> Ok(Stolen(held, evicted, collected))
+
+            | Some w ->
+                // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
+                match deleteComment transport ref myId with
+                | Ok() -> Ok(Lost w.Worker)
+                | Error e ->
+                    Error(
+                        Transport
+                            $"lost the claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                    )
+
+        // THE #1620 STEAL — EVICT EVERY LIVE MARKER HELD BY ANOTHER WORKER, so the CAS above runs on a
+        // clear item. Only `claim --force` reaches this.
+        //
+        // EVERY live foreign marker goes, not merely the winning one. A live marker left behind has a LOWER
+        // id than the one we are about to post, so it would win the re-read and we would withdraw — having
+        // already deleted the real holder's lock and taken nothing, which is the one outcome strictly worse
+        // than refusing. Clearing them all is what makes "the way is clear" true. A racer whose in-flight
+        // marker we delete is not harmed: its own re-read finds the marker gone, which this CAS already
+        // reads as a LOSS and retries (`Undecided`) — the #950/#266 fail-closed path, reached honestly.
+        //
+        // A FAILED DELETE IS NOT A STEAL. Their lock stands, so take nothing and say so: posting our marker
+        // over a marker we could not remove is two live locks on one item, which is the whole thing the CAS
+        // exists to prevent. `deleteComment` treats 404 as success, so a holder who released concurrently
+        // is not an error — "already gone" is the goal state.
+        let evictLive (markers: Reads.Marker list) : IoResult<WorkerId list> =
+            let rec go acc rest =
+                match rest with
+                | [] -> Ok(List.rev acc)
+                | (m: Reads.Marker) :: tail ->
+                    match deleteComment transport ref m.Id with
+                    | Ok() -> go (m.Worker :: acc) tail
+                    | Error e ->
+                        Error(
+                            Transport
+                                $"could not evict worker %s{m.Worker.Value}'s live marker (comment %d{m.Id}) from %s{ref.Short}: %s{explain e}. Their lock STANDS and nothing was taken."
+                        )
+
+            markers
+            |> List.filter (fun m -> not (Reads.isStale leaseMinutes m) && m.Worker <> worker)
+            |> go []
+
         match liveBefore with
         // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
         // read as free and a second worker would be handed files somebody may be standing in.
@@ -241,7 +348,74 @@ module Writes =
 
         // Somebody else holds a LIVE lock. Refuse before we post anything: a marker we post and then
         // withdraw is a comment somebody has to read, and the item is not ours regardless.
-        | Some m when m.Worker <> worker -> Ok(Lost m.Worker)
+        //
+        // UNLESS THIS IS A STEAL (#1620). `--force` is the org's only sanctioned recovery route for a holder
+        // that died mid-item with hours of lease left: `reap` refuses an item with an open `item/<n>-*` PR
+        // (#581, correct), `adopt` refuses a claim that is not stale (correct — a live claim is not an
+        // orphan), and both of them point HERE. This arm is what makes that instruction true. It was not
+        // before: `--force` was read in exactly one place, the caller's #516 one-item-per-worker pre-check,
+        // so it refused identically with and without the flag while every message promised otherwise.
+        | Some m when m.Worker <> worker ->
+            match force with
+            | RefuseLiveHolder -> Ok(Lost m.Worker)
+            | StealLiveHolder ->
+                // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
+                // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
+                // to delete the winner and promote whatever was queued behind it.
+                //
+                //   * UNPARSEABLE — a lock held by nobody is not a contested item, and evicting the holder
+                //     would promote a marker we cannot attribute to anybody. `reap` owns that.
+                //   * OUR OWN WORKER ID — the `Twin` refusal (#419) has to cover this position or it only
+                //     covers half its own rule. Reachable: an orphaned marker from a failed withdraw (this
+                //     function names that state), or a hand-written one. Left unguarded, the eviction would
+                //     delete the real holder's live lock and then LOSE the re-read to our own twin's
+                //     surviving marker — deleting a live lock and taking nothing, the one outcome the
+                //     eviction comment below calls strictly worse than refusing.
+                let liveOthers = before |> List.filter (fun x -> not (Reads.isStale leaseMinutes x))
+
+                if liveOthers |> List.exists (fun x -> x.Worker = WorkerId UnparsedMarker) then
+                    Ok BlockedByUnparseableMarker
+                else
+                    match liveOthers |> List.tryFind (fun x -> x.Worker = worker) with
+                    // Sessions known and different: a twin, named as one.
+                    | Some ours when (twinSession session ours.Session).IsSome ->
+                        Ok(Twin (twinSession session ours.Session).Value)
+                    // OUR ID, AND WE CANNOT CALL IT A TWIN — a sessionless marker, or our own session.
+                    // Either way it is a marker of ours sitting BEHIND somebody else's live lock, which the
+                    // CAS never produces and cannot resolve: evicting past it would delete the holder and
+                    // then lose the re-read to it. `Undecided` is the honest answer — retryable, and it
+                    // destroys nothing while an anomalous marker set is what it is.
+                    | Some _ ->
+                        Ok(
+                            Undecided
+                                $"a live marker for worker %s{worker.Value} sits BEHIND %s{m.Worker.Value}'s lock on %s{ref.Short} — a state the CAS does not produce. Refusing to force past it: the eviction would delete the live holder and then lose to this marker. Reap the item, or resolve the duplicate marker by hand"
+                        )
+                    | None ->
+                        match evictLive before with
+                        | Error e -> Error e
+                        | Ok evicted ->
+                            // ANNOUNCE THE EVICTION THE INSTANT IT HAPPENS, NOT WHEN IT PAYS OFF.
+                            //
+                            // A CALLBACK for `readPreviousStatus`'s reason — the caller owns the courtesy,
+                            // this function owns the lock — and it is invoked HERE, between the delete and
+                            // the post, deliberately.
+                            //
+                            // Reporting the theft only through the `Stolen` outcome would report it only on
+                            // the HAPPY PATH. Every exit below can follow a successful eviction: the post
+                            // can fail, the re-read can fail or come back without our marker, a newcomer can
+                            // win the open race. In each of those the holder's live lock is already DELETED
+                            // and no `Stolen` is ever returned — so the worker whose lock we destroyed would
+                            // be told nothing, and their next `heartbeat` would read the empty item and
+                            // report an EXPIRED LEASE. That is the silent transfer #1620's decision calls
+                            // worse than a refusal, wearing the fix's clothes.
+                            //
+                            // The residue this does NOT fix, stated honestly: a steal that evicts and then
+                            // fails to post leaves the item with NO live marker. That is recoverable — the
+                            // item reads as free and the next claimant takes it — and the displaced worker
+                            // has been told. A destroyed lock nobody knows about is not recoverable, which
+                            // is why the notice, not the marker, is what this guarantees.
+                            onEvict evicted
+                            postAndResolve evicted
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
@@ -286,65 +460,8 @@ module Writes =
                 // session, exactly as it refreshes the lease.
                 Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus), collected))
 
-        | None ->
-
-        // 2. POST OUR MARKER.
-        //
-        // THIS is the linearisation point, and the only place the pre-claim column is worth a point (#481):
-        // we have decided to post, no live marker stood in the way, and one line further on the board will
-        // say `In progress` and the answer will be gone. A lost race or a re-claim never reaches here, so
-        // neither pays the read.
-        let previousStatus = readPreviousStatus ()
-        let body = markerBody worker session leaseMinutes previousStatus
-
-        match postComment transport ref body with
-        | Error e -> Error e
-        | Ok myId ->
-
-        // 3. RE-READ, AND TAKE THE LOWEST LIVE ID AS THE WINNER.
-        //
-        // FROM HERE ON, OUR MARKER IS POSTED. Every exit below must either KEEP it (we won) or REMOVE it
-        // (we lost, or we cannot tell) — never abort in between and leave it orphaned. An orphaned marker
-        // is a lock held by a worker who does not know they hold it, and nothing will ever release it.
-        let withdraw (reason: string) =
-            match deleteComment transport ref myId with
-            | Ok() -> Ok(Undecided reason)
-            | Error e ->
-                // WE CANNOT WIN AND WE CANNOT WITHDRAW. This is the one genuinely bad outcome, and it must
-                // be reported as itself: the marker is on the issue, we do not hold the item, and a human
-                // has to reap it.
-                Error(
-                    Transport
-                        $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
-                )
-
-        match Reads.markers transport ref.Owner ref.Repo ref.Number with
-        | Error e -> withdraw $"the re-read failed (%s{explain e})"
-        | Ok after ->
-
-        match Reads.winner leaseMinutes after with
-        // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot tell" is
-        // a LOSS**. Reading it as a win would be a lock granted on the strength of an observation we did
-        // not make.
-        | None -> withdraw "our marker vanished from the re-read"
-
-        | Some w when w.Id = myId ->
-            // WE WON. The lowest live marker id is ours, and every racer computing the same total order
-            // reaches the same conclusion. Now collect the stale debris this win claimed over — including
-            // our OWN just-superseded stale marker, so a renew ends with exactly one marker, not two.
-            // `session` is what we posted into the marker (`body`, above), so the `Held` re-emits it on
-            // every heartbeat and twin-detection survives the lease (#1149).
-            Ok(Won(Held(ref, worker, myId, session, previousStatus), collectStale myId after))
-
-        | Some w ->
-            // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
-            match deleteComment transport ref myId with
-            | Ok() -> Ok(Lost w.Worker)
-            | Error e ->
-                Error(
-                    Transport
-                        $"lost the claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
-                )
+        // Nobody holds it. Post and race, evicting nothing.
+        | None -> postAndResolve []
 
     let verifyHeld
         (transport: IGitHubTransport)

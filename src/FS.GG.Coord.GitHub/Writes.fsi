@@ -84,6 +84,32 @@ module Writes =
         /// restored, so `release` says so instead of inventing one.
         member PreviousStatus: BoardStatus option
 
+    /// **MAY THIS CLAIM TAKE AN ITEM ANOTHER WORKER IS HOLDING RIGHT NOW?** (#1620)
+    ///
+    /// A TYPE RATHER THAN A `bool`, because the two answers are not "more" and "less" of one thing — one of
+    /// them DELETES another worker's lock, and a positional boolean at a call site says nothing about which
+    /// way round it is. `Chores.offer` and `claim` are the only callers, and both should read as English.
+    ///
+    /// It exists because the org had no sanctioned recovery route for a holder that DIED mid-item. `reap`
+    /// refuses an item with an open `item/<n>-*` PR (#581), `adopt` refuses a claim that is not stale — both
+    /// correctly — and both told the recovering worker to run `claim --force`, which refused identically with
+    /// and without the flag. A documented dead end is a standing invitation to invent an undocumented route,
+    /// and the two that were found and declined were impersonation (`release --worker <the dead worker>`) and
+    /// faking staleness with a shrunken `--lease`. Give death a sanctioned path, and make it loud.
+    type ClaimForce =
+        /// The ordinary claim. Another worker's live lock is a refusal — `Lost`, before we post anything.
+        | RefuseLiveHolder
+
+        /// `claim --force`. EVICT the live holder's marker and take the item, reporting `Stolen` so the
+        /// caller can announce the theft. Deliberately NOT a liveness heuristic: a blanket steal with loud
+        /// accounting was preferred over guessing whether a slow worker is a dead one.
+        ///
+        /// It does NOT override the two refusals that are about a broken IDENTITY rather than a contested
+        /// item: a `Twin` marker (our id, another session — #419) and an unparseable marker (a lock held by
+        /// nobody) still refuse under it, because forcing there deletes a lock somebody may be working
+        /// behind, and the remedy for a broken identity is a new identity, not a bigger hammer.
+        | StealLiveHolder
+
     /// What happened when we went for the lock.
     ///
     /// NOT A BOOL, AND NOT AN OPTION. Each case is a different instruction to the worker, and collapsing
@@ -114,7 +140,26 @@ module Writes =
         /// place the fresh-claim path's shared-id warning would otherwise never be reached.
         | Renewed of held: Held * collected: WorkerId list
 
+        /// **WE TOOK IT FROM A LIVE HOLDER** — the `--force` steal (#1620), and the ONLY outcome that
+        /// reports one. `from` is every worker whose LIVE marker we evicted to clear the way; `collected` is
+        /// the ordinary stale debris, exactly as `Won` carries it, and the two are separate lists because
+        /// they are separate facts: one is a lapsed lease being tidied up, the other is a working worker
+        /// being displaced.
+        ///
+        /// IT IS A CASE OF ITS OWN RATHER THAN A `Won` WITH A LONGER LIST, because a caller that scripts
+        /// this needs to tell "I was handed a free item" from "I took a working worker's item" — the second
+        /// is a decision somebody may have to answer for. A `Won` that quietly meant "and I deleted
+        /// someone's lock" is the silent-transfer bug, pre-installed.
+        ///
+        /// The DUTY to announce the theft does not ride on this case, though: it rides on `onEvict` below,
+        /// because a lock can be destroyed on executions that never reach here.
+        | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
+
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
+        ///
+        /// Under `StealLiveHolder` this outcome still happens — it just means a DIFFERENT thing: not "the
+        /// holder refused us" but "we cleared the item and then lost the fresh race to a worker who arrived
+        /// after the eviction". Comment order decides that, as it decides every other claim.
         | Lost of WorkerId
 
         /// **THE MARKER CARRIES OUR WORKER ID, BUT A DIFFERENT SESSION.** An id two workers share is not a
@@ -156,9 +201,29 @@ module Writes =
     /// already someone else's, a re-claim because it inherits the column the superseded marker recorded. The
     /// claim is the hottest path on the scarcest budget in the org (#418), so paying this read on every
     /// losing attempt would be the exact regression #481 is careful not to introduce.
+    /// `force` decides ONE arm of the match below — the one where another worker's marker is live. Under
+    /// `StealLiveHolder` that arm evicts every live foreign marker and then runs the protocol above
+    /// UNCHANGED, so a steal is not a second lock protocol racing the first: it clears the way, posts, and
+    /// is resolved by the same comment order as everybody else. A worker that arrives between the eviction
+    /// and our post can still win, and should.
+    ///
+    /// `onEvict` is called with the workers whose LIVE claim was just deleted, the moment it is deleted and
+    /// BEFORE the marker post that may fail — a thunk for `readPreviousStatus`'s reason (the caller owns the
+    /// courtesy; this function owns the lock). It is never called on the ordinary path, and never with an
+    /// empty list.
+    ///
+    /// **IT IS NOT THE SAME EVENT AS THE `Stolen` OUTCOME, AND THAT IS THE POINT.** `Stolen` says "we
+    /// evicted somebody AND got the item"; `onEvict` says "somebody's live lock is gone", which is true of
+    /// strictly more executions — the post can fail, the re-read can fail, a newcomer can win the open race,
+    /// and each of those returns `Lost`/`Undecided`/`Error` over an item whose holder has already been
+    /// deleted. Announcing only on `Stolen` would leave that worker uninformed in exactly the cases where it
+    /// most needs to stop, and its next `heartbeat` would find the empty item and report an EXPIRED LEASE —
+    /// a lock destroyed silently, and then misdescribed.
     val claim:
         transport: IGitHubTransport ->
         leaseMinutes: int ->
+        force: ClaimForce ->
+        onEvict: (WorkerId list -> unit) ->
         worker: WorkerId ->
         session: SessionId option ->
         ref: Ref ->

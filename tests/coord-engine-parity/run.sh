@@ -1633,12 +1633,28 @@ fi
 # (j') THE #418 PROPERTY, re-expressed. The pre-claim read must sit on the WINNING post path only: a claim
 #      that loses the CAS to a live holder must spend ZERO item-Status reads — otherwise every losing `take`
 #      round would pay a GraphQL point on the budget that dies first under fan-out.
+#
+#      A BARE `claim`, AND THE MISSING FLAG IS THE POINT (.github#1620). Every other `renv claim` in this
+#      file passes `--force` to skip the #516 one-item-per-worker pre-check, and this leg did too — back
+#      when `--force` was read ONLY by that pre-check and could not affect the CAS. It can now: `--force`
+#      TAKES a live claim, which is the recovery route `adopt` and the usage block always advertised and
+#      #1620 finally implemented. So `--force` here would WIN, and there would be no losing claim left to
+#      measure. The bare form is what this leg always meant: `heldElsewhere` rides the board SCAN (which
+#      `restore_server.graphql` serves, and which is counted as `boardScan`, not `itemStatus`), pika-r01
+#      holds nothing else, and the claim reaches the CAS and loses to finch-a3f's live marker — spending
+#      the zero item-Status reads this asserts.
 rsrv 'FSGG_PARITY_MARKERS=[{"n":360,"id":860,"worker":"finch-a3f"}]' --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (j') bound a port"; else
-  renv claim FS.GG.SDD#360 --force --worker pika-r01 >/dev/null 2>&1; lrc=$?
-  { [ "$lrc" -ne 0 ] && [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "0" ]; } \
+  lout="$(renv claim FS.GG.SDD#360 --worker pika-r01 2>&1)"; lrc=$?
+  # THE OUTPUT IS PART OF THE ASSERTION, and dropping the flag is why. `lrc != 0 && itemStatus == 0` is
+  # satisfied by outcomes that never reach the CAS at all — a failed `heldElsewhere` board read, or a #516
+  # refusal — and both spend zero item-Status reads, so the leg would go green while proving nothing about
+  # WHERE the pre-claim read sits. Requiring the loss to name finch-a3f pins it to the CAS's `Lost` arm,
+  # which is the only exit this property is about.
+  { [ "$lrc" -ne 0 ] && [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "0" ] \
+      && printf '%s' "$lout" | grep -q 'already held by finch-a3f'; } \
     && ok "#418: a claim that LOSES to a live holder spends ZERO pre-claim reads — the read is on the win path only" \
-    || bad "#418: a losing claim must not pay the pre-claim read" "rc=$lrc gql=$(rget "$RS_PORT" /_gql)"
+    || bad "#418: a losing claim must not pay the pre-claim read" "rc=$lrc gql=$(rget "$RS_PORT" /_gql) out=$lout"
   kill "$RS_SRV" 2>/dev/null
 fi
 
@@ -4142,7 +4158,9 @@ fi
 #
 # Disposed on the record (ADR-0040 §5): where the engine's wording differs from bash's literal, the
 # PROPERTY is asserted, not the spelling — (c) `held by heron-b71` vs `worker 'heron-b71' does` (both name
-# the holder); (d) `claim --force` vs `fsgg-coord claim` (both point at re-claiming); (f) `unparseable
+# the holder); (d) NO LONGER DISPOSED — both engines now point at a plain re-claim (.github#1620 changed the
+# engine's line from `claim --force`, which was wrong twice over: an expired lease needs no force, and
+# `--force` now really does evict a LIVE holder); (f) `unparseable
 # lock` vs `unparsed-marker` (both BLOCK the item); (g) `could not take … a LOSS` vs `removed our marker`/
 # `nothing was claimed` (both DELETE the posted marker at `/_deletes` and claim NOTHING via a non-zero exit).
 # ==================================================================================================
@@ -4200,8 +4218,14 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
   [ "$ADV_RC" != "0" ] \
     && ok "case24(d): an expired lease cannot be renewed in place (heartbeat refused)" \
     || bad "case24(d): an expired lease heartbeat must fail" "rc=$ADV_RC $ADV_OUT"
+  # `grep -qi claim` alone matched `claim --force` exactly as happily as a plain re-claim, so the
+  # disposition retired in .github#1620 was retired in PROSE only — nothing would have caught a regression
+  # to the old wording. An expired lease needs no force (a plain `claim` COLLECTS the stale marker), and
+  # `--force` now evicts a LIVE holder, so pointing at it here would recommend a steal as the remedy for
+  # one's own lapsed lease. Assert the absence too: that is the half a `grep -q` cannot express.
   printf '%s' "$ADV_OUT" | grep -q 'EXPIRED' && printf '%s' "$ADV_OUT" | grep -qi 'claim' \
-    && ok "case24(d): ...it says the lease EXPIRED and points at re-claiming (bash 'fsgg-coord claim', disposed)" \
+    && ! printf '%s' "$ADV_OUT" | grep -q -- '--force' \
+    && ok "case24(d): ...it says the lease EXPIRED and points at a PLAIN re-claim, never --force (.github#1620)" \
     || bad "case24(d): refusal must say EXPIRED and name the re-claim remedy" "$ADV_OUT"
 
   # (g) A transient read failure on the CAS re-read must not ORPHAN the marker we just posted — an orphaned

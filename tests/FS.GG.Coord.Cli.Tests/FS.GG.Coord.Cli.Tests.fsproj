@@ -26,6 +26,7 @@
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
+    <Compile Include="ForceStealTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
