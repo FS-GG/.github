@@ -100,11 +100,29 @@ jobs:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
-          # skill-union-assert.sh sources scripts/lib/args.sh (shared need_val) at load, so the
-          # sparse checkout must fetch it too — a lone script would die before parsing any arg.
+          # FETCH THE DIRECTORY, NEVER A LIST OF FILES (.github#1510). skill-union-assert.sh sources
+          # its helpers from scripts/lib/ at load, so they must be present or the job dies before
+          # parsing a single argument. This list used to ENUMERATE them — the script + lib/args.sh —
+          # and an enumeration of a dependency set drifts silently the moment a `source` is added:
+          # lib/roots.sh was hoisted here by #525 and never added, so EVERY receiver caller of this
+          # reusable workflow failed at load in ~7s having asserted nothing (#1510; hit independently
+          # by FS.GG.SDD#718 and FS.GG.Governance#327). #843 is the same defect class one hop over.
+          #
+          # `scripts/` fixes the CLASS, not lib/roots.sh: a fourth `source` is covered with no edit
+          # here. The invariant it rests on — every load-time dependency lives under scripts/ — is the
+          # one scripts/generate-skill-union-bundle already enforces, since it inlines scripts/lib/*
+          # to build the self-contained dist/ artifact and skill-union-bundle.yml fails a bundle that
+          # still sources a sibling. Do NOT narrow this back to named files.
+          #
+          # ANCHOR THE PATTERN. Non-cone mode is gitignore-style, where a pattern with no leading or
+          # interior slash matches at ANY depth: a bare `scripts/` also drags in every nested scripts/
+          # dir, which here means the work-board and work-roadmap skills' copies under all three
+          # ADR-0011 skill roots. Harmless to the assertion, but this job has no business checking out
+          # the skill roots of the authority repo while auditing somebody else's. The leading slash
+          # pins it to the repo root. Verified against this repo: `/scripts/` yields scripts/
+          # recursively — scripts/lib/{args,roots,gate}.* all land — and not one file outside it.
           sparse-checkout: |
-            scripts/skill-union-assert.sh
-            scripts/lib/args.sh
+            /scripts/
           sparse-checkout-cone-mode: false
 
       - name: Assert the skill union is byte-identical across roots
