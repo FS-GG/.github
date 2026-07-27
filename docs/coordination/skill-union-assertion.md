@@ -132,6 +132,53 @@ by `and` / `or` (`and` binds tighter; no parentheses). Values and params are bar
 authoritative catalog of ids + conditions is the org skill registry `registry/skills.yml` (ADR-0017),
 generated from the producer manifests.
 
+## A co-tenant need not have a producer at all (#1509)
+
+Process, product and kit skills all have an **external producer** to verify a digest against: a
+manifest, a `.specify/` tree, an embedded-resource set, the coordination kit. A further class lives in
+the committed roots and has none — a skill with **no producer manifest and no `registry/skills.yml`
+row anywhere in the org**. It is undeclared because nothing declares it, not because it drifted in, and
+it is a legitimate co-tenant.
+
+It has two shapes, and they are not the same fact:
+
+- **repo-native** — the receiver repo **authored** it. It is the origin.
+- **vendored** — the repo holds a copy of somebody else's repo-native skill. `metadata.source` names
+  the origin, and no fabric moves the bytes.
+
+`spectre-console` is the worked example and shows both. FS.GG.Governance authored it (specs 091/093,
+recorded in its `metadata.source`), so it is repo-native **there**; FS.GG.SDD's own repair classifies
+its copy as a *"vendored co-tenant, `metadata.source: FS.GG.Governance spec 091`"*. Measured
+2026-07-27, it sits in the runtime roots of `FS-GG/.github`, `FS.GG.Governance` and `FS.GG.SDD`, while
+`registry/skills.yml` (50 rows) has **no row for it** and no producer manifest declares it. **Do not
+assume one canonical body**: Governance's and SDD's `SKILL.md` are byte-identical
+(`c5f71431…`), and `.github`'s is **not** (`603497ae…`) — nothing gates cross-repo identity for a
+skill no manifest owns, and this assertion does not either. Its subject is one tree.
+
+Three consequences:
+
+1. **A repair driven from "the authoritative producer" silently leaves it behind.** Rematerializing a
+   partitioned tree from its producer(s) fixes every id one of them emits and no others, so a
+   producer-less co-tenant stays partitioned. Both completed rollout repairs had to **correct the
+   attribution first** and give the skill an explicit authority row of its own inside the same
+   materializer; had either driven the documented producer set alone, it would have merged a still-
+   partitioned tree. See [Rollout state](#rollout-state-measured-2026-07-27) below.
+2. **A `--co-tenants` glob set is not automatically wide enough.** The
+   [Set semantics](#the-manifest-and-the-canonical-digest) example, `"fs-gg-sdd-* speckit-*"`, matches
+   `spectre-console` under neither shape, so a caller passing a `--manifest` over a tree holding it
+   gets `[dangling]` for a skill that belongs there. A tree with producer-less co-tenants must name
+   them, or a glob covering them, in its own `--co-tenants`.
+3. **"The producer" is usually plural, and naming one of several is the same error as naming none.**
+   SDD's roots are written by four authorities: `.specify/` (the 10 `speckit-*`),
+   `FS.GG.SDD.Commands.fsproj` EmbeddedResources (the 17 `fs-gg-sdd-*`), the FS.GG.Kit pin (the 4 kit
+   skills, which were never partitioned), and the repo's own hand (`spectre-console`). Of its 28
+   partitioned ids, "rematerialize from `.specify/`" reaches **10**; both code-owned producers together
+   reach **27**; only enumerating the set reaches all 28.
+
+None of this weakens checks 1–2: a producer-less skill is still required to be in **every** root and
+byte-identical across them *within that tree*. Having no producer excuses it from the *digest*
+cross-check, never from the union.
+
 ## Usage
 
 Directly:
@@ -195,11 +242,15 @@ other cost the org three partitioned repositories:
 | this assertion, wired as `receives: skill-union` | the **complete runtime-visible union** — every skill in the repo's committed `.claude/skills`, `.codex/skills`, `.agents/skills` | *every* skill in the union is present in every root and byte-identical across them |
 
 `coordination-coherence` cannot see a co-tenant skill: it is not in the `kit:` block, so it is not in
-that gate's subject. **Measured on `origin/main`, 2026-07-27** — Governance `.claude=15 .codex=4
-.agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD `.claude=32 .codex=21 .agents=4`.
-Projections were **missing**, for 11, 46 and 28 skills, and all three were green on
-`coordination-coherence` throughout, because the four kit skills really are coherent in all three of
-their roots.
+that gate's subject. Here are the three trees it cost, **each measured at the commit named** rather
+than at a moving `main` — Governance `9243c07` `.claude=15 .codex=4 .agents=4`; SDD `f419f0e`
+`.claude=32 .codex=21 .agents=4`; Rendering `ee5e6c3` `.claude=50 .codex=4 .agents=50`. Projections
+were **missing**, for 11, 28 and 46 skills, and all three were green on `coordination-coherence`
+throughout, because the four kit skills really are coherent in all three of their roots.
+
+Two of those three have since been repaired. **The current numbers are stated once, in Rollout state
+below, and nowhere else** — a present-tense count restated in a second place is how this document
+aged into three wrong issue bodies.
 
 The sentence that stood here also said *"with every multi-root skill byte-identical"*, and it was
 **wrong** — read off a summary line that had not checked ([#1506](https://github.com/FS-GG/.github/issues/1506)).
@@ -225,7 +276,7 @@ does appear, because the defect is a missing projection and not a divergent byte
 
 Check 1 used to **short-circuit**: a `[partitioned]` id was skipped past check 2, so the copies it *did*
 have were never diffed — and `byte-identical=` then counted only the ids that survived to the
-comparison. On `FS.GG.Rendering@main` the gate printed
+comparison. On `FS.GG.Rendering` at `ee5e6c3` the gate printed
 
 ```
 ::error::[partitioned] skill 'fs-gg-layout' is absent from root(s): .codex/skills
@@ -365,19 +416,27 @@ This section used to prescribe exactly that pair ([#1504](https://github.com/FS-
 and seven rostered receivers were queued behind it. Governance reached the wiring step first and
 filed [#1508](https://github.com/FS-GG/.github/issues/1508); SDD, holding `admin: true`, independently
 declined to arm the context for the same reason. Nothing mechanical stopped either of them — which is
-the second half of that fix, below.
+the second half of that fix, below. **Both refusals were correct and both are now resolved the same
+way**: SDD (`a066e0b`) and then Governance (`c577961`) each wired the unfiltered form and armed the
+context — the shape prescribed above — measured 2026-07-27.
 
 **Two repairs exist, and this doc takes the first:**
 
 1. **Drop the `paths:` filter, so the job always runs and always reports.** What the block above does.
    It costs a runner-minute of static shell per PR — the assertion needs no SDK, no restore and no
-   network — and it is the shape the org already relies on: [#1508](https://github.com/FS-GG/.github/issues/1508)
-   reports that every context Governance requires today is produced by `gate.yml` or
-   `coordination-coherence.yml`, and both of those were confirmed on 2026-07-27 to carry **no
-   `pull_request` `paths:` or `paths-ignore:` filter at all**. (The producing side is readable without
-   credentials; which contexts are *required* needs `administration: read`, so that half is #1508's
-   report rather than a re-measurement here.) `repos-audit`'s detector reads an absent `paths:` as
-   armed (Half 2), so this costs nothing in capability terms either.
+   network — and it is the shape the org already relies on. When
+   [#1508](https://github.com/FS-GG/.github/issues/1508) was written, every context Governance required
+   came from `gate.yml` or `coordination-coherence.yml`, and both were confirmed on 2026-07-27 to carry
+   **no `pull_request` `paths:` or `paths-ignore:` filter at all** — the load-bearing half, and still
+   true. Its *"that is all of them"* half has since expired: re-read on 2026-07-27,
+   Governance's required set has grown to eight and now also includes `contract-coherence / coherence`
+   and `skill-union / skill-union`. `repos-audit`'s detector reads an absent `paths:` as armed
+   (Half 2), so this costs nothing in capability terms either.
+
+   (Branch protection **is** readable here — `repos/FS-GG/<repo>/branches/main/protection` — so the
+   required-context claims in this document are direct reads, not inferences. An earlier revision said
+   that half needed `administration: read` and could not be re-measured; it can, and the two receiver
+   claims below were measured that way.)
 2. Keep the filter and add a **no-op twin** reporting the same context for the excluded paths — a
    second workflow filtered by the exact complement (`paths-ignore:` naming the same roots), whose job
    id and callee job id match, so it derives the byte-identical `skill-union / skill-union`. This is
@@ -393,9 +452,12 @@ the second half of that fix, below.
 Keeping the filter on `push:` is deliberate and safe: a `push` filter has no bearing on what a pull
 request reports, and the required context is a PR check.
 
-**No receiver is left carrying the filtered form.** Verified 2026-07-27 over
-`repos/FS-GG/<repo>/contents/.github/workflows/skill-union.yml?ref=main`: none of the seven rostered
-receivers has the caller on its default branch yet, so correcting the block here lands ahead of every
+**No receiver is left carrying the filtered form.** Re-measured 2026-07-27 over each rostered
+receiver's `main`: **two** of the seven now have the caller — `FS.GG.SDD` (`a066e0b`) and
+`FS.GG.Governance` (`c577961`). Both carry a bare `pull_request:` with **no `paths:` key**, and both
+have `skill-union / skill-union` in their default branch's required contexts, so both are the
+prescribed shape rather than the deadlocking one. The other five ship no
+`.github/workflows/skill-union.yml` at all, so correcting the block here still lands ahead of their
 adoption. A receiver that wired the filtered form on a branch must drop the `pull_request` `paths:`
 filter **before** arming the context, not after — arming first is the deadlock, and it takes the
 un-arming PR down with it.
@@ -443,57 +505,117 @@ lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2
 a generated-product caller, so it does **not** satisfy Templates' own `receives: skill-union` row: those
 are different subjects, and the roster's detector says so out loud rather than counting one as the other.
 
-### Rollout state (as of 2026-07-27)
+### Rollout state (measured 2026-07-27)
 
 **The audited trees are the org's rostered repositories — eight of them**, one committed tree each, and
 enumerating them here is deliberate: "how many trees are audited?" must have an answer that is *read*
-rather than counted from memory. Measured over `main` per repo, comparing every blob under the three
-roots:
+rather than counted from memory. **Every row carries the commit it was measured at**, because a row
+without one is a summary, and summaries from this document have misdirected three repairs already. Each
+was produced by running, over a fresh clone at that commit:
 
-| tree | union | `.claude` / `.codex` / `.agents` | verdict |
-| --- | --- | --- | --- |
-| `.github` (authority — asserts itself) | 13 | 13 / 13 / 13 | coherent |
-| `FS.GG.Templates` | 4 | 4 / 4 / 4 | coherent |
-| `FS.GG.Game` | 21 | 21 / 21 / 21 | coherent |
-| `FS.GG.Audio` | 20 | 20 / 20 / 20 | coherent |
-| `FS.GG.Net` | 4 | 4 / 4 / 4 | coherent |
-| `FS.GG.Governance` | 15 | 15 / 4 / 4 | **11 partitioned** (the `speckit-*` set) |
-| `FS.GG.SDD` | 32 | 32 / 21 / 4 | **28 partitioned** (`fs-gg-sdd-*` + `speckit-*`) |
-| `FS.GG.Rendering` | 50 | 50 / 4 / 50 | **46 partitioned** *and* **30 divergent** — see below |
+```sh
+scripts/skill-union-assert.sh --product <tree> --roots ".claude/skills .codex/skills .agents/skills"
+```
+
+| tree | at | union | `.claude` / `.codex` / `.agents` | verdict |
+| --- | --- | --- | --- | --- |
+| `.github` (authority — asserts itself) | `9bb9856` | 13 | 13 / 13 / 13 | coherent |
+| `FS.GG.Templates` | `754eaad` | 4 | 4 / 4 / 4 | coherent |
+| `FS.GG.Game` | `84fb307` | 21 | 21 / 21 / 21 | coherent |
+| `FS.GG.Audio` | `2df9e1d` | 20 | 20 / 20 / 20 | coherent |
+| `FS.GG.Net` | `9e5f757` | 4 | 4 / 4 / 4 | coherent |
+| `FS.GG.Governance` | `c577961` | 15 | 15 / 15 / 15 | coherent — **repaired** (`9d8359c`), wired second |
+| `FS.GG.SDD` | `a066e0b` | 32 | 32 / 32 / 32 | coherent — **repaired**, and the first wired receiver |
+| `FS.GG.Rendering` | `ee5e6c3` | 50 | 50 / 4 / 50 | **46 partitioned** *and* **30 divergent** — see below |
+
+**Seven of the eight are coherent. `FS.GG.Rendering` is the one that is not.**
+
+This rollout is moving fast enough to invalidate a snapshot mid-edit, and it did: Governance's caller
+landed while this section was being rewritten, taking the gap count from 6 to 5 between two runs of
+`repos-audit` an hour apart. That is the argument for the commit column, not an excuse for it — a row
+you can re-measure is repairable, a bare number is not.
 
 **This table used to end "Nothing is `[divergent]`: every skill present in more than one root is
 byte-identical." That was false, and it was false because the gate had not looked**
 ([#1506](https://github.com/FS-GG/.github/issues/1506) — a `[partitioned]` id short-circuited past the
-byte comparison, and `byte-identical=4` then counted only the 4 ids that reached it). Measured directly
-on `origin/main`, 2026-07-27, over the roots each id **is** present in:
+byte comparison, and `byte-identical=4` then counted only the 4 ids that reached it). Over the roots
+each id **is** present in — **before** the two repairs, which is where the lesson lives, and after:
 
-| tree | comparable (≥2 roots) | identical | **differing** | single-root (not comparable) |
+| tree | at | comparable (≥2 roots) | identical | **differing** | single-root (not comparable) |
+| --- | --- | --- | --- | --- | --- |
+| `FS.GG.Governance` | `9243c07` (pre) | 4 of 15 | 4 | 0 | **11** |
+| `FS.GG.Governance` | `c577961` (now) | 15 of 15 | 15 | 0 | 0 |
+| `FS.GG.SDD` | `f419f0e` (pre) | 21 of 32 | 21 | 0 | **11** |
+| `FS.GG.SDD` | `a066e0b` (now) | 32 of 32 | 32 | 0 | 0 |
+| `FS.GG.Rendering` | `ee5e6c3` | 50 of 50 | 20 | **30** | 0 |
+
+**The pre rows are the point.** Governance and SDD really were drift-free — but over **4 and 21** ids,
+not 15 and 32, and the summary that said so never named the denominator. That is the whole of #1506 in
+two rows, and it survives the repair only if the rows do.
+
+*(This table previously gave SDD's pre-repair line as "21 of **33**", with a note calling the 33-vs-32
+mismatch an in-flight snapshot. It was neither in flight nor 33: re-measured at `f419f0e`, the union is
+**32** — 21 comparable + 11 single-root — and 21 + 12 never summed to a union at all. Corrected here
+rather than quietly dropped, on the same principle as the rest of this section.)*
+
+Rendering's repair is **both** kinds: 46 missing projections *and* 30 divergent pairs. A
+byte-comparison-only checker would miss the partitions; the checker that short-circuited on partitions
+missed the drift.
+
+#### Name the partitioned set; do not describe it by its producer (#1509)
+
+Each of the three partitioned trees had its ids described here by naming a **producer set**, and two of
+the three descriptions were wrong in the same way. Enumerated below at the commit where the partition
+existed — the pre-repair commit for the two that were repaired, and current `main` for Rendering, which
+has not been:
+
+| tree | at | partitioned | what the ids actually are | what this doc used to say |
 | --- | --- | --- | --- | --- |
-| `FS.GG.Governance` | 4 of 15 | 4 | 0 | 11 |
-| `FS.GG.SDD` | 21 of 33 | 21 | 0 | 12 |
-| `FS.GG.Rendering` | 50 of 50 | 20 | **30** | 0 |
+| `FS.GG.Governance` | `9243c07` | 11 | **10** `speckit-*` **+ 1 producer-less `spectre-console`** (repo-native here) | "the `speckit-*` set" (at `9bb9856`) |
+| `FS.GG.SDD` | `f419f0e` | 28 | **17** `fs-gg-sdd-*` **+ 10** `speckit-*` **+ 1 producer-less `spectre-console`** (vendored here) | "`fs-gg-sdd-*` + `speckit-*`" (at `9bb9856`) |
+| `FS.GG.Rendering` | `ee5e6c3` | 46 | **30** `fs-gg-*` **+ 16** `speckit-*`, no producer-less member | "the product/Speckit set" (before `22461b4`) — this one *does* hold |
 
-So Governance and SDD really are drift-free — but over 4 and 21 ids, not 15 and 33, and the old summary
-never said which. Rendering's repair is **both** kinds: 46 missing projections *and* 30 divergent pairs.
-A byte-comparison-only checker would miss the partitions; the checker that short-circuited on partitions
-missed the drift. (SDD's union reads 33 here against 32 in the table above: its three-root
-materialization is in flight, so the two rows are different snapshots — which is itself why a coverage
-denominator belongs in the output rather than in prose that ages.)
+In both wrong cases the **count was right and the attribution was wrong**, and the missing member was
+the same skill: `spectre-console`, a [co-tenant with no producer](#a-co-tenant-need-not-have-a-producer-at-all-1509)
+and no `registry/skills.yml` row. Driving only the producer set this document named would have
+rematerialized 10 of Governance's 11 and, for SDD, 10 of 28 from `.specify/` — or 27 of 28 counting all
+three of its authorities — and left the remainder partitioned.
 
-`skill-union` is rostered on all seven framework repos and wired by none of them yet, so the scheduled
-[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **7 gaps** (measured: 32
-receiver-capability pairs, 25 wired, 7 gaps, 0 unrostered adopters — every other capability green). That
-is the ratchet [#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the rollout
-is complete only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes for every
-tree above **and** every receiver check is green.
+**What actually happened is the useful part, and it is not a war story.** Neither repair shipped a red
+gate, because neither worker believed the attribution: Governance's caught it first and filed #1509,
+recording the outcome as a counterfactual — *"a repair driving only `.specify/` **would have** left it
+partitioned and the gate red"* — and SDD's classified `spectre-console` as a fourth authority in its
+own producer table before materializing anything. Both then handled it **inside** the same materializer
+as an explicit authority row, not as an out-of-band fix-up, and SDD deliberately armed its required
+context only *after* the coherent merge so the gate would be green from its first run. The cost of the
+mis-attribution was paid in re-derivation by two workers, not in red CI — which is the cheap outcome,
+and it happened because they measured instead of reading this table.
 
-Four of the seven — Templates, Game, Audio, Net — are already root-coherent and need only the caller
-above. Three must **rematerialize from their authoritative producers first** (not copy an arbitrary root,
-and proving an idempotent second materialization), and those repairs are filed and sequenced as cross-repo
-requests: [Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326),
-[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080) and
-[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716). Each is independent of the other two — a repo's
-roots are its own — and each depends on this repo only for the caller shape above and the roster row.
+A producer-set description is a *guess about where the ids came from* wearing the clothes of a
+measurement. Enumerate the set, or say the breakdown is unmeasured; do not name a producer and let a
+reader infer coverage from it.
+
+`skill-union` is rostered on all seven framework repos, and **two have wired it**: `FS.GG.SDD`
+(`a066e0b`) and `FS.GG.Governance` (`c577961`), each of which also made `skill-union / skill-union`
+required on its default branch. So the scheduled
+[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **5 gaps** — measured 2026-07-27 by
+running `scripts/repos-audit.sh` from this repo: 32 receiver-capability pairs, 27 wired, 5 gaps,
+0 unrostered adopters, 0 undetermined, every other capability green. That is the ratchet
+[#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the rollout is complete
+only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes for every tree
+above **and** every receiver check is green.
+
+Six of the seven receivers — Templates, Game, Audio, Net, Governance and SDD — are now root-coherent,
+and of those Governance and SDD have also wired the caller, so the remaining four need nothing but the
+block above. The seventh, `FS.GG.Rendering`, must **rematerialize from its authoritative producer
+first** (not copy an arbitrary root, and proving an idempotent second materialization):
+[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080), the last of the three
+cross-repo requests still open. The other two —
+[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716) and
+[Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326) — are **closed**, their
+rematerializations having landed in `a066e0b` and `9d8359c` respectively. Each repair is independent
+of the other two — a repo's roots are its own — and each depends on this repo only for the caller
+shape above and the roster row.
 
 One tree sits outside this capability's subject and outside the composition gate's, so nothing audits it:
 `FS.GG.Rendering`'s `template/base/`, which carries `.claude/skills` and `.agents/skills` and no `.codex/`.
