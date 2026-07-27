@@ -112,13 +112,17 @@ updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
-  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit] }
-  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 $LABELS_CAP
 YAML
 }
+# `kit-delivery: package` is on both rows because that is what the real roster says of all seven
+# receivers, and because the kit-pin freshness sweep (#1540) grades PACKAGE receivers only — absent
+# means byte-copy, which has no pin to grade. A fixture roster that omitted it would silently
+# exclude both receivers from that sweep and every kit-pin leg would pass over an empty set.
 REG="$WORK/repos.yml"; mkreg "$REG"
 
 # gh stub: `list` (dir) prints filenames from $FIX/<slug>.list; workflow raw reads print
@@ -178,6 +182,10 @@ fi
 # never a fabricated "this receiver is current".
 { [ "$kind" = pinlocal ] || [ "$kind" = pinroot ] || [ "$kind" = receiver ]; } \
   && [ -f "$FIX/$slug.failpin" ] && apifail 403
+# Only the PROPS reads fail; the receiver project still reads. That is the PARTIAL read — the repo
+# looks answerable on the evidence we got, and is not.
+{ [ "$kind" = pinlocal ] || [ "$kind" = pinroot ]; } \
+  && [ -f "$FIX/$slug.failpinprops" ] && apifail 403
 
 case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
@@ -211,7 +219,7 @@ chmod +x "$STUB/gh"
 # detector's evidence and (in the Templates shape) a pin file, so a leg that left one behind would
 # contribute a second, contradictory version literal to the next leg and turn a deliberate finding
 # into a refusal. Every writer of it — wire_materializer, pin_inline — runs after this.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -1940,6 +1948,23 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   || bad "an unread pin is not an answer" "rc=$rc: $out"
 rm -f "$FIX/FS-GG__FS.GG.Rendering.failpin"
 
+# (11b) A PARTIAL read must not be graded at all. The receiver project reads fine and carries a
+#       CURRENT inline pin; the props read then fails. On the evidence held the repo looks current —
+#       and the file we could not read may carry a different version, which is a refusal, not a
+#       pass. So the repo must be reported ONLY as undetermined, and must NOT also appear as `ok`.
+#       This is the leg for the bug that shipped in the first draft of this sweep: rows were appended
+#       to the manifest as they were fetched, so a repo could be counted `ok` on half a read.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin_inline FS-GG/FS.GG.Rendering "$KIT_PUBLISHED"
+: > "$FIX/FS-GG__FS.GG.Rendering.failpinprops"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] \
+    && ! printf '%s' "$out" | grep -q 'ok: FS-GG/FS.GG.Rendering pins FS.GG.Kit'; } \
+  && ok "kit-pin: a PARTIALLY read receiver is never graded — no 'ok' beside its own undetermined" \
+  || bad "half a read must not produce a verdict" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failpinprops"
+unpin FS-GG/FS.GG.Rendering
+
 # (12) AN UNREADABLE FEED IS NOT A CLEAN SWEEP. Without a comparand every receiver would otherwise be
 #      graded against nothing and pass — the exact shape of the bug this whole sweep is about, in the
 #      sweep itself. Point the reader at a flat-container that is not there.
@@ -1950,6 +1975,129 @@ out="$(FSGG_NUGET_ORG_BASE="file://$WORK/no-such-feed" run 2>&1)" && rc=0 || rc=
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired, and every'; } \
   && ok "kit-pin: an unreadable FEED is a no-verdict — nobody is graded against nothing" \
   || bad "no comparand must never mean everybody passes" "rc=$rc: $out"
+
+# (14) THE SWEEP'S SUBJECT MUST EXIST. `repos.sh list --receives <cap>` does not validate the id: an
+#      unknown capability selects nothing and exits 0. So a roster that renamed or retired
+#      `coordination-kit` would leave this sweep covering NOBODY — and the run would still end on
+#      "every coordination-kit receiver pins the published FS.GG.Kit", exit 0, over receivers five
+#      releases stale. This is the #503 shape one sweep over, and it is why the literal is asserted
+#      against the roster's own capability list.
+KITREG="$WORK/kitcap.yml"
+cat > "$KITREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coord-kit] }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coord-kit] }
+capabilities:
+  - { id: coord-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.SDD 0.1.0; pin FS-GG/FS.GG.Rendering 0.1.0
+#      The run may legitimately still be exit 0 — the WIRING half really did pass — but the sentence
+#      it ends on must not claim kit freshness it never looked at. That claim is what the earlier
+#      draft printed over two receivers pinning 0.1.0, five stable releases behind.
+out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
+        bash "$AUDIT" --registry "$KITREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ printf '%s' "$out" | grep -q "declares no 'coordination-kit' capability" \
+    && printf '%s' "$out" | grep -q 'NO kit pin was graded, so nothing is claimed' \
+    && ! printf '%s' "$out" | grep -q 'pin the published FS.GG.Kit'; } \
+  && ok "kit-pin: a sweep with no subject says so and claims NOTHING — never a green over nobody" \
+  || bad "a sweep whose subject does not exist must not report everyone current" "rc=$rc: $out"
+unpin FS-GG/FS.GG.SDD; unpin FS-GG/FS.GG.Rendering
+
+# (15) A byte-copy receiver has no pin to grade and must not be REFUSED for it. `kit-delivery`
+#      absent MEANS byte-copy per the roster, so grading every coordination-kit receiver would red
+#      the daily audit forever on a correct roster the moment such a receiver is rostered.
+BCREG="$WORK/bytecopy.yml"
+cat > "$BCREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+nopin FS-GG/FS.GG.Rendering        # a byte-copy receiver genuinely has no PackageReference
+out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
+        bash "$AUDIT" --registry "$BCREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 byte-copy, not graded' \
+    && ! printf '%s' "$out" | grep -q 'REFUSED a repo it cannot grade'; } \
+  && ok "kit-pin: a byte-copy receiver is EXCLUDED, not refused, and the exclusion is counted" \
+  || bad "byte-copy delivery has no pin and must not red the audit" "rc=$rc: $out"
+unpin FS-GG/FS.GG.Rendering
+
+# (16) VersionOverride BEATS the central PackageVersion under CPM. A sweep reading only `Version`
+#      grades the version that is NOT restored — a green over a stale receiver, which is this
+#      sweep's own failure mode one attribute over.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"
+mkpin "$KIT_PUBLISHED" "$FIX/FS-GG__FS.GG.Rendering/Directory.Packages.local.props"
+cat > "$FIX/FS-GG__FS.GG.Rendering/receiver.proj" <<XML
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Kit" VersionOverride="0.6.0" />
+  </ItemGroup>
+</Project>
+XML
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'pins FS.GG.Kit 0.6.0' \
+    && printf '%s' "$out" | grep -q 'VersionOverride'; } \
+  && ok "kit-pin: a VersionOverride WINS over the central pin, and reds when it is the stale one" \
+  || bad "the version that is actually restored is the one that must be graded" "rc=$rc: $out"
+
+# (17) An MSBuild property version is refused, and the message says the pin may be fine rather than
+#      calling it malformed — the sweep cannot resolve it, which is a different claim.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"
+cat > "$FIX/FS-GG__FS.GG.Rendering/Directory.Packages.local.props" <<'XML'
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="FS.GG.Kit" Version="$(FsggKitVersion)" />
+  </ItemGroup>
+</Project>
+XML
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'not a single literal NuGet version' \
+    && printf '%s' "$out" | grep -q 'may well be fine'; } \
+  && ok "kit-pin: an MSBuild-property version is refused, and named as unreadable not malformed" \
+  || bad "an unresolvable property is not a graded pin" "rc=$rc: $out"
+
+# (18) The MSBuild 2003 namespace, `Update=` instead of `Include=`, and a lowercase package id are
+#      all live spellings. Each would silently make a real pin invisible — which reads as "unpinned".
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"
+cat > "$FIX/FS-GG__FS.GG.Rendering/Directory.Packages.local.props" <<'XML'
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <PackageVersion Update="fs.gg.kit" Version="0.6.0" />
+  </ItemGroup>
+</Project>
+XML
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'pins FS.GG.Kit 0.6.0'; } \
+  && ok "kit-pin: the 2003 namespace, Update= and a lowercase id are all read as a real pin" \
+  || bad "a real pin in a legal spelling must not read as unpinned" "rc=$rc: $out"
+
+# (19) An unreadable pin file must not be blamed on WIRING. The per-capability lines say 0
+#      undetermined; a red that named wiring would send an operator to the wrong file (#327/#335).
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+: > "$FIX/FS-GG__FS.GG.Rendering.failpin"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'could not determine the FS.GG.Kit pin freshness' \
+    && ! printf '%s' "$out" | grep -q 'could not determine wiring'; } \
+  && ok "kit-pin: an unread pin reds as a PIN no-verdict, never as a wiring one" \
+  || bad "a red must name its own subject" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failpin"
+unpin FS-GG/FS.GG.Rendering
 
 # (13) The borrowed feed reader fails closed when it is gone, like the sparse rule does.
 rm -f "$SPARSEBOX/scripts/fsgg_feed.py"
