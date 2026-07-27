@@ -222,8 +222,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              every "QUEUED; flush replays it" message names (#862). Replays
                                              by DEFAULT; --dry-run lists the queue and writes nothing
   child  <parent-ref> <child-ref>            attach a child issue to a parent
-  widen  <ref> --paths T...                  add paths to a HELD item's touch-set (union; idempotent)
-  set-paths <ref> --paths T...               replace a HELD item's touch-set explicitly (also narrows)
+  widen  <ref> --paths T... [--json]         add paths to a HELD item's touch-set (union; idempotent)
+  set-paths <ref> --paths T... [--json]      replace a HELD item's touch-set explicitly (also narrows)
+                                             --json: the resulting declaration and the #353 verdict as
+                                             one object, rather than prose over two streams (#1517)
   overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
   say    <ref> [--to W] <message>            message another worker; --to defaults to `*` (anyone
                <ref> --to W --message M      holding the item). The message is POSITIONAL — the form

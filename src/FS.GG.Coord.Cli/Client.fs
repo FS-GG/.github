@@ -2614,11 +2614,17 @@ module Client =
 
     // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
     // the raw suffix beside a reservation that has none reads as two different things), deduped.
-    let private sharedTokens (pairs: (string * string) list) =
+    //
+    // #1517 — this returns the LIST and the human sites join it, rather than returning the joined string
+    // and leaving a machine consumer to split it back apart. `widen --json` emits these stems, and a
+    // comma-joined string beside a sibling `paths` ARRAY in the same object is a shape formatted for the
+    // stderr line it used to have only one caller for.
+    let private sharedTokens (pairs: (string * string) list) : string list =
         pairs
         |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
         |> List.distinct
-        |> String.concat ", "
+
+    let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
 
     /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
     /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
@@ -2630,7 +2636,7 @@ module Client =
         (opts: Options)
         (ref: Ref)
         (ts: TouchSet)
-        : Errors.IoResult<(Ref * string * string) list> =
+        : Errors.IoResult<(Ref * string * string list) list> =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> Error e
         | Ok board ->
@@ -2827,8 +2833,10 @@ module Client =
                                                 // machine contract, and stdout is the only stream `--json` speaks on.
                                                 let notified =
                                                     [ for other, holder, toks in collisions do
+                                                        let toksText = sharedTokenText toks
+
                                                         eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                                        eprint $"  %s{toks}"
+                                                        eprint $"  %s{toksText}"
 
                                                         // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
                                                         // overlap is TRANSIENT — the scheduler already sequences it and
@@ -2843,7 +2851,7 @@ module Client =
                                                         // decide, so the message names it instead of defaulting to the
                                                         // edge that closes rings.
                                                         let msg =
-                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toksText}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
                                                         match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
                                                         | Error e ->
@@ -2929,7 +2937,7 @@ module Client =
                         ExitGreen
                     | Ok collisions ->
                         for other, holder, toks in collisions do
-                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder toks
+                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder (sharedTokenText toks)
 
                         ExitContended
 
@@ -2961,7 +2969,7 @@ module Client =
                                 printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
                                 ExitGreen
                             | pairs ->
-                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokens pairs)
+                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
                                 ExitContended
 
         | _ ->

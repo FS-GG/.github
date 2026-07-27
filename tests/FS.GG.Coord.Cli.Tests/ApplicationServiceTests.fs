@@ -321,7 +321,9 @@ module ApplicationServiceTests =
         Assert.Equal("FS-GG/FS.GG.SDD", str "repo" collision)
         Assert.Equal(75, collision.GetProperty("number").GetInt32())
         Assert.Equal("otter-9c21", str "worker" collision)
-        Assert.Contains("src/Shared.fs", str "sharedTokens" collision)
+
+        // An ARRAY, like the `paths` beside it — not the comma-joined string the human stderr line uses.
+        Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
 
         // The notice this command posts on the OTHER worker's item is part of the receipt. A notice that
         // FAILED still leaves a standing collision, so a consumer must be able to read the outcome rather
@@ -332,12 +334,14 @@ module ApplicationServiceTests =
         // ExitContended (6) — UNCHANGED, and the same in both projections.
         Assert.Equal(6, code)
 
-    [<Fact>]
-    let ``a courtesy notice that failed is reported IN the receipt, not by silence`` () =
+    [<Theory>]
+    [<InlineData "widen">]
+    [<InlineData "set-paths">]
+    let ``a courtesy notice that failed is reported IN the receipt, not by silence`` (verb: string) =
         let code, out =
             run
                 (overlappingWorld true)
-                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+                [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
 
         let collision =
             (parsed out).GetProperty("collisions").EnumerateArray() |> Seq.head
@@ -350,15 +354,23 @@ module ApplicationServiceTests =
         Assert.Equal(6, code)
 
     [<Theory>]
-    [<InlineData "widen">]
-    [<InlineData "set-paths">]
-    let ``the OVERLAP human projection is unchanged and puts nothing on stdout`` (verb: string) =
+    [<InlineData("widen", "widened")>]
+    [<InlineData("set-paths", "set")>]
+    let ``the OVERLAP human projection is unchanged and puts nothing else on stdout`` (verb: string, past: string) =
         let code, out =
             run (overlappingWorld false) [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
 
         // The human OVERLAP branch has always written its detail to stderr and only the receipt line to
         // stdout. That is the split #1517 fixes FOR MACHINES by putting the detail in the object — it does
         // not move a byte of the human form, which existing recipes read.
-        Assert.DoesNotContain("OVERLAP", out)
-        Assert.Contains("→ Paths: ", out)
+        //
+        // Pinned as an EQUALITY, like the DISJOINT leg above. A `DoesNotContain "OVERLAP"` would still pass
+        // if the Text branch also emitted the JSON object, whose verdict is the lowercase `"overlap"`.
+        let declared =
+            if verb = "widen" then
+                "scripts/fsgg-coord, src/Shared.fs"
+            else
+                "src/Shared.fs"
+
+        Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
         Assert.Equal(6, code)

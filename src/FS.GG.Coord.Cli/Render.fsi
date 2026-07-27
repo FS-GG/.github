@@ -84,8 +84,9 @@ module Render =
     type PathCollision =
         { Ref: Ref
           Worker: string
-          /// The shared token STEMS, exactly as the human line names them.
-          SharedTokens: string
+          /// The shared token STEMS. A LIST, rendered as an array — the human form joins them into one
+          /// stderr line, and a machine field shaped to that line would be a consumer splitting on ", ".
+          SharedTokens: string list
           Notified: bool
           /// Why the notice failed; `None` when it landed.
           NotifyError: string option }

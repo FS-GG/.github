@@ -102,7 +102,7 @@ module Render =
     type PathCollision =
         { Ref: Ref
           Worker: string
-          SharedTokens: string
+          SharedTokens: string list
           Notified: bool
           NotifyError: string option }
 
@@ -344,7 +344,17 @@ module Render =
             w.WriteString("repo", $"%s{c.Ref.Owner}/%s{c.Ref.Repo}")
             w.WriteNumber("number", c.Ref.Number)
             w.WriteString("worker", c.Worker)
-            w.WriteString("sharedTokens", c.SharedTokens)
+
+            // An ARRAY, like the `paths` beside it and like `renderWhoJson`'s. The human form joins these
+            // stems into one stderr line; shaping the machine field to that line would hand a consumer a
+            // string to split on ", " — a human's formatting choice promoted to a wire contract.
+            w.WriteStartArray("sharedTokens")
+
+            for t in c.SharedTokens do
+                w.WriteStringValue t
+
+            w.WriteEndArray()
+
             w.WriteBoolean("notified", c.Notified)
 
             match c.NotifyError with
