@@ -16,12 +16,12 @@ bad() { echo "FAIL  $1"; failcount=$((failcount + 1)); }
 if python3 "$CHECK" --root "$ROOT"; then
   ok "the real three-root skills carry one coherent current truth"
 else
-  bad "the real three-root skill audit failed"
+  bad "the real two-root skill audit failed"
 fi
 
 seed() {
   local target="$1"
-  for runtime in .agents/skills .codex/skills .claude/skills; do
+  for runtime in .agents/skills .claude/skills; do
     mkdir -p "$target/$runtime"
     for skill in check-board cross-repo-coordination cut-nuget-release drive-board \
       intra-repo-parallel-work lane-steward p-add padd-item pnext-item publishing-and-deployment \
@@ -48,7 +48,7 @@ expect_finding() {
 
 LANE="$WORK/lane"
 seed "$LANE"
-for runtime in .agents/skills .codex/skills .claude/skills; do
+for runtime in .agents/skills .claude/skills; do
   sed -i 's|scripts/fsgg-coord set-paths <issue> --paths|scripts/fsgg-coord widen <issue> --paths|' \
     "$LANE/$runtime/lane-steward/SKILL.md"
 done
@@ -59,7 +59,7 @@ expect_finding \
 
 PUBLISH="$WORK/publish"
 seed "$PUBLISH"
-for runtime in .agents/skills .codex/skills .claude/skills; do
+for runtime in .agents/skills .claude/skills; do
   sed -i 's/## Historical rollout record/## Public nuget.org (decided, wiring pending — ADR-0012 + ADR-0013)/' \
     "$PUBLISH/$runtime/publishing-and-deployment/SKILL.md"
 done

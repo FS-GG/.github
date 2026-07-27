@@ -35,6 +35,21 @@
             public string KitDir { get; set; }
             public string ReceiverRoot { get; set; }
             public string SkillRoots { get; set; }
+
+            // Roots this contract USED to declare and no longer does, ';'-separated (ADR-0065 as
+            // amended by ADR-0067 §5, .github#1636).
+            //
+            // WITHOUT THIS THE RETIREMENT CANNOT REACH A RECEIVER. The stale-file sweep below only
+            // visits directories the manifest still maps into, so dropping a root from SkillRoots
+            // makes the materializer STOP LOOKING at it — the retired copies would survive every
+            // future materialize, orphaned but present, and Codex would keep cataloging them. A
+            // receiver would then have to delete the tree BY HAND, which is exactly what ADR-0065's
+            // transport contract forbids and what this item's acceptance criterion 3 rules out.
+            //
+            // Scope is deliberately narrow: only skill directories the CURRENT manifest declares are
+            // removed, so a receiver's OWN skill under a retired root is left alone (and the root
+            // then stays, non-empty, which is the correct outcome — it is no longer ours to police).
+            public string RetiredSkillRoots { get; set; }
             // The build-config capability (Directory.Build.props / Directory.Packages.props) reaches
             // only 4 of the receivers and .github imports rather than copies it, so it is OPT-IN: a
             // consumer that wants it sets FsggKitMaterializeBuildConfig=true. Off, build-config rows are
@@ -83,9 +98,18 @@
                 foreach (var r in (SkillRoots ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
                     roots.Add(r.Trim());
 
+                var retiredRoots = new List<string>();
+                foreach (var r in (RetiredSkillRoots ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var t = r.Trim();
+                    // A root cannot be both live and retired; the live set wins and the entry is ignored.
+                    if (t.Length > 0 && !roots.Contains(t)) retiredRoots.Add(t);
+                }
+
                 var clients = new List<ITaskItem>();
                 var nonClients = new List<ITaskItem>();
                 var managedSkillDirs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                var kitSkillNames = new HashSet<string>(StringComparer.Ordinal);
                 int copied = 0, verified = 0;
 
                 foreach (var raw in File.ReadAllLines(manifest))
@@ -125,6 +149,23 @@
                     }
 
                     var dests = new List<string>();
+                    if (kind == "skill")
+                    {
+                        // The skill's own top-level directory name, which is what a retired root holds
+                        // a copy of. Recorded from the manifest — AFTER the existence and sha256 checks
+                        // above, so only a row this package really carries can ever name a deletion —
+                        // so the sweep below removes only what the kit itself put there.
+                        //
+                        // `.`/`..` are REFUSED rather than normalized. A manifest destination that
+                        // escapes its root is a producer defect the copy path already treats as one,
+                        // but here the consequence is a recursive DELETE outside the retired root, so
+                        // it is rejected explicitly instead of relying on that.
+                        var normalizedDest = receiverDest.Replace('\\', '/');
+                        var slash = normalizedDest.IndexOf('/');
+                        var skillName = slash < 0 ? normalizedDest : normalizedDest.Substring(0, slash);
+                        if (skillName.Length > 0 && skillName != "." && skillName != "..")
+                            kitSkillNames.Add(skillName);
+                    }
                     if (kind == "skill")
                         foreach (var root in roots)
                             dests.Add(Path.Combine(ReceiverRoot, root, receiverDest.Replace('/', Path.DirectorySeparatorChar)));
@@ -214,6 +255,55 @@
                     }
                 }
 
+                // RETIRED ROOTS. A root this contract no longer declares still holds the copies an
+                // OLDER package wrote. The loop above cannot reach them — it only walks `roots` — so
+                // the retirement is completed here, by the materializer, on the receiver's next
+                // restore. This is the mechanism that lets ADR-0065's "never delete a mirror by hand"
+                // and ADR-0067 §5's "the third root goes away" both be true at once.
+                //
+                // ONLY ON A CLEAN MATERIALIZE. If anything above failed — a missing packaged file, a
+                // sha256 mismatch, a refused hand-authored .props — the receiver does NOT yet have the
+                // copies that replace these, and removing the old ones would turn a loud, recoverable
+                // failure into a tree with no skills in any root. Deleting last year's copy is only
+                // safe once this year's is verifiably on disk.
+                if (!Log.HasLoggedErrors)
+                {
+                foreach (var retired in retiredRoots)
+                {
+                    var retiredRootDir = Path.Combine(ReceiverRoot, retired.Replace('/', Path.DirectorySeparatorChar));
+                    if (!Directory.Exists(retiredRootDir)) continue;
+                    foreach (var skillName in kitSkillNames)
+                    {
+                        var stale = Path.Combine(retiredRootDir, skillName);
+                        if (!Directory.Exists(stale)) continue;
+                        // A SYMLINKED entry is unlinked, never recursed into. Phase 2 (.github#1635)
+                        // makes a runtime root a generated view, so a retired root may legitimately be
+                        // a link to a tree that is still live — and a recursive delete through it would
+                        // destroy the canonical source instead of the copy.
+                        var info = new DirectoryInfo(stale);
+                        if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+                        {
+                            info.Delete();
+                            Log.LogMessage(MessageImportance.High,
+                                "FS.GG.Kit: unlinked retired skill root view " + stale + " (ADR-0067 §5).");
+                            continue;
+                        }
+                        Directory.Delete(stale, true);
+                        Log.LogMessage(MessageImportance.High,
+                            "FS.GG.Kit: removed retired skill root copy " + stale + " (ADR-0067 §5).");
+                    }
+                    // Only if nothing of the receiver's own is left. A surviving entry is theirs, not
+                    // ours, and removing the directory around it would be the hand-deletion this whole
+                    // mechanism exists to avoid.
+                    if (Directory.GetFileSystemEntries(retiredRootDir).Length == 0)
+                    {
+                        Directory.Delete(retiredRootDir);
+                        Log.LogMessage(MessageImportance.High,
+                            "FS.GG.Kit: removed now-empty retired skill root " + retiredRootDir + ".");
+                    }
+                }
+                }
+
                 ClientFiles = clients.ToArray();
                 NonClientFiles = nonClients.ToArray();
                 // A floor, not decoration: an EMPTY or truncated-to-zero manifest would otherwise
@@ -239,6 +329,7 @@
        of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
   <Target Name="FsggKitMaterialize">
     <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)"
+                    RetiredSkillRoots="$(FsggKitRetiredSkillRoots)"
                     IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)" AdoptBuildConfig="$(FsggKitAdoptBuildConfig)">
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
       <Output TaskParameter="NonClientFiles" ItemName="_FsggKitNonClient" />

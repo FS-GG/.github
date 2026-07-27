@@ -13,8 +13,16 @@
     <FsggKitReceiverRoot Condition="'$(FsggKitReceiverRoot)' == ''">$(MSBuildProjectDirectory)</FsggKitReceiverRoot>
 
     <!-- The skill roots a receiver holds, ';'-separated. ADR-0065 makes this the same universal
-         three-root contract used by fsgg-sdd and coordination-sync. -->
-    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.codex/skills;.agents/skills</FsggKitSkillRoots>
+         root contract used by fsgg-sdd and coordination-sync — TWO roots since ADR-0067 §5
+         (.github#1636) retired `.codex/skills`, which is Codex's other native root and produced only
+         a duplicate catalog entry. Receivers drop it by RE-MATERIALIZING, never by hand. -->
+    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.agents/skills</FsggKitSkillRoots>
+
+    <!-- Roots the contract has RETIRED, ';'-separated. The materializer removes the kit's own skill
+         directories from each on the receiver's next restore, so a retirement completes itself
+         instead of leaving every receiver an orphaned tree to delete by hand. Retiring a root without
+         listing it here is a no-op on receivers: the materializer only walks FsggKitSkillRoots. -->
+    <FsggKitRetiredSkillRoots Condition="'$(FsggKitRetiredSkillRoots)' == ''">.codex/skills</FsggKitRetiredSkillRoots>
 
     <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
          materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->

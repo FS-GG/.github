@@ -50,7 +50,7 @@ WHAT THIS GATE ASSERTS — THE SYNTACTIC RULE, AND WHY THAT ONE
     construction. But the anchoring was a real finding in #1514's review, not a stylistic one: under
     `sparse-checkout-cone-mode: false` these patterns are gitignore-style, so a pattern with no
     leading or interior slash matches a directory of that name AT ANY DEPTH — and this repo has SIX
-    such directories (`.agents|.claude|.codex/skills/work-{board,roadmap}/scripts/`), every one of
+    such directories (`.agents|.claude/skills/work-{board,roadmap}/scripts/`), every one of
     which a bare `scripts/` drags in. The elegant gate is BLIND to the exact refinement the two
     repairs landed. A gate that blesses the wrong pattern is worse than a cheaper one that does not.
 
@@ -414,7 +414,7 @@ def grade_pattern(pattern: str, *, cone: bool, where: str, tracked: set[str] | N
                 f"{where}: sparse pattern {pattern!r} is NOT ANCHORED. Under "
                 f"`sparse-checkout-cone-mode: false` these are gitignore-style patterns, so one with "
                 f"no leading slash matches a directory of that name AT ANY DEPTH — a bare `scripts/` "
-                f"also drags in the six nested scripts/ directories under this repo's skill bundles. "
+                f"also drags in the four nested scripts/ directories under this repo's skill bundles. "
                 f"Add the leading slash so 'this checkout is scoped to scripts/' is a true claim."
             )
 

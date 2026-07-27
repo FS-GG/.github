@@ -221,10 +221,15 @@ capabilities:
       build-config hole that #628 exists to close.
 
   # THE FULL SKILL UNION (#1504, ADR-0065, ADR-0011). `coordination-kit`'s detector above proves the
-  # KIT-OWNED SUBSET of the three-root invariant — the four skills the `kit:` block names, and only
+  # KIT-OWNED SUBSET of the root invariant — the four skills the `kit:` block names, and only
   # those. This row is the capability that proves the WHOLE runtime-visible union: every skill in a
-  # repo's committed `.claude/skills`, `.codex/skills` and `.agents/skills`, present in every root and
+  # repo's committed `.claude/skills` and `.agents/skills`, present in every root and
   # byte-identical across them. The two are not the same claim, and the gap between them was invisible.
+  #
+  # THE ROOT SET IS TWO since 2026-07-28 (ADR-0067 §5, #1636); the measurement below predates that and
+  # its `.codex` column is history, not a live column. The gap it records is unaffected: `.codex` and
+  # `.agents` were BOTH Codex-native, so a repo short on `.agents` was short on skills for Codex either
+  # way, and retiring `.codex` removes a copy rather than a runtime.
   #
   # MEASURED ON `origin/main`, 2026-07-27, and this is why the row exists: Governance holds
   # `.claude=15 .codex=4 .agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD

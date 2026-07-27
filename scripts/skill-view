@@ -74,10 +74,12 @@ SOURCE=""
 MANIFEST=""
 MODE="auto"
 
-# ADR-0011's three, unchanged by this record (ADR-0067 §9). `lib/roots.sh` takes the default from its
-# CALLER precisely so a migration changes it in one reviewed place rather than four by drift.
-DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"
-DEFAULT_LABEL="default (ADR-0011's three)"
+# ADR-0065's two, as amended by ADR-0067 §5 and landed by .github#1636. `lib/roots.sh` takes the
+# default from its CALLER precisely so a migration changes it in one reviewed place rather than four
+# by drift — and this is that migration: `.codex/skills` is Codex's OTHER native root, so it carried
+# no runtime the remaining two do not and only ever produced a duplicate catalog entry.
+DEFAULT_ROOTS=".claude/skills .agents/skills"
+DEFAULT_LABEL="default (ADR-0065's two)"
 
 die() { echo "::error::skill-view: $*" >&2; exit 2; }
 

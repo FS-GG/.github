@@ -5,7 +5,6 @@ on:
   pull_request:
     paths:
       - ".claude/skills/**"
-      - ".codex/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "registry/skills.yml"
@@ -27,7 +26,6 @@ on:
     branches: [main]
     paths:
       - ".claude/skills/**"
-      - ".codex/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
       - "registry/skills.yml"

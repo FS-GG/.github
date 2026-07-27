@@ -95,7 +95,7 @@
 set -euo pipefail
 
 PRODUCT="."
-DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"   # ADR-0011: the scaffolded-product set
+DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 as amended by ADR-0067 §5 (#1636): TWO roots
 ROOTS_DECL_FILE=".agent-skill-roots"   # named in the missing-root hint below; lib/roots.sh reads it
 ROOTS=""
 ROOTS_ARG=""
@@ -132,7 +132,7 @@ Options:
   --roots "<r1> ..."      space-separated skill roots, relative to --product. Resolution order:
                           --roots, then $AGENT_SKILL_ROOTS, then <product>/.agent-skill-roots (a
                           checked-in declaration, for a tree that is not a scaffolded product),
-                          then ADR-0011's three: ".claude/skills .codex/skills .agents/skills".
+                          then ADR-0065's two: ".claude/skills .agents/skills" (ADR-0067 §5).
                           An absent root is a misconfiguration (exit 2) at every level.
   --manifest <file.json>  producer skill-manifest; enables the digest cross-check (check 3)
   --co-tenants "<glob>…"  globs of undeclared co-tenant skill ids to admit (only with --manifest)

@@ -56,8 +56,11 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
     errors = findings(root)
     assert any("placeholder" in item for item in errors)
 
+    # Restore the mutated root from the OTHER root's pristine copy, so the next assertion sees a
+    # metadata finding rather than a cross-root divergence. The source was `.codex` until ADR-0067 §5
+    # retired it (.github#1636); `.claude` is the surviving counterpart of `.agents`.
     shutil.copyfile(
-        root / ".codex/skills/sample-skill/SKILL.md",
+        root / ".claude/skills/sample-skill/SKILL.md",
         root / ".agents/skills/sample-skill/SKILL.md",
     )
     skill.write_text(skill_text("wrong-name", valid))

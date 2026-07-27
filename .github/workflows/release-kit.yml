@@ -150,7 +150,7 @@ jobs:
           CSPROJ
           dotnet restore "$work/Consumer.csproj" --configfile "$work/isolated.config"
           dotnet build   "$work/Consumer.csproj" -c Release --no-restore
-          for root in .claude/skills .codex/skills .agents/skills; do
+          for root in .claude/skills .agents/skills; do
             for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
               [ -f "$recv/$root/$s/SKILL.md" ] || { echo "::error::packaged kit did not materialize $root/$s/SKILL.md from a real restore"; exit 1; }
             done

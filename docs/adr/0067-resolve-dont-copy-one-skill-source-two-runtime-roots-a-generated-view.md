@@ -10,7 +10,7 @@
      visible from BOTH ends, which is the whole point of house rule 3. -->
 - **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1 — **in DIRECTION only;** it stays in force and this record retires nothing it mandates. See §9.
 - **Amends:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5 — **in DIRECTION only;** the declared root set is unchanged today. Decision 6 is untouched and re-affirmed. See §6, §9.
-- **Amends:** [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set — **in DIRECTION only;** the ordered three-root set and the transport contract still govern. See §5, §9.
+- **Amends:** [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set — **§5 is EXECUTED as of 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)): the ordered set is now TWO, `.claude/skills` + `.agents/skills`, and ADR-0065 was amended in that same change.** Its transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. §6's generated view is NOT landed. See §5, §9.
 - **Applies:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — *derive, don't restate* — to files rather than to facts.
 
 ## Context
@@ -67,6 +67,18 @@ project root). `.codex/skills` carries no runtime that the other two do not — 
 removes the duplicate catalog entry Codex measurably emits when a skill appears in both of its
 roots, which host configuration currently has to suppress on every developer machine.
 
+> **EXECUTED 2026-07-28 by [#1636](https://github.com/FS-GG/.github/issues/1636),** on the maintainer's
+> explicit authorisation of 2026-07-27, ahead of phases 2–4 and depending on none of them. ADR-0065 was
+> amended in the same change, as this record's Consequences require. The premise was **re-measured**
+> rather than inherited from phase 1: in a three-root tree the same skill appears **twice** in
+> `codex debug prompt-input` (from `.codex/skills` and `.agents/skills`, never from `.claude/skills`);
+> in a two-root tree it appears **once**, from `.agents/skills`, with no configuration at all. Measured
+> benefit: Codex's effective catalog cost on this repo's own driver skills fell **6335 → 3174**
+> characters. One finding not anticipated here: the kit materializer could not by itself complete the
+> retirement on receivers, because dropping a root from the declared set makes the materializer stop
+> looking at that root — so a **retired-root declaration** was required and is now part of the contract
+> (ADR-0065 §Retiring a root). §6's generated view is untouched and still unbuilt.
+
 **§6 — The mechanism is a view generated at checkout, never a committed symlink.** Both runtimes
 accept an untracked, generated directory and cannot distinguish it from a committed one; neither
 consults git. A **committed** symlink, by contrast, does not degrade under
@@ -93,8 +105,10 @@ silent one, which is `#1611`'s own category-D finding ("a gate that never runs a
 always passes are indistinguishable from outside") re-appearing on the far side of the rewrite.
 
 **§9 — Sequencing: nothing is retired before its replacement is proven.** ADR-0011, ADR-0014 and
-ADR-0065 remain **in force**, and their root set remains **three**, until the phase that lands the
-mechanism amends them in the same change that proves it. The order is: build the view and the
+ADR-0065 remain **in force**, and no *mechanism* is retired until the phase that lands its replacement
+amends them in the same change that proves it. (Their root set was **three**; §5 narrowed it to two on
+2026-07-28 — a root-set narrowing is not a mechanism retirement, it retires nothing that has a
+replacement pending, and the Alternatives below call it *separable rather than optional*.) The order is: build the view and the
 absence check; run it alongside the existing gates unchanged; **port** the fixtures rather than
 re-derive them; retire the old apparatus **per repo**, with the freshness sweep last.
 
@@ -112,6 +126,8 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
   `FS.GG.Kit`, `.agent-skill-roots`, `KitDigest.fs` and the composition gate, and ADR-0065's transport
   contract **forbids** deleting a mirror to hide a duplicate. Executing §5 therefore requires amending
   ADR-0065 in the change that lands it — this record decides the direction, not the flip.
+  **DONE 2026-07-28 (#1636):** all six migrated in one change, ADR-0065 amended in it, and the
+  transport contract kept rather than bent — see ADR-0065 §Retiring a root.
 - §2 and §3 bind **now**, independently of the rewrite. They are the rules
   [#1584](https://github.com/FS-GG/.github/issues/1584) and
   [#1585](https://github.com/FS-GG/.github/issues/1585) are the first instances of, and a new gate

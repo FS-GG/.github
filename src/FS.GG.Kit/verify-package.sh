@@ -71,6 +71,17 @@ unzip -q "$nupkg" "kit/*" "build/*" -d "$WORK/unpacked"
 # not the package cache, owns the modes receiver repos commit.
 find "$WORK/unpacked/kit" -type f -exec chmod a+x {} +
 recv="$WORK/recv"; mkdir -p "$recv"
+# A receiver as it stands TODAY: carrying the `.codex/skills` copies an older kit wrote, plus one skill
+# of its own. Seeded BEFORE the first materialize so the retired-root sweep is measured on the real
+# migration shape rather than on an empty tree (ADR-0067 §5, .github#1636).
+mkdir -p "$recv/.codex/skills/check-board" "$recv/.codex/skills/receiver-own-skill"
+printf 'stale kit copy\n' > "$recv/.codex/skills/check-board/SKILL.md"
+printf 'the receiver own skill\n' > "$recv/.codex/skills/receiver-own-skill/SKILL.md"
+# ...and one retired-root entry that is a generated VIEW rather than a copy (the phase-2 shape,
+# .github#1635). The sweep must UNLINK it, never recurse through it into the canonical tree.
+mkdir -p "$WORK/canonical-victim"
+printf 'canonical, must survive\n' > "$WORK/canonical-victim/SKILL.md"
+ln -s "$WORK/canonical-victim" "$recv/.codex/skills/pnext-item"
 cat > "$WORK/materialize.proj" <<EOF
 <Project>
   <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
@@ -82,19 +93,31 @@ cat > "$WORK/materialize.proj" <<EOF
 </Project>
 EOF
 dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
-for root in .claude/skills .codex/skills .agents/skills; do
+for root in .claude/skills .agents/skills; do
   for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
     [ -f "$recv/$root/$s/SKILL.md" ] || fail "skill not materialized: $root/$s/SKILL.md"
   done
 done
 [ -x "$recv/scripts/fsgg-coord" ]        || fail "client not materialized executable at scripts/fsgg-coord"
 [ -f "$recv/.config/dotnet-tools.json" ] || fail "engine manifest not materialized at .config/dotnet-tools.json"
-unexpected_exec="$(find "$recv/.claude/skills" "$recv/.codex/skills" "$recv/.agents/skills" \
+# The retired root is swept BY THE MATERIALIZER (ADR-0067 §5). Both halves are load-bearing: the kit's
+# own copy goes, and the receiver's own skill under that root SURVIVES — a sweep that took the whole
+# directory would be the hand-deletion ADR-0065's transport contract forbids, wearing a build task.
+[ ! -e "$recv/.codex/skills/check-board" ] \
+  || fail "retired root .codex/skills still carries the kit's check-board after materialize"
+[ -f "$recv/.codex/skills/receiver-own-skill/SKILL.md" ] \
+  || fail "retired-root sweep destroyed a skill the kit does not own"
+[ ! -e "$recv/.codex/skills/pnext-item" ] && [ ! -L "$recv/.codex/skills/pnext-item" ] \
+  || fail "retired-root sweep left a generated view behind at .codex/skills/pnext-item"
+[ -f "$WORK/canonical-victim/SKILL.md" ] \
+  || fail "retired-root sweep RECURSED THROUGH A SYMLINK and destroyed the canonical tree"
+echo "   retired root .codex/skills swept: kit copies removed, a view unlinked not followed, the receiver's own skill kept"
+unexpected_exec="$(find "$recv/.claude/skills" "$recv/.agents/skills" \
   "$recv/.config/dotnet-tools.json" -type f -perm /111 -print)"
 [ -z "$unexpected_exec" ] || fail "non-client receiver output is executable after fresh materialize: $unexpected_exec"
 # build-config is OPT-IN: the default materialize must NOT write it.
 [ ! -f "$recv/Directory.Build.props" ]    || fail "build-config materialized without opt-in (Directory.Build.props at receiver root)"
-echo "   4 skills × 3 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
+echo "   4 skills × 2 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
 
 echo "== 3a. overwrite + byte-identical materialization normalize metadata =="
 probe="$recv/.agents/skills/check-board/SKILL.md"
@@ -175,7 +198,7 @@ printf 'skill\tskills/check-board/references/transport.md\tcheck-board/reference
 mkdir -p "$recv/.claude/skills/check-board"
 printf 'stale\n' > "$recv/.claude/skills/check-board/undeclared.txt"
 dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
-for root in .claude/skills .codex/skills .agents/skills; do
+for root in .claude/skills .agents/skills; do
   [ -x "$recv/$root/check-board/references/transport.md" ] \
     || fail "multi-file skill reference was not materialized executable: $root"
 done

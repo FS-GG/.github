@@ -85,7 +85,7 @@ module KitDigest =
     /// The universal skill roots — `coordination-sync`, FS.GG.Kit and fsgg-sdd share this default
     /// under ADR-0065. Repos with an intentional override simply lack the other root directories;
     /// `kitDivergedRoots` treats an absent root as outside that tree's declared runtime surface.
-    let private kitSkillRoots = [ ".claude/skills"; ".codex/skills"; ".agents/skills" ]
+    let private kitSkillRoots = [ ".claude/skills"; ".agents/skills" ]
 
     let private skillCopies (roots: string list) (src: string) : (string * string) list =
         let trim (s: string) = s.TrimEnd([| '/' |])

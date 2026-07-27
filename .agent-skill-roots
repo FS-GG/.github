@@ -2,8 +2,13 @@
 # --roots nor $AGENT_SKILL_ROOTS is given (.github#517).
 #
 # FS-GG/.github is a KIT SOURCE repo, not a scaffolded product. ADR-0065 removes the former kit-lane
-# exception: framework repos and scaffolded products expose the same three runtime roots. The checked-in
+# exception: framework repos and scaffolded products expose the SAME runtime roots. The checked-in
 # declaration keeps the bare local assertion and every materializer on that universal contract.
+#
+# TWO roots, not three (ADR-0065 as amended by ADR-0067 §5, landed by .github#1636). `.agents/skills`
+# is CODEX's own second native root, not a third runtime's — measured on Codex CLI 0.145.0, which
+# discovers it with no configuration at all. `.codex/skills` therefore carried no runtime the other
+# two did not, and its only observable effect was a DUPLICATE catalog entry Codex emits when the same
+# skill appears in both of its roots. Retiring it is a contract migration, not a mirror deletion.
 .claude/skills
-.codex/skills
 .agents/skills

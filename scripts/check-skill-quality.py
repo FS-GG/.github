@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
+ROOTS = (".claude/skills", ".agents/skills")
 # The single statement of the contract schema this gate understands. Stated ONCE on purpose
 # (.github#1574): two literals let two readers of the same contract disagree about whether they
 # are looking at a supported document, and one of them then declines to check anything.

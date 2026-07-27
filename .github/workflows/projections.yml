@@ -114,7 +114,10 @@ jobs:
           #          registry/dependencies.yml).
           # 27 → 37: M3 routes ten skill projections into focused references and emits each one to the
           #          third active root (`.codex`) as well as `.claude`/`.agents` (#1413).
-          expected=37
+          # 37 → 27: ADR-0067 §5 (#1636) retires `.codex/skills` — it is Codex's OTHER native root, so
+          #          those ten emissions were a second copy nothing read. The ten projections remain;
+          #          only the duplicate destination goes.
+          expected=27
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

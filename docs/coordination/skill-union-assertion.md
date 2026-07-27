@@ -16,16 +16,16 @@ one thin `workflow_call` wrapper, wired into a caller with a single `uses:` bloc
 ADR-0014's four-repo audit (finding **F2**) found the skill-vendoring apparatus verified
 **presence only** — `doctor`/`upgrade` checked `Option.isSome`, the composition gate asserted
 *nothing* about the roots, and `scaffold-provenance` carried no digest. So a root that exists but
-has **drifted bytes**, a provider skill **missing from one root**, or a `.codex` that **diverges**
-from `.claude` were all invisible. The apparatus that exists to guarantee "the three roots are the
-byte-identical union" never checked that they were. This assertion is that missing check, made
+has **drifted bytes**, a provider skill **missing from one root**, or an `.agents` root that
+**diverges** from `.claude` were all invisible. The apparatus that exists to guarantee "the roots are
+the byte-identical union" never checked that they were. This assertion is that missing check, made
 reusable so *every* lane (orchestrated `fsgg-sdd` **and** standalone template) asserts it where
 skills are consumed.
 
 ## What it checks
 
 Over the configured `AGENT_SKILL_ROOTS` ([which roots?](#which-roots--a-tree-declares-its-own-set-517)
-— default ADR-0011's three: `.claude/skills`, `.codex/skills`, `.agents/skills`), for **every** skill
+— default ADR-0065's two: `.claude/skills`, `.agents/skills`), for **every** skill
 in the union it asserts:
 
 1. **present** — the skill directory exists in **every** root (a miss is a *partitioned* root);
@@ -60,7 +60,7 @@ the ADR-0017 tightening — see below.
 The producer manifest is JSON — ADR-0014's `{ id, scope, sha256, body }` per skill:
 
 ```json
-{ "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+{ "roots": [".claude/skills", ".agents/skills"],
   "skills": [
     { "id": "cross-repo-coordination", "scope": "process", "sha256": "<SKILL.md body sha256>" },
     { "id": "fs-gg-ui-render",          "scope": "product", "sha256": "<SKILL.md body sha256>" }
@@ -227,7 +227,7 @@ Directly:
 
 ```sh
 scripts/skill-union-assert.sh --product <product-dir> \
-  [--roots ".claude/skills .codex/skills .agents/skills"] \
+  [--roots ".claude/skills .agents/skills"] \
   [--manifest <manifest.json>] \
   [--co-tenants "fs-gg-sdd-* speckit-*"] \
   [--params <scaffold-provenance.json>]        # enables the condition-aware check 4 (needs --manifest)
@@ -244,8 +244,8 @@ ADR-0065 gives both delivery lanes the same default root set:
 
 | Lane | Roots | Written by |
 | --- | --- | --- |
-| **Scaffolded product** | `.claude/skills` `.codex/skills` `.agents/skills` (ADR-0011's three) | `fsgg-sdd`, the sole mirror authority |
-| **Kit consumer** (FS-GG's own repos, incl. `.github`) | `.claude/skills` `.codex/skills` `.agents/skills` | `FS.GG.Kit` / `coordination-sync` |
+| **Scaffolded product** | `.claude/skills` `.agents/skills` (ADR-0065's two) | `fsgg-sdd`, the sole mirror authority |
+| **Kit consumer** (FS-GG's own repos, incl. `.github`) | `.claude/skills` `.agents/skills` | `FS.GG.Kit` / `coordination-sync` |
 
 The roots resolve in this order; a tree declares a set only when it intentionally overrides the
 universal default:
@@ -260,35 +260,44 @@ arguments** is green on a clean tree here, and why `skill-roots-selfcheck.yml` r
 command — the command CI runs is the command a worker runs.
 
 **An absent root stays a hard exit `2` at every level.** Declaring roots narrows *what is asked for*;
-it never weakens the answer. This is why the fix for #517 was a declaration rather than dropping
-`.codex/skills` from the default: a scaffolded product whose producer never materialized `.codex/`
-must keep failing — catching exactly that is the gate's reason to exist (ADR-0011's origin bug), and
-a default that no longer asks for the root would be the fail-*open* pattern of #266/#292.
+it never weakens the answer. This is why the fix for #517 was a declaration rather than dropping a
+root from the default: a scaffolded product whose producer never materialized `.agents/` must keep
+failing — catching exactly that is the gate's reason to exist (ADR-0011's origin bug), and a default
+that no longer asks for a root it still expects would be the fail-*open* pattern of #266/#292.
+
+> `.codex/skills` **was** in this default and is no longer, and that is not the failure above.
+> ADR-0067 §5 (.github#1636) established by measurement that it was Codex's *other* native root
+> rather than a third runtime's, so it was removed from what is ASKED FOR, in the same change that
+> removed it from what is DELIVERED. Narrowing a default because a root has no runtime is a contract
+> migration; narrowing one while a producer still owes the root is the fail-open bug.
 
 **The declaration is for a tree asserting *itself*, never for a tree being audited.** The reusable
 `skill-union-assert.yml` gate therefore **always passes `--roots` explicitly** and never consults the
 product's `.agent-skill-roots`. The tree it audits is producer-*generated* (`fsgg-sdd` and the
 `fs-gg-ui` template write it), whereas the `roots:` input is human-authored by the consumer repo —
 so honouring a declaration found *inside the subject* would let a template bug that emitted one
-silently switch `.codex/skills` off and turn the gate green on a partitioned product. The roots come
+silently switch a root off and turn the gate green on a partitioned product. The roots come
 from the caller; the declaration serves the bare local run and a repo's own selfcheck.
 
 ## Subset coherence is not union coherence (#1504)
 
-Two org gates check the three-root invariant, they are **not** the same claim, and reading one as the
+Two org gates check the root invariant, they are **not** the same claim, and reading one as the
 other cost the org three partitioned repositories:
 
 | gate | subject | what a green means |
 | --- | --- | --- |
 | [`coordination-coherence.yml`](../../.github/workflows/coordination-coherence.yml) (`receives: coordination-kit`) | the **kit-owned subset** — exactly the skills `registry/repos.yml`'s `kit:` block names (today: `cross-repo-coordination`, `intra-repo-parallel-work`, `check-board`, `pnext-item`) | those four skills are materialized, in every root, byte-identical to canonical |
-| this assertion, wired as `receives: skill-union` | the **complete runtime-visible union** — every skill in the repo's committed `.claude/skills`, `.codex/skills`, `.agents/skills` | *every* skill in the union is present in every root and byte-identical across them |
+| this assertion, wired as `receives: skill-union` | the **complete runtime-visible union** — every skill in the repo's committed `.claude/skills`, `.agents/skills` | *every* skill in the union is present in every root and byte-identical across them |
 
 `coordination-coherence` cannot see a co-tenant skill: it is not in the `kit:` block, so it is not in
 that gate's subject. Here are the three trees it cost, **each measured at the commit named** rather
 than at a moving `main` — Governance `9243c07` `.claude=15 .codex=4 .agents=4`; SDD `f419f0e`
 `.claude=32 .codex=21 .agents=4`; Rendering `ee5e6c3` `.claude=50 .codex=4 .agents=50`. Projections
 were **missing**, for 11, 28 and 46 skills, and all three were green on `coordination-coherence`
-throughout, because the four kit skills really are coherent in all three of their roots.
+throughout, because the four kit skills really are coherent in all of their roots. (Those three
+measurements predate ADR-0067 §5; their `.codex` column is history. The gap is unaffected — `.codex`
+and `.agents` were both Codex-native, so a tree short on `.agents` was short on skills for Codex
+either way.)
 
 Two of those three have since been repaired. **The current numbers are stated once, in Rollout state
 below, and nowhere else** — a present-tense count restated in a second place is how this document
@@ -686,7 +695,6 @@ on:
     branches: [main]
     paths:
       - ".claude/skills/**"
-      - ".codex/skills/**"
       - ".agents/skills/**"
       - ".github/workflows/skill-union.yml"
   workflow_dispatch:

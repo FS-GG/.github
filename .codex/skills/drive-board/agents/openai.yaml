@@ -1,7 +1,0 @@
-interface:
-  display_name: "Drive Board"
-  short_description: "Burn down the org-wide FS-GG board"
-  default_prompt: "Use $drive-board to reconcile and burn down the org-wide FS-GG Coordination board."
-
-policy:
-  allow_implicit_invocation: false

@@ -6,7 +6,6 @@ on:
       - "scripts/release-train-*.fsx"
       - "tests/release-train-tooling/**"
       - ".claude/skills/cut-nuget-release/**"
-      - ".codex/skills/cut-nuget-release/**"
       - ".agents/skills/cut-nuget-release/**"
       - ".github/workflows/release-train-tooling.yml"
   push:
@@ -15,7 +14,6 @@ on:
       - "scripts/release-train-*.fsx"
       - "tests/release-train-tooling/**"
       - ".claude/skills/cut-nuget-release/**"
-      - ".codex/skills/cut-nuget-release/**"
       - ".agents/skills/cut-nuget-release/**"
       - ".github/workflows/release-train-tooling.yml"
 

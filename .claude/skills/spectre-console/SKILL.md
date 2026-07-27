@@ -404,7 +404,7 @@ This skill is **advisory** — it gates nothing. No build/test/publish/merge wor
 deleting it changes no CI outcome.
 
 - **Canonical capability**: `FS-GG/.github` ships byte-identical
-  `spectre-console/SKILL.md` bodies under `.claude/skills`, `.codex/skills`, and `.agents/skills`.
+  `spectre-console/SKILL.md` bodies under `.claude/skills` and `.agents/skills`.
 - **Installed (Spectre-using repos)**: FS.GG.Governance (0.57.1), FS.GG.SDD (0.57.0). Route to the
   installed `spectre-console` skill by name through the host's skill/resource mechanism; do not link
   to one source-tree runtime root, because receivers materialize only their declared roots.

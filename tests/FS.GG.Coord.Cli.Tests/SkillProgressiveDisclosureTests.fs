@@ -53,7 +53,6 @@ module SkillProgressiveDisclosureTests =
         for skill in skills do
             let canonical = files ".claude" skill
             Assert.Equal<Map<string, string>>(canonical, files ".agents" skill)
-            Assert.Equal<Map<string, string>>(canonical, files ".codex" skill)
 
     [<Fact>]
     let ``representative tasks route to focused references instead of loading one monolith`` () =
