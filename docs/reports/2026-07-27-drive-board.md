@@ -3,9 +3,9 @@
 Org-wide Coordination burn-down. Operator: @EHotwagner. Host: `drive-board`, up to 6 concurrent
 disposable workers, publish authorization granted mid-run.
 
-**The board did not shrink, and that is the headline finding — not a footnote.** 74 non-Done rows at the time of this revision, against 34 rows reaching Done during the run. This report explains why that is the expected result and what would actually change it.
-end, against 34 rows reaching Done during the run. This report explains why that is the expected
-result and what would actually change it.
+**The board did not shrink, and that is the headline finding — not a footnote.** 74 non-Done rows at
+the time of this revision, against 34 rows reaching Done during the run. This report explains why that
+is the expected result and what would actually change it.
 
 > **Review note.** A first draft of this report was reviewed adversarially before merge and came back
 > `CHANGES REQUIRED`. It was wrong on the landed count, contradicted itself on two internal counts,
