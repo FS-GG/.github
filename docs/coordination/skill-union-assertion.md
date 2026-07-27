@@ -296,12 +296,10 @@ one workflow file**. Copy it verbatim:
 # .github/workflows/skill-union.yml
 name: skill-union
 on:
+  # DELIBERATELY UNFILTERED — do not add a `paths:` filter here. This context is REQUIRED on the
+  # default branch, and a required check that does not report on every PR blocks the repo. See
+  # "Why the pull_request trigger carries no paths: filter" below before you tidy this.
   pull_request:
-    paths:
-      - ".claude/skills/**"
-      - ".codex/skills/**"
-      - ".agents/skills/**"
-      - ".github/workflows/skill-union.yml"
   push:
     branches: [main]
     paths:
@@ -326,9 +324,11 @@ all three. A call aimed at a subdirectory is a generated-product audit and does 
 capability; a narrowed `roots:` is a smaller audit than the capability claims.
 
 **Half 2 — the gate is armed.** The `pull_request` trigger must fire when any of the three roots
-changes: either it carries `paths:` covering all three, or it carries no `paths:` filter at all (wider,
-and therefore fine). A `paths-ignore:` naming a root disarms it. A `push`-only workflow reports nothing
-on a pull request, so it can never be the required check. **An unarmed gate is not a gate** — the
+changes. `repos-audit` accepts two ways of satisfying that — a `paths:` filter covering all three, or
+no `paths:` filter at all — but **only the second is compatible with making the context required**, so
+the block above uses it and this section prescribes it. A `paths-ignore:` naming a root disarms it. A
+`push`-only workflow reports nothing on a pull request, so it can never be the required check.
+**An unarmed gate is not a gate** — the
 [#332](https://github.com/FS-GG/.github/issues/332)/[#334](https://github.com/FS-GG/.github/issues/334)/[#880](https://github.com/FS-GG/.github/issues/880)
 class, where the check is correct and its trigger is what fails open.
 
@@ -348,6 +348,58 @@ the detector can resolve, and an unresolvable subject fails closed.
 `skill-union / skill-union` (`<caller job> / <callee job>`) — see
 [reusable-workflow-contract](reusable-workflow-contract.md), and note that the callee job id is
 **public API** the authority may not rename without sequencing it.
+
+#### Why the `pull_request` trigger carries no `paths:` filter
+
+**Because the context above is REQUIRED, and GitHub does not skip a required check whose workflow a
+path filter excluded — it never creates the check run at all.** Branch protection cannot tell that
+apart from a check that has not reported yet, so it holds the pull request at *"Expected — waiting for
+status to be reported"*, indefinitely. Filtering the trigger and requiring the context are therefore
+**incompatible instructions**, and a receiver that did both would block **every PR that does not touch
+a skill root** — which is most of them, in a repo whose protection is typically `enforce_admins: true`
+with no bypass. Including the PR that removes the filter.
+
+This section used to prescribe exactly that pair ([#1504](https://github.com/FS-GG/.github/issues/1504)),
+and seven rostered receivers were queued behind it. Governance reached the wiring step first and
+filed [#1508](https://github.com/FS-GG/.github/issues/1508); SDD, holding `admin: true`, independently
+declined to arm the context for the same reason. Nothing mechanical stopped either of them — which is
+the second half of that fix, below.
+
+**Two repairs exist, and this doc takes the first:**
+
+1. **Drop the `paths:` filter, so the job always runs and always reports.** What the block above does.
+   It costs a runner-minute of static shell per PR — the assertion needs no SDK, no restore and no
+   network — and it is the shape the org already relies on: [#1508](https://github.com/FS-GG/.github/issues/1508)
+   reports that every context Governance requires today is produced by `gate.yml` or
+   `coordination-coherence.yml`, and both of those were confirmed on 2026-07-27 to carry **no
+   `pull_request` `paths:` or `paths-ignore:` filter at all**. (The producing side is readable without
+   credentials; which contexts are *required* needs `administration: read`, so that half is #1508's
+   report rather than a re-measurement here.) `repos-audit`'s detector reads an absent `paths:` as
+   armed (Half 2), so this costs nothing in capability terms either.
+2. Keep the filter and add a second, always-running job that reports the **same context name** for the
+   excluded paths. This is the standard GitHub workaround, and **it does not work for this contract**:
+   the required context is the nested `skill-union / skill-union`, which GitHub derives from
+   `<caller job id> / <callee job id>`. Reproducing that string needs a second job whose id is also
+   `skill-union` in the same file — YAML forbids the duplicate key — and any other job id yields a
+   different context, which does not satisfy the requirement. So for a `uses:`-shaped required check,
+   option 1 is the only one available.
+
+Keeping the filter on `push:` is deliberate and safe: a `push` filter has no bearing on what a pull
+request reports, and the required context is a PR check.
+
+**No receiver is left carrying the filtered form.** Verified 2026-07-27 over
+`repos/FS-GG/<repo>/contents/.github/workflows/skill-union.yml?ref=main`: none of the seven rostered
+receivers has the caller on its default branch yet, so correcting the block here lands ahead of every
+adoption. A receiver that wired the filtered form on a branch must drop the `pull_request` `paths:`
+filter **before** arming the context, not after — arming first is the deadlock, and it takes the
+un-arming PR down with it.
+
+**This is now asserted, not remembered.**
+[`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) reports a required
+context whose only producer is path-filtered, naming the workflow and the filter. It previously asked
+only whether a producing workflow *triggers on* `pull_request` — a strictly wider question than
+whether the context *reports on every* pull request, and the filtered-and-required combination sat in
+the gap. `required-context-coherence.yml` sweeps the roster nightly with it.
 
 **`FS-GG/.github` is not a receiver.** It is the *source* of the assertion and asserts its own roots with
 [`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml), running the bare

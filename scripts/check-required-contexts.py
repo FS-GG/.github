@@ -26,13 +26,37 @@ neither side can see and no check asserted. See docs/coordination/reusable-workf
 WHAT IT ASSERTS. For the repo it is pointed at:
 
   every context in `branches/<branch>/protection`'s required status checks
-      is producible by some workflow in the working tree that triggers on `pull_request`.
+      is reported by some workflow in the working tree on EVERY pull request.
+
+"Reported on every pull request" is the assertion, and it is deliberately NOT the weaker "producible
+by some workflow that triggers on `pull_request`" this gate used to make (.github#1508). The weaker
+one is strictly WIDER, and only the stronger one is what a required context actually needs: a
+workflow whose `pull_request` trigger carries a `paths:` filter DOES trigger on `pull_request`, and
+still reports nothing on a PR that touches none of those paths. See PATH FILTERS below.
 
 "Producible" is computed STATICALLY, from the YAML — not by sampling live check runs. That is the
 whole point: a check run that has not reported yet and a check run that can NEVER report look
 identical at any given moment, and it is the second one that deadlocks the repo. Only the static
 derivation can tell them apart, and it catches the plain typo in a protection setting for free — a
 misspelled required context is indistinguishable from a renamed one, and both deadlock identically.
+
+PATH FILTERS ARE PART OF THE SUBJECT (.github#1508). GitHub does NOT synthesise a neutral or skipped
+check run for a workflow its `paths:`/`paths-ignore:` filter excluded — it never creates the check run
+at all. Branch protection cannot tell "excluded by a filter" from "has not reported yet", so it holds
+the PR at "Expected — waiting for status to be reported" indefinitely. A required context produced
+only by a path-filtered workflow therefore blocks every PR that touches none of those paths, which is
+normally MOST of them. The two repairs are: drop the filter so the job always runs and always reports,
+or stop requiring the context. This gate reports the combination; it does not choose between them.
+
+  Found in docs/coordination/skill-union-assertion.md, whose receiver caller was `paths:`-filtered to
+  the three ADR-0011 skill roots AND told the receiver to make the resulting context required. Seven
+  rostered receivers were queued behind that instruction. This gate scored the shape GREEN, because
+  the filtered workflow does trigger on `pull_request` — the exact fail-open (#266) it exists to close.
+
+  A filtered producer does NOT condemn a context some OTHER workflow reports on every PR: the question
+  is whether the context always reports, not whether one of its producers is filtered. Nor does a
+  filter that excludes nothing (`paths: ["**"]`), or a filter on any event other than the PR ones — a
+  `push:` filter has no bearing on what a pull request sees.
 
 HOW A CONTEXT IS DERIVED (this is GitHub's naming, and getting it wrong would make the gate lie)
   normal job        -> the job's `name:` if it has one, else its job id
@@ -43,8 +67,12 @@ HOW A CONTEXT IS DERIVED (this is GitHub's naming, and getting it wrong would ma
   A workflow that does NOT trigger on `pull_request` produces NOTHING on a PR. A context required
   from such a workflow can never report, and is a finding — not a skip.
 
+  A workflow whose `pull_request` trigger is PATH-FILTERED produces nothing on a PR that touches none
+  of those paths. A context required only from such a workflow is a finding too, for the same reason.
+
 EVERY ONE OF THESE IS AN ERROR, NOT A SKIP
   - A required context no `pull_request` workflow can produce      (the repo is deadlocked, or will be)
+  - A required context produced only behind a `paths:` filter      (deadlocked for most PRs — #1508)
   - A workflow, on either side, that will not parse
   - A callee that cannot be resolved at the ref its caller pins
   - A matrix this gate cannot enumerate (`include`/`exclude`/an expression). Guessing would produce
@@ -195,6 +223,60 @@ def triggers(doc: dict) -> dict:
     return {}
 
 
+# The pull-request events. Either one puts a check run on a PR, so either one, unfiltered, is enough
+# to make a context report on every PR.
+PR_EVENTS = ("pull_request", "pull_request_target")
+
+# A `paths:` entry that matches every changed file. Such a filter excludes no pull request, so it is
+# not the #1508 defect, and reporting it would be the gate crying wolf about a repo that is fine.
+UNIVERSAL_PATHS = frozenset({"**", "**/*"})
+
+
+def _event_path_filter(cfg: object, event: str) -> str | None:
+    """The path filter on ONE pull-request event, or None if it excludes no pull request."""
+    if not isinstance(cfg, dict):
+        return None  # `pull_request:` bare, or listed in `on: [pull_request]` — no filter at all
+    for key in ("paths", "paths-ignore"):
+        raw = cfg.get(key)
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list) or not raw:
+            continue
+        # `paths:` may name a universal pattern, in which case nothing is excluded. `paths-ignore:`
+        # cannot: every entry it carries SUBTRACTS pull requests, which is the defect.
+        if key == "paths" and any(
+            isinstance(p, str) and p.strip() in UNIVERSAL_PATHS for p in raw
+        ):
+            return None
+        return f"`on.{event}.{key}: {raw!r}`"
+    return None
+
+
+def pr_path_filter(doc: dict) -> str | None:
+    """This workflow's pull-request path filter, or None when it runs on EVERY pull request.
+
+    THE DEFECT THIS MODELS (.github#1508). "Triggers on `pull_request`" is a strictly WIDER claim than
+    "reports on every pull request", and only the second is what a required context needs. A
+    path-filtered workflow satisfies the first and fails the second, and GitHub does not skip the
+    resulting required check — it never creates the check run, so branch protection waits forever.
+
+    Only the PR events are consulted. A `push:` filter, however narrow, has no bearing on what a pull
+    request sees, and treating one as a filter would report a deadlock over a perfectly healthy repo.
+
+    If the workflow declares BOTH PR events and either is unfiltered, it reports on every PR — the
+    unfiltered one is enough on its own, so the filter on the other is not a finding.
+    """
+    trig = triggers(doc)
+    present = [e for e in PR_EVENTS if e in trig]
+    filters = []
+    for event in present:
+        got = _event_path_filter(trig[event], event)
+        if got is None:
+            return None
+        filters.append(got)
+    return " and ".join(filters) if filters else None
+
+
 def matrix_suffixes(job: dict, subject: str) -> list[str]:
     """The ` (v1, v2)` suffixes GitHub appends to a matrix job's check name — one per combination.
 
@@ -328,11 +410,19 @@ def contexts_of(doc: dict, what: str, wf: Workflows, prefix: str = "", depth: in
     return out
 
 
-def producible_contexts(root: str, repo: str) -> tuple[set[str], list[str]]:
-    """Every context the repo's `pull_request`-triggered workflows can report on a PR.
+def producible_contexts(root: str, repo: str) -> tuple[set[str], dict[str, list[str]], list[str]]:
+    """Every context the repo reports on an ARBITRARY pull request, and the two ways of falling short.
 
-    Also returns the workflows that exist but do NOT trigger on pull_request, so a finding can say
-    "this context is produced, but only on push" rather than the useless "no workflow produces it".
+    Returns (always, filtered, non_pr):
+
+      always    contexts reported on EVERY pull request — the only set a required context may live in.
+      filtered  context -> the path-filtered workflow(s) that are its ONLY producers, so it reports on
+                some pull requests and not others (.github#1508). Keyed for the message, because
+                "which filter" is the whole of the repair.
+      non_pr    contexts produced only by workflows that do not trigger on a PR at all.
+
+    The last two exist so a finding can name WHICH way the context falls short — "only on push",
+    "only when .claude/skills/** changes" — rather than the useless "no workflow produces it".
     """
     wf = Workflows(root, repo)
     d = os.path.join(root, ".github", "workflows")
@@ -344,13 +434,22 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], list[str]]:
         raise GateError(f"{d} contains no workflow files — this repo produces no contexts at all")
 
     pr_contexts: set[str] = set()
+    filtered: dict[str, list[str]] = {}
     non_pr: list[str] = []
     for path in files:
         rel = os.path.relpath(path, root)
         with open(path, encoding="utf-8") as fh:
             doc = load_yaml(fh.read(), rel)
-        if "pull_request" in triggers(doc) or "pull_request_target" in triggers(doc):
-            pr_contexts |= contexts_of(doc, rel, wf)
+        if any(e in triggers(doc) for e in PR_EVENTS):
+            # A path filter must not cost us the DERIVATION: the finding names the context, so it has
+            # to be derived exactly here, and an unparsable filtered workflow is still exit 3.
+            produced = contexts_of(doc, rel, wf)
+            path_filter = pr_path_filter(doc)
+            if path_filter is None:
+                pr_contexts |= produced
+            else:
+                for context in sorted(produced):
+                    filtered.setdefault(context, []).append(f"{rel} {path_filter}")
         else:
             # Not a finding by itself — most workflows are not PR gates. But a required context that
             # matches one of these is a repo that will hang forever, and the message must say so.
@@ -365,7 +464,13 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], list[str]]:
                 non_pr.extend(sorted(contexts_of(doc, rel, wf)))
             except (GateError, Unreachable):
                 pass
-    return pr_contexts, non_pr
+
+    # A context some UNFILTERED workflow also reports is fine, whoever else produces it behind a
+    # filter. The question this gate asks is "does it always report?", not "is some producer of it
+    # filtered?" — and answering the second would be a confident, wrong "your repo is deadlocked".
+    for context in pr_contexts:
+        filtered.pop(context, None)
+    return pr_contexts, filtered, non_pr
 
 
 def classic_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
@@ -554,7 +659,7 @@ def main(argv: list[str]) -> int:
         )
         return OK
 
-    pr_contexts, non_pr = producible_contexts(args.root, args.repo)
+    pr_contexts, filtered, non_pr = producible_contexts(args.root, args.repo)
 
     findings: list[str] = []
     audited = 0
@@ -571,6 +676,22 @@ def main(argv: list[str]) -> int:
         audited += 1
         if context in pr_contexts:
             print(f"  ok   {context}")
+            continue
+
+        # A PATH-FILTERED producer deadlocks differently from an absent one, and the repair is
+        # different too, so it gets its own finding rather than a clause bolted onto the generic one
+        # (.github#1508). "Every PR" would be wrong here — it is every PR that misses the filter.
+        if context in filtered:
+            findings.append(
+                f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but its only "
+                f"producer's `pull_request` trigger is PATH-FILTERED: {'; '.join(filtered[context])}. "
+                f"GitHub does not skip a filtered required check — it never creates the check run at "
+                f"all, and branch protection cannot tell that apart from one that has not reported "
+                f"yet. So every pull request touching none of those paths is held at \"Expected — "
+                f"waiting for status to be reported\" and can never merge, which is normally MOST "
+                f"pull requests. Drop the `paths:` filter so the job always runs and always reports "
+                f"(what a required context needs), or stop requiring this context."
+            )
             continue
 
         why = (
@@ -617,7 +738,14 @@ def main(argv: list[str]) -> int:
     print(
         f"ok: every required context is producible — {audited} audited"
         + (f", {len(skipped)} skipped (not GitHub Actions)" if skipped else "")
-        + f", against {len(pr_contexts)} context(s) this repo can produce on a PR."
+        + f", against {len(pr_contexts)} context(s) this repo reports on EVERY pull request"
+        + (
+            f" ({len(filtered)} further context(s) exist only behind a `paths:` filter and are "
+            f"therefore not requirable, but none of them is required)"
+            if filtered
+            else ""
+        )
+        + "."
     )
     return OK
 

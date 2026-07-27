@@ -316,6 +316,159 @@ expect "a required context produced only on \`push\` never reports on a PR — c
   1 "does not trigger on \`pull_request\`" "$WP" "$RP" FS-GG/R
 
 # =============================================================================================
+# 3b. A `paths:`-FILTERED `pull_request` workflow does not report on an ARBITRARY PR (.github#1508).
+#
+# THE HOLE THIS CLOSES. "Triggers on `pull_request`" is a strictly WIDER claim than "reports on every
+# pull request", and only the SECOND is what a required context needs. A path-filtered workflow
+# satisfies the first and fails the second, so it scored GREEN here — in the gate whose entire purpose
+# is "this required context can never report, and the repo is deadlocked".
+#
+# GitHub does NOT synthesise a neutral or skipped check run for a workflow its `paths:` filter
+# excluded; it never creates the check run at all. Branch protection then holds the PR at "Expected —
+# waiting for status to be reported" forever. So requiring a path-filtered context blocks every PR
+# that touches none of those paths — normally MOST of them.
+#
+# Found while wiring the skill-union receiver caller for FS.GG.Governance#326. The documented caller in
+# docs/coordination/skill-union-assertion.md was `paths:`-filtered to the three ADR-0011 skill roots
+# AND told the receiver to make the resulting context required, and seven rostered receivers were
+# queued behind that instruction. Two receivers declined to arm it by hand; nothing mechanical would
+# have stopped the other five.
+# =============================================================================================
+# THE REGRESSION, in the exact shape the doc used to prescribe: the skill-union receiver caller.
+RFP="$WORK/r-filtered"; WFP="$WORK/w-filtered"
+mkwf "$RFP/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - ".github/workflows/skill-union.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+protect "$WFP" FS-GG/R main "skill-union"
+expect "REGRESSION #1508: a required context whose only producer is \`paths:\`-filtered is a FINDING" \
+  1 "REQUIRES the status check 'skill-union'" "$WFP" "$RFP" FS-GG/R
+expect "REGRESSION #1508: ...and it blames the FILTER, not a missing or misnamed workflow" \
+  1 "PATH-FILTERED" "$WFP" "$RFP" FS-GG/R
+expect "REGRESSION #1508: ...and it names the filtered workflow and the filter it carries" \
+  1 ".github/workflows/skill-union.yml" "$WFP" "$RFP" FS-GG/R
+expect "REGRESSION #1508: ...and it states the GitHub mechanic — a filtered required check is never created, not skipped" \
+  1 "GitHub does not skip a filtered required check" "$WFP" "$RFP" FS-GG/R
+expect "REGRESSION #1508: ...and it names the consequence: the PR waits for a status that never arrives" \
+  1 "waiting for status to be reported" "$WFP" "$RFP" FS-GG/R
+
+# THE FIX THE DOC NOW PRESCRIBES — the same caller with the `pull_request` filter dropped. This is the
+# other half of the regression: the gate must not merely fail louder, it must PASS the repaired shape.
+RFU="$WORK/r-unfiltered"
+mkwf "$RFU/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+  workflow_dispatch:
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "the REPAIRED caller — \`pull_request\` unfiltered — is green, and a \`push\` filter is irrelevant to a PR" \
+  0 "ok: every required context is producible" "$WFP" "$RFU" FS-GG/R
+
+# `paths-ignore:` is the same defect wearing the other key. A PR touching only ignored paths gets no
+# check run, so the context still cannot be required.
+RFI="$WORK/r-paths-ignore"
+mkwf "$RFI/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "a \`paths-ignore:\` filter is the same deadlock — a docs-only PR never gets the check run" \
+  1 "PATH-FILTERED" "$WFP" "$RFI" FS-GG/R
+
+# A filtered producer must NOT condemn a context that some OTHER workflow reports on every PR. The
+# question is whether the context always reports, not whether some producer of it is filtered — and
+# crying wolf here would be a confident, wrong "your repo is deadlocked".
+RFB="$WORK/r-filtered-plus-always"
+mkwf "$RFB/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".claude/skills/**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+mkwf "$RFB/.github/workflows/always.yml" <<'YML'
+name: always
+on: { pull_request: }
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "a context ALSO produced by an unfiltered workflow is fine — a filtered twin does not condemn it" \
+  0 "ok: every required context is producible" "$WFP" "$RFB" FS-GG/R
+
+# A `paths:` filter that matches EVERY changed file excludes no pull request, so it is not this defect.
+# Reporting it would be the gate crying wolf — the same "confident, alarming, WRONG finding" the
+# expression and matrix legs above refuse to produce.
+RFW="$WORK/r-paths-universal"
+mkwf "$RFW/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: ["**"]
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+expect "a \`paths: [\"**\"]\` filter excludes no PR, so it is NOT reported — the gate does not cry wolf" \
+  0 "ok: every required context is producible" "$WFP" "$RFW" FS-GG/R
+
+# The filtered context is still DERIVED correctly — including through a reusable call, which is the
+# shape every skill-union receiver actually has (`skill-union / skill-union`).
+RFN="$WORK/r-filtered-nested"; WFN="$WORK/w-filtered-nested"; mkdir -p "$WFN/refs/main"
+mkwf "$RFN/.github/workflows/skill-union.yml" <<'YML'
+name: skill-union
+on:
+  pull_request:
+    paths: [".claude/skills/**"]
+jobs:
+  skill-union:
+    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main
+YML
+mkwf "$WFN/refs/main/skill-union-assert.yml" <<'YML'
+name: skill-union-assert
+on: { workflow_call: }
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+protect "$WFN" FS-GG/R main "skill-union / skill-union"
+expect "the nested receiver context \`skill-union / skill-union\` is derived AND caught when filtered" \
+  1 "REQUIRES the status check 'skill-union / skill-union'" "$WFN" "$RFN" FS-GG/R
+
+# =============================================================================================
 # 4. Fail closed. "I could not check" is never green, and never a finding either (#266/#320/#335).
 # =============================================================================================
 # NOT PROTECTED (404) is an ANSWER, not a failure. It requires nothing, so nothing can deadlock.
