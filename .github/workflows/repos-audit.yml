@@ -13,18 +13,25 @@
 # Reads the (public) FS-GG repos with the run-scoped token.
 #
 # The script distinguishes four outcomes, and this workflow must not collapse them (#327, #335):
-#   0  every declared receiver is wired
+#   0  every declared receiver is wired, and every coordination-kit receiver pins the published kit
 #   1  a real finding — the roster and the real wiring disagree. Either a declared receiver is not
 #      wired (a gap), or a repo wires a fabric it never declared (an unrostered adopter, #503) — or a
-#      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529)
-#   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage)
-#   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, or a
-#      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade
-#      (#316, #320, #503, #1529)
+#      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529) — or a
+#      coordination-kit receiver's FS.GG.Kit pin is behind the newest published one (#1540)
+#   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage), or
+#      nuget.org would not say which FS.GG.Kit version is published (#1540)
+#   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, a
+#      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, or a
+#      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself
+#      (#316, #320, #503, #1529, #1540)
 #
 # The audit also carries #1522's sparse-checkout closure rule across the whole roster (#1529), which
 # is why 1 and 3 each gained a cause. The rule is IMPORTED from scripts/check-sparse-checkout-
 # closure.py rather than restated, so the two readers cannot drift.
+#
+# AND IT SWEEPS EVERY coordination-kit RECEIVER'S FS.GG.Kit PIN AGAINST nuget.org (#1540, #1560),
+# which is why 1, 2 and 3 each gained one more. That sweep is why this runs DAILY rather than weekly
+# — see the schedule below.
 #
 # Both no-verdicts stay RED: "I could not check" must never render as "I checked, and it's fine"
 # (#266). Neither may render as "I checked, and it's broken", so each outcome gets its own, and
@@ -38,8 +45,20 @@
 name: repos-audit
 
 on:
+  # DAILY, not weekly (#1540). Roster WIRING changes when somebody edits a workflow, which is rare
+  # and self-announcing, and a weekly cadence was right for it. KIT-PIN FRESHNESS changes when the
+  # kit is REPUBLISHED — an event in a different repository that touches no file here and no file in
+  # any receiver — so the audit's answer can go from true to false with nobody committing anything.
+  # On the weekly cadence the org could sit up to seven days with every receiver stale and every
+  # check green, which is a slower version of the exact blindness #1540 is about: FS.GG.Audio's own
+  # coherence gate read green across two kit republishes purely because it had not pushed.
+  #
+  # Daily is chosen against the observed rate of the thing being watched, not picked for tidiness:
+  # FS.GG.Kit shipped 0.6.0, 0.7.0 and 0.8.0 inside 25 hours on 2026-07-26/27. An hourly cron would
+  # buy little more — a kit bump still needs a human PR in each receiver — and would multiply a
+  # cross-repo API sweep by 24 against the rate limit this script treats as its main adversary.
   schedule:
-    - cron: "17 8 * * 1"   # weekly, Monday 08:17 UTC
+    - cron: "17 8 * * *"   # daily, 08:17 UTC
   workflow_dispatch:
 
 permissions:
@@ -86,10 +105,10 @@ jobs:
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
-      - name: Every declared receiver is wired
+      - name: Every declared receiver is wired and current
         if: steps.audit.outputs.rc == '0'
         run: |
-          echo "### ✅ repos-audit: every declared receiver is wired" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ✅ repos-audit: every declared receiver is wired, and every coordination-kit receiver pins the published FS.GG.Kit" >> "$GITHUB_STEP_SUMMARY"
 
       # Exit 1 covers BOTH directions of the same disagreement, because they are one class: the audit
       # ran to completion, and the roster does not describe the org. Naming only the gap here — as
@@ -104,10 +123,13 @@ jobs:
             echo "Either a repo whose \`receives:\` declares a fabric does not satisfy that"
             echo "capability's receiver detector (**a gap**), or a repo adopts one without declaring"
             echo "it (**an unrostered adopter** — invisible to every fabric that iterates the"
-            echo "roster). The audit step's annotations name the repo, capability, missing evidence,"
+            echo "roster), or a \`coordination-kit\` receiver's **FS.GG.Kit pin is behind** the"
+            echo "newest version published on nuget.org (#1540) — its materialized kit is stale"
+            echo "now, and its own \`coordination-coherence\` will only say so on its next push."
+            echo "The audit step's annotations name the repo, capability, missing evidence,"
             echo "and which side is wrong."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repos-audit: the roster and the real wiring disagree::The audit ran to completion and found a declared receiver that is not wired, or a repo that wires a capability it does not declare. This is a real finding — act on it."
+          echo "::error title=repos-audit: the roster and the real wiring disagree::The audit ran to completion and found a declared receiver that is not wired, a repo that wires a capability it does not declare, or a coordination-kit receiver pinning a stale FS.GG.Kit. This is a real finding — act on it."
           exit 1
 
       - name: 'INCONCLUSIVE: could not read a receiver (transient — re-run)'

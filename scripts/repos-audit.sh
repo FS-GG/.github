@@ -69,14 +69,25 @@
 # repositories, and this is the only tool in the org that already has a roster, a repo filter, a
 # retry ladder and a network budget. See THE SPARSE-CHECKOUT CLOSURE SWEEP below.
 #
+# AND IT SWEEPS EVERY coordination-kit RECEIVER'S FS.GG.Kit PIN AGAINST THE PUBLISHED KIT (#1540,
+# #1560). A third mandate, here for the same reason and one more: participation is not a one-off. A
+# repo can wire the detector perfectly and still be running a kit two minors old, and until #1540
+# nothing in the org could say so until that repo happened to PUSH — at which point its own `main`
+# went red, in a place that blocks nothing and pages no one. See THE KIT-PIN FRESHNESS SWEEP below.
+#
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
-# Exit: 0 = every declared receiver is wired; 1 = at least one gap (a declared receiver is unwired,
-# or a repo adopted a capability it never rostered, or a cross-repo sparse-checkout enumerates a
-# file); 2 = no verdict, RETRYABLE — receiver evidence could not be read (rate limit, auth, outage);
-# 3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
-# receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo sparse-checkout
-# whose SHAPE the closure rule refuses to grade, or a bad invocation.
+# Exit:
+#   0 = every declared receiver is wired, and every coordination-kit receiver pins the published kit
+#   1 = at least one gap — a declared receiver is unwired, a repo adopted a capability it never
+#       rostered, a cross-repo sparse-checkout enumerates a file, or a coordination-kit receiver's
+#       FS.GG.Kit pin is behind the newest published one
+#   2 = no verdict, RETRYABLE — receiver evidence could not be read (rate limit, auth, outage), or
+#       the NuGet feed the kit pins are graded against could not be read
+#   3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
+#       receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo
+#       sparse-checkout whose SHAPE the closure rule refuses to grade, a coordination-kit receiver
+#       whose FS.GG.Kit pin cannot be located or contradicts itself, or a bad invocation
 #
 # "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
 # "I checked, and it's broken" (#320). The same argument applies one level in, which is why 2 and 3
@@ -158,6 +169,14 @@ command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
 # no-verdict about the audit, never a silent "no repository enumerates anything" over ten repos.
 [ -f "$SPARSE_RULE" ] \
   || die "the sparse-checkout closure rule is not at $SPARSE_RULE. It is IMPORTED, not restated here (#1529/#1522), so without it this audit cannot grade a single cross-repo checkout — and reporting that as a clean sweep is the fail-open both items exist to end."
+# The kit-pin sweep's version ORDERING and feed reader, imported for exactly the reason the sparse
+# rule is: fsgg_feed.py's own docstring says two copies of NuGet version ordering is how the two
+# copies drift, and a gate that orders versions wrongly reports green on a stale pin. Asserted up
+# front, so a missing module is a permanent no-verdict about the audit rather than a surprise in the
+# middle of a sweep that has already printed half a verdict.
+KIT_FEED_LIB="$HERE/fsgg_feed.py"
+[ -f "$KIT_FEED_LIB" ] \
+  || die "the NuGet feed reader is not at $KIT_FEED_LIB. The kit-pin freshness sweep (#1540) IMPORTS its version ordering and its nuget.org reader from there rather than restating either, so without it no receiver's pin can be compared to the published kit — and reporting that as a clean sweep is the same fail-open."
 
 # The capabilities and their detectors come from the ROSTER (`capabilities:`), not from a constant
 # here. They used to be a `wf_for_cap` case statement plus an `AUDITED_CAPS` string — two
@@ -195,8 +214,17 @@ CALLS_ERR_FILE="$(mktemp)"
 # files above, which are per-call): `workflow`, `finding`, `refusal`, `ungraded`, `unresolved`,
 # `unparseable`, and one `counts` line per workflow read.
 SPARSE_FILE="$(mktemp)"
-trap 'rm -f "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE"' EXIT
-gh_last_err()    { tr -s '\n' ' ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
+# The kit-pin freshness sweep's ledger (#1540), same line-oriented shape as SPARSE_FILE: `finding`,
+# `refusal`, `undetermined`, `ok`, and one `published` line naming the version everything was graded
+# against. A FILE for the same reason — the grading happens in a `$( )`.
+KITPIN_FILE="$(mktemp)"
+# Where that sweep stages the pin-bearing files it fetched, so the verdict program can parse XML
+# instead of bash grepping it. One subdirectory per repo; see THE KIT-PIN FRESHNESS SWEEP.
+KITPIN_DIR="$(mktemp -d)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$KITPIN_FILE" "$KITPIN_DIR"' EXIT
+# Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
+# kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
+gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
 calls_last_err() { cat "$CALLS_ERR_FILE"; }
 
 gh_api() {  # <gh api args…> -> body on stdout; 0 = ok, 1 = missing (404), 2 = unreachable
@@ -740,6 +768,243 @@ sparse_grade() {
 # One pass, all kinds. Re-walking a repo's workflows once per detector kind would multiply the API
 # traffic against the rate limit this script already treats as its main adversary — the same reasoning
 # that made this function repo-major rather than cap-major in the first place.
+# --- THE KIT-PIN FRESHNESS SWEEP (#1540, closing #1560's criterion 4) ----------------------------
+#
+# WHAT IT ASSERTS. Every `receives: coordination-kit` repo pins an FS.GG.Kit version EQUAL to the
+# newest stable FS.GG.Kit published on nuget.org. A receiver below that is STALE and reds HERE.
+#
+# WHY IT EXISTS. `coordination-coherence` already catches a stale receiver — but only in the
+# RECEIVER'S OWN `main`, and only once that repo happens to push. Between a kit republish and the
+# receiver's next push, the receiver is stale and every check anyone can see is green. That window is
+# not theoretical: FS.GG.Audio's gate read green for over a day across the 0.7.0 AND 0.8.0
+# republishes, purely because it had not pushed since before either. A check that cannot see the
+# thing it is reporting on is the epic #266 defect, and the gate that REPORTS (the receiver's) is not
+# the gate that can ACT (this one) — #1560's criterion 4 in as many words. This sweep is f(roster,
+# feed): it needs no push from anybody, so the answer changes the moment the kit is republished.
+#
+# NOT A SECOND OPINION ON COHERENCE. It grades the PIN, never the materialized bytes.
+# `coordination-coherence` owns the bytes and is strictly better at it. The pin is what this can see
+# from here without cloning eight repos, and a stale pin is the CAUSE the byte drift is a symptom of.
+#
+# THE COMPARAND IS THE FEED, NOT THIS TREE. `src/FS.GG.Kit/FS.GG.Kit.csproj`'s `<Version>` is what
+# the authority intends to ship next; nuget.org is what a receiver can actually restore. Grading
+# against the csproj would demand a bump no receiver could make in the window between a version
+# commit and its release tag. "Canonical source moved and the PACKAGE has not" is a real defect and
+# it already has an owner — `check-kit-published-coherence.py` — so the two gates compose: that one
+# says PUBLISH IT, this one says RECEIVERS, TAKE IT. Neither restates the other.
+#
+# WHERE THE PIN LIVES IS DERIVED, NOT LISTED. There is no per-repo pin-path column in
+# registry/repos.yml and this sweep does not add one — a hand-maintained list of which file holds
+# which repo's pin is precisely the thing that rots (the roster header's own warning). Instead all
+# three shapes the org actually uses are READ, and the file that carries a version literal is the
+# answer:
+#   .config/kit/FS.GG.Kit.receiver.proj   an inline `Version=` on the PackageReference (no CPM).
+#                                         FS.GG.Templates is the only receiver in this shape today.
+#   Directory.Packages.local.props        CPM, `build-config` receivers — their root props file is
+#                                         the DISTRIBUTED baseline, so repo-owned pins go here.
+#   Directory.Packages.props              CPM, the repos that hand-author their own build config
+#                                         (net, audio).
+# A repo may legitimately have only one of these. What it may NOT have is none, or two that
+# disagree: both are REFUSALS (exit 3), never a pass. "I could not find this repo's pin" must not
+# render as "this repo's pin is current" — and it very nearly did, because the two-file assumption
+# (`Directory.Packages*.props` only) reports FS.GG.Templates as having no pin at all, which is how
+# this item was originally briefed and is wrong.
+#
+# Argv: the staging dir and its manifest. Stdout: tab-separated ledger records, one per line.
+KIT_PIN_PY=$(cat <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+sys.path.insert(0, os.environ["FSGG_SCRIPTS_DIR"])
+import fsgg_feed  # noqa: E402
+
+PACKAGE = "FS.GG.Kit"
+
+# The flat-container base the published version is resolved from. Unset in CI, so the sweep reads
+# the real nuget.org through fsgg_feed's own reader — the SAME registry the org preset routes
+# FS.GG.* to, and therefore the same one Renovate compares against. The fixture points this at a
+# local flat-container tree over file://, which exercises this exact fetch/parse/compare path rather
+# than a mock of it: only the base URL differs between the test and production.
+_base = os.environ.get("FSGG_NUGET_ORG_BASE", "").strip()
+if _base:
+    fsgg_feed.NUGET_ORG = _base.rstrip("/")
+
+out = []
+
+
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
+
+
+def localname(tag):
+    # MSBuild files may or may not carry the 2003 namespace; both spellings are live in this org.
+    return tag.rsplit("}", 1)[-1]
+
+
+def versions_in(text):
+    """Every FS.GG.Kit version literal in one MSBuild file. Raises on XML that will not parse."""
+    root = ET.fromstring(text)
+    found = []
+    for el in root.iter():
+        if localname(el.tag) not in ("PackageReference", "PackageVersion"):
+            continue
+        include = el.get("Include") or el.get("Update") or ""
+        # NuGet package ids are case-insensitive; comparing them case-sensitively is how a gate
+        # misses a real pin and reports the repo as unpinned.
+        if include.strip().lower() != PACKAGE.lower():
+            continue
+        # VersionOverride BEATS the central PackageVersion under CPM, so a repo can carry
+        # `<PackageReference Include="FS.GG.Kit" VersionOverride="0.6.0" />` while its
+        # Directory.Packages.props says 0.8.0 — and reading only `Version` grades the version that
+        # is NOT restored and calls a stale receiver current. That is this sweep's own failure mode
+        # one attribute over, so the override is read, and it WINS rather than being reported as a
+        # second contradictory pin: MSBuild is not ambiguous here, and refusing a shape the build
+        # resolves deterministically would be a red nobody could act on.
+        override = el.get("VersionOverride")
+        if override is not None and override.strip():
+            found.append((override.strip(), True))
+            continue
+        version = el.get("Version")
+        if version is None:
+            child = next((c for c in el if localname(c.tag) == "Version"), None)
+            version = child.text if child is not None else None
+        if version is None:
+            continue          # a version-less PackageReference IS the CPM shape: pin is elsewhere.
+        version = version.strip()
+        if not version:
+            continue
+        found.append((version, False))
+    return found
+
+
+staging, manifest = sys.argv[1], sys.argv[2]
+
+repos = {}
+order = []
+with open(manifest, encoding="utf-8") as fh:
+    for line in fh:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        repo, repopath, local = line.split("\t", 2)
+        if repo not in repos:
+            repos[repo] = []
+            order.append(repo)
+        if local != "-":
+            repos[repo].append((repopath, os.path.join(staging, local)))
+
+# Resolve the comparand ONCE, before grading anybody. A feed we cannot read is an undetermined run,
+# not a clean one: without it there is no comparand, so every repo below would otherwise be graded
+# against nothing and pass. fsgg_feed raises rather than returning [] precisely so this cannot be
+# fumbled into a silent green.
+# `except Exception`, not `except GateError`, and the width is deliberate. fsgg_feed wraps
+# HTTPError/URLError/ValueError, but a socket timeout, an SSL error or a ConnectionReset mid-read
+# escapes all three — and an escaping traceback makes this program exit non-zero, which the shell
+# turns into `die` -> exit 3, the PERMANENT no-verdict. A network blip would then be reported as
+# "a human must fix a file" and never retried: #335 exactly backwards. Every failure to reach the
+# feed is retryable, so every one of them lands on the same undetermined row.
+try:
+    live = fsgg_feed.nuget_org_versions(PACKAGE)
+    stable = []
+    unparsable = []
+    for v in live:
+        # Filtered one at a time: nuget.org serving a single version this ordering cannot parse
+        # must not make the whole sweep undetermined forever. One bad entry is refused BY NAME and
+        # the rest still yield a comparand — but only if some stable version survived.
+        try:
+            if not fsgg_feed.is_prerelease(v):
+                stable.append(v)
+        except fsgg_feed.GateError:
+            unparsable.append(v)
+    if not stable:
+        raise fsgg_feed.GateError(
+            f"nuget.org serves {len(live)} version(s) of {PACKAGE} and none is a usable stable "
+            f"release (unparsable: {unparsable or 'none'}), so there is no version a receiver "
+            f"could pin."
+        )
+    published = fsgg_feed.newest(stable)
+except Exception as e:
+    emit("undetermined", "*",
+         f"could not resolve the published {PACKAGE} version: {type(e).__name__}: {e}")
+    print("\n".join(out))
+    sys.exit(0)
+
+emit("published", published)
+
+for repo in order:
+    literals = []
+    for repopath, local in repos[repo]:
+        try:
+            with open(local, encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, UnicodeDecodeError) as e:
+            # A staged file we cannot decode is a file we did not really read. Retryable in the
+            # same sense as any other unread evidence, and emphatically not a verdict.
+            emit("undetermined", repo, f"staged {repopath} unreadable: {type(e).__name__}: {e}")
+            break
+        try:
+            for v, is_override in versions_in(text):
+                literals.append((repopath, v, is_override))
+        except ET.ParseError as e:
+            emit("refusal", repo,
+                 f"{repopath} is not parsable XML ({e}), so this repo's {PACKAGE} pin could not be "
+                 f"read. Unparsable is not unpinned and it is not current.")
+            break
+    else:
+        # A VersionOverride wins outright, so it collapses the set rather than contradicting it.
+        overrides = [(p, v) for p, v, o in literals if o]
+        if overrides:
+            literals = [(p, v, True) for p, v in overrides]
+        distinct = {v for _, v, _ in literals}
+        where = ", ".join(
+            f"{p} -> {v}{' (VersionOverride)' if o else ''}" for p, v, o in literals
+        )
+        if not literals:
+            emit("refusal", repo,
+                 f"no {PACKAGE} version literal in any of the three pin shapes "
+                 f"(.config/kit/{PACKAGE}.receiver.proj inline Version, Directory.Packages.local.props, "
+                 f"Directory.Packages.props). Either this repo takes the kit some way this sweep does "
+                 f"not know how to read, or it declares 'receives: coordination-kit' and pins nothing. "
+                 f"Both are unanswered, and neither is 'current'.")
+        elif len(distinct) > 1:
+            emit("refusal", repo,
+                 f"{PACKAGE} is pinned to more than one version in this repo ({where}). The effective "
+                 f"pin is a restore-order accident, so no single version can be graded.")
+        else:
+            pin = literals[0][1]
+            try:
+                behind = fsgg_feed.parse_version(pin) < fsgg_feed.parse_version(published)
+                ahead = fsgg_feed.parse_version(pin) > fsgg_feed.parse_version(published)
+            except fsgg_feed.GateError as e:
+                # Covers an MSBuild property (`$(FsggKitVersion)`), a floating version (`0.8.*`) and
+                # a range (`[0.8.0,)`) as well as outright garbage. All of them mean the same thing
+                # here — this sweep cannot say what version is restored — and all of them refuse
+                # rather than pass. Resolving a property against the file's own PropertyGroup would
+                # narrow this and is worth doing; it is NOT done here, and this message says so
+                # instead of pretending the shape is malformed.
+                emit("refusal", repo,
+                     f"{PACKAGE} pin {pin!r} ({where}) is not a single literal NuGet version this "
+                     f"sweep can order ({e}). An MSBuild property, a floating version or a range "
+                     f"reaches this branch: the pin may well be fine, but its effective value is "
+                     f"not readable from the file, so nothing is asserted about it.")
+                continue
+            if behind:
+                emit("finding", repo,
+                     f"pins {PACKAGE} {pin} ({where}) but {published} is published on nuget.org. The "
+                     f"receiver's materialized kit is whatever {pin} shipped, so coordination-coherence "
+                     f"will red on its `main` the next time it pushes — and reads green until then.")
+            elif ahead:
+                emit("finding", repo,
+                     f"pins {PACKAGE} {pin} ({where}), which is AHEAD of the newest published {published}. "
+                     f"No receiver can restore that version; this pin does not resolve.")
+            else:
+                emit("ok", repo, f"pins {PACKAGE} {pin} ({where})")
+
+print("\n".join(out))
+PY
+)
+
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
@@ -937,6 +1202,14 @@ repo_calls() {
 roster_list() {  # <cap> -> receiver full names; non-zero if the roster cannot be enumerated
   if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" list --receives "$1" --registry "$REGISTRY"
   else bash "$REPOS_SH" list --receives "$1"; fi
+}
+
+# The capability whose receivers the kit-pin sweep grades. Named once, and asserted against the
+# roster's own capability list before the sweep runs — see THE KIT-PIN FRESHNESS SWEEP.
+KIT_CAP="coordination-kit"
+roster_list_pkg() {  # the KIT_CAP receivers that take the kit AS A PACKAGE (ADR-0062)
+  if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" list --receives "$KIT_CAP" --kit-delivery package --registry "$REGISTRY"
+  else bash "$REPOS_SH" list --receives "$KIT_CAP" --kit-delivery package; fi
 }
 
 all_repos_list() {  # every rostered repo, receives or not — the drift check's starting set
@@ -1239,6 +1512,132 @@ for cap in $CAPS_ORDER; do
 done
 echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps gap(s), $drift unrostered adopter(s), $undetermined undetermined"
 
+# --- the kit-pin freshness sweep (#1540) ---------------------------------------------------------
+# Fetch each coordination-kit receiver's candidate pin files, then grade them all in ONE verdict
+# program — one pass, one feed read, one comparand for the whole roster. A per-repo feed read would
+# make the sweep's answer depend on WHEN in the loop a republish landed.
+#
+# The three candidate paths are tried for every receiver rather than selected per repo, because
+# which one a repo uses is exactly the fact that is not written down anywhere (see the section
+# header). A 404 is an ANSWER — that shape is simply not how this repo pins — and costs nothing but
+# the call. An unreachable read is not: it makes the repo undetermined, like any other unread
+# receiver, and the run stops being a verdict.
+kitpin_receivers=0; kitpin_read=0
+# THE SUBJECT MUST EXIST BEFORE IT CAN BE SWEPT, and this is the one assertion that keeps the sweep
+# honest. `repos.sh list --receives <cap>` does NOT validate the id: an unknown capability is a jq
+# select that matches nothing, so it prints nothing and exits 0. Without this check, the day
+# `coordination-kit` is renamed or retired in the roster, this sweep would cover NOBODY, force its
+# own counters to zero, and let the run end on "every coordination-kit receiver pins the published
+# FS.GG.Kit" at exit 0 — a green claim about a set that was never looked at.
+#
+# That is #503 exactly, one sweep over: a hardcoded id here that the roster no longer knows about is
+# audited only if somebody also remembers to edit this file, and forgetting is silent. It is NOT
+# covered by the per-capability guard above, which checks the ids the roster DOES declare and knows
+# nothing about this literal. So the literal is asserted against the roster's own capability list.
+kit_cap_declared=0
+case " $CAPS_ORDER " in *" $KIT_CAP "*) kit_cap_declared=1 ;; esac
+
+kit_roster=""; kit_all_receivers=""
+if [ "$kit_cap_declared" -eq 1 ]; then
+  # Narrowed to `--kit-delivery package`, which is not a detail: the roster records that a
+  # coordination-kit receiver may take the kit BYTE-COPY (and that absence of the field MEANS
+  # byte-copy). Such a receiver legitimately has no FS.GG.Kit PackageReference anywhere, so grading
+  # it on a pin would refuse it — exit 3, every day, forever, for a roster state that is correct.
+  # Every receiver reads `package` today; the roster's semantics say the next one need not.
+  kit_roster="$(roster_list_pkg)" \
+    || die "cannot enumerate the $KIT_CAP package receivers — repos.sh list --receives $KIT_CAP --kit-delivery package failed."
+  kit_all_receivers="$(roster_list "$KIT_CAP")" \
+    || die "cannot enumerate the $KIT_CAP receivers — repos.sh list --receives $KIT_CAP failed."
+fi
+: > "$KITPIN_DIR/manifest.tsv"
+while IFS= read -r repo; do
+  [ -n "$repo" ] || continue
+  kitpin_receivers=$((kitpin_receivers + 1))
+  slug="${repo//\//__}"
+  mkdir -p "$KITPIN_DIR/$slug"
+  kit_repo_ok=1; kit_n=0
+  # Staged to a PER-REPO buffer and only committed to the manifest once every candidate has been
+  # read. A partial read must not be graded: if the first candidate says 0.8.0 and the second is
+  # unreachable, the repo LOOKS current on the evidence we hold — and the second file may carry a
+  # different pin, which is a refusal, not a pass. Appending as we went produced exactly that: an
+  # `ok: <repo> pins 0.8.0` line printed beside the `undetermined` for the same repo. The exit code
+  # was still 2, so the verdict was never wrong, but the report contradicted it — and a report that
+  # says "ok" about a repo the run did not finish reading is the sentence this whole sweep exists to
+  # stop anyone writing.
+  : > "$KITPIN_DIR/$slug/manifest.part"
+  for candidate in ".config/kit/FS.GG.Kit.receiver.proj" "Directory.Packages.local.props" "Directory.Packages.props"; do
+    frc=0; body="$(get_repo_file "$repo" "$candidate")" || frc=$?
+    if [ "$frc" -eq "$RC_UNREACHABLE" ]; then
+      printf 'undetermined\t%s\treading %s failed — %s\n' "$repo" "$candidate" "$(gh_last_err)" >> "$KITPIN_FILE"
+      kit_repo_ok=0
+      break
+    fi
+    [ "$frc" -eq 0 ] || continue          # 404: this repo does not pin in this shape. An answer.
+    kit_n=$((kit_n + 1))
+    printf '%s' "$body" > "$KITPIN_DIR/$slug/$kit_n"
+    printf '%s\t%s\t%s\n' "$repo" "$candidate" "$slug/$kit_n" >> "$KITPIN_DIR/$slug/manifest.part"
+  done
+  if [ "$kit_repo_ok" -eq 1 ]; then
+    kitpin_read=$((kitpin_read + 1))
+    cat "$KITPIN_DIR/$slug/manifest.part" >> "$KITPIN_DIR/manifest.tsv"
+    # A receiver whose every candidate 404'd still needs a row, or the verdict program never sees it
+    # and a repo that pins NOWHERE would vanish from the sweep instead of being refused.
+    [ "$kit_n" -gt 0 ] || printf '%s\t-\t-\n' "$repo" >> "$KITPIN_DIR/manifest.tsv"
+  fi
+done <<< "$kit_roster"
+
+# The sweep is only as meaningful as the set it covered. The capability EXISTS (asserted above), so
+# the only way to reach zero here is that every one of its receivers takes the kit byte-copy — a
+# legitimate roster state in which there is no pin anywhere to grade. That is a real "nothing to
+# assert", so it is not a refusal; but it must not end the run on the sentence a real sweep earns
+# either, which is why the terminal OK line below is conditional on `kitpin_graded`.
+kit_bytecopy=$(( $(printf '%s\n' "$kit_all_receivers" | grep -c . || true) - kitpin_receivers ))
+if [ "$kitpin_receivers" -eq 0 ]; then
+  if [ "$kit_cap_declared" -eq 0 ]; then
+    echo "repos-audit: kit-pin freshness (#1540) — this roster declares no '$KIT_CAP' capability, so this sweep has no subject and graded nothing. NOTHING was asserted about kit freshness."
+  else
+    echo "repos-audit: kit-pin freshness (#1540) — all $kit_bytecopy $KIT_CAP receiver(s) take the kit byte-copy, so there is no pin to grade anywhere. NOTHING was asserted about kit freshness; that is not a clean bill."
+  fi
+  kitpin_findings=0; kitpin_refusals=0; kitpin_undet=0; kitpin_graded=0
+else
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$KIT_PIN_PY" "$KITPIN_DIR" "$KITPIN_DIR/manifest.tsv" >> "$KITPIN_FILE" \
+    || die "the kit-pin freshness verdict program failed to run. That is not a clean sweep — no receiver's pin was graded."
+
+  kitpin_count() { grep -cE "^$1"$'\t' "$KITPIN_FILE" 2>/dev/null || true; }
+  kitpin_findings="$(kitpin_count finding)"
+  kitpin_refusals="$(kitpin_count refusal)"
+  kitpin_undet="$(kitpin_count undetermined)"
+  kitpin_ok="$(kitpin_count ok)"
+  kitpin_published="$(awk -F'\t' '$1 == "published" { print $2; exit }' "$KITPIN_FILE")"
+
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      finding)      echo "::error::repos-audit: kit-pin freshness — $a $b" ;;
+      refusal)      echo "::error::repos-audit: kit-pin freshness REFUSED a repo it cannot grade — $a: $b" ;;
+      undetermined) echo "::error::repos-audit: kit-pin freshness — $a: $b" ;;
+      ok)           echo "  ok: $a $b" ;;
+    esac
+  done < "$KITPIN_FILE"
+
+  # GRADED is read back off the LEDGER, not off the fetch loop. `kitpin_read` counts repos whose
+  # every candidate read succeeded, which is a fact about the network, not about how many verdicts
+  # were reached — and the two disagreeing is how the summary came to print "graded 0 of 2 … 2
+  # current" while that bug was live. A denominator that cannot contradict the numerator is worth
+  # the extra line.
+  kitpin_graded=$(( kitpin_ok + kitpin_findings + kitpin_refusals ))
+  if [ -z "$kitpin_published" ]; then
+    echo "repos-audit: kit-pin freshness (#1540) — the published FS.GG.Kit version could not be resolved, so NOTHING was asserted about any receiver's pin. That is not a clean sweep."
+  else
+    echo "repos-audit: kit-pin freshness (#1540) — newest stable FS.GG.Kit published on nuget.org is $kitpin_published; graded $kitpin_graded of $kitpin_receivers $KIT_CAP package receiver(s) ($kit_bytecopy byte-copy, not graded): $kitpin_ok current, $kitpin_findings stale-or-unresolvable, $kitpin_refusals refusal(s), $kitpin_undet undetermined. This is f(roster, feed) — no receiver has to push for it to change."
+  fi
+fi
+
+# DELIBERATELY NOT folded into `$undetermined`. That counter's diagnostic says "could not determine
+# WIRING for N repo(s)", and an unreadable Directory.Packages.props is not a wiring question — the
+# per-capability lines a few rows up would be saying "0 undetermined" while the exit-2 message
+# blamed wiring. A red that names the wrong subject is the defect this workflow's own comments exist
+# to prevent (#327/#335). It gets its own counter and its own sentence, at the same exit code.
+
 # --- the sparse-checkout closure sweep's report (#1529) ------------------------------------------
 # Read back from the ledger, because the grading happened inside a subshell. `grep -c` exits 1 on no
 # match, which `set -e` would take as fatal, so every count is guarded — and the guard must not
@@ -1281,8 +1680,9 @@ fi
 # This is the RETRYABLE no-verdict, and the only exit 2 in this script: the subject exists and we
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
-if [ "$undetermined" -ne 0 ]; then
-  echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
+if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ]; then
+  [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
+  [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
   exit 2
 fi
 
@@ -1301,6 +1701,15 @@ if [ "$sparse_refusals" -ne 0 ]; then
   exit 3
 fi
 
+# A receiver whose FS.GG.Kit pin could not be LOCATED joins the permanent no-verdicts, for the same
+# reason a refused sparse shape does: the read succeeded and the answer is still unknown, so it is
+# neither "current" (#266) nor "stale" (#320), and a re-run reproduces it exactly. The remedy is a
+# commit — either the repo pins where this sweep can see it, or the sweep learns the shape.
+if [ "$kitpin_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $kitpin_refusals coordination-kit receiver(s) have an FS.GG.Kit pin this sweep REFUSES to grade — pinned nowhere it knows to look, pinned in two places at once, or pinned to something that is not a version. Nothing was asserted about their freshness. Not transient: a re-run reproduces it. The annotations above name each one." >&2
+  exit 3
+fi
+
 # A gap and an unrostered adopter are one exit code because they are one CLASS: the audit ran to
 # completion and found the roster and the real wiring disagreeing. Both are deterministic, neither is
 # transient, and both are fixed by a commit — they differ only in WHICH side is wrong, and the
@@ -1311,10 +1720,24 @@ fi
 # completion and found a receiver's cross-repo checkout under-fetching. Deterministic, not transient,
 # fixed by a commit. Splitting it out would buy a caller a fifth branch to read what the annotation
 # already says.
-if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ]; then
+#
+# A stale kit pin joins them on the same argument again, a third subject across: the audit ran to
+# completion and found a receiver behind the published kit. Deterministic, not transient, fixed by a
+# commit in that receiver. It is a FINDING and not a no-verdict precisely because the sweep DID
+# reach an answer — which is the whole point of it existing here rather than waiting for the
+# receiver to push and discover it in its own `main`.
+if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
+  [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   exit 1
 fi
-echo "repos-audit: OK — every declared receiver is wired."
+# The terminal claim is CONDITIONAL on the sweep having graded somebody. A run that graded nobody
+# has not earned the second half of that sentence, and printing it anyway is how "I looked at an
+# empty set" becomes "everything is current" (#266).
+if [ "$kitpin_graded" -gt 0 ]; then
+  echo "repos-audit: OK — every declared receiver is wired, and all $kitpin_graded graded $KIT_CAP receiver(s) pin the published FS.GG.Kit."
+else
+  echo "repos-audit: OK — every declared receiver is wired. NO kit pin was graded, so nothing is claimed about kit freshness."
+fi
