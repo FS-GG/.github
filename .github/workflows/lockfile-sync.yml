@@ -604,6 +604,24 @@ jobs:
           # because the App id is a secret, Actions masks it to `***` in the log, so the wrong value did
           # not even look wrong. #514 fixed the identical bug in skill-registry-autofix.yml and named
           # this file as still carrying it (.github#522). Literal, because no step output carries it.
+          #
+          # THIS ADDRESS IS ALSO LOAD-BEARING FOR RENOVATE (.github#1533), and this job — not just
+          # kit-materialize.yml — is a PROVEN cause. Renovate reads a foreign-authored commit on its own
+          # branch as "the user edited this PR", renames the PR `... - abandoned`, parks it under PR Edited
+          # (Blocked), and never updates that branch again; the branch is long-lived, so the freeze is
+          # permanent and silent. Measured 2026-07-27: of the 19 branches then parked across SDD,
+          # Rendering, Governance, Game and Templates, ELEVEN carried a `chore: sync packages.lock.json`
+          # commit and EIGHT of those carried NOTHING ELSE — so this job is independently sufficient to
+          # park a branch, and the damage is not the kit: SkiaSharp, Expecto/FsCheck, actions/checkout,
+          # actions/upload-artifact, fs.gg.audio.*, fs.gg.game.core and the FS.GG.UI coherent set were all
+          # frozen by it. The issue that fixed the kit half raised this half as "plausible, unverified";
+          # it is verified, and it was already the larger half.
+          #
+          # It needs no separate remedy, because it shares this identity: the single `gitIgnoredAuthors`
+          # entry in the org-shared preset (default.json) covers both jobs. That entry must equal this
+          # EXACT string — Renovate matches by Set.delete on the commit author/committer email, not a
+          # login, not a regex, not case-insensitively. If you change this line, change default.json IN
+          # THE SAME PR. Nothing in CI compares them yet; .github#1538 is the gate that will.
           git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git add -- '*packages.lock.json'
