@@ -62,13 +62,73 @@ share an exit code. Every one of these is an ERROR, never a skip and never "cohe
 
 Comparison is by exact 64-hex digest, never by substring.
 
+THE PR ARM (`--pr-arm`, .github#1597). Everything above is the verdict of record that the release
+ACTUALLY HAPPENED, and it stays exactly as it is: it is the only thing that observes the published
+package, and only `main` plus the feed can answer that. But it is also, by construction, a verdict
+that arrives too late to act on. A PR that edits a `kit:` source merges GREEN — this workflow's live
+job is `if: github.event_name != 'pull_request'` — and the repo learns the published kit went stale
+on the POST-MERGE run, by which time every `coordination-kit` receiver is already carrying bytes that
+disagree with canonical. That happened twice in one morning: `edc8404` (#1581) and `0e1c5d0` (#1591),
+the second 40 minutes after a release greened the first, on a different kit source.
+
+So this arm moves the AUTHORING obligation to the moment it can still be met — the PR — without
+touching the arm that observes the release. Two arms, two subjects, one file, because they share the
+kit-source list, the feed reader and the NuGet ordering, and a second copy of any of those is how two
+gates end up disagreeing about what "newest" means (#263).
+
+THE NAIVE RULE DOES NOT WORK, AND IT IS WORTH BEING PRECISE ABOUT WHY. The obvious PR check is *"a PR
+touching a kit source must bump `<Version>`"*. **That rule greens `edc8404`, the first incident**: it
+bumped `0.8.0 -> 0.8.1` and `main` was still RED afterwards, because a bump is not a publish. Nobody
+had run the release. A rule that scores the first of two incidents green is not a gate, it is a
+formality.
+
+The rule that separates all three cases compares against THE FEED, not the tree's own history — the
+same comparand discipline `scripts/repos-audit.sh` already spells out for the pin sweep ("THE
+COMPARAND IS THE FEED, NOT THIS TREE"):
+
+    if a PR's diff touches any `kit:` source in registry/repos.yml,
+    then src/FS.GG.Kit/FS.GG.Kit.csproj <Version> must be STRICTLY GREATER
+    than the newest STABLE FS.GG.Kit on nuget.org.
+
+  * `0e1c5d0` / #1591 — touches `scripts/fsgg-coord`; `<Version>` 0.8.1, published 0.8.1.
+    `0.8.1 > 0.8.1` is false -> RED at PR time. Caught, which is the whole point.
+  * `edc8404` / #1581 — touches two kit sources; `<Version>` 0.8.1, published 0.8.0 -> green, and
+    CORRECTLY so: the bump was real and the release followed it.
+  * a bump already landed and not yet released, then a second kit-touching PR — green, and correctly
+    so. Between a bump and its release the tree is legitimately ahead of the feed, and the second PR
+    simply rides into the pending release. The naive rule would demand a pointless second bump.
+  * a PR touching no kit source -> NOT EVALUATED, and it never reads the network.
+
+WHAT THIS ARM DELIBERATELY DOES NOT DO: pick the version. `0e1c5d0` was receiver-visible BEHAVIOUR, so
+`0.9.0` was the right answer and `0.8.2` was not, and no gate can tell those apart. The arithmetic
+stays human (#1597 review). This says only "the number you are shipping is not ahead of the one the
+fleet can already restore", which is a fact, not a judgement.
+
+THE KIT-SOURCE LIST IS READ FROM registry/repos.yml, NEVER RESTATED — not here, and not in the
+workflow's trigger. A restated list is stale the day a `kit:` row lands, and this workflow's PR
+trigger USED to carry a `paths:` filter naming only this gate's own files, which is why a kit-source
+PR did not even start it. That is `.github#1606`'s shape inverted: a gate whose subject is not in its
+trigger set. The trigger is now UNFILTERED on `pull_request`, exactly as the `push` trigger already
+is and for the same reason — the subject is not any one path — and the arm no-ops (exit 0, no network)
+on a PR that touches nothing.
+
+FAILS CLOSED, like everything else here (#266). No feed verdict is RED, never green: an unreachable
+or rate-limited nuget.org means we cannot tell whether the bump is sufficient, and "cannot tell" must
+not merge. The network is only reached once a kit source IS touched, so an outage cannot block PRs
+that had no obligation in the first place.
+
 Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
+        scripts/check-kit-published-coherence.py --pr-arm [--base <ref-or-sha>]
 
 `--fixture-manifest <tsv> --canonical-manifest <tsv>` compares canned manifests and refuses to run
 unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/ sets. A test hook
-that can silently turn the gate into a no-op is the very defect class above.
+that can silently turn the gate into a no-op is the very defect class above. The PR arm's canned
+inputs (`--changed-files`, `--kit-sources`, `--published-version`) are locked behind the same switch,
+for the same reason: each one of them, left open, is a way to make the arm answer without reading its
+subject.
 
-Exit 0 = the newest published FS.GG.Kit carries the same coordination-kit bytes canonical derives.
+Exit 0 = the newest published FS.GG.Kit carries the same coordination-kit bytes canonical derives
+(default arm), or this PR incurs no republish obligation it has not already met (`--pr-arm`).
 """
 from __future__ import annotations
 
@@ -96,11 +156,17 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     is_prerelease,
     newest,
     nuget_org_versions,
+    parse_version,
 )
 
 # The package the fleet materializes (ADR-0062). Its content — not just its version — is the subject.
 PACKAGE = "FS.GG.Kit"
 LOCK = "registry/repos.lock"
+# The PR arm's two authored subjects: where the kit sources are DECLARED, and where the version a PR
+# proposes to ship is authored. Neither is restated anywhere in this file or in the workflow.
+ROSTER = "registry/repos.yml"
+KIT_CSPROJ = "src/FS.GG.Kit/FS.GG.Kit.csproj"
+_VERSION_ELEMENT = re.compile(r"<Version>\s*([^<\s][^<]*?)\s*</Version>")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STAGE_KIT = os.path.join(REPO_ROOT, "src", "FS.GG.Kit", "stage-kit.sh")
 REPOS_TOOL = os.path.join(REPO_ROOT, "scripts", "repos.sh")
@@ -282,6 +348,194 @@ def coordination_entries(manifest_tsv: str, subject: str) -> dict[str, ManifestE
     return out
 
 
+def kit_sources(roster_path: str) -> list[str]:
+    """Every `source:` in repos.yml's `kit:` block. Read, never restated (.github#1597 AC2).
+
+    A new kit row is therefore covered the day it lands — including the four non-client skill rows,
+    which #1586's shim-shrink does not remove. An absent, non-list, or empty `kit:` block is a
+    GateError rather than an empty set: an empty set silently switches the whole arm off, and a check
+    that disables itself on a bad read is the fail-open (#266) this file exists to refuse.
+    """
+    import yaml  # lazy: the fixture arm never parses YAML, and so need not depend on PyYAML.
+
+    try:
+        text = open(roster_path, encoding="utf-8").read()
+    except OSError as e:
+        raise GateError(f"cannot read the kit roster {roster_path!r}: {e}") from e
+    try:
+        roster = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        raise GateError(f"{roster_path} is not parsable as YAML: {e}") from e
+    if not isinstance(roster, dict):
+        raise GateError(f"{roster_path} is not a YAML mapping")
+
+    kit = roster.get("kit")
+    if not isinstance(kit, list) or not kit:
+        raise GateError(
+            f"{roster_path}: `kit:` is missing or not a non-empty list — this arm cannot tell which "
+            f"sources oblige a republish, and 'cannot tell' is not 'nothing to do'."
+        )
+    sources: list[str] = []
+    for index, row in enumerate(kit):
+        if not isinstance(row, dict):
+            raise GateError(f"{roster_path}: kit[{index}] is not a mapping")
+        source = row.get("source")
+        if not isinstance(source, str) or not source.strip():
+            raise GateError(
+                f"{roster_path}: kit[{index}] has no usable `source` ({source!r}) — a kit row whose "
+                f"source cannot be read would silently drop out of this arm's subject "
+                f"(run: scripts/repos.sh validate)."
+            )
+        sources.append(source.strip().rstrip("/"))
+    return sources
+
+
+def changed_paths(base: str) -> list[str]:
+    """Repo-relative paths this PR changes, as `git diff --name-only <base>...HEAD`.
+
+    Three-dot on purpose: it diffs the merge base against HEAD, so changes that landed on the BASE
+    branch after the PR forked are not attributed to the PR. Two-dot would blame a kit-source commit
+    from someone else's merge on whichever PR happened to be open, and demand a bump from a diff that
+    does not contain one.
+
+    Any git failure is a GateError. A PR whose diff cannot be read has an UNKNOWN obligation, and an
+    unknown obligation must not merge (#266) — an empty list here would read as "touched nothing".
+    """
+    if not base or not base.strip():
+        raise GateError(
+            "the PR arm has no base ref to diff against (pass --base, or set GITHUB_BASE_REF) — "
+            "without one there is no diff, and no diff is not 'no kit sources touched'."
+        )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{base.strip()}...HEAD"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as e:
+        raise GateError(f"cannot run git to read this PR's diff: {e}") from e
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise GateError(
+            f"cannot diff against base {base!r}"
+            + (f": {detail}" if detail else "")
+            + " — check out enough history (actions/checkout `fetch-depth: 0`) so the merge base "
+            "resolves; a diff this arm cannot compute is a no-verdict, not a green."
+        )
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def touched_kit_sources(changed: list[str], sources: list[str]) -> list[tuple[str, str]]:
+    """(changed path, kit source) for every changed path that IS or lives UNDER a kit source.
+
+    Kit sources are a mix of files (`scripts/fsgg-coord`) and directories (a skill root), so the test
+    is exact-match OR prefix-with-separator. The separator is not optional: a bare `startswith` would
+    make `.claude/skills/check-board-notes` match the `check-board` skill, and this arm would demand a
+    republish for a file the kit does not ship.
+    """
+    hits: list[tuple[str, str]] = []
+    for path in changed:
+        for source in sources:
+            if path == source or path.startswith(source + "/"):
+                hits.append((path, source))
+                break
+    return hits
+
+
+def declared_kit_version(csproj_path: str) -> str:
+    """The single `<Version>` FS.GG.Kit.csproj authors. Zero or many is a GateError, not a guess."""
+    try:
+        text = open(csproj_path, encoding="utf-8").read()
+    except OSError as e:
+        raise GateError(f"cannot read {csproj_path!r} to learn the version this PR ships: {e}") from e
+    found = _VERSION_ELEMENT.findall(text)
+    if len(found) != 1:
+        raise GateError(
+            f"{csproj_path} declares {len(found)} <Version> element(s); this arm needs exactly one to "
+            f"know what a merge would publish."
+        )
+    return found[0]
+
+
+def run_pr_arm(
+    *,
+    roster_path: str,
+    csproj_path: str,
+    base: str,
+    canned_changed: str | None,
+    canned_sources: str | None,
+    canned_published: str | None,
+) -> int:
+    """The .github#1597 rule. Exit 0 = no unmet republish obligation; 1 = RED (including no-verdict)."""
+
+    def canned_lines(path: str, what: str) -> list[str]:
+        try:
+            raw = open(path, encoding="utf-8").read()
+        except OSError as e:
+            raise GateError(f"cannot read the canned {what} {path!r}: {e}") from e
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+
+    sources = (
+        canned_lines(canned_sources, "kit-source list")
+        if canned_sources
+        else kit_sources(roster_path)
+    )
+    changed = (
+        canned_lines(canned_changed, "changed-file list")
+        if canned_changed
+        else changed_paths(base)
+    )
+
+    hits = touched_kit_sources(changed, sources)
+    if not hits:
+        print(
+            f"ok: this PR changes {len(changed)} file(s), none of them a `kit:` source declared in "
+            f"{roster_path} ({len(sources)} source(s) considered). No republish obligation, and the "
+            f"feed was not read."
+        )
+        return 0
+
+    declared = declared_kit_version(csproj_path)
+    if is_prerelease(declared):
+        raise GateError(
+            f"{csproj_path} declares the prerelease <Version> {declared!r}. release-kit.yml refuses "
+            f"to publish a prerelease and the shared Renovate preset sets ignoreUnstable=true, so no "
+            f"receiver could ever restore it — a prerelease cannot discharge a republish obligation."
+        )
+    published = canned_published or newest_published_stable()
+
+    touched_list = "\n".join(
+        f"    {path}  (kit source: {source})" for path, source in sorted(hits)
+    )
+    if parse_version(declared) > parse_version(published):
+        print(
+            f"ok: this PR touches {len(hits)} `kit:` source file(s), and "
+            f"{csproj_path} <Version> {declared} is ahead of the newest published {PACKAGE} "
+            f"({published}) — merging it rides into a release that has not happened yet.\n"
+            f"{touched_list}"
+        )
+        return 0
+
+    print(
+        f"::error::check-kit-published-coherence: this PR edits the coordination kit but ships a "
+        f"version the fleet can ALREADY restore. {csproj_path} <Version> is {declared} and the newest "
+        f"published {PACKAGE} on nuget.org is {published}; the rule is STRICTLY GREATER "
+        f"({declared} > {published} is false).\n{touched_list}\n"
+        f"Merging this leaves every `coordination-kit` receiver materializing {published}, whose bytes "
+        f"no longer match canonical — `kit-published-coherence` reds on main immediately afterwards "
+        f"and `coordination-coherence` reds in the receivers (.github#1291, #1591).\n"
+        f"Bump <Version> in {csproj_path} to a version above {published}. Choose it yourself: patch "
+        f"for a comment or doc edit, MINOR when the change is receiver-visible behaviour — a gate "
+        f"cannot tell those apart, and #1591 needed the minor. Then release (tag kit/v<version> -> "
+        f"release-kit.yml) after this merges; the main-only arm above stays the verdict that the "
+        f"release actually happened.",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -295,7 +549,66 @@ def main(argv: list[str]) -> int:
         "--canonical-manifest",
         help="read the canonical kit-manifest.tsv from a file (tests only; requires --fixture-manifest)",
     )
+    ap.add_argument(
+        "--pr-arm",
+        action="store_true",
+        help="the PR-time authoring rule (.github#1597): does this diff owe a kit republish?",
+    )
+    ap.add_argument("--base", default=os.environ.get("GITHUB_BASE_REF", ""), help="PR base ref/sha")
+    ap.add_argument("--roster", default=ROSTER, help=f"kit-source declaration (default: {ROSTER})")
+    ap.add_argument("--csproj", default=KIT_CSPROJ, help=f"kit project (default: {KIT_CSPROJ})")
+    ap.add_argument("--changed-files", help="read this PR's changed paths from a file (tests only)")
+    ap.add_argument("--kit-sources", help="read the kit-source list from a file (tests only)")
+    ap.add_argument("--published-version", help="the newest published kit, canned (tests only)")
     args = ap.parse_args(argv)
+
+    # EVERY canned input is locked behind the SAME switch as --fixture-manifest, and for the same
+    # reason: each is a way to make a gate answer without reading its subject. --base/--roster/--csproj
+    # are NOT locked — they redirect the read, they do not replace it, so a wrong one still fails.
+    pr_arm_canned = {
+        "--changed-files": args.changed_files,
+        "--kit-sources": args.kit_sources,
+        "--published-version": args.published_version,
+    }
+    supplied = sorted(flag for flag, value in pr_arm_canned.items() if value)
+    if supplied and os.environ.get("FSGG_KIT_COHERENCE_FIXTURE_OK") != "1":
+        print(
+            f"::error::check-kit-published-coherence: {', '.join(supplied)} read canned input and are "
+            f"NOT a coherence signal. They are available only to tests/kit-published-coherence/, which "
+            f"sets FSGG_KIT_COHERENCE_FIXTURE_OK=1. Refusing to run.",
+            file=sys.stderr,
+        )
+        return 1
+    if supplied and not args.pr_arm:
+        print(
+            f"::error::check-kit-published-coherence: {', '.join(supplied)} are --pr-arm inputs and "
+            f"mean nothing to the published-package arm. Refusing to run rather than ignoring them.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.pr_arm:
+        if args.fixture_manifest or args.canonical_manifest:
+            print(
+                "::error::check-kit-published-coherence: --pr-arm and the manifest fixture flags are "
+                "different arms with different subjects; run one or the other.",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            return run_pr_arm(
+                roster_path=args.roster,
+                csproj_path=args.csproj,
+                base=args.base,
+                canned_changed=args.changed_files,
+                canned_sources=args.kit_sources,
+                canned_published=args.published_version,
+            )
+        except GateError as e:
+            # AC3: a no-verdict is RED. We cannot tell whether the bump is sufficient, and "cannot
+            # tell" must not merge.
+            print(f"::error::check-kit-published-coherence (pr-arm): {e}", file=sys.stderr)
+            return 1
 
     try:
         lock_digests = read_lock_digests(args.lock)

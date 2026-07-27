@@ -20,6 +20,16 @@
 # (release-kit.yml), not by editing some other PR. So the live check runs on main, on a schedule, and on
 # demand; a PR runs the fixture, whose subject IS the diff.
 #
+# ...AND WHY THERE IS NOW A DIFFERENT PR ARM ANYWAY (.github#1597). The paragraph above is about the
+# LIVE check, and it is still true. What it did not cover is the AUTHORING obligation: a PR that edits
+# a `kit:` source merged green here and reddened `main` seconds later — twice in one morning (`edc8404`
+# / #1581, then `0e1c5d0` / #1591) — because by the time the only arm that looks runs, the kit is
+# already stale and every receiver is already carrying it. `pr-arm` below asks the one question that
+# IS a property of the diff: does this PR edit a kit source while shipping a `<Version>` the fleet can
+# already restore? It does not replace the `published` job, which stays the verdict of record that the
+# release actually happened. See the checker's docstring for why the naive "bump the version" rule
+# scores the FIRST of those two incidents green.
+#
 # The gate FAILS CLOSED (epic #266): an unreadable/stale lock, a canonical stage failure, an
 # unreachable feed, or a missing/malformed manifest is an ERROR, never "coherent". So this workflow
 # must never gain a `continue-on-error` or a conditional that lets the live job be skipped into green —
@@ -28,11 +38,21 @@ name: kit-published-coherence
 
 on:
   pull_request:
-    paths:
-      - "scripts/check-kit-published-coherence.py"
-      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
-      - "tests/kit-published-coherence/**"
-      - ".github/workflows/kit-published-coherence.yml"
+    # DELIBERATELY UNFILTERED (.github#1597), and this is a change from the list that used to sit here.
+    # That list named only this gate's OWN files, so a PR editing `.claude/skills/pnext-item/**` — a
+    # `kit:` source, and the exact shape of `edc8404` — did not start this workflow at all. That is
+    # .github#1606's defect inverted: the gate's subject was not in its trigger set.
+    #
+    # The repair cannot be "add the kit sources to this list": the list would be a RESTATEMENT of
+    # `registry/repos.yml`'s `kit:` block, stale the day a new kit row lands, which is precisely what
+    # #1597 AC2 forbids. YAML `paths:` cannot read another file. So the filter goes, `pr-arm` reads the
+    # roster itself, and a PR touching no kit source exits 0 without reading the network.
+    #
+    # It also makes both PR jobs REPORTABLE ON EVERY PULL REQUEST, which is the only shape a required
+    # context may have (.github#1508 / check-required-contexts): GitHub creates no check run at all for
+    # a workflow its `paths:` filter excluded, so a path-filtered producer of a required context holds
+    # every other PR at "Expected — waiting for status to be reported" forever. Neither job is required
+    # today; this simply stops the filter from being the reason it could never become one.
   push:
     branches: [main]
     # DELIBERATELY UNFILTERED, like engine-pin-coherence. The verdict is a function of main's repos.lock
@@ -63,11 +83,44 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
+      # Was a bare `actions/setup-python`, on the grounds that the fixture was pure stdlib. The
+      # `pr-arm` legs (.github#1597) read `registry/repos.yml` — including the legs that prove a
+      # MALFORMED roster is a no-verdict rather than an empty kit-source set — so the fixture now needs
+      # the same pinned YAML dependency the live arms declare. Taking it from the shared action rather
+      # than a second hand-rolled step is what `check-policy-checker-inventory` asserts: an unpinned
+      # or hand-installed PyYAML is how a policy gate ends up depending on a runner-image accident.
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the kit-published-coherence fixture (no network)
         run: bash tests/kit-published-coherence/run.sh
+
+  # PR-only. The AUTHORING obligation, asked while it can still be met (.github#1597): if this diff
+  # edits a `kit:` source declared in registry/repos.yml, FS.GG.Kit.csproj <Version> must already be
+  # ahead of the newest published kit on nuget.org. Not a substitute for `published` below — that one
+  # observes the RELEASE; this one observes the PR.
+  pr-arm:
+    name: pr-arm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: fixture
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The subject is `git diff --name-only <base>...HEAD`, so the MERGE BASE has to resolve. The
+          # default shallow fetch has no common ancestor with the base branch and the diff fails —
+          # which this gate reports as a no-verdict RED, not a green, so a shallow checkout here would
+          # be a self-inflicted permanent red rather than a silent pass.
+          fetch-depth: 0
+      # Reads registry/repos.yml with PyYAML, exactly as scripts/repos.sh validate does. Declare the
+      # pinned dependency rather than inheriting a runner-image accident (the #1469 review lesson that
+      # made the `published` job deterministically red on a clean runner).
+      - uses: ./.github/actions/setup-policy-python
+      - name: Does this PR edit the kit without getting ahead of the published one?
+        run: |
+          python scripts/check-kit-published-coherence.py --pr-arm \
+            --base "${{ github.event.pull_request.base.sha }}"
 
   # Online. The actual coherence signal: newest published FS.GG.Kit against main's validated lock +
   # exact pack-time staged manifest (destinations, bytes, modes, and closed set).
