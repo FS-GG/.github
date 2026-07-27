@@ -1,6 +1,7 @@
 # Polyglot Web Product Architecture and Implementation Design
 
 **Date:** 2026-07-27 16:35:09 +02:00
+**Amended:** 2026-07-27 — general-purpose TypeScript website profile made the base web product
 **Status:** Proposed architecture and implementation programme
 **Scope:** FS-GG framework development and generated/product development
 **Decision posture:** Plain TypeScript browser client; F# ASP.NET Core server; no Blazor; no Fable in the first implementation
@@ -15,12 +16,19 @@ FS-GG should support web products through two related but deliberately separate 
    server and the TypeScript browser client. That repository uses one product board and
    `work-board`, with one root SDD lifecycle.
 
-The recommended browser renderer is a plain TypeScript package built directly on CanvasKit. Fable
-is not required to decode or render the portable scene protocol, and adding it would introduce a
-second compilation model before it has demonstrated unique value. The F# server remains the
-authoritative application runtime and produces `FS.GG.UI.Scene` values. The browser consumes the
-existing deterministic portable Scene package, renders it through CanvasKit, and returns normalized
-input events.
+The base web product is a **general-purpose TypeScript website** with arbitrary HTML, CSS, DOM
+content, assets, routes and API calls. It does not depend on FS.GG.Rendering, CanvasKit, SceneCodec
+or SignalR. The generated baseline is plain TypeScript with Vite so that a product can stay vanilla
+or adopt React, Svelte, Vue or another browser framework without making that choice an FS-GG
+platform dependency.
+
+Scene rendering is an opt-in specialization of that website. The recommended browser renderer is a
+plain TypeScript package built directly on CanvasKit and mounted into one or more elements inside
+the ordinary site. Fable is not required to decode or render the portable scene protocol, and
+adding it would introduce a second compilation model before it has demonstrated unique value. In a
+server-authoritative rendered product, the F# server produces `FS.GG.UI.Scene` values; the browser
+consumes the existing deterministic portable Scene package, renders it through CanvasKit, and
+returns normalized input events. The rest of the website remains normal DOM content.
 
 The main discovery is that much of the hard architectural seam already exists:
 
@@ -40,10 +48,11 @@ The main discovery is that much of the hard architectural seam already exists:
 The recommended sequence is therefore:
 
 1. establish a mixed F#/TypeScript SDD acceptance workspace;
-2. implement and prove the TypeScript decoder and CanvasKit renderer against the existing corpus;
-3. add a transport-independent live-session envelope and an ASP.NET Core SignalR adapter;
-4. add a polyglot web product profile to Templates;
-5. generate a reference product monorepo and run it through `work-board` plus the full SDD
+2. add and prove a general-purpose `web` product profile with no Rendering dependency;
+3. implement and prove the TypeScript decoder and CanvasKit renderer against the existing corpus;
+4. add a `web-rendering` specialization with a transport-independent live-session envelope and an
+   ASP.NET Core SignalR adapter;
+5. generate reference product monorepos and run them through `work-board` plus the full SDD
    lifecycle;
 6. add incremental scene delivery only after full-snapshot measurements justify it.
 
@@ -83,8 +92,9 @@ would make every product feature a cross-repository change, duplicate planning s
 atomic contract changes unnecessarily difficult. A monorepo allows one issue, one specification,
 one dependency graph, one review, and one release decision for a vertical product slice.
 
-This does not make framework packages part of the product repository. Reusable scene decoding and
-CanvasKit rendering belong to a framework repository and are consumed as versioned npm packages.
+This does not make framework packages part of the product repository. A general website needs no
+Rendering package. When selected, reusable scene decoding and CanvasKit rendering belong to a
+framework repository and are consumed as versioned npm packages.
 
 ### D2 — Use plain TypeScript, not Blazor or Fable, for the browser runtime
 
@@ -104,7 +114,56 @@ Fable should be reconsidered only for a bounded, measured reason, such as:
 
 It should not be introduced merely to make the repository look more uniformly F#.
 
-### D3 — Create a browser-rendering framework component
+### D3 — Make a general TypeScript website the base profile
+
+FS-GG.Templates should expose two composable product shapes:
+
+```text
+web
+└── F# ASP.NET Core server
+    └── arbitrary TypeScript website
+        ├── HTML/CSS/DOM content and assets
+        ├── routes and navigation
+        ├── HTTP APIs
+        ├── optional real-time transport
+        └── vanilla TypeScript or a product-selected UI framework
+
+web-rendering
+└── everything in web
+    └── @fs-gg/rendering-web
+        ├── Scene decoder
+        ├── CanvasKit renderer
+        ├── optional live-session adapter
+        └── semantic DOM/input bridge
+```
+
+`web` is the stable base. It generates the ASP.NET Core host, TypeScript/Vite client, integrated
+development proxy, production static-asset publishing, tests, root build, SDD lifecycle and
+`work-board` materialization. It must not carry a transitive dependency on Rendering or assume the
+site is a single-page application.
+
+The template should start with vanilla TypeScript because it is the least-prescriptive executable
+baseline, not because products are forbidden from choosing a framework. Framework-specific
+starters may be added as explicit client-flavour options after their maintenance and upgrade costs
+are accepted. Product source is free to use any npm package.
+
+`web-rendering` is an additive specialization, never a replacement application shell. A product
+can combine ordinary web UI with one or more rendered surfaces:
+
+```html
+<header><!-- native navigation and account UI --></header>
+<main>
+  <aside><!-- native forms, inventory, help, settings --></aside>
+  <canvas id="scene"><!-- rendered FS.GG surface --></canvas>
+</main>
+<footer><!-- arbitrary native content --></footer>
+```
+
+Authentication, navigation, forms, documentation, commerce, settings and accessibility-heavy
+interfaces should ordinarily remain native DOM. CanvasKit owns only the visual surface that needs
+Scene fidelity.
+
+### D4 — Create a browser-rendering framework component
 
 Create a new framework repository named **`FS.GG.Rendering.Web`**, coordinated on the existing
 FS-GG Coordination board. It owns browser-specific implementation and npm identity, while
@@ -143,12 +202,23 @@ Ownership remains strict:
 | Skia reference images and canonical cross-backend corpus | `FS.GG.Rendering` |
 | TypeScript decoder, CanvasKit renderer, browser capability ledger | `FS.GG.Rendering.Web` |
 | Generic SDD lifecycle and polyglot acceptance | `FS.GG.SDD` |
-| Generated product layout and web profile | `FS.GG.Templates` |
+| Generated product layout and `web`/`web-rendering` profiles | `FS.GG.Templates` |
 | F# ASP.NET host and product UI/domain behaviour | Product repository |
 | Generic transport abstraction, if later proven reusable | `FS.GG.Net` |
 | Organisation board schema, registry and cross-repo sequence | `.github` |
 
-### D4 — Keep the durable Scene package independent of the live transport
+The package must expose an embeddable component rather than own the page:
+
+```ts
+const viewer = createSceneViewer({
+  canvas: document.querySelector<HTMLCanvasElement>("#scene")!,
+  transport
+});
+```
+
+Ordinary `web` products never import this package.
+
+### D5 — Keep the durable Scene package independent of the live transport
 
 The existing `FSGGSCENE` portable package is the rendering contract. SignalR, WebSocket framing,
 HTTP fetches, and session acknowledgements are delivery mechanisms around it, not additions to the
@@ -165,7 +235,7 @@ The browser must be able to load a saved Scene package without SignalR. The serv
 deliver the same package over SignalR, raw WebSocket, HTTP, or a test fixture without changing its
 bytes.
 
-### D5 — Use SignalR first, behind a small transport interface
+### D6 — Use SignalR first, behind a small transport interface
 
 ASP.NET Core SignalR is the recommended first hosting adapter. It supplies a supported TypeScript
 client, automatic reconnection, WebSocket-first transport selection with fallbacks, streaming, and
@@ -198,7 +268,7 @@ export interface SceneSessionTransport {
 Only the adapter imports `@microsoft/signalr`. Tests and future raw-WebSocket adapters implement the
 same interface.
 
-### D6 — One SDD lifecycle governs both language lanes
+### D7 — One SDD lifecycle governs both language lanes
 
 The product has one specification and one lifecycle. It must not create a F# SDD workflow and a
 separate TypeScript planning convention.
@@ -242,7 +312,7 @@ The first SDD change should be an executable mixed-workspace acceptance fixture,
 `language: typescript` field. The core model does not need to know a source language merely to
 validate requirements, tasks, evidence, and readiness.
 
-### D7 — `drive-board` governs framework work; `work-board` governs product work
+### D8 — `drive-board` governs framework work; `work-board` governs product work
 
 The same board machinery should be reused, but the two drivers have different scopes.
 
@@ -253,13 +323,13 @@ FS-GG Coordination board
     ├── SDD: prove polyglot lifecycle
     ├── Rendering: fixtures and protocol clarifications
     ├── Rendering.Web: decoder and CanvasKit backend
-    └── Templates: web product profile
+    └── Templates: base `web` profile + optional `web-rendering` extension
 
 Product board
   work-board
     ├── server feature paths
     ├── client feature paths
-    ├── shared live-envelope paths
+    ├── optional shared live-envelope paths
     ├── browser tests
     └── deployment
 ```
@@ -375,7 +445,11 @@ The semantic projection must satisfy the platform expectation that user-interfac
 name, role and value
 ([WCAG 2.2, Name, Role, Value](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)).
 
-## Target runtime architecture
+## Target runtime architecture for the `web-rendering` specialization
+
+The base `web` profile is an ordinary ASP.NET Core plus TypeScript website and does not use the
+runtime below. The following architecture is activated only when a product selects or later adds
+the rendering specialization.
 
 ### Server-authoritative first slice
 
@@ -576,9 +650,9 @@ A web feature plan should name:
 
 - F# server modules and public interfaces;
 - TypeScript modules and exported types;
-- live-envelope changes;
-- scene-protocol dependency and supported range;
-- accessibility behaviour;
+- live-envelope changes, when real-time rendering is selected;
+- scene-protocol dependency and supported range, when rendering is selected;
+- DOM accessibility behaviour and any rendered-surface semantic sidecar;
 - browser and server evidence;
 - deployment and compatibility impact.
 
@@ -622,8 +696,9 @@ Use separate CI jobs for fast feedback, plus one integrated product gate:
 |---|---|
 | `dotnet` | build logs, TRX, F# surface report |
 | `web` | typecheck/lint, unit JUnit, declaration/API report |
-| `browser-conformance` | Playwright JUnit, candidate PNGs, diffs, browser metadata |
-| `integration` | built server + browser, SignalR session tests, accessibility results |
+| `browser` | Playwright JUnit and normal website interaction/accessibility evidence |
+| `rendering-conformance` *(specialization)* | candidate PNGs, diffs, CanvasKit/browser metadata |
+| `rendering-integration` *(specialization)* | SignalR session tests and semantic-sidecar results |
 | `sdd` | lifecycle validation/verify reports |
 | `package` | NuGet/npm dry-run artifacts and manifests when publishable |
 
@@ -693,7 +768,35 @@ Make the smallest changes exposed by this proof. Likely changes:
 
 Exit: a CI acceptance test demonstrates one lifecycle across both lanes with real reports.
 
-### Milestone 2 — Execute the browser feasibility proof
+### Milestone 2 — Add the general-purpose generated web profile
+
+**Owner:** `FS.GG.Templates`
+
+Add the base `web` profile after the mixed-workspace proof succeeds. It generates:
+
+- an F# ASP.NET Core server with normal HTTP/API and static-asset hosting;
+- a plain TypeScript/Vite website with arbitrary HTML, CSS, DOM content and assets;
+- a development proxy and integrated production publish;
+- an npm workspace and lockfile;
+- server, web and Playwright tests;
+- root build orchestration;
+- one SDD lifecycle;
+- product `work-board` driver and board configuration guidance;
+- deployment example;
+- generic web product skills.
+
+It does **not** reference `FS.GG.Rendering`, `@fs-gg/rendering-web`, CanvasKit, SceneCodec or
+SignalR. Those are independent opt-ins. The baseline does not prescribe a client framework or
+assume that arbitrary product content is a scene.
+
+Continue using `dotnet new` as the template transport. A dotnet template can contain arbitrary
+TypeScript and configuration files; introducing a second scaffold engine is unnecessary.
+
+Exit: generation is deterministic; the arbitrary-content reference site builds and runs; generated
+output builds offline under the supported cache conditions; both language lanes are drift-checked;
+and the product lifecycle imports real TRX and JUnit evidence.
+
+### Milestone 3 — Execute the browser feasibility proof
 
 **Owners:** `FS.GG.Rendering`, then `FS.GG.Rendering.Web`
 
@@ -717,7 +820,7 @@ Rendering.Web:
 Exit: all three Feature 146 showcase entries produce browser images; the final decision is based on
 measured comparisons rather than `candidate-not-executed`.
 
-### Milestone 3 — Add interaction and ASP.NET hosting
+### Milestone 4 — Add rendered interaction and ASP.NET hosting
 
 **Owner:** reference product first
 
@@ -740,35 +843,39 @@ If promotion occurs:
 Exit: a user can interact with a server-authoritative control showcase through the browser, and
 disconnect/reconnect does not corrupt the session.
 
-### Milestone 4 — Add the generated web product profile
+### Milestone 5 — Add the generated rendering specialization
 
 **Owner:** `FS.GG.Templates`
 
-Add a profile such as `web` or `app-web` that generates:
+Add `web-rendering` as an extension of the proven `web` profile. It adds:
 
-- F# ASP.NET Core server;
-- TypeScript/Vite browser application;
-- npm workspace and lockfile;
-- server and web tests;
-- Playwright configuration;
-- root build orchestration;
-- one SDD lifecycle;
-- product `work-board` driver and board configuration guidance;
-- framework package pins;
-- deployment example;
-- web-specific product skills.
+- the pinned `@fs-gg/rendering-web` package and CanvasKit assets;
+- an embeddable viewer mounted into one element of an otherwise arbitrary website;
+- optional SignalR live-session server and client adapters;
+- the semantic DOM/input sidecar;
+- Scene/resource fixtures and browser-conformance tests;
+- rendering-specific product skills and package pins.
 
-Continue using `dotnet new` as the template transport. A dotnet template can contain arbitrary
-TypeScript and configuration files; introducing a second scaffold engine is unnecessary.
+The extension must compose with existing product DOM content and must also support static
+Scene-package viewing without SignalR. It must not replace the site's application shell, router,
+styles or arbitrary content.
 
-Exit: generation is deterministic, generated output builds offline under the supported cache
-conditions, all tests run, and drift checks cover both language lanes.
+Exit: both `web` and `web-rendering` generation are deterministic; the base profile remains
+Rendering-free; the specialization passes the browser fidelity, interaction and accessibility
+gates; and generated drift checks prove their composition.
 
-### Milestone 5 — Prove product development
+### Milestone 6 — Prove product development
 
-**Owner:** generated reference product
+**Owner:** generated reference products
 
-Use the template to create a real product repository and deliver a vertical feature through:
+Create two reference product repositories:
+
+1. a general website proving arbitrary DOM content, routing, forms, HTTP APIs and deployment with no
+   Rendering dependency;
+2. a rendered website proving that an FS.GG scene surface composes with native navigation, forms
+   and accessibility content.
+
+Deliver a vertical feature in each through:
 
 - one product issue;
 - one product board;
@@ -779,11 +886,12 @@ Use the template to create a real product repository and deliver a vertical feat
 - full CI evidence;
 - production-like deployment.
 
-Exit: the workflow—not just the code—has been demonstrated.
+Exit: the workflow—not just the code—has been demonstrated for both the base and specialized
+profiles, and the base product has no accidental renderer dependency.
 
-### Milestone 6 — Optimize and publish
+### Milestone 7 — Optimize and publish
 
-Only after the reference product is measured:
+Only after the reference products are measured:
 
 - decide whether full snapshots meet performance budgets;
 - design delta delivery if justified;
@@ -791,11 +899,21 @@ Only after the reference product is measured:
 - finalize npm trusted publishing/provenance;
 - extend generic FS-GG release contracts;
 - set browser support and compatibility policy;
-- publish stable framework packages and advance Templates pins.
+- publish the stable browser framework package and advance only the `web-rendering` pins;
+- release the base `web` profile independently of browser-renderer readiness.
 
 ## Acceptance criteria and budgets
 
 The initial programme is complete when:
+
+### General web profile
+
+- A generated `web` product serves arbitrary HTML, CSS, assets and TypeScript application code.
+- It supports normal HTTP APIs and production static-asset publishing without SignalR.
+- It contains no direct or transitive FS.GG.Rendering, CanvasKit or SceneCodec dependency.
+- A product can add its chosen npm UI framework without changing the SDD or board model.
+- Server TRX and client/browser JUnit evidence reach the same SDD work item.
+- Root restore, build, test, run and publish commands cover both language lanes.
 
 ### Protocol and fidelity
 
@@ -901,7 +1019,10 @@ The first epic should be decomposed as follows:
 A0  Org ADR + component/board registration
 │
 ├── A1  SDD mixed F#/TS acceptance workspace
-│   └── A2  SDD release-artifact generalization (only gaps proved by A1)
+│   ├── A2  SDD release-artifact generalization (only gaps proved by A1)
+│   └── W1  Templates general `web` profile
+│       └── W2  Rendering-free arbitrary-content reference product
+│           └── W3  base product-board/work-board/SDD workflow proof
 │
 ├── B1  Rendering publishes canonical Scene v1 foreign-consumer corpus
 │   └── B2  Rendering.Web TypeScript decoder
@@ -916,15 +1037,17 @@ A0  Org ADR + component/board registration
 │   └── C4  semantic DOM/input bridge
 │       └── C5  reconnect/resync/security/performance acceptance
 │
-└── D1  Templates web profile        (blocked by A1, B6, C5)
-    └── D2  generated reference product
-        └── D3  product-board/work-board/SDD workflow proof
-            └── D4  stable package and template release
+└── R1  Templates `web-rendering` extension  (blocked by W1, B6, C5)
+    └── R2  rendered arbitrary-content reference product
+        └── R3  rendered product-board/work-board/SDD workflow proof
+            └── R4  stable browser package and rendering-extension release
 ```
 
-`A1` and `B1` can start concurrently. `C1` can be designed once the full-snapshot contract is
-settled, but its implementation should not distract from `B6`, the browser proof that is currently
-missing. Templates must consume proven contracts rather than becoming the integration laboratory.
+`A1` and `B1` can start concurrently. Once `A1` proves the mixed lifecycle, `W1` can proceed without
+waiting for any Rendering item. `C1` can be designed once the full-snapshot contract is settled, but
+its implementation should not distract from `B6`, the browser proof that is currently missing.
+`R1` composes only proven base-web and browser-rendering contracts; Templates must not become the
+integration laboratory.
 
 ## Final recommendation
 
@@ -932,8 +1055,11 @@ Proceed with the plain TypeScript design.
 
 The architecture is not “an F# repository with an awkward JavaScript folder.” It is:
 
+- a general-purpose F#/TypeScript website profile with arbitrary native web content and no
+  Rendering dependency;
 - a language-neutral portable Scene contract owned by Rendering;
-- an independently conforming TypeScript/CanvasKit renderer owned by a browser framework component;
+- an optional, independently conforming TypeScript/CanvasKit renderer owned by a browser framework
+  component and embeddable inside that ordinary website;
 - an F# ASP.NET Core product host;
 - one polyglot product monorepo;
 - one product board driven by `work-board`;
@@ -941,10 +1067,12 @@ The architecture is not “an F# repository with an awkward JavaScript folder.�
 - one organisation Coordination board driven by `drive-board` for the framework programme.
 
 This arrangement uses the strengths of the existing FS-GG machinery without forcing TypeScript
-through F#-specific surfaces. It also preserves a credible path to Fable later: Fable can be added
-for proven shared application logic without being made a prerequisite for browser rendering,
-protocol conformance, or product governance.
+through F#-specific surfaces or making Scene rendering the definition of a web product. It also
+preserves a credible path to Fable later: Fable can be added for proven shared application logic
+without being made a prerequisite for a normal website, browser rendering, protocol conformance, or
+product governance.
 
-The immediate next action is not to build the product template. It is to create the Coordination
-epic, prove the mixed SDD workspace, and convert Feature 146's three
-`candidate-not-executed` entries into real CanvasKit comparison evidence.
+The immediate next action is to create the Coordination epic and prove the mixed SDD workspace.
+That unblocks the general `web` profile independently. In parallel, the rendering lane can convert
+Feature 146's three `candidate-not-executed` entries into real CanvasKit comparison evidence before
+`web-rendering` is added to Templates.
