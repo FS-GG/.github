@@ -463,14 +463,29 @@ implementation would green any divergence the moment it was regenerated — the 
 a fix for it. It also verifies the `SkillMirror.fs` digest recorded in the table's `derivedFrom` block,
 so a table derived from a *different* library revision cannot claim to have been derived from this one.
 
-**The residual gap, stated rather than implied.** This closes shell-drifts-from-table (a gate on every
-PR) and table-drifts-from-library-at-`a066e0b` (a re-runnable derivation). It does **not** notice a
-**future** library change on its own: this repo's CI holds neither the source nor the package, and the
-sibling repository is not this item's to edit. What would close it is a scheduled cross-repo freshness
-check reading `SkillMirror.fs` over the API and comparing its digest to `derivedFrom.skillMirrorFsSha256`
-— cheap, but a new workflow and a new checker, so it is **filed rather than smuggled in**:
-[#1546](https://github.com/FS-GG/.github/issues/1546). Until it lands, `#120`'s claim is pinned in one
-direction and dated in the other, and this paragraph is the honest statement of which is which.
+**The residual gap, and what now watches it.** This closes shell-drifts-from-table (a gate on every
+PR) and table-drifts-from-library-at-`a066e0b` (a re-runnable derivation). Neither notices a **future**
+library change: this repo's CI holds neither the source nor the package. That third leg landed as
+[#1546](https://github.com/FS-GG/.github/issues/1546) (`f3a6d15`) — a scheduled cross-repo freshness
+check, [`skillmirror-freshness.yml`](../../.github/workflows/skillmirror-freshness.yml) plus
+[`scripts/check-skillmirror-freshness.py`](../../scripts/check-skillmirror-freshness.py), running daily
+at **07:11 UTC**, which reads `SkillMirror.fs` over the API and compares its digest to
+`derivedFrom.skillMirrorFsSha256`.
+
+**Read what that gate actually asserts, because it is narrower than "the table is live."** It compares
+a digest of **one file**, `src/FS.GG.Contracts/SkillMirror.fs`. It notices that the library *moved*; it
+never says whether the move altered `verify`'s behaviour — only re-running the oracle does that. And
+`Schemas.fs`, which the oracle also `#load`s, is **outside its reach**, so a change confined to
+`Schemas.fs` can move `verify` while this gate stays green:
+[#1577](https://github.com/FS-GG/.github/issues/1577). A freshness gate is a tripwire on one file, not a
+proof of alignment, and calling it the latter would re-create the fail-open #1513 was filed about.
+
+**The table is dated right now — and the point is that this is measured, not feared.** As of
+2026-07-27, `derivedFrom` records `b1c7e94d…` (4371 B) at `a066e0b`, while `SkillMirror.fs` on
+`FS-GG/FS.GG.SDD` `main` hashes `2742eb73…` (18807 B). Re-deriving the table is tracked as
+[#1576](https://github.com/FS-GG/.github/issues/1576). So `#120`'s claim is still pinned in one
+direction and dated in the other — the difference from before is that the drift is now **announced by a
+gate** on a schedule instead of waiting to be found by hand for a fourth time.
 
 ### Intentional differences are asserted, not commented
 
@@ -659,19 +674,36 @@ jobs:
       # params: ".fsgg/scaffold-provenance.json"               # enables [missing]/[unexpected] (needs manifest)
 ```
 
-The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49)
-(roadmap **T3.2**) is the first caller — it invokes this for the orchestrated **and** standalone
-lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2, consumer half). It is
-a generated-product caller, so it does **not** satisfy Templates' own `receives: skill-union` row: those
-are different subjects, and the roster's detector says so out loud rather than counting one as the other.
+**The one live caller of this shape is `FS.GG.Rendering`'s**
+[`template-base-skill-union.yml`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/.github/workflows/template-base-skill-union.yml)
+(`product-path: template/base`, `manifest:` supplied). It audits a tree that is **committed** to the
+repository rather than scaffolded by it — neither a runtime root nor a generated output — which is a
+shape this document did not previously describe. It is a generated-product-shaped caller, so it does
+**not** satisfy Rendering's own `receives: skill-union` row: those are different subjects, and the
+roster's detector says so out loud rather than counting one as the other. See
+[the ninth audited tree](#the-ninth-audited-tree-fsggrenderings-templatebase) below.
+
+**The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) (roadmap
+T3.2) was to be the first such caller, and it is not one — the issue is closed and the caller was never
+wired.** This document previously said flatly that it "is the first caller", which was a plan read as a
+fact. Measured 2026-07-27: `FS-GG/FS.GG.Templates` contains **no reference to `skill-union` anywhere**
+(code search, 0 hits), so `composition.yml` still uses the "grep for the failure string and skip" shape
+(ADR-0014 F2, consumer half) that #49 was meant to replace. Tracked as
+[Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313). Do not cite Templates as
+precedent for this block until that is true.
 
 ### Rollout state (measured 2026-07-27)
 
-**The audited trees are the org's rostered repositories — eight of them**, one committed tree each, and
-enumerating them here is deliberate: "how many trees are audited?" must have an answer that is *read*
-rather than counted from memory. **Every row carries the commit it was measured at**, because a row
-without one is a summary, and summaries from this document have misdirected three repairs already. Each
-was produced by running, over a fresh clone at that commit:
+**The rostered repository trees are eight**, one committed tree each, and enumerating them here is
+deliberate: "how many trees are audited?" must have an answer that is *read* rather than counted from
+memory. The subject set today is **nine trees** — these eight, plus `FS.GG.Rendering`'s `template/base/`
+subdirectory, a different shape recorded
+[below](#the-ninth-audited-tree-fsggrenderings-templatebase) rather than as a ninth row here. How many
+of them a *gate* keeps re-checking is a smaller number, and a separate question; it is answered under
+the table, because conflating the two is the error this section keeps having to repair. **Every row
+carries the commit it was measured at**, because a row without one is a summary, and summaries from this
+document have misdirected three repairs already. Each was produced by running, over a fresh clone at
+that commit:
 
 ```sh
 scripts/skill-union-assert.sh --product <tree> --roots ".claude/skills .codex/skills .agents/skills"
@@ -686,9 +718,23 @@ scripts/skill-union-assert.sh --product <tree> --roots ".claude/skills .codex/sk
 | `FS.GG.Net` | `9e5f757` | 4 | 4 / 4 / 4 | coherent |
 | `FS.GG.Governance` | `c577961` | 15 | 15 / 15 / 15 | coherent — **repaired** (`9d8359c`), wired second |
 | `FS.GG.SDD` | `a066e0b` | 32 | 32 / 32 / 32 | coherent — **repaired**, and the first wired receiver |
-| `FS.GG.Rendering` | `ee5e6c3` | 50 | 50 / 4 / 50 | **46 partitioned** *and* **30 divergent** — see below |
+| `FS.GG.Rendering` | `e2d860b` | 50 | 50 / 50 / 50 | coherent — **repaired** ([Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080)), wired third |
 
-**Seven of the eight are coherent. `FS.GG.Rendering` is the one that is not.**
+**All eight rows read coherent.** `FS.GG.Rendering` was the last holdout — 46 partitioned *and* 30
+divergent at `ee5e6c3` — and its rematerialization landed on 2026-07-27. Re-measured here at `e2d860b`:
+union **50**, `50 / 50 / 50`, **0 partitioned and 0 divergent**, comparing the `SKILL.md` blob of every
+id across all three roots.
+
+**Read that as eight rows, not as a live org-wide green, because the rows are not equally alive.** A
+row is a claim about *its own commit*, and only the trees whose repo has wired the caller are re-checked
+after it: `FS.GG.SDD`, `FS.GG.Governance` and `FS.GG.Rendering` have a gate that re-asserts theirs on
+every push, and `.github` asserts itself via
+[`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml). The other four —
+`FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, `FS.GG.Net` — are exactly the four open gaps below;
+their rows are **hand measurements that nothing has re-checked since**, and each could have drifted the
+moment after it was taken without anything going red. That is not a footnote on the table, it *is* the
+remaining rollout: a coherent row and a wired gate are different facts, and only the second one keeps
+being true.
 
 This rollout is moving fast enough to invalidate a snapshot mid-edit, and it did: Governance's caller
 landed while this section was being rewritten, taking the gap count from 6 to 5 between two runs of
@@ -707,7 +753,8 @@ each id **is** present in — **before** the two repairs, which is where the les
 | `FS.GG.Governance` | `c577961` (now) | 15 of 15 | 15 | 0 | 0 |
 | `FS.GG.SDD` | `f419f0e` (pre) | 21 of 32 | 21 | 0 | **11** |
 | `FS.GG.SDD` | `a066e0b` (now) | 32 of 32 | 32 | 0 | 0 |
-| `FS.GG.Rendering` | `ee5e6c3` | 50 of 50 | 20 | **30** | 0 |
+| `FS.GG.Rendering` | `ee5e6c3` (pre) | 50 of 50 | 20 | **30** | 0 |
+| `FS.GG.Rendering` | `e2d860b` (now) | 50 of 50 | 50 | 0 | 0 |
 
 **The pre rows are the point.** Governance and SDD really were drift-free — but over **4 and 21** ids,
 not 15 and 32, and the summary that said so never named the denominator. That is the whole of #1506 in
@@ -718,16 +765,17 @@ mismatch an in-flight snapshot. It was neither in flight nor 33: re-measured at 
 **32** — 21 comparable + 11 single-root — and 21 + 12 never summed to a union at all. Corrected here
 rather than quietly dropped, on the same principle as the rest of this section.)*
 
-Rendering's repair is **both** kinds: 46 missing projections *and* 30 divergent pairs. A
+Rendering's repair was **both** kinds: 46 missing projections *and* 30 divergent pairs. A
 byte-comparison-only checker would miss the partitions; the checker that short-circuited on partitions
-missed the drift.
+missed the drift. Both are closed at `e2d860b`, and the row above is retained rather than dropped for
+the same reason as the Governance and SDD pre rows — a repair whose evidence is deleted cannot be
+re-checked.
 
 #### Name the partitioned set; do not describe it by its producer (#1509)
 
 Each of the three partitioned trees had its ids described here by naming a **producer set**, and two of
 the three descriptions were wrong in the same way. Enumerated below at the commit where the partition
-existed — the pre-repair commit for the two that were repaired, and current `main` for Rendering, which
-has not been:
+existed — which is now the **pre-repair** commit for all three, Rendering's included:
 
 | tree | at | partitioned | what the ids actually are | what this doc used to say |
 | --- | --- | --- | --- | --- |
@@ -755,33 +803,81 @@ A producer-set description is a *guess about where the ids came from* wearing th
 measurement. Enumerate the set, or say the breakdown is unmeasured; do not name a producer and let a
 reader infer coverage from it.
 
-`skill-union` is rostered on all seven framework repos, and **two have wired it**: `FS.GG.SDD`
-(`a066e0b`) and `FS.GG.Governance` (`c577961`), each of which also made `skill-union / skill-union`
-required on its default branch. So the scheduled
-[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **5 gaps** — measured 2026-07-27 by
-running `scripts/repos-audit.sh` from this repo: 32 receiver-capability pairs, 27 wired, 5 gaps,
-0 unrostered adopters, 0 undetermined, every other capability green. That is the ratchet
-[#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the rollout is complete
-only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes for every tree
-above **and** every receiver check is green.
+`skill-union` is rostered on all seven framework repos, and **three have wired it**: `FS.GG.SDD`
+(`a066e0b`), `FS.GG.Governance` (`c577961`) and now `FS.GG.Rendering` (`e2d860b`), each of which also
+made `skill-union / skill-union` required on its default branch. So the scheduled
+[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **4 gaps** — measured 2026-07-27 by
+running `scripts/repos-audit.sh` from this repo: 32 receiver-capability pairs, 28 wired, 4 gaps
+(Templates, Game, Audio, Net), 0 unrostered adopters, 0 undetermined, every other capability green.
+That is the ratchet [#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the
+rollout is complete only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes
+for every tree above **and** every receiver check is green.
 
-Six of the seven receivers — Templates, Game, Audio, Net, Governance and SDD — are now root-coherent,
-and of those Governance and SDD have also wired the caller, so the remaining four need nothing but the
-block above. The seventh, `FS.GG.Rendering`, must **rematerialize from its authoritative producer
-first** (not copy an arbitrary root, and proving an idempotent second materialization):
-[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080), the last of the three
-cross-repo requests still open. The other two —
-[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716) and
-[Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326) — are **closed**, their
-rematerializations having landed in `a066e0b` and `9d8359c` respectively. Each repair is independent
-of the other two — a repo's roots are its own — and each depends on this repo only for the caller
-shape above and the roster row.
+**The gap count moved 5 → 4, and it is worth being exact about why, because the obvious reason is the
+wrong one.** It did *not* move because `template/base/` came under audit. A gap is a **receiver**
+capability — a repo that declared `receives: skill-union` and wired a caller at its own committed roots
+— and the `template/base` caller is a generated-product-shaped subject that closes no receiver row at
+all. `repos-audit` says so in its own words, refusing exactly that substitution: *"A call aimed at a
+GENERATED product (`product-path: <subdir>`), or narrowed with `roots:`, is a different subject and
+deliberately does not count."* The one gap that closed is `FS.GG.Rendering`'s, and it closed because
+Rendering wired its **own** `skill-union.yml` at `product-path` default `.` — a second, unrelated
+workflow. Counting the generated-product caller as a closed gap is precisely the error
+[#628](https://github.com/FS-GG/.github/issues/628) was filed about.
 
-One tree sits outside this capability's subject and outside the composition gate's, so nothing audits it:
-`FS.GG.Rendering`'s `template/base/`, which carries `.claude/skills` and `.agents/skills` and no `.codex/`.
-It is neither a committed runtime root nor a generated product, and ADR-0011 §3 confines a provider to
-`.agents/skills/` — so the correct repair may be to *remove* the `.claude/` copy rather than add a root.
-Filed as a decision item: [Rendering#1081](https://github.com/FS-GG/FS.GG.Rendering/issues/1081).
+All seven receivers are now root-coherent, and of those Governance, SDD and Rendering have also wired
+the caller, so the remaining four — Templates, Game, Audio and Net — need nothing but the block above.
+All three cross-repo rematerialization requests are now **closed**:
+[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716),
+[Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326) and
+[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080), their rematerializations having
+landed in `a066e0b`, `9d8359c` and Rendering's `main` respectively — each from its authoritative
+producer rather than by copying an arbitrary root. Each repair was independent of the other two — a
+repo's roots are its own — and each depended on this repo only for the caller shape above and the
+roster row.
+
+#### The ninth audited tree: `FS.GG.Rendering`'s `template/base/`
+
+One tree used to sit outside this capability's subject **and** outside the composition gate's, so
+nothing audited it: `FS.GG.Rendering`'s `template/base/`. It is neither a committed runtime root nor a
+scaffolded product, so it fell between the two subjects — and a tree that every gate believes is
+someone else's is the [#266](https://github.com/FS-GG/.github/issues/266) shape exactly. It was filed
+as a decision item, [Rendering#1081](https://github.com/FS-GG/FS.GG.Rendering/issues/1081), and **that
+decision has been taken — the opposite way to the guess this document used to carry.**
+
+**Outcome (Reading B, 2026-07-27): complete the tree, do not strip it.** The `.claude/skills/` copy is
+explicitly **not** a residual ADR-0011 §3 provider leak; `.codex/` joined it. The reasoning is that the
+standalone lane has no `fsgg-sdd` orchestrator to compute the union and fan it out, so a scaffolding
+base tree must carry the roots itself. This does not overturn `specs/229-drop-claude-skills-mirror`,
+which governs what a **provider** writes; a base tree for an orchestrator-less lane is a different
+subject, and the two disagree without contradiction.
+
+Measured at Rendering `e2d860b`: `template/base/` carries all three roots, each holding the single id
+`fs-gg-project`, byte-identical across them (the same blob `e3846977…`, 6275 B), and its canonical
+digest is `c9fac83f…` — the value
+[`template/skill-manifest/skill-manifest.json`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/template/skill-manifest/skill-manifest.json)
+declares for that id, recomputed here rather than transcribed.
+
+It is now gated by
+[`template-base-skill-union.yml`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/.github/workflows/template-base-skill-union.yml)
+— a caller of this repo's reusable `skill-union-assert.yml` with `product-path: template/base` and
+`manifest:` supplied, so all three checks are live over it, the digest cross-check included. Landed in
+[Rendering PR #1083](https://github.com/FS-GG/FS.GG.Rendering/pull/1083); green there and on the merge
+commit as the context **`template-base-skill-union / skill-union`**.
+
+**This caller does not satisfy `FS.GG.Rendering`'s `receives: skill-union` row, and must never be read
+as doing so.** That row is satisfied by Rendering's *separate* `skill-union.yml` over the repository's
+own committed roots ([Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080)) — two
+subjects, two workflows, two greens, and per [#1504](https://github.com/FS-GG/.github/issues/1504) and
+[#628](https://github.com/FS-GG/.github/issues/628) one green never stands in for the other. It changes
+no gap count; see the paragraph above for why the count nevertheless moved.
+
+**It is also a caller shape this document had not described** — and, measured 2026-07-27, the **only
+live** generated-product-shaped caller in the org. Templates#49 was to audit a *scaffolded artifact*
+but was closed without wiring anything ([Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313));
+this audits a **committed subdirectory**, which is neither a runtime root nor a generated output. So
+the audited set is nine trees, not eight: the eight rostered repository trees in the table above, plus
+this one — recorded here rather than as a ninth row, because that table enumerates rostered
+repositories and this is a subdirectory of one of them.
 
 ### Standalone fetch — supported, and it is `dist/`, not `scripts/`
 
