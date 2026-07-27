@@ -270,21 +270,28 @@ module CommandSurfaceTests =
         // Every command, both spellings, both directions: advertised ⇒ parses, unadvertised ⇒ REFUSED.
         let emitted = emittedFlags ()
 
+        // STRICT IN BOTH DIRECTIONS, and deliberately not "any error that is not the residue message
+        // counts as acceptance". That weaker predicate is sound today only because `parse` checks arity
+        // nowhere in the bare form — so the moment a command gains one (the natural next step for
+        // `landable`, `field-id`, `issues`, all of which currently parse bare with no positionals), that
+        // command's row would silently stop testing anything in the advertised direction. A gate that
+        // quietly narrows its own subject is the #266 shape. So: advertised MUST parse `Ok`, and
+        // unadvertised MUST produce the residue refusal by name. Anything else is a finding.
         let disagreements =
             [ for verb, _, _ in contractCommands do
                   for flag in [ "--json"; "--text" ] do
                       let advertised = emitted.[verb].Contains flag
+                      let result = parse ((verb.Split(' ') |> Array.toList) @ [ flag ])
 
-                      let accepted =
-                          match parse ((verb.Split(' ') |> Array.toList) @ [ flag ]) with
-                          | Ok _ -> true
-                          // A refusal that names the flag is the residue rule. Any OTHER error is this
-                          // command complaining about arity or a missing argument, which says nothing
-                          // about the flag — so it does not count as a refusal of it.
-                          | Error e -> not (e.Contains $"%s{flag} is not a flag of")
-
-                      if advertised <> accepted then
-                          yield $"%s{verb} %s{flag}: advertised=%b{advertised}, accepted=%b{accepted}" ]
+                      match advertised, result with
+                      | true, Ok _ -> ()
+                      | true, Error e -> yield $"%s{verb} %s{flag}: advertised, but parse REFUSED it: %s{e}"
+                      | false, Error e when e.Contains $"%s{flag} is not a flag of" -> ()
+                      | false, Ok _ -> yield $"%s{verb} %s{flag}: NOT advertised, and the parser accepted it"
+                      | false, Error e ->
+                          yield
+                              $"%s{verb} %s{flag}: NOT advertised, and the refusal is about something else "
+                              + $"— the flag went unjudged: %s{e}" ]
 
         Assert.True(
             List.isEmpty disagreements,

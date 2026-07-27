@@ -204,10 +204,14 @@ module OptionsTests =
         Assert.True((parse [ "claim"; ".github#574"; "--force" ] |> ok).Force)
 
     [<Fact>]
-    let ``#991 a flag whose field has a non-optional default is Global — there is nothing to refuse`` () =
-        // `--json`/`--text` land in `Render` and `--lease` in `LeaseMinutes`, both non-optional. "Given" and
-        // "defaulted" are the same state, so they cannot be detected and must not be guessed at. They are
-        // declared Global deliberately, and every command keeps taking them.
+    let ``#991 --lease has a non-optional default and no record of the act, so it stays Global`` () =
+        // WHY THIS TEST WAS RENAMED (#1523). It used to say `--json`/`--text` were Global for the same
+        // reason `--lease` is, and that every command kept taking them. Both halves are now false: the
+        // render flags carry a `RenderGiven` record of having been GIVEN, which is exactly what "given
+        // and defaulted are the same state" claimed was impossible, and they are scoped off `Global` on
+        // the strength of it. `--lease` is the one that still has no such record — it lands in
+        // `LeaseMinutes`, nothing observes the act, and so there is genuinely nothing here to refuse.
+        // That is the same defect one flag along, and it is filed rather than guessed at.
         Assert.Equal(Json, (parse [ "who"; "--json" ] |> ok).Render)
         Assert.Equal(Text, (parse [ "lint"; "--text" ] |> ok).Render)
         Assert.Equal(30, (parse [ "take"; "--lease"; "30" ] |> ok).LeaseMinutes)
@@ -774,8 +778,9 @@ module OptionsTests =
           "board", Json
           "issues", Json
 
-          // TEXT only — prose, a bare id, or one verdict word. These are the fifteen that moved, plus the
-          // five (`reap`, `overlap`, `say`… ) whose arms had already pinned `Text` by hand.
+          // TEXT only — prose, a bare id, or one verdict word. These are the fifteen VERBS that moved
+          // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
+          // the five (`reap`, `overlap`, `room open`, `followup`, `flush`) already pinned `Text` by hand.
           "whoami", Text
           "next", Text
           "reap", Text
@@ -933,16 +938,44 @@ module OptionsTests =
         // necessity rather than by choice, which is exactly the state #991 recorded and #1523 measured.
         let bare = parse [ "who" ] |> ok
         Assert.Equal(Text, bare.Render)
-        Assert.Equal(None, bare.RenderGiven)
+        Assert.Empty(bare.RenderGiven)
 
         let explicitText = parse [ "who"; "--text" ] |> ok
         Assert.Equal(Text, explicitText.Render)
-        Assert.Equal(Some Text, explicitText.RenderGiven)
+        Assert.Equal<Set<Render>>(Set.ofList [ Text ], explicitText.RenderGiven)
 
         let explicitJson = parse [ "who"; "--json" ] |> ok
-        Assert.Equal(Some Json, explicitJson.RenderGiven)
+        Assert.Equal<Set<Render>>(Set.ofList [ Json ], explicitJson.RenderGiven)
 
-        // LAST WINS, and the record of the act follows the effect rather than remembering the first.
+        // `Render` is LAST WINS. The RECORD is not — it is every spelling that was typed, and the next
+        // test is why that distinction is load-bearing rather than tidy.
         let both = parse [ "who"; "--json"; "--text" ] |> ok
         Assert.Equal(Text, both.Render)
-        Assert.Equal(Some Text, both.RenderGiven)
+        Assert.Equal<Set<Render>>(Set.ofList [ Json; Text ], both.RenderGiven)
+
+    [<Fact>]
+    let ``#1523 giving BOTH spellings does not smuggle the out-of-scope one past the guard`` () =
+        // THE HOLE THIS CLOSES, found by review of the first cut of #1523 and reproduced against the built
+        // binary before it was fixed:
+        //
+        //   $ fsgg-coord-engine done .github#1 --json --text   -> ACCEPTED, and ran
+        //   $ fsgg-coord-engine board --text --json            -> ACCEPTED, and printed JSON
+        //
+        // `RenderGiven` was `Render option` and held the WINNER. `Render` is last-wins, so `--json --text`
+        // resolved to `Text`, `flagsGiven` reported only `--text` — which `done` legitimately takes — and
+        // the `--json` that `done` cannot honour went through unnamed. That is the accepted-and-ignored
+        // silence this entire change exists to end, rebuilt inside the guard against it, and reachable by
+        // any caller that appends a flag to a template that already carries the other one.
+        //
+        // A command holding one legal render flag and one illegal one is the ONLY case that separates
+        // "remember the winner" from "remember what was typed", which is why it gets its own test.
+        for verb, args, offending in
+            [ "done", [ ".github#1523"; "--flip" ], "--json"
+              "whoami", [ "--mint" ], "--json"
+              "next", [], "--json"
+              "board", [], "--text"
+              "issues", [ "sdd" ], "--text"
+              "scan", [], "--text" ] do
+            for order in [ [ "--json"; "--text" ]; [ "--text"; "--json" ] ] do
+                let e = parse ([ verb ] @ args @ order) |> rejected
+                Assert.Contains($"%s{offending} is not a flag of", e)

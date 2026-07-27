@@ -137,9 +137,12 @@ module Options =
     type Options =
         { Command: Command
           Render: Render
-          /// `--json`/`--text` AS GIVEN — `None` when neither appeared on argv. `Render` alone cannot say,
+          /// EVERY render flag GIVEN — empty when neither appeared on argv. `Render` alone cannot say,
           /// because it has a non-optional default; this is what makes the flag guardable at all (#1523).
-          RenderGiven: Render option
+          ///
+          /// A SET rather than the winner: `Render` is last-wins, and remembering only the winner would
+          /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
+          RenderGiven: Set<Render>
           SnapshotFile: string option
           Repo: string option
           Fresh: bool

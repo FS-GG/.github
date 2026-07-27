@@ -78,13 +78,19 @@ module Options =
     type Options =
         { Command: Command
           Render: Render
-          /// `--json`/`--text` AS GIVEN — `None` when neither appeared on argv.
+          /// EVERY render flag GIVEN — empty when neither `--json` nor `--text` appeared on argv.
           ///
           /// `Render` alone cannot answer "was the flag given?", because it has a non-optional default:
           /// "given" and "defaulted" are the same state, which is the exemption that kept `--json` `Global`
           /// and unguardable (#991's own note, quoted at `scopeOf`). This field is the missing bit, and it
           /// is what lets `flagsGiven` report `--json` so the residue rule can refuse it (#1523).
-          RenderGiven: Render option
+          ///
+          /// A SET, NOT THE LAST ONE. `Render` keeps last-wins, and a field that only remembered the
+          /// winner would leave the loser invisible: `done --json --text` would resolve to `Text`, report
+          /// only `--text` — which `done` legitimately takes — and let the `--json` it cannot honour
+          /// through unnamed. That is the accepted-and-ignored silence this whole change exists to end,
+          /// rebuilt inside the guard against it. Every spelling that was typed is refusable.
+          RenderGiven: Set<Render>
           SnapshotFile: string option
           Repo: string option
           Fresh: bool
@@ -342,12 +348,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | BatchCmd -> Both Json // Client.fs `batch`
         | Ready -> Both Json // Client.fs `ready`
         | Reconcile -> Both Text // and `--apply --json` is refused outright, below
+        // `who`, `budget` and `inbox` share one polarity, and it is the mirror of `ready`/`batch`: the
+        // human table is what an operator or a worker reads, and `--json` opts into the machine contract
+        // (case 20/25's rows, `pendingBoardWrites` — #862).
         | Who -> Both Text
         | Budget -> Both Text
         | Claim -> Both Text
         // `adopt` and `take` produce no stdout of their own — both delegate to `claim`, passing `opts`
-        // through, so `claim`'s receipt is theirs. `take`'s EMPTY-QUEUE arm still prints prose regardless;
-        // that residue is filed separately by #1523 and is a defect in the handler, not in this row.
+        // through, so `claim`'s receipt is theirs. CAVEAT, and it is a real one: `take`'s EMPTY-QUEUE arm
+        // prints prose regardless of `Render`, so `take --json` is honoured only when it actually claims
+        // something. That is a defect in the handler, not in this row — it is #1525, and this item's
+        // touch-set is the options surface, not `Client.fs`.
         | Adopt -> Both Text
         | Take -> Both Text
         | Widen -> Both Text // both reach the shared `updateTouchSet` (#1517)
@@ -357,9 +368,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LintCmd -> Both Text
 
         // ---- JSON ONLY: stdout is a machine document whatever the flag says ----------------------------
-        // `scan` DOES match on `opts.Render`, and both arms print the same document deliberately — the
-        // snapshot is the contract, and `scan --text | decide` must keep working. So the match decides
-        // nothing on stdout and `--text` is a promise `scan` cannot keep.
+        // `scan` DOES match on `opts.Render` (`Program.fs`), and both arms print the same document —
+        // deliberately, because the snapshot IS the contract and `scan | decide` must keep working. So the
+        // match decides nothing on stdout, and `--text` was a no-op rather than a rendering: there is no
+        // human projection of a snapshot to ask for. The PIPELINE is unaffected either way (`scan` bare and
+        // `scan --text` printed identical bytes); what is refused is only the flag that never did anything.
+        //
+        // The now-unreachable `Text` arm and its comment live in `Program.fs`, which is outside this item's
+        // touch-set. Filed as a follow-up rather than reached into.
         | Scan -> JsonOnly
         | CommandContractCmd -> JsonOnly
         | BoardCmd -> JsonOnly
@@ -373,6 +389,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // either of those, is a fleet outage bought for nothing.
         | WhoAmI -> TextOnly
         | Next -> TextOnly
+        // `reap` reports what it WOULD collect; the destructive collect is gated behind `--apply`, so the
+        // bare form is a DRY RUN and the thing an operator reads before deciding is prose.
         | Reap -> TextOnly
         | Landable -> TextOnly // one verdict word; the decision is the exit code
         | Release -> TextOnly
@@ -390,6 +408,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | OptionId -> TextOnly
         | ItemId -> TextOnly
         | Add -> TextOnly
+        // `flush` REPLAYS by default (the opposite polarity to `reap --apply`, see `DryRun`), and what it
+        // prints is a report an operator reads after the `EX_RATE` back-off.
         | Flush -> TextOnly
         | Help -> TextOnly
         | Version -> TextOnly
@@ -408,7 +428,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | TextOnly -> Text
 
     /// Every nullary `Command` case, by reflection — the one enumeration that cannot drift from the DU.
-    /// Module-level, so the reflection cost is paid once per process rather than once per `scopeOf` call.
     let private allCommands: Command list =
         Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
         |> Array.toList
@@ -417,6 +436,16 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 None
             else
                 Some(Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Command))
+
+    /// The commands each render flag may be given to, DERIVED from `renderSupport` and computed ONCE.
+    ///
+    /// A hand-written pair of lists here would be the same defect one level along — a second copy of
+    /// `renderSupport`, free to drift from it — and this board has spent five items on exactly that shape.
+    /// Module-level `let` rather than a filter inside `scopeOf`, because `renderCommandContract` calls
+    /// `scopeOf` once per (command, flag) pair and would otherwise rebuild both lists ~1,400 times.
+    let private jsonReaders = allCommands |> List.filter (fun c -> renderSupport c <> TextOnly)
+
+    let private textReaders = allCommands |> List.filter (fun c -> renderSupport c <> JsonOnly)
 
     /// THE FLAG SURFACE (#991) — every global flag, and the commands that READ it.
     ///
@@ -502,11 +531,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FRepo -> Global
         | FWorker -> Global
 
-        // DERIVED, never listed (#1523). A hand-written pair of command lists here would be the same defect
-        // one level along — a second copy of `renderSupport`, free to drift from it, and this board has spent
-        // five items today on exactly that shape. Ask the declaration instead.
-        | FJson -> Only(allCommands |> List.filter (fun c -> renderSupport c <> TextOnly))
-        | FText -> Only(allCommands |> List.filter (fun c -> renderSupport c <> JsonOnly))
+        // DERIVED, never listed (#1523) — see `jsonReaders`/`textReaders`.
+        | FJson -> Only jsonReaders
+        | FText -> Only textReaders
 
         | FSnapshot -> Only [ Decide; LanesView ]
 
@@ -565,9 +592,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// records the ACT of giving them separately from the `Render` they set — the smallest change that
     /// turns an unguardable flag into a guarded one.
     let private flagsGiven (o: Options) : (Flag * string) list =
-        [ if o.RenderGiven = Some Json then FJson, "--json"
-          if o.RenderGiven = Some Text then FText, "--text"
-          if o.SnapshotFile.IsSome then FSnapshot, "--snapshot"
+        [ if o.SnapshotFile.IsSome then FSnapshot, "--snapshot"
           if o.Repo.IsSome then FRepo, "--repo"
           if o.Worker.IsSome then FWorker, "--worker"
           if o.Evidence.IsSome then FEvidence, "--evidence"
@@ -601,7 +626,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Mint then FMint, "--mint"
           if o.Flip then FFlip, "--flip"
           if not (List.isEmpty o.Over) then FOver, "--over"
-          if o.Limit.IsSome then FLimit, "-n" ]
+          if o.Limit.IsSome then FLimit, "-n"
+
+          // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
+          // head changed the message for inputs that were already wrong for another reason:
+          // `next --snapshot x --json` used to name `--snapshot` and point at `decide`/`lanes`, which is
+          // the more useful answer. Adding a guard should not re-word an existing refusal.
+          //
+          // BOTH spellings are reported when both were typed — see `RenderGiven`. One command can hold a
+          // legal `--text` and an illegal `--json` at the same time, and only one of them is a finding.
+          if o.RenderGiven.Contains Json then FJson, "--json"
+          if o.RenderGiven.Contains Text then FText, "--text" ]
 
     /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
     /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
@@ -937,10 +972,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 // have it here?" — which has a one-line answer that the list would bury.
                 | Some(FJson, _, _) ->
                     Error
-                        $"--json is not a flag of `%s{commandName o.Command}` — it has NO machine projection: its stdout is human text whatever you ask for. It would have been ACCEPTED and IGNORED before #1523 (the flag was advertised on all 40 commands and honoured by 14); this refusal is the flag telling you the truth. Run `command-contract` for the commands that do emit JSON."
+                        $"--json is not a flag of `%s{commandName o.Command}` — it has no machine projection: its stdout is human text whatever you ask for. It would have been ACCEPTED and IGNORED before #1523; this refusal is the flag telling you the truth. Run `command-contract` for the commands that do emit JSON."
                 | Some(FText, _, _) ->
                     Error
-                        $"--text is not a flag of `%s{commandName o.Command}` — it has NO human projection: its stdout is a machine document whatever you ask for (#1523). Project it yourself rather than being told a text rendering happened that did not."
+                        $"--text is not a flag of `%s{commandName o.Command}` — it has no human projection: its stdout is a machine document whatever you ask for, so asking for text would change nothing (#1523). Drop the flag, or project the document yourself."
                 | Some(_, spelling, readers) ->
                     // NAME THE READERS, not just the refusal. The caller reached for this flag because they
                     // wanted something; the useful answer is where that something lives, which is why #867's
@@ -1164,13 +1199,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 flags
                     { acc with
                         Render = Json
-                        RenderGiven = Some Json }
+                        RenderGiven = acc.RenderGiven.Add Json }
                     t
             | "--text" :: t ->
                 flags
                     { acc with
                         Render = Text
-                        RenderGiven = Some Text }
+                        RenderGiven = acc.RenderGiven.Add Text }
                     t
 
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
@@ -1181,7 +1216,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
               // constructible; NOTHING should read this field's value here.
               Render = Json
-              RenderGiven = None
+              RenderGiven = Set.empty
               SnapshotFile = None
               Repo = None
               Fresh = false
@@ -1226,13 +1261,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         /// same `renderSupport` row that decides whether `--json` may be given at all. That is the whole
         /// structural repair on this side of the file.
         ///
-        /// It used to be per-arm, and the arms disagreed with themselves: sixteen left `Render` at the
-        /// module default of `Json` while their handlers printed prose, so the DECLARED default and the
-        /// PRINTED one were opposites on two-fifths of the surface, in the exact configuration #1517
-        /// described. `widen` is the proof that it matters and not the exception: honouring `opts.Render`
-        /// in the renderer while the arm still said `Json` would have flipped the bare `widen` — the form
-        /// every recipe, skill and driver in the corpus runs — from its human receipt to a JSON object.
-        /// With one derivation there is no arm left to forget, and the sixteen traps are disarmed at once.
+        /// It used to be per-arm, and the arms disagreed with themselves: seventeen left `Render` at the
+        /// module default of `Json` while what they printed was prose (fifteen verbs, plus `--help` and
+        /// `--version`, which are reached by flag). The DECLARED default and the PRINTED one were
+        /// opposites on two-fifths of the surface, in the exact configuration #1517 described. `widen` is
+        /// the proof that this matters and not the exception: honouring `opts.Render` in the renderer
+        /// while the arm still said `Json` would have flipped the bare `widen` — the form every recipe,
+        /// skill and driver in the corpus runs — from its human receipt to a JSON object. With one
+        /// derivation there is no arm left to forget, and all seventeen traps are disarmed at once.
         let start (c: Command) =
             { defaults with
                 Command = c
