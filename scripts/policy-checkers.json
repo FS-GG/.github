@@ -36,6 +36,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/recipe-pagination/run.sh",
       "workflow": ".github/workflows/recipe-pagination.yml"
+    },
+    {
+      "source": "scripts/check-sparse-checkout-closure.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/sparse-checkout-closure/run.sh",
+      "workflow": ".github/workflows/sparse-checkout-closure.yml"
     }
   ]
 }
