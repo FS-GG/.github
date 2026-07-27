@@ -25,6 +25,66 @@ trap 'rm -rf "$WORK"' EXIT
 STUB="$WORK/bin"; mkdir -p "$STUB"
 export FIX="$WORK/fix"; mkdir -p "$FIX"
 
+# --- the kit-pin freshness sweep's world (#1540) -------------------------------------------------
+#
+# A LOCAL NuGet flat-container, served over file://, standing in for api.nuget.org. This is NOT a
+# mock of the sweep's feed reader: `fsgg_feed.nuget_org_versions` builds `<base>/<id>/index.json`,
+# fetches it with urllib and parses it, and every one of those steps runs here exactly as it does in
+# CI. Only the base URL differs — so an error in the URL shape, the JSON shape, the prerelease
+# filter or the version ORDER is caught by this fixture rather than in production.
+#
+# The version list is deliberately NOT sorted: nuget.org returns creation order, and `newest()`
+# exists because of that. A fixture that pre-sorted its feed would let a broken comparand pass.
+KITFEED="$WORK/feed"; mkdir -p "$KITFEED/fs.gg.kit"
+cat > "$KITFEED/fs.gg.kit/index.json" <<'JSON'
+{"versions": ["0.1.0", "0.2.0", "0.10.0-preview.1", "0.8.0", "0.6.0", "0.7.0"]}
+JSON
+export FSGG_NUGET_ORG_BASE="file://$KITFEED"
+# 0.8.0 is the newest STABLE above — 0.10.0-preview.1 sorts higher numerically and must be excluded
+# as a prerelease, which is the second thing this feed shape pins.
+KIT_PUBLISHED="0.8.0"
+
+# The pin every repo is served unless a leg says otherwise, so the legs that predate this sweep and
+# have nothing to do with pins stay green. See the `pinlocal` arm of the gh stub.
+mkpin() { cat > "$2" <<XML
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="FS.GG.Kit" Version="$1" />
+    <PackageVersion Include="FSharp.Core" Version="9.0.100" />
+  </ItemGroup>
+</Project>
+XML
+}
+mkpin "$KIT_PUBLISHED" "$FIX/_default.pin"
+
+# pin <repo> <version> [local|root]  — this repo pins the kit in a CPM props file, at <version>.
+pin() { local slug="${1//\//__}" file="Directory.Packages.${3:-local}.props"
+        [ "${3:-local}" = root ] && file="Directory.Packages.props"
+        mkdir -p "$FIX/$slug"; mkpin "$2" "$FIX/$slug/$file"; }
+# pin_inline <repo> <version> — the FS.GG.Templates shape: the version rides the PackageReference in
+# the receiver project and there is NO CPM props file at all. `.receiver.proj.pinned` tells the stub
+# to 404 the props reads, which is what that repo really does.
+pin_inline() { local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; : > "$FIX/$slug/receiver.proj.pinned"
+               cat > "$FIX/$slug/receiver.proj" <<XML
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Kit" Version="$2" />
+  </ItemGroup>
+</Project>
+XML
+}
+# nopin <repo> — the receiver pins the kit NOWHERE this sweep knows to look.
+nopin() { local slug="${1//\//__}"; mkdir -p "$FIX/$slug"
+          rm -f "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"
+          : > "$FIX/$slug.nopin"; }
+# unpin <repo> — back to the default (current) pin.
+unpin() { local slug="${1//\//__}"
+          rm -f "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj.pinned" \
+                "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
+
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
@@ -88,6 +148,13 @@ case "$path" in
                                   file="${path##*/contents/.github/workflows/}" ;;
   */contents/.config/kit/FS.GG.Kit.receiver.proj)
                                   kind=receiver; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
+  # The kit-pin freshness sweep's other two candidate pin shapes (#1540). Served like any other
+  # content read, so a repo that does not pin in a given shape 404s exactly as the real API does —
+  # which is the ANSWER "this repo does not pin here", not a failure.
+  */contents/Directory.Packages.local.props)
+                                  kind=pinlocal; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
+  */contents/Directory.Packages.props)
+                                  kind=pinroot; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   *)                              kind=repo; repo="${path#repos/}" ;;
 esac
 slug="${repo//\//__}"
@@ -107,6 +174,10 @@ fi
 { [ "$kind" = file ] || [ "$kind" = receiver ]; } \
   && [ -f "$FIX/$slug.failfile" ] && apifail 403
 [ "$kind" = receiver ] && [ -f "$FIX/$slug.failreceiver" ] && apifail 403
+# Only the pin reads fail: lets a fixture prove an unreadable pin file is an UNDETERMINED run and
+# never a fabricated "this receiver is current".
+{ [ "$kind" = pinlocal ] || [ "$kind" = pinroot ] || [ "$kind" = receiver ]; } \
+  && [ -f "$FIX/$slug.failpin" ] && apifail 403
 
 case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
@@ -117,13 +188,30 @@ case "$kind" in
         cat "$FIX/$slug/$file" ;;
   receiver) [ -f "$FIX/$slug/receiver.proj" ] || notfound
             cat "$FIX/$slug/receiver.proj" ;;
+  # A repo with no explicit pin fixture is served the DEFAULT current pin, so the ~60 legs that
+  # predate the kit-pin sweep and care nothing about pins stay green without each having to declare
+  # one. `<slug>.nopin` suppresses the fallback — that is how a leg models a receiver that pins
+  # nowhere, which must be a REFUSAL and not a pass.
+  pinlocal) if [ -f "$FIX/$slug/Directory.Packages.local.props" ]; then
+              cat "$FIX/$slug/Directory.Packages.local.props"
+            elif [ -f "$FIX/$slug.nopin" ] || [ -f "$FIX/$slug/receiver.proj.pinned" ]; then notfound
+            else cat "$FIX/_default.pin"; fi ;;
+  pinroot)  [ -f "$FIX/$slug/Directory.Packages.props" ] || notfound
+            cat "$FIX/$slug/Directory.Packages.props" ;;
 esac
 STUB
 chmod +x "$STUB/gh"
 
 # Helpers to shape a repo's workflows in the stub. Each clears any injected failure first, so a
 # fixture step never inherits the previous step's outage.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.gone"; }
+# It clears the PIN shaping too (#1540), for the same reason: a leg that pinned a repo stale must not
+# leave it stale for the next leg, which would turn one deliberate finding into a run-wide exit 1.
+# So `pin`/`pin_inline`/`nopin` are called AFTER the wire helper, never before.
+# `receiver.proj` is cleared here too, and that matters beyond tidiness: it is BOTH the materializer
+# detector's evidence and (in the Templates shape) a pin file, so a leg that left one behind would
+# contribute a second, contradictory version literal to the next leg and turn a deliberate finding
+# into a refusal. Every writer of it — wire_materializer, pin_inline — runs after this.
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -1697,6 +1785,10 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 SPARSEBOX="$WORK/sparsebox"; mkdir -p "$SPARSEBOX/scripts/lib"
 cp "$AUDIT" "$SPARSEBOX/scripts/repos-audit.sh"
 cp "$HERE/../../scripts/lib/args.sh" "$SPARSEBOX/scripts/lib/args.sh"
+# The kit-pin sweep borrows fsgg_feed.py by the same mechanism, and asserts it at the same place. The
+# sandbox needs it so THESE legs still fail on the symbol they are about; its own absence gets its
+# own leg below.
+cp "$HERE/../../scripts/fsgg_feed.py" "$SPARSEBOX/scripts/fsgg_feed.py"
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # (a) the rule file is GONE. Caught up front, beside the `gh` and `python3` checks, because a missing
@@ -1721,6 +1813,155 @@ out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "sparse: a rule that lost the borrowed symbols reds and names them, never greens" \
   || bad "a moved rule must fail closed and say which symbols went" "rc=$rc: $out"
+
+# --- THE KIT-PIN FRESHNESS SWEEP (#1540, #1560 criterion 4) --------------------------------------
+#
+# THE ONE THING THESE LEGS EXIST TO PROVE: the sweep REDS ON A GENUINELY STALE RECEIVER. A fixture
+# that only walks the happy path proves nothing about a freshness gate — the whole failure mode
+# #1540 is about is a check that reads green over something it cannot see, and a green-only fixture
+# is that same defect one level up. So every leg below that asserts "current -> green" has a sibling
+# that asserts "behind -> exit 1, naming the repo, the pin and the published version".
+#
+# The comparand comes from the LOCAL flat-container at $FSGG_NUGET_ORG_BASE (see the top of this
+# file). That is not a stub of the reader: fsgg_feed's real URL construction, real urllib fetch, real
+# JSON parse, real prerelease filter and real version ordering all run.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+
+# (1) Both receivers pin the published version -> green, and the report NAMES the comparand.
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q "newest stable FS.GG.Kit published on nuget.org is $KIT_PUBLISHED" \
+    && printf '%s' "$out" | grep -q '2 current'; } \
+  && ok "kit-pin: every receiver on the published kit -> green, and the comparand is named" \
+  || bad "a current roster must pass and say what it compared against" "rc=$rc: $out"
+
+# (2) THE LOAD-BEARING LEG. One receiver is two minors behind — the real FS.GG.Templates/SDD state on
+#     2026-07-27 — and NOTHING about its wiring changed. It must red HERE, without that repo pushing.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'kit-pin freshness — FS-GG/FS.GG.Rendering pins FS.GG.Kit 0.6.0' \
+    && printf '%s' "$out" | grep -q "but $KIT_PUBLISHED is published" \
+    && printf '%s' "$out" | grep -q '1 current, 1 stale' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired, and every'; } \
+  && ok "kit-pin: a STALE receiver reds here, naming its pin and the published version" \
+  || bad "a receiver behind the published kit must be a finding" "rc=$rc: $out"
+
+# (3) The stale receiver is FULLY WIRED and its workflows are untouched. This pins the thing that
+#     makes the sweep worth having: wiring and freshness are different questions, and a repo can
+#     answer the first perfectly while failing the second. Were the sweep folded into the wiring
+#     detectors, this leg would report a gap and send someone to fix a workflow that is correct.
+{ printf '%s' "$out" | grep -q 'ok: FS-GG/FS.GG.Rendering wires FS-GG/.github/.github/workflows/coordination-coherence.yml' \
+    && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
+  && ok "kit-pin: a stale receiver is still reported WIRED — freshness is not a wiring gap" \
+  || bad "staleness must not be reported as a wiring gap" "$out"
+
+# (4) The FS.GG.Templates shape: the pin rides an inline Version= on the PackageReference in
+#     .config/kit/FS.GG.Kit.receiver.proj and there is NO Directory.Packages*.props at all. The
+#     briefing for #1540 asserted this repo had "no pin found" because it looked only at the two
+#     props files; a sweep that inherits that assumption reports the org's stalest receiver as
+#     unpinned. Stale in THAT shape must red exactly as stale in a CPM shape does.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin_inline FS-GG/FS.GG.Rendering 0.6.0
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering pins FS.GG.Kit 0.6.0' \
+    && printf '%s' "$out" | grep -q '.config/kit/FS.GG.Kit.receiver.proj -> 0.6.0'; } \
+  && ok "kit-pin: an INLINE receiver-project pin is read, and reds when stale (the Templates shape)" \
+  || bad "the inline no-CPM pin shape must be read like any other" "rc=$rc: $out"
+
+# (5) …and the same shape, current, is green. Otherwise leg (4) would also pass on a sweep that
+#     simply cannot read that file and calls every such repo stale.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin_inline FS-GG/FS.GG.Rendering "$KIT_PUBLISHED"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 current'; } \
+  && ok "kit-pin: an INLINE receiver-project pin at the published version is green" \
+  || bad "the inline shape must be able to pass, or leg (4) proves nothing" "rc=$rc: $out"
+
+# (6) The hand-authored-CPM shape (net/audio): the pin is in the ROOT Directory.Packages.props.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+nopin FS-GG/FS.GG.Rendering; pin FS-GG/FS.GG.Rendering 0.7.0 root
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'Directory.Packages.props -> 0.7.0'; } \
+  && ok "kit-pin: a root Directory.Packages.props pin is read, and reds when stale" \
+  || bad "the hand-authored CPM shape must be read too" "rc=$rc: $out"
+
+# (7) PRERELEASE ORDERING. The feed carries 0.10.0-preview.1, which sorts ABOVE 0.8.0 numerically. A
+#     receiver on the newest STABLE must be green — a sweep that took the max of all versions would
+#     demand a prerelease nobody should pin and red the entire org forever.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q "is $KIT_PUBLISHED;" \
+    && ! printf '%s' "$out" | grep -q '0.10.0-preview'; } \
+  && ok "kit-pin: the comparand is the newest STABLE, not the highest prerelease" \
+  || bad "a prerelease must never become the version receivers are held to" "rc=$rc: $out"
+
+# (8) A pin AHEAD of the feed does not resolve for anybody, so it is a finding and not a pass. The
+#     naive comparison — `pin != published` treated as stale — would say the right thing for the
+#     wrong reason; this asserts the diagnostic actually distinguishes the two directions.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.9.0
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'AHEAD of the newest published' \
+    && printf '%s' "$out" | grep -q 'does not resolve'; } \
+  && ok "kit-pin: a pin ahead of the feed is a finding, and says so in its own words" \
+  || bad "an unresolvable pin is not a current pin" "rc=$rc: $out"
+
+# (9) A receiver that pins the kit NOWHERE this sweep can see is a REFUSAL (exit 3), never a pass.
+#     This is the #266 leg: "I could not find this repo's pin" must not render as "this repo is
+#     current". It is exit 3 and not 1 because nothing was asserted — the remedy is to teach the
+#     sweep the shape or move the pin, not to bump a version.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+nopin FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'REFUSED a repo it cannot grade' \
+    && printf '%s' "$out" | grep -q 'no FS.GG.Kit version literal' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired, and every'; } \
+  && ok "kit-pin: a receiver pinning nowhere is REFUSED, never reported current" \
+  || bad "an unlocatable pin must not read as a current one" "rc=$rc: $out"
+
+# (10) Two pin files that DISAGREE. The effective version is then a restore-order accident, so there
+#      is no single fact to grade and the sweep refuses rather than picking a winner silently.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0; pin FS-GG/FS.GG.Rendering "$KIT_PUBLISHED" root
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'pinned to more than one version'; } \
+  && ok "kit-pin: contradictory pins are REFUSED, not silently resolved" \
+  || bad "two disagreeing pins have no single answer" "rc=$rc: $out"
+
+# (11) An UNREADABLE pin file is the retryable no-verdict, exactly as an unreadable workflow is. The
+#      repo exists, we failed to read it, and a later run may well succeed — so it must not be
+#      reported as either current or stale.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+: > "$FIX/FS-GG__FS.GG.Rendering.failpin"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'kit-pin freshness — FS-GG/FS.GG.Rendering' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired, and every'; } \
+  && ok "kit-pin: an unreadable pin file is a RETRYABLE no-verdict, never a fabricated verdict" \
+  || bad "an unread pin is not an answer" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failpin"
+
+# (12) AN UNREADABLE FEED IS NOT A CLEAN SWEEP. Without a comparand every receiver would otherwise be
+#      graded against nothing and pass — the exact shape of the bug this whole sweep is about, in the
+#      sweep itself. Point the reader at a flat-container that is not there.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(FSGG_NUGET_ORG_BASE="file://$WORK/no-such-feed" run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'could not resolve the published FS.GG.Kit version' \
+    && printf '%s' "$out" | grep -q 'NOTHING was asserted' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired, and every'; } \
+  && ok "kit-pin: an unreadable FEED is a no-verdict — nobody is graded against nothing" \
+  || bad "no comparand must never mean everybody passes" "rc=$rc: $out"
+
+# (13) The borrowed feed reader fails closed when it is gone, like the sparse rule does.
+rm -f "$SPARSEBOX/scripts/fsgg_feed.py"
+cp "$HERE/../../scripts/check-sparse-checkout-closure.py" "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
+out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
+        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'NuGet feed reader is not at' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "kit-pin: a MISSING feed reader is a permanent no-verdict, not a clean org" \
+  || bad "the borrowed feed reader's absence must fail closed" "rc=$rc: $out"
+
+unpin FS-GG/FS.GG.Rendering
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
