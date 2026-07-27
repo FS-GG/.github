@@ -2614,11 +2614,17 @@ module Client =
 
     // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
     // the raw suffix beside a reservation that has none reads as two different things), deduped.
-    let private sharedTokens (pairs: (string * string) list) =
+    //
+    // #1517 — this returns the LIST and the human sites join it, rather than returning the joined string
+    // and leaving a machine consumer to split it back apart. `widen --json` emits these stems, and a
+    // comma-joined string beside a sibling `paths` ARRAY in the same object is a shape formatted for the
+    // stderr line it used to have only one caller for.
+    let private sharedTokens (pairs: (string * string) list) : string list =
         pairs
         |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
         |> List.distinct
-        |> String.concat ", "
+
+    let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
 
     /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
     /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
@@ -2630,7 +2636,7 @@ module Client =
         (opts: Options)
         (ref: Ref)
         (ts: TouchSet)
-        : Errors.IoResult<(Ref * string * string) list> =
+        : Errors.IoResult<(Ref * string * string list) list> =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> Error e
         | Ok board ->
@@ -2773,47 +2779,112 @@ module Client =
                                         | Error e -> fail e
                                         | Ok() ->
                                             let paths = String.Join(", ", proposed.Tokens)
-                                            printfn "%s %s → Paths: %s" past ref.Short paths
+
+                                            // #1517 — THE RENDER MODE IS HONOURED HERE, and it was not before. `--json`
+                                            // is `Global` in `scopeOf` and `command-contract` advertises it on both
+                                            // verbs, so the parser accepted it, the residue rule had nothing to refuse,
+                                            // and this renderer then printed human prose and exited 0 — #867/#991's
+                                            // "accepted and ignored" defect, arriving through the one door that rule
+                                            // cannot watch. A driver that widens a touch-set had to scrape
+                                            // `widened <ref> → Paths: a, b` out of stdout and the overlap verdict out
+                                            // of STDERR to learn what it had just done.
+                                            //
+                                            // The TEXT projection below is byte-identical to what it has always been,
+                                            // deliberately: every existing recipe reads it. This is an addition.
+                                            //
+                                            // The JSON object cannot be written HERE, though the human receipt is: it
+                                            // carries the collision list, and whether each colliding holder was
+                                            // successfully NOTIFIED is not known until the notify loop has run. So the
+                                            // Json arm emits ONE object at the end of whichever branch it takes, and
+                                            // never a partial receipt first — a machine consumer gets one document per
+                                            // invocation or none.
+                                            match opts.Render with
+                                            | Json -> ()
+                                            | Text -> printfn "%s %s → Paths: %s" past ref.Short paths
 
                                             // Declaration time is the cheap moment to learn that editing a kit source
                                             // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
+                                            // It is stderr-only, so it cannot corrupt the JSON projection.
                                             KitDigest.digestWarn ()
+
+                                            let receipt (collisions: PathCollision list) : string =
+                                                renderPathUpdateJson
+                                                    { Ref = ref
+                                                      Worker = w.Id
+                                                      Kind = past
+                                                      Paths = proposed.Tokens
+                                                      Collisions = collisions }
 
                                             match collisions with
                                             | [] ->
-                                                printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                                match opts.Render with
+                                                | Json -> printfn "%s" (receipt [])
+                                                | Text ->
+                                                    printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+
                                                 ExitGreen
                                             | collisions ->
                                                 // The notify is the part a worker cannot do alone. A post that fails is
                                                 // reported, but the collision still stands — it does not become DISJOINT.
 
-                                                for other, holder, toks in collisions do
-                                                    eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                                    eprint $"  %s{toks}"
+                                                // #1517 — the notify OUTCOME is collected as it is printed, because the
+                                                // JSON receipt carries it. The stderr lines below are unchanged and are
+                                                // emitted in BOTH projections: they are operator diagnostics, not the
+                                                // machine contract, and stdout is the only stream `--json` speaks on.
+                                                let notified =
+                                                    [ for other, holder, toks in collisions do
+                                                        let toksText = sharedTokenText toks
 
-                                                    // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
-                                                    // overlap is TRANSIENT — the scheduler already sequences it and
-                                                    // it self-clears the moment a claim drops — whereas `Blocked by`
-                                                    // is a DURABLE edge nothing ever recomputes. Offering the durable
-                                                    // remedy for the transient condition is how a ring got drawn on a
-                                                    // premise withdrawn 60 seconds later and held #1059 hostage: a
-                                                    // category error the tool used to recommend first. `Blocked by` is
-                                                    // correct ONLY for a real logical dependency (this work must be
-                                                    // authored against the other's LANDED result), which outlives any
-                                                    // claim — and that distinction is the thing the worker has to
-                                                    // decide, so the message names it instead of defaulting to the
-                                                    // edge that closes rings.
-                                                    let msg =
-                                                        $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                        eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
+                                                        eprint $"  %s{toksText}"
 
-                                                    match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                                                    | Error e ->
-                                                        eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
-                                                    | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
+                                                        // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
+                                                        // overlap is TRANSIENT — the scheduler already sequences it and
+                                                        // it self-clears the moment a claim drops — whereas `Blocked by`
+                                                        // is a DURABLE edge nothing ever recomputes. Offering the durable
+                                                        // remedy for the transient condition is how a ring got drawn on a
+                                                        // premise withdrawn 60 seconds later and held #1059 hostage: a
+                                                        // category error the tool used to recommend first. `Blocked by` is
+                                                        // correct ONLY for a real logical dependency (this work must be
+                                                        // authored against the other's LANDED result), which outlives any
+                                                        // claim — and that distinction is the thing the worker has to
+                                                        // decide, so the message names it instead of defaulting to the
+                                                        // edge that closes rings.
+                                                        let msg =
+                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toksText}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+
+                                                        match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                                                        | Error e ->
+                                                            eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+
+                                                            yield
+                                                                { Ref = other
+                                                                  Worker = holder
+                                                                  SharedTokens = toks
+                                                                  Notified = false
+                                                                  NotifyError = Some(Errors.explain e) }
+                                                        | Ok() ->
+                                                            eprint $"  notified worker %s{holder} on %s{other.Short}"
+
+                                                            yield
+                                                                { Ref = other
+                                                                  Worker = holder
+                                                                  SharedTokens = toks
+                                                                  Notified = true
+                                                                  NotifyError = None } ]
 
                                                 eprint "fsgg-coord-engine: the path update introduced a collision — do NOT keep editing the shared paths until it is resolved."
+
+                                                // The OVERLAP detail is IN the object, not beside it on stderr — that
+                                                // split is the half of this defect a machine consumer could not work
+                                                // around at all (#1517 AC2).
+                                                match opts.Render with
+                                                | Json -> printfn "%s" (receipt notified)
+                                                | Text -> ()
+
                                                 // A real same-repo collision exits non-zero (engine ExitContended=6;
-                                                // bash's literal 1 disposed on the record, ADR-0040 §5).
+                                                // bash's literal 1 disposed on the record, ADR-0040 §5). UNCHANGED by
+                                                // #1517: the renderer was the bug, the verbs' semantics were not.
                                                 ExitContended
 
     let widen (ctx: Context) (opts: Options) : int = updateTouchSet Union ctx opts
@@ -2866,7 +2937,7 @@ module Client =
                         ExitGreen
                     | Ok collisions ->
                         for other, holder, toks in collisions do
-                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder toks
+                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder (sharedTokenText toks)
 
                         ExitContended
 
@@ -2898,7 +2969,7 @@ module Client =
                                 printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
                                 ExitGreen
                             | pairs ->
-                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokens pairs)
+                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
                                 ExitContended
 
         | _ ->
