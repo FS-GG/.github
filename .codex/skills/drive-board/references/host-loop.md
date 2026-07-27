@@ -25,3 +25,11 @@ Backlog follow-ups; a snapshot taken before worker dispatch cannot plan the next
 Terminate only from a fresh read. “Nothing schedulable” may mean empty, blocked, contended, stale, or
 unreadable. An empty Ready batch is not completion while Backlog is actionable or untriaged. Report
 deliberately parked and human-blocked Backlog without repeatedly redispatching or spinning on it.
+
+The stopping test is **no startable `defect`**, not an empty board: a run in which fixing one thing files
+two can never reach an empty board, and every row it files is real. `hardening` is drained deliberately as
+ordinary backlog; `decision` is surfaced and never dispatched. **An unclassed row is a possible defect, not
+a minor one** — `lint`'s `CLASS-UNSET` names each, and while any remains the class-based test cannot say
+the board is defect-free. Read the class from the item's own `Class:` line, never from the board column
+alone: the column is a projection `reconcile` writes, so a row it has not reached yet is blank on the board
+and classed in its body.

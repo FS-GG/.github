@@ -140,6 +140,36 @@ module Types =
         /// item against a surface we cannot see. It yields `Undetermined`: not startable, and said so.
         | Unreadable of reason: string
 
+    /// How BAD an item is (.github#1588) — the axis the board had no vocabulary for.
+    ///
+    /// The board already carries `Status`, `Phase`, `Workstream`, `Effort` and `Repo Scope`: it has words
+    /// for *when*, *where* and *how big*, and had none for *how bad*. That gap is why a burn-down could
+    /// not terminate on its own terms — `drive-board` stops when "a fresh reconcile and backlog triage
+    /// have no startable item", and a run in which fixing one thing files two can never reach that state.
+    /// A human sorted the same rows by reading their titles in seconds; the fact was knowable and simply
+    /// nowhere in the data.
+    ///
+    /// THREE CASES, AND THE SPLIT IS THE POINT. A red `main` and a stale comment in a test file are both
+    /// "an open item" to `batch`, to `ready` and to the driver's stopping rule, and they are not remotely
+    /// the same obligation. `decision` is a third thing again: it is not work at all until a human
+    /// chooses, so it must never be dispatched.
+    ///
+    /// THERE IS NO `unknown` CASE, DELIBERATELY. An item whose class nobody has established carries
+    /// `None`, and the absence is the finding — `lint`'s `CLASS-UNSET` reports it and `drive-board` treats
+    /// it as POSSIBLY a defect. An `Unknown` case would be a value a rule could match and dismiss, which
+    /// is #266's fail-open wearing this union's clothes: untriaged severity must be as loud as untriaged
+    /// status, not a fourth quiet option.
+    type ItemClass =
+        /// Something is broken NOW: a gate red on `main`, a summary reporting a byte-identity it never
+        /// computed, a reusable workflow that dies at load for every caller.
+        | Defect
+        /// Nothing is broken; the change removes a way it could break. Real work, and never the reason a
+        /// burn-down cannot stop — it accumulates as ordinary backlog and is drained deliberately.
+        | Hardening
+        /// A human must CHOOSE before any work is authorable. Surfaced, never dispatched: driving it
+        /// would make the machine answer the question the item exists to escalate.
+        | Decision
+
     /// A live claim on an item.
     type Claim =
         { Worker: WorkerId
@@ -239,7 +269,30 @@ module Types =
           /// `Unknown` HOLD the item `Blocked` — fail closed, exactly as one `BlockerUnknown` already keeps
           /// `BLOCKER-CLEARED` from firing (#266, #421). "Could not evaluate the predicate" is not "the
           /// predicate holds."
-          Predicate: RegistryPredicate.Verdict option }
+          Predicate: RegistryPredicate.Verdict option
+
+          /// **WHAT THE ITEM'S OWN TEXT SAYS IT IS** — a `Class:` body line, a `[decision]` title prefix,
+          /// or ADR-0045's `Blocked on: human/decision` sentinel (.github#1588, ADR-0066).
+          ///
+          /// `None` is a REAL answer and the common one today: the item's text carries no evidence of its
+          /// severity. It is never a default class. A default here would be #266's fail-open one axis
+          /// over — a row nobody triaged reading as a row that is fine — and it is the exact failure
+          /// #1588's AC3 names when it says "derived or reported, never guessed".
+          Class: ItemClass option
+
+          /// **WHAT THE BOARD COLUMN CURRENTLY RENDERS** — the projection, observed, never derived.
+          ///
+          /// TWO FIELDS, BECAUSE THEY ARE TWO FACTS, and the reconciliation lives in the gap between them.
+          /// `Class` is the item's claim about itself; this is what the board says today;
+          /// `CLASS-PROJECTION-LAG` is derived exactly where they disagree. Collapsed into one field the
+          /// disagreement would be inexpressible, so nothing could reconcile it and the chore could never
+          /// retire — `Chore.isRetired` would answer "still owed" forever against a write that landed.
+          ///
+          /// Resolved at the impure edge (`Scan` reads the column), never by `Chore.derive`, on exactly
+          /// `Predicate`'s terms: the pure derivation reads FACTS and cannot mistake a failed read for a
+          /// verdict. A context that never resolves it keeps `None` and derives no projection chore,
+          /// which is the fail-closed answer — a projection we could not observe is not one we may write.
+          BoardClass: ItemClass option }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///
@@ -313,3 +366,28 @@ module Types =
     /// verdict's clothes (#266). The caller decides how to fail; `Snapshot` reports it as a parse error
     /// against the JSON path, which is what it did before this function existed.
     val blockerStateOfWireName: s: string -> BlockerState option
+
+    /// **THE CLASS WIRE VOCABULARY: an `ItemClass` as the Projects v2 OPTION NAME, spelled ONCE.**
+    ///
+    /// THIS ONE STRING IS THREE WIRES AT BIRTH, which is why the pair below exists on day one rather than
+    /// after it drifts: it is the board's single-select option name, the value a filer writes in a
+    /// `Class:` body line, and the word the options table in `docs/coordination/board-schema.md`
+    /// documents. #983 counted four agreeing copies of `statusWireName` and called the agreement the
+    /// finding; #1012 measured the render/parse pair that did NOT agree and left 775 tests green while
+    /// every merged blocker read as still-holding. Three wires from one function is the answer to both.
+    ///
+    /// A TOTAL match, no wildcard, on `statusWireName`'s terms. There is no empty case: an item with no
+    /// class is `None`, and the absence of a class is not a class meaning absence.
+    val itemClassWireName: c: ItemClass -> string
+
+    /// The INVERSE, DERIVED from `itemClassWireName` rather than restating it — so the vocabulary is
+    /// spelled exactly once and the board field, the body line and the docs cannot disagree.
+    ///
+    /// This is the function `Class.fromBody` calls, which is what makes the grammar a filer may write
+    /// identical to what `reconcile` writes onto the board. A separate parse list would let the docs
+    /// teach a word the writer never emits.
+    ///
+    /// `None` means the string is not a class at all — NOT a default. Resolving an unrecognised word onto
+    /// the nearest of three would be a guess carrying a parser's authority, which is exactly what
+    /// .github#1588's AC3 forbids; `lint` reports the item as unclassed instead, and a human decides.
+    val itemClassOfWireName: s: string -> ItemClass option

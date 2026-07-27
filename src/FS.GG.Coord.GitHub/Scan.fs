@@ -17,7 +17,13 @@ module Scan =
           Status: BoardStatus
           BlockedByRaw: string
           State: IssueState
-          IsPullRequest: bool }
+          IsPullRequest: bool
+          /// The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
+          /// does not tell apart — the row is unclassed, the value is a word this engine does not speak,
+          /// or the project has no `Class` field at all — and all three mean the same thing to the only
+          /// consumer: there is no projection here to trust. `lint` reports the gap from the ITEM's text,
+          /// which is the authority, so nothing downstream has to guess which of the three this was.
+          BoardClass: ItemClass option }
 
     [<Literal>]
     let OffBoardCap = 60
@@ -93,6 +99,7 @@ module Scan =
                nodes { \
                  status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
+                 class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
                    ... on Issue { number title state repository { nameWithOwner } } \
@@ -163,7 +170,13 @@ module Scan =
                       Status = nested node "status" "name" |> Option.map boardStatusOf |> Option.defaultValue NoStatus
                       BlockedByRaw = nested node "blockedBy" "text" |> Option.defaultValue ""
                       State = state
-                      IsPullRequest = isPr }
+                      IsPullRequest = isPr
+                      // COSTS NOTHING TO ADD. `fieldValueByName` is a RESOLVER field — one value per
+                      // item, no node multiplication — so this is the same 7 points over the live board
+                      // that the query's own comment measures. `Option.bind` on the resolved name, so a
+                      // project with no `Class` field (every board before .github#1588, and every parity
+                      // fixture) reads `None` rather than failing the scan.
+                      BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName }
 
             | _ -> None
 
@@ -195,6 +208,15 @@ module Scan =
             w.WriteString("status", statusWireName r.Status)
 
             w.WriteString("blockedBy", r.BlockedByRaw)
+
+            // OMITTED when unclassed, rather than written as "". An empty string would round-trip through
+            // `itemClassOfWireName` to `None` and so happen to be correct — but it would also be a cache
+            // entry ASSERTING a value for a column nobody read, and `statusWireName`'s empty case is
+            // exactly that assertion made deliberately for a column that really is unset. Here it is not:
+            // `None` covers "no such field on this project", which is not a value at all.
+            match r.BoardClass with
+            | Some c -> w.WriteString("class", itemClassWireName c)
+            | None -> ()
 
             w.WriteString(
                 "state",
@@ -241,7 +263,13 @@ module Scan =
                               IsPullRequest =
                                 match e.TryGetProperty "isPullRequest" with
                                 | true, v -> v.ValueKind = JsonValueKind.True
-                                | _ -> false }
+                                | _ -> false
+                              // Absent on every cache entry written before .github#1588, and that reads
+                              // as `None` — the fail-closed direction. A stale entry then derives a
+                              // projection chore that rewrites the column it already holds, which costs
+                              // one idempotent board write; the opposite default would suppress a real
+                              // projection because an old cache said nothing.
+                              BoardClass = s "class" |> Option.bind itemClassOfWireName }
                     | _ -> None)
                 |> List.ofSeq
                 |> Some

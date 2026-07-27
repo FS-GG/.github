@@ -28,9 +28,16 @@ cross-repo allocation, not item implementation.
    and follow-up items against GitHub—not its narrative.
 7. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
    parked rows from that wave enter the next plan.
-8. Stop only when a fresh reconcile and backlog triage have no startable item, untriaged/actionable
-   backlog, live claim, unresolved repair, queued write, or actionable follow-up. Surface deliberately
-   parked and human-blocked backlog instead of spinning or declaring it completed.
+8. Stop only when a fresh reconcile and backlog triage leave **no startable `Class: defect`**, and no
+   live claim, unresolved repair, queued write, or actionable follow-up. `hardening` accumulates as
+   ordinary backlog and is drained deliberately — it is not a reason to keep running. `decision` is
+   surfaced to a human and never dispatched. Surface deliberately parked and human-blocked backlog
+   instead of spinning or declaring it completed.
+9. **An unclassed row counts as a possible defect.** A `CLASS-UNSET` finding in `lint` means the row's
+   severity is unknown, not that it is minor, so the stopping rule in step 8 does not apply while any
+   remains: report them and stop, or class them, but never read them as "no defect left". Fixing one
+   thing legitimately files two, so the run also ends when a wave produces only `hardening` and
+   `decision` — that is completion, not a stall.
 
 Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.

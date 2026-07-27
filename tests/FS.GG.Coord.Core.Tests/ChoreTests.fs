@@ -50,7 +50,9 @@ module ChoreTests =
           Claim = None
           ItemPr = None
           HumanBlock = None
-          Predicate = None }
+          Predicate = None
+          Class = None
+          BoardClass = None }
 
     /// Every case of a union, by reflection — the sweep's axes are DERIVED, never typed out.
     ///
@@ -79,6 +81,12 @@ module ChoreTests =
 
     let private everyLiveness: Liveness list =
         everyCaseOf<Liveness> (fun t -> if t = typeof<int> then box 42 else noFields t)
+
+    /// `None` and every `ItemClass`, because BOTH class fields are options and the interesting cases are
+    /// the disagreements between them (.github#1588). Derived from the union like every other axis, so a
+    /// fourth class widens the sweep rather than escaping it.
+    let private everyClassValue: ItemClass option list =
+        None :: (everyCaseOf<ItemClass> noFields |> List.map Some)
 
     let private ids (items: Item list) = derive items |> List.map (fun c -> c.Id)
 
@@ -401,26 +409,36 @@ module ChoreTests =
         Assert.Equal(7, List.length everyStatus)
         Assert.Equal(5, List.length everyBlockerState)
         Assert.Equal(5, List.length everyLiveness)
+        Assert.Equal(4, List.length everyClassValue)
 
     [<Fact>]
-    let ``an item derives AT MOST ONE chore — every kind writes the column, so two is a contradiction`` () =
+    let ``an item derives AT MOST ONE chore PER FIELD — two writes to one field is a contradiction`` () =
         // The invariant behind the two defects above, stated over every combination rather than by example.
         //
-        // It is stated with NO exclusions and NO filter, and that is the test. Every one of the five kinds
-        // has a remedy that writes `Status`, so "at most one chore that writes the column" and "at most one
-        // chore" are the same sentence — and the shorter one cannot be quietly narrowed the way the longer
-        // one was.
+        // **IT SAYS "PER FIELD" NOW, AND THAT IS A RESTATEMENT, NOT A NARROWING.** It used to say "at most
+        // one chore", full stop, and justified the shorter sentence like this: *"Every one of the five kinds
+        // has a remedy that writes `Status`, so 'at most one chore that writes the column' and 'at most one
+        // chore' are the same sentence — and the shorter one cannot be quietly narrowed the way the longer
+        // one was."* The two sentences were the same only because of that coincidence. `CLASS-PROJECTION-LAG`
+        // (.github#1588) writes `Class`, so they have come apart, and a `Status` repair alongside a `Class`
+        // projection on one item is two independent repairs rather than a contradiction — both land, in
+        // either order, with the same result.
         //
-        // It used to exclude STALE-CLAIM, on the grounds that it "restores a column rather than setting
+        // The reason for the caution in that old comment stands and is honoured: the exclusion this test
+        // once carried was for STALE-CLAIM, "on the grounds that it restores a column rather than setting
         // one". Restoring IS writing — its remedy is `reap`, and `reap` restores `PreviousStatus` (#481) —
-        // and that exclusion is precisely what hid a real contradiction for as long as it stood: on a CLOSED
+        // and that exclusion is exactly what hid a real contradiction for as long as it stood: on a CLOSED
         // issue carrying a STALE marker, STALE-CLAIM ("restore the column it overwrote") and
-        // CLOSED-ISSUE-NOT-DONE ("set Done") both fired, writing opposite columns to one item.
+        // CLOSED-ISSUE-NOT-DONE ("set Done") both fired, writing opposite columns to one item. So the
+        // partition below is keyed on `Kind.Write`, which is the ENGINE's own answer to "what does this
+        // remedy write" and the same value `reconcile` sends. STALE-CLAIM's `None` is its own bucket, not an
+        // exemption: it still cannot coexist with anything, which is what caught that defect.
         //
         // Every axis is DERIVED from its union (see `everyCaseOf`), so a case added tomorrow widens this
         // sweep instead of silently escaping it. Blocker sets go to every ORDERED PAIR, not a hand-picked
         // few: `List.forall` is what BLOCKER-CLEARED turns on, and a single-element set cannot tell `forall`
-        // from `exists`.
+        // from `exists`. The two class fields are swept independently, because the projection rule fires on
+        // their DISAGREEMENT and a sweep that moved them together would never generate one.
         let claims = None :: (everyLiveness |> List.map (fun l -> Some(claim other, l)))
 
         let blockerSets =
@@ -431,25 +449,117 @@ module ChoreTests =
                       yield [ blocker 2 a; blocker 3 b ] ]
 
         let mutable derivedSomething = 0
+        let mutable sawClassChore = 0
 
         for st in everyStatus do
             for cl in claims do
                 for bs in blockerSets do
                     for state in [ Open; Closed ] do
-                        let i = { item 1 with Status = st; State = state; Claim = cl; Blockers = bs }
-                        let derived = derive [ i ]
-                        derivedSomething <- derivedSomething + derived.Length
+                        for declared in everyClassValue do
+                            for board in everyClassValue do
+                                let i =
+                                    { item 1 with
+                                        Status = st
+                                        State = state
+                                        Claim = cl
+                                        Blockers = bs
+                                        Class = declared
+                                        BoardClass = board }
 
-                        Assert.True(
-                            derived.Length <= 1,
-                            $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} derived %d{derived.Length} chores: %A{derived |> List.map (fun c -> c.Kind.RuleId)}"
-                        )
+                                let derived = derive [ i ]
+                                derivedSomething <- derivedSomething + derived.Length
+
+                                sawClassChore <-
+                                    sawClassChore
+                                    + (derived
+                                       |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG")
+                                       |> List.length)
+
+                                for field, group in derived |> List.groupBy (fun c -> c.Kind.Write |> Option.map fst) do
+                                    Assert.True(
+                                        List.length group <= 1,
+                                        $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} class=%A{declared} boardClass=%A{board} derived %d{List.length group} chores writing %A{field}: %A{group |> List.map (fun c -> c.Kind.RuleId)}"
+                                    )
 
         // NON-VACUITY, and it is not a formality: everything above is an UPPER bound, so `derive = fun _ -> []`
         // satisfies every assertion in this test. That is the same shape as the two touch-set tests below —
         // an emptiness this suite would have read as proof — and #266 is the epic about a check reporting
         // green over a subject it never saw. A sweep that asserts "never two" must also show it ever saw one.
         Assert.True(derivedSomething > 0, "the sweep derived NO chores at all — `at most one` proved nothing")
+
+        // AND IT MUST HAVE SEEN THE NEW KIND SPECIFICALLY. The counter above would stay satisfied by the
+        // five Status rules alone, so widening the sweep with two class axes could have added 16× the
+        // combinations and exercised the rule they were added for exactly zero times — a sweep that grew
+        // and proved nothing new. This is the axis's own non-vacuity guard.
+        Assert.True(sawClassChore > 0, "the sweep never derived a CLASS-PROJECTION-LAG — the class axes proved nothing")
+
+    [<Fact>]
+    let ``#1588 a Status repair and a Class projection COEXIST — they are two repairs, not a contradiction`` () =
+        // The positive statement of what "per field" bought, pinned by example so the restatement above is
+        // not merely a weaker assertion nobody checked. A closed issue still carrying `Ready` needs its
+        // column set to Done AND its declared class projected; neither write is the other's business, and
+        // suppressing one to preserve "at most one chore" would leave a real repair underived forever.
+        //
+        // Note the item is OPEN: `CLASS-PROJECTION-LAG` is scoped to open rows, so the coexistence has to be
+        // demonstrated against a rule that fires on one — `STATUS-NOT-BLOCKED` here.
+        let i =
+            { item 1 with
+                Status = Ready
+                State = Open
+                Blockers = [ blocker 2 BlockerOpen ]
+                Class = Some Defect
+                BoardClass = None }
+
+        let derived = derive [ i ]
+
+        Assert.Equal<string list>(
+            [ "STATUS-NOT-BLOCKED"; "CLASS-PROJECTION-LAG" ],
+            derived |> List.map (fun c -> c.Kind.RuleId) |> List.sort |> List.rev
+        )
+
+        // They write DIFFERENT fields — the property the invariant is actually about.
+        Assert.Equal<string list>(
+            [ "Class"; "Status" ],
+            derived |> List.choose (fun c -> c.Kind.Write |> Option.map fst) |> List.sort
+        )
+
+    [<Fact>]
+    let ``#1588 an item whose text declares NO class derives no projection — never a default`` () =
+        // AC3, as an invariant. `Class = None` is the common case today (a board where nobody has written a
+        // `Class:` line yet), and the one thing this rule must never do is stamp such a row with a class the
+        // engine made up. `lint`'s CLASS-UNSET reports it to a human instead.
+        for board in everyClassValue do
+            let i = { item 1 with Class = None; BoardClass = board }
+            Assert.Empty(derive [ i ] |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG"))
+
+    [<Fact>]
+    let ``#1588 the projection RETIRES once the column agrees — or reconcile could never come clean`` () =
+        // `Chore.isRetired` is what tells a caller a chore is discharged, and it is answered by re-deriving.
+        // An unconditional write would re-derive forever against a write that landed, so `reconcile` would
+        // report the same finding on every pass and never converge — the board permanently "dirty" for a
+        // reason nobody could clear.
+        for c in everyCaseOf<ItemClass> noFields do
+            let agreeing = { item 1 with Class = Some c; BoardClass = Some c }
+            Assert.Empty(derive [ agreeing ] |> List.filter (fun x -> x.Kind.RuleId = "CLASS-PROJECTION-LAG"))
+
+            let lagging = { item 1 with Class = Some c; BoardClass = None }
+            let chores = derive [ lagging ] |> List.filter (fun x -> x.Kind.RuleId = "CLASS-PROJECTION-LAG")
+            Assert.Single chores |> ignore
+            Assert.True(isRetired (List.head chores) [ agreeing ], "the chore did not retire against an agreeing board")
+
+    [<Fact>]
+    let ``#1588 a DISAGREEING column is rewritten - a wrong projection is not left standing`` () =
+        // The case a naive `BoardClass.IsNone` guard would miss: the column says one thing, the item's text
+        // says another. That is not "already projected" — it is the board asserting something the item does
+        // not, which is worse than an empty column because a reader would believe it.
+        let i = { item 1 with Class = Some Defect; BoardClass = Some Hardening }
+
+        Assert.Equal<string list>(
+            [ "CLASS-PROJECTION-LAG" ],
+            derive [ i ] |> List.map (fun c -> c.Kind.RuleId)
+        )
+
+        Assert.Equal<(string * string) option>(Some("Class", "defect"), (List.head (derive [ i ])).Kind.Write)
 
     // ---- what is NOT a chore: fixes only ever write to the BOARD -------------------------------------
 

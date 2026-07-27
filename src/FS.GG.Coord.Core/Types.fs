@@ -94,6 +94,15 @@ module Types =
         /// becomes startable the moment the action lands (e.g. #574), but not before.
         | AwaitingHumanAction
 
+    /// How BAD an item is — the axis the board had no vocabulary for (.github#1588). See Types.fsi.
+    type ItemClass =
+        /// Something is broken NOW.
+        | Defect
+        /// Nothing is broken; the change removes a way it could break.
+        | Hardening
+        /// A human must choose before any work is authorable.
+        | Decision
+
     type Claim =
         { Worker: WorkerId
           Session: SessionId option
@@ -134,7 +143,23 @@ module Types =
           /// resolved `Verdict` is the FACT the pure `BLOCKER-CLEARED` derivation reads, the way it reads
           /// `Blocker.State`: `Agrees` lets the flip proceed, `Contradicts`/`Unknown` HOLD it (fail closed,
           /// #266). Resolved at the impure edge, never in `Chore.derive` — see `RegistryPredicate`.
-          Predicate: RegistryPredicate.Verdict option }
+          Predicate: RegistryPredicate.Verdict option
+
+          /// The class the item's OWN TEXT declares — a `Class:` body line, a `[decision]` title prefix,
+          /// or ADR-0045's `Blocked on: human/decision` sentinel (.github#1588). `None` means the text
+          /// carries no evidence, which is a REAL answer and never a default — see `Class` and ADR-0066.
+          Class: ItemClass option
+
+          /// The class the BOARD FIELD currently holds — the PROJECTION, observed, not derived.
+          ///
+          /// Two fields, because they are two facts and the item turns on not collapsing them: `Class` is
+          /// what the item says it is, `BoardClass` is what the board currently renders, and
+          /// `CLASS-PROJECTION-LAG` exists exactly where they disagree. One field could not express the
+          /// disagreement, so nothing could reconcile it.
+          ///
+          /// Resolved at the impure edge (the scan reads the column), never by `Chore.derive` — the same
+          /// split, for the same reason, as `Predicate` above.
+          BoardClass: ItemClass option }
 
     type Verdict<'a> =
         | Green of 'a
@@ -189,3 +214,42 @@ module Types =
     let blockerStateOfWireName (s: string) =
         let t = s.Trim().ToLowerInvariant()
         everyBlockerState |> List.tryFind (fun c -> blockerStateWireName c = t)
+
+    // THE CLASS WIRE VOCABULARY, ONCE — and this one is THREE wires at birth, which is why it is written
+    // as a pair on day one rather than after it drifts. The same three strings are the Projects v2 option
+    // NAMES, the `Class:` body-line values `lint` reads back, and the words the `Class` options table in
+    // `docs/coordination/board-schema.md` documents. #1012 measured what happens when a render/parse pair
+    // lives in two modules with nothing asserting they are inverse: 775 tests stayed green while `merged`
+    // rendered as `"MERGED"` and parsed as nothing, and every merged blocker read as still-holding.
+    //
+    // A TOTAL match, no wildcard, on `statusWireName`'s terms: a fourth `ItemClass` case must fail the
+    // BUILD here rather than render as "" and clear somebody's board column. There is no empty case — an
+    // item with no class has `None`, which is the absence of a class, not a class meaning absence.
+    let itemClassWireName (c: ItemClass) =
+        match c with
+        | Defect -> "defect"
+        | Hardening -> "hardening"
+        | Decision -> "decision"
+
+    /// Every `ItemClass`, as the subject `itemClassOfWireName` searches.
+    ///
+    /// THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `everyBlockerState` carries the
+    /// identical caveat. A case missing here renders fine and no longer PARSES, so a `Class:` line the
+    /// docs tell a filer to write would read as no declaration at all, and `lint` would report the item
+    /// untriaged while its author had triaged it. `TypesTests` pins this list against the union by
+    /// reflection, so nobody has to remember it.
+    let private everyItemClass = [ Defect; Hardening; Decision ]
+
+    // THE INVERSE, DERIVED — never a second list of the strings (#1012). This is the function the body-line
+    // parser calls, so the grammar `Class.fromBody` accepts is defined by the renderer above and cannot
+    // drift from what `reconcile` writes onto the board.
+    //
+    // `None` means the string is not a class at all. Deliberately not a default: "a word we do not know"
+    // must not resolve to one of three, because the resolution would be a GUESS with a parser's authority
+    // behind it, which is exactly what #1588's AC3 forbids.
+    let itemClassOfWireName (s: string) =
+        if isNull s then
+            None
+        else
+            let t = s.Trim().ToLowerInvariant()
+            everyItemClass |> List.tryFind (fun c -> itemClassWireName c = t)

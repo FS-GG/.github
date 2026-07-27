@@ -59,6 +59,50 @@ The coordination-kit protocol carries the same mapping. In particular, `net`
 is `P8 Net`; it must not be filed under `P1 Rendering` merely because a caller
 may eventually render network state.
 
+## Class
+
+How BAD an item is ([.github#1588](https://github.com/FS-GG/.github/issues/1588)) — the axis
+neither `Repo Scope` (where) nor `Phase` (which product) can carry. The vocabulary is **closed**
+at exactly three values.
+
+<!-- class-options:start -->
+| option | meaning |
+|---|---|
+| `defect` | something is broken now: a red gate, a wrong answer, a rule that fails open |
+| `hardening` | nothing is broken; the change removes a way it could break |
+| `decision` | a human must choose before any work is authorable |
+<!-- class-options:end -->
+
+The **authority is the item's own `Class:` body line** — ADR-0045's sentinel grammar, shared
+verbatim with `Paths:` and `Blocked on:` (a line at up to three leading spaces, outside any
+fenced code block), plus a `[decision]` title prefix and a `Blocked on: human/decision` sentinel
+read as evidence. **This board field is a downstream PROJECTION written by `reconcile`, not a
+hand-maintained input.** Editing the field on a card does not change what the item is; the next
+`reconcile` overwrites it from the body. A board field nobody derives is a fourth hand-maintained
+copy of a fact, which is the drift ADR-0045 refused a board field to avoid.
+
+The pull-request gate checks this bounded table without requiring Projects credentials:
+
+```sh
+scripts/project-field-options check --field Class --schema docs/coordination/board-schema.md
+```
+
+Unlike Repo Scope there is no roster file to be the authority, so the check compares this table
+against a closed three-value vocabulary hardcoded in the tool — the engine's `ItemClass` union.
+Drift in either direction, an absent marker block, or an unreadable schema is a refusal, never an
+empty/clean result. Operators may additionally check the live project with
+`--field Class` and no `--schema`.
+
+### Creating `Class` is not a guarded migration
+
+Recorded so a future operator does not read `project-field-options` as refusing to help them:
+creating `Class` is `createProjectV2Field` on a field that **does not yet exist**. There are no
+assignments to lose, so no snapshot precondition is meaningful and `add-option` has nothing to
+guard. `project-field-options` exists to fence `updateProjectV2Field`, whose historical failure
+recreated a field's options and cleared the value on **every** item. The guarded
+snapshot → `add-option` → restore sequence below becomes relevant to `Class` only if a **later
+fourth option** is ever added — which is an ADR, not a board edit.
+
 ## Guarded single-select migration
 
 `scripts/project-field-options` is field-generic and fail-closed. Its

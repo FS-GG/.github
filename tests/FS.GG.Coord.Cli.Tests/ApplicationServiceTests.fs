@@ -20,7 +20,8 @@ module ApplicationServiceTests =
           Status = status
           BlockedByRaw = ""
           State = state
-          IsPullRequest = isPullRequest }
+          IsPullRequest = isPullRequest
+          BoardClass = None }
 
     [<Fact>]
     let ``ready application service preserves the exact JSON projection contract`` () =

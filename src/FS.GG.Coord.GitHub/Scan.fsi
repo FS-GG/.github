@@ -44,7 +44,22 @@ module Scan =
           State: IssueState
           /// A PR on the board is not an item of WORK. #641: they were listed as issues, so a duplicate
           /// check read a PR as "already filed" and suppressed a real finding.
-          IsPullRequest: bool }
+          IsPullRequest: bool
+          /// The `Class` column as OBSERVED — the PROJECTION `reconcile` writes, read back so that
+          /// `CLASS-PROJECTION-LAG` can fire on disagreement and RETIRE on agreement (.github#1588).
+          ///
+          /// It costs nothing. `fieldValueByName` is a resolver field, so this is the same 7-point full
+          /// scan the cost model above measures — one more resolved value per item, no node multiplication.
+          ///
+          /// `None` COLLAPSES THREE FACTS ON PURPOSE: the row is unclassed, the column holds a word this
+          /// engine does not speak, or the project has no `Class` field at all. That collapse is safe here
+          /// and nowhere else, because this value is never a verdict — it is one half of a comparison whose
+          /// authority is the ITEM'S OWN TEXT (ADR-0066). All three mean "there is no projection here to
+          /// trust", and the remedy is identical: write what the item declares. Contrast `TouchSet`, where
+          /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
+          /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
+          /// looked at. Here the source is the body, and `lint` reads it directly.
+          BoardClass: ItemClass option }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///

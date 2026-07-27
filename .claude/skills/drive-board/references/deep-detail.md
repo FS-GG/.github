@@ -248,8 +248,7 @@ when it is not** — that is the entire reason [check-board](../../check-board/S
 stop because a `take` returned 5, or because one `batch` came back empty. Stop only when a **fresh**
 reconcile and [backlog-triage](backlog-triage.md) pass show all four of:
 
-- **No schedulable item in any repo** — `batch --repo <r>` empty for every `r`, and `next` explains
-  *why* each remaining candidate is skipped (blocked or no touch-set) rather than startable.
+- **No startable `defect` in any repo** — not an empty board. See "why the test is `defect`" below.
 - **No actionable or untriaged Backlog remains.** Every Backlog row was classified from the current
   wave: actionable rows were promoted before `batch`; retained rows have a concrete evidenced reason;
   human judgement rows are surfaced in the completion report.
@@ -263,6 +262,41 @@ reconcile and [backlog-triage](backlog-triage.md) pass show all four of:
 A remaining candidate that is blocked on a **human** (`awaiting-human`, or check-board's *asked-and-
 unanswered* list) is **not** yours to unblock and **not** a reason to keep spinning. Surface it and
 stop — driving it yourself would make the machine answer the decision the item exists to escalate.
+
+### Why the test is `defect`, and not "no schedulable item" (.github#1588, ADR-0066)
+
+The old first condition was **no schedulable item in any repo**, and it is why this loop could not
+terminate on its own terms. Measured on 2026-07-27: the board went from 5 non-Done rows to **34** during a
+single burn-down in which 35+ items merged. That growth was *healthy* — every new row was a real, evidenced
+finding produced by fixing the previous one (#1538 spawned #1568; #721 spawned #726 and #727; #1525 spawned
+#1562). But under a rule that says "stop when nothing is schedulable", a run in which fixing one thing files
+two **never stops**, and that run ended only because a human intervened.
+
+The board carried no way to tell these apart, because it had words for *when* (`Status`), *where* (`Repo
+Scope`), and *how big* (`Effort`), and none for **how bad**:
+
+- **defect** — `coordination-coherence` RED on `main` (#722); a reusable gate that dies at load for every
+  caller (#1510); a summary reporting a byte-identity it never computed (#1506).
+- **hardening** — `sparse.py` accepting `"1"` where `core.getBooleanInput` wants `true` (#1554); a test
+  file's running commentary skipping two version entries (#724).
+- **decision** — three digest implementations disagreeing on CRLF, and somebody must pick (#1547).
+
+A human sorted those by reading the titles in seconds. The fact was knowable and simply nowhere in the
+data, so `batch`, `ready` and this stopping rule saw one undifferentiated row for all three.
+
+**The unclassed row is the part to get right, and it is the reason this contract is not simply "stop when
+no row is classed `defect`".** A driver keying on `defect` over rows that carry no class reads every one of
+them as *not-a-defect* and terminates immediately — stopping early and leaving live defects, which is the
+exact failure this change exists to prevent, arriving through the change itself. So an unclassed row counts
+as a **possible defect**: `lint`'s `CLASS-UNSET` names each one, and while any remains the class test cannot
+report the board defect-free. That is #266's rule on a new axis — a subject you could not evaluate is never
+a subject that passed — and it makes this contract safe at any level of population rather than only after
+somebody has classed every row.
+
+**Read the class from the item, not from the board column.** The `Class:` body line is the authority
+(ADR-0066, preserving ADR-0045's decision to carry this kind of fact in the body rather than a Projects v2
+field); the board's `Class` column is a projection `reconcile` writes. A row `reconcile` has not reached yet
+is blank on the board and classed in its body, so the column alone under-reports.
 
 ## 7. The completion report
 

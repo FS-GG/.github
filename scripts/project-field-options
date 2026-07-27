@@ -26,6 +26,18 @@ class Refused(RuntimeError):
     pass
 
 
+# The bounded options table each gated field publishes in docs/coordination/board-schema.md.
+# `check` reads the table by MARKER rather than by heading, so a heading rename cannot silently
+# widen the block a gate reads; an absent marker is a refusal, never an empty option set.
+SCHEMA_MARKERS = {"Repo Scope": "repo-scope-options", "Class": "class-options"}
+
+# The `Class` vocabulary, CLOSED at exactly three values (.github#1588).  Unlike Repo Scope there
+# is no roster file to be the authority here: this is the engine's `ItemClass` union
+# (src/FS.GG.Coord.Core/Types.fs) transcribed, and this gate exists precisely to catch that
+# transcription going stale in either direction.  A fourth value is an ADR plus a guarded
+# `add-option`, not an edit to the table.
+CLASS_VOCABULARY = ("defect", "hardening", "decision")
+
 FIELD_QUERY = r"""
 query ProjectFieldOptionsField($owner:String!,$number:Int!){
   organization(login:$owner){projectV2(number:$number){
@@ -139,6 +151,13 @@ def read_state(owner: str, number: int, title: str, field_name: str) -> dict[str
             raise Refused(f"project item count changed while paging ({total} -> {page_total}); retry snapshot")
         for raw in page["nodes"]:
             value = raw.get("fieldValueByName")
+            # WART, deliberately NOT fixed here (.github#1588): this tool is field-generic in the
+            # QUERY (`$field` is whatever `--field` names) but not in these item key names.  Read
+            # `repoScope`/`repoScopeOptionId` as "this field's value / this field's option id" —
+            # the 2026-07-23 snapshot under docs/coordination/board-schema-snapshots/ was captured
+            # with `--field Phase` and still spells them this way.  Both committed snapshots seal a
+            # sha256 over the canonical payload, so renaming the keys would invalidate both
+            # recovery artifacts; the rename is only safe alongside a formatVersion bump.
             item = {
                 "id": raw["id"],
                 "repoScope": value.get("name") if value else None,
@@ -192,6 +211,8 @@ def seal(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_snapshot(path: Path) -> dict[str, Any]:
+    # `repoScope`/`repoScopeOptionId` below are the field-generic value keys, not Repo Scope —
+    # see the note in `read_state`; the two committed snapshots depend on this exact spelling.
     try:
         snapshot = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
@@ -228,6 +249,7 @@ def load_snapshot(path: Path) -> dict[str, Any]:
 
 
 def assignment_map(state: dict[str, Any]) -> dict[str, str | None]:
+    # `repoScope` is this field's value regardless of `--field` — see the note in `read_state`.
     return {i["id"]: i.get("repoScope") for i in state["items"]}
 
 
@@ -286,21 +308,29 @@ def compare_resolver(roster: Path, resolver: Path) -> None:
         raise Refused(f"embedded --repo resolver drift: missing={missing}; stale={stale}; wrong={wrong}")
 
 
-def documented_options(path: Path) -> list[dict[str, str]]:
+def documented_options(path: Path, marker: str) -> list[dict[str, str]]:
+    """Read one bounded options table out of board-schema.md.
+
+    The marker is a PARAMETER (.github#1588): a second gated field must read its own block, and a
+    hardcoded marker would have made the Class gate silently re-read the Repo Scope table and
+    report green about a field it never looked at.  Every failure mode below is a refusal — an
+    unreadable file, an absent block, absent rows, duplicated rows — because this function's whole
+    job is to make an empty read impossible to mistake for a clean one.
+    """
     try:
         text = path.read_text()
     except OSError as exc:
         raise Refused(f"cannot read board schema {path}: {exc}") from exc
     match = re.search(
-        r"<!-- repo-scope-options:start -->(.*?)<!-- repo-scope-options:end -->",
+        rf"<!-- {re.escape(marker)}:start -->(.*?)<!-- {re.escape(marker)}:end -->",
         text,
         re.DOTALL,
     )
     if not match:
-        raise Refused("board schema lacks the bounded Repo Scope options table")
+        raise Refused(f"board schema lacks the bounded {marker} table")
     names = re.findall(r"^\|\s*`([^`]+)`\s*\|", match.group(1), re.MULTILINE)
     if not names or len(names) != len(set(names)):
-        raise Refused("board schema Repo Scope rows were absent or duplicated")
+        raise Refused(f"board schema {marker} rows were absent or duplicated")
     return [{"name": name} for name in names]
 
 
@@ -381,20 +411,63 @@ def cmd_verify_snapshot(args: argparse.Namespace) -> None:
     print(f"valid complete snapshot: {snapshot['itemTotalCount']} items, sha256={snapshot['sha256']}")
 
 
-def cmd_check(args: argparse.Namespace) -> None:
+def check_options(args: argparse.Namespace, marker: str) -> list[dict[str, Any]]:
+    """The option set a check gates, from exactly one of the documented table, a sealed snapshot,
+    or the live field.
+
+    Every branch either returns options or raises.  There is no fall-through that yields `[]`, so
+    no caller can compare "nothing read" against an expected set and call the silence a match.
+    """
     if args.schema:
-        options = documented_options(Path(args.schema))
-    elif args.snapshot:
-        state = load_snapshot(Path(args.snapshot))
-        options = state["field"]["options"]
-    else:
-        state = read_state(args.owner, args.project_number, args.project_title, args.field)
-        options = state["field"]["options"]
+        return documented_options(Path(args.schema), marker)
+    if args.snapshot:
+        return load_snapshot(Path(args.snapshot))["field"]["options"]
+    return read_state(args.owner, args.project_number, args.project_title, args.field)["field"]["options"]
+
+
+def check_repo_scope(args: argparse.Namespace) -> None:
+    options = check_options(args, SCHEMA_MARKERS["Repo Scope"])
     roster = Path(args.roster)
     compare_roster(options, roster, set(args.allow_extra))
     compare_resolver(roster, Path(args.resolver))
     names = [o["name"] for o in options]
     print(f"Repo Scope and --repo resolver match roster ({len(roster_ids(roster))} repos; allowed extras={sorted(set(names)-set(roster_ids(roster)))})")
+
+
+def check_class(args: argparse.Namespace) -> None:
+    """Gate the `Class` options against the closed `ItemClass` vocabulary (.github#1588).
+
+    Deliberately does NOT run `compare_resolver` or `compare_roster`.  `registry/repos.yml` and
+    `Options.resolveRepo` answer *which repo*, which says nothing about *how bad*; wiring them in
+    here would red this gate on unrelated roster churn and, worse, would make a green `Class` run
+    depend on a file the vocabulary does not come from.  `--allow-extra` is likewise not honoured:
+    the point of a closed vocabulary is that there is no such thing as a tolerated extra.
+    """
+    options = check_options(args, SCHEMA_MARKERS["Class"])
+    actual = {o["name"] for o in options}
+    expected = set(CLASS_VOCABULARY)
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise Refused(f"Class drift: missing={missing}; unexpected={unexpected}")
+    print(f"Class matches the closed ItemClass vocabulary ({', '.join(CLASS_VOCABULARY)})")
+
+
+def cmd_check(args: argparse.Namespace) -> None:
+    # Dispatch on --field, and REFUSE anything unrecognised (.github#1588).  Falling through to the
+    # Repo Scope leg would be the worst outcome this tool can produce: `check --field Severity
+    # --schema …` would read the repo-scope table, pass against the roster, and print a green
+    # verdict about a field nothing examined.  A gate that answers questions it was not asked is
+    # indistinguishable from no gate.
+    if args.field == "Repo Scope":
+        check_repo_scope(args)
+    elif args.field == "Class":
+        check_class(args)
+    else:
+        raise Refused(
+            f"no check is defined for field {args.field!r}; known fields: "
+            + ", ".join(repr(name) for name in sorted(SCHEMA_MARKERS))
+        )
 
 
 def cmd_restore(args: argparse.Namespace) -> None:
@@ -459,14 +532,14 @@ def parse_args() -> argparse.Namespace:
     verify = subs.add_parser("verify-snapshot", help="verify local completeness and integrity")
     verify.add_argument("--snapshot", required=True)
     verify.set_defaults(func=cmd_verify_snapshot)
-    check = subs.add_parser("check", help="compare roster ids with Repo Scope options")
+    check = subs.add_parser("check", help="gate a field's options against its authority (--field)")
     common(check)
-    check.add_argument("--roster", default="registry/repos.yml")
-    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs")
+    check.add_argument("--roster", default="registry/repos.yml", help="Repo Scope authority; unused by --field Class")
+    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs", help="Repo Scope only; unused by --field Class")
     source = check.add_mutually_exclusive_group()
     source.add_argument("--snapshot", help="check an integrity-verified captured field instead of live GitHub")
     source.add_argument("--schema", help="check the bounded options table in board-schema.md (CI/offline)")
-    check.add_argument("--allow-extra", action="append", default=["cross-repo"])
+    check.add_argument("--allow-extra", action="append", default=["cross-repo"], help="Repo Scope only; Class is a closed vocabulary")
     check.set_defaults(func=cmd_check)
     recovery = subs.add_parser("restore", help="restore and verify all snapshotted assignments")
     common(recovery)

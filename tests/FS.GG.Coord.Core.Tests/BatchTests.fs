@@ -30,7 +30,9 @@ module BatchTests =
           Claim = None
           ItemPr = None
           HumanBlock = None
-          Predicate = None }
+          Predicate = None
+          Class = None
+          BoardClass = None }
 
     let private held w ageSeconds it =
         { it with

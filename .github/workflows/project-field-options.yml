@@ -1,5 +1,13 @@
 name: project-field-options
 
+# The two path lists below are duplicated verbatim; keep them identical.  Both include the two F#
+# sources this job actually reads, not just the tool and its docs:
+#   * Options.fs — the Repo Scope check scrapes `Options.resolveRepo` on EVERY run, including the
+#     offline `--schema` one, so before this was listed an Options.fs edit could red this workflow
+#     without ever triggering it (.github#1588).
+#   * Types.fs — the `Class` check compares board-schema.md against a three-value vocabulary
+#     transcribed from the `ItemClass` union.  A transcription has no compiler behind it, so the
+#     trigger is what puts this gate in front of whoever edits the union.
 on:
   pull_request:
     paths:
@@ -9,6 +17,8 @@ on:
       - "docs/coordination/board-schema-snapshots/**"
       - ".claude/skills/cross-repo-coordination/SKILL.md"
       - ".agents/skills/cross-repo-coordination/SKILL.md"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Core/Types.fs"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
   push:
@@ -20,6 +30,8 @@ on:
       - "docs/coordination/board-schema-snapshots/**"
       - ".claude/skills/cross-repo-coordination/SKILL.md"
       - ".agents/skills/cross-repo-coordination/SKILL.md"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Core/Types.fs"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
   workflow_dispatch:
@@ -37,3 +49,8 @@ jobs:
         run: bash tests/project-field-options/run.sh
       - name: Check roster against documented Repo Scope schema
         run: scripts/project-field-options check --schema docs/coordination/board-schema.md
+      # `--schema` is not a convenience here: this job has `permissions: contents: read` and no
+      # Projects credential, so the live form cannot run.  The offline form is the only one CI can
+      # execute, and it is enough — the drift being gated is between two files in this checkout.
+      - name: Check documented Class schema against the closed ItemClass vocabulary
+        run: scripts/project-field-options check --field Class --schema docs/coordination/board-schema.md

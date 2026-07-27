@@ -2594,10 +2594,53 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   [ "$src" -eq 1 ] && ok "case14: lint --repo sdd (has errors) exits 1 — the short-id resolves and scopes" || bad "case14: --repo sdd exit" "rc=$src"
   lt --repo game >/dev/null 2>&1; grc=$?
   [ "$grc" -eq 0 ] && ok "case14: lint --repo game (clean) exits 0 — scoped away from the SDD errors" || bad "case14: --repo game exit" "rc=$grc"
-  # game's clean scope really is scanned (not just empty): its one Ready item declares a real touch-set.
+  # game's clean scope really is scanned (not just empty): its one Ready item declares a real touch-set
+  # AND a `Class:` line, so every rule in the pass has a subject there and none of them fires.
   [ "$(lt --repo game --json 2>/dev/null | jq -c '.')" = "[]" ] \
     && ok "case14: ...and that clean scope produced zero findings (a real item, really scanned)" \
     || bad "case14: --repo game must be clean+empty" "$(lt --repo game --json 2>/dev/null)"
+
+  # ---- CLASS-UNSET (.github#1588) --------------------------------------------------------------------
+  #
+  # The SIXTH lint rule, certified HERE on the day it lands. .github#1609 was filed because two rules —
+  # BLOCKED-NO-REASON (ADR-0045's whole enforcement mechanism) and BLOCKER-CYCLE — shipped with zero
+  # coverage, and a rule nothing exercises is a rule nobody can tell apart from one that never fires.
+  cus() { jq -r '[.[] | select(.code=="CLASS-UNSET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson"; }
+
+  # Fires on EXACTLY the Ready/Backlog OPEN rows whose own TEXT records no class. #423 is In progress and
+  # #424 is closed, so neither is a candidate; #500 is classed and lives in the other scope.
+  [ "$(cus)" = "FS.GG.SDD#400,FS.GG.SDD#407,FS.GG.SDD#420,FS.GG.SDD#421,FS.GG.SDD#422,FS.GG.SDD#430,FS.GG.SDD#431,FS.GG.SDD#435" ] \
+    && ok "#1588: CLASS-UNSET fires on exactly the Ready/Backlog OPEN rows whose text declares no class" \
+    || bad "#1588: CLASS-UNSET must fire on exactly 400,407,420,421,422,430,431,435" "$(cus)"
+
+  # The three derivations, as NEGATIVES — the half that proves the rule is not simply always-red.
+  case "$(cus)" in *432*) bad "#1588: an explicit 'Class: hardening' body line must suppress CLASS-UNSET" "$(cus)" ;;
+                   *)     ok "#1588: an explicit 'Class:' body line is a declaration — CLASS-UNSET is silent" ;; esac
+  case "$(cus)" in *433*) bad "#1588: a '[decision]' TITLE prefix must derive a class (AC3)" "$(cus)" ;;
+                   *)     ok "#1588: a '[decision]' title prefix derives 'decision' with no body line (AC3)" ;; esac
+  case "$(cus)" in *434*) bad "#1588: ADR-0045's 'Blocked on: human/decision' must derive a class (AC5)" "$(cus)" ;;
+                   *)     ok "#1588: ADR-0045's human/decision sentinel derives 'decision' — no second line (AC5)" ;; esac
+
+  # AC3's refusal, and the one worth stating loudest: an unknown word is NOT a declaration. If `Class: bug`
+  # resolved to the nearest of three, #435 would drop out of the set above and look triaged — a guess
+  # carrying a parser's authority, invisible precisely because it succeeded.
+  case "$(cus)" in *435*) ok "#1588: an unrecognised class word is NO declaration — never the nearest of three (AC3)" ;;
+                   *)     bad "#1588: 'Class: bug' must not resolve to a class" "$(cus)" ;; esac
+
+  # It is an ERROR, not a note: untriaged severity is exactly as invisible as an untriaged status, and a
+  # note would not fail the gate that makes anybody fix it.
+  [ "$(jq -r '[.[] | select(.code=="CLASS-UNSET") | .severity] | unique | join(",")' <<<"$ljson")" = "error" ] \
+    && ok "#1588: CLASS-UNSET is an error — untriaged severity is as invisible as an untriaged status" \
+    || bad "#1588: CLASS-UNSET must be severity error" "$ljson"
+
+  # The detail names the three words a filer must choose between. A gate that says "wrong" without saying
+  # what right looks like is the gate #698 names — noise, merge anyway.
+  d435="$(jq -r '.[] | select(.code=="CLASS-UNSET" and (.id|test("435"))) | .detail' <<<"$ljson")"
+  printf '%s' "$d435" | grep -q 'Class: defect' \
+    && printf '%s' "$d435" | grep -q 'Class: hardening' \
+    && printf '%s' "$d435" | grep -q 'Class: decision' \
+    && ok "#1588: CLASS-UNSET's detail names all three body-line values by name" \
+    || bad "#1588: CLASS-UNSET detail must name the three values" "$d435"
 
   kill "$LINT_SRV" 2>/dev/null
 fi
