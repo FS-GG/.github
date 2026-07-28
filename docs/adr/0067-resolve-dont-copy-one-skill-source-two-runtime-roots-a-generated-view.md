@@ -112,12 +112,49 @@ replacement pending, and the Alternatives below call it *separable rather than o
 absence check; run it alongside the existing gates unchanged; **port** the fixtures rather than
 re-derive them; retire the old apparatus **per repo**, with the freshness sweep last.
 
+> **PHASE 4 WROTE THAT ORDER ON 2026-07-28 ([#1676](https://github.com/FS-GG/.github/issues/1676)) and
+> retired nothing, because §9's own precondition is not met on any receiver.** The order lives at
+> [`docs/coordination/skill-apparatus-retirement-order.md`](../coordination/skill-apparatus-retirement-order.md)
+> — recorded before the first retirement, as that item requires, rather than derived per repo as it goes.
+> Three findings from writing it change what the rest of this record's Consequences claim:
+>
+> 1. **The apparatus list below conflates duplication with distribution, and only the first retires.**
+>    Resolve-don't-copy removes one repo committing the same skill twice. It does not remove `.github`
+>    shipping skills to seven receivers through a versioned package — §4 settled that the multi-repo
+>    split is not revisited, so the kit still ships, pins still go stale, and bumps still have to land.
+>    Sorted by that line: `skill-union-assert` **retires** (with one object, byte-divergence is not
+>    detected-and-absent but structurally impossible, and `skill-view-parity.sh` checks that rather than
+>    assuming it); kit materialization and `coordination-coherence` **narrow** but keep their non-skill
+>    subjects; `kit-published-coherence`, the Renovate bump loop and **the kit-pin freshness sweep** are
+>    **unchanged**. The sweep still goes last, and phase 4's measurement is that it has no retirement
+>    trigger at all under this end state — *"is receiver R's pin current?"* is a distribution question
+>    this record does not answer.
+> 2. **No receiver has the replacement, and none ever has.** `scripts/skill-view` is not a `kit:` row
+>    (`registry/repos.yml:328-343`), so no published `FS.GG.Kit` — 0.14.0 included — delivers it. A
+>    receiver that was perfectly current would still fail §9's precondition. Separately, the materializer
+>    has only two states for a root, materialized or retired, and none for *"a declared runtime root that
+>    is generated locally"* — so a receiver's second root stays committed, and `scripts/skill-view`
+>    refuses to generate over a root git tracks. Both are filed by #1676; [#1693](https://github.com/FS-GG/.github/issues/1693)
+>    then gates the bump that would carry either.
+> 3. **[#1685](https://github.com/FS-GG/.github/issues/1685) does not block the order.** Measured on this
+>    repo's 13 skills: an **all-view** layout exits 2 in `skill-union-assert` and NOT COMPARABLE in the
+>    parity harness, but the **half-view** layout the order actually retires into — one tracked source,
+>    one generated view — is exit 0 and AGREE in both directions of source. #1685 binds the end state
+>    §1 reads most naturally, not the step §9 takes next.
+>
+> Consistent with §9 and with #1676's own AC 5, that item amended **nothing else**: ADR-0011 Decision 1,
+> ADR-0014 Decision 5 and ADR-0065's root set remain amended *in direction only* and stay in force,
+> because no mechanism was retired.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
   `kit-published-coherence`, `coordination-coherence`, `skill-union-assert`, the kit-pin freshness
   sweep, the kit Renovate bump loop — keeps running unchanged, and keeps being repaired, until §9's
-  order reaches it. This record is not authority to delete any of them.
+  order reaches it. This record is not authority to delete any of them. **Nor is that list a
+  prediction: phase 4 sorted it (§9's phase-4 note) and only `skill-union-assert` and the second
+  committed root actually retire — two narrow, three are untouched by this record entirely. Every one
+  of them is still running today.**
 - `skill-union-assert` needs **no code change** to run alongside the resolved layout: its existing
   `--roots` / `.agent-skill-roots` override — which ADR-0065 already provides for as a reviewed
   exception — accepts a two-root tree, measured green on phase 1's demonstration.
