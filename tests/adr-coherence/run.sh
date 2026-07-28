@@ -225,5 +225,96 @@ cat > "$L12/README.md" <<'EOF'
 EOF
 expect 0 "$L12" "" "a date, an issue number, a digest, a §ref and a non-claim clause are NOT targets"
 
+# ------------------------------------------- legs 13-17: EXECUTION-STATE AGREEMENT (.github#1703)
+# The defect: ADR-0067 §5 retired `.codex/skills`; #1636 executed it and amended ADR-0065 in the same
+# change; ADR-0011 and ADR-0014 — the other two records ADR-0067 amends — were not touched, and neither
+# were their index rows. Assertions 1-4 were ALL GREEN over that corpus. The link ADR-0011 <-> ADR-0067
+# is two-sided; assertion 2 is satisfied by a link that says nothing about whether the amendment has
+# HAPPENED. Meanwhile index row 130 said EXECUTED 2026-07-28 and row 109 said "D1 still governs today".
+#
+# `amender` builds that corpus in miniature: 0003 numbers its clauses `**§N — …**`, executes §5, and
+# amends 0001 and 0002. $1 chooses what 0001's note records. 0002 is always the record that got the
+# amendment right, so every leg carries a control that must stay clean.
+amender() { # $1=dir  $2=0001's note about ADR-0003
+  local dir="$1" note="$2"
+  mkdir -p "$dir"
+  record 0001 "Accepted" "- **Amended by:** [ADR-0003](0003-three.md) $note" > "$dir/0001-one.md"
+  record 0002 "Accepted" "- **Amended by:** [ADR-0003](0003-three.md) §5 — **EXECUTED 2026-07-28.**" \
+    > "$dir/0002-two.md"
+  cat > "$dir/0003-three.md" <<'EOF'
+# ADR-0003: the amender
+
+- **Status:** Accepted
+- **Date:** 2026-07-14
+- **Affects:** `.github`
+- **Amends:** [ADR-0001](0001-one.md) and [ADR-0002](0002-two.md)
+
+## Context
+c
+## Decision
+
+**§5 — the clause that executed.** body.
+
+> **EXECUTED 2026-07-28.** [ADR-0002](0002-two.md) was amended in the same change.
+
+**§6 — the clause that did not.** body.
+
+## Consequences
+e
+EOF
+  cat > "$dir/README.md" <<'EOF'
+| ADR | Title | Status |
+|---|---|---|
+| [0001](0001-one.md) | One | Accepted |
+| [0002](0002-two.md) | Two | Accepted |
+| [0003](0003-three.md) | Three | Accepted |
+
+## Supersession map
+
+| Amended | § | By | What changed |
+|---|---|---|---|
+| [0001](0001-one.md) | D1 | [0003](0003-three.md) §5 | **EXECUTED 2026-07-28.** |
+| [0002](0002-two.md) | D1 | [0003](0003-three.md) §5 | **EXECUTED 2026-07-28.** |
+EOF
+}
+
+# Leg 13 is the pair's control: 0001 records the execution, so the corpus is clean. Without it,
+# legs 14-17 would pass on a gate that reported a finding for every amendment in the corpus.
+L13="$TMP/exec-recorded"; amender "$L13" '§5 — **EXECUTED 2026-07-28.**'
+expect 0 "$L13" "" "an amended record that RECORDS the execution is clean"
+
+# Leg 14 is the .github#1703 defect itself, reduced: the amendment link is two-sided and the note is
+# present — assertion 2 is satisfied — and the note is SILENT about whether §5 happened.
+L14="$TMP/exec-unrecorded"; amender "$L14" '— direction only; this record stays IN FORCE.'
+expect_all 1 "$L14" "an amended record SILENT about an EXECUTED clause is a FINDING" \
+  "0001-one.md:1 — EXECUTION STATE UNRECORDED"
+
+# Leg 15: the escape hatch, and it must actually work — a record amended only by §6, which has NOT
+# executed, is not falsified by §5's execution and must not be dragged into a finding. This is the
+# leg that keeps assertion 5 from degenerating into "every amended record must say EXECUTED".
+L15="$TMP/exec-other-clause"; amender "$L15" '§6 — direction only; §6 is not landed.'
+expect 0 "$L15" "" "a record amended by a clause that has NOT executed is clean when it cites it"
+
+# Leg 16: the INDEX half. #1636 flipped row 130 and not row 109, so the table disagreed with itself
+# about one flip. Here 0001's RECORD is correct and only its row is stale — the reverse of leg 14,
+# because a gate that checked only the records would have called that corpus clean.
+L16="$TMP/exec-row-stale"; amender "$L16" '§5 — **EXECUTED 2026-07-28.**'
+sed -i 's#| \[0001\](0001-one.md) | D1 | \[0003\](0003-three.md) §5 | \*\*EXECUTED 2026-07-28.\*\* |#| [0001](0001-one.md) | D1 | [0003](0003-three.md) | **Direction only; D1 still governs today.** |#' \
+  "$L16/README.md"
+expect_all 1 "$L16" "an index row SILENT about an EXECUTED clause is a FINDING" \
+  "README.md:11 — EXECUTION STATE UNRECORDED"
+
+# Leg 17: THE MARKER IS A DECLARATION, NOT A WORD ENGLISH CAN SAY BY ACCIDENT.
+# Case-insensitive matching was the first implementation and it was measured wrong on the real
+# corpus: `already executed the reclassification` (ADR-0033's Affects line) and `the reciprocal
+# amendment markers when executed` (ADR-0056:83) both matched, and the gate reported six findings
+# against records that have executed nothing. Here ADR-0003 executes NOTHING and merely uses the
+# word — assertion 5 must find no amender at all, so the silent 0001 stays clean.
+L17="$TMP/lowercase-prose"; amender "$L17" '— direction only; this record stays IN FORCE.'
+sed -i 's#> \*\*EXECUTED 2026-07-28.\*\* \[ADR-0002\](0002-two.md) was amended in the same change.#> The reclassification was executed elsewhere and is recorded in the wrong place.#' \
+  "$L17/0003-three.md"
+sed -i 's#\*\*EXECUTED 2026-07-28.\*\*#executed, allegedly#g' "$L17/README.md" "$L17/0002-two.md"
+expect 0 "$L17" "" "lowercase 'executed' in prose is NOT an execution marker"
+
 printf '\nadr-coherence fixture: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

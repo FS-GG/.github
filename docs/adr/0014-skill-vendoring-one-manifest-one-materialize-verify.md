@@ -6,7 +6,7 @@
 - **Relationship:** **Extends and amends [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md).** ADR-0011's five *invariants* stand (byte-identical union in every root; single mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, not symlinks). ADR-0014 replaces its *implementation* — which fragmented into four hand-maintained mirror mechanisms and shipped **no content verification** — with one shared, content-addressed algorithm, and draws the missing product/dev-surface boundary. Where the two disagree on mechanism, ADR-0014 wins.
 - **Extended by:** [ADR-0017](0017-skill-registry-condition-aware-materialization.md) — §Decision 1's manifest entry `{ id, scope, sha256 }` is **no longer the whole schema**: ADR-0017 adds `materializes-when` + `supplied-by`, and the org catalog it introduces ([`registry/skills.yml`](../../registry/skills.yml)) carries `owner`, `source` and `mirrored` on top. See §Decision 1.
 - **Amended by:** [ADR-0065](0065-one-agent-skill-root-contract.md) — Decision 5's three-root default now applies to coordination-kit receivers as well as scaffolded products; ownership and lane-specific triggers remain separate.
-- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) (2026-07-27) — **direction only; this record stays IN FORCE.** Decision 5's declared root set becomes **two** in the end state (`.agents/skills` + `.claude/skills`), because `.agents/skills` is Codex's own second native root rather than a third runtime's. **Decision 6 is untouched and re-affirmed:** a *committed* symlink is still rejected, now on a measurement — under `core.symlinks=false` it checks out as a regular text file and both runtimes then exit 0 with zero skills and no diagnostic. See §Decision 5.
+- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). Decision 5's declared root set is now TWO: `.claude/skills`, `.agents/skills`.** `.codex/skills` is **retired** — it is Codex's other native root, not a third runtime's. The authoritative statement of the set, and of how a root leaves it, is [ADR-0065](0065-one-agent-skill-root-contract.md) §Decision + §Retiring a root; this note does not restate it. Decision 5's *design* is untouched and is what made the flip a one-line change: the roots are one declared constant and destinations are computed, so `FsggKitSkillRoots` moved from three entries to two and a `FsggKitRetiredSkillRoots` declaration carried the sweep. **Decision 6 is untouched and re-affirmed:** a *committed* symlink is still rejected, now on a measurement — under `core.symlinks=false` it checks out as a regular text file and both runtimes then exit 0 with zero skills and no diagnostic. See §Decision 5. Brought current by [#1703](https://github.com/FS-GG/.github/issues/1703): [#1690](https://github.com/FS-GG/.github/pull/1690) landed the flip and amended ADR-0065 only, so this field said *"direction only"* for a day after the direction had been taken.
 
 ## Context
 
@@ -161,8 +161,21 @@ one shared algorithm across every lane.**
    > **2026-07-27 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5):**
    > the constant's *value* is now decided to become **two** roots in the end state — `.agents/skills`
    > and `.claude/skills`. This clause's own design is what makes that a one-line change rather than
-   > an N-place edit, and **the constant is unchanged today**: the flip carries a package-publication
-   > and receiver-re-materialization tail and lands with the mechanism, not before it (ADR-0067 §9).
+   > an N-place edit.
+   >
+   > **AMENDED 2026-07-28 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5,
+   > EXECUTED by [#1636](https://github.com/FS-GG/.github/issues/1636); this note corrected by
+   > [#1703](https://github.com/FS-GG/.github/issues/1703)).** The sentence deleted from the note above
+   > read *"and the constant is unchanged today: the flip carries a package-publication and
+   > receiver-re-materialization tail and lands with the mechanism, not before it (ADR-0067 §9)"*. It
+   > was written 2026-07-27 and falsified 2026-07-28. The constant's value is now
+   > **two**, `.claude/skills` and `.agents/skills`, and the parenthetical *"(currently `.claude`,
+   > `.codex`, `.agents`)"* above reads as the three-root era it was written in. The tail the note
+   > predicted is what the flip actually cost: the constant alone was not enough, because dropping a
+   > root from the declared set makes the materializer stop walking it, so a **retired-root**
+   > declaration was added beside it (`FsggKitRetiredSkillRoots`, `FS.GG.Kit` 0.15.0) to sweep the
+   > receivers. That is a second constant, not a repeal of this clause: destinations are still
+   > computed, never hand-written per source.
 
 6. **Invariants retained from ADR-0011.** Single mirror authority per lane; providers write
    only `.agents/skills/` in the orchestrated lane; strict `isSddTree`; materialized copies

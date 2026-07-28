@@ -47,12 +47,61 @@ WHAT IT ASSERTS
   3. NO ORPHANS, NO GHOSTS — every file has an index row, every row has a file (or is an explicit
      `~~NNNN~~` tombstone: withdrawn numbers are retired, not reused).
   4. SHAPE — every record carries Status, Date, Affects, Context, Decision, Consequences.
+  5. EXECUTION-STATE AGREEMENT — if an amending ADR marks one of its own `**§N — …**` clauses
+     `EXECUTED`, then every record it amends, and every index row for that amendment, must say so
+     too: carry an `EXECUTED` marker naming the amender, or cite a §N of the amender that has NOT
+     executed. Silence is a finding. (.github#1703 — see below.)
+
+WHAT ASSERTION 5 IS FOR, AND WHY IT IS SHAPED AS A REQUIRED MARKER RATHER THAN A FORBIDDEN PHRASE
+  ADR-0067 §5 retired `.codex/skills`. `.github#1636` executed it on 2026-07-28 and amended ADR-0065
+  in the same change — its header, its §Decision, and index rows 88/114/130. It did NOT touch ADR-0011
+  or ADR-0014, the other two records ADR-0067 amends, and it did not touch their index rows. For a day
+  the corpus said both things at once: row 130 said EXECUTED 2026-07-28, and row 109 said *"D1 still
+  governs today"*. The reader who opened ADR-0011 to ask *"how many roots does a materializer write?"*
+  was told **three**, by a record that told them it was in force.
+
+  Assertions 1-4 were all green over that corpus. The amendment link ADR-0011 <-> ADR-0067 is present
+  and two-sided; assertion 2 is satisfied by a link that says nothing about whether the amendment has
+  HAPPENED. That is the .github#266 shape — a check that passes because it never looked at the thing
+  that was wrong — inside the gate written to close it, for the second time (.github#1637 was the
+  first).
+
+  The obvious check is the one this gate does NOT implement: forbid *"still governs today"* / *"direction
+  only"* beside an EXECUTED note. It was considered and rejected, because it gates the TENSE of a
+  hand-written English sentence, and this corpus deliberately QUOTES its own falsified sentences as
+  history — ADR-0011's amendment-history line quotes *"its three-root union is still the rule today"*
+  verbatim, on purpose, and `.github#1706` was filed to stop workers "correcting" dated historical
+  measurements into the present tense. A gate that reds on a record for recording its own history
+  teaches workers to stop recording it, and it still misses every author who writes "carried out" where
+  the vocabulary expected "EXECUTED".
+
+  So the check is inverted into a POSITIVE one, and every input is DERIVED rather than restated
+  (ADR-0058):
+
+    * WHICH CLAUSES EXECUTED is read from the amending record's OWN `**§N — …**` sections — the one
+      authoritative home of that fact. Nothing else declares it.
+    * WHICH RECORDS ARE AMENDED is the amendment graph assertion 2 already computes.
+    * The amended record must then carry the `EXECUTED` token in a note naming the amender. The token
+      is the corpus's existing convention (ADR-0065:8, ADR-0067:63, README row 130), not a new field.
+
+  A record legitimately amended only by a clause that has NOT executed says so by citing that clause:
+  `§6` is untouched by `§5`'s execution, and a note that cites `§6` is clean. That escape hatch is
+  also the fix for the smaller defect underneath this one — more than half of the corpus's amendment
+  notes never named WHICH clause of the amender they were about, so a reader could not tell whether an
+  execution falsified them. Under assertion 5 they have to.
 
 WHAT IT DOES NOT ASSERT
   Not whether a decision is GOOD, not whether it shipped, not whether the prose is current. A
   record can be coherent and wrong. This gate only proves the corpus does not CONTRADICT ITSELF —
   which is the class of defect no reviewer catches, because catching it means reading 37 files at
   once and diffing them against a table.
+
+  Assertion 5 is not an exception to that. It asserts that an execution recorded in ONE place is
+  recorded in the OTHERS; it does not read the repo to find out whether anything actually shipped, and
+  a corpus that unanimously and wrongly says EXECUTED is coherent by this gate. Nor does it judge the
+  PROSE around the marker: ADR-0067:139 asserted, an hour after the flip, that *"ADR-0065's root set
+  remain[s] amended in direction only"* while ADR-0065's own header said EXECUTED. Assertion 5 does not
+  see that sentence, and closing that gap would mean gating tense — see above.
 
 EXIT CODES (the contract; nothing greps this script's prose)
   0  coherent
@@ -134,6 +183,112 @@ def declared_targets(text: str):
             clause = clause[: stop.start()]
         for ref in REF_RE.finditer(clause):
             yield ref.group(1) or ref.group(2)
+
+# ---------------------------------------------------------------- assertion 5: execution state
+#
+# An amending record declares its own clauses as `**§5 — The end state has TWO runtime roots…**`.
+# That heading is the section key, and the EXECUTED marker inside the section is the fact.
+SECTION_HEAD_RE = re.compile(r"^\*\*§(\d+)\s*[—-]", re.M)
+
+# The corpus's execution token, and it is CASE-SENSITIVE: `**EXECUTED 2026-07-28 ([#1636](…)).**`.
+# All three sites that record an execution today write it in caps (ADR-0065:8, ADR-0067:63,
+# README row 130) — it is a declaration, in the same way `**Status:** Accepted` is a declaration
+# drawn from a fixed vocabulary this gate already requires verbatim.
+#
+# Case-insensitive was tried first and is WRONG, measured on this corpus: it matched
+# `already executed the reclassification` in ADR-0033's Affects line and `the reciprocal amendment
+# markers when executed` in ADR-0056:83 — ordinary prose, in records that have executed nothing —
+# and reported three findings and three index findings against records that are fine. A marker that
+# ordinary English can utter by accident is not a marker.
+#
+# The trade is named rather than hidden: an author who writes `Executed 2026-07-28` in a note gets
+# no credit for it and the gate reports the record as silent. That is a FALSE ALARM, which this
+# corpus can afford — the failure mode is a worker being told to capitalise a word. The
+# case-insensitive alternative's failure mode was the reverse.
+EXECUTED_RE = re.compile(r"\bEXECUTED\b")
+
+# A citation of the AMENDER's clause, inside a note: `§5`, `§6`. `§Retiring a root` and `§Decision`
+# are section names, not numbers, and are deliberately not citations for this purpose — a numbered
+# clause is what the amender's own headings key on.
+SECTION_CITE_RE = re.compile(r"§(\d+)\b")
+
+
+def notes(text: str):
+    """Split a record into NOTES: the unit an amendment marker is written in.
+
+    A note is either one ordinary line (a `- **Amended by:** …` header field, an index row) or one
+    maximal run of blockquote lines (`   > **AMENDED 2026-07-28 …**`, which wraps across four or five
+    of them). Splitting per-LINE instead would tear a blockquote note in half and lose the `§5` on
+    its first line from the `EXECUTED` on its third.
+
+    Yields (line_number, note_text).
+    """
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        if re.match(r"^\s*>", lines[i]):
+            start = i
+            while i < len(lines) and re.match(r"^\s*>", lines[i]):
+                i += 1
+            yield start + 1, "\n".join(lines[start:i])
+        else:
+            yield i + 1, lines[i]
+            i += 1
+
+
+def refs(text: str):
+    """Every ADR number named anywhere in `text` (not clause-scoped — a note is already the scope)."""
+    return {m.group(1) or m.group(2) for m in REF_RE.finditer(text)}
+
+
+def executed_sections(num: str, text: str) -> set[str]:
+    """The clauses of ADR-`num` that ITS OWN body marks EXECUTED.
+
+    Two shapes, and the difference is what anchors the marker to this record rather than another:
+
+      * The record numbers its clauses `**§N — …**` (ADR-0067). The heading IS the anchor, so any
+        EXECUTED marker inside a section belongs to that section — even though ADR-0067 §5's note
+        also names ADR-0065 (*"ADR-0065 was amended in the same change"*). Text BEFORE the first
+        heading is deliberately ignored: that is the header block, and an `EXECUTED` marker there
+        is in an `- **Amended by:**` field, which records what SOMEONE ELSE executed. The record
+        that executed it will be found as its own amender.
+      * The record numbers nothing. Then the only unambiguous self-execution is a note that names
+        no OTHER record — because the overwhelmingly common note that says EXECUTED is the one an
+        AMENDED record carries about its amender (`- **Amended by:** [ADR-0067] §5 — EXECUTED …`,
+        ADR-0065:8). Counting that as ADR-0065 executing would make every amended record an amender
+        and cascade a demand for markers nobody owes. Reported as `*`, which no §-citation dodges.
+    """
+    heads = list(SECTION_HEAD_RE.finditer(text))
+    if not heads:
+        for _, note in notes(text):
+            if EXECUTED_RE.search(note) and not (refs(note) - {num}):
+                return {"*"}
+        return set()
+    done = set()
+    for n, head in enumerate(heads):
+        end = heads[n + 1].start() if n + 1 < len(heads) else len(text)
+        if EXECUTED_RE.search(text[head.end(): end]):
+            done.add(head.group(1))
+    return done
+
+
+def acknowledges_execution(text: str, amender: str, done: set[str]) -> bool:
+    """Does `text` record the execution state of `amender`'s executed clauses?
+
+    Clean if ANY note naming the amender either carries the EXECUTED token, or cites a numbered
+    clause of the amender that is NOT in `done` (an amendment by an unexecuted clause is untouched
+    by the execution, and saying WHICH clause is how a record proves that rather than asserting it).
+    """
+    for _, note in notes(text):
+        if amender not in refs(note):
+            continue
+        if EXECUTED_RE.search(note):
+            return True
+        cited = {m.group(1) for m in SECTION_CITE_RE.finditer(note)}
+        if cited and not (cited & done):
+            return True
+    return False
+
 
 # The four statuses the corpus uses. Anything else is a typo, and a typo'd status is a status
 # nobody can gate on.
@@ -274,6 +429,57 @@ def main() -> int:
                 f"docs/adr/{Path([p for p in files if p.name.startswith(a)][0]).name}:1 — "
                 f"ONE-SIDED LINK: ADR-{b} declares an amendment/supersession relation with "
                 f"ADR-{a}, and ADR-{a} never mentions ADR-{b}. Add the marker to ADR-{a}."
+            )
+
+    # (5) EXECUTION-STATE AGREEMENT
+    #
+    # The amender's own numbered clauses say WHICH parts have executed; the amendment graph built for
+    # assertion 2 says WHO must know. Both are derived — nothing here reads a field a human maintains
+    # for this check's benefit (ADR-0058).
+    executed = {num: executed_sections(num, text) for num, text in bodies.items()}
+
+    for a, b in sorted(declared):
+        for amender, amended in ((a, b), (b, a)):
+            done = executed.get(amender)
+            if not done or amended not in bodies:
+                continue
+            if acknowledges_execution(bodies[amended], amender, done):
+                continue
+            clauses = "the record" if done == {"*"} else "§" + ", §".join(sorted(done))
+            findings.append(
+                f"docs/adr/{[p for p in files if p.name.startswith(amended)][0].name}:1 — "
+                f"EXECUTION STATE UNRECORDED: ADR-{amender} marks {clauses} EXECUTED in its own "
+                f"body, and ADR-{amended} — which it amends — records no execution state for it. "
+                f"The reader who opens ADR-{amended} is told an amendment is pending that has "
+                f"already happened. Either carry the `EXECUTED` marker in the note that names "
+                f"ADR-{amender} (ADR-0065:8 is the house form), or, if this record is amended only "
+                f"by a clause that has NOT executed, cite that clause: a note naming `§N` for an "
+                f"unexecuted N is clean. (.github#1703)"
+            )
+
+    # …and the index rows say the same thing, or they are the half of the corpus that lies. Row 130
+    # was flipped to EXECUTED by #1636 and row 109 was not, so the table disagreed WITH ITSELF about
+    # whether one flip had happened. A supersession row is `| amended | § | amender | what changed |`.
+    for n, line in enumerate(index_text.splitlines(), start=1):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else []
+        if len(cells) < 4:
+            continue
+        subject = refs(cells[0])
+        if len(subject) != 1:
+            continue
+        amended = subject.pop()
+        for amender in sorted(refs(cells[2])):
+            done = executed.get(amender)
+            if not done or amender == amended:
+                continue
+            if acknowledges_execution(line, amender, done):
+                continue
+            clauses = "the record" if done == {"*"} else "§" + ", §".join(sorted(done))
+            findings.append(
+                f"docs/adr/README.md:{n} — EXECUTION STATE UNRECORDED: this row says ADR-{amender} "
+                f"amends ADR-{amended}, ADR-{amender} marks {clauses} EXECUTED, and the row does "
+                f"not. An index that flips one row of a flip and not the others disagrees with "
+                f"itself about whether the flip happened. (.github#1703)"
             )
 
     if findings:

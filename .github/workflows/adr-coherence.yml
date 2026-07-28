@@ -76,7 +76,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Assert the index agrees with the records, and every amendment has two ends
+      - name: Assert the index agrees with the records, every amendment has two ends, and every execution is recorded at both
         id: check
         run: |
           rc=0
@@ -100,7 +100,7 @@ jobs:
           {
             echo "### adr-coherence: the ADR corpus contradicts itself"
             echo
-            echo 'Two shapes of finding, and the fix differs:'
+            echo 'Three shapes of finding, and the fix differs:'
             echo
             echo '**A status DISAGREES** between a record and its row in `docs/adr/README.md`.'
             echo 'Neither end is authoritative — they must simply agree. Decide which is true and'
@@ -117,9 +117,20 @@ jobs:
             echo 'ADR-0015 sat for twelve days telling readers to follow a procedure ADR-0037 had'
             echo 'already proved **cannot exist**.'
             echo
+            echo '**EXECUTION STATE UNRECORDED** — an amending ADR marks one of its own `**§N — …**`'
+            echo 'clauses `EXECUTED`, and a record it amends (or that amendment'"'"'s index row) does not'
+            echo 'say so. Add the literal uppercase `EXECUTED` marker to the note naming the amender —'
+            echo '`docs/adr/0065-*.md:8` is the house form — or, if this record is amended only by a'
+            echo 'clause that has **not** executed, cite that clause: a note naming `§N` for an'
+            echo 'unexecuted `N` is clean. (`.github#1703`: ADR-0067 §5 retired `.codex/skills`,'
+            echo '`#1636` amended ADR-0065 and index rows 88/114/130 in the same change, and left'
+            echo 'ADR-0011, ADR-0014 and rows 109/115 saying the three-root union governed **today**.'
+            echo 'Every other assertion in this gate was green over that corpus — the amendment links'
+            echo 'were two-sided, and a link says nothing about whether the amendment has happened.)'
+            echo
             echo 'See the job log for the file, the line, and which end is missing.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=adr-coherence: the corpus contradicts itself::A status disagrees, or an amendment has only one end. See the job log."
+          echo "::error title=adr-coherence: the corpus contradicts itself::A status disagrees, an amendment has only one end, or an execution is recorded in one place and not the others. See the job log."
           exit 1
 
       - name: 'NO VERDICT (permanent): the corpus could not be read'
