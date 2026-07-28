@@ -586,6 +586,45 @@
     </Task>
   </UsingTask>
 
+  <!-- WHAT A MATERIALIZE DOES TO A DIVERGENT RECEIVER, MEASURED BY MUTATION RATHER THAN READ OFF THIS
+       FILE (.github#1834, 2026-07-28, on a throwaway clone of FS.GG.SDD at its own pin, FS.GG.Kit
+       0.18.0). This table had been READ out of the code three times and restated; each row below was
+       reproduced by breaking a real receiver tree and running both mechanisms. Anchors are file
+       sha256 on disk — never this task's own log — and every leg carries an unmutated control plus a
+       refutation leg proving the gate can still red (#1808's four-point specification, #266).
+
+         divergence                              next materialize      `kit / coordination-kit`
+         ..........................................................................................
+         a materialized file hand-edited         OVERWRITTEN (1 wrtn)  RED  `DRIFT (differs): <path>`
+         a stray file in a managed skill dir     DELETED               RED  `DRIFT (extra): <path>`
+         the kit drops a skill/config ROW        ORPHANED, untouched   GREEN, and still green when
+                                                                      the orphan is then CORRUPTED
+
+       The third row is the one that matters and it was reproduced TWICE, once without any synthetic
+       input: 0.17.0 -> 0.18.0 really did drop `.config/dotnet-tools.json` (#1615/ADR-0068), the graded
+       set went 28 -> 27, and the file it stopped declaring was neither deleted nor restored nor graded
+       thereafter. The skill-row half needed a package that never shipped, so a local 0.18.0 with one
+       skill's five rows removed was built for it: the whole `.claude/skills/<id>/` directory survived,
+       the closed-transport-unit sweep logged ZERO removals because it only walks directories the
+       manifest still maps into, and the gate stayed green on a corrupted file inside it.
+
+       SO THE TWO CLASSES THE GATE CATCHES ARE EXACTLY THE TWO A MATERIALIZE WOULD HAVE ERASED, and the
+       one it misses is the one nothing erases. That is not a defect in the gate — `coordination-sync`
+       in its pinned check mode grades DECLARED files against the pin, and an orphan is by
+       construction no longer declared. It is the reason `RetiredSkillRoots` exists, and the reason a
+       dropped ROW (as opposed to a dropped ROOT, which the retirement sweep below does complete) has
+       no automatic remedy at all.
+
+       AND "AT THE NEXT MATERIALIZE" IS NOT "SOON", WHICH IS THE HALF A READER GUESSES WRONG. The
+       receivers' `kit-materialize.yml` callers trigger on `pull_request` ALONE — no `workflow_dispatch`
+       in any of the seven — and the materialize job is further gated to `renovate/*` same-repo head
+       refs. Across 842 runs in seven receivers, ZERO ran on `main`. A divergence committed to `main` is
+       therefore never healed on `main`; it is healed only when a Renovate branch carrying it is
+       materialized and that pull request merges. Measured interval between merged `renovate/*` pull
+       requests: mean 27-84h, p90 70-265h, max 167-312h (7-13 DAYS), and two receivers had too few to
+       measure at all. The detector runs 9-69 times a DAY in the same repos. Do not describe this
+       materializer as self-healing without that ratio attached. -->
+
   <!-- Public entry point. Invoke explicitly (`dotnet build -t:FsggKitMaterialize`) or let it run as part
        of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
   <Target Name="FsggKitMaterialize">
