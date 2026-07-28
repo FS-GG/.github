@@ -390,20 +390,12 @@ that is where you are standing, this class is report-only until then — say so 
 for the raw call, which the gate will refuse anyway and which is unmetered for a reason.
 
 **`add` is idempotent, and it is safe to `--apply` — but not because adding twice is harmless.**
-Adding an already-boarded issue **creates no twin**: it prints the existing item id and exits 0
-(`addProjectV2ItemById` is idempotent server-side — measured on the live board in `#870`, not
-inferred). If you have read this skill before, note the correction: it used to say a second add
-**creates a duplicate**. That was `#421`'s *counterfactual* — "a duplicate would have been created
-had I followed that remediation" — hardening into an assertion as it was copied inward, and it does
-not reproduce (`#871`).
-
-**It is no longer a pure no-op, and that is deliberate (`#1823`).** A re-add of a row whose `Status`
-is **empty** now writes `Status = Backlog` — one field mutation, and the whole point: fourteen rows
-were filed with no `Status` in a single day, every one found by accident, and a row with no `Status`
-is invisible to every scheduler. A row that already **has** a column is still untouched, because
-`add` reads the column before it decides — so a bulk `--apply` cannot walk an `In progress` row back
-to `Backlog`. Two consequences for this pass: boarding an `OFF-BOARD-ISSUE` now leaves it visible to
-triage rather than invisible, and a re-add is no longer free of writes when the column is empty.
+Adding an already-boarded issue is a **no-op**: it prints the existing item id and exits 0, with no
+twin created (`addProjectV2ItemById` is idempotent server-side — measured on the live board in
+`#870`, not inferred). If you have read this skill before, note the correction: it used to say a
+second add **creates a duplicate**. That was `#421`'s *counterfactual* — "a duplicate would have been
+created had I followed that remediation" — hardening into an assertion as it was copied inward, and
+it does not reproduce (`#871`).
 
 What `#421` is actually about survives intact, and it is the part that matters: **the only thing
 licensing the mutation is a successful read that found nothing.** An error is a read that did not
