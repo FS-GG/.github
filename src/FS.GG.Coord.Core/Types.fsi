@@ -277,6 +277,16 @@ module Types =
           ItemPr: int option
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
           /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
+          ///
+          /// TWO READERS, NOT ONE (.github#1644). `Schedulability` step 3b refuses to HAND the item out, and
+          /// `Chore`'s `BLOCKER-CLEARED` refuses to PROMOTE it — a scheduler that withholds a row while a
+          /// mechanical chore writes `Ready` onto it is one mechanism arguing with the other, and the write
+          /// wins because it is what the board then shows everybody.
+          ///
+          /// `None` IS AMBIGUOUS AND ITS READERS MUST TREAT IT SO. It means "declares no sentinel" and "the
+          /// body was never read" alike, because this option has nowhere to put the second. The
+          /// disambiguating fact is `TouchSet.Unreadable` on the same item, off the same body — which is why
+          /// the chore gate consults it and `Client.enrichBoardFacts` consults it for `Class`.
           HumanBlock: HumanBlock option
           /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
           /// producer's manifest (ADR-0050 call-site B / .github#1203). This is a FACT on the item, the

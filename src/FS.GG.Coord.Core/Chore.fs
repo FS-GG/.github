@@ -85,6 +85,53 @@ module Chore =
         | Some(RegistryPredicate.Contradicts _)
         | Some(RegistryPredicate.Unknown _) -> false
 
+    /// THE HUMAN-PARK GATE — ADR-0045's sentinel, respected by the one chore that would overwrite it
+    /// (.github#1644).
+    ///
+    /// `BLOCKER-CLEARED` clears an item `Blocked → Ready` when its recorded blockers resolve. An item whose
+    /// body carries `Blocked on: human/decision` (or `human/action`) is unstartable until a HUMAN acts,
+    /// whatever its concrete edges say — `Schedulability` step 3b refuses it outright, and ADR-0045's whole
+    /// consequence is that such an item is "refused by construction". Promoting it writes the board a column
+    /// that CONTRADICTS the scheduler, and the promotion is not self-correcting: `Ready` is what advertises
+    /// the row to `ready`/`batch --include-backlog` and to every human reading the board, `lint`'s
+    /// `BLOCKED-NO-REASON` only watches a `Blocked` row so it stops watching the park, and
+    /// `STATUS-NOT-BLOCKED` cannot push the row back because its blockers are all resolved. One write, and
+    /// the parking record is a body line nothing on the board agrees with any more.
+    ///
+    /// `true` — the flip may proceed — in exactly one case: the item declares NO sentinel **and we read the
+    /// body that would have carried one**.
+    ///
+    /// THE SECOND CLAUSE IS THE FAIL-CLOSED, AND IT IS NOT DECORATION (#266). `HumanBlock = None` means BOTH
+    /// "the body declares no sentinel" and "nobody read the body": `HumanBlock option` has nowhere to put
+    /// "I could not look", and `Snapshot.parse` renders an unreadable body as `None` for exactly that reason.
+    /// Gating on `HumanBlock.IsSome` alone would therefore promote a parked row whose body read FAILED —
+    /// the fail-open dressed as the fix. The engine already records the missing fact one field over:
+    /// `TouchSet.Unreadable` IS "we did not read the body" (`Types.fsi`), lifted off the SAME body by the
+    /// SAME parse on the SAME terms, so this asks it rather than adding a second flag that could disagree
+    /// with it. `Client.enrichBoardFacts` solved the identical collapse for `Class` from the identical
+    /// source. And the gate is not a no-op: `Scan` reads every OPEN candidate's body unconditionally, so a
+    /// failed read reaches here as `Unreadable`, not as a missing field.
+    ///
+    /// THIS IS THE ONE RULE THAT READS `TouchSet`, and it reads it as a BODY-READ RECEIPT, never as a
+    /// touch-set: no path token is inspected and no declaration is judged. The match is TOTAL so a sixth
+    /// `TouchSet` case must be classified here rather than defaulting to "the body was read" — which is the
+    /// fail-open direction, and the only direction this function exists to make unwritable.
+    ///
+    /// **#620-SAFE, and that is the half the fixture pair pins.** An item with no parking record over a body
+    /// we DID read is untouched: `None` + a readable touch-set flips exactly as it did before. That is the
+    /// entire population #620's remedy was built for, and this narrows the flip condition rather than
+    /// adding a second way to trigger it.
+    let private humanBlockAllowsFlip (item: Item) : bool =
+        match item.HumanBlock with
+        | Some _ -> false
+        | None ->
+            match item.TouchSet with
+            | Unreadable _ -> false
+            | Undeclared
+            | DeclaredNone
+            | DeclaredChore
+            | Declared _ -> true
+
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
         member _.Subject = subject
@@ -245,11 +292,20 @@ module Chore =
               // closing can no longer fake readiness for an item whose real acceptance is a registry fact
               // (FS.GG.Rendering#923). An item that declares no predicate (`None`) is ungated and flips as
               // today (ADR-0050 decision 5).
+              //
+              // ...AND the item must not be PARKED ON A HUMAN — .github#1644. `Blocked on: human/decision`
+              // is ADR-0045's sentinel for "a person must choose before this is startable", and this is the
+              // one mechanical rule that could overwrite it: promoting such a row to `Ready` converts "a
+              // human must decide this" into "a worker may pick this up". `humanBlockAllowsFlip` also fails
+              // closed on a body we did not READ, because `HumanBlock = None` cannot tell that apart from
+              // "declares no sentinel". The gate order mirrors `Schedulability`'s: concrete blockers, then
+              // the human park (step 3b), then the machine predicate.
               if
                   item.State = Open
                   && item.Status = Blocked
                   && not item.Blockers.IsEmpty
                   && item.Blockers |> List.forall Blockers.isResolved
+                  && humanBlockAllowsFlip item
                   && predicateAllowsFlip item
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)

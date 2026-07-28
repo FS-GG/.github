@@ -65,6 +65,39 @@ The engine owns both sentinels in the typed core: `HumanBlock` (`Types.fs`, pars
 a `DeclaredChore` `TouchSet` case distinct from `DeclaredNone`, and an `AwaitingHuman` `Schedulability`
 verdict checked after the concrete blockers and before the touch-set.
 
+> **Amendment (2026-07-28, [.github#1644](https://github.com/FS-GG/.github/issues/1644)) — a park is
+> respected by the WRITERS too, not only by the scheduler; and a DEFERRAL is a park.**
+>
+> Two things this record left implicit, each of which cost a lane.
+>
+> **1. `BLOCKER-CLEARED` must not promote a parked row.** The decision above says the scheduler refuses a
+> human-parked item. It says nothing about the mechanical chores that WRITE the column, and one of them
+> contradicted it: `BLOCKER-CLEARED` (`Blocked → Ready` when every recorded blocker resolves) did not
+> consult `Item.HumanBlock`, so a row carrying `Blocked on: human/decision` **and** a concrete blocker that
+> later closed was promoted to `Ready`. A scheduler that withholds a row while a chore advertises it is one
+> mechanism arguing with the other, and the write wins — it is what the board then shows every human and
+> every other reader. The promotion does not heal, either: with all blockers resolved `STATUS-NOT-BLOCKED`
+> cannot push the row back, and `BLOCKED-NO-REASON` only watches a `Blocked` row, so the park loses its
+> lint cover at the same moment. **The rule now consults the sentinel and fails CLOSED on a body it did not
+> read** — `HumanBlock = None` cannot tell "declares no sentinel" from "nobody looked", and
+> `TouchSet.Unreadable` is the fact that tells them apart. `#620`'s promotion is untouched for every item
+> that carries no park.
+>
+> The general statement, which is the part worth carrying forward: **no mechanical remedy may overwrite a
+> sentinel this ADR made machine-readable.** A rule added later that writes a scheduling column owes the
+> same consultation.
+>
+> **2. A DEFERRAL IS A HUMAN-PARK, and must be filed as one.** [#1613](https://github.com/FS-GG/.github/issues/1613)
+> was parked twice in prose — a board driver's deferral comment and a worker's "**Set to `Backlog`, not
+> `Ready`**" — and neither wrote the sentinel. The mechanism above existed and would have worked: `take`
+> would have refused the row at step 3b with *"a human must DECIDE before this can start"*, and the whole
+> lane [#1644](https://github.com/FS-GG/.github/issues/1644) was filed about would never have been spent.
+> It was not a missing mechanism; it was a mechanism nobody reached for, because this record's Decision
+> names *"a decision item"* and *"a scope grant"* and never names the case a driver actually meets. So it
+> is named now: **when a driver or a worker decides "not now, a person must settle this first", that is
+> `Blocked on: human/decision` in the body — a comment is not a park.** A hand-written column is not one
+> either: nothing verifies it, and on #1613 neither hand-written column was ever on the board.
+
 ## Consequences
 
 - A decision item is now **refused by construction**: it declares `Blocked on: human/decision` and keeps
@@ -81,6 +114,14 @@ verdict checked after the concrete blockers and before the touch-set.
   `Paths: any` opts into the new schedulable-chore behaviour.
 - A concrete `Blocked by #n` still outranks the sentinel in the scheduler's verdict, because it is the
   more actionable sentence; the sentinel governs only once the concrete blockers are clear.
+- **The sentinel now also holds `BLOCKER-CLEARED` off the row (2026-07-28,
+  [#1644](https://github.com/FS-GG/.github/issues/1644)) — see the amendment in *Decision*.** A parked item
+  whose concrete blocker closes therefore stays `Blocked` rather than being promoted to `Ready`. That is
+  the intended end state: `Blocked` is where a row a person must settle belongs, and the sentinel in its
+  body is what says which kind of settling. It does cost one sentence of precision — `Schedulability`
+  checks the column (step 2) before the sentinel (step 3b), so such a row is refused with *"Status is
+  Blocked"* rather than *"a human must DECIDE"*. That ordering is this record's and is unchanged; the
+  reporting gap is filed as its own item rather than settled by re-ordering the scheduler here.
 
 ## Alternatives considered
 
