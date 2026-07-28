@@ -81,6 +81,46 @@ and ADR-0014 Decision 6's rejection of committed symlinks therefore **stands and
 now on a measurement rather than an argument. Phase 1's own demonstration used a committed symlink
 because it needed no new tooling; that form is Linux-only and is **not** the end state.
 
+> **§6.1 — THE RULE THAT FOLLOWS FROM THE VIEW-ROOT DEFINITION, STATED ONCE.** *A view root is
+> untracked and git-ignored by construction, so it is **absent in every fresh checkout**. Therefore
+> **any gate that runs over a receiver's own checkout cannot see a generated view root**, and a gate
+> whose subject is one must generate it **in a file the receiver owns** — its receiver project —
+> **never in a workflow step**.*
+>
+> The workflow-step half is not a style preference and it is the part that keeps being missed: a
+> `uses:` of a reusable workflow **checks the caller out and runs there**, and a caller cannot add a
+> step to a callee. So a receiver that puts the generate in a workflow has covered only the trees
+> that run *that* workflow, and has not covered the one it does not own the workflow for.
+>
+> **This has now been rediscovered three times in one day, by three workers who each paid to find
+> it**, which is why it is written here beside the definition rather than a fourth time somewhere
+> else:
+>
+> 1. [`#1715`](https://github.com/FS-GG/.github/issues/1715) — blocker **B5**. `skill-union-assert.yml`
+>    is a `uses:` whose subject is the caller's roots; on a retired tree a view root is simply absent
+>    in that checkout — measured **exit 2**, exit 0 once the view exists. Resolved by retiring the
+>    caller (shape (b)).
+> 2. [`FS.GG.SDD#771`](https://github.com/FS-GG/FS.GG.SDD/issues/771) — the same absence one artifact
+>    over. `skill-manifest.json` lived only in the root being retired, so the view did not carry it and
+>    the file was **gone with a clean `git status --porcelain`**. Its readers moved to the tracked root.
+> 3. [`#1759`](https://github.com/FS-GG/.github/issues/1759) — `kit-materialize.yml`, a `uses:` that
+>    runs `FsggKitMaterialize` over the caller's checkout, where `FsggKitCheckSkillView` asserts the
+>    view root. Filed as a suspected red on all retired receivers; **measured and REFUTED** on a bare
+>    clone of all seven on 2026-07-28 (`tern-f6ba`) — every one `Build succeeded`, because every one
+>    carries its own `Fsgg<Repo>GenerateSkillView` with `BeforeTargets="FsggKitCheckSkillView"`. The
+>    failure mode is nonetheless real and was **mutation-proven**: delete that one target from a copy
+>    of a retired tree and the same command reds with *"view skill root '.agents/skills' is ABSENT or a
+>    DANGLING link"*. So instance 3 is evidence for the rule **and** evidence that the fleet already
+>    obeys it.
+>
+> **What holds the third instance at zero is seven independent hand-copies, not an invariant** — which
+> is [`#1710`](https://github.com/FS-GG/.github/issues/1710) piece 1, still open and still the right
+> fix (establish the precondition in `FS.GG.Kit`, so there is nothing to copy). Until it lands, the
+> absence is **reported** rather than discovered: `repos-audit.sh`'s view-root generate sweep grades
+> every `coordination-kit` package receiver's receiver project daily and reds when one declares
+> `FsggKitViewSkillRoots` with nothing generating it (`#1759`). That sweep is also the regression guard
+> afterwards, so it does not retire with `#1710`.
+
 **§7 — Do not build a resolver.** Every "point the runtime elsewhere" mechanism works and every one
 costs something: session-only scope (`--plugin-dir`), relocating an entire config home including
 auth (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), or a per-machine bootstrap (the local directory
