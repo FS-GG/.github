@@ -144,8 +144,24 @@ expect_fail "config kit row without a dest"   1 "no 'dest'"          "$(variant 
 expect_fail "config dest is absolute"         1 "receiver-RELATIVE"  "$(variant cfgabsdest  's/kind: client, source: scripts\/democlient }/kind: config, source: scripts\/democlient, dest: \/etc\/x }/')"
 expect_fail "config dest escapes the root"    1 "escape"             "$(variant cfgdotdot   's/kind: client, source: scripts\/democlient }/kind: config, source: scripts\/democlient, dest: ..\/x }/')"
 expect_fail "non-config row carrying a dest"  1 "only 'config'"      "$(variant clientdest  's/kind: client, source: scripts\/democlient }/kind: client, source: scripts\/democlient, dest: foo }/')"
-# THE #1077 INVARIANT: a kit delivering the fsgg-coord shim MUST deliver the engine manifest too.
-expect_fail "shim delivered without its engine manifest" 1 "engine manifest" \
+# THE #1077 INVARIANT IS NO LONGER ASSERTED HERE (#1615, 2026-07-28, ADR-0068).
+#
+# THIS LEG USED TO READ:
+#   # THE #1077 INVARIANT: a kit delivering the fsgg-coord shim MUST deliver the engine manifest too.
+#   expect_fail "shim delivered without its engine manifest" 1 "engine manifest" \
+#     "$(variant shimnomanifest 's/source: scripts\/democlient/source: scripts\/fsgg-coord/')"
+#
+# It is REPLACED, not deleted, and the replacement is deliberately not in this file. `validate` reads
+# a roster; the invariant is about a RECEIVER'S TREE. The old rule could only say "these two rows ride
+# one fabric" and inferred the receiver property from that arrangement, so a receiver that deleted its
+# own `.config/dotnet-tools.json` stayed green forever. `scripts/repos-audit.sh`'s engine-manifest
+# sweep reads each receiver's actual manifest instead; its legs — including the mutation proof — live
+# in `tests/repos-audit/run.sh`.
+#
+# SO THE LEG THAT BELONGS HERE NOW IS THE OPPOSITE ONE: a roster delivering the shim and NOT the
+# manifest must PASS validation, because that is the roster this org now ships. Without this, the next
+# worker to "restore" the deleted rule would find every fixture green and no argument against it.
+expect_pass "shim WITHOUT an engine manifest row is a valid roster (#1615/ADR-0068 — the invariant moved to repos-audit's engine-manifest sweep, which reads the receiver's tree)" \
   "$(variant shimnomanifest 's/source: scripts\/democlient/source: scripts\/fsgg-coord/')"
 expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
 # --- the kit lock: the digests moved OUT of the roster into a generated artifact (#527) -----------

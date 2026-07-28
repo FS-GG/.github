@@ -710,17 +710,51 @@ else
 fi
 rm -rf "$NOMOD" "$M86"
 
-# c. THE KNOWN THAT IS NOT FIXED, PINNED SO IT CANNOT BE MISREAD AS FIXED. The engine's tool manifest is
-#    still a kit row, so an ENGINE version bump still republishes the kit and still stales every
-#    receiver — the other three of the six churn events (#1507, #1517, #1523). #1586's filer corrected
-#    the issue's own premise on exactly this point, and criterion 5 as filed ("no kit republish and no
-#    receiver fan-out") is unmeetable without moving that row, which overturns #1077. The ownership
-#    question is filed separately rather than smuggled in here. If this leg ever flips, that follow-up
-#    landed, and the "reduced, not removed" wording in both shim files should be revisited with it.
+# c. THE FOLLOW-UP LANDED, AND THIS LEG IS NOW THE OTHER WAY UP (#1615, 2026-07-28, ADR-0068).
+#
+#    THIS LEG USED TO READ, and the wording is kept because it is the record of what was true:
+#      *"THE KNOWN THAT IS NOT FIXED, PINNED SO IT CANNOT BE MISREAD AS FIXED. The engine's tool
+#      manifest is still a kit row, so an ENGINE version bump still republishes the kit and still
+#      stales every receiver — the other three of the six churn events (#1507, #1517, #1523). …If this
+#      leg ever flips, that follow-up landed, and the 'reduced, not removed' wording in both shim
+#      files should be revisited with it."*
+#
+#    It flipped, deliberately, and this is the revisit that sentence asked for. #1615 took
+#    `dist/dotnet/.config/dotnet-tools.json` off the `kit:` block: the engine's version now reaches
+#    receivers through Renovate's nuget manager, which already reads `/(^|/)dotnet-tools\.json$/` as a
+#    shipped `managerFilePattern`. So an engine bump no longer edits kit content, no longer stales
+#    `registry/repos.lock`, and no longer obliges a republish.
+#
+#    #1586's criterion 5 IS NOW MEETABLE, and the assertion below is what holds it. Between #1586 and
+#    #1615 the criterion was retired as unachievable; it is un-retired, because the two doors it named
+#    are both shut — the verb partition by #1586 (leg (a) above), the version pin by #1615.
+#
+#    #1077's INVARIANT IS NOT GONE. It moved from `repos.sh validate` (which asserted two rows share a
+#    fabric — `f(this roster)`) to `repos-audit.sh`'s engine-manifest sweep (which reads each
+#    receiver's actual `.config/dotnet-tools.json` — `f(roster, receiver tree)`). That is strictly
+#    stronger: a receiver that deletes its own manifest was invisible to the old rule and reds on the
+#    new one. See ADR-0068 and `tests/repos-audit/run.sh`'s engine-manifest legs, which are
+#    mutation-proven.
+#
+#    IF THIS LEG EVER FLIPS BACK, somebody re-added the manifest to the kit. That is not forbidden —
+#    but it re-opens the republish door #1615 closed, so read ADR-0068 before believing it was
+#    intended, and re-retire criterion 5 if it was.
 if printf '%s\n' "$KITSRC" | grep -qx 'dist/dotnet/.config/dotnet-tools.json'; then
-  ok "#1586: KNOWN — the engine tool manifest is STILL a kit row (#1077), so an engine bump still republishes: this change REDUCES the fan-out, it does not remove it"
+  bad "#1615: the engine tool manifest is a kit row AGAIN — an engine bump republishes the kit and stales seven receivers once more, and #1586's criterion 5 is unmeetable again. Read ADR-0068 before accepting this" "$KITSRC"
 else
-  bad "#1586: the engine tool manifest left the kit without this gate's prose being updated — re-read #1077 and #1586's filer correction" "$KITSRC"
+  ok "#1615: the engine tool manifest has NO kit row (ADR-0068), so an engine version bump is a .github commit and a per-receiver Renovate PR — not a republish + 7-receiver fan-out. With leg (a), #1586's criterion 5 is now MEETABLE"
+fi
+
+# d. …AND #1077's INVARIANT IS STILL ASSERTED SOMEWHERE — the leg that stops (c) being a licence to
+#    simply delete a rule. #1615's AC2 is explicit that the co-fabric rule may be REPLACED and not
+#    merely dropped, so this asserts the replacement EXISTS rather than trusting the ADR's prose. It
+#    is deliberately a check on the audit, not on the roster: the whole point of the replacement is
+#    that it lives where it can read a receiver's tree.
+if grep -q 'the engine-manifest sweep (#1615)' "$REPO_ROOT/scripts/repos-audit.sh" \
+   && grep -q 'fs.gg.coord.cli' "$REPO_ROOT/scripts/repos-audit.sh"; then
+  ok "#1615/#1077: the engine-manifest sweep is present in repos-audit.sh — the invariant the kit row used to buy by construction is asserted against every receiver's tree (AC2)"
+else
+  bad "#1615: the engine manifest left the kit and NOTHING replaced #1077's invariant — templates and audio can hold a fsgg-coord shim with no engine again, which is exactly the defect #1077 closed" "the sweep is missing from scripts/repos-audit.sh"
 fi
 # ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
 # EVERY LEG IN §3 DRIVES THE SHIM WITH `env -u FSGG_COORD_ENGINE_BIN`, WHICH UNSETS TIER 1 AND NOTHING
