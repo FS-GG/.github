@@ -124,7 +124,10 @@ KNOWN BOUND, stated rather than hidden: a producer is recognised by a manifest a
 MANIFEST_CANDIDATES, directly under its checkout. A repo that publishes its manifest somewhere else
 is not seen at all -- and, if the registry names no row from it, is not seen by check 4 either. CI
 checks the producers out at exactly these paths, so this is a shape the gate requires, not a hole it
-tolerates; a producer that moves its manifest must add the new location here. `.github` is itself a
+tolerates; a producer that moves its manifest must add the new location here. That obligation is not
+theoretical: FS.GG.SDD moved its process manifest from `.agents/skills/` to `.claude/skills/` because
+ADR-0067 §6 makes the former a generated view that a bare clone does not have, and this list gained
+the tracked root in the same landing (#1757, FS-GG/FS.GG.SDD#771). `.github` is itself a
 producer of its own authored DRIVER skills (ADR-0054); it emits its manifest at the third candidate
 (`registry/driver-skill-manifest.json`) and is reached not by a network clone but by its own
 checkout, which skill-registry-coherence.yml makes visible under `--repos-root` as `.github`.
@@ -218,11 +221,28 @@ FROZEN_MIRROR_REPO = "FS.GG.Rendering"
 FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
 
 # Where a producer publishes its `skill-manifest` (schema v1). SDD EMITS its process manifest into
-# the agent-skill root; Rendering and Game publish theirs from the template tree; `.github` emits its
-# DRIVER manifest into the registry dir it owns (ADR-0054 — `.github` authors its own product-
-# materialized `scope: driver` skills, e.g. work-roadmap). Probed in order; the first hit wins.
-# Locations, not repo names -- the producer SET is derived (see producers()).
+# its TRACKED SOURCE agent-skill root; Rendering and Game publish theirs from the template tree;
+# `.github` emits its DRIVER manifest into the registry dir it owns (ADR-0054 — `.github` authors its
+# own product-materialized `scope: driver` skills, e.g. work-roadmap). Probed in order; the first hit
+# wins. Locations, not repo names -- the producer SET is derived (see producers()).
+#
+# `.claude/skills/` LEADS, AND `.agents/skills/` IS THE ONE IT REPLACES (#1757, FS-GG/FS.GG.SDD#771).
+# ADR-0067 §6 turns `.agents/skills` into a GENERATED VIEW: untracked, git-ignored, and absent in a
+# bare checkout by construction — which is what `skill-registry-coherence.yml` makes of every named
+# producer (`git clone --depth 1 --filter=blob:none`, no view generation). A producer whose manifest
+# lived only there therefore had NO manifest here at all, and `find_manifest` would return None,
+# firing the fail-closed `manifest-found` finding and taking all 16 of SDD's process rows out of
+# digest coverage. Adding the tracked root is what keeps that from happening; keeping the view root
+# is what keeps a producer that has not moved yet working, and costs nothing.
+#
+# THE ORDER IS THE ANSWER TO "WHICH ONE WINS", AND IT IS NOT ARBITRARY. A transitional tree can carry
+# BOTH — during a move, or simply because a LINK-mode `skill-view generate` makes the view root
+# resolve to the source. The tracked source is the authority in every one of those cases: it is what
+# git carries, what a reviewer reads, and what the producer's own writer emits. Reading the view
+# first would mean grading a repo against a file whose existence depends on whether a checkout step
+# happened to run — the shape ADR-0067 §8 exists to remove. So the tracked root leads.
 MANIFEST_CANDIDATES = (
+    ".claude/skills/skill-manifest.json",
     ".agents/skills/skill-manifest.json",
     "template/skill-manifest/skill-manifest.json",
     "registry/driver-skill-manifest.json",
