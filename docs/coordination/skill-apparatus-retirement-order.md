@@ -437,6 +437,84 @@ exists**, which is blocker B2 below.
 > [`#1730`](https://github.com/FS-GG/.github/issues/1730) was filed and closed when Audio landed with no
 > alarm at all.
 
+> **STAGE 5 EXECUTED ON `FS.GG.Governance`, 2026-07-28 — the first retirement B5's clearance MADE
+> POSSIBLE rather than merely failed to block** ([#1748](https://github.com/FS-GG/.github/issues/1748),
+> [FS.GG.Governance#337](https://github.com/FS-GG/FS.GG.Governance/pull/337)). Governance is one of the
+> three receivers that wired a `skill-union` caller, so §5.1's decision is the only reason it was
+> dispatchable. Verified on the receiver, not inherited from `#1715`: `.github/workflows/skill-union.yml`
+> is gone (`37c12d1`), and `main`'s required contexts are `Deterministic gate (locked restore + build)`,
+> `Full test suite (dotnet fsi build.fsx test)`, `Full test suite — Release`, `Build-config drift check
+> (shared-build-config)`, `Reference gate set — pack guard`, `contract-coherence / coherence`,
+> `kit / coordination-kit` and **`skill-view-check`** — eight, with no union gate among them.
+>
+> §4's four preconditions, re-run on `FS.GG.Governance@37c12d1` that day:
+>
+> | precondition | measured |
+> |---|---|
+> | 1 — `scripts/skill-view` present and executable in R | **yes**, 21,851 bytes, mode 0755, with `lib/args.sh` + `lib/roots.sh` beside it; it ran and produced the view |
+> | 2 — parity AGREE on R's tree, and again on R's resolved equivalent | **AGREE / AGREE.** Committed tree: `old=ok new=ok` over **15 ids in 2 roots**. Resolved half-view: same population, byte identity *"STRUCTURALLY IMPOSSIBLE to violate here — every configured root resolves to the same object … Checked, not assumed."* |
+> | 3 — half-view, not all-view | **half-view** (`.claude/skills` tracked source, `.agents/skills` generated), so `#1685` is not engaged |
+> | 4 — second root not left committed | satisfied by the retirement commit itself — `skill-view` refused to generate while the root was tracked, measured, so the deletions and the generate are necessarily one change |
+>
+> Kit pin **0.15.0** (`Directory.Packages.local.props`, via PR #333 → `2d37fa1`).
+>
+> **`diff -r .claude/skills .agents/skills` was SILENT**, and hardened past the diff: 15 skills and
+> **34 tracked files** per root, identical path sets, identical git modes, zero symlinks, and nothing
+> untracked or ignored inside either. Four receivers have now had this check decide their cost and one
+> (`FS.GG.SDD`) has had it stop the retirement; it has never once been redundant.
+>
+> **THE ONE THING THIS RECEIVER MEASURED THAT THE FIRST THREE COULD NOT, and it retro-justifies stage 1's
+> finding 1.** Stage 1 concluded the generate belongs in the receiver project rather than a workflow
+> step, on the argument that a workflow step covers only the trees that run that workflow. On Governance
+> that stops being an argument: `-t:FsggKitMaterialize` runs in **two** trees, and one of them is
+> **`kit-materialize.yml`, a `uses:` of this repo's reusable workflow, which a caller cannot add a step
+> to at all**. Measured on a bare checkout of the retired tree: *"view skill root '.agents/skills' is
+> ABSENT or a DANGLING link"*, build FAILED — so a workflow-step generate would have left Governance's
+> next Renovate kit bump red on a tree nobody touched, **with no file the receiver owns in which to fix
+> it**. That is B5's own shape (a reusable workflow whose subject is a bare checkout) recurring on a
+> different gate, and the receiver-project target is what makes it a non-event.
+> `FsggGovernanceGenerateSkillView` (`BeforeTargets="FsggKitCheckSkillView"`, `Condition` on the view
+> property) covers both trees; the required `Build-config drift check` went green on it in 10s.
+> **Every remaining `build-config` receiver owes the same, and for this reason rather than stage 1's.**
+>
+> **The §8 hole, re-measured here.** With `FsggKitViewSkillRoots` emptied and the root deleted: the
+> materialize reports *"no view skill roots declared … nothing to assert"* and succeeds, and
+> `coordination-sync --check --against-pin` reports *"OK — all 30 materialized file(s)"* — the
+> **required** `kit / coordination-kit`, green on exactly the tree the alarm exists to fail. Governance's
+> alarm is `scripts/check-skill-view-roots.sh` on its required `skill-view-check` context: §5.1's
+> replacement gate given a second leg, which is the cheapest correct home this repo had (no
+> `composition` harness; no other required job that is both skill-shaped and free of a .NET restore).
+> It is **FS.GG.Audio's shape, ported rather than re-derived**, extended in one direction — an absent
+> declared root is a RED here rather than "expected on a bare clone", because this host job generates
+> the view immediately before asserting it, which is what makes the alarm itself fire on both mutations
+> instead of only the declaration one.
+>
+> **Mutation-proven in CI, by run id, and the green was read in the job log rather than inferred:**
+>
+> | tree | run | verdict |
+> |---|---|---|
+> | unmutated retirement branch | [30343002231](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343002231) | `success` — alarm `4 passed, 0 failed`, both legs present in the log |
+> | `<FsggKitViewSkillRoots>` emptied, view root left in place | [30343106728](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343106728) | **failure** — *"cannot read the runtime root set … both properties must be declared"*, `1 passed, 2 failed` |
+> | the generate dropped, so the view root is absent | [30343108765](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343108765) | **failure** — *"declared runtime root '.agents/skills' does not exist"*, `3 passed, 1 failed` |
+>
+> Note the middle row: on that tree `skill-view check` **alone is green**, which is precisely why the
+> alarm is a separate leg and not a comment. Both proof branches were deleted unmerged — nothing was
+> retired to obtain this evidence. **This is the third hand-copy of the alarm and the second of the
+> generate target**; `#1710` still owns collapsing them, and three receivers have now paid.
+>
+> **A finding this stage produced that is NOT about the retirement, and was not fixed here.**
+> Governance's own `scripts/materialize-skill-roots.sh` hardcodes ADR-0011's **three** roots as its
+> write set (`:137`) and subtracts neither `FsggKitRetiredSkillRoots` nor `FsggKitViewSkillRoots`. So
+> `--check` **fails on an untouched `main`** — 23 drift paths under the retired `.codex/skills` — and
+> the remedy it prints re-creates the four kit skill directories there, which ADR-0065 §Retiring a root
+> forbids and `#1636`'s sweep undid. Nothing noticed because **no workflow runs it**. After the
+> retirement it also plans writes into the view root, i.e. through the symlink into the tracked source
+> the script's own header says it never writes. That is `FS.GG.SDD#767` and `FS.GG.SDD#770` recurring in
+> a third repo, in one file. Filed as
+> [`FS.GG.Governance#338`](https://github.com/FS-GG/FS.GG.Governance/issues/338). **It is also the
+> answer to "is this repo's own checker a safety net for the retirement?" — it is not**, and a worker on
+> a later receiver should not treat a repo-local materializer as one.
+
 ### The per-receiver sequence 0.15.0 makes available (stage 1, per repo)
 
 Measured end-to-end by `src/FS.GG.Kit/verify-package.sh` §3f, on a receiver tree holding a stale
@@ -827,6 +905,31 @@ is a no-op when unnecessary and the failure it prevents is a `git revert` that c
 directory, which is exactly the situation in which the rollback is being run and the worst moment to
 discover it. **Do not delete the step. Do not be surprised when it reports nothing to remove. And do
 not let three green receivers talk you out of running it on the producer.**
+
+**Re-run against `FS.GG.Governance`, 2026-07-28, BEFORE the retirement landed** (`#1676` AC 3). Dry run
+in a throwaway clone of `37c12d1` (15 skills, 34 tracked files under `.agents/skills`):
+
+| step | command | observed |
+|---|---|---|
+| sweep | `dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize` with the view disposition set | removed the kit's 4 materialized directories from the view root, then **failed loudly** — *"23 of 23 kit skill file(s) are NOT visible there"*. That failure is the §8 assertion working, and it is step 2 of the per-receiver sequence above |
+| retire | `git rm -r --cached .agents/skills` + `rm -rf` + `/.agents/skills` in `.gitignore`, one commit | **36 files changed, 13 insertions, 6303 deletions** |
+| generate | `scripts/skill-view generate --source .claude/skills --roots ".agents/skills"` | `.agents/skills: generated (link)`; `15/15 declared skill(s) visible` in **both** roots, 30 paths examined |
+| retired state | `git status --porcelain` | **0 changed paths** — the generated root is invisible to git |
+| rollback | `git revert --no-edit <retirement-commit>`, **with no `rm -rf` first** | rc 0; `.agents/skills` back to **34 tracked files in a real directory** holding 15 skills, `find .agents -type l` → **0** symlinks |
+| prove | `skill-union-assert.sh --product .` / `diff -r .claude/skills .agents/skills` | `OK — all roots hold the byte-identical union`, `in-every-root=15/15 byte-identical=15/15` (exit 0) / identical, silent |
+| after | `git status --porcelain` | **0 changed paths** |
+
+**`rm -rf <second-root>` was NOT required, and the tally above becomes FOUR receivers against the
+producer's one.** Templates, Audio, Net and now Governance — every receiver actually retired at the
+time of writing — each restore correctly from `git revert` alone, with git replacing the symlink by
+itself (SDD agrees on a dry run and is still not counted). The paragraph above stands unchanged,
+including its last sentence: **do not let four green receivers talk you out of running the step on the
+producer.**
+
+**Unlike SDD's, this rollback surfaced nothing new** — `diff -r` on the restored tree is silent, because
+it was silent before the retirement too. That is the expected outcome and it is worth recording as such:
+the diff is a cheap check whose *negative* result is the whole point, and four of five receivers have
+now paid nothing for it.
 
 ---
 

@@ -292,6 +292,105 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > [#1723](https://github.com/FS-GG/.github/issues/1723), because that document was held by another
 > worker for the whole of this item.
 
+> **STAGE 5 EXECUTED, 2026-07-28 — `FS.GG.Governance` is the FIFTH receiver retired
+> ([#1748](https://github.com/FS-GG/.github/issues/1748),
+> [FS.GG.Governance#337](https://github.com/FS-GG/FS.GG.Governance/pull/337)).** That repo's
+> `.agents/skills` is no longer a second committed copy: it is a **view root** resolved from
+> `.claude/skills` at checkout. **34 committed files stopped existing**; the runtime root set is
+> unchanged, because it is the union of `FsggKitSkillRoots` and `FsggKitViewSkillRoots` and that union
+> still holds ADR-0011's two.
+>
+> **This is the FIRST retirement that B5 made possible rather than merely didn't block.** Governance is
+> one of the three receivers that wired a `skill-union` caller, so it was un-retirable until
+> [#1715](https://github.com/FS-GG/.github/issues/1715) decided shape (b). Verified on this repo rather
+> than inherited from that item: `.github/workflows/skill-union.yml` is gone (`37c12d1`), and the
+> branch's required contexts include `skill-view-check` and no longer include `skill-union /
+> skill-union`. §9's precondition was re-run on that tree, that day: parity **AGREE** on the committed
+> tree (`old=ok new=ok`, **15 ids in 2 roots**) and **AGREE** again on the resolved half-view, byte
+> identity *"STRUCTURALLY IMPOSSIBLE to violate here … Checked, not assumed."* Half-view throughout, so
+> [#1685](https://github.com/FS-GG/.github/issues/1685) was never engaged.
+>
+> **`diff -r .claude/skills .agents/skills` was SILENT**, hardened past the diff itself: 15 skills and
+> 34 tracked files per root, identical path sets, identical git modes, zero symlinks, nothing untracked
+> or ignored inside either. Nothing lived only in the copy being retired. That is now **four receivers
+> where the diff decided the cost** and one (`FS.GG.SDD`) where it stopped the retirement.
+>
+> **A FOURTH receiver shape, and the expensive part was neither the skills nor the tests.** Governance
+> is a `build-config` receiver with a `gate.yml`, eight required contexts and a substantial F# suite —
+> and none of that cost anything. What cost something is that the materialize runs in **two** trees
+> here, and one of them is `kit-materialize.yml`, a `uses:` of this repo's reusable workflow that a
+> caller **cannot add a step to**. Measured on a bare checkout of the retired tree, `-t:FsggKitMaterialize`
+> fails with *"view skill root '.agents/skills' is ABSENT or a DANGLING link"* — so a workflow-step
+> generate would have left the next Renovate kit bump red on a tree nobody touched, with no file the
+> receiver owns in which to fix it. Governance ships `FsggGovernanceGenerateSkillView`
+> (`BeforeTargets="FsggKitCheckSkillView"`), which is stage 1's finding 1 turning out to be **load-bearing
+> rather than stylistic**: the receiver-project target is the only placement that reaches a tree the
+> receiver does not own the workflow for. The required `Build-config drift check` went green on it
+> (job 90222666600).
+>
+> **The §8 hole re-measured here, and the alarm mutation-proven in CI by run id.** With
+> `FsggKitViewSkillRoots` emptied and the root deleted: the materialize reports *"no view skill roots
+> declared … nothing to assert"* and `coordination-sync --check --against-pin` reports *"OK — all 30
+> materialized file(s)"* — the **required** `kit / coordination-kit`, green on exactly the tree the
+> alarm exists to fail. Governance's alarm is `scripts/check-skill-view-roots.sh` on its required
+> `skill-view-check` context — FS.GG.Audio's shape, ported rather than re-derived, and deliberately not
+> FS.GG.Net's (a new job that is **not** required, [#1727](https://github.com/FS-GG/.github/issues/1727)).
+> Unmutated [30343002231](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343002231) `success`
+> (alarm `4 passed, 0 failed`, read in the job log, not inferred from the green);
+> `FsggKitViewSkillRoots` emptied
+> [30343106728](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343106728) **failure**; the
+> generated view absent
+> [30343108765](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30343108765) **failure**. Both
+> proof branches were deleted unmerged. **This is the THIRD hand-copy of the alarm and the second of the
+> generate target** — exactly what [#1710](https://github.com/FS-GG/.github/issues/1710) predicted and
+> still owns; three receivers have now paid it and three more would.
+>
+> **Rollback re-run against this receiver (#1676 AC 3), before the retirement landed.** `git revert`
+> alone, **with no `rm -rf` first**: `.agents/skills` back to **34 tracked files in a real directory**
+> holding 15 skills, `find .agents -type l` → **0**, `diff -r` identical, `skill-union-assert.sh
+> --product .` exit 0 (`in-every-root=15/15 byte-identical=15/15`), `git status --porcelain` → **0
+> changed paths**. **`rm -rf` was NOT required.** Four receivers now say the step is unnecessary against
+> the producer's one; it stays because it is harmless when unnecessary and fatal to omit when it is not.
+>
+> **`.codex/skills` was not touched, again.** It holds **11** `speckit-*` / `spectre-console` skills
+> that are Governance's OWN; §5's sweep withdrew only the kit-owned four, and ADR-0065 §Retiring a root
+> forbids anyone hand-deleting the rest. Verified 11 before and 11 after.
+>
+> **One finding this stage produced that is not about the retirement.** Governance's own
+> `scripts/materialize-skill-roots.sh` still hardcodes ADR-0011's **three** roots as its write set and
+> subtracts neither the retired root nor a view root. `--check` therefore **fails on an untouched
+> `main`** (23 drift paths under the retired `.codex/skills`), and the remedy it prints re-creates the
+> four kit skill directories there — `FS.GG.SDD#767`'s re-creation hazard and `FS.GG.SDD#770`'s
+> missing view-root subtraction, in one file, in a third repo. No workflow runs it, which is why nothing
+> noticed. Filed as [`FS.GG.Governance#338`](https://github.com/FS-GG/FS.GG.Governance/issues/338) and
+> **not** fixed here.
+>
+> AC 7 is unchanged and still unreachable as written. **The verdict is 5 of 7 retired, and it was
+> counted rather than carried forward** — `git ls-files .agents/skills` on a shallow clone of each
+> rostered receiver, 2026-07-28 08:40Z, because the REST contents endpoint was secondary-rate-limited
+> and "I could not read it" is not a count (#266):
+>
+> | receiver | tracked files under `.agents/skills` | state |
+> |---|---|---|
+> | `FS.GG.Templates` | 0 | retired (stage 1) |
+> | `FS.GG.Audio` | 0 | retired (stage 3) |
+> | `FS.GG.Net` | 0 | retired |
+> | `FS.GG.Game` | 0 | retired — **landed during this stage**, so the "in flight" note this worker was dispatched with was already stale |
+> | `FS.GG.Governance` | 34 → 0 | retired, this stage |
+> | `FS.GG.SDD` | 52 | **refused** (stage 2), and the refusal's own trigger B5 is now cleared — its remaining blockers are `FS.GG.SDD#770` / `#771`, not §9 |
+> | `FS.GG.Rendering` | 70 | untouched, claimed on [#1747](https://github.com/FS-GG/.github/issues/1747) |
+>
+> So the only receiver neither retired nor in flight is `FS.GG.SDD`, and stage 2's two SDD-side findings
+> are what stand between it and the end state — not this record.
+>
+> **Two landed retirements have no stage note in THIS record, which is why the count above had to be
+> measured rather than read off it.** `FS.GG.Net` is recorded in the retirement order (§4/§7, as its
+> stage 4) but not here; `FS.GG.Game` appears in neither, and it landed while this stage was in flight.
+> Reading this ADR alone on 2026-07-28 gives "2 of 7". The gap is filed as
+> [#1754](https://github.com/FS-GG/.github/issues/1754) rather than back-filled here, because a stage
+> note is written from the retiring worker's own measurements and inventing two from the outside is the
+> restatement ADR-0058 exists to stop.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
