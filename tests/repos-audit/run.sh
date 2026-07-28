@@ -264,13 +264,20 @@ updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
-  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
-  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: ${SDD_COVER:-required} }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: ${REN_COVER:-required} }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 $LABELS_CAP
 YAML
 }
+# `absence-cover: required` is on both rows for the reason `kit-delivery` is, one sweep across
+# (#1785): the absence-cover sweep grades EVERY coordination-kit package receiver, and a receiver
+# that declares no word is a FINDING there. A fixture roster that omitted it would turn all ~130 legs
+# that predate the sweep red for a reason none of them is about. `$SDD_COVER`/`$REN_COVER` let a leg
+# say a DIFFERENT word without rewriting the roster — that is how the drift legs below state a claim
+# the API contradicts, which is the whole subject of #1785.
+#
 # `kit-delivery: package` is on both rows because that is what the real roster says of all seven
 # receivers, and because the kit-pin freshness sweep (#1540) grades PACKAGE receivers only — absent
 # means byte-copy, which has no pin to grade. A fixture roster that omitted it would silently
@@ -335,6 +342,13 @@ case "$path" in
   # which is the single most important thing this sweep gets right, so the ref is matched explicitly.
   */contents/*\?ref=*)            kind=reffile; repo="${path#repos/}"; repo="${repo%%/contents/*}"
                                   ref="${path##*\?ref=}" ;;
+  # The absence-cover sweep's two protection reads (#1785). BOTH stores, because GitHub keeps
+  # required checks in two and enforces both, so the required set is their UNION and reading one is
+  # #574's vacuous green. They are matched BEFORE the catch-all `repo` arm for the obvious reason and
+  # separately from each other for a load-bearing one: the fixture must be able to make ONE of them
+  # fail, since a half-read is exactly the state the sweep has to refuse rather than grade.
+  */branches/*/protection)        kind=protection; repo="${path#repos/}"; repo="${repo%%/branches/*}" ;;
+  */rules/branches/*)             kind=rules;      repo="${path#repos/}"; repo="${repo%%/rules/*}" ;;
   */pulls\?*)                     kind=pulls;    repo="${path#repos/}"; repo="${repo%%/pulls*}" ;;
   */branches\?*)                  kind=branches; repo="${path#repos/}"; repo="${repo%%/branches*}" ;;
   *)                              kind=repo; repo="${path#repos/}" ;;
@@ -376,7 +390,17 @@ case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
         echo "$repo" ;;                        # stands in for `--jq '.full_name'`
   list) [ -f "$FIX/$slug.list" ] || notfound   # no workflows dir at all — the real API 404s here
-        cat "$FIX/$slug.list" ;;
+        cat "$FIX/$slug.list"
+        # #1785: `absence.yml` is served BESIDE whatever workflow list a leg wrote, never inside it.
+        # A dozen helpers in this file rewrite `.list` wholesale, and if the absence lane lived in
+        # that list every one of them would silently delete its repo's absence cover — turning legs
+        # about sparse-checkout and skill-union red for a reason none of them is about. Here it
+        # survives any `.list`, and `absence_shape <repo> none` is the only way to remove it.
+        # `if`, not `&&`: this is the LAST command in the arm, so a bare `[ -f … ] && echo` exits 1
+        # for every repo with no absence lane — including the authority — and the audit reads that
+        # as "listing .github/workflows failed", an unreachable-API no-verdict over a repo the stub
+        # answered perfectly. A test's false result must never become a transport failure.
+        if [ -f "$FIX/$slug/absence.yml" ]; then echo "absence.yml"; fi ;;
   file) [ -f "$FIX/$slug/$file" ] || notfound
         cat "$FIX/$slug/$file" ;;
   receiver) [ -f "$FIX/$slug/receiver.proj" ] || notfound
@@ -422,6 +446,18 @@ case "$kind" in
   # The pin AT a ref. A ref with no fixture 404s — which is the ANSWER "that branch does not carry
   # this file", the same contract the plain content reads use, and the reason an unmatched ref can
   # never manufacture an offer.
+  # --- the absence-cover sweep (#1785) ---
+  #
+  # The DEFAULT for classic protection is a 404 and for rulesets an EMPTY LIST, and that pair is the
+  # honest default rather than a convenient one: it is what an UNPROTECTED branch really answers, and
+  # the gate this sweep imports reads exactly that pair as "this branch requires nothing". So a
+  # fixture repo nobody has armed derives `unrequired` or `none`, never `required` — a leg that wants
+  # `required` has to say so, which is what stops a green here from being free.
+  protection) [ -f "$FIX/$slug.failprot" ] && apifail "$(cat "$FIX/$slug.failprot")"
+              [ -f "$FIX/$slug/protection.json" ] || notfound
+              cat "$FIX/$slug/protection.json" ;;
+  rules)      [ -f "$FIX/$slug.failrules" ] && apifail "$(cat "$FIX/$slug.failrules")"
+              if [ -f "$FIX/$slug/rules.json" ]; then cat "$FIX/$slug/rules.json"; else echo '[]'; fi ;;
   reffile)  [ -f "$FIX/$slug.failref" ] && apifail 403
             refslug="${ref//\//__}"
             [ -f "$FIX/$slug/ref/$refslug" ] || notfound
@@ -445,7 +481,131 @@ chmod +x "$STUB/gh"
 # The TOOL-MANIFEST shaping is cleared here too (#1615), for exactly the reason the pin shaping is:
 # a leg that gave a receiver no engine declaration must not leave it that way for the next leg, which
 # would turn one deliberate finding into a run-wide exit 1 and mask whatever that leg was about.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props" "$FIX/$slug.notools" "$FIX/$slug.failtools" "$FIX/$slug/dotnet-tools.json"; }
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props" "$FIX/$slug.notools" "$FIX/$slug.failtools" "$FIX/$slug/dotnet-tools.json" "$FIX/$slug.failprot" "$FIX/$slug.failrules" "$FIX/$slug/protection.json" "$FIX/$slug/rules.json"
+               # …and RE-ESTABLISHES the default absence cover (#1785). Every shaping helper in this
+               # file calls clearfail first, so this is the one place that can guarantee a repo the
+               # legs below have not deliberately shaped still derives `required` and matches the
+               # roster word. It is a RESET, exactly like the pin and tree shaping above: without it
+               # a leg that mutated one repo's cover would leave the NEXT leg red, and with it every
+               # leg that predates this sweep is untouched by it.
+               absence_shape "$1" covered; protect "$1" "Absence cover"; }
+# --- the absence-cover sweep's world (#1785) ------------------------------------------------------
+#
+# absence_shape <repo> <shape> — write the repo's `absence.yml`, the workflow whose jobs decide what
+# catches an ABSENT generated view root here. Five shapes, and each one is a real receiver's:
+#
+#   covered    one job, `Absence cover`, runs `skill-view check` UN-EXCUSED. With `protect` naming
+#              that context, the sweep derives `required` — FS.GG.SDD / Rendering / Governance /
+#              Net's shape, and the fixture default.
+#   sidelined  the SAME assertion, moved to a job called `Nightly sweep` that no protection requires,
+#              and the required job now only EXCUSES it. Derives `unrequired`. THE MUTATION: this is
+#              FS.GG.Game's cover rotting — the materialize leaving the required job — and it is the
+#              one this sweep exists to catch.
+#   weak       the required job excuses absence and the un-excused assertion lives on a `uses:` of
+#              this authority's kit-materialize.yml, which nothing requires. Derives `unrequired` —
+#              FS.GG.Audio's and FS.GG.Templates' real shape, measured 2026-07-28.
+#   uncovered  EVERY invocation carries `--absent-ok`. Nothing anywhere asserts an absent view root.
+#              Derives `none`, which no roster row may declare and which is always a finding.
+#   prose      `covered`'s cover DELETED, and the surviving excused step's `--absent-ok` REASON
+#              contains the literal `-t:FsggKitMaterialize` — exactly as FS.GG.Audio's does. The
+#              honest answer is `none`; a sweep that reads the reason as an invocation answers
+#              `required`. See the leg that pins it: this bug was real, in the first cut of the
+#              sweep, and it certified a receiver's excuse from the sentence denying it.
+absence_shape() { local slug="${1//\//__}" shape="$2"
+  mkdir -p "$FIX/$slug"
+  # The reason string every shape reuses. It NAMES the materialize target, because the real ones do.
+  local why='this job is a bare checkout that never materializes, so an ungenerated view root is its normal state; NO required context on this repo runs -t:FsggKitMaterialize, so absence is caught on the materialize path instead'
+  case "$shape" in
+    covered)   cat > "$FIX/$slug/absence.yml" <<YML
+jobs:
+  cover:
+    name: Absence cover
+    steps:
+      - name: Runtime skill-root contract
+        run: bash scripts/skill-view check --source .claude/skills --tree .
+YML
+      ;;
+    sidelined) cat > "$FIX/$slug/absence.yml" <<YML
+jobs:
+  cover:
+    name: Absence cover
+    steps:
+      - name: Runtime skill-root contract
+        run: |
+          bash scripts/skill-view check --source .claude/skills --tree . \\
+            --absent-ok "$why"
+  nightly:
+    name: Nightly sweep
+    steps:
+      - name: Runtime skill-root contract
+        run: bash scripts/skill-view check --source .claude/skills --tree .
+YML
+      ;;
+    weak)      cat > "$FIX/$slug/absence.yml" <<YML
+jobs:
+  cover:
+    name: Absence cover
+    steps:
+      - name: Runtime skill-root contract
+        run: |
+          bash scripts/skill-view check --source .claude/skills --tree . \\
+            --absent-ok "$why"
+  materialize:
+    uses: FS-GG/.github/.github/workflows/kit-materialize.yml@main
+YML
+      ;;
+    uncovered) cat > "$FIX/$slug/absence.yml" <<YML
+jobs:
+  cover:
+    name: Absence cover
+    steps:
+      - name: Runtime skill-root contract
+        run: |
+          bash scripts/skill-view check --source .claude/skills --tree . \\
+            --absent-ok "$why"
+YML
+      ;;
+    prose)     cat > "$FIX/$slug/absence.yml" <<YML
+jobs:
+  cover:
+    name: Absence cover
+    steps:
+      # A comment naming -t:FsggKitMaterialize, which is also not an invocation.
+      - name: Runtime skill-root contract
+        run: |
+          bash scripts/skill-view check --source .claude/skills --tree . \\
+            --absent-ok "$why"
+YML
+      ;;
+    none)      rm -f "$FIX/$slug/absence.yml" ;;
+    *) echo "absence_shape: unknown shape '$shape'" >&2; return 1 ;;
+  esac
+}
+# protect <repo> <context>… — the classic branch-protection payload, requiring exactly these
+# contexts. No arguments arms the branch with none, which is a real state and not an absent one.
+protect() { local slug="${1//\//__}"; shift
+  mkdir -p "$FIX/$slug"
+  printf '%s' "$@" >/dev/null
+  { printf '{"required_status_checks":{"strict":false,"contexts":['
+    local first=1 c
+    for c in "$@"; do [ "$first" = 1 ] || printf ','; first=0; printf '"%s"' "$c"; done
+    printf ']}}'; } > "$FIX/$slug/protection.json"
+}
+# protect_ruleset <repo> <context>… — the OTHER store. A branch may be governed by either or both and
+# GitHub enforces both, so the sweep must read their UNION (#574). A leg that arms a context HERE and
+# nowhere else proves the sweep is not reading classic protection alone — which is the exact vacuous
+# green FS.GG.Governance produced for check-required-contexts.py before #574.
+protect_ruleset() { local slug="${1//\//__}"; shift
+  mkdir -p "$FIX/$slug"
+  { printf '[{"type":"required_status_checks","parameters":{"required_status_checks":['
+    local first=1 c
+    for c in "$@"; do [ "$first" = 1 ] || printf ','; first=0; printf '{"context":"%s"}' "$c"; done
+    printf ']}}]'; } > "$FIX/$slug/rules.json"
+}
+# unprotect <repo> — the branch requires nothing, in EITHER store. That is a real answer (a 404 from
+# the classic endpoint plus an empty ruleset list), not a failure to read one.
+unprotect() { local slug="${1//\//__}"; rm -f "$FIX/$slug/protection.json" "$FIX/$slug/rules.json"; }
+
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -2123,8 +2283,8 @@ authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
   - { id: .allstar,  full: FS-GG/.allstar,        role: framework, receives: [labels] }
-  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
-  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 $LABELS_CAP
@@ -2387,6 +2547,11 @@ cp "$HERE/../../scripts/lib/args.sh" "$SPARSEBOX/scripts/lib/args.sh"
 # sandbox needs it so THESE legs still fail on the symbol they are about; its own absence gets its
 # own leg below.
 cp "$HERE/../../scripts/fsgg_feed.py" "$SPARSEBOX/scripts/fsgg_feed.py"
+# The absence-cover sweep borrows check-required-contexts.py by the same mechanism and asserts it at
+# the same place (#1785). Same reason as fsgg_feed.py: THESE legs must still fail on the symbol they
+# are about, not on a dependency they never mentioned. Its own absence, and its own hoist, get their
+# own legs below.
+cp "$HERE/../../scripts/check-required-contexts.py" "$SPARSEBOX/scripts/check-required-contexts.py"
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # (a) the rule file is GONE. Caught up front, beside the `gh` and `python3` checks, because a missing
@@ -2613,7 +2778,7 @@ updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
-  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
   - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
@@ -2800,6 +2965,197 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 
 view_root FS-GG/FS.GG.SDD noview; view_root FS-GG/FS.GG.Rendering noview
 unpin FS-GG/FS.GG.Rendering
+
+
+# --- the absence-cover sweep (#1785) -------------------------------------------------------------
+#
+# WHAT THESE LEGS ARE FOR. ADR-0067 §8's alarm reds on an absent generated view root by default, and
+# three receivers excuse that with `--absent-ok "<why>"`. The reason is required and printed, and it
+# is a FREE-TEXT claim about that repo's BRANCH PROTECTION — "a required context materializes here",
+# "no required context does". Nothing re-checked it. These legs are what re-checks it: the roster
+# carries the claim as a word, the sweep derives the truth from the union of both protection stores
+# plus the receiver's own jobs, and disagreement is red in BOTH directions.
+#
+# Leg (1) is the one that can fail, and it is the real rot: FS.GG.Game's `--absent-ok` sits in the
+# same required job that runs the materialize, so the day that materialize moves to an unrequired job
+# the excuse keeps printing over a repo nothing guards. Leg (7) is the mutation of the SWEEP, not of
+# a receiver — the first cut of it read Audio's reason string as an invocation and derived `required`
+# for the one receiver whose whole point is that it is not.
+#
+# Every leg re-shapes BOTH receivers, because `clearfail` resets a repo to `covered` and a leg that
+# shaped only one would be proving its point against a neighbour that had silently drifted.
+
+# (0) THE GREEN, and it is the real fleet's shape: SDD / Rendering / Governance / Net all run the
+#     assertion un-excused on a context their branch requires, measured 2026-07-28.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q 'absence-cover: required — required context(s) running the assertion un-excused: Absence cover' \
+    && printf '%s' "$out" | grep -q 'graded 2 of 2 coordination-kit package receiver(s): 2 match the roster'; } \
+  && ok "absence-cover: a required context running the assertion un-excused matches the roster word" \
+  || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
+
+# (1) THE LEG THAT CAN FAIL — #1785 AC1/AC2, and the whole reason this sweep exists. The assertion is
+#     still there, still un-excused, still runs — it has simply moved off the required context, and
+#     the required job now only EXCUSES absence. That is FS.GG.Game's carve-out rotting, and every
+#     other signal in the org stays green through it: the roster is unchanged, the receiver's printed
+#     reason is unchanged, the view-root generate sweep is unchanged, CI is unchanged.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+absence_shape FS-GG/FS.GG.Rendering sidelined
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'absence-cover — FS-GG/FS.GG.Rendering the roster says `absence-cover: required` and live branch protection says otherwise' \
+    && printf '%s' "$out" | grep -q 'This is the UNSAFE direction' \
+    && printf '%s' "$out" | grep -q 'Nightly sweep' \
+    && printf '%s' "$out" | grep -q '1 receiver(s) do not match the roster'; } \
+  && ok "absence-cover: an assertion that MOVED OFF a required context reds (#1785 AC1/AC2)" \
+  || bad "a rotted carve-out must red here, not on the day an ungenerated view ships" "rc=$rc: $out"
+
+# (2) …and it is NOT a wiring gap, and NOT a view-root generate finding. The receiver wires its
+#     capability perfectly and generates its view; a red that named either would send an operator to
+#     a workflow that is correct (#327/#335).
+{ printf '%s' "$out" | grep -q '2 wired, 0 gap(s)' \
+    && ! printf '%s' "$out" | grep -q 'declared receiver(s) have not wired' \
+    && ! printf '%s' "$out" | grep -q 'NOTHING generates'; } \
+  && ok "absence-cover: a rotted carve-out is not reported as a wiring gap" \
+  || bad "the finding must name its own subject" "$out"
+
+# (3) NOTHING ASSERTS IT AT ALL — every invocation carries `--absent-ok`. This is the state no roster
+#     row may declare, so it is a finding whatever the word says, and the diagnostic has to say that
+#     absence is excused everywhere and caught nowhere rather than merely that a word mismatched.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+absence_shape FS-GG/FS.GG.Rendering uncovered
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q "NOTHING in this receiver runs the kit's view-root assertion without" \
+    && printf '%s' "$out" | grep -q 'excused everywhere and caught nowhere'; } \
+  && ok "absence-cover: absence excused on EVERY lane is a finding, not a word mismatch" \
+  || bad "the underivable state must red with its own diagnostic" "rc=$rc: $out"
+
+# (4) THE DIVERGENCE IS PRESERVED, NOT FLATTENED (#1785's not-in-scope, #1777's deliberate spread).
+#     FS.GG.Audio and FS.GG.Templates really are covered only by their kit-materialize lane, which no
+#     context requires. That is `unrequired`, it is legitimate, and a sweep that red it would be
+#     making a per-repo protection decision that is not its to make. Declared `unrequired` -> GREEN.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+absence_shape FS-GG/FS.GG.Rendering weak
+REN_COVER=unrequired mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: unrequired — no REQUIRED context runs it' \
+    && printf '%s' "$out" | grep -q 'materialize / Materialize the kit from its pin'; } \
+  && ok "absence-cover: a receiver covered only by its materialize lane is GREEN when it says so" \
+  || bad "a legitimate unrequired cover must not be flattened into a finding" "rc=$rc: $out"
+
+# (5) …and the SAME tree with the STRONGER word is the unsafe finding. One roster word apart, and it
+#     is the difference between a receiver that knows absence does not block a merge and one whose
+#     printed `--absent-ok` reason claims a required context has it covered.
+mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'This is the UNSAFE direction' \
+    && printf '%s' "$out" | grep -q 'excused by --absent-ok on: Absence cover'; } \
+  && ok "absence-cover: the same tree with the stronger word is the UNSAFE finding" \
+  || bad "the word is the claim; a wrong word must red" "rc=$rc: $out"
+
+# (6) THE SAFE DIRECTION IS STILL A FINDING. The repo is covered more strongly than it claims — that
+#     is not dangerous, and the word is still wrong, and the word is what the next reader trusts.
+#     Reporting it green is how a roster becomes decoration.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+REN_COVER=unrequired mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'This is the SAFE direction' \
+    && printf '%s' "$out" | grep -q 'Update the row'; } \
+  && ok "absence-cover: a roster word that UNDER-claims is a finding too" \
+  || bad "a stale roster word is wrong in both directions" "rc=$rc: $out"
+mkreg "$REG"
+
+# (7) THE MUTATION OF THE SWEEP ITSELF, AND IT CAUGHT A REAL BUG. FS.GG.Audio's `--absent-ok` reason
+#     reads, verbatim and on one line, "NO required context on this repo runs -t:FsggKitMaterialize".
+#     The first cut of this sweep matched that literal inside the `run:` block, concluded Audio's
+#     required job runs the materialize, and derived `required` for the one receiver whose entire
+#     point is that it is NOT — certifying the excuse by reading the sentence that denies it. That is
+#     #1785's own defect class, one level in.
+#
+#     The shape here has NOTHING that asserts absence: one excused step whose reason names the
+#     target, and a comment that names it too. The honest answer is `none`. A sweep that reads prose
+#     as an invocation answers `required` and this leg fails.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+absence_shape FS-GG/FS.GG.Rendering prose
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering NOTHING in this receiver runs the kit's view-root assertion" \
+    && ! printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
+  && ok "absence-cover: an --absent-ok REASON naming the materialize is prose, never an invocation" \
+  || bad "reading the excuse as evidence FOR the excuse is the bug this sweep is about" "rc=$rc: $out"
+
+# (8) THE UNION OF BOTH STORES (#574), which is why the protection read is IMPORTED rather than
+#     written here. FS.GG.Governance is protected by a repository RULESET and answers 404 on the
+#     classic endpoint; a sweep that read classic alone would report it as requiring nothing and
+#     derive `unrequired` over a fully-protected repo. Here the context is required ONLY by a
+#     ruleset, and the verdict must still be `required`.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+unprotect FS-GG/FS.GG.Rendering
+protect_ruleset FS-GG/FS.GG.Rendering "Absence cover"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
+  && ok "absence-cover: a context required only by a RULESET still covers absence (#574)" \
+  || bad "reading one protection store is a vacuous green" "rc=$rc: $out"
+
+# (9) AN UNPROTECTED BRANCH IS A REAL ANSWER, NOT A MISSING ONE. Both stores say "requires nothing",
+#     both were readable, so the assertion runs on no required context: `unrequired`. It must not be
+#     confused with a protection we could not read — that is leg (10).
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+unprotect FS-GG/FS.GG.Rendering
+REN_COVER=unrequired mkreg "$REG"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: unrequired'; } \
+  && ok "absence-cover: a branch that requires nothing is an ANSWER, and it is 'unrequired'" \
+  || bad "an unprotected branch is not an unread one" "rc=$rc: $out"
+mkreg "$REG"
+
+# (10) #266, THE WHOLE POINT. A protection read that FAILED is reported as unread and never as a
+#      valid excuse. 403 is the dominant real cause — reading required checks needs
+#      `administration: read`, which no workflow GITHUB_TOKEN can hold — so it is PERMANENT: a
+#      re-run with the same credential reproduces it exactly, and the remedy is a token, not a wait.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+echo 403 > "$FIX/FS-GG__FS.GG.Rendering.failprot"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] \
+    && printf '%s' "$out" | grep -q 'absence-cover REFUSED to grade FS-GG/FS.GG.Rendering' \
+    && printf '%s' "$out" | grep -q 'administration: read' \
+    && ! printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
+  && ok "absence-cover: protection we may not read is REFUSED, never a verified excuse (#266)" \
+  || bad "an unread protection must not render as a checked one" "rc=$rc: $out"
+
+# (11) …and the OTHER store failing is refused just as hard. A half-read is not a verdict: the
+#      required set is the union, so one unreadable store makes the union unknowable. Classic
+#      answers perfectly here and the run must still refuse.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+echo 403 > "$FIX/FS-GG__FS.GG.Rendering.failrules"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] \
+    && printf '%s' "$out" | grep -q 'absence-cover REFUSED to grade FS-GG/FS.GG.Rendering' \
+    && ! printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
+  && ok "absence-cover: an unreadable RULESET store is refused too — a half-read is not a verdict" \
+  || bad "one readable store is not the required set" "rc=$rc: $out"
+
+# (12) A TRANSIENT read failure is the RETRYABLE no-verdict, and must not share a code with (10).
+#      "try again" and "a human must grant a scope" are different verdicts and a caller that wants to
+#      retry only the first must be able to ask by exit code (#335).
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+echo 500 > "$FIX/FS-GG__FS.GG.Rendering.failprot"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] \
+    && printf '%s' "$out" | grep -q 'absence-cover could not read FS-GG/FS.GG.Rendering' \
+    && printf '%s' "$out" | grep -q 'could not read the branch protection or rulesets of 1 receiver' \
+    && ! printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
+  && ok "absence-cover: a TRANSIENT protection failure is retryable, not permanent (#335)" \
+  || bad "an outage and a missing scope are different verdicts" "rc=$rc: $out"
+clearfail FS-GG/FS.GG.Rendering
+
 
 # --- THE BUMP-OFFER SWEEP (#1768) ----------------------------------------------------------------
 #
@@ -3115,9 +3471,9 @@ updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,    full: FS-GG/.github,          role: authority, receives: [labels] }
-  - { id: sdd,        full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit], kit-delivery: package }
-  - { id: rendering,  full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit], kit-delivery: package }
-  - { id: governance, full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: sdd,        full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: rendering,  full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: governance, full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 $LABELS_CAP
@@ -3156,7 +3512,7 @@ updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
-  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
   - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }

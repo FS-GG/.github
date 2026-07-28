@@ -135,6 +135,22 @@ expect_fail "not exactly one authority"       1 "exactly one"        "$(variant 
 expect_fail "kit-delivery bad value"          1 "byte-copy|package"  "$(variant kdbad  's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], kit-delivery: bogus/')"
 expect_fail "kit-delivery on non-receiver"    1 "does not receive coordination-kit" "$(variant kdnonrecv 's/role: authority, receives: \[labels\]/role: authority, receives: [labels], kit-delivery: package/')"
 expect_pass "kit-delivery: package on a coordination-kit receiver" "$(variant kdpkg 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], kit-delivery: package/')"
+
+# absence-cover (#1785): WHAT CATCHES AN ABSENT GENERATED VIEW ROOT in this receiver — ADR-0067 §6
+# makes `.agents/skills` a generated view, §8's alarm reds on its absence by default, and a receiver
+# that excuses that with `--absent-ok` is making a claim about its own branch protection that used to
+# live only in a printed sentence. The vocabulary is two words, and the field is not the authority:
+# repos-audit's absence-cover sweep derives the real answer from the API daily and reds on drift.
+expect_fail "absence-cover bad value"       1 "required|unrequired"    "$(variant acbad 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], absence-cover: sometimes/')"
+expect_fail "absence-cover on non-receiver" 1 "does not receive coordination-kit" "$(variant acnonrecv 's/role: authority, receives: \[labels\]/role: authority, receives: [labels], absence-cover: required/')"
+expect_pass "absence-cover: required on a coordination-kit receiver"   "$(variant acreq  's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], absence-cover: required/')"
+expect_pass "absence-cover: unrequired on a coordination-kit receiver" "$(variant acunreq 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], absence-cover: unrequired/')"
+# THE WORD A ROW MAY NOT SAY, and this leg is the whole reason the vocabulary has two entries rather
+# than three. `none` is a state the daily sweep DERIVES and reds on; a roster row asserting it would
+# be the org writing down that nothing catches an ungenerated view — the silent exit 0 in both
+# runtimes that ADR-0067 §8 exists to forbid, granted in advance and in writing. It is refused here,
+# at parse time, so it can never be merged and later read as a licence.
+expect_fail "absence-cover: 'none' is not declarable" 1 "not a declarable state" "$(variant acnone 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], absence-cover: none/')"
 expect_fail "authority receives the kit"      1 "must not RECEIVE"   "$(variant authkit     's/full: FS-GG\/.github,   role: authority, receives: \[labels\]/full: FS-GG\/.github,   role: authority, receives: [labels, coordination-kit]/')"
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
 expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"

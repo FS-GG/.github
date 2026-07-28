@@ -19,13 +19,18 @@
 #      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529) — or a
 #      coordination-kit receiver's FS.GG.Kit pin is behind the newest published one (#1540) — or a
 #      receiver declares a generated view skill root that NOTHING generates before the kit asserts
-#      it (#1759)
+#      it (#1759), or a receiver whose real branch protection contradicts the roster's
+#      `absence-cover:` word for it — the free-text `--absent-ok` claim, finally re-checked (#1785)
 #   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage), or
-#      nuget.org would not say which FS.GG.Kit version is published (#1540)
+#      nuget.org would not say which FS.GG.Kit version is published (#1540), or a receiver's branch
+#      protection would not read (#1785 — an unread protection is never a verified excuse)
 #   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, a
 #      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, a
-#      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself, or a
-#      receiver's view-root generate cannot be ORDERED against the kit's assertion (#1759)
+#      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself, a
+#      receiver's view-root generate cannot be ORDERED against the kit's assertion (#1759), or a
+#      receiver's absence cover cannot be graded at all — most often because this run holds no
+#      `administration: read` credential, so the required set could be read from only one of the two
+#      stores GitHub keeps it in, and a half-read is #574's vacuous green (#1785)
 #      (#316, #320, #503, #1529, #1540, #1759)
 #
 # The audit also carries #1522's sparse-checkout closure rule across the whole roster (#1529), which
@@ -76,6 +81,10 @@ permissions:
   # not a silent 404 that the sweep would have to interpret. It stays read-only: this audit reports,
   # and has never written anything anywhere.
   pull-requests: read
+  # `administration: read` is DELIBERATELY ABSENT and cannot be added: it is not a valid scope for a
+  # GITHUB_TOKEN, and declaring it is a startup validation error that produces no check run at all
+  # (#478/#1575). The absence-cover sweep's protection read goes through the App token minted in the
+  # job below, never through this token. Said here because this is where a reader looks for it.
 
 env:
   # Re-audit once before believing a no-verdict. Exit 2's dominant cause is an API rate limit, whose
@@ -97,10 +106,49 @@ jobs:
       # Only the authoritative pass is echoed. A discarded first pass emits per-repo `::error::`
       # annotations of its own, and replaying them over a clean retry would hang red annotations on a
       # green run — the annotation list is a surface too, and the whole point here is that it not lie.
+      # THE ONE READ THIS AUDIT MAKES THAT GITHUB_TOKEN CANNOT (#1785). The absence-cover sweep asks
+      # what a receiver's branch REQUIRES, and `branches/<b>/protection` needs `administration: read`
+      # — which is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN. Declaring it is a
+      # startup validation error that produces no check run at all (the #478 blind spot, hit for real
+      # by #1575), so no amount of editing the block above can grant it. The org dispatch App holds
+      # the scope (#574's org grant, 2026-07-17) and required-context-coherence.yml already mints it
+      # per receiver on the same roster, green today; this mints ONE token over the whole set.
+      #
+      # `continue-on-error`, and that is not a shrug. Without the token the sweep refuses every
+      # receiver and the run exits 3 with a diagnostic naming the credential — the honest outcome —
+      # so a mint failure must not kill the four sweeps that need no credential before they report.
+      # The audit's own exit code stays the verdict.
+      - name: Mint the App installation token the absence-cover sweep needs
+        id: absentok-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          # The roster is the subject list everywhere else in this workflow, and it cannot be one
+          # here: `create-github-app-token` resolves its input before any step has read a file. These
+          # are the repos the App is installed on, and a receiver MISSING from this list is not a
+          # silent pass — its protection read 403s and the sweep refuses it BY NAME (#266).
+          repositories: |
+            FS.GG.SDD
+            FS.GG.Rendering
+            FS.GG.Governance
+            FS.GG.Templates
+            FS.GG.Game
+            FS.GG.Audio
+            FS.GG.Net
+          permission-administration: read
+
       - name: Audit roster participation
         id: audit
         env:
           GH_TOKEN: ${{ github.token }}
+          # Handed to the absence-cover sweep ALONE. Every other read this script makes is a
+          # public-repo read the run-scoped token makes correctly, and a repo-scoped installation
+          # token would 404 the authority itself — so the two are not interchangeable and the script
+          # does not treat them as such.
+          ABSENTOK_TOKEN: ${{ steps.absentok-token.outputs.token }}
         run: |
           audit() { rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?; }
 
