@@ -66,6 +66,16 @@ on:
 
 permissions:
   contents: read
+  # The bump-offer sweep (#1768) reads each BEHIND receiver's open pull requests, to tell "behind, and
+  # a bump is open" apart from "behind, and nobody ever proposed one". Those need different actions
+  # from different people and the freshness sweep alone cannot distinguish them.
+  #
+  # Declared even though every rostered repo is public and the run-scoped token can already read a
+  # public repo's PR list without it. The grant is the DOCUMENTATION of what this job reads, and the
+  # day a receiver goes private the failure should be a 403 on a permission this workflow asked for,
+  # not a silent 404 that the sweep would have to interpret. It stays read-only: this audit reports,
+  # and has never written anything anywhere.
+  pull-requests: read
 
 env:
   # Re-audit once before believing a no-verdict. Exit 2's dominant cause is an API rate limit, whose

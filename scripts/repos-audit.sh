@@ -246,7 +246,16 @@ KITPIN_DIR="$(mktemp -d)"
 # its own — the file it grades is `.config/kit/FS.GG.Kit.receiver.proj`, which that sweep already
 # stages for every package receiver. See THE VIEW-ROOT GENERATE SWEEP.
 VIEWGEN_FILE="$(mktemp)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE"' EXIT
+# The bump-offer sweep's ledger (#1768), same line-oriented shape: `offer-current`, `offer-superseded`,
+# `offer-ratelimited`, `offer-none`, `offer-undetermined`. It RIDES the kit-pin sweep — it grades ONLY
+# the receivers that sweep already found BEHIND — so a fully current org pays it nothing. See THE
+# BUMP-OFFER SWEEP.
+OFFER_FILE="$(mktemp)"
+# Where that sweep stages each behind receiver's open pull requests, its branch list, and the pin file
+# read AT a candidate bump branch's head. Same staging-then-grade split as the kit-pin sweep, for the
+# same reason: the verdict program parses XML and JSON, and bash must not.
+OFFER_DIR="$(mktemp -d)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -281,6 +290,13 @@ get_workflow() {    # <repo> <file> -> raw workflow text; rc per gh_api
 }
 get_repo_file() {   # <repo> <repo-relative path> -> raw text; rc per gh_api
   gh_api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2"
+}
+# The same read, at a NAMED REF (#1768). The bump-offer sweep needs the pin as it stands on a bump
+# branch, not on `main`, and `?ref=` is how the contents API says that. Kept as its own function
+# rather than a defaulted third argument to `get_repo_file`, so nothing that reads a repo's DEFAULT
+# branch can silently acquire a ref by passing one argument too many.
+get_repo_file_ref() {  # <repo> <repo-relative path> <ref> -> raw text; rc per gh_api
+  gh_api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2?ref=$3"
 }
 
 # --- THE ROSTER'S TREES — RULE (4) BEYOND THE AUTHORITY (#1556) ----------------------------------
@@ -1451,6 +1467,13 @@ for repo in order:
                      f"pins {PACKAGE} {pin} ({where}) but {published} is published on nuget.org. The "
                      f"receiver's materialized kit is whatever {pin} shipped, so coordination-coherence "
                      f"will red on its `main` the next time it pushes — and reads green until then.")
+                # A MACHINE-READABLE twin of the sentence above, and the whole input to the bump-offer
+                # sweep (#1768). It carries the pin PATH as well as the version because that sweep
+                # re-reads the same file at a candidate bump branch's head, and re-deriving which of
+                # the three shapes this repo uses would be a second copy of the rule above — the thing
+                # #1522 exists to stop. It is not printed: the shell's report loop cases on the kinds
+                # it knows and ignores the rest, exactly as it already does for `published`.
+                emit("behind", repo, pin, published, literals[0][0])
             elif ahead:
                 emit("finding", repo,
                      f"pins {PACKAGE} {pin} ({where}), which is AHEAD of the newest published {published}. "
@@ -1629,6 +1652,295 @@ for repo in order:
              f"generate step (#1715 blocker B5, #1759). The fix is a target in {RECEIVER_PROJ}: "
              f"<Target Name=\"Fsgg…GenerateSkillView\" BeforeTargets=\"{ASSERT_TARGET}\" "
              f"Condition=\"'$({VIEW_PROP})' != ''\"> running `scripts/skill-view generate`.")
+
+print("\n".join(out))
+PY
+)
+
+# --- THE BUMP-OFFER SWEEP (#1768) ----------------------------------------------------------------
+#
+# WHAT IT ASSERTS. For every receiver the kit-pin sweep just found BEHIND, this says whether a bump to
+# the published kit was ever OFFERED — and if one was, whether it offers the version that is actually
+# published. Four terminal states, and the remedy for each names a different human action taken by a
+# different person.
+#
+# WHY IT EXISTS. The kit-pin sweep says "receiver R is behind". That one sentence is equally true when
+# Renovate proposed a bump and nobody merged it, and when Renovate never proposed anything at all —
+# and those need opposite actions. On 2026-07-28 both halves failed on the same morning and neither
+# was reported anywhere:
+#
+#   * FS.GG.Audio and FS.GG.Net had not re-extracted since the #1580 preset fix. Renovate here is
+#     predominantly PUSH-triggered and neither repo had been pushed, so neither would ever have
+#     proposed. Repaired by hand-ticking each Dependency Dashboard's `<!-- manual job -->` box.
+#   * FS.GG.Net's bump was then held by a rate limit: the branch existed, the PR did not, and the
+#     dashboard carried `- [ ] <!-- unlimit-branch=renovate/fs.gg.kit-0.x -->`. Ticking that box
+#     produced FS.GG.Net#42 four minutes later.
+#
+# Both states are, from outside, indistinguishable from "this receiver is current" — a bump that is
+# never proposed produces no PR, no check, no notification and no row. That is #1533's class exactly:
+# a failure whose symptom is a NON-EVENT. Today they were told apart only because a human opened two
+# dashboards and read them.
+#
+# AND THE THIRD MODE, WHICH IS STRUCTURAL RATHER THAN INCIDENTAL (#1761). Neither
+# `release-coord-engine.yml` nor `release-kit.yml` calls `dispatch-sender.yml`, so CUTTING A RELEASE
+# NOTIFIES NOBODY. The push half of the fabric never fires for these two packages; Renovate's own
+# schedule is the only path. So after a release every receiver simply stays behind until that schedule
+# comes round, and the org's evidence for "the bump is on its way" is nothing at all. This sweep is
+# f(roster, feed, each receiver's PR list) — like the kit-pin sweep it rides, it needs no push from
+# anybody, which is the only reason it can see a mode whose whole nature is that no event occurs.
+#
+# A SUPERSEDED OFFER IS NOT AN OFFER. This is the distinction the sweep would be worthless without,
+# and it is not hypothetical: measured 2026-07-28, FS.GG.SDD#773, FS.GG.Rendering#1123,
+# FS.GG.Governance#335 and FS.GG.Audio#214 were all open, all named FS.GG.Kit 0.15.1, and the
+# published kit was 0.16.0. A check that reported those four as "has a bump" would be reporting a
+# green nobody earned: merging all four leaves every one of them behind. So the offered version is
+# compared to the published one, and an offer below it is its own state with its own remedy.
+#
+# THE OFFERED VERSION IS READ FROM THE BRANCH, NEVER FROM THE TITLE. `chore(deps): update dependency
+# fs.gg.kit to 0.15.1` is prose Renovate composes and a human may edit; the pin file at the PR's head
+# is what would actually land. So the same pin file the kit-pin sweep graded on `main` is re-read at
+# the head ref and parsed by the SAME `versions_in` rule — no second copy of "what is a pin", for the
+# reason #1522 exists, and no way for a retitle to move this verdict.
+#
+# A BRANCH IS ONLY AN OFFER IF IT IS AHEAD OF `main`. Renovate does not delete a merged branch here,
+# so "a branch exists and no PR does" has TWO causes and only one of them is the rate limit. Measured
+# 2026-07-28: FS.GG.Game carried `renovate/fs.gg.kit-0.x` with no open PR, and that branch pinned
+# 0.15.1 — exactly what Game's own `main` pinned, because its PR had already merged. Reporting that as
+# "rate-limited, go tick unlimit-branch" would have sent someone to a dashboard to tick a box that was
+# not there. So a branch counts as a held offer only when its pin is STRICTLY AHEAD of the pin on
+# `main`; a branch at or below it is a leftover and says nothing.
+#
+# WHAT IT CANNOT SEE, WRITTEN DOWN RATHER THAN PAPERED OVER (#266). Renovate's scheduling is not
+# observable from this side, and this sweep does not pretend otherwise:
+#
+#   * WHETHER RENOVATE HAS RUN. Nothing here reads the Dependency Dashboard's timestamp or the bot's
+#     job log. "No open PR and no branch ahead" is the same observation for "the dashboard is stale
+#     and never re-extracted" (mode 1) and "a release happened and nothing told anyone" (mode 3). The
+#     sweep reports them as ONE state, `offer-none`, and its remedy names the tick that repairs both —
+#     because the same tick does repair both. It does NOT claim to know which one it is looking at.
+#   * WHEN THE NEXT RUN IS. Not observable at all. A receiver reported `offer-none` may have a bump
+#     proposed a minute later. This is a report about NOW, and re-running it is the only way to know.
+#   * A DELIBERATELY CLOSED BUMP. Closing a Renovate PR adds the dep to the dashboard's ignore list.
+#     From here that is indistinguishable from never having been offered one, and the remedy differs
+#     (untick the ignore box, not the manual-job box). The `offer-none` text says so rather than
+#     asserting the cause it did not check — the #566 discipline, one gate over.
+#   * A NON-RENOVATE BUMP IN FLIGHT. A hand-authored PR that moves the pin is FOUND (the head ref is
+#     read the same way), but a bump sitting in somebody's local checkout is not a thing this or any
+#     other check can see.
+#
+# THE REMEDY MUST NAME THE HUMAN ACTION. Both of today's repairs were a single checkbox tick that
+# nobody knew to make. A check that reports a problem and leaves the reader to work out what to do
+# recreates the non-event it was built to end, so every state below names the box AND the issue it is
+# on. `- [ ] <!-- manual job -->` and `- [ ] <!-- unlimit-branch=… -->` are Renovate's own markers and
+# are quoted verbatim, because that is the string the reader will be searching the dashboard for.
+#
+# Argv: the staging dir and its manifest. Stdout: tab-separated ledger records, one per line.
+OFFER_PY=$(cat <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+sys.path.insert(0, os.environ["FSGG_SCRIPTS_DIR"])
+import fsgg_feed  # noqa: E402
+
+PACKAGE = "FS.GG.Kit"
+DASHBOARD = "Renovate's Dependency Dashboard issue"
+
+out = []
+
+
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
+
+
+def localname(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+# The SAME rule the kit-pin sweep grades `main` with, so the two cannot disagree about what a pin is.
+# Kept identical deliberately: if the manager's shape changes, both must move together or the sweep
+# would compare a version it read one way against a version it read another.
+def versions_in(text):
+    root = ET.fromstring(text)
+    found = []
+    for el in root.iter():
+        if localname(el.tag) not in ("PackageReference", "PackageVersion"):
+            continue
+        include = el.get("Include") or el.get("Update") or ""
+        if include.strip().lower() != PACKAGE.lower():
+            continue
+        override = el.get("VersionOverride")
+        if override is not None and override.strip():
+            found.append(override.strip())
+            continue
+        version = el.get("Version")
+        if version is None:
+            child = next((c for c in el if localname(c.tag) == "Version"), None)
+            version = child.text if child is not None else None
+        if version is None or not version.strip():
+            continue
+        found.append(version.strip())
+    return found
+
+
+def read(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+staging, manifest = sys.argv[1], sys.argv[2]
+
+# One record per BEHIND receiver, written by the shell: what it pins, what is published, where its pin
+# lives, and the staged evidence about its open bumps.
+with open(manifest, encoding="utf-8") as fh:
+    rows = [line.rstrip("\n").split("\t") for line in fh if line.strip()]
+
+for repo, pin, published, pinpath, slug in rows:
+    base = os.path.join(staging, slug)
+
+    # An unread PR list is NOT "no bump was offered". It is a failure to read, and the one thing this
+    # sweep must never do is turn a lost API call into the very state it exists to report — that is
+    # #266's defect wearing this sweep's clothes.
+    err = os.path.join(base, "err")
+    if os.path.exists(err):
+        emit("offer-undetermined", repo,
+             f"could not read this repo's open pull requests or branches ({read(err).strip()}), so "
+             f"nothing is known about whether a {PACKAGE} bump was offered. It is behind either way — "
+             f"the kit-pin sweep said so — but WHICH remedy applies is unanswered, and 'no bump was "
+             f"offered' is emphatically not the safe guess.")
+        continue
+
+    # Both were normalized to `<key>\t<ref>\t<slug>` by the shell, which is also where a body of the
+    # wrong shape was already turned into the `err` above. Reaching here means both parsed.
+    def rows(name):
+        path = os.path.join(base, name)
+        if not os.path.exists(path):
+            return []
+        return [ln.split("\t") for ln in read(path).splitlines() if ln.strip()]
+
+    try:
+        prs = rows("prs.tsv")
+        branches = rows("branches.tsv")
+    except (OSError, UnicodeDecodeError) as e:
+        emit("offer-undetermined", repo,
+             f"the staged pull-request/branch evidence would not read ({type(e).__name__}: {e}), so "
+             f"nothing is known about whether a {PACKAGE} bump was offered.")
+        continue
+
+    # A candidate is any open PR whose HEAD we managed to read a kit pin from — the shell stages one
+    # `head/<n>` blob per open PR whose head ref looks like it could carry one. Reading the pin is
+    # what makes it a candidate; the title is never consulted.
+    offers = []          # (pr_number, offered_version, head_ref)
+    unreadable = []
+    for num, ref, _refslug in prs:
+        blob = os.path.join(base, "head", num)
+        if not os.path.exists(blob):
+            continue
+        try:
+            found = versions_in(read(blob))
+        except (ET.ParseError, OSError, UnicodeDecodeError) as e:
+            unreadable.append(f"#{num} ({type(e).__name__})")
+            continue
+        if not found:
+            continue
+        offers.append((num, found[0], ref))
+
+    try:
+        published_v = fsgg_feed.parse_version(published)
+        pin_v = fsgg_feed.parse_version(pin)
+    except fsgg_feed.GateError as e:
+        emit("offer-undetermined", repo,
+             f"cannot order this repo's pin {pin!r} against the published {published!r} ({e}), so an "
+             f"offer cannot be graded against either.")
+        continue
+
+    def ordered(v):
+        try:
+            return fsgg_feed.parse_version(v)
+        except fsgg_feed.GateError:
+            return None
+
+    # An offer AT the published version is the only one that makes the receiver current. Pick the
+    # highest readable offer: two open bumps is not an error, and grading the lower one would report a
+    # superseded state for a repo that has a current offer sitting right beside it.
+    graded = [(n, v, ordered(v), b) for n, v, b in offers]
+    readable = [g for g in graded if g[2] is not None]
+    if readable:
+        best = max(readable, key=lambda g: g[2])
+        n, v, ov, _b = best
+        if ov >= published_v:
+            emit("offer-current", repo,
+                 f"is behind ({pin}) and PR #{n} offers {PACKAGE} {v}, which is the published version. "
+                 f"Nothing is wrong with the PROPOSAL step here: the bump exists and is current. "
+                 f"REMEDY: review and merge {repo}#{n}. No dashboard tick is needed.")
+        else:
+            emit("offer-superseded", repo,
+                 f"is behind ({pin}) and PR #{n} offers {PACKAGE} {v} — but {published} is published, "
+                 f"so that PR is SUPERSEDED and merging it leaves this receiver behind. Renovate has "
+                 f"not re-proposed since {published} was released, which is what a release that "
+                 f"notifies nobody looks like from here (#1761: neither release-coord-engine.yml nor "
+                 f"release-kit.yml calls dispatch-sender.yml). REMEDY: on {DASHBOARD} in {repo}, tick "
+                 f"`- [ ] <!-- manual job -->` to force a re-extraction now; Renovate will retarget "
+                 f"#{n} at {published} within minutes. Merging #{n} first is not wrong, it is just "
+                 f"not sufficient.")
+        if unreadable:
+            emit("offer-undetermined", repo,
+                 f"graded the offer above, but {len(unreadable)} other open PR(s) carried a "
+                 f"{PACKAGE} pin this sweep could not read ({', '.join(unreadable)}). If one of those "
+                 f"is the current offer, the state above is understated.")
+        continue
+
+    if unreadable:
+        emit("offer-undetermined", repo,
+             f"has {len(unreadable)} open PR(s) whose {PACKAGE} pin would not read "
+             f"({', '.join(unreadable)}) and no readable offer, so whether a bump was offered is "
+             f"unanswered. Not 'no bump': unread evidence is not an answer (#266).")
+        continue
+
+    # NO open PR offers a bump. The remaining question is whether Renovate got as far as a BRANCH and
+    # was then held — the rate limit — or never proposed at all. Only a branch strictly AHEAD of the
+    # pin on `main` counts; see the header on FS.GG.Game's leftover branch.
+    held = []
+    for _key, bname, bslug in branches:
+        blob = os.path.join(base, "branch", bslug)
+        if not os.path.exists(blob):
+            continue
+        try:
+            found = versions_in(read(blob))
+        except (ET.ParseError, OSError, UnicodeDecodeError):
+            continue
+        if not found:
+            continue
+        bv = ordered(found[0])
+        # STRICTLY ahead of `main`, which is the whole discrimination: Renovate does not delete a
+        # merged branch here, so a leftover at exactly the pin on `main` is not an offer and must not
+        # be reported as a rate-limited one. See FS.GG.Game in the header.
+        if bv is not None and bv > pin_v:
+            held.append((bname, found[0], bv))
+
+    if held:
+        name, v, _ov = max(held, key=lambda h: h[2])
+        emit("offer-ratelimited", repo,
+             f"is behind ({pin}) and branch `{name}` already carries {PACKAGE} {v} — but NO open pull "
+             f"request proposes it. That is Renovate having created the branch and then been held by "
+             f"a rate limit, which is the FS.GG.Net failure of 2026-07-28 exactly. REMEDY: on "
+             f"{DASHBOARD} in {repo}, tick `- [ ] <!-- unlimit-branch={name} -->`. The PR appears "
+             f"within a few minutes. (Do NOT raise prHourlyLimit/branchConcurrentLimit as the fix "
+             f"here — that is a separate decision with its own costs and it does not make this state "
+             f"visible.)")
+        continue
+
+    emit("offer-none", repo,
+         f"is behind ({pin}, published {published}) and NO bump has been offered at all — no open pull "
+         f"request and no branch ahead of `main`. THIS IS THE STATE NOTHING ELSE IN THIS ORG REPORTS: "
+         f"the freshness sweep says only that it is behind, which is equally true of a receiver whose "
+         f"bump is sitting open and unmerged. REMEDY: on {DASHBOARD} in {repo}, tick "
+         f"`- [ ] <!-- manual job -->` to force a re-extraction. If the dep then appears under "
+         f"'Detected dependencies' but no PR follows, it is rate-limited — tick that branch's "
+         f"`- [ ] <!-- unlimit-branch=… -->` box next. WHAT THIS SWEEP DID NOT CHECK: whether Renovate "
+         f"has run at all since the last preset change, and whether a previous bump here was CLOSED by "
+         f"a human (which adds the dep to the dashboard's ignore list and looks identical from "
+         f"outside, but is repaired by unticking THAT box instead). Both reach this same state.")
 
 print("\n".join(out))
 PY
@@ -2267,6 +2579,165 @@ else
   fi
 fi
 
+# --- the bump-offer sweep (#1768) ----------------------------------------------------------------
+# For each receiver the sweep above found BEHIND, fetch what would tell a human WHICH remedy applies:
+# the repo's open pull requests, its branch list, and the kit pin as it stands at each candidate head.
+# Then grade them all in ONE verdict program, as above.
+#
+# LAZY, AND THE LAZINESS IS THE COST CONTROL. Nothing here is fetched for a receiver that is current.
+# An org whose receivers are all on the published kit pays this sweep ZERO additional API calls — the
+# same property #1556 criterion 5 asked of the tree fetches, and the reason this rides the freshness
+# sweep instead of polling the org. Per BEHIND receiver it costs one PR list, one branch list, and one
+# content read per candidate head; today that is seven receivers behind and eleven reads.
+offer_subjects=0; offer_fetched=0
+: > "$OFFER_DIR/manifest.tsv"
+
+# The behind rows are the kit-pin sweep's own machine-readable output, so this sweep's subject set
+# cannot drift from what that one reported. If it graded nobody behind, the loop body never runs.
+# Normalize one API list into `<key>\t<slug>` lines, and FAIL rather than abort if the body is not
+# the shape this sweep expects. Under `set -euo pipefail` a bare `json.load` in a pipeline takes the
+# whole audit down mid-loop — which is not a no-verdict, it is no report at all, and it is exactly the
+# fail-shape this script's own header forbids. Every caller below therefore guards this with `||` and
+# turns the failure into an `err` file, which the verdict program renders as `offer-undetermined`.
+#
+# The slug exists because a git ref carries `/` and cannot be a filename.
+offer_normalize() {  # <kind: prs|branches> <infile> <outfile> -> `<num-or-name>\t<ref>\t<slug>` lines
+  python3 -c '
+import json, sys
+kind, src, dst = sys.argv[1], sys.argv[2], sys.argv[3]
+data = json.load(open(src, encoding="utf-8"))
+if not isinstance(data, list):
+    raise ValueError("expected a JSON array, got %s" % type(data).__name__)
+rows = []
+for item in data:
+    if kind == "prs":
+        key, ref = str(item["number"]), item["headRefName"]
+    else:
+        key = ref = item["name"]
+    rows.append("%s\t%s\t%s" % (key, ref, ref.replace("/", "__")))
+open(dst, "w", encoding="utf-8").write("\n".join(rows) + ("\n" if rows else ""))
+' "$1" "$2" "$3" 2>"$GH_ERR_FILE"
+}
+
+# Would a ref of this name plausibly carry a kit bump? Deliberately GENEROUS, and the asymmetry is
+# deliberate too: a ref that carries a bump and is missed here reads as `offer-none` — a false alarm
+# that sends someone to a dashboard — whereas a ref matched needlessly costs one content read that
+# finds no pin change. So the filter errs wide. It is matched on the REF and never on the PR TITLE,
+# because a title is prose Renovate composes and a human may edit, while the ref is what the branch
+# actually is. The filter exists at all only so a repo with thirty open PRs does not cost thirty
+# content reads to answer one question.
+offer_candidate_ref() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    *fs.gg.kit*|*fs-gg-kit*|*coordination-kit*|*kit-bump*|*bump-kit*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# The behind rows are the kit-pin sweep's own machine-readable output, so this sweep's subject set
+# cannot drift from what that one reported. If it graded nobody behind, the loop body never runs.
+while IFS=$'\t' read -r _kind repo pin published pinpath; do
+  [ -n "$repo" ] || continue
+  offer_subjects=$((offer_subjects + 1))
+  slug="${repo//\//__}"
+  mkdir -p "$OFFER_DIR/$slug/head" "$OFFER_DIR/$slug/branch"
+  offer_err=""
+
+  # Open PRs, then branches. ANY failure here — the call, or a body that is not the documented shape
+  # — makes this receiver UNDETERMINED about its offer. Never `offer-none`: that is a verdict, and
+  # manufacturing it out of a lost API call would be this sweep committing the very #266 error it
+  # was built to report.
+  prc=0; prs="$(gh_api "repos/$repo/pulls?state=open&per_page=100" \
+                       --jq '[.[] | {number, headRefName: .head.ref}]')" || prc=$?
+  if [ "$prc" -ne 0 ]; then
+    offer_err="reading open pull requests failed — $(gh_last_err)"
+  else
+    printf '%s' "$prs" > "$OFFER_DIR/$slug/prs.json"
+    brc=0; branches="$(gh_api "repos/$repo/branches?per_page=100" --jq '[.[] | {name}]')" || brc=$?
+    if [ "$brc" -ne 0 ]; then
+      offer_err="reading branches failed — $(gh_last_err)"
+    else
+      printf '%s' "$branches" > "$OFFER_DIR/$slug/branches.json"
+      offer_normalize prs "$OFFER_DIR/$slug/prs.json" "$OFFER_DIR/$slug/prs.tsv" \
+        || offer_err="the open pull-request list was not the shape this sweep reads — $(gh_last_err)"
+      if [ -z "$offer_err" ]; then
+        offer_normalize branches "$OFFER_DIR/$slug/branches.json" "$OFFER_DIR/$slug/branches.tsv" \
+          || offer_err="the branch list was not the shape this sweep reads — $(gh_last_err)"
+      fi
+    fi
+  fi
+
+  if [ -z "$offer_err" ]; then
+    offer_fetched=$((offer_fetched + 1))
+    # The pin file AT each candidate head, and at each candidate BRANCH. The branch pass is what sees
+    # the rate-limited state at all: a branch held with no PR leaves no other evidence anywhere.
+    #
+    # A head read that 404s is an ANSWER — that ref does not carry this pin shape — and a head read
+    # that fails otherwise simply leaves that candidate out of the set. Neither can manufacture an
+    # offer; a receiver whose every candidate went unread lands on `offer-none`, whose own text names
+    # "a bump we could not read" among the things it did not check.
+    while IFS=$'\t' read -r key ref refslug; do
+      [ -n "$key" ] || continue
+      offer_candidate_ref "$ref" || continue
+      hrc=0; head="$(get_repo_file_ref "$repo" "$pinpath" "$ref")" || hrc=$?
+      [ "$hrc" -eq 0 ] || continue
+      printf '%s' "$head" > "$OFFER_DIR/$slug/head/$key"
+    done < "$OFFER_DIR/$slug/prs.tsv"
+
+    while IFS=$'\t' read -r key ref refslug; do
+      [ -n "$key" ] || continue
+      offer_candidate_ref "$ref" || continue
+      hrc=0; head="$(get_repo_file_ref "$repo" "$pinpath" "$ref")" || hrc=$?
+      [ "$hrc" -eq 0 ] || continue
+      printf '%s' "$head" > "$OFFER_DIR/$slug/branch/$refslug"
+    done < "$OFFER_DIR/$slug/branches.tsv"
+  else
+    printf '%s' "$offer_err" > "$OFFER_DIR/$slug/err"
+  fi
+
+  printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$pin" "$published" "$pinpath" "$slug" \
+    >> "$OFFER_DIR/manifest.tsv"
+done < <(awk -F'\t' '$1 == "behind"' "$KITPIN_FILE")
+
+
+if [ "$offer_subjects" -eq 0 ]; then
+  # NOT a green, and the sentence says which of the two silences this is. "No receiver is behind" is a
+  # real all-clear about the proposal step — there is nothing to propose. "The freshness sweep reached
+  # no verdict" is not, and must not borrow the first one's words (#266).
+  offer_none=0; offer_current=0; offer_superseded=0; offer_ratelimited=0; offer_undet=0
+  if [ "$kitpin_graded" -gt 0 ] && [ "$kitpin_findings" -eq 0 ]; then
+    echo "repos-audit: bump-offer (#1768) — no receiver is behind, so there is no bump for anyone to have been offered. This one IS an all-clear about the proposal step."
+  else
+    echo "repos-audit: bump-offer (#1768) — the kit-pin sweep reached no BEHIND verdict for anybody, so this sweep had no subject and graded nothing. NOTHING was asserted about whether any receiver has been offered a bump."
+  fi
+else
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$OFFER_PY" "$OFFER_DIR" "$OFFER_DIR/manifest.tsv" >> "$OFFER_FILE" \
+    || die "the bump-offer verdict program failed to run. That is not a clean sweep — no behind receiver's proposal state was graded."
+
+  offer_count() { grep -cE "^$1"$'\t' "$OFFER_FILE" 2>/dev/null || true; }
+  offer_none="$(offer_count offer-none)"
+  offer_current="$(offer_count offer-current)"
+  offer_superseded="$(offer_count offer-superseded)"
+  offer_ratelimited="$(offer_count offer-ratelimited)"
+  offer_undet="$(offer_count offer-undetermined)"
+
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      # The three states that mean a HUMAN MUST GO TICK SOMETHING are errors in their own right, with
+      # their own annotation, so the operator reading the run sees the action and not merely the fact.
+      offer-none)         echo "::error::repos-audit: bump-offer — $a $b" ;;
+      offer-ratelimited)  echo "::error::repos-audit: bump-offer — $a $b" ;;
+      offer-superseded)   echo "::error::repos-audit: bump-offer — $a $b" ;;
+      # A current offer is NOT an error here. The receiver is still behind and the kit-pin sweep has
+      # already said so with its own red; this line exists to tell the reader that the proposal step
+      # worked and the remaining action is a review, not a dashboard tick.
+      offer-current)      echo "  bump-offer: $a $b" ;;
+      offer-undetermined) echo "::error::repos-audit: bump-offer — $a: $b" ;;
+    esac
+  done < "$OFFER_FILE"
+
+  echo "repos-audit: bump-offer (#1768) — of $offer_subjects receiver(s) the kit-pin sweep found behind, read the open PRs/branches of $offer_fetched: $offer_current have a CURRENT bump open, $offer_superseded have a SUPERSEDED one, $offer_ratelimited have a branch held by a rate limit, $offer_none have NO bump at all, $offer_undet undetermined. This does NOT observe whether Renovate has run, when it next will, or whether a bump here was closed by hand — see the header on what this sweep cannot see."
+fi
+
 # --- the view-root generate sweep (#1759) --------------------------------------------------------
 #
 # IT RIDES THE KIT-PIN STAGING AND FETCHES NOTHING. The file it grades —
@@ -2375,13 +2846,20 @@ fi
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
-   || [ "$viewgen_undet" -ne 0 ]; then
+   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
   # receiver project is not a wiring question, and folding it into `$undetermined` would print
   # "could not determine WIRING" about a file that answers a different question (#327/#335).
   [ "$viewgen_undet" -eq 0 ] || echo "::error::repos-audit: could not read the receiver project of $viewgen_undet repo(s), so nothing was proven about whether their declared view skill root can be generated. This is a failure to READ, not a missing generate target." >&2
+  # Its own counter and sentence for the same reason as the two above, and here the wrong subject
+  # would be actively dangerous: an unread PR list means we do not know whether a bump was OFFERED,
+  # which is a different question from whether the pin is stale (we KNOW it is — that is why this
+  # receiver was a subject at all). Folding it into $kitpin_undet would report "nothing was proven
+  # about their kit" over a receiver whose kit staleness was in fact proven, and would lose the one
+  # fact the operator needs: that the REMEDY, not the finding, is the unknown.
+  [ "$offer_undet" -eq 0 ] || echo "::error::repos-audit: could not determine whether $offer_undet behind receiver(s) have been OFFERED a kit bump — their open pull requests, branches, or a candidate head's pin would not read. They are behind either way; what is unknown is which remedy applies, and 'nobody offered them one' is not the safe guess (#1768/#266)." >&2
   # A rostered repository whose git TREE would not read (#1556). It joins the retryable no-verdicts on
   # the same argument the two above are made on: the subject exists, we failed to read it, and a later
   # run may well reach a verdict. It gets its own counter and sentence rather than being folded into
@@ -2454,13 +2932,26 @@ fi
 # FINDING and not a no-verdict because the sweep DID reach an answer — from here, with no push from
 # that receiver — which is the whole point of grading it centrally rather than waiting for a
 # Renovate kit bump to red on a tree nobody touched.
+#
+# A behind receiver that was never OFFERED a bump — or was offered a superseded one, or has a branch a
+# rate limit is sitting on — joins them a fifth subject across (#1768). Every one of those is a
+# finding on the same argument: the sweep reached an answer from here, with no push from anybody, and
+# the remedy is a specific human action named in the annotation.
+#
+# It is counted SEPARATELY rather than left to ride $kitpin_findings, even though today every offer
+# subject is also a kit-pin finding. The two say different things — "this receiver is stale" and
+# "nobody has proposed fixing it" — and the second must not be able to vanish silently if the first
+# is ever restructured. An alarm whose firing depends on a neighbouring alarm's implementation is the
+# leg that survives its own mutation, which is the defect this whole area keeps rediscovering.
+offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
-   || [ "$viewgen_findings" -ne 0 ]; then
+   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
+  [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   exit 1
 fi
 # The terminal claim is CONDITIONAL on the sweep having graded somebody. A run that graded nobody
@@ -2478,4 +2969,14 @@ if [ "$viewgen_graded" -gt 0 ]; then
   echo "repos-audit: OK — all $viewgen_graded receiver(s) that declare a view skill root generate it before FsggKitCheckSkillView."
 else
   echo "repos-audit: OK — NO receiver's view-root generate was graded, so nothing is claimed about it."
+fi
+# The bump-offer sweep's terminal line, conditional on the same argument again — with one difference
+# that matters. Reaching here means NO receiver is behind, so the claim it earns is not "every
+# receiver has been offered a bump" but "no receiver needed one". Those are not the same sentence and
+# the stronger one is unearnable from here: this sweep can only ever speak about receivers the
+# freshness sweep handed it, and when the org is current it is handed nobody.
+if [ "$offer_subjects" -gt 0 ]; then
+  echo "repos-audit: OK — all $offer_subjects behind receiver(s) have a CURRENT kit bump open; the proposal step is working and what remains is a review in each repo."
+else
+  echo "repos-audit: OK — no receiver was behind, so none needed a bump proposed. Nothing is claimed about Renovate's scheduling, which this audit cannot observe."
 fi
