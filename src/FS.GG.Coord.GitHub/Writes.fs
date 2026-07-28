@@ -30,12 +30,17 @@ module Writes =
         | RefuseLiveHolder
         | StealLiveHolder
 
+    type SelfIdentity =
+        | Derives of WorkerId
+        | DerivesNothing
+
     type ClaimOutcome =
         | Won of held: Held * collected: WorkerId list
         | Renewed of held: Held * collected: WorkerId list
         | Stolen of held: Held * from: WorkerId list * collected: WorkerId list
         | Lost of WorkerId
         | Twin of theirs: SessionId
+        | Impersonates of derived: WorkerId * named: WorkerId
         | Undecided of reason: string
         | BlockedByUnparseableMarker
 
@@ -43,6 +48,10 @@ module Writes =
         | Holds of Held
         | DoesNotHold
         | TwinHolds of theirs: SessionId
+        // `ImpersonatesHolder`, not a second `Impersonates`: `ClaimOutcome` already has that name, and two
+        // cases spelled alike in one module shadow each other at every unqualified construction. This is the
+        // `Twin`/`TwinHolds` pairing's reason, and its spelling.
+        | ImpersonatesHolder of derived: WorkerId * named: WorkerId
 
     [<Sealed>]
     type Reapable
@@ -117,6 +126,28 @@ module Writes =
         match ours, theirs with
         | Some(SessionId o), Some(SessionId t) when o <> t -> Some(SessionId t)
         | _ -> None
+
+    /// IS THE CALLER ASKING TO ACT AS SOMEBODY ELSE? Returns the id it derived for ITSELF when it is (#1646).
+    ///
+    /// ONE PREDICATE, TWO CALLERS — `claim`'s re-claim arm and `verifyHeld` — for `twinSession`'s reason,
+    /// verbatim: these are `Held`'s only two doors, and a `claim` that renews a marker `verifyHeld` refuses to
+    /// verify (or the reverse) would mean the tool hands you the lock in one verb and denies it in another.
+    ///
+    /// It compares the named `worker` against what this PROCESS resolves for itself with `--worker` taken
+    /// away. That is the only fact in the whole exchange the flag cannot restate: the id came off the board,
+    /// and under a shared harness session the session came from a sibling, so both of the older legs match on
+    /// facts the impersonator legitimately holds.
+    ///
+    /// UNASKABLE IS NOT "NO". `DerivesNothing` — a human, a harness exporting no session and no
+    /// `$FSGG_WORKER` — has nothing to compare, exactly as a caller with no session of its own can never
+    /// conclude "twin". It returns `None` there because the question cannot be put, not because the answer is
+    /// clean, and #1646 records that residue rather than dressing it up: a caller that unsets its own identity
+    /// before impersonating arrives here and is indistinguishable from the operator this arm exists for.
+    let private impersonated (self: SelfIdentity) (worker: WorkerId) : WorkerId option =
+        match self with
+        | Derives d when d <> worker -> Some d
+        | Derives _
+        | DerivesNothing -> None
 
     // ---- comment primitives ----------------------------------------------------------------------
 
@@ -208,6 +239,7 @@ module Writes =
         (force: ClaimForce)
         (onEvict: WorkerId list -> unit)
         (worker: WorkerId)
+        (self: SelfIdentity)
         (session: SessionId option)
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
@@ -430,6 +462,16 @@ module Writes =
         // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
         // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
         | Some m ->
+            // THE OTHER DOOR TO A `Held`, AND IT HAS THE SAME HOLE (#1646). This arm hands back a `Renewed`
+            // over a marker it did not create, on the strength of the id alone — and under one harness
+            // session `twinSession` below cannot call that marker somebody else's, because the impersonator's
+            // session IS theirs. So `claim --worker <them>` renewed a live holder's lease and reported the
+            // item held, through the door #1031 only had to consider for `verifyHeld`. It is asked before the
+            // twin question for `verifyHeld`'s reason, in the same order, so the two doors cannot disagree.
+            match impersonated self worker with
+            | Some derived -> Ok(Impersonates(derived, worker))
+            | None ->
+
             match twinSession session m.Session with
             | Some theirs -> Ok(Twin theirs)
             | None ->
@@ -467,6 +509,7 @@ module Writes =
         (transport: IGitHubTransport)
         (leaseMinutes: int)
         (worker: WorkerId)
+        (self: SelfIdentity)
         (session: SessionId option)
         (ref: Ref)
         : IoResult<HeldOutcome> =
@@ -483,6 +526,22 @@ module Writes =
                 // THE ID MATCHED. That is NOT the same question as "is this ours", and #419 is the whole
                 // reason: an id two workers share is an id this protocol cannot separate. Ask the session
                 // predicate — `claim`'s own — before opening the door to the capability.
+                //
+                // AND ASK WHO WE ARE FIRST (#1646). The id matching proves nothing on its own — it was
+                // COPIED off this very marker set — and under one harness session the session leg matches for
+                // the same reason, because every sibling of the fan-out holds it. So the question that
+                // survives a shared session is asked BEFORE the twin one: does this process's OWN identity
+                // agree with the id it was told to act as? A caller that derived `kite-461` and named
+                // `vole-418` is definitively not `vole-418`, whatever the sessions say — and calling that a
+                // TWIN would send them to `whoami --mint` over an identity collision they do not have.
+                //
+                // This arm is reached only when the named worker holds the LIVE lock, which is what makes it
+                // safe to accuse: a mis-typed `--worker` names an id that holds nothing and falls through to
+                // `DoesNotHold` below, where the caller can note the disagreement without the accusation.
+                match impersonated self worker with
+                | Some derived -> Ok(ImpersonatesHolder(derived, worker))
+                | None ->
+
                 match twinSession session m.Session with
                 | Some theirs -> Ok(TwinHolds theirs)
                 // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later

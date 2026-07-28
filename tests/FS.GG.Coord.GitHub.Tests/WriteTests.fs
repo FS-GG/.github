@@ -15,6 +15,14 @@ let private aRef =
 let private me = WorkerId "vole-418"
 let private them = WorkerId "kite-461"
 
+/// THE ORDINARY CALLER (#1646): this process's OWN worker id is the one it is acting as.
+///
+/// That is every invocation the protocol prescribes — `eval "$(scripts/fsgg-coord whoami --mint)"` and then
+/// run the verb — so it is the default throughout this file, and the impersonation legs below are the ones
+/// that deviate from it. Spelling it as a named value rather than `Derives me` at fifty call sites keeps the
+/// deviation VISIBLE: a test that passes anything else is making a point.
+let private itsMe = Derives me
+
 let private now = System.DateTimeOffset.UtcNow.ToString("o")
 
 let private marker (id: int) (worker: string) (extra: string) =
@@ -96,7 +104,7 @@ let ``the chore lock is the item CAS UNCHANGED — an off-board ref, a short lea
     // The chore-lock configuration, in full: a short lease, and `fun () -> None` for the board callback —
     // a lock issue has no column to restore, which is why the coupling belongs in the callback and not in
     // the CAS. No new function, no new marker prefix, no parameter that does not already exist.
-    match claim transport choreLease RefuseLiveHolder ignore me None choreLock (fun () -> None) with
+    match claim transport choreLease RefuseLiveHolder ignore me itsMe None choreLock (fun () -> None) with
     | Ok(Won(held, _)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal(me, held.Worker)
@@ -133,7 +141,7 @@ let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` 
               ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // a rival got there first
               ok "" ] // so we withdraw
 
-    match claim transport choreLease RefuseLiveHolder ignore me None choreLock (fun () -> None) with
+    match claim transport choreLease RefuseLiveHolder ignore me itsMe None choreLock (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"two workers must not hold one chore — got %A{other}"
 
@@ -152,7 +160,7 @@ let ``the chore lock COLLECTS a dead holder's debris — the lock a worker died 
               ok (comments [ staleClaimJson 800 "kite-461" ""; marker 901 "vole-418" "" ])
               ok "" ] // collect the dead marker
 
-    match claim transport choreLease RefuseLiveHolder ignore me None choreLock (fun () -> None) with
+    match claim transport choreLease RefuseLiveHolder ignore me itsMe None choreLock (fun () -> None) with
     | Ok(Won(held, evicted)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Contains(them, evicted)
@@ -170,7 +178,7 @@ let ``the CAS WINS when our marker is the lowest live id`` () =
               ok """{"id":901}""" // 2. post our marker
               ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal(me, held.Worker)
@@ -188,7 +196,7 @@ let ``the CAS LOSES to a lower id, and WITHDRAWS its own marker`` () =
               ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 3. re-read: 901 beat us
               ok "" ] // 4. DELETE our 902
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"we should have lost to the lower id — got %A{other}"
 
@@ -207,7 +215,7 @@ let ``'we cannot tell' is a LOSS - our marker missing from the re-read withdraws
               ok "[]" // the re-read does not contain our marker at all
               ok "" ] // so we withdraw it
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
     | other -> failwith $"an unobservable outcome is a LOSS, never a win — got %A{other}"
 
@@ -222,7 +230,7 @@ let ``a FAILED re-read withdraws the marker and refuses - it never wins by defau
               Error(Http(502, "bad gateway")) // the re-read failed
               ok "" ] // withdraw
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
     | other -> failwith $"a failed re-read must not win the lock — got %A{other}"
 
@@ -240,7 +248,7 @@ let ``a marker we can neither win with NOR withdraw is reported LOUDLY - it is o
               Error(Http(502, "bad gateway"))
               Error(Http(500, "delete failed")) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Error(Transport detail) -> Assert.Contains("orphaned", detail)
     | other -> failwith $"an orphaned marker must be loud — got %A{other}"
 
@@ -250,7 +258,7 @@ let ``the CAS refuses BEFORE posting when somebody else already holds a live loc
     // ours. Refuse cheaply.
     let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"a live rival lock must be refused — got %A{other}"
 
@@ -266,7 +274,7 @@ let ``an UNPARSEABLE marker blocks the item - it is a claim held by nobody`` () 
 
     let transport = scripted [ ok (comments [ unparseable ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok BlockedByUnparseableMarker -> ()
     | other -> failwith $"an unparseable marker must block — got %A{other}"
 
@@ -283,7 +291,7 @@ let ``re-claiming an item we ALREADY hold renews it in place and posts no second
             [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
               ok """{"id":901}""" ] // 2. PATCH: renew the lease in place
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"re-claiming our own live lock renews it in place — got %A{other}"
 
@@ -304,7 +312,7 @@ let ``a won claim COLLECTS a stale OTHER worker's marker and names the evicted w
               ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ]) // 3. re-read: we win
               ok "" ] // 4. DELETE ghost-111's stale marker
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal<WorkerId list>([ WorkerId "ghost-111" ], collected)
@@ -324,7 +332,7 @@ let ``a claim renewing our OWN stale marker ends with ONE marker and reports no 
               ok (comments [ staleClaimJson 811 "vole-418" ""; marker 901 "vole-418" "" ]) // 3. re-read: fresh wins
               ok "" ] // 4. DELETE our own superseded stale marker
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Empty(collected)
@@ -343,7 +351,7 @@ let ``collecting a stale marker a peer already removed (404) is not fatal`` () =
               ok (comments [ staleClaimJson 818 "ghost-444" ""; marker 901 "vole-418" "" ])
               Error(NotFound "already gone") ] // 4. the winner's delete landed first
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal<WorkerId list>([ WorkerId "ghost-444" ], collected) // a 404 IS a successful collect
@@ -360,7 +368,7 @@ let ``a stale marker we could not delete is LEFT for reap, never a reason to fai
               ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ])
               Error(RateLimited(UnknownBudget, None)) ] // 4. DELETE faults — leave it for reap
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Empty(collected)
@@ -380,7 +388,7 @@ let ``a STALE unparseable marker is collected as debris but never notified (no w
               ok (comments [ staleUnparseable; marker 901 "vole-418" "" ]) // 3. re-read: we win
               ok "" ] // 4. DELETE the stale debris
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Empty(collected) // deleted, but there is no worker to notify
@@ -397,7 +405,7 @@ let ``#419 a live marker with OUR id but a DIFFERENT session is a TWIN - refused
     // and differ, it is a twin: refuse, and carry the OTHER session so the caller can name it.
     let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
     | other -> failwith $"our id in another session is a twin, not a win — got %A{other}"
 
@@ -412,7 +420,7 @@ let ``#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not
     let transport =
         scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok """{"id":901}""" ] // read, then PATCH the renew
 
-    match claim transport 120 RefuseLiveHolder ignore me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
 
@@ -422,7 +430,7 @@ let ``#419 the SAME session re-claiming its own marker is a heartbeat, not a twi
     let transport =
         scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]); ok """{"id":901}""" ] // read, then PATCH
 
-    match claim transport 120 RefuseLiveHolder ignore me (Some(SessionId "79b9e347")) aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "79b9e347")) aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"our own session re-claiming is a heartbeat, not a twin — got %A{other}"
 
@@ -433,7 +441,7 @@ let ``a failed FIRST read is fatal, and nothing is posted`` () =
     // do.
     let transport = scripted [ Error(RateLimited(UnknownBudget, None)) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Error(RateLimited _) -> ()
     | other -> failwith $"a failed lock read must refuse — got %A{other}"
 
@@ -465,7 +473,7 @@ let ``#1620 --force TAKES a live claim held by another worker, and names who it 
               ok """{"id":902}""" // 3. post ours
               ok (comments [ marker 902 "vole-418" "" ]) ] // 4. re-read: the way is clear, we win
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(held, from, _)) ->
         Assert.Equal(902L, held.MarkerId)
         Assert.Equal(me, held.Worker)
@@ -487,7 +495,7 @@ let ``#1620 the SAME board WITHOUT --force still refuses - the flag is what make
     // existed. If these two tests ever agree again, the flag has drifted back.
     let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"without --force a live rival lock must be refused — got %A{other}"
 
@@ -502,7 +510,7 @@ let ``#1620 a steal does NOT override a TWIN - a broken identity is not a contes
     // remedy for a broken identity is a NEW identity, not a bigger hammer.
     let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
 
-    match claim transport 120 StealLiveHolder ignore me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
     | other -> failwith $"--force must NOT steal from a twin — got %A{other}"
 
@@ -520,7 +528,7 @@ let ``#1620 a steal does NOT override an UNPARSEABLE marker - a lock held by nob
 
     let transport = scripted [ ok (comments [ marker 901 "kite-461" ""; unparseable ]) ]
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok BlockedByUnparseableMarker -> ()
     | other -> failwith $"an unparseable lock blocks even under --force — got %A{other}"
 
@@ -537,7 +545,7 @@ let ``#1620 an eviction we could NOT complete takes nothing, and never posts our
             [ ok (comments [ marker 901 "kite-461" "" ])
               Error(Http(500, "delete failed")) ]
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Error(Transport detail) ->
         Assert.Contains("could not evict", detail)
         Assert.Contains("STANDS", detail)
@@ -558,7 +566,7 @@ let ``#1620 a steal that loses the FRESH race backs off cleanly - it does not fo
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // 4. a newcomer beat us
               ok "" ] // 5. withdraw ours
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(WorkerId "otter-77", w)
     | other -> failwith $"a steal that loses the fresh race is a LOSS — got %A{other}"
 
@@ -577,7 +585,7 @@ let ``#1620 a steal still COLLECTS stale debris, and reports it apart from who i
               ok (comments [ staleClaimJson 700 "ghost-111" ""; marker 902 "vole-418" "" ])
               ok "" ] // collect the stale 700
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Stolen(_, from, collected)) ->
         Assert.Equal<WorkerId list>([ them ], from)
         Assert.Equal<WorkerId list>([ WorkerId "ghost-111" ], collected)
@@ -604,7 +612,7 @@ let ``#1620 a steal whose POST fails still announces the eviction - the lock is 
               ok "" // EVICT — their lock is destroyed HERE
               Error(Http(500, "post failed")) ] // and the post fails, so no `Stolen` is ever returned
 
-    match claim transport 120 StealLiveHolder evicted.AddRange me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Error _ -> ()
     | other -> failwith $"a failed post after an eviction is an error — got %A{other}"
 
@@ -626,7 +634,7 @@ let ``#1620 a steal that LOSES the fresh race still announces the eviction it pe
               ok (comments [ marker 902 "otter-77" ""; marker 903 "vole-418" "" ]) // a newcomer beat us
               ok "" ] // withdraw ours
 
-    match claim transport 120 StealLiveHolder evicted.AddRange me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(WorkerId "otter-77", w)
     | other -> failwith $"a steal that loses the fresh race is a LOSS — got %A{other}"
 
@@ -642,7 +650,7 @@ let ``#1620 a claim that evicts NOBODY never calls onEvict - no theft is reporte
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]) ]
 
-    match claim transport 120 StealLiveHolder evicted.AddRange me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder evicted.AddRange me itsMe None aRef (fun () -> None) with
     | Ok(Won _) -> ()
     | other -> failwith $"--force on a free item is an ordinary win — got %A{other}"
 
@@ -661,7 +669,7 @@ let ``#1620 a steal does NOT evict past a live marker carrying OUR OWN id - the 
                         marker 902 "vole-418" " session=79b9e347" ] // our id, another session, queued behind
               ) ]
 
-    match claim transport 120 StealLiveHolder ignore me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe (Some(SessionId "ed60050b")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
     | other -> failwith $"a twin behind the holder must refuse the steal — got %A{other}"
 
@@ -676,7 +684,7 @@ let ``#1620 --force on a FREE item is an ordinary win - it reports no theft it d
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]) ]
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"--force on a free item is an ordinary win — got %A{other}"
 
@@ -689,7 +697,7 @@ let ``#1620 --force re-claiming our OWN live marker renews it - it does not stea
     let transport =
         scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok """{"id":901}""" ]
 
-    match claim transport 120 StealLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"--force must not steal from ourselves — got %A{other}"
 
@@ -703,7 +711,7 @@ let ``#481 the claim RECORDS the column it overwrote, so release can put it back
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> Some InReview) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> Some InReview) with
     | Ok(Won(held, _)) ->
         // The marker we POST carries `prev=`, percent-encoded — and the capability carries it forward, so
         // `release` restores the column somebody chose rather than guessing `Ready`.
@@ -716,7 +724,7 @@ let ``#481 a column NOBODY recorded is not restored - release says so rather tha
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) ->
         match release transport held with
         | Ok None -> ()
@@ -733,7 +741,7 @@ let ``#481 a column NOBODY recorded is not restored - release says so rather tha
 ///
 /// A test suite that could mint the capability would be testing a different type from the one that ships.
 let private acquire (transport: Fake.Recorder) =
-    match verifyHeld transport 120 me None aRef with
+    match verifyHeld transport 120 me itsMe None aRef with
     | Ok(Holds held) -> held
     | other -> failwith $"the fixture must actually hold the lock — got %A{other}"
 
@@ -800,7 +808,7 @@ let private capturing (responses: IoResult<Response> list) =
     recorder, bodies
 
 let private holdAs (session: string) (transport: Fake.Recorder) =
-    match verifyHeld transport 120 me (Some(SessionId session)) aRef with
+    match verifyHeld transport 120 me itsMe (Some(SessionId session)) aRef with
     | Ok(Holds held) -> held
     | other -> failwith $"the fixture must hold the lock as %s{session} — got %A{other}"
 
@@ -843,7 +851,7 @@ let ``#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed`` () =
 
     let twinTransport = scripted [ ok (comments [ beatenMarker ]) ]
 
-    match claim twinTransport 120 RefuseLiveHolder ignore me (Some(SessionId "S2")) aRef (fun () -> None) with
+    match claim twinTransport 120 RefuseLiveHolder ignore me itsMe (Some(SessionId "S2")) aRef (fun () -> None) with
     | Ok(Twin(SessionId theirs)) -> Assert.Equal("S1", theirs)
     | other -> failwith $"a twin claiming after a heartbeat must be refused Twin — got %A{other}"
 
@@ -1101,7 +1109,7 @@ let ``verifyHeld fails CLOSED - an unreadable marker set yields an error, never 
     // hold it" — which is a claim a failed read is not entitled to make.
     let transport = Fake.Recorder(fun _ -> Error(Malformed("FS.GG.SDD#42", "not JSON")))
 
-    match verifyHeld transport 120 me None aRef with
+    match verifyHeld transport 120 me itsMe None aRef with
     | Error(Malformed _) -> ()
     | other -> failwith $"a failed read must not mint a capability — got %A{other}"
 
@@ -1109,7 +1117,7 @@ let ``verifyHeld fails CLOSED - an unreadable marker set yields an error, never 
 let ``verifyHeld returns the capability when the live winner IS us`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
 
-    match verifyHeld transport 120 me None aRef with
+    match verifyHeld transport 120 me itsMe None aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"we hold it — got %A{other}"
 
@@ -1117,7 +1125,7 @@ let ``verifyHeld returns the capability when the live winner IS us`` () =
 let ``verifyHeld does NOT hold when SOMEBODY ELSE holds it - and that is not a capability`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "kite-461" "" ]))
 
-    match verifyHeld transport 120 me None aRef with
+    match verifyHeld transport 120 me itsMe None aRef with
     | Ok DoesNotHold -> ()
     | other -> failwith $"another worker's lock is not ours — got %A{other}"
 
@@ -1132,7 +1140,7 @@ let ``#1031 verifyHeld REFUSES the capability over a TWIN's marker - our id, ano
     // the last place this invariant was asserted by convention rather than construction (#839 residual 2/4).
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
-    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    match verifyHeld transport 120 me itsMe (Some(SessionId "ed60050b")) aRef with
     | Ok(TwinHolds(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
     | other -> failwith $"our id in another session is a TWIN, not us — got %A{other}"
 
@@ -1144,7 +1152,7 @@ let ``#1031 a twin is a case of its OWN - collapsing it into DoesNotHold would m
     // has to carry the twin, because no id-keyed question downstream can recover it.
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
-    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    match verifyHeld transport 120 me itsMe (Some(SessionId "ed60050b")) aRef with
     | Ok DoesNotHold -> failwith "a twin must not be reported as a plain non-hold — the caller cannot tell"
     | Ok(TwinHolds _) -> ()
     | other -> failwith $"expected a twin — got %A{other}"
@@ -1157,7 +1165,7 @@ let ``#1031 a SESSIONLESS marker with our id still verifies - the boundary of th
     // worker out of an item they really hold, and `release`/`heartbeat` would break for every such marker.
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
 
-    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    match verifyHeld transport 120 me itsMe (Some(SessionId "ed60050b")) aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
 
@@ -1165,7 +1173,7 @@ let ``#1031 a SESSIONLESS marker with our id still verifies - the boundary of th
 let ``#1031 our OWN session verifies its own marker - or no worker could ever renew`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
-    match verifyHeld transport 120 me (Some(SessionId "79b9e347")) aRef with
+    match verifyHeld transport 120 me itsMe (Some(SessionId "79b9e347")) aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"our own session must verify its own lock — got %A{other}"
 
@@ -1175,9 +1183,169 @@ let ``#1031 a SESSIONLESS caller keeps the old behaviour over a marker that carr
     // anything a twin, because it has nothing to compare. `claim` treats this as ours; so must this.
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
-    match verifyHeld transport 120 me None aRef with
+    match verifyHeld transport 120 me itsMe None aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a caller with no session of its own cannot conclude twin — got %A{other}"
+
+// ---- #1646: a SESSION IS NOT A CREDENTIAL -----------------------------------------------------------
+//
+// These sit beside the #1031 legs above deliberately, and the two blocks together are one statement.
+//
+// #1031 pinned: OUR ID, ANOTHER SESSION ⇒ refused. That is a shared IDENTITY, and the session is what tells
+// the two apart. These pin the case the session CANNOT reach: our id, THEIR session — because it is the
+// same session. Every subagent of one Claude Code session shares one session id (`whoami` says so), so for
+// the fan-out this board actually runs, the second factor #1031 added is one every sibling also holds:
+// `twinSession` concludes twin only when both sessions are KNOWN and DIFFER, and equal sessions returned
+// `None`, which `verifyHeld` read as "ours".
+//
+// So a caller that names another worker's id — copied straight off the board — matched the id leg because
+// it was copied, and matched the session leg because it is a sibling. Both legs, and the door to the
+// capability that authorises PATCHing and DELETING that marker.
+//
+// The third fact is the one `--worker` cannot restate: who this PROCESS is with the flag taken away.
+
+/// A caller whose own resolved identity is `kite-461` — the sibling in the fan-out, asking to act as
+/// `vole-418`. It is the ONLY thing that differs from the passing legs above.
+let private impersonator = Derives them
+
+[<Fact>]
+let ``#1646 verifyHeld REFUSES the capability when the caller NAMES another worker whose marker is live`` () =
+    // THE HOLE, AT ITS OWN LEVEL. `me` (vole-418) holds the live marker; the caller is `kite-461` and has
+    // passed `--worker vole-418`. Sessions are IDENTICAL, so #1031's predicate has nothing to say.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+
+    match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
+    | Ok(ImpersonatesHolder(derived, named)) ->
+        Assert.Equal(them, derived)
+        Assert.Equal(me, named)
+    | other -> failwith $"naming another worker's live marker must not open the door to Held — got %A{other}"
+
+[<Fact>]
+let ``#1646 the shared session is exactly what made it work - the SAME call with DIFFERENT sessions is the #1031 twin`` () =
+    // THE PAIR THAT MAKES THE POINT. Change ONE thing about the leg above — the sessions now differ — and
+    // #1031's refusal fires instead. That refusal was already there, and it is why the hole was invisible:
+    // the protocol demonstrably refused this argv shape, just never in the configuration the fleet runs in.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+
+    match verifyHeld transport 120 me impersonator (Some(SessionId "ed60050b")) aRef with
+    | Ok(ImpersonatesHolder _) -> ()
+    | other -> failwith $"a differing session must still refuse — got %A{other}"
+
+[<Fact>]
+let ``#1646 it is NOT DoesNotHold - a typo and an impersonation need different messages`` () =
+    // WHY IT IS A CASE OF ITS OWN, and it is `TwinHolds`'s reason one step further out. `DoesNotHold` sends
+    // the caller to the heartbeat diagnosis, which re-reads the markers, keys on the id it was GIVEN, finds
+    // that id on the live winner and reports "your lease EXPIRED, re-claim it" — about somebody else's
+    // lease, as though it were ours. And `TwinHolds` would be worse: it prescribes `whoami --mint` for an
+    // identity collision this caller does not have. Neither remedy is the one that fits.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+
+    match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
+    | Ok DoesNotHold -> failwith "an impersonation reported as a plain non-hold sends the caller to 'your lease expired'"
+    | Ok(TwinHolds _) -> failwith "this is not a shared id — prescribing `whoami --mint` would be the wrong remedy"
+    | Ok(ImpersonatesHolder _) -> ()
+    | other -> failwith $"expected the impersonation refusal — got %A{other}"
+
+[<Fact>]
+let ``#1646 a MISTYPED --worker is not an accusation - an id that holds nothing stays DoesNotHold`` () =
+    // THE COMMONER MISTAKE, AND THE BOUNDARY OF THE ACCUSATION. `kite-461` typed `--worker vole-418`, and
+    // vole-418 holds NOTHING here — the live marker is somebody else's entirely. There is no lock to take,
+    // so there is nothing to accuse anybody of: this is a flag to re-check, and the caller must be told so
+    // rather than told it is impersonating. The refusal fires only where the named id owns the live lock.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "smew-f31" " session=624f304a" ]))
+
+    match verifyHeld transport 120 me impersonator (Some(SessionId "624f304a")) aRef with
+    | Ok DoesNotHold -> ()
+    | other -> failwith $"a named id that holds nothing is a typo, not an impersonation — got %A{other}"
+
+[<Fact>]
+let ``#1646 a worker still operates its OWN claim across processes - including after a heartbeat rewrote the marker`` () =
+    // THE REGRESSION THIS MUST NOT CAUSE, and it is `verifyHeld`'s whole reason for existing: every command
+    // after `claim` is a fresh process, so the capability has to survive one. Here the marker was written by
+    // an EARLIER process of the same worker — and `heartbeat` rewrites the whole body (#1149), so this is
+    // the post-heartbeat marker, session and all. Same id, same self, and it still verifies.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a prev=Ready" ]))
+
+    match verifyHeld transport 120 me itsMe (Some(SessionId "624f304a")) aRef with
+    | Ok(Holds held) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Equal(Some Ready, held.PreviousStatus)
+    | other -> failwith $"a worker must keep operating its own claim across processes — got %A{other}"
+
+[<Fact>]
+let ``#1646 a SESSIONLESS marker with our id still verifies - the #1031 boundary must not regress`` () =
+    // #1031 leg 3, re-asserted against the NEW predicate. A marker with no `session=` — a human, a harness
+    // exporting none, any pre-#419 marker — is indistinguishable from ours, and failing closed on it would
+    // lock a worker out of an item they really hold. The new question is about the CALLER's own id, not the
+    // marker's session, so it must leave this case exactly where it found it.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
+
+    match verifyHeld transport 120 me itsMe (Some(SessionId "624f304a")) aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
+
+[<Fact>]
+let ``#1646 a caller that derives NOTHING is not refused - the human operator --worker exists for`` () =
+    // THE COST, STATED. `--worker` has legitimate callers that resolve no identity of their own: a human
+    // operator, a harness exporting no session and setting no `$FSGG_WORKER`. They have nothing to be
+    // measured against, so the question is UNASKABLE — and answering an unaskable question "no" would lock
+    // out exactly the callers the flag exists for, which is #1031's boundary reached from one fact further
+    // out. #1646 records this as residue rather than a clean close: a caller that unsets its own identity
+    // before impersonating lands here too, and the tool cannot tell it from the operator.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=624f304a" ]))
+
+    match verifyHeld transport 120 me DerivesNothing (Some(SessionId "624f304a")) aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"a caller with no derived identity must keep the pre-#1646 behaviour — got %A{other}"
+
+[<Fact>]
+let ``#1646 claim is the OTHER door and it refuses too - a re-claim under a foreign id is not a renewal`` () =
+    // `Held` HAS TWO DOORS (`Writes.fsi`: "the only ways to hold one are to win the CAS or to re-read"), and
+    // closing one is closing half. `claim`'s re-claim arm hands back a `Renewed` over a marker it did not
+    // create, on the strength of the id alone — and it PATCHes that marker, so `claim --worker <them>`
+    // renewed a live holder's lease and reported the item held. Measured on this tree before the fix:
+    //   $ FSGG_WORKER=kite-461 fsgg-coord-engine claim FS.GG.SDD#44 --worker vole-418
+    //   held FS.GG.SDD#44 by worker vole-418 (lease renewed; lock held; ...)   rc=0
+    //
+    // ONE TRANSPORT RESPONSE IS SCRIPTED, and that is an assertion: `scripted` fails the moment it is called
+    // a second time, so the refusal must happen on the READ, before the PATCH. A refusal that renewed the
+    // lease first would be no refusal at all.
+    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=624f304a" ]) ]
+
+    match claim transport 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+    | Ok(Impersonates(derived, named)) ->
+        Assert.Equal(them, derived)
+        Assert.Equal(me, named)
+    | other -> failwith $"`claim --worker <them>` must not renew their lease — got %A{other}"
+
+[<Fact>]
+let ``#1646 the two doors agree - claim and verifyHeld answer the SAME question the same way`` () =
+    // `twinSession`'s rule, restated for the new predicate: "a `claim` that calls a marker a twin and a
+    // `verifyHeld` that calls the same marker ours would mean the tool refuses you the lock and then
+    // authorises you to delete it." Both now route through one `impersonated`, and this drives BOTH over the
+    // identical marker set to pin that they cannot drift.
+    let markerSet = comments [ marker 901 "vole-418" " session=624f304a" ]
+    let forClaim = scripted [ ok markerSet ]
+    let forVerify = Fake.Recorder(fun _ -> ok markerSet)
+
+    let claimSaidNo =
+        match claim forClaim 120 RefuseLiveHolder ignore me impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+        | Ok(Impersonates _) -> true
+        | _ -> false
+
+    let verifySaidNo =
+        match verifyHeld forVerify 120 me impersonator (Some(SessionId "624f304a")) aRef with
+        | Ok(ImpersonatesHolder _) -> true
+        | _ -> false
+
+    let agreed = claimSaidNo = verifySaidNo
+
+    Assert.True(
+        agreed,
+        $"the two doors to Held disagreed: claim refused = %b{claimSaidNo}, verifyHeld refused = %b{verifySaidNo}"
+    )
+
+    Assert.True(claimSaidNo, "both doors must refuse the impersonation")
 
 // ---- child: the id is a NUMBER ----------------------------------------------------------------------
 
@@ -1335,7 +1503,7 @@ let ``#895 the LOCK ITSELF goes over REST - the winning CAS never spends a Graph
               ok """{"id":901}""" // 2. POST our marker — the linearisation point
               ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest live id
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"we should have won — got %A{other}"
 
@@ -1361,7 +1529,7 @@ let ``#895 the WITHDRAW is on the lock's budget too - a lost race never reaches 
               ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 901 beat us
               ok "" ] // DELETE our 902
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"we should have lost to the lower id — got %A{other}"
 
@@ -1380,7 +1548,7 @@ let ``#895 the RENEW is on the lock's budget too - holding a claim never spends 
             [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
               ok """{"id":901}""" ] // 2. PATCH: renew in place
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> None) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
     | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"re-claiming our own live lock renews it in place — got %A{other}"
 
@@ -1406,7 +1574,7 @@ let ``#895 the pre-claim column read is the CALLER's - the CAS routes no board r
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
 
-    match claim transport 120 RefuseLiveHolder ignore me None aRef (fun () -> Some InReview) with
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> Some InReview) with
     | Ok(Won(held, _)) -> Assert.Equal(Some InReview, held.PreviousStatus)
     | other -> failwith $"the previous column must be recorded — got %A{other}"
 

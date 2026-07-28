@@ -15,7 +15,17 @@ module Identity =
     type Worker =
         { Id: string
           Session: string option
-          Provenance: Provenance }
+          Provenance: Provenance
+          /// WHO THIS PROCESS IS WHEN NOBODY TELLS IT — rules 2-4 with `--worker` taken away (#1646).
+          ///
+          /// `Id` is what the caller asked to BE; this is what the caller IS. They differ on exactly one
+          /// shape — `--worker <somebody else>` — and that shape is what turns a shared harness session into
+          /// a working impersonation, because both of the older checks (the id, and `session=`) match on
+          /// facts a sibling of the fan-out legitimately holds.
+          ///
+          /// `None` is "this process resolves nothing of its own": a human operator, a harness exporting no
+          /// session. It is UNASKABLE, never a clean answer — see `Writes.SelfIdentity`.
+          Derived: string option }
 
     /// The word list, VERBATIM from the bash client — a derived id must be the same id on both engines, or a
     /// worker that switched engines mid-loop would appear to be two workers and lose its own lock.
@@ -93,6 +103,29 @@ module Identity =
     /// session id, so a fallback would swap one shared id for another and `whoami` still would not warn.
     /// And the message names the OFFENDING INPUT (#611): "could not derive a worker id" alone would send a
     /// worker to check a variable they did set.
+    /// THE ID THIS PROCESS ANSWERS TO WITH `--worker` TAKEN AWAY (#1646) — rules 2-4, and nothing else.
+    ///
+    /// ONE DEFINITION, so the flag branch and the env branch below cannot disagree about who this process is.
+    /// Re-deriving it beside `resolve` would be #485's shape (one question, two implementations) sitting in
+    /// the function whose whole job is to answer that question once.
+    ///
+    /// A `$FSGG_WORKER` that slugs to NOTHING is not an identity (#1070) — it is the id every annihilating
+    /// input shares — so it derives `None` rather than an empty string that would then "disagree" with every
+    /// `--worker` and read as an impersonation. Refusing a real worker over a malformed variable would be a
+    /// lockout, and `resolved` already refuses that input on its own terms when it is the id being used.
+    ///
+    /// A SHARED session id still counts. It names the SESSION rather than the worker — `whoami` warns exactly
+    /// that — so it is a poor identity; but "poor identity" and "no identity" are different, and the shape
+    /// being closed is *naming a different worker*, which a shared-session caller does just as deliberately as
+    /// any other. Excluding it here would leave the hole open to any caller who simply never minted an id.
+    let private derivedId () : string option =
+        match env "FSGG_WORKER" with
+        | Some w ->
+            match slug w with
+            | "" -> None
+            | id -> Some id
+        | None -> harnessSession () |> Option.map (snd >> nameFromSeed)
+
     let private resolved (raw: string) (source: string) (session: string option) (provenance: Provenance) =
         match slug raw with
         | "" ->
@@ -102,7 +135,8 @@ module Identity =
             Ok
                 { Id = id
                   Session = session
-                  Provenance = provenance }
+                  Provenance = provenance
+                  Derived = derivedId () }
 
     let resolve (worker: string option) : Result<Worker, string> =
         let session = harnessSession () |> Option.map snd
@@ -121,7 +155,8 @@ module Identity =
                         Ok
                             { Id = id
                               Session = Some sid
-                              Provenance = FromSession(harness, sid) }
+                              Provenance = FromSession(harness, sid)
+                              Derived = Some id }
                     else
                         // DERIVED, BUT UNSAFE. Every subagent of this session shares the id. We still return
                         // it (a single-worker session is the common case and it IS that worker), but with
@@ -130,7 +165,8 @@ module Identity =
                             { Id = id
                               Session = Some sid
                               Provenance =
-                                FromSharedSession(harness, sid, $"every subagent of this %s{harness} session shares this id") }
+                                FromSharedSession(harness, sid, $"every subagent of this %s{harness} session shares this id")
+                              Derived = Some id }
                 | None ->
                     // REFUSE rather than invent a shared id. The bash client persists a per-checkout id
                     // here; the engine does not, because a persisted-per-checkout id is itself a shared id
@@ -159,4 +195,13 @@ module Identity =
           $"derived: %s{rule}"
           match worker.Session with
           | Some s -> $"session: %s{s}"
-          | None -> "session: (none)" ]
+          | None -> "session: (none)"
+          // WHO THIS PROCESS IS WHEN NOBODY TELLS IT (#1646) — and it is printed ONLY when it disagrees with
+          // the id in use, because that is the only time it says anything the two lines above do not. A
+          // disagreement is the impersonation shape, and `whoami` is where a worker checks its identity
+          // BEFORE a lock command refuses it — a refusal a worker cannot reproduce from `whoami` is one they
+          // have to guess at.
+          match worker.Derived with
+          | Some d when d <> worker.Id ->
+              $"self: %s{d} — this process's OWN id. `--worker %s{worker.Id}` names a DIFFERENT worker, and the lock verbs (claim/release/heartbeat/widen) REFUSE that over their live marker (#1646)."
+          | _ -> () ]
