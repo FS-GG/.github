@@ -317,7 +317,14 @@ module ApplicationServiceTests =
                 match opts.Command with
                 | Options.Widen -> Client.widen (context transport) opts
                 | Options.SetPaths -> Client.setPaths (context transport) opts
-                | other -> failwithf "this fixture drives widen/set-paths only, got %A" other
+                // `batch` IS THE OTHER SURFACE, AND IT IS DRIVEN FROM THE SAME WORLD ON PURPOSE
+                // (.github#1792). The defect that item is about is two components answering "who has
+                // reserved this file" differently, so a fixture that could only reach ONE of them could
+                // not have failed for the reason under test — it could only ever re-assert whichever
+                // answer it was already able to see. `Client.batch` runs the real `Scan.snapshot`, so
+                // this dispatch is what lets one board, one marker and one second be put to both.
+                | Options.BatchCmd -> Client.batch (context transport) opts
+                | other -> failwithf "this fixture drives widen/set-paths/batch only, got %A" other
 
             Console.Out.Flush()
             code, captured.ToString()
@@ -731,12 +738,38 @@ module ApplicationServiceTests =
         Assert.Equal(0, code)
 
     [<Fact>]
-    let ``#1779 control: a marker whose LEASE HAS LAPSED reserves nothing`` () =
-        // Same colliding declaration, same holder, and the marker is 240 minutes old against the 120-minute
-        // default lease. `Reads.winner` applies the lease; `Reads.reserver` does not. KILLS: swapping
-        // `winner` for `reserver`, or treating "the comments array is non-empty" as a live claim.
+    let ``#1792 (was a #1779 control): a marker whose LEASE HAS LAPSED still RESERVES`` () =
+        // INVERTED BY .github#1792, NOT DELETED — this leg is the defect, written down as an assertion.
+        //
+        // As #1779 wrote it this asserted `DISJOINT`, with the note "`Reads.winner` applies the lease;
+        // `Reads.reserver` does not. KILLS: swapping `winner` for `reserver`". That was an accurate
+        // description of `activeCollisions` and the wrong answer: the SCHEDULER (`Scan.snapshot`) read the
+        // same marker through `reserver` and called the file reserved, so the two surfaces disagreed and
+        // "is this file taken?" depended on which verb you asked. #1792 settled it in `reserver`'s favour
+        // at both sites — a lease is a clock, a lock is broken only by `reap` (#461/#581) — so the expected
+        // verdict flips here. The leg is kept, and kept named, because a test that pinned the defect as
+        // correct behaviour is exactly what the next reader needs to see flipped rather than vanished.
+        //
+        // Same colliding declaration, same holder; the marker is 240 minutes old against the 120-minute
+        // default lease, BACKDATED rather than slept for. KILLS: reverting this call site to `winner`.
         let code, out, _ =
             runOn None Set.empty laggingHolders (Map.ofList [ 75, 240 ]) laggingBodies
+
+        let collision = soleCollision out
+        Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+        Assert.Equal("otter-9c21", str "worker" collision)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1792 control: NO marker at all still reserves nothing, lapsed or otherwise`` () =
+        // THE LEG THAT KEEPS THE ONE ABOVE HONEST. `reserver` falls back to the lowest-id marker when no
+        // marker is live, so the flip above is one step away from "any comment reserves" — and #1779's
+        // token-only control uses a live-marker world, so it cannot see that step. Here #75 has NO marker
+        // and the age map is set anyway, so the ONLY difference from the leg above is whether a marker
+        // exists at all. KILLS: `reserver _ markers = List.tryHead markers` degrading into "the comments
+        // array is non-empty", which is #461 inverted — the failure the marker read exists to prevent.
+        let code, out, _ =
+            runOn None Set.empty (Map.ofList [ 74, "kite-469" ]) (Map.ofList [ 75, 240 ]) laggingBodies
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
         Assert.Equal(0, code)
@@ -763,6 +796,175 @@ module ApplicationServiceTests =
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
         Assert.Equal(0, code)
+
+    // ---- .github#1792: ONE MARKER, ONE ANSWER --------------------------------------------------------
+    //
+    // The legs above ask `activeCollisions` alone. These ask it AND `Scan.snapshot` — the scheduler behind
+    // `take`/`next`/`batch` — about ONE board, ONE marker and ONE second, because the #1792 defect is not
+    // that either surface is wrong on its own. Both looked right in isolation, which is exactly what made
+    // it survive three lock fixes in a day: `Scan.snapshot` read the marker through `Reads.reserver` (a
+    // lapsed lease still reserves), `activeCollisions` read the SAME marker through `Reads.winner` (it does
+    // not), and nothing in the codebase reconciled them. A worker reaching a file by the `take` path was
+    // refused it while a worker reaching it by the `widen` path was cleared for it.
+    //
+    // Each leg below varies exactly ONE thing about row #75 and asserts BOTH answers, so no leg can pass by
+    // agreeing with itself.
+
+    /// The #1792 world. Three rows, and only #75 varies:
+    ///   • **#74** — OURS (`kite-469`, `In progress`). The caller that runs `widen … --paths src/Shared.fs`.
+    ///   • **#75** — THE CONTENDED ROW, declaring `src/Shared.fs`. Its marker and its column are the inputs.
+    ///   • **#76** — an UNCLAIMED `Ready` candidate declaring `src/Shared.fs` and nothing else. It is what
+    ///     the SCHEDULER is asked about, and it exists so the scheduler leg cannot pass for the gate leg's
+    ///     reason: #74 is HELD, so `batch` passes over it whatever #75's marker says, and a test watching
+    ///     #74 would be measuring the claim rather than the lapsed lease.
+    let private contendedBodies =
+        Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs"; 76, "Paths: src/Shared.fs" ]
+
+    let private contendedWorld (column75: string) (holders: Map<int, string>) (age: Map<int, int>) =
+        worldOf
+            (fun n ->
+                match n with
+                | 75 -> column75
+                | 76 -> "Ready"
+                | _ -> "In progress")
+            contendedBodies
+            holders
+            age
+            Set.empty
+            false
+
+    /// THE SCHEDULER'S ANSWER: the refs `batch --json` offers. `Client.batch` runs the real `Scan.snapshot`,
+    /// so this is the reservation rule under test and not a re-implementation of it.
+    let private scheduled (world: Fake.Recorder) : string list =
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            let _, out = runIn dir world [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+            (parsed out).EnumerateArray() |> Seq.map (fun e -> e.GetString()) |> List.ofSeq
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    /// THE COLLISION GATE'S ANSWER: `widen`'s verdict for the same files on the same world.
+    let private gateVerdict (world: Fake.Recorder) : string =
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            let _, out = runIn dir world (widenOnto "src/Shared.fs")
+            str "verdict" (parsed out)
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``#1792: a LAPSED lease reserves on BOTH surfaces`` () =
+        // THE ITEM. #75's marker is 240 minutes old against the 120-minute default lease — backdated by the
+        // fixture, never slept for, which is how production reaches this state and how a test may.
+        //
+        // Before #1792 this leg was the defect in one line: the scheduler refused #76 and the gate cleared
+        // #74 onto the very same file, same board, same second. KILLS: reverting `activeCollisions` to
+        // `Reads.winner` (the gate goes `disjoint` while the scheduler still refuses), and equally any
+        // "fix" that instead moved `Scan.snapshot` to `winner` (the scheduler would then offer #76 and this
+        // leg fails on the OTHER assertion). Both directions are killed here, deliberately: the item is
+        // about the two agreeing, not about which one moved.
+        //
+        // #75 SITS IN `Blocked`, AND THE COLUMN IS LOAD-BEARING. An earlier draft of this leg used
+        // `In progress` and SURVIVED the "move the scheduler to `winner`" mutation: with no live winner the
+        // markerless-`In progress` arm (`RUnowned`) reserved the file anyway, so the scheduler assertion
+        // passed for a reason that had nothing to do with the lapsed lease. A column that reserves NOTHING
+        // on its own is what makes this leg measure the MARKER — which is the only thing #1792 is about.
+        // `Blocked` also keeps #75 out of the candidate pool, so the assertion is about #76's admission and
+        // not about which of two colliding rows won a lane.
+        let world = contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])
+
+        Assert.DoesNotContain("FS.GG.SDD#76", scheduled world)
+        Assert.Equal("overlap", gateVerdict (contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])))
+
+    [<Fact>]
+    let ``#1792 control: with NO marker and no In-progress column, BOTH surfaces free the file`` () =
+        // THE LEG THAT MAKES THE OTHER TWO CAPABLE OF FAILING, and without it neither is. #75 sits in a
+        // column that reserves nothing and carries no marker, so the file is genuinely free — and #76 must
+        // now be OFFERED and the gate must say `disjoint`. `Assert.DoesNotContain` is satisfied by a
+        // scheduler that offers nothing ever (an empty board, a broken fixture, a `batch` that errored and
+        // printed `[]`), and that is precisely the shape of the ten checks-that-could-not-fail found in
+        // this codebase on 2026-07-28. This leg is what forces `scheduled` to be able to return #76 at all.
+        //
+        // #75 is `Blocked` rather than `Ready` so it is not itself a competing candidate for the same file —
+        // the assertion is about #76's admission, not about which of two colliding rows won a lane.
+        let world = contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty
+
+        Assert.Contains("FS.GG.SDD#76", scheduled world)
+        Assert.Equal("disjoint", gateVerdict (contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty))
+
+    [<Fact>]
+    let ``#1792: agreeing with the scheduler costs the gate NOTHING`` () =
+        // .github#1779 made this scan CHEAPER — 24/27/31 GraphQL points to ZERO, REST at one issue-list read
+        // plus one marker read per COLLIDING row — and #1792 must not spend that back. It does not, and this
+        // is the measurement rather than the assertion that it does not: `Reads.reserver` is a pure function
+        // over the marker list `Reads.markers` already fetched on the line above it, so the reservation rule
+        // changed and the REQUEST COUNT did not.
+        //
+        // COUNTED, NOT ESTIMATED (.github#1086 got this same trade wrong by an order of magnitude by
+        // estimating). `Fake.Recorder` records every request the engine issues, so these are exact and
+        // reproducible — which the live rate-limit counters, at a 2-4 call delta against seven concurrent
+        // workers, are not.
+        //
+        // The world is the LAPSED one — the case whose answer #1792 changed — so this counts the path that
+        // now reports OVERLAP where it used to report DISJOINT. Doing MORE work for the new answer is
+        // exactly the regression this leg exists to catch.
+        let world = contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            let _, out = runIn dir world (widenOnto "src/Shared.fs")
+            Assert.Equal("overlap", str "verdict" (parsed out))
+
+            // THE BOARD IS NOT READ. #1779's zero, still zero — and the only way to reach the one case
+            // #1792 declined (`RUnowned`, which is column-derived) is to break this.
+            Assert.Equal(0, world.GraphQlCalls)
+
+            // REST: the issue-list read, one marker read for the ONE colliding row, and the writes `widen`
+            // makes on top (the body PATCH and the courtesy notice). The number is pinned rather than
+            // bounded so that a re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779
+            // measured and refused — cannot land quietly.
+            Assert.Equal(7, world.RestCalls)
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``#1792: a MARKERLESS In-progress row diverges, and that divergence is deliberate`` () =
+        // THE REMAINDER #1792 DECLINED TO COLLAPSE, PINNED SO IT STAYS A DECISION.
+        //
+        // #75 has NO marker and sits in `In progress`. `Scan.snapshot` reserves it (`RUnowned` — something
+        // is evidently editing those files) so #76 is refused. `activeCollisions` cannot see it at all:
+        // #1779 keyed that scan on `Reads.openIssues`, which carries numbers and bodies and no board state,
+        // so the reservation is unreachable there BY CONSTRUCTION rather than by omission.
+        //
+        // It is left that way for two reasons, both about the gate rather than the scheduler: reaching the
+        // column costs a board read per call on a verb workers loop (the GraphQL half #1779 drove to zero —
+        // #418/#1666), and a markerless row offers a blocked worker no exit at all: no worker to `say` to,
+        // no marker to `reap`, no lease to wait out. A scheduler can absorb an unactionable stop by waiting;
+        // a gate a worker is told to believe cannot, because the only remedy left is to ignore it.
+        //
+        // So the rule this pins is: THE TWO SURFACES AGREE ON EVERY MARKER, LIVE OR LAPSED, AND DIVERGE ONLY
+        // WHERE THERE IS NO MARKER. KILLS: quietly teaching `activeCollisions` the column — which would be a
+        // defensible change, and must be made with these two costs in front of whoever makes it, not as a
+        // side effect. If you are here because this leg failed, that is the conversation it is asking for.
+        let world = contendedWorld "In progress" (Map.ofList [ 74, "kite-469" ]) Map.empty
+
+        Assert.DoesNotContain("FS.GG.SDD#76", scheduled world)
+        Assert.Equal("disjoint", gateVerdict (contendedWorld "In progress" (Map.ofList [ 74, "kite-469" ]) Map.empty))
 
     // THE QUEUE IS NO LONGER CONSULTED, AND THESE SAY SO OUT LOUD (.github#1779).
     //
