@@ -426,11 +426,14 @@ sparse_tree_ensure() {
     return 0
   fi
   # A HERESTRING, NOT A PIPE, and this file spends twenty lines on why — see `repo_calls`, under
-  # "`grep -q` IS FED BY A HERESTRING, NEVER BY A PIPE, AND THAT IS NOT STYLE". Under `pipefail` a
-  # `printf` that takes SIGPIPE when `grep -q` exits early
-  # makes the PIPELINE 141, so the `if` reads FALSE even though grep MATCHED — measured at 7 in 10 on
-  # the incident that produced that rule. Here that misreading declares a ROSTERED repository
-  # off-roster: UNGRADED at exit 0, the fail-open direction, non-deterministically. #1608.
+  # "`grep -q` IS FED BY A HERESTRING, NEVER BY A PIPE, AND THAT IS NOT STYLE". `grep -q` exits the
+  # instant it matches; if the writer is still blocked on the pipe buffer it takes SIGPIPE, and
+  # `pipefail` then reports the PIPELINE as 141 — so the `if` reads FALSE even though grep MATCHED,
+  # 7 times in 10 on the incident that produced the rule. Here that misreading declares a ROSTERED
+  # repository off-roster: UNGRADED at exit 0, the fail-open direction, non-deterministically.
+  #
+  # The roster is a few hundred bytes at ~8 repos, so it cannot fire today and no runtime fixture
+  # could catch it — the fixture asserts it over the SOURCE instead. #1608.
   if ! grep -qxF "$key" <<< "$SPARSE_ROSTER"; then
     printf 'offroster\tit is not on this audit%s roster, and the roster is the boundary of what this audit may claim to know about (#1556)\n' \
       "'s" > "$SPARSE_TREE_DIR/$slug.err"
