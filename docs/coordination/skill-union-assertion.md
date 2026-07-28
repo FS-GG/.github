@@ -688,10 +688,58 @@ exactly why the [repo roster](../../registry/repos.yml) declares this capability
 `caller:` detector rather than a bare `workflow:` one — the latter would certify the full-union
 capability off a call that never looks at the receiver's roots ([#628](https://github.com/FS-GG/.github/issues/628)).
 
-### The required receiver caller — a framework repo's own committed roots
+### The required receiver caller — RETIRED 2026-07-28. Do not wire a new one.
 
-This is the shape `receives: skill-union` means, and `scripts/repos-audit.sh` requires **both halves in
-one workflow file**. Copy it verbatim:
+> **This shape is retired org-wide, and the block below is kept as a record of what it was, not as an
+> instruction.** Decided on [`#1715`](https://github.com/FS-GG/.github/issues/1715) (ADR-0067 §9 phase 4,
+> blocker **B5**, shape (b)) with the repository owner's authorization, and executed the same day: the
+> three receivers that had wired it — `FS.GG.SDD`, `FS.GG.Rendering`, `FS.GG.Governance` — no longer do,
+> and `skill-union / skill-union` is no longer a required context on any of them.
+>
+> **Why: on the layout ADR-0067 phase 4 retires into, this gate cannot fail.** Measured on all three of
+> those repos' own trees, at a dry-run retirement:
+>
+> ```
+> --roots ".agents/skills"                 -> exit 2, "no skills found under any root"
+> --roots ".claude/skills .agents/skills"  -> exit 0, in-every-root=N/N, byte-identical=N/N
+> ```
+>
+> `union_ids()` enumerates with `find` and no `-L`, so a root that **is** a generated view contributes
+> **zero** ids — that is the first line by itself. Every id in the second came from the tracked root
+> alone, and the view root satisfied presence only because presence is `[ -d ]` **through** the symlink,
+> which cannot fail. Both halves below become tautologies, on a context that was **required** under
+> `enforce_admins` — epic `#266`'s most expensive shape.
+>
+> **What to wire instead**, in the receiver's own repo, with no `uses:` of anything here and the
+> receiver's **own** pinned `scripts/skill-view` (`#1584`):
+>
+> ```yaml
+> # .github/workflows/skill-view-check.yml — required context `skill-view-check`
+> on:
+>   pull_request:            # DELIBERATELY UNFILTERED — see the paths: section below, it still applies
+>   push: { branches: [main] }
+>   workflow_dispatch:
+> permissions: { contents: read }
+> jobs:
+>   skill-view-check:
+>     name: skill-view-check
+>     steps:
+>       - uses: actions/checkout@v7
+>       - run: bash scripts/skill-view check --source .claude/skills --tree .
+> ```
+>
+> It asserts ADR-0067 §8's absence classes and it is **mutation-proven to fail** — the generated view
+> removed and the source root emptied each red it, by run id. The decision, the run ids, the per-repo
+> swap order and the one direction the new gate does **not** cover are in
+> [`skill-apparatus-retirement-order.md` §5.1](skill-apparatus-retirement-order.md). The
+> **generated-product** caller is a different animal and is **not** retired — see "Auditing a subtree of
+> the caller's checkout" below; `FS.GG.Rendering`'s `template-base-skill-union.yml` is still live.
+>
+> If you are here because a repo has no skill gate, wire `skill-view-check`. Wiring the block below
+> would re-create the blocker `#1715` cleared.
+
+This is the shape `receives: skill-union` used to mean, and `scripts/repos-audit.sh` requires **both
+halves in one workflow file**. It is recorded verbatim:
 
 ```yaml
 # .github/workflows/skill-union.yml
@@ -1007,7 +1055,7 @@ id across all three roots.
 
 **Read that as eight rows, not as a live org-wide green, because the rows are not equally alive.** A
 row is a claim about *its own commit*, and only the trees whose repo has wired the caller are re-checked
-after it: `FS.GG.SDD`, `FS.GG.Governance` and `FS.GG.Rendering` have a gate that re-asserts theirs on
+after it: `FS.GG.SDD`, `FS.GG.Governance` and `FS.GG.Rendering` had a gate that re-asserted theirs on
 every push, and `.github` asserts itself via
 [`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml). The other four —
 `FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, `FS.GG.Net` — are exactly the four open gaps below;
@@ -1015,6 +1063,23 @@ their rows are **hand measurements that nothing has re-checked since**, and each
 moment after it was taken without anything going red. That is not a footnote on the table, it *is* the
 remaining rollout: a coherent row and a wired gate are different facts, and only the second one keeps
 being true.
+
+> **SUPERSEDED FOR THE THREE WIRED ROWS, 2026-07-28 ([`#1715`](https://github.com/FS-GG/.github/issues/1715)).**
+> `FS.GG.SDD`, `FS.GG.Governance` and `FS.GG.Rendering` no longer wire this caller — it is retired, for
+> the reason in "The required receiver caller" above — so **no tree in this table is re-checked by
+> `skill-union-assert` any more except `.github`'s own** (via `skill-roots-selfcheck.yml`) and
+> `FS.GG.Rendering`'s `template/base/` subdirectory (a different, still-live shape). All eight rows are
+> now hand measurements, and the paragraph above should be read as applying to eight repos rather than
+> four.
+>
+> **That is a narrowing of THIS gate's reach and not of the org's coverage**, and the distinction is the
+> point: the three repos each gained a required `skill-view-check` context that asserts ADR-0067 §8's
+> absence classes over their own roots on every pull request, and unlike the rows above it is
+> mutation-proven to fail. What it does **not** assert is the cross-root **byte** comparison this table
+> reports, for as long as a repo still commits two independent copies. That gap is real, is bounded by
+> each repo's own phase-4 retirement, and is recorded in
+> [`skill-apparatus-retirement-order.md` §5.1](skill-apparatus-retirement-order.md) rather than left for
+> a reader of this table to infer.
 
 This rollout is moving fast enough to invalidate a snapshot mid-edit, and it did: Governance's caller
 landed while this section was being rewritten, taking the gap count from 6 to 5 between two runs of
