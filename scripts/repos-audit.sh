@@ -85,6 +85,17 @@
 # fix it. Seven receivers each hand-copied that target and nothing compared them until this sweep.
 # See THE VIEW-ROOT GENERATE SWEEP below.
 #
+# AND IT RE-DERIVES, DAILY, WHAT ACTUALLY CATCHES AN ABSENT VIEW ROOT IN EACH RECEIVER (#1785). A
+# fifth mandate, and the first one whose subject is a claim held in the GitHub API rather than in a
+# file. ADR-0067 §8's alarm reds on an absent view root by default; a receiver whose alarm runs on a
+# bare checkout excuses it with `--absent-ok "<why>"`, and that reason — required and printed, so the
+# carve-out cannot be a shrug — is FREE TEXT asserting something about that repo's BRANCH PROTECTION.
+# Three receivers carry one. Adding a required context, removing one, moving a materialize step
+# between jobs, or renaming a job all change the answer, and none of them touches the string. So the
+# claim moved to the roster (`absence-cover:`) where a sweep can grade it, and this is that sweep:
+# the union of classic protection and rulesets, against the receiver's own committed jobs. The prose
+# is never read. See THE ABSENCE-COVER SWEEP below.
+#
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
 # Exit:
@@ -92,16 +103,21 @@
 #   1 = at least one gap — a declared receiver is unwired, a repo adopted a capability it never
 #       rostered, a cross-repo sparse-checkout enumerates a file, a coordination-kit receiver's
 #       FS.GG.Kit pin is behind the newest published one, or a receiver declares a view skill root
-#       that nothing generates before FsggKitCheckSkillView (#1759)
+#       that nothing generates before FsggKitCheckSkillView (#1759), or a receiver whose real branch
+#       protection contradicts the roster's `absence-cover:` word for it — or that declares none
+#       (#1785)
 #   2 = no verdict, RETRYABLE — receiver evidence could not be read (rate limit, auth, outage), the
 #       NuGet feed the kit pins are graded against could not be read, the git TREE a cross-repo
 #       sparse-checkout fetches could not be read, so rule (4) did not run for it (#1556), or a
-#       receiver project would not read
+#       receiver project would not read, or a receiver's branch protection / rulesets would not read
+#       (#1785 — an unread protection is never a verified excuse)
 #   3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
 #       receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo
 #       sparse-checkout whose SHAPE the closure rule refuses to grade, a coordination-kit receiver
 #       whose FS.GG.Kit pin cannot be located or contradicts itself, a view-root generate whose
-#       ORDERING against FsggKitCheckSkillView cannot be read (#1759), or a bad invocation
+#       ORDERING against FsggKitCheckSkillView cannot be read (#1759), a receiver whose absence cover
+#       cannot be graded — no `administration: read` credential, a workflow that will not parse, or a
+#       matrix whose check-run names cannot be enumerated (#1785) — or a bad invocation
 #
 # "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
 # "I checked, and it's broken" (#320). The same argument applies one level in, which is why 2 and 3
@@ -133,6 +149,12 @@ AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers 
 # helpers are already repo-agnostic, because the gate was written not to care where a workflow came
 # from. A rule change lands in ONE place and both readers move together, by construction.
 SPARSE_RULE="$HERE/check-sparse-checkout-closure.py"
+# The required-context gate, imported by the absence-cover sweep (#1785) for the same reason the
+# sparse rule is: it already knows that GitHub keeps required checks in TWO stores and that the
+# required set is their UNION (#574), and it already knows what GitHub calls a job's check run. A
+# second copy of either would be the defect one level up — this audit's whole subject is a claim
+# about protection that nothing re-derives.
+CONTEXT_RULE="$HERE/check-required-contexts.py"
 # The tree whose git INDEX resolves rule (4) — "does this pattern select any tracked path?". It is
 # the checkout this script is running out of, derived from the script's own location rather than
 # spelled, exactly as REPOS_SH is. That tree is the AUTHORITY's, so rule (4) runs for precisely the
@@ -183,6 +205,8 @@ command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
 # no-verdict about the audit, never a silent "no repository enumerates anything" over ten repos.
 [ -f "$SPARSE_RULE" ] \
   || die "the sparse-checkout closure rule is not at $SPARSE_RULE. It is IMPORTED, not restated here (#1529/#1522), so without it this audit cannot grade a single cross-repo checkout — and reporting that as a clean sweep is the fail-open both items exist to end."
+[ -f "$CONTEXT_RULE" ] \
+  || die "the required-context gate is not at $CONTEXT_RULE. The absence-cover sweep (#1785) IMPORTS its union-of-both-protection-stores read (#574) and GitHub's job-naming rule rather than restating either, so without it no receiver's absence cover can be graded — and a sweep that grades nothing must never report a clean org."
 # The kit-pin sweep's version ORDERING and feed reader, imported for exactly the reason the sparse
 # rule is: fsgg_feed.py's own docstring says two copies of NuGet version ordering is how the two
 # copies drift, and a gate that orders versions wrongly reports green on a stale pin. Asserted up
@@ -263,7 +287,14 @@ OFFER_DIR="$(mktemp -d)"
 ENGMAN_FILE="$(mktemp)"
 # Where it stages each receiver's tool manifest, so the verdict program parses JSON and bash does not.
 ENGMAN_DIR="$(mktemp -d)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR"' EXIT
+# The absence-cover sweep's ledger (#1785), same line-oriented shape: `finding`, `refusal`,
+# `undetermined`, `ok`. See THE ABSENCE-COVER SWEEP.
+ABSENTOK_FILE="$(mktemp)"
+# Where EVERY rostered repo's workflow YAML is staged as the detector pass reads it, so that sweep
+# can ask "which jobs reach the kit's view-root assertion" without a second fetch of bytes this
+# script already held. Same ride-the-existing-pass economy as the view-root generate sweep (#1759).
+ABSENTOK_DIR="$(mktemp -d)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR" "$ABSENTOK_FILE" "$ABSENTOK_DIR"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -1665,6 +1696,341 @@ print("\n".join(out))
 PY
 )
 
+# --- THE ABSENCE-COVER SWEEP (#1785) -------------------------------------------------------------
+#
+# WHAT IT ASSERTS. For every coordination-kit package receiver: the roster's `absence-cover:` word
+# for that repo is what its REAL branch protection plus its REAL committed workflows say. The word
+# has two legal values and they are a statement about strength:
+#
+#   required    at least one context the DEFAULT BRANCH REQUIRES is produced by a job that runs the
+#               kit's view-root assertion WITHOUT `--absent-ok`. Absence cannot reach `main`.
+#   unrequired  something runs that assertion un-excused, but no REQUIRED context does. Absence is
+#               caught on a lane that blocks no merge.
+#
+# and the third state is DERIVED ONLY, never declarable: nothing in the repo runs the assertion
+# un-excused at all. A receiver may not write that down, because writing it down would be asking for
+# the carve-out ADR-0067 §8 exists to refuse.
+#
+# WHY IT EXISTS (#1785, from #1777). ADR-0067 §8's alarm reds on an absent view root by default, and
+# a receiver whose alarm runs on a bare checkout excuses it with `--absent-ok "<why>"`. The reason is
+# required and printed — and it is FREE TEXT making a claim about that repo's BRANCH PROTECTION:
+#
+#   FS.GG.Game       "the SAME required job runs -t:FsggKitMaterialize below, where
+#                     FsggKitCheckSkillView reds an absent or dangling root on a REQUIRED context"
+#   FS.GG.Audio      "NO required context on this repo runs -t:FsggKitMaterialize … so absence is
+#                     caught on the materialize path instead"
+#   FS.GG.Templates  "absence is caught on the materialize path instead … and NOT on any required
+#                     context here"
+#
+# Every one of those is falsifiable and NOTHING falsified it. Adding a required context, removing
+# one, moving a materialize step between jobs, or renaming a job all change the answer, and none of
+# them touches the string. Game's is the one that rots UNSAFELY: it says a required context covers
+# absence, so if the materialize step ever leaves that job the excuse still prints, the check still
+# passes, and an ungenerated view reaches `main` unremarked — ADR-0067 §8's silent class re-entering
+# through the door built to keep it out.
+#
+# SO THE CLAIM STOPS BEING PROSE. The word lives in the roster, where every fabric already reads it
+# and where changing it is a reviewed edit to `.github`; the FACT is derived here, daily, from the
+# API. Prose is not consulted, not parsed and not graded — a receiver's reason string is a message to
+# a human, and this sweep is what makes it stay true. That direction is deliberate: a worker on this
+# very item nearly shipped a wrong change on the authority of a `gate.yml` COMMENT asserting a
+# context was not required when protection said it was.
+#
+# IT IS ASKED OF ALL SEVEN, NOT ONLY THE THREE THAT EXCUSE ABSENCE. Restricting the subject to
+# repos carrying `--absent-ok` would make the sweep's reach depend on finding every invocation of it
+# — and Templates' is not in a workflow at all, it is inside `tests/composition/run.sh`, which this
+# audit does not fetch. Asking every receiver the same question needs no such search, covers the
+# receivers that red on absence today (SDD, Rendering, Governance red BECAUSE their generate runs
+# first — that divergence is a parameter, not a fork, and this sweep records it rather than
+# flattening it), and reports the day one of THEM loses its cover too.
+#
+# WHY NOT `check-required-contexts.py`. That gate asks whether every required context is PRODUCIBLE.
+# This asks whether a particular THING a context does is still done by a required one. Different
+# question, same two API stores — so the STORES are imported from it rather than restated, exactly as
+# the sparse-closure rule is (#1529/#1522). `required_contexts()` reads classic protection AND
+# rulesets and returns their UNION, because GitHub enforces both and reading one is the vacuous green
+# #574 paid for. Its naming primitives are borrowed too, so "what does GitHub call this job" has one
+# implementation in this org.
+#
+# WHAT IT CANNOT SEE, SAID OUT LOUD RATHER THAN PAPERED OVER:
+#   - Inside a script a workflow SHELLS OUT to. Templates' excused invocation lives in
+#     `tests/composition/run.sh`; this sweep sees the `run:` block, not the file it runs. So a
+#     receiver whose only un-excused assertion is inside a called script derives `none` and reds
+#     HERE — a false finding, in the safe direction, that a human resolves in one read.
+#   - Inside a composite action (`uses: ./.github/actions/…`). Same shape, same direction.
+#   - Whether a step's `if:` actually evaluates true on a given pull request. Templates' composition
+#     step is guarded by a docs-only scope gate, so its lane really is absent on a docs-only PR;
+#     nothing here models that, and #1508's path-filter reasoning is not re-derived either.
+#   - Whether the assertion is REACHED on every path through a job that does run it.
+#   - A reusable workflow OTHER than this authority's `kit-materialize.yml`. A receiver that moved
+#     its materialize into some third-party callee derives `none` and reds — again the safe way.
+#
+# Argv: the required-context gate (imported, not restated), the staged-workflow dir, and the
+# roster manifest `<repo>\t<declared cover, or "-">`.
+# Stdout: tab-separated ledger records, one per line.
+ABSENTOK_PY=$(cat <<'PY'
+import importlib.util
+import os
+import re
+import sys
+
+RULE, STAGING, MANIFEST, AUTHORITY_WF = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+# By PATH, not by name: the module's filename has hyphens. Loading it does not run its main() — that
+# is guarded by `if __name__ == "__main__"`.
+spec = importlib.util.spec_from_file_location("required_contexts_gate", RULE)
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+
+# THE BORROWED SURFACE, NAMED — because importing across a file boundary makes these an interface,
+# and an interface nobody wrote down is one the next refactor is entitled to break (#1599). A missing
+# name is a PERMANENT no-verdict here, never a sweep that quietly grades nothing.
+BORROWED = ("required_contexts", "load_yaml", "jobs_of", "display_name", "matrix_suffixes",
+            "GateError", "Unreachable", "Missing", "Forbidden")
+_absent = [n for n in BORROWED if not hasattr(gate, n)]
+if _absent:
+    sys.stderr.write(
+        "absence-cover: the required-context gate no longer exports " + ", ".join(_absent) +
+        " — the union-of-both-protection-stores read and GitHub's job-naming rule are IMPORTED from "
+        "it, never restated here (#1529/#1522/#1785). Nothing was graded.\n")
+    raise SystemExit(3)
+
+BRANCH = "main"
+AUTHORITY = "FS-GG/.github"
+MATERIALIZE_WF = "kit-materialize.yml"
+
+# What a `run:` block has to contain for its job to REACH the kit's view-root assertion. The first
+# two are MSBuild targets: `FsggKitCheckSkillView` is `AfterTargets=FsggKitMaterialize`, so either
+# spelling arrives at the same assertion, and neither can carry `--absent-ok` (that is a property of
+# the tool invocation, not of the target).
+TARGET_RE = re.compile(r"-t:Fsgg(?:KitMaterialize|KitCheckSkillView)\b")
+CHECK_RE = re.compile(r"skill-view\b[^\n]*\bcheck\b")
+ABSENT_RE = re.compile(r"--absent-ok\b")
+# `uses: FS-GG/.github/.github/workflows/kit-materialize.yml@<ref>`, quoted or not — the quoting
+# blind spot #503 paid for, on this reader too.
+USES_RE = re.compile(
+    r"^[\"']?" + re.escape(AUTHORITY) + r"/\.github/workflows/(?P<file>[^/@\"']+)@")
+
+out = []
+
+
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
+
+
+def uncommented(text):
+    """A `run:` block with its whole-line shell comments removed.
+
+    Load-bearing, not tidiness. FS.GG.Audio's `gate.yml` explains in comments beside the excused
+    step that NO required context here runs `-t:FsggKitMaterialize` — and those comments contain the
+    literal target name. Reading them as invocations would derive `required` for the one receiver
+    whose whole point is that it is NOT, i.e. it would certify the excuse by reading the sentence
+    that admits it. A trailing `foo # …` comment on a live line is still counted; that is a known
+    over-read in the direction of a false RED.
+    """
+    return "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+
+
+# A quoted span in a `run:` block. Blanked before anything is read as an INVOCATION, because in this
+# subject a quoted string is overwhelmingly likely to be the `--absent-ok` REASON — and the reason is
+# a sentence ABOUT the very targets this sweep looks for.
+QUOTED_RE = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'", re.S)
+
+
+def unquoted(text):
+    """A `run:` block with every quoted string blanked, so PROSE cannot be read as a command.
+
+    THIS IS THE WHOLE ITEM, INSIDE THE CHECK FOR IT. FS.GG.Audio's `--absent-ok` reason reads, in
+    full and on one line: "NO required context on this repo runs -t:FsggKitMaterialize …". The first
+    cut of this sweep matched that literal, concluded that Audio's required `Build + test (locked
+    restore, net10.0, headless)` job runs the materialize, and derived `required` for the one
+    receiver whose entire point is that it is NOT — certifying the excuse by reading the sentence
+    that denies it. That is the same defect as #1785 itself, one level in, and it is why this check
+    reads prose NOWHERE: not the reason, not a comment, not a quoted argument.
+
+    The cost is a known over-strip in the SAFE direction: an invocation hidden inside a quoted
+    `bash -c "…"` is not seen, so its job does not count as covering and the receiver derives a
+    WEAKER cover than it has — a false RED a human clears in one read, never a false green.
+    """
+    return QUOTED_RE.sub(" ", text)
+
+
+def callee_jobs(filename, subject):
+    """The job display names inside one of THIS AUTHORITY's reusable workflows."""
+    path = os.path.join(AUTHORITY_WF, filename)
+    with open(path, encoding="utf-8") as fh:
+        doc = gate.load_yaml(fh.read(), f"{AUTHORITY}/.github/workflows/{filename}")
+    return [gate.display_name(jid, j) for jid, j in gate.jobs_of(doc, subject).items()]
+
+
+def job_contexts(job_id, job, subject):
+    """What GitHub calls this job's check run(s) — the shared naming rule, applied per job.
+
+    A job that CALLS a reusable workflow produces one context per callee job, named
+    `<caller display> / <callee job display>`; every other job produces its own display name. Matrix
+    suffixes come from the caller either way.
+    """
+    display = gate.display_name(job_id, job)
+    suffixes = gate.matrix_suffixes(job, subject)
+    uses = job.get("uses")
+    if isinstance(uses, str):
+        m = USES_RE.match(uses.strip())
+        if not m:
+            # Some other callee. We do not hold it, so we cannot name its jobs — and a job whose
+            # contexts we cannot name must not be counted as covering anything.
+            return None
+        return [f"{display}{s} / {c}" for s in suffixes for c in callee_jobs(m.group("file"), subject)]
+    return [f"{display}{s}" for s in suffixes]
+
+
+def grade_repo(repo, declared):
+    slug = repo.replace("/", "__")
+    wfdir = os.path.join(STAGING, slug)
+    if not os.path.isdir(wfdir):
+        emit("undetermined", repo,
+             "no workflow was staged for this receiver, so nothing about what covers an absent view "
+             "root could be read. That is not 'this repo covers nothing'.")
+        return
+
+    covering, excused = [], []
+    for name in sorted(os.listdir(wfdir)):
+        subject = f"{repo} .github/workflows/{name}"
+        try:
+            with open(os.path.join(wfdir, name), encoding="utf-8") as fh:
+                doc = gate.load_yaml(fh.read(), subject)
+            jobs = gate.jobs_of(doc, subject)
+        except gate.GateError as e:
+            # A workflow that will not parse, or declares no jobs, is not evidence that this repo
+            # covers nothing. Refuse the repo rather than grade it on the files that did parse.
+            emit("refusal", repo,
+                 f"{subject} could not be read ({e}), so this receiver's covering jobs cannot be "
+                 f"enumerated. Unparsable is not 'covers nothing'.")
+            return
+        for job_id, job in jobs.items():
+            steps = job.get("steps")
+            is_covering = is_excused = False
+            if isinstance(job.get("uses"), str):
+                m = USES_RE.match(job["uses"].strip())
+                is_covering = bool(m) and m.group("file") == MATERIALIZE_WF
+            for step in steps if isinstance(steps, list) else []:
+                if not isinstance(step, dict):
+                    continue
+                run = step.get("run")
+                if not isinstance(run, str):
+                    continue
+                body = uncommented(run)
+                # The FLAG is read on the commented-out-but-still-quoted body — `--absent-ok` itself
+                # is never inside quotes, only its reason is. Everything read as an INVOCATION is
+                # read with the quotes blanked; see unquoted() for the bug that rule exists for.
+                excuse_here = bool(ABSENT_RE.search(body))
+                body = unquoted(body)
+                if TARGET_RE.search(body):
+                    is_covering = True
+                elif CHECK_RE.search(body):
+                    if excuse_here:
+                        is_excused = True
+                    else:
+                        is_covering = True
+            if not (is_covering or is_excused):
+                continue
+            try:
+                names = job_contexts(job_id, job, f"{subject} [{job_id}]")
+            except gate.GateError as e:
+                emit("refusal", repo,
+                     f"{subject} [{job_id}] reaches the view-root assertion but its check-run "
+                     f"name(s) cannot be derived ({e}). A guessed context that happened to be "
+                     f"required would be a vacuous green over an unguarded repo.")
+                return
+            except OSError as e:
+                emit("refusal", repo,
+                     f"{subject} [{job_id}] calls a reusable workflow this authority should hold "
+                     f"and does not ({e}), so its contexts cannot be named.")
+                return
+            if names is None:
+                continue
+            (covering if is_covering else excused).extend(names)
+
+    try:
+        required = {str(c.get("context", "")) for c in gate.required_contexts(repo, BRANCH, None, None)}
+    except (gate.Unreachable, gate.Missing) as e:
+        emit("undetermined", repo,
+             f"branch protection / rulesets on {BRANCH} would not read ({e}). #266: a protection "
+             f"read that failed is UNREAD, and an unread protection is never a valid excuse.")
+        return
+    except (gate.Forbidden, gate.GateError) as e:
+        emit("refusal", repo,
+             f"branch protection / rulesets on {BRANCH} are unreadable and re-running will not "
+             f"change that ({str(e).splitlines()[0]}). Reading required checks needs "
+             f"`administration: read`, which is NOT grantable to a workflow GITHUB_TOKEN — the "
+             f"audit must run with the org App's installation token. Nothing about this receiver's "
+             f"absence cover was asserted.")
+        return
+
+    hits = sorted(set(covering) & required)
+    if not covering:
+        derived = "none"
+    elif hits:
+        derived = "required"
+    else:
+        derived = "unrequired"
+
+    where = f"un-excused assertion on: {', '.join(sorted(set(covering))) or '(nothing)'}"
+    if excused:
+        where += f"; excused by --absent-ok on: {', '.join(sorted(set(excused)))}"
+
+    if derived == "none":
+        emit("finding", repo,
+             f"NOTHING in this receiver runs the kit's view-root assertion without `--absent-ok`. "
+             f"An absent view root is therefore excused everywhere and caught nowhere — exit 0 with "
+             f"no diagnostic over an ungenerated view, which is the exact silent class ADR-0067 §8 "
+             f"forbids. The roster says `absence-cover: {declared or '(unset)'}`. "
+             f"{where}. Either restore a lane that asserts it un-excused, or this repo has no "
+             f"business excusing absence at all.")
+        return
+    if not declared:
+        emit("finding", repo,
+             f"declares no `absence-cover:` in registry/repos.yml, so what covers an absent view "
+             f"root here is unstated and therefore ungraded. Derived from live protection today: "
+             f"{derived}"
+             + (f" (required context(s): {', '.join(hits)})" if hits else "") +
+             f". Add `absence-cover: {derived}` to this repo's roster row — the word is what makes "
+             f"the claim re-checkable tomorrow (#1785).")
+        return
+    if declared == derived:
+        emit("ok", repo,
+             f"absence-cover: {derived}"
+             + (f" — required context(s) running the assertion un-excused: {', '.join(hits)}"
+                if hits else " — no REQUIRED context runs it; " + where))
+        return
+    if declared == "required" and derived == "unrequired":
+        emit("finding", repo,
+             f"the roster says `absence-cover: required` and live branch protection says otherwise: "
+             f"the assertion still runs un-excused ({where}), but NO context this branch REQUIRES "
+             f"produces it. This is the UNSAFE direction — the receiver's own `--absent-ok` reason "
+             f"claims a required context covers absence, that claim is now FALSE, and an ungenerated "
+             f"view can reach `main` while the excuse keeps printing (ADR-0067 §8 via #1785). Either "
+             f"put the assertion back on a required context, or change the roster word and accept "
+             f"that absence no longer blocks a merge here.")
+        return
+    emit("finding", repo,
+         f"the roster says `absence-cover: {declared}` and live branch protection says `{derived}` "
+         f"(required context(s) running the assertion un-excused: {', '.join(hits) or 'none'}). "
+         f"This is the SAFE direction — the repo is covered more strongly than it claims — but the "
+         f"roster word is what the next reader trusts and it is wrong. Update the row.")
+
+
+with open(MANIFEST, encoding="utf-8") as fh:
+    for line in fh:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        repo, declared = line.split("\t", 1)
+        grade_repo(repo, "" if declared == "-" else declared)
+
+print("\n".join(out))
+PY
+)
+
 # --- THE BUMP-OFFER SWEEP (#1768) ----------------------------------------------------------------
 #
 # WHAT IT ASSERTS. For every receiver the kit-pin sweep just found BEHIND, this says whether a bump to
@@ -2094,6 +2460,14 @@ repo_calls() {
     files=""                              # visible, but no workflows dir: no CI enforcement.
   fi
 
+  # THE ABSENCE-COVER SWEEP'S "I REACHED THIS REPO" MARK (#1785). Created the moment the listing is a
+  # real answer — INCLUDING the answer "visible, and it has no workflows at all" — and never when the
+  # listing failed, because those two must not share a verdict. An empty directory here means the
+  # repo covers an absent view root with nothing, which is a FINDING; a missing directory means we
+  # never read it, which is a no-verdict. Collapsing them would let an outage report a receiver as
+  # unguarded, or an unguarded receiver report as an outage, and #266/#320 forbid both directions.
+  mkdir -p "$ABSENTOK_DIR/${repo//\//__}"
+
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     frc=0; text="$(get_workflow "$repo" "$f")" || frc=$?
@@ -2110,6 +2484,14 @@ repo_calls() {
     # phantom ADOPTER of its own fabrics, which is a statement about participation and has nothing
     # to say about whether a checkout under-fetches.
     sparse_grade "$repo" "$f" <<< "$text"
+
+    # THE ABSENCE-COVER SWEEP (#1785) rides this pass too, and stages rather than grades: its
+    # question — which of this repo's JOBS reach the kit's view-root assertion un-excused, and is any
+    # of their check-run names one the branch REQUIRES — needs the parsed YAML and the protection
+    # API, and bash must do neither. Staging here is what keeps its API cost at exactly the two
+    # protection reads per receiver: the workflow bytes are already in hand.
+    mkdir -p "$ABSENTOK_DIR/${repo//\//__}"
+    printf '%s' "$text" > "$ABSENTOK_DIR/${repo//\//__}/$f"
     # Only a call to the AUTHORITY's copy counts. A repo's own local `uses: ./.github/workflows/x.yml`
     # is deliberately NOT matched: .github runs contract-coherence.yml on itself exactly that way, and
     # running your own workflow is not participating in somebody else's fabric. Matching it would make
@@ -2272,6 +2654,11 @@ roster_list() {  # <cap> -> receiver full names; non-zero if the roster cannot b
 # The capability whose receivers the kit-pin sweep grades. Named once, and asserted against the
 # roster's own capability list before the sweep runs — see THE KIT-PIN FRESHNESS SWEEP.
 KIT_CAP="coordination-kit"
+roster_absence_cover() {  # `<full>\t<absence-cover or ->` per KIT_CAP package receiver (#1785)
+  if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" absence-cover --registry "$REGISTRY"
+  else bash "$REPOS_SH" absence-cover; fi
+}
+
 roster_list_pkg() {  # the KIT_CAP receivers that take the kit AS A PACKAGE (ADR-0062)
   if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" list --receives "$KIT_CAP" --kit-delivery package --registry "$REGISTRY"
   else bash "$REPOS_SH" list --receives "$KIT_CAP" --kit-delivery package; fi
@@ -2980,6 +3367,61 @@ else
   fi
 fi
 
+# --- the absence-cover sweep (#1785) -------------------------------------------------------------
+#
+# IT RIDES THE DETECTOR PASS'S WORKFLOW READS AND ADDS EXACTLY TWO API CALLS PER RECEIVER — the two
+# protection stores. Every workflow it grades was staged by `repo_calls` as that pass read it, so the
+# YAML costs nothing here; the protection cannot be ridden, because nothing else in this script reads
+# it. Fourteen calls a day against the rate limit this script treats as its main adversary.
+#
+# THE CREDENTIAL IS THE ONE THING THIS SWEEP NEEDS THAT NO OTHER DOES. `branches/<b>/protection`
+# requires `administration: read`, which is NOT a valid `permissions:` scope for a workflow's
+# GITHUB_TOKEN — declaring it is a startup validation error that produces no check run at all (the
+# #478 blind spot). So repos-audit.yml mints the org dispatch App's installation token for this sweep
+# alone, exactly as required-context-coherence.yml does, and hands it over in $ABSENTOK_TOKEN.
+# WITHOUT IT EVERY RECEIVER IS A REFUSAL, LOUDLY — a rulesets-only read would answer for FS.GG.Audio
+# and lie by omission, which is #574's vacuous green with a different subject.
+absentok_findings=0; absentok_refusals=0; absentok_undet=0; absentok_ok=0; absentok_graded=0
+absentok_manifest="$ABSENTOK_DIR/manifest.tsv"
+if [ "$kit_cap_declared" -eq 0 ]; then
+  echo "repos-audit: absence-cover (#1785) — the roster declares no $KIT_CAP capability, so no receiver has a generated view root and this sweep had no subject. NOTHING was asserted."
+elif ! roster_absence_cover > "$absentok_manifest" 2>/dev/null; then
+  die "cannot enumerate the $KIT_CAP package receivers' absence-cover words — repos.sh absence-cover failed. That is not a clean sweep: no receiver's absence cover was graded."
+elif [ ! -s "$absentok_manifest" ]; then
+  echo "repos-audit: absence-cover (#1785) — no $KIT_CAP package receiver is rostered, so this sweep graded nothing. NOTHING was asserted about what catches an absent generated view root anywhere."
+else
+  # The App token, and ONLY for this sweep. Every other read in this script is a public-repo read the
+  # run-scoped token makes correctly, and handing them a repo-scoped installation token would 404 the
+  # authority itself. Unset => the gate's own Forbidden path fires and every receiver is a refusal.
+  GH_TOKEN="${ABSENTOK_TOKEN:-${GH_TOKEN:-}}" \
+    python3 -c "$ABSENTOK_PY" "$CONTEXT_RULE" "$ABSENTOK_DIR" "$absentok_manifest" \
+            "$HERE/../.github/workflows" >> "$ABSENTOK_FILE" \
+    || die "the absence-cover verdict program failed to run. That is not a clean sweep — no receiver's absence cover was graded."
+
+  absentok_count() { grep -cE "^$1"$'\t' "$ABSENTOK_FILE" 2>/dev/null || true; }
+  absentok_findings="$(absentok_count finding)"
+  absentok_refusals="$(absentok_count refusal)"
+  absentok_undet="$(absentok_count undetermined)"
+  absentok_ok="$(absentok_count ok)"
+
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      finding)      echo "::error::repos-audit: absence-cover — $a $b" ;;
+      refusal)      echo "::error::repos-audit: absence-cover REFUSED to grade $a — $b" ;;
+      undetermined) echo "::error::repos-audit: absence-cover could not read $a — $b" ;;
+      ok)           echo "  ok: $a $b" ;;
+    esac
+  done < "$ABSENTOK_FILE"
+
+  absentok_graded=$(( absentok_ok + absentok_findings ))
+  absentok_subjects="$(wc -l < "$absentok_manifest" | tr -d ' ')"
+  if [ "$absentok_graded" -eq 0 ]; then
+    echo "repos-audit: absence-cover (#1785) — NONE of the $absentok_subjects $KIT_CAP package receiver(s) could be graded ($absentok_refusals refusal(s), $absentok_undet unread). NOTHING was asserted about what catches an absent generated view root; that is not a clean bill (#266)."
+  else
+    echo "repos-audit: absence-cover (#1785) — graded $absentok_graded of $absentok_subjects $KIT_CAP package receiver(s): $absentok_ok match the roster's word, $absentok_findings do NOT, $absentok_refusals refusal(s), $absentok_undet unread. The roster's word is what a reader trusts; branch protection is what actually holds, and this is the only thing in the org that compares them. It does NOT read any receiver's \`--absent-ok\` reason: that string is prose for a human, and this sweep is what keeps it true."
+  fi
+fi
+
 # DELIBERATELY NOT folded into `$undetermined`. That counter's diagnostic says "could not determine
 # WIRING for N repo(s)", and an unreadable Directory.Packages.props is not a wiring question — the
 # per-capability lines a few rows up would be saying "0 undetermined" while the exit-2 message
@@ -3040,13 +3482,18 @@ fi
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
-   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ]; then
+   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ] \
+   || [ "$absentok_undet" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
   # receiver project is not a wiring question, and folding it into `$undetermined` would print
   # "could not determine WIRING" about a file that answers a different question (#327/#335).
   [ "$viewgen_undet" -eq 0 ] || echo "::error::repos-audit: could not read the receiver project of $viewgen_undet repo(s), so nothing was proven about whether their declared view skill root can be generated. This is a failure to READ, not a missing generate target." >&2
+  # Its own counter and sentence again, and here the wrong subject is the one #266 is FOR: an unread
+  # branch protection is not "this receiver has no cover for an absent view root" and must never be
+  # allowed to render as "its excuse checks out". A protection we could not read is UNREAD.
+  [ "$absentok_undet" -eq 0 ] || echo "::error::repos-audit: could not read the branch protection or rulesets of $absentok_undet receiver(s), so NOTHING was proven about what catches an absent generated view root there. An unread protection is not a verified excuse (#266/#1785)." >&2
   # Its own counter and sentence for the same reason as the two above, and here the wrong subject
   # would be actively dangerous: an unread PR list means we do not know whether a bump was OFFERED,
   # which is a different question from whether the pin is stale (we KNOW it is — that is why this
@@ -3118,6 +3565,19 @@ if [ "$engman_refusals" -ne 0 ]; then
   exit 3
 fi
 
+# A receiver whose absence cover this sweep REFUSES joins the permanent no-verdicts on the same
+# argument once more, and the dominant cause is a credential rather than a commit: reading required
+# checks needs `administration: read`, which no workflow GITHUB_TOKEN can hold, so an audit run
+# without the org App's installation token refuses EVERY receiver rather than grading them from the
+# one store a plain token can see. That half-read is #574's vacuous green, and it is refused here for
+# the same reason it was there. The other causes are a workflow that will not parse and a matrix
+# whose check-run names cannot be enumerated — a guessed context that happened to be required would
+# certify an unguarded repo.
+if [ "$absentok_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $absentok_refusals receiver(s) had their absence cover REFUSED rather than graded — most often because this run holds no token with \`administration: read\`, so the required-context set could not be read from BOTH stores. Nothing was asserted about what catches an absent generated view root in them. Not transient: a re-run with the same credential reproduces it. The annotations above name each one (#1785/#574)." >&2
+  exit 3
+fi
+
 # A gap and an unrostered adopter are one exit code because they are one CLASS: the audit ran to
 # completion and found the roster and the real wiring disagreeing. Both are deterministic, neither is
 # transient, and both are fixed by a commit — they differ only in WHICH side is wrong, and the
@@ -3160,13 +3620,15 @@ fi
 # here, by reading that repo's tree — which is exactly the capability the rule it replaces never had.
 offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
-   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ]; then
+   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
+   || [ "$absentok_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
   [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
+  [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's \`absence-cover:\` word for them, or declare none. That word is a claim about BRANCH PROTECTION — the same claim each receiver's \`--absent-ok\` reason makes in free text and nothing re-checked until now — and live protection says otherwise. Where the derived answer is WEAKER than the word, an absent generated view root can now reach \`main\` while the excuse keeps printing: ADR-0067 §8's silent class, through the door §8 opened (#1785/#1777)." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   exit 1
 fi

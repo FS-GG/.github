@@ -24,6 +24,11 @@
 #                                                           # EVERY capability the roster claims —
 #                                                           # including one with no `capabilities:` row.
 #                                                           # The audit's closure check reads this (#628).
+#   repos.sh absence-cover [--registry <file>]              # full<TAB>absence-cover (or `-`), one row
+#                                                           # per coordination-kit PACKAGE receiver, in
+#                                                           # roster order. The word repos-audit's
+#                                                           # absence-cover sweep grades against live
+#                                                           # branch protection (#1785).
 #   repos.sh kit [--field id|kind|source|dest] [--kind skill|client|config] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh relock [--registry <file>] [--root <dir>]      # REGENERATE registry/repos.lock from the
@@ -313,6 +318,47 @@ cmd_list() {
 # received but undeclared is invisible to all of them — which is exactly how `build-config` stayed
 # invisible while four repos received it. This is the query that can SEE the gap, so it is the one the
 # audit's closure check reads.
+# `absence-cover` (per repo; #1785) — WHAT CATCHES AN ABSENT GENERATED VIEW ROOT IN THIS RECEIVER.
+#
+# ADR-0067 §6 makes `.agents/skills` a generated view: untracked, git-ignored, and therefore ABSENT in
+# every fresh checkout. §8's alarm reds on that by default, and a receiver whose alarm runs on a bare
+# checkout excuses it with `--absent-ok "<why>"`. That reason is free text, it is a claim about THIS
+# REPO'S BRANCH PROTECTION, and until #1785 nothing re-checked it. This word is that claim, moved to
+# where a sweep can grade it daily against the API:
+#
+#   required    a context the default branch REQUIRES is produced by a job that runs the kit's
+#               view-root assertion WITHOUT `--absent-ok`. An absent view root cannot reach `main`.
+#   unrequired  the assertion runs un-excused somewhere, but on NO required context. Absence is
+#               caught on a lane that blocks no merge — true of a receiver whose only materialize is
+#               its Renovate kit-bump workflow.
+#
+# There is deliberately no third word. "Nothing catches absence here" is a state repos-audit.sh
+# DERIVES and reds on; it is not one a roster row may assert, because asserting it would be asking
+# for precisely the silent exit 0 over an ungenerated view that §8 forbids.
+#
+# THE WORD IS NOT THE AUTHORITY — the API is. This row says what the org BELIEVES covers absence in
+# that receiver; repos-audit's absence-cover sweep reads the union of classic protection and rulesets
+# plus the receiver's committed workflows, derives the real answer, and reds when the two disagree in
+# EITHER direction. A stale row is a finding, not a licence. Legal only on a coordination-kit
+# receiver, for the same reason `kit-delivery` is: nothing else has a view root to miss.
+cmd_absence_cover() {
+  local reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --registry) need_val absence-cover "$@"; reg="$2"; shift 2 ;;
+      *)          die "absence-cover: unknown arg '$1'." ;;
+    esac
+  done
+  [ -f "$reg" ] || die "registry not found: $reg"
+  # `-` rather than an empty field, so a caller reading TSV cannot mistake "unset" for a short line.
+  # Narrowed to PACKAGE receivers, matching the set repos-audit's kit sweeps grade.
+  yaml2json "$reg" | jq -r '
+    .repos[]
+    | select(((.receives // []) | index("coordination-kit")) != null)
+    | select(((."kit-delivery" // "byte-copy")) == "package")
+    | [ .full, ((."absence-cover" // "-") | if . == "" then "-" else . end) ] | @tsv'
+}
+
 cmd_received() {
   local reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
@@ -699,9 +745,18 @@ cmd_validate() {
   [ -z "$dups" ] || err "duplicate repo id(s): $(echo "$dups" | tr '\n' ' ')"
 
   # --- per-repo fields + receives vocabulary ---
-  local id full role recv delivery cap
-  while IFS=$'\t' read -r id full role recv delivery; do
+  local id full role recv delivery cover cap
+  # `-` FOR AN ABSENT FIELD, NOT AN EMPTY ONE, AND THIS IS NOT COSMETIC. Tab is an IFS *whitespace*
+  # character, so `read` with IFS=$'\t' collapses a run of tabs into ONE delimiter — an empty
+  # `kit-delivery` therefore shifts `absence-cover` left into `$delivery`, and the validator reports
+  # `kit-delivery 'required' invalid` about a field the row never set. It was invisible while
+  # kit-delivery was the LAST column (an empty trailing field is simply absent, which is what it
+  # means); adding a sixth column is what made it reachable. jq emits `-` and this loop maps it back,
+  # so the meaning of "absent" lives in one place and column order stops being load-bearing.
+  while IFS=$'\t' read -r id full role recv delivery cover; do
     [ -n "$id" ] || continue
+    [ "$delivery" = "-" ] && delivery=""
+    [ "$cover" = "-" ] && cover=""
     [[ "$id"   =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "repo id '$id' must be lowercase kebab/dotted."
     [[ "$full" =~ ^FS-GG/.+ ]]               || err "repo '$id' full '$full' must be 'FS-GG/<repo>'."
     case "$role" in authority|framework) ;; *) err "repo '$id' role '$role' invalid (authority|framework)." ;; esac
@@ -720,7 +775,24 @@ cmd_validate() {
           || err "repo '$id' sets kit-delivery '$delivery' but does not receive coordination-kit — the field only governs how a coordination-kit receiver takes the kit." ;;
       *) err "repo '$id' kit-delivery '$delivery' invalid (byte-copy|package)." ;;
     esac
-  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), (."kit-delivery" // "")] | @tsv')
+    # absence-cover (#1785): what catches an ABSENT generated view root here. Optional in the schema
+    # and required in practice by repos-audit's absence-cover sweep, which reds a coordination-kit
+    # package receiver that declares none — the split is deliberate, because "this row is missing" is
+    # a finding about the org that belongs in the daily sweep beside the derived answer, not a parse
+    # error that stops every other fabric from reading the roster at all.
+    #
+    # 'none' is NOT in the vocabulary, and its absence is the point: a receiver may not write down
+    # that nothing catches an absent view root. That state is DERIVED by the sweep and red there.
+    case "$cover" in
+      "") ;;
+      required|unrequired)
+        echo "$recv" | grep -qw coordination-kit \
+          || err "repo '$id' sets absence-cover '$cover' but does not receive coordination-kit — the field states what catches an absent GENERATED VIEW ROOT (ADR-0067 §6/§8), which only a kit receiver has." ;;
+      none)
+        err "repo '$id' sets absence-cover 'none'. That is not a declarable state (#1785): a receiver may not assert that NOTHING catches an absent generated view root — that is the silent exit 0 over an ungenerated view ADR-0067 §8 forbids. repos-audit DERIVES that state and reds on it. Either name the cover (required|unrequired) or fix the repo." ;;
+      *) err "repo '$id' absence-cover '$cover' invalid (required|unrequired)." ;;
+    esac
+  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), ((."kit-delivery" // "-") | if . == "" then "-" else . end), ((."absence-cover" // "-") | if . == "" then "-" else . end)] | @tsv')
 
   # --- exactly one authority, matching the top-level, and not a kit receiver ---
   local authct; authct="$(echo "$json" | jq '[.repos[] | select(.role=="authority")] | length')"
@@ -1066,6 +1138,7 @@ case "${1:-}" in
   list)     shift; cmd_list "$@" ;;
   caps)     shift; cmd_caps "$@" ;;
   received) shift; cmd_received "$@" ;;
+  absence-cover) shift; cmd_absence_cover "$@" ;;
   kit)      shift; cmd_kit "$@" ;;
   # TWO VERBS, TWO AUTHORITIES (#1613). The operation is selected HERE, by the word the caller typed,
   # and is never an argument to either — so no flag on `require-context` can make it remove, and the
