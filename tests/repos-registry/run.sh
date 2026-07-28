@@ -747,6 +747,334 @@ fi
 # that package. The receiver-set invariant above still holds — build config is still RECEIVED (now via the
 # package), it is simply no longer PUSHED.
 
+# ---- the scoped branch-protection writer (#1613) -------------------------------------------------
+#
+# `repos.sh require-context` / `unrequire-context` can WEAKEN protection across the whole roster, so
+# the negative legs matter more than the positive ones here. The bar this section is held to: prove it
+# REFUSES, not that it works. Every leg below either asserts a refusal, or asserts the API traffic the
+# tool did NOT generate — because "it did not remove anything" is a claim about calls, and a claim
+# about calls cannot be checked by reading the tool's own summary line.
+#
+# Stubbed `gh` on PATH, per tests/repos-audit/run.sh, plus a call log: `$GH_CALL_LOG` records
+# `METHOD<TAB>PATH` for every request, and several assertions read nothing else.
+PSTUB="$WORK/pstub"; PFIX="$WORK/pfix"; PLOG="$WORK/gh-calls.log"
+mkdir -p "$PSTUB" "$PFIX"
+export PFIX
+
+# The stub models the ONE resource this tool is allowed to touch: a branch's classic required status
+# checks. It deliberately implements no other endpoint, so a tool that reached for
+# `…/protection` itself, or for enforce_admins, would get an unrecognised-path failure rather than a
+# convenient success — the stub cannot be the reason a scope violation passes.
+#
+#   $PFIX/<slug>.contexts     the branch's current required contexts, one per line (absent => 404)
+#   $PFIX/<slug>.checksshape  report them via `checks[]` with an EMPTY `contexts[]` (the migrated shape)
+#   $PFIX/<slug>.failread     the READ 403s (no administration: read)
+#   $PFIX/<slug>.failwrite    the WRITE 403s (no administration: write)
+#   $PFIX/<slug>.liar         the write returns 200 and changes NOTHING (the 200-is-not-evidence case)
+#   $PFIX/<slug>.dropother    the write applies AND silently drops a pre-existing context
+cat > "$PSTUB/gh" <<'STUB'
+#!/usr/bin/env bash
+set -uo pipefail
+method=GET; path=""; ctxarg=""
+args=("$@"); n=$#
+for ((i=0;i<n;i++)); do
+  case "${args[i]}" in
+    --method)        method="${args[i+1]:-}" ;;
+    repos/*)         path="${args[i]}" ;;
+    'contexts[]='*)  ctxarg="${args[i]#contexts[]=}" ;;
+  esac
+done
+[ -n "${GH_CALL_LOG:-}" ] && printf '%s\t%s\n' "$method" "$path" >> "$GH_CALL_LOG"
+repo="${path#repos/}"; repo="${repo%%/branches/*}"; slug="${repo//\//__}"
+f="$PFIX/$slug.contexts"
+
+notfound()  { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+forbidden() { echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1; }
+
+# Any path other than the two this tool is permitted is an outright failure, not a 404 — a 404 would
+# be read as "no classic block", which is a FINDING about the repo, and would let an out-of-scope
+# call masquerade as a legitimate one.
+case "$path" in
+  */branches/*/protection/required_status_checks|*/branches/*/protection/required_status_checks/contexts) ;;
+  *) echo "gh: STUB REFUSED an endpoint outside required_status_checks: $path" >&2; exit 1 ;;
+esac
+
+case "$method" in
+  GET)
+    [ -f "$PFIX/$slug.failread" ] && forbidden
+    [ -f "$f" ] || notfound
+    if [ -f "$PFIX/$slug.checksshape" ]; then
+      jq -R -s 'split("\n") | map(select(length>0))
+                | { contexts: [], checks: map({context: ., app_id: null}) }' < "$f"
+    else
+      jq -R -s 'split("\n") | map(select(length>0)) | { contexts: ., checks: [] }' < "$f"
+    fi ;;
+  POST|DELETE)
+    [ -f "$PFIX/$slug.failwrite" ] && forbidden
+    [ -f "$f" ] || notfound
+    if [ ! -f "$PFIX/$slug.liar" ]; then
+      if [ "$method" = POST ]; then printf '%s\n' "$ctxarg" >> "$f"
+      else { grep -Fxv -- "$ctxarg" "$f" || true; } > "$f.t"; mv "$f.t" "$f"; fi
+      # A server that applies the requested change AND quietly drops something else. The tool's
+      # read-back must compare the whole SET, not just look for the context it asked about.
+      [ -f "$PFIX/$slug.dropother" ] && { { grep -Fxv -- "collateral" "$f" || true; } > "$f.t"; mv "$f.t" "$f"; }
+      LC_ALL=C sort -u -o "$f" "$f"
+    fi
+    echo '{"contexts":[]}' ;;
+  *) echo "gh: STUB REFUSED method $method" >&2; exit 1 ;;
+esac
+STUB
+chmod +x "$PSTUB/gh"
+
+PROTREG="$WORK/protect.yml"
+mkprotreg() {  # mkprotreg <charlie-receives>
+  cat > "$PROTREG" <<YAML
+schemaVersion: 8
+updated: 2026-07-28
+authority: FS-GG/.github
+repos:
+  - { id: .github, full: FS-GG/.github,      role: authority, receives: [labels] }
+  - { id: alpha,   full: FS-GG/FS.GG.Alpha,   role: framework, receives: [labels, coordination-kit] }
+  - { id: bravo,   full: FS-GG/FS.GG.Bravo,   role: framework, receives: [labels, coordination-kit] }
+  - { id: charlie, full: FS-GG/FS.GG.Charlie, role: framework, receives: [$1] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+}
+mkprotreg "labels"
+
+GUARD="kit-bump-shape"
+pset()   { local slug="${1//\//__}"; shift; : > "$PFIX/$slug.contexts"; printf '%s\n' "$@" | grep -v '^$' >> "$PFIX/$slug.contexts" || true; }
+pget()   { local slug="${1//\//__}"; LC_ALL=C sort "$PFIX/$slug.contexts" 2>/dev/null | tr '\n' ',' ; }
+pclear() { rm -f "$PFIX"/*.contexts "$PFIX"/*.failread "$PFIX"/*.failwrite "$PFIX"/*.liar "$PFIX"/*.dropother "$PFIX"/*.checksshape; }
+pmark()  { local slug="${1//\//__}"; : > "$PFIX/$slug.$2"; }
+# A fresh, fully-protected roster: both kit receivers already require two OTHER contexts, so every
+# leg below runs against a branch that has something to lose.
+pbase()  { pclear; pset FS-GG/FS.GG.Alpha "Deterministic gate" collateral; pset FS-GG/FS.GG.Bravo "Deterministic gate" collateral; }
+
+POUT=""; PRC=0
+prun() { PRC=0; : > "$PLOG"
+         POUT="$(GH_CALL_LOG="$PLOG" PATH="$PSTUB:$PATH" bash "$REPOS_SH" "$@" --registry "$PROTREG" 2>&1)" || PRC=$?; }
+ncalls()  { grep -c "^$1	" "$PLOG" 2>/dev/null || true; }   # ncalls <METHOD>
+allcalls() { wc -l < "$PLOG" | tr -d ' '; }
+
+# expect_refusal <name> <expected-exit> <substr> — the command must fail AND must have made NO API
+# call whatsoever. A refusal that already touched the API is not a refusal.
+expect_refusal() {
+  local n="$1" want="$2" substr="$3"; shift 3
+  prun "$@"
+  if [ "$PRC" -eq 0 ]; then bad "$n" "expected a refusal, got exit 0: $POUT"; return; fi
+  if [ "$PRC" -ne "$want" ]; then bad "$n" "expected exit $want, got $PRC: $POUT"; return; fi
+  case "$POUT" in *"$substr"*) ;; *) bad "$n" "exit $PRC but missing '$substr': $POUT"; return ;; esac
+  if [ "$(allcalls)" != "0" ]; then bad "$n" "refused, but made $(allcalls) API call(s): $(cat "$PLOG")"; return; fi
+  ok "$n"
+}
+
+echo "-- branch-protection writer (#1613)"
+
+# === THE SEPARATION OF ADD FROM REMOVE ===========================================================
+# This is the item's binding constraint: adding and removing are different operations with different
+# authority, and removal must never fire as a side effect of anything else. Four legs, all negative.
+
+pbase
+expect_refusal "remove REFUSES without --confirm-remove" 2 "REFUSING to remove a required context" \
+  unrequire-context --context "$GUARD" --receives coordination-kit --apply
+expect_refusal "remove REFUSES a --confirm-remove naming a DIFFERENT context" 2 "does not match" \
+  unrequire-context --context "$GUARD" --receives coordination-kit --confirm-remove "some-other-check" --apply
+# The add verb has no removal flag, and the removal verb's confirmation is not even a WORD it knows.
+# Tolerating-and-ignoring it would be worse than rejecting it: a flag that is accepted on the wrong
+# verb is a flag somebody will believe did something.
+expect_refusal "add REJECTS --confirm-remove outright, and names the separate verb" 2 "unrequire-context" \
+  require-context --context "$GUARD" --receives coordination-kit --confirm-remove "$GUARD" --apply
+for flag in --remove --delete --unrequire --op --mode --prune; do
+  expect_refusal "add has no '$flag' — there is no argument that flips it to removal" 2 "unknown arg" \
+    require-context --context "$GUARD" --receives coordination-kit "$flag" remove --apply
+done
+
+# === WHAT PROVES REMOVE CANNOT FIRE AS A SIDE EFFECT: THE RECORDED TRAFFIC =======================
+# The tool's own summary saying "added" is not evidence that nothing was deleted. The call log is.
+pbase
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 0 ] && [ "$(ncalls DELETE)" = "0" ] && [ "$(ncalls PUT)" = "0" ] \
+   && [ "$(ncalls PATCH)" = "0" ] && [ "$(ncalls POST)" = "2" ]; then
+  ok "add path issues GET+POST only — zero DELETE, zero PUT, zero PATCH over the whole roster"
+else
+  bad "add path issued a mutating call it must never make" \
+      "exit $PRC; POST=$(ncalls POST) DELETE=$(ncalls DELETE) PUT=$(ncalls PUT) PATCH=$(ncalls PATCH)
+$(cat "$PLOG")"
+fi
+# `enforce_admins: true` is live on several receivers, and the endpoint that can clear it is the
+# whole-object PUT on `…/protection` — the one this tool must never name. Asserted on TRAFFIC, over
+# both verbs, because a source-level promise is not a runtime guarantee.
+badpath=0
+for p in enforce_admins required_pull_request_reviews restrictions required_signatures; do
+  grep -q "$p" "$PLOG" && badpath=1
+done
+grep -qE '	repos/[^	]*/protection$' "$PLOG" && badpath=1
+if [ "$badpath" = 0 ]; then ok "add path never names the protection object, enforce_admins, or review requirements"
+else bad "add path reached outside required_status_checks" "$(cat "$PLOG")"; fi
+
+# === SOURCE-LEVEL CONTAINMENT: the endpoints are the guarantee, not the flag parsing =============
+# Every `gh api` call in repos.sh must go through the one wrapper, and every call of that wrapper must
+# pass a path built by one of the two path functions. That is what makes "no bug in this file can
+# reach enforce_admins" a checkable statement rather than a comment.
+# CODE ONLY — comment lines are stripped first. This file's headers discuss the endpoints it must
+# never call, at length and on purpose, and a check that counted prose would be satisfiable by
+# rewording a comment. It is the executable lines that have to be clean.
+code() { grep -vE '^[[:space:]]*#' "$REPOS_SH" | grep -n "$1" || true; }
+napi="$(code '[^_]gh api ' | wc -l | tr -d ' ')"
+if [ "$napi" = "1" ]; then ok "repos.sh invokes 'gh api' from exactly ONE place (the audited wrapper)"
+else bad "repos.sh has $napi 'gh api' call sites — every API path must funnel through one wrapper" \
+        "$(code '[^_]gh api ')"; fi
+offsite="$(code 'gh_api_capture ' | grep -v 'rsc_read_path\|rsc_write_path\|gh_api_capture() {' || true)"
+if [ -z "$offsite" ]; then ok "every gh_api_capture call passes an rsc_read_path/rsc_write_path path"
+else bad "a gh_api_capture call names an API path outside required_status_checks" "$offsite"; fi
+if [ "$(grep -c "branches/%s/protection/required_status_checks" "$REPOS_SH" || true)" = "2" ] \
+   && [ "$(grep -c "branches/%s/protection'" "$REPOS_SH" || true)" = "0" ]; then
+  ok "the only two protection paths repos.sh names are both under required_status_checks"
+else
+  bad "repos.sh names a branch-protection path outside required_status_checks" \
+      "$(grep -n 'branches/%s/protection' "$REPOS_SH")"
+fi
+
+# === DRY RUN BY DEFAULT ==========================================================================
+pbase
+prun require-context --context "$GUARD" --receives coordination-kit
+if [ "$PRC" -eq 0 ] && [ "$(ncalls POST)" = "0" ] && [ "$(ncalls DELETE)" = "0" ] \
+   && [ "$(pget FS-GG/FS.GG.Alpha)" = "Deterministic gate,collateral," ] \
+   && case "$POUT" in *WOULD-ADD*) true ;; *) false ;; esac; then
+  ok "no --apply: reports WOULD-ADD, issues zero writes, leaves the branch untouched"
+else
+  bad "the dry run is not dry" "exit $PRC; POST=$(ncalls POST); alpha=$(pget FS-GG/FS.GG.Alpha)
+$POUT"
+fi
+
+# === APPLY, READ BACK, AND IDEMPOTENCE ===========================================================
+pbase
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 0 ] && [ "$(pget FS-GG/FS.GG.Alpha)" = "Deterministic gate,collateral,$GUARD," ] \
+   && [ "$(pget FS-GG/FS.GG.Bravo)" = "Deterministic gate,collateral,$GUARD," ]; then
+  ok "--apply arms every roster-derived receiver, preserving the contexts already required"
+else bad "--apply did not arm the roster" "exit $PRC; alpha=$(pget FS-GG/FS.GG.Alpha) bravo=$(pget FS-GG/FS.GG.Bravo)
+$POUT"; fi
+# Idempotence is not "the second run also ends green" — it is that the second run WRITES NOTHING.
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 0 ] && [ "$(ncalls POST)" = "0" ] \
+   && case "$POUT" in *"UNCHANGED (already required)"*) true ;; *) false ;; esac; then
+  ok "a second --apply reports UNCHANGED and issues zero writes (idempotent, and provably so)"
+else bad "the second run wrote something" "exit $PRC; POST=$(ncalls POST)
+$POUT"; fi
+
+# The migrated protection shape: contexts reported via `checks[]` with an EMPTY `contexts[]`. Reading
+# only the deprecated array would say "nothing is required here" about a fully protected branch, and
+# the tool would then POST a context that is already required and compare the read-back to a fiction.
+pbase; pset FS-GG/FS.GG.Alpha "Deterministic gate" collateral "$GUARD"; pmark FS-GG/FS.GG.Alpha checksshape
+prun require-context --context "$GUARD" --receives coordination-kit --only FS-GG/FS.GG.Alpha --apply
+if [ "$PRC" -eq 0 ] && [ "$(ncalls POST)" = "0" ]; then
+  ok "a branch reporting its contexts via checks[] is read correctly — no redundant write"
+else bad "the checks[] protection shape was read as empty" "exit $PRC; POST=$(ncalls POST)
+$POUT"; fi
+
+# === FAIL CLOSED ON PARTIAL APPLICATION ==========================================================
+pbase; pmark FS-GG/FS.GG.Bravo failwrite
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 1 ] \
+   && [ "$(pget FS-GG/FS.GG.Alpha)" = "Deterministic gate,collateral,$GUARD," ] \
+   && case "$POUT" in *"1 added, 0 unchanged, 1 failed"*) true ;; *) false ;; esac \
+   && case "$POUT" in *"administration: write"*) true ;; *) false ;; esac \
+   && [ "$(ncalls POST)" = "2" ]; then
+  ok "a repo whose write 403s: per-repo outcomes, exit 1, the credential named, and NO blind retry"
+else
+  bad "partial application did not fail closed" "exit $PRC; POST=$(ncalls POST) (a retry would make it 3)
+$POUT"
+fi
+
+# A branch with no CLASSIC required-status-checks block. Creating one is a whole-object PUT — the one
+# call that can disable enforce_admins by omission — so this must REFUSE, not helpfully arm it.
+pbase; rm -f "$PFIX/FS-GG__FS.GG.Bravo.contexts"
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 1 ] && [ "$(ncalls POST)" = "1" ] \
+   && case "$POUT" in *"will not CREATE one"*) true ;; *) false ;; esac; then
+  ok "an unprotected branch is a REFUSAL — the tool never creates protection it would have to PUT"
+else bad "the tool tried to create protection" "exit $PRC; POST=$(ncalls POST)
+$POUT"; fi
+
+# HTTP 200 IS NOT EVIDENCE. The write succeeds and the branch does not hold the context.
+pbase; pmark FS-GG/FS.GG.Bravo liar
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 1 ] && [ "$(ncalls POST)" = "2" ] \
+   && case "$POUT" in *"READ-BACK MISMATCH"*) true ;; *) false ;; esac; then
+  ok "a write that returns 200 and changes nothing is a FAILURE, caught by read-back, not retried"
+else bad "success was inferred from an HTTP 200" "exit $PRC; POST=$(ncalls POST)
+$POUT"; fi
+
+# REFUSE TO REDUCE. The write applies the requested context AND silently drops another. Looking for
+# `$GUARD` in the read-back would pass this; comparing the whole SET is what catches it.
+pbase; pmark FS-GG/FS.GG.Bravo dropother
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+if [ "$PRC" -eq 1 ] && case "$POUT" in *"READ-BACK MISMATCH"*) true ;; *) false ;; esac; then
+  ok "an add that would REDUCE the required set (a context vanished) fails read-back"
+else bad "the add path let a pre-existing required context disappear" "exit $PRC
+$POUT"; fi
+
+# === THE REMOVAL VERB, FULLY CONFIRMED ===========================================================
+pbase; pset FS-GG/FS.GG.Alpha "Deterministic gate" collateral "$GUARD"
+pset FS-GG/FS.GG.Bravo "Deterministic gate" collateral "$GUARD"
+prun unrequire-context --context "$GUARD" --receives coordination-kit --confirm-remove "$GUARD" --apply
+if [ "$PRC" -eq 0 ] && [ "$(ncalls DELETE)" = "2" ] && [ "$(ncalls POST)" = "0" ] \
+   && [ "$(pget FS-GG/FS.GG.Alpha)" = "Deterministic gate,collateral," ]; then
+  ok "the removal verb, fully confirmed, removes exactly the named context and nothing else"
+else bad "the removal verb misbehaved" "exit $PRC; DELETE=$(ncalls DELETE) POST=$(ncalls POST) alpha=$(pget FS-GG/FS.GG.Alpha)
+$POUT"; fi
+# Naming a context that is not there is a typo, not a no-op: the operator believes they removed
+# something. Silence would turn the typo into "done".
+prun unrequire-context --context "$GUARD" --receives coordination-kit --confirm-remove "$GUARD" --apply
+if [ "$PRC" -eq 1 ] && [ "$(ncalls DELETE)" = "0" ] \
+   && case "$POUT" in *"nothing to remove"*) true ;; *) false ;; esac; then
+  ok "removing a context that is NOT required is a failure, not a silent no-op"
+else bad "an absent context removed silently" "exit $PRC; DELETE=$(ncalls DELETE)
+$POUT"; fi
+
+# === THE TARGET SET IS THE ROSTER, AND MOVES WITH IT ==============================================
+pbase
+expect_refusal "a capability NO repo receives is refused, never swept as an empty set" 2 "EMPTY target set" \
+  require-context --context "$GUARD" --receives skill-union --apply
+expect_refusal "--only NARROWS the roster set and cannot extend it" 2 "is not among the repos that receive" \
+  require-context --context "$GUARD" --receives coordination-kit --only FS-GG/FS.GG.Charlie --apply
+expect_refusal "--context is required" 2 "--context" require-context --receives coordination-kit
+# Every comparison in the tool — the target-set membership test, `want`, and the read-back equality —
+# is line-oriented. A multi-line context would make the read-back verify a set it never wrote.
+expect_refusal "a multi-line --context is refused, not silently mis-compared" 2 "SINGLE LINE" \
+  require-context --context "$(printf 'a\nb')" --receives coordination-kit --apply
+expect_refusal "--receives is required — targets are never hand-listed" 2 "never hand-listed" \
+  require-context --context "$GUARD"
+
+pbase; prun require-context --context "$GUARD" --receives coordination-kit --only FS-GG/FS.GG.Alpha --apply
+if [ "$PRC" -eq 0 ] && [ "$(pget FS-GG/FS.GG.Alpha)" = "Deterministic gate,collateral,$GUARD," ] \
+   && [ "$(pget FS-GG/FS.GG.Bravo)" = "Deterministic gate,collateral," ]; then
+  ok "--only arms exactly one roster member — the recovery path after a partial application"
+else bad "--only did not narrow" "alpha=$(pget FS-GG/FS.GG.Alpha) bravo=$(pget FS-GG/FS.GG.Bravo)"; fi
+
+# THE ANTI-FIFTH-COPY LEG (#1507/#1510/#1515/#1528/#1538): the target set moves when the ROSTER moves,
+# with no edit anywhere else. If this ever fails, a repo list has grown somewhere it should not have.
+pbase; pset FS-GG/FS.GG.Charlie "Deterministic gate"
+mkprotreg "labels, coordination-kit"
+prun require-context --context "$GUARD" --receives coordination-kit --apply
+mkprotreg "labels"
+if [ "$PRC" -eq 0 ] && [ "$(pget FS-GG/FS.GG.Charlie)" = "Deterministic gate,$GUARD," ] \
+   && case "$POUT" in *"3 repo(s)"*) true ;; *) false ;; esac; then
+  ok "adding a receiver to the ROSTER moves the target set, with no other edit (no fifth copy)"
+else bad "the target set did not follow the roster" "exit $PRC; charlie=$(pget FS-GG/FS.GG.Charlie)
+$POUT"; fi
+
+# The real roster's seven kit receivers are what `#1587` AC2 needs armed. Pinned so a roster change
+# that silently drops one from the fabric is visible here rather than at apply time.
+kit_receivers="$(bash "$REPOS_SH" list --receives coordination-kit --field id | sort | tr '\n' ',')"
+if [ "$kit_receivers" = "audio,game,governance,net,rendering,sdd,templates," ]; then
+  ok "require-context's real target set for coordination-kit is the SEVEN receivers #1587 names"
+else bad "the coordination-kit receiver set is not the seven #1587 must arm" "declared: $kit_receivers"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"
