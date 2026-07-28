@@ -54,6 +54,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/kit-published-coherence/run.sh",
       "workflow": ".github/workflows/kit-published-coherence.yml"
+    },
+    {
+      "source": "scripts/check-kit-bump-shape.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/kit-bump-shape/run.sh",
+      "workflow": ".github/workflows/kit-bump-shape.yml"
     }
   ]
 }
