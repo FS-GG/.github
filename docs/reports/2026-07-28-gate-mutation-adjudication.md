@@ -100,6 +100,17 @@ then passed on its own terms.
 
 ## NOT MEASURED — 8, and why each
 
+> **SUPERSEDED for 7 of the 8, same day.** `#1829` adjudicated them —
+> `docs/reports/2026-07-28-gate-mutation-wave3.md`. All seven came back **JUSTIFIED**. Only
+> `cross-repo-request-predicate.yml` remains NOT MEASURED, and **for a different reason than the one
+> stated below**: the multi-repo fixture this table says is missing already exists
+> (`tests/registry-predicate/run.sh`, run by `coord-engine.yml`); what is uncovered is the workflow's
+> own wiring, and its job conclusion cannot carry its finding at all (`#1839`). The "why not measured"
+> notes below were also optimistic in the other direction — `project-field-options.yml`'s workflow
+> already runs an offline fixture as its FIRST step, and `drivers-package.yml`'s fixture is
+> `src/FS.GG.Drivers/verify-package.sh`. Read this table as what was true at the time of writing, not
+> as a standing description of the obstacles.
+
 **`#266`: "I could not evaluate this" is NEVER "I evaluated it and it passed."** None of these eight is
 a clean verdict, and none is grounds for removing anything. They are filed as `#1829`.
 
