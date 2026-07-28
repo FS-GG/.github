@@ -207,15 +207,21 @@ module Writes =
         /// and keeps the old behaviour, and our OWN session re-claiming is a heartbeat, not a twin.
         | Twin of theirs: SessionId
 
-        /// **THE MARKER IS THE NAMED WORKER'S, AND WE ARE NOT THEM** (#1646). `claim` is `Held`'s OTHER door:
-        /// a live marker already bearing the named id is renewed IN PLACE and handed back as `Renewed`,
-        /// bypassing the CAS. Under a shared session `twinSession` cannot call that marker a twin's, so
-        /// `claim --worker <them>` renewed a live holder's lease and reported the item held — the same
-        /// impersonation `verifyHeld` grants, through the door #1031 did not have to consider.
+        /// **WE ASKED TO CLAIM AS A WORKER WE ARE NOT** (#1646). `claim` is `Held`'s OTHER door, and it is
+        /// refused for the WHOLE function rather than on the arm where the hole was first found:
         ///
-        /// It refuses only the RE-CLAIM arm. Posting a fresh marker under a foreign id is a different act
-        /// (forgery, not lock theft), it is not what this issue measured, and it is left alone deliberately
-        /// rather than folded in here by resemblance.
+        ///   * the RE-CLAIM arm renewed a live marker on the strength of its id alone and handed back
+        ///     `Renewed` — the same impersonation `verifyHeld` grants, through the door #1031 did not have to
+        ///     consider, and invisible to `twinSession` because the impersonator's session IS the holder's;
+        ///   * the `--force` STEAL arm evicted a live holder and posted under the named id, so the notice
+        ///     #1620 requires was written over a THIRD party's name. That does not bypass the accounting;
+        ///     it falsifies it, in the only surviving record of a lock that no longer exists;
+        ///   * the FRESH-CAS arm planted a marker under a name whose own creator then cannot heartbeat or
+        ///     release it, because every verb that would operate it goes through `verifyHeld`.
+        ///
+        /// Refusing three of the four would leave `claim` and `verifyHeld` disagreeing about one question,
+        /// which is exactly what `impersonated` is factored to make impossible. So it is asked ONCE, before
+        /// the marker read: the refusal spends nothing and touches nothing.
         | Impersonates of derived: WorkerId * named: WorkerId
 
         /// **WE CANNOT TELL, AND THAT IS A LOSS.** The re-read failed, or our own marker was not in it.
@@ -352,8 +358,8 @@ module Writes =
     /// holds too — and `twinSession` returns `None` for equal sessions, which `verifyHeld` read as "ours".
     /// The two previous repairs made the protocol better at telling IDS apart, and neither can help when the
     /// second factor is shared as well. `self` is the third fact, and it is the one `--worker` cannot restate:
-    /// under `Derives d`, a live marker for a `worker` that is not `d` is refused as `Impersonates`, no matter
-    /// what the sessions say. Under `DerivesNothing` the question is unaskable and the older rules decide
+    /// under `Derives d`, a live marker for a `worker` that is not `d` is refused as `ImpersonatesHolder`, no
+    /// matter what the sessions say. Under `DerivesNothing` the question is unaskable and the older rules decide
     /// alone — the human operator and the session-less harness keep working, which is the #1031 boundary
     /// restated for a fact one step further out.
     ///

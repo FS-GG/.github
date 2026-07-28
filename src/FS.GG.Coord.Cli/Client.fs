@@ -287,9 +287,13 @@ module Client =
         mintRemedy ()
         ExitRed
 
-    /// THE IMPERSONATION REFUSAL (#1646), shared by every verb that takes a `Held` — `claim`'s re-claim arm,
-    /// `release`, `heartbeat`, `widen`, and `done`'s lock-drop — for `twinRefusal`'s reason: one situation,
-    /// one message.
+    /// THE IMPERSONATION REFUSAL (#1646), shared by the verbs that REFUSE over a worker we are not — `claim`,
+    /// `release`, `heartbeat`, `widen` — for `twinRefusal`'s reason: one situation, one message.
+    ///
+    /// `done`'s lock-drop is the fifth site and deliberately does NOT use this, exactly as it declines
+    /// `twinRefusal`: the stamp is earned by the MERGE, which owes nothing to whose lock sits on the item, so
+    /// `done` reports the foreign claim, leaves it alone, and still exits green. Same hazard, different
+    /// verdict, different sentence.
     ///
     /// IT SAYS A DIFFERENT THING FROM THE TWIN REFUSAL, AND MUST. A twin is a broken IDENTITY — two workers
     /// arrived at one id by accident — and its remedy is a new id. This is not an accident and a new id is not
@@ -301,6 +305,12 @@ module Client =
     /// the item and makes the displaced worker's next `heartbeat` fail loudly — and then the impersonation
     /// route stayed open, one flag shorter and silent. A refusal that did not point at `--force` would leave
     /// the recovering worker exactly where #1596's did: at a documented dead end, inventing a way round.
+    ///
+    /// **AND THE REMEDY IS SPELLED WITHOUT `--worker`, WHICH IS NOT A DETAIL.** Review caught this: a caller
+    /// who copies the line back with the flag they already had — `claim <ref> --force --worker <them>` — is
+    /// refused by this very function, because a steal under a foreign id is the sharper half of what is being
+    /// closed (it evicts a live holder AND signs the #1620 notice with a third party's name). A remedy that
+    /// loops back to its own refusal is worse than none: it reads as the tool malfunctioning.
     ///
     /// It does NOT offer "export $FSGG_WORKER=<them>", which would work. That is the residue #1646 records
     /// (this is not a proof of identity, and cannot be), not a workaround to publish: a tool that prints its
@@ -314,13 +324,27 @@ module Client =
         (named: WorkerId)
         : int =
         eprint
-            $"fsgg-coord-engine: refusing to %s{verb} %s{ref.Short} as '%s{named.Value}' — this process's OWN worker id is '%s{derived.Value}', and '%s{named.Value}' holds the LIVE lock on %s{ref.Short}. `--worker` ASSERTS an identity; it does not prove one, so naming another worker's id would take their lock with nothing recorded and nobody told (#1646)."
+            $"fsgg-coord-engine: refusing to %s{verb} %s{ref.Short} as '%s{named.Value}' — this process's OWN worker id is '%s{derived.Value}'. `--worker` ASSERTS an identity; it does not prove one, so acting on %s{ref.Short} under another worker's id would take, renew or destroy their lock with nothing recorded and nobody told (#1646)."
+
+        // WITHOUT `--worker`, and the omission is load-bearing — see the doc above. The line a caller pastes
+        // back has to be one that RUNS.
+        eprint
+            $"  If you are RECOVERING a holder that is really gone, use the sanctioned route AS YOURSELF — it posts the theft on the item and makes their next heartbeat fail loudly:  FSGG_WORKER=%s{derived.Value} scripts/fsgg-coord claim %s{ref.Short} --force"
 
         eprint
-            $"  If you are RECOVERING a holder that is really gone, use the sanctioned route — it posts the theft on the item and makes their next heartbeat fail loudly:  scripts/fsgg-coord claim %s{ref.Short} --force"
+            $"  If you meant to act as YOURSELF, drop `--worker %s{named.Value}` — this process is '%s{derived.Value}'."
 
-        eprint
-            $"  If you meant to act as YOURSELF, drop `--worker %s{named.Value}` (you are '%s{derived.Value}')."
+        // THE ID WE JUST TOLD THEM TO USE MAY ITSELF BE SHARED, AND NOTHING ELSE WOULD SAY SO (#419).
+        //
+        // `worker opts` prints the shared-session warning off the PROVENANCE, and with `--worker` present the
+        // provenance is `FromFlag` — so a caller in exactly this state has never been warned that the id this
+        // refusal is sending them back to is one every sibling of the fan-out also derives. Pointing a worker
+        // at a shared id without saying so would be this refusal re-creating #419 while closing #1646.
+        match Identity.derivedProvenance () with
+        | Some(Identity.FromSharedSession(_, _, why)) ->
+            eprint
+                $"  NOTE — '%s{derived.Value}' was derived from a session where %s{why}, so it is not unique to this worker either. Mint one first (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+        | _ -> ()
 
         ExitRed
 
@@ -2358,10 +2382,15 @@ module Client =
                             | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
                             | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
                             | Ok Writes.DoesNotHold
-                            // #1646: unreachable from here in practice — the claim that produced `held` was
-                            // itself refused if we were impersonating — but it is a READBACK, so it reports
-                            // rather than decides: `markerObserved=false` is the honest receipt for a marker
-                            // this process may not verify, and `converged` then says so.
+                            // #1646. This is a READBACK, so it REPORTS rather than decides: `markerObserved
+                            // = false` is the honest receipt for a marker this process may not verify, and
+                            // `converged` then says so.
+                            //
+                            // It is not reachable from a successful claim any more, and the history is worth
+                            // keeping: while the refusal sat on `claim`'s re-claim arm alone, `claim --worker
+                            // <them>` on a FREE item won the CAS and then failed its own readback here — a
+                            // green claim whose receipt said the marker was not ours, because it was not.
+                            // `claim` refuses that argv outright now, so the two agree.
                             | Ok(Writes.ImpersonatesHolder _)
                             | Ok(Writes.TwinHolds _) -> false, None
                             | Error e ->

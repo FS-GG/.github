@@ -1221,13 +1221,21 @@ let ``#1646 verifyHeld REFUSES the capability when the caller NAMES another work
     | other -> failwith $"naming another worker's live marker must not open the door to Held — got %A{other}"
 
 [<Fact>]
-let ``#1646 the shared session is exactly what made it work - the SAME call with DIFFERENT sessions is the #1031 twin`` () =
-    // THE PAIR THAT MAKES THE POINT. Change ONE thing about the leg above — the sessions now differ — and
-    // #1031's refusal fires instead. That refusal was already there, and it is why the hole was invisible:
-    // the protocol demonstrably refused this argv shape, just never in the configuration the fleet runs in.
+let ``#1646 the session is not what decides it - a DIFFERING session reaches the same refusal, by the new rule`` () =
+    // THE PAIR THAT MAKES THE POINT, and its name is the point. Change ONE thing about the leg above — the
+    // sessions now differ — and the caller is refused either way. Before #1646 this configuration was the
+    // ONLY one refused, which is why the hole was invisible: the protocol demonstrably rejected this argv
+    // shape, just never in the configuration the fleet actually runs in.
+    //
+    // IT IS NOT `TwinHolds`, AND THAT IS DELIBERATE — the ordering, stated. A twin means OUR id is shared.
+    // Our id is `kite-461`; the marker says `vole-418`. Nobody shares anything with us: we typed somebody
+    // else's id, and they have a twin. Reporting `TwinHolds` would tell this caller to `whoami --mint` over
+    // an identity collision it does not have, and #1031's own case doc is the argument — an outcome that
+    // sends the reader to the wrong remedy is the defect that case exists to prevent.
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
 
     match verifyHeld transport 120 me impersonator (Some(SessionId "ed60050b")) aRef with
+    | Ok(TwinHolds _) -> failwith "we do not share an id with anybody — `whoami --mint` is the wrong remedy here"
     | Ok(ImpersonatesHolder _) -> ()
     | other -> failwith $"a differing session must still refuse — got %A{other}"
 
@@ -1297,6 +1305,56 @@ let ``#1646 a caller that derives NOTHING is not refused - the human operator --
     match verifyHeld transport 120 me DerivesNothing (Some(SessionId "624f304a")) aRef with
     | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a caller with no derived identity must keep the pre-#1646 behaviour — got %A{other}"
+
+[<Fact>]
+let ``#1646 the --force STEAL under a foreign id is refused - and it is the sharpest of the four`` () =
+    // FOUND BY REVIEW, AFTER THE REFUSAL FIRST WENT IN ON `claim`'s RE-CLAIM ARM ALONE. The reasoning that
+    // left this open was that the other arms CREATE a marker rather than adopt one, and creating a lock
+    // under somebody else's name is a different act from taking theirs. `--force` is where that stops being
+    // true — it deletes the holder's live marker on the way. Measured on this tree before the fix:
+    //
+    //   $ FSGG_WORKER=kite-461 fsgg-coord-engine claim FS.GG.SDD#42 --force --worker smew-f31
+    //   STOLE FS.GG.SDD#42 from worker 'vole-418' (--force)                              rc=0
+    //   <!-- fsgg:msg from=smew-f31 to=vole-418 -->
+    //
+    // `kite-461` destroyed `vole-418`'s lock and #1620's notice — the thing that makes a steal accountable —
+    // was signed by `smew-f31`, who did nothing. So this does not merely BYPASS the accounting the way
+    // `release --worker` does; it FALSIFIES it, in the only surviving record of a lock that no longer exists.
+    //
+    // ONE TRANSPORT RESPONSE IS SCRIPTED, AND THAT IS THE ASSERTION. `scripted` fails the moment it is
+    // called a second time, so a refusal that read the markers first — let alone one that got as far as the
+    // eviction DELETE — reds here. The refusal has to precede the read, and it does.
+    // A THIRD party, because that is what makes the false attribution visible: the caller is `kite-461`, the
+    // beneficiary it names is `smew-f31`, and the worker whose lock would be destroyed is a fourth. Naming
+    // the caller's OWN id here would be an ordinary sanctioned steal and prove nothing.
+    let beneficiary = WorkerId "smew-f31"
+    let transport = scripted []
+
+    match claim transport 120 StealLiveHolder ignore beneficiary impersonator (Some(SessionId "624f304a")) aRef (fun () -> None) with
+    | Ok(Impersonates(derived, named)) ->
+        Assert.Equal(them, derived)
+        Assert.Equal(beneficiary, named)
+        Assert.Equal(0, transport.RestCalls)
+    | other -> failwith $"a --force steal under a foreign id must be refused before anything is read — got %A{other}"
+
+[<Fact>]
+let ``#1646 a FRESH claim under a foreign id is refused - a lock nobody can drop is not a lock`` () =
+    // THE THIRD ARM, and it is refused for a reason of its own. `claim --worker <them>` on a FREE item posted
+    // a marker in their name and reported success — and then its own creator could not heartbeat or release
+    // it, because every verb that would operate it goes through `verifyHeld` and is refused. A live
+    // reservation, under a name that never asked for it, that stands until the lease lapses because the only
+    // worker who could drop it does not know it exists.
+    //
+    // `reap` cannot collect it (the claim is not stale) and `release` refuses it (we are not them), so
+    // "recoverable by the ordinary path" was not true of it either.
+    let transport = scripted []
+
+    match claim transport 120 RefuseLiveHolder ignore me impersonator None aRef (fun () -> None) with
+    | Ok(Impersonates(derived, named)) ->
+        Assert.Equal(them, derived)
+        Assert.Equal(me, named)
+        Assert.Equal(0, transport.RestCalls)
+    | other -> failwith $"a fresh claim under a foreign id must be refused — got %A{other}"
 
 [<Fact>]
 let ``#1646 claim is the OTHER door and it refuses too - a re-claim under a foreign id is not a renewal`` () =

@@ -81,6 +81,17 @@ module Identity =
     /// would still report success over an identity that cannot hold a lock (#266).
     val resolve: worker: string option -> Result<Worker, string>
 
+    /// WHERE `Worker.Derived` CAME FROM — rules 2-4's provenance, with `--worker` taken away (#1646).
+    ///
+    /// It exists for one caller and one sentence: the impersonation refusal sends a worker back to its OWN
+    /// id, and has to be able to say when that id is itself a shared one. Nothing else would say it — the
+    /// `#419` shared-session warning is printed off `Worker.Provenance`, which is `FromFlag` whenever
+    /// `--worker` is present, so a caller in exactly the impersonation state has never been warned. A refusal
+    /// that quietly recommends a shared id would re-create #419 in the act of closing #1646.
+    ///
+    /// `None` for a process that derives no identity of its own, exactly as `Worker.Derived` is.
+    val derivedProvenance: unit -> Provenance option
+
     /// Mint a fresh, genuinely-random id (`whoami --mint`). One `word-hhhh` line, so
     /// `eval "$(… whoami --mint)"` is the whole ritual. It does NOT consult the current identity — minting
     /// is for making a NEW worker, and reading the old one would defeat the point.

@@ -129,9 +129,15 @@ module Writes =
 
     /// IS THE CALLER ASKING TO ACT AS SOMEBODY ELSE? Returns the id it derived for ITSELF when it is (#1646).
     ///
-    /// ONE PREDICATE, TWO CALLERS — `claim`'s re-claim arm and `verifyHeld` — for `twinSession`'s reason,
-    /// verbatim: these are `Held`'s only two doors, and a `claim` that renews a marker `verifyHeld` refuses to
-    /// verify (or the reverse) would mean the tool hands you the lock in one verb and denies it in another.
+    /// ONE PREDICATE, TWO CALLERS — `claim` and `verifyHeld` — for `twinSession`'s reason, verbatim: these are
+    /// `Held`'s only two doors, and a `claim` that takes a lock `verifyHeld` then refuses to verify (or the
+    /// reverse) would mean the tool hands you the lock in one verb and denies it in another.
+    ///
+    /// AND EACH CALLER ASKS IT ONCE, FOR ITS WHOLE FUNCTION. `claim` asked it on the re-claim arm alone at
+    /// first, on the reasoning that its other arms CREATE a marker rather than adopt one. Review found that
+    /// `--force` breaks the reasoning — it deletes the holder's live marker on the way, and then signs
+    /// #1620's theft notice with the named worker's name — and the fresh-CAS arm plants a lock whose creator
+    /// cannot then drop it. Two of the three exceptions were the hole again. So: no arms.
     ///
     /// It compares the named `worker` against what this PROCESS resolves for itself with `--worker` taken
     /// away. That is the only fact in the whole exchange the flag cannot restate: the id came off the board,
@@ -244,6 +250,38 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
+
+        // 0. ARE WE THE WORKER WE SAY WE ARE? (#1646) — BEFORE THE READ, AND BEFORE ANY ARM.
+        //
+        //    THE CHECK IS NOT ON AN ARM, BECAUSE THE HOLE WAS NOT ON ONE. This first went in on the re-claim
+        //    arm alone, on the reasoning that the OTHER arms create a marker rather than adopt one, and that
+        //    creating a lock under somebody else's name is a different act from taking theirs. Review found
+        //    the reasoning does not survive contact with `--force`, and the measurement is unambiguous:
+        //
+        //      $ FSGG_WORKER=kite-461 fsgg-coord-engine claim FS.GG.SDD#42 --force --worker smew-f31
+        //      STOLE FS.GG.SDD#42 from worker 'vole-418' (--force)
+        //      STOLE FS.GG.SDD#42 for worker smew-f31 (--force; lock held; ...)      rc=0
+        //      <!-- fsgg:msg from=smew-f31 to=vole-418 -->
+        //
+        //    `kite-461` destroyed `vole-418`'s live lock, and the notice #1620 requires — the one that makes
+        //    a steal accountable — was posted over `smew-f31`'s name. `smew-f31` did nothing. So the steal
+        //    does not merely BYPASS #1620's accounting, which is what #1646 says `release --worker` does; it
+        //    FALSIFIES it, writing a false attribution into the only surviving record of a destroyed lock.
+        //
+        //    And the fresh-CAS arm is the same code path (`postAndResolve`) reached with nothing to evict: it
+        //    plants a marker under a name its own creator then cannot heartbeat or release, because every
+        //    verb that would operate it goes through `verifyHeld` and is refused. A lock nobody can drop.
+        //
+        //    ONE QUESTION, ASKED ONCE, FOR THE WHOLE FUNCTION. A rule applied to three of four arms is the
+        //    shape this item is about — and here it would leave `claim` and `verifyHeld` disagreeing, which
+        //    is precisely what `impersonated` is factored to make impossible.
+        //
+        //    IT COSTS NOTHING AND SPENDS NOTHING. It is pure, it precedes the marker read, and a refusal
+        //    therefore touches neither the network nor the item. `DerivesNothing` — the human operator, the
+        //    harness that exports no session — is unaffected, as everywhere else.
+        match impersonated self worker with
+        | Some derived -> Ok(Impersonates(derived, worker))
+        | None ->
 
         // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
         //    marker to clean up — this is the only cheap place to fail, and it is why the read comes first.
@@ -462,16 +500,11 @@ module Writes =
         // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
         // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
         | Some m ->
-            // THE OTHER DOOR TO A `Held`, AND IT HAS THE SAME HOLE (#1646). This arm hands back a `Renewed`
-            // over a marker it did not create, on the strength of the id alone — and under one harness
-            // session `twinSession` below cannot call that marker somebody else's, because the impersonator's
-            // session IS theirs. So `claim --worker <them>` renewed a live holder's lease and reported the
-            // item held, through the door #1031 only had to consider for `verifyHeld`. It is asked before the
-            // twin question for `verifyHeld`'s reason, in the same order, so the two doors cannot disagree.
-            match impersonated self worker with
-            | Some derived -> Ok(Impersonates(derived, worker))
-            | None ->
-
+            // THE IMPERSONATION QUESTION IS ALREADY ANSWERED — step 0 asked it for the whole function, so by
+            // here `worker` is this process's own id (or it derives none). That matters most on THIS arm:
+            // it hands back a `Renewed` over a marker it did not create, on the strength of the id alone,
+            // and under one harness session `twinSession` below cannot call that marker somebody else's,
+            // because the impersonator's session IS theirs. It was the first door found; it was not the only.
             match twinSession session m.Session with
             | Some theirs -> Ok(Twin theirs)
             | None ->
