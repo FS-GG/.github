@@ -389,16 +389,26 @@ sparse_tree_ensure() {
   # caller — the two checks are in different languages and only one of them is looking at a URL.
   #
   # It is also what makes the SLUG safe. The cache key is the repository with `/` doubled to `__`,
-  # and a name carrying `/`, `..` or anything outside `[a-z0-9._-]` could both escape the cache
-  # directory and collide two repositories onto one entry — which would grade one repo's patterns
-  # against another repo's tree, the worst answer available.
+  # and a name carrying `/`, `..` or anything outside the classes below could escape the cache
+  # directory.
+  #
+  # AND THE SLUG IS INJECTIVE, which this comment used to CLAIM and the guard did not deliver
+  # (#1608). While `_` was inside the OWNER class, `owner__x/repo` and `owner/x__repo` both slugged
+  # to `owner__x__repo` — two repositories on one cache entry, which would grade one repo's patterns
+  # against another repo's tree, the worst answer available. Owner and name do not share a class any
+  # more: an owner login is alphanumerics and hyphens only, so `_` cannot appear in it, so no two
+  # keys can slug the same. That is now a property of the guard rather than a sentence about it.
+  #
+  # The NAME class is the wider one, and it MAY BEGIN WITH A DOT — `FS-GG/.github`, the authority,
+  # is the repository this org fetches most and the guards used to reject it outright. The optional
+  # leading dot must be followed by a non-dot, so `.`, `..` and `...` are not names.
   #
   # Nothing is WRITTEN on refusal, deliberately: the grader classifies a non-literal `repository:`
   # itself and never asks for it, so reaching here at all is a defect in this file rather than a fact
   # about anyone's workflow. Leaving the repository undecided makes the grader ask a second time, and
   # `sparse_grade`'s loop guard turns that into a loud no-verdict — which is what a defect here
   # should look like, and is strictly better than inventing a reason.
-  if ! [[ "$key" =~ ^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$ ]] || [[ "$key" == *..* ]]; then
+  if ! [[ "$key" =~ ^[a-z0-9][a-z0-9-]*/[.]?[a-z0-9_-][a-z0-9._-]*$ ]] || [[ "$key" == *..* ]]; then
     return 0
   fi
   slug="${key//\//__}"
@@ -415,7 +425,16 @@ sparse_tree_ensure() {
       > "$SPARSE_TREE_DIR/$slug.err"
     return 0
   fi
-  if ! printf '%s\n' "$SPARSE_ROSTER" | grep -qxF "$key"; then
+  # A HERESTRING, NOT A PIPE, and this file spends twenty lines on why — see `repo_calls`, under
+  # "`grep -q` IS FED BY A HERESTRING, NEVER BY A PIPE, AND THAT IS NOT STYLE". `grep -q` exits the
+  # instant it matches; if the writer is still blocked on the pipe buffer it takes SIGPIPE, and
+  # `pipefail` then reports the PIPELINE as 141 — so the `if` reads FALSE even though grep MATCHED,
+  # 7 times in 10 on the incident that produced the rule. Here that misreading declares a ROSTERED
+  # repository off-roster: UNGRADED at exit 0, the fail-open direction, non-deterministically.
+  #
+  # The roster is a few hundred bytes at ~8 repos, so it cannot fire today and no runtime fixture
+  # could catch it — the fixture asserts it over the SOURCE instead. #1608.
+  if ! grep -qxF "$key" <<< "$SPARSE_ROSTER"; then
     printf 'offroster\tit is not on this audit%s roster, and the roster is the boundary of what this audit may claim to know about (#1556)\n' \
       "'s" > "$SPARSE_TREE_DIR/$slug.err"
     return 0
@@ -867,7 +886,39 @@ def emit(kind, text):
 # A literal `owner/name` and nothing else. `repository: ${{ inputs.repo }}` is resolved by the RUNNER
 # from values this file cannot see, so there is no repository to ask for a tree — that is a permanent
 # boundary of the audit, reported UNGRADED, and NOT a read failure to retry.
-LITERAL_REPOSITORY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
+#
+# THE TWO COMPONENTS DO NOT SHARE A CHARACTER CLASS, and writing one class twice is what broke this
+# (#1608). GitHub's rule: an OWNER login is alphanumerics and hyphens, and may not begin with a
+# hyphen; a repository NAME may also carry `.` and `_`, and MAY BEGIN WITH A DOT. Requiring the name
+# to begin with an alphanumeric rejected `FS-GG/.github` — the authority, the repository every
+# sibling in this org fetches — so every cross-repo step naming it was reported "not a literal
+# `owner/name`", a permanent boundary at exit 0, about the one repository whose `repository:` is the
+# most literal thing in the file. Any dot-prefixed repo an org adds (`.allstar`, `.github-private`)
+# was silently unreachable the same way, so rule (4) never ran for it.
+#
+# The optional leading dot must be FOLLOWED by a non-dot, so `.`, `..` and `...` are not names.
+#
+# THE OWNER CLASS IS ALSO WHAT MAKES THE CACHE SLUG INJECTIVE. The slug is the key with `/` doubled
+# to `__`; two keys collide only if one owner is a prefix of the other followed by `_`, and an owner
+# cannot contain `_`. See the matching guard in `sparse_tree_ensure`, which states the same thing on
+# the side that turns the slug into a path.
+LITERAL_REPOSITORY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[.]?[A-Za-z0-9_-][A-Za-z0-9._-]*$")
+
+# The reason, once, because TWO places now answer with it: `_resolve_foreign`, and the grading loop —
+# which has to settle the shape BEFORE it asks whose index applies, so that an expression stays a
+# permanent boundary even on a run whose own origin would not read.
+NOT_LITERAL = ("its `repository:` is not a literal `owner/name` — the runner resolves it from values "
+               "this audit cannot see, so there is no tree to ask")
+
+
+def is_literal_repository(repository):
+    """Is this a repository GitHub could really resolve, rather than a runner expression?
+
+    `..` is refused separately from the pattern: a name may carry dots, but the slug this becomes is
+    turned into a filesystem path on both sides of the cache.
+    """
+    return bool(LITERAL_REPOSITORY.match(repository)) and ".." not in repository
+
 
 _foreign = {}
 
@@ -885,9 +936,11 @@ def foreign_tracked(repository):
 
 
 def _resolve_foreign(repository):
-    if not LITERAL_REPOSITORY.match(repository) or ".." in repository:
-        return ("ungraded", "its `repository:` is not a literal `owner/name` — the runner resolves "
-                            "it from values this audit cannot see, so there is no tree to ask")
+    # Kept even though the caller has already settled the shape: this is the function that turns a
+    # repository into a PATH, and defence in depth on the two sides of that is the whole reason the
+    # bash guard exists too.
+    if not is_literal_repository(repository):
+        return ("ungraded", NOT_LITERAL)
     slug = repository.lower().replace("/", "__")
     paths_at = os.path.join(TREE_CACHE, slug + ".paths")
     error_at = os.path.join(TREE_CACHE, slug + ".err")
@@ -974,9 +1027,24 @@ for job_id, params in rule.sparse_steps(document):
     # `why` is set exactly when rule (4) could NOT run, and carries the kind that decides whether
     # this is a boundary of the audit (reported, run still green) or a failure to read (the run is
     # not a verdict). Rule (4) not running is never a pass, in either case (#266).
+    #
+    # ORDER IS THE ASSERTION HERE (#1608). The SHAPE is settled first because it is decidable without
+    # knowing which repository this checkout is — an expression is a permanent boundary on any run.
+    # Only then is "is this us?" asked, and when the ORIGIN WOULD NOT READ that question has no
+    # answer. Falling through to the foreign path in that state would silently assert "this is not
+    # the tree I hold" about a repository that may well BE the tree we hold, and grade rule (4)
+    # against the API's view of some default branch instead of the working tree we are running out
+    # of. An unreadable origin is a failure to READ — the same class as the index that will not
+    # answer, one branch down, and it fails closed for the same reason (#266).
     tracked = None
     why = None
-    if resolved["ours"] is not None and repository.casefold() == resolved["ours"].casefold():
+    if not is_literal_repository(repository):
+        why = ("ungraded", NOT_LITERAL)
+    elif resolved["ours"] is None:
+        why = ("noverdict", "this audit could not read its own checkout's origin, so whether that is "
+                            "the tree it holds — and therefore whose git index answers rule (4) — "
+                            "could not be decided")
+    elif repository.casefold() == resolved["ours"].casefold():
         tracked = resolved["tracked"]
         if tracked is None:
             why = ("noverdict", "it fetches the tree this audit holds (%s), whose git index would "
@@ -2077,7 +2145,12 @@ if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdic
   # `$undetermined`, because that counter's diagnostic says "could not determine WIRING" and an
   # unreadable git tree is not a wiring question — a red that names the wrong subject is the defect
   # this script's own comments exist to prevent (#327/#335).
-  [ "$sparse_noverdict" -eq 0 ] || echo "::error::repos-audit: could not read the git tree behind $sparse_noverdict cross-repo sparse-checkout step(s), so rule (4) — do the named directories exist? — did not run for them. Nothing was proven about those steps; this is an API failure, not an under-fetching checkout." >&2
+  # "an API failure" was too narrow and named the wrong subject for two of the three ways this fires
+  # (#1608): the API's tree read is one, the LOCAL git index that would not answer is another, and
+  # since #1608 an unreadable local ORIGIN is a third. All three are failures to READ — which is the
+  # distinction that matters to a caller, and the one this sentence has to keep. Each step's own
+  # reason is annotated above; this line must not overwrite it with a guess.
+  [ "$sparse_noverdict" -eq 0 ] || echo "::error::repos-audit: could not read the git tree behind $sparse_noverdict cross-repo sparse-checkout step(s), so rule (4) — do the named directories exist? — did not run for them. Nothing was proven about those steps; this is a failure to READ (the API's tree, or this audit's own checkout — each step's reason is named above), not an under-fetching checkout." >&2
   exit 2
 fi
 
