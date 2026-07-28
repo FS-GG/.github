@@ -874,10 +874,18 @@ module ApplicationServiceTests =
         // "fix" that instead moved `Scan.snapshot` to `winner` (the scheduler would then offer #76 and this
         // leg fails on the OTHER assertion). Both directions are killed here, deliberately: the item is
         // about the two agreeing, not about which one moved.
-        let world = contendedWorld "In progress" laggingHolders (Map.ofList [ 75, 240 ])
+        //
+        // #75 SITS IN `Blocked`, AND THE COLUMN IS LOAD-BEARING. An earlier draft of this leg used
+        // `In progress` and SURVIVED the "move the scheduler to `winner`" mutation: with no live winner the
+        // markerless-`In progress` arm (`RUnowned`) reserved the file anyway, so the scheduler assertion
+        // passed for a reason that had nothing to do with the lapsed lease. A column that reserves NOTHING
+        // on its own is what makes this leg measure the MARKER — which is the only thing #1792 is about.
+        // `Blocked` also keeps #75 out of the candidate pool, so the assertion is about #76's admission and
+        // not about which of two colliding rows won a lane.
+        let world = contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])
 
         Assert.DoesNotContain("FS.GG.SDD#76", scheduled world)
-        Assert.Equal("overlap", gateVerdict (contendedWorld "In progress" laggingHolders (Map.ofList [ 75, 240 ])))
+        Assert.Equal("overlap", gateVerdict (contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])))
 
     [<Fact>]
     let ``#1792 control: with NO marker and no In-progress column, BOTH surfaces free the file`` () =
