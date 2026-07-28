@@ -12,6 +12,13 @@ This is that order, **written before the first retirement** rather than derived 
 Everything below was **measured on 2026-07-28** against `0ea5396`. Where a number appears, the command
 that produced it appears with it.
 
+> **Where the live state is.** The retirement count lives in **one** place — §4's *standing verdict* —
+> and every other block in this document is a dated, append-only record of an attempt. If you are
+> updating this document after a stage, change the standing verdict and **append**; do not edit a
+> historical block to carry a new headline, and do not add a second count anywhere. This document went
+> stale three times on 2026-07-28 because the count was spread across four prose blocks in two
+> sections, and no single edit could bring it current.
+
 ---
 
 ## 1. What actually retires — and what does not
@@ -137,10 +144,43 @@ verdict.
    tracks, with no override** — so a repo whose second root is still committed cannot have a view
    generated there at all.
 
-### Verdict as of 2026-07-28: **0 of 7 receivers are eligible.**
+### The standing verdict — 2026-07-28 08:10Z: **3 of 7 retired**
+
+> **`FS.GG.Templates`, `FS.GG.Audio`, `FS.GG.Net` are retired. `FS.GG.SDD` was attempted and refused.
+> `FS.GG.Game` is IN FLIGHT.**
+>
+> | stage | receiver | outcome | mechanism | second root at the attempt |
+> |---|---|---|---|---|
+> | 1 | `FS.GG.Templates` | **RETIRED** | [Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323), squash `531b01b` | 4 skills, 23 files |
+> | 2 | `FS.GG.SDD` | **REFUSED** — B5; no PR was ever opened against it | — | 32 skills + `skill-manifest.json`, 52 files |
+> | 3 | `FS.GG.Audio` | **RETIRED** | [Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), squash `52a358f` | 20 skills, 39 files |
+> | 4 | `FS.GG.Net` | **RETIRED** | [Net#45](https://github.com/FS-GG/FS.GG.Net/pull/45), squash `602f47a` | 4 skills, 23 files |
+> | 5 | `FS.GG.Game` | **IN FLIGHT** — [`#1734`](https://github.com/FS-GG/.github/issues/1734) | — | 21 skills committed |
+>
+> **Stage 5's outcome is deliberately absent, and this absence is load-bearing.** `#1734` was open and
+> held when this block was written. An unobserved outcome written into this record is precisely the
+> defect this section keeps acquiring — do not fill the row in from a PR title, an issue body, or the
+> fact that earlier stages succeeded. Fill it in from `FS.GG.Game@main`, or leave it.
+>
+> Still committing a second root, re-read from each repo's `main` on 2026-07-28:
+> `FS.GG.Governance` (15 skills), `FS.GG.Game` (21), `FS.GG.SDD` (32 + the manifest),
+> `FS.GG.Rendering` (50).
+
+**This heading carries the count, and nothing below it does.** The blocks under it are dated,
+append-only records; when the count changes, change *this* line and append a record, never edit a
+record to carry a new headline. That rule exists because it was learned the expensive way: this
+document has been stale **three separate times on 2026-07-28** — after stage 1 it said 0 of 7, after
+stage 3 it said 1 of 7, and `#1723` (which was filed to fix the second of those) was itself
+**two stages out of date** by the time a worker reached it, asking for a count of 2 when the truth was
+3. A count spread across four prose blocks in two sections cannot be updated atomically, so it is now
+in one place. The mechanism that would stop a *fourth* recurrence is filed as
+[`#1750`](https://github.com/FS-GG/.github/issues/1750); it is deliberately not built here.
+
+#### How the verdict got here (historical — do not read as current)
 
 The roster is `registry/repos.yml:104-110` — `sdd`, `rendering`, `governance`, `templates`, `game`,
-`audio`, `net`. All seven fail precondition 1, for a reason that is not on the board:
+`audio`, `net`. **When this section was first written all seven failed precondition 1**, for a reason
+that was not on the board:
 
 > **`scripts/skill-view` is not a `kit:` row.** The kit's six sources are four skills, `scripts/fsgg-coord`
 > and `dist/dotnet/.config/dotnet-tools.json` (`registry/repos.yml:328-343`, `registry/repos.lock:9-14`).
@@ -209,8 +249,9 @@ exists**, which is blocker B2 below.
 >    `composition` check, with an offline can-fire demo that drives the assertion (both `bad` arms mutated
 >    to `ok`; the demo red both times).
 
-> **STAGE 2 ATTEMPTED ON `FS.GG.SDD`, 2026-07-28, AND REFUSED. The verdict is still 1 of 7.**
-> `FS.GG.SDD@387adc6` passes all four of §4's preconditions and is **still not eligible**, because §9's
+> **STAGE 2 ATTEMPTED ON `FS.GG.SDD`, 2026-07-28, AND REFUSED.** (This block said *"the verdict is
+> still 1 of 7"*. It was true for about an hour. The count now lives only in the standing verdict
+> above.) `FS.GG.SDD@387adc6` passed all four of §4's preconditions and was **still not eligible**, because §9's
 > precondition is not "the four checks pass", it is *"nothing is retired before its replacement is
 > proven"* — and SDD is the first receiver where the thing being retired has a **live, required
 > replacement-less consumer**. Everything below was measured on that tree, that day.
@@ -273,6 +314,20 @@ exists**, which is blocker B2 below.
 > throwaway clone. Items 2 and 3 are SDD-side and fixable in SDD; item 1 is not, and is the one that
 > makes the refusal a §9 refusal rather than a scheduling one.
 >
+> > **ITEM 1 IS RESOLVED — [`#1715`](https://github.com/FS-GG/.github/issues/1715) closed 2026-07-28
+> > 08:04:47Z, shape (b).** The `skill-union` caller was **retired** rather than taught to see a
+> > generated root, so the thing that made SDD ineligible no longer exists on any receiver. Verified
+> > on the three repos that wired one: `FS.GG.SDD`, `FS.GG.Rendering` and `FS.GG.Governance` each
+> > require **`skill-view-check`** and **no longer require `skill-union / skill-union`** (read back
+> > from `…/branches/main/protection/required_status_checks` on 2026-07-28), and
+> > `FS.GG.SDD/.github/workflows/skill-union.yml` is **404**. The full decision is §5.1.
+> >
+> > **SDD is still not retired**, and item 1 clearing does not retire it: findings **2 and 3 above
+> > stand unresolved** (`FS.GG.SDD#771`, `FS.GG.SDD#770`). SDD's `.agents/skills` still holds 32 skill
+> > directories **and `skill-manifest.json`** — re-read from `main` 2026-07-28, and the 33rd entry is
+> > finding 2 sitting exactly where the dry run found it. A worker re-approaching SDD is unblocked on
+> > the *gate* and blocked on the *manifest*.
+>
 > **What this changes about the shape of the remaining six.** Templates was the *thin* receiver — no
 > `gate.yml`, no `build-config`, no repo-owned skills in the audited roots, no `skill-union` caller.
 > SDD is the *framework* receiver: its own test suite reads its own roots from the repo path in a bare
@@ -280,6 +335,107 @@ exists**, which is blocker B2 below.
 > union gate. Its blast radius is `.github`-shaped, which is precisely §6's *"Not in this order"*
 > argument for why the authority's own roots are a separate item. **Do not read Templates' cost as the
 > per-receiver cost.**
+
+> **STAGE 3 RETIRED `FS.GG.Audio` and STAGE 4 RETIRED `FS.GG.Net`, both 2026-07-28.** Preconditions
+> re-run on each receiver's own pre-retirement tree — `FS.GG.Audio@1f9c58c`, `FS.GG.Net@e97186a` — and
+> re-derived again here from those trees rather than inherited from either stage's report:
+>
+> | precondition | `FS.GG.Audio@1f9c58c` | `FS.GG.Net@e97186a` |
+> |---|---|---|
+> | 1 — `scripts/skill-view` present and executable | **yes**, 21,851 bytes mode 0755; it ran and produced the view (`20/20 declared skill(s) visible`) | **yes**; it ran and produced the view (`4/4 declared skill(s) visible`) |
+> | 2 — parity AGREE on the tree and on the resolved equivalent | **AGREE / AGREE** over **20 ids in 2 roots** | **AGREE / AGREE** over **4 ids in 2 roots** |
+> | 3 — half-view, not all-view | **half-view**, so `#1685` unengaged | **half-view**, so `#1685` unengaged |
+> | 4 — second root not left committed | satisfied by the retirement commit itself (39 tracked deletions) | satisfied by the retirement commit itself (23 tracked deletions) |
+> | B5 reach — does R wire a `skill-union` caller? | **no** (`grep -rl skill-union .github/` empty) | **no** |
+> | `diff -r <source> <second-root>` (§7's pre-retirement check) | **silent** | **silent** |
+>
+> Landed as [Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210) squash `52a358f` and
+> [Net#45](https://github.com/FS-GG/FS.GG.Net/pull/45) squash `602f47a`; both **green on `main` by run
+> id** — Audio `Build + test` **90207951357**, `kit / coordination-kit` **90207951562**; Net
+> `Build + test` **90208065783**, `Composition (runtime skill roots)` **90208065757**,
+> `kit / coordination-kit` **90208065377**, all `success` at the squash.
+>
+> **THE COST PREDICTOR STAGE 2 GUESSED IS WRONG, AND THAT MATTERS MORE THAN THE TWO ROWS ABOVE.**
+> Stage 2 generalised from SDD that *framework-shaped* receivers — a `gate.yml`, `build-config`,
+> repo-owned skills in the audited roots — would be expensive. **Audio disproved it.** Audio has a
+> `gate.yml` and **16 repo-owned `fs-gg-sdd-*` skills inside the root being retired** (of 20 ids
+> total), and was still cheap — because those 16 sat in **both** audited roots, so the view reproduces
+> them and `diff -r` is silent. Nothing had to be relocated.
+>
+> The two predictors that actually held across five attempts are:
+>
+> 1. **`diff -r <source> <second-root>` in the second-root direction.** Non-empty means a file with no
+>    home in the view, and it is the only thing that stopped a receiver on content. It was non-empty
+>    exactly once — SDD's `skill-manifest.json` — and that is exactly the one receiver that stalled on
+>    content.
+> 2. **Whether R wires a `skill-union` caller** — historical, now moot fleet-wide (`#1715`), and it is
+>    the only thing that stopped a receiver on gating.
+>
+> Repo size and repo shape predicted **neither**. Audio is the largest retirement so far by files (39)
+> and by repo-owned skills (16) and cost the least trouble of the three.
+>
+> **And `FS.GG.Net` was not a third data point at all — it was `FS.GG.Templates` again.** Re-measured
+> here: both receivers carry the **same 4 kit skill ids** (`check-board`,
+> `cross-repo-coordination`, `intra-repo-parallel-work`, `pnext-item`), **23 files**, and **zero**
+> repo-owned skills in the audited roots. So the sample is smaller than the stage count suggests: five
+> attempts, but only **three distinct receiver shapes** — thin (Templates, Net), framework with a
+> producer-authoritative file (SDD), and skill-heavy-but-symmetric (Audio). Reading "four stages
+> succeeded" as four independent confirmations overstates the evidence by one.
+>
+> **A record that only records what held is not a record.** Stage 2's generalisation is written down
+> here *because* it was wrong; the previous version of this document would have carried it forward
+> unchallenged into Governance, Game and Rendering, each of which is framework-shaped and would have
+> been priced as expensive on an argument Audio had already falsified.
+
+> **THE KIT PIN IS NOT IN THE SAME FILE ON EVERY RECEIVER, AND THE ORDER USED TO IMPLY IT WAS**
+> ([`#1725`](https://github.com/FS-GG/.github/issues/1725) — it caused a real wrong turn on stage 4).
+> **Three distinct locations across the four receivers measured so far**, each read from the repo:
+>
+> | receiver | where `FS.GG.Kit`'s version actually is |
+> |---|---|
+> | `FS.GG.Templates` | inline `<PackageReference Include="FS.GG.Kit" Version="…" />`, with `<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>` — no CPM |
+> | `FS.GG.Net` | **CPM** — `Directory.Packages.props:19`, `<PackageVersion Include="FS.GG.Kit" Version="0.15.0" />`. `.config/kit/FS.GG.Kit.receiver.proj` contains **zero** `Version=` and says so itself: *"Version pinned centrally in Directory.Packages.props (CPM; Renovate-managed), like every other pin."* |
+> | `FS.GG.Audio` | **CPM** — `Directory.Packages.props`, `Version="0.15.0"`; its receiver project likewise contains **zero** `Version=` |
+> | `FS.GG.SDD` | `Directory.Packages.local.props` |
+>
+> **`FS.GG.Governance`, `FS.GG.Game` and `FS.GG.Rendering` were NOT measured for this table** — none of
+> them declares `FS.GG.Kit` in `Directory.Packages.props`, and where each one *does* pin it was not
+> established here. That is an unknown, not a fourth shape, and it is written down as an unknown
+> deliberately: guessing it is the exact failure `#1725` records.
+>
+> **Do not assert a path you have not opened.** A worker who re-measures the *value* dutifully while
+> taking the stated *path* on trust opens a file that does not contain the pin, finds nothing, and has
+> to guess whether that is "no pin" or "wrong file" — on Net the honest reading of the stated path was
+> that precondition 1 FAILS, which is the opposite of the truth. The location-independent read that
+> works on all three shapes is `coordination-sync --check --against-pin`, which reports the resolved
+> version (*"all N materialized file(s) match the FS.GG.Kit 0.15.0 this tree pins"*) without naming a
+> file at all. **Prefer it.**
+
+> **THE §8 REPLACEMENT ALARM HAS BEEN HAND-BUILT THREE TIMES, IN THREE DIFFERENT SHAPES, AND ONE OF
+> THEM CANNOT BLOCK A MERGE.** §4's stage-1 finding 2 says the retirement removes the only gate that
+> would notice a view root leaving the runtime contract, and that the same change must replace it. It
+> did — differently every time. Read back from each repo's `gate.yml` and its branch protection on
+> 2026-07-28:
+>
+> | receiver | the alarm | rides | required? |
+> |---|---|---|---|
+> | `FS.GG.Templates` | `tests/composition/lib/skill-view-roots.sh` | the inherited `composition` check | **yes** — `composition` is a required context |
+> | `FS.GG.Audio` | `scripts/check-skill-view-roots.sh`, as a *step* named *"Runtime skill-root contract"* | the existing `Build + test (locked restore, net10.0, headless)` job | **yes** — that job is a required context |
+> | `FS.GG.Net` | `tests/composition/skill-view-roots.sh`, in a **new job** named `Composition (runtime skill roots)` | nothing — it is its own job | **NO** ([`#1727`](https://github.com/FS-GG/.github/issues/1727)) |
+>
+> Net's job is `success` on `main` (**90208065757**) and it is *not* in
+> `…/protection/required_status_checks` — so the check that replaces the retirement's lost loud
+> failure is the one check that cannot stop a merge. A green that cannot block is `#266`'s subject.
+>
+> **The next receiver must ride a context that is ALREADY REQUIRED rather than invent a fourth shape.**
+> Adding a new job is the tempting move — it is tidier and it isolates the concern — and it is the move
+> that silently drops the alarm's authority, because a new job's context is not required until somebody
+> POSTs it, and nothing in the retirement makes them. Audio's shape (a step inside an
+> already-required job) is the cheapest one that keeps the teeth.
+> [`#1710`](https://github.com/FS-GG/.github/issues/1710) owns collapsing the three into one kit-shipped
+> assertion and predicted exactly this hand-copy; it has now happened three times out of three.
+> [`#1730`](https://github.com/FS-GG/.github/issues/1730) was filed and closed when Audio landed with no
+> alarm at all.
 
 ### The per-receiver sequence 0.15.0 makes available (stage 1, per repo)
 
@@ -336,7 +492,7 @@ materialized `.agents/skills` and one skill of its own:
 |---|---|---|
 | **B1** | The kit does not deliver `scripts/skill-view` (or the absence-check wiring) to receivers. Precondition 1 fails on all seven. | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `scripts/skill-view` is a `kit:` row, as are the two libraries it sources at startup — `repos.sh validate` now refuses a kit that separates them, because a receiver holding the tool without them would read as satisfying precondition 1 while the tool exits non-zero on every run. **Re-read precondition 1 as written**: "present *and executable*" means it runs, and the kit's own gate proves that by running the materialized copy from a receiver tree. |
 | **B2** | The materializer has exactly two states for a root: `FsggKitSkillRoots` (materialize into it) and `FsggKitRetiredSkillRoots` (delete the kit's directories from it) — `src/FS.GG.Kit/build/FS.GG.Kit.props:19,25`. There is **no third state** for *"still a declared runtime root, but generated locally rather than materialized"*, which is exactly what a view root is. Without it a receiver's second root stays committed, and `scripts/skill-view:331` then refuses to generate the view there. ADR-0065 §Retiring a root forbids the receiver hand-deleting it — *"A receiver never hand-deletes a mirror; the materializer that created it is the thing that removes it."* | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `FsggKitViewSkillRoots` is the third state — a root that stays in the runtime contract, is not materialized into, has its previously-materialized kit directories swept by the materializer, and is then **asserted visible** (`FsggKitCheckSkillView`, ADR-0067 §8). ADR-0065 §A root's three dispositions records the contract. **Empty by default**, so it retires nothing until a receiver's own stage-1 change sets it. |
-| **B3** | [`#1693`](https://github.com/FS-GG/.github/issues/1693) — `#1587`'s diff-shape guard refuses the 0.14.0 bump on all seven receivers, so no kit change reaches any receiver today regardless. 0 of 7 are current (SDD 0.10.0; five at 0.8.0; Audio 0.6.0). | open |
+| **B3** | [`#1693`](https://github.com/FS-GG/.github/issues/1693) — `#1587`'s diff-shape guard refuses the 0.14.0 bump on all seven receivers, so no kit change reaches any receiver today regardless. 0 of 7 are current (SDD 0.10.0; five at 0.8.0; Audio 0.6.0). | **CLOSED 2026-07-28 01:33:08Z, and its premise was false** — the diff-shape guard did not exist, so nothing was ever mechanically refusing the bumps (the same correction §4's stage-1 block records). The counts in this cell are the 2026-07-27 reading and are **superseded**: `Templates`, `SDD`, `Audio` and `Net` all pin **0.15.0** as of 2026-07-28. Each receiver's bump still has to LAND — nothing automerges them — which is a scheduling fact, not a blocker. |
 | **B4** | `scripts/repos-audit.sh:1841` requires a receiver's gate to be armed on a change to a **committed** skill root. A generated root cannot be armed that way. Repairing this is **sanctioned** — ADR-0067 says the apparatus *"keeps running unchanged, and keeps being repaired"* until §9's order reaches it — but it must precede the first receiver retirement, and it **must not be confused with retiring the sweep**, which is last. | **NOT a blocker for a receiver that never wired the caller — measured 2026-07-28 on the first retirement.** The arming check at `repos-audit.sh:1909` is reached only when a repo BOTH declares `skill-union` and calls the workflow (`declared=1 && calls_it=1`). Zero receivers call it (`registry/repos.yml`'s `skill-union` row; Templates#313 recorded the decision not to), so every receiver lands on the **GAP** branch instead — before the retirement and after it, identically. `FS.GG.Templates` was a `skill-union` gap on 2026-07-27 and is a `skill-union` gap now, for the same reason and with no new red. **Still open, and still precedes the first receiver that DOES wire a caller** — which is a different, later event than "the first receiver retirement", and this row conflated the two. |
 | **B5** | **A receiver that DOES wire a `skill-union` caller cannot be retired at all**, and the caller-arming question B4 asks is the smaller half of it. `skill-union-assert.yml` is a reusable workflow: it checks the caller out and asserts over that checkout, so a root that only exists after a `generate` is **absent** in its subject. Measured on `FS.GG.SDD@387adc6`'s dry-run retirement: `configured root is absent: ./.agents/skills`, **exit 2**, on a context that is **required** under `enforce_admins`. The workflow's own header refuses the obvious lift — *"Adding an artifact input to lift that limit is a decision, not a tidy-up — do not infer it from this note."* | **CLEARED 2026-07-28 by [#1715](https://github.com/FS-GG/.github/issues/1715), shape (b) — the caller is retired in all THREE receivers that wired one.** Shape (a) (an opt-in input teaching the reusable workflow to generate the caller's view) was **declined**: it widens a contract five other repos read in order to preserve a gate whose subject the rewrite is deliberately removing, and it makes a gate produce its own subject. See §5.1 below for the decision, the measurement that forced it, the replacement, and the run ids that prove the replacement can fail. |
 
@@ -486,12 +642,12 @@ B1 + B2 in one kit change and one republish; B3; then the seven bumps land. Noth
 Roster order, cheapest blast radius first, so that the rollback path is exercised on the smallest tree
 before the largest:
 
-1. `FS.GG.Net` — no Renovate config (`default.json:12`), no `build-config`; the smallest surface.
-2. `FS.GG.Audio`
-3. `FS.GG.Templates`
+1. `FS.GG.Net` — no Renovate config (`default.json:12`), no `build-config`; the smallest surface. — **RETIRED (stage 4)**
+2. `FS.GG.Audio` — **RETIRED (stage 3)**
+3. `FS.GG.Templates` — **RETIRED (stage 1)**
 4. `FS.GG.Governance`
-5. `FS.GG.Game`
-6. `FS.GG.SDD`
+5. `FS.GG.Game` — **stage 5 IN FLIGHT** ([`#1734`](https://github.com/FS-GG/.github/issues/1734))
+6. `FS.GG.SDD` — attempted at stage 2 and **refused**; B5 has since cleared but findings 2 and 3 stand
 7. `FS.GG.Rendering` — largest skill tree (`.claude=50`, measured at `registry/repos.yml:234-236`), last.
 
 > **ACTUAL ORDER, 2026-07-28: `FS.GG.Templates` went first, and the list above is now a preference
@@ -506,16 +662,30 @@ before the largest:
 > four `build-config` receivers (SDD, Rendering, Governance, Game) each run one in their own
 > `build-config-drift` job and will need the generate reachable from that tree too.
 >
-> **Retired 1 of 7. Remaining: Net, Audio, Governance, Game, SDD, Rendering — all still stage 0**
-> (`#1587` owns delivery and is itself `Blocked`).
+> **Retired 1 of 7 at that point. Remaining: Net, Audio, Governance, Game, SDD, Rendering — all still
+> stage 0** (`#1587` owns delivery and is itself `Blocked`).
 >
 > **STILL 1 of 7 after stage 2 was attempted on `FS.GG.SDD` (2026-07-28).** SDD is the only receiver
 > besides Templates carrying 0.15.0 and it passes all four §4 preconditions, and it was **not** retired:
 > see §4's stage-2 block and B5. Nothing on SDD was changed; no PR was opened against it.
+>
+> **Stages 3 and 4 then retired `FS.GG.Audio` and `FS.GG.Net` (2026-07-28), and stage 5
+> (`FS.GG.Game`, [`#1734`](https://github.com/FS-GG/.github/issues/1734)) is in flight as this is
+> written.** The count is in §4's standing verdict and **only** there; this paragraph deliberately no
+> longer carries one, because carrying it in two sections is how it went stale three times in one day.
 
-For each: re-run §4's four preconditions; retire the second committed root; confirm the repo's gates
-green **on `main`, by run id, not by merge**; retire that repo's `skill-union-assert` caller; close only
+For each: re-run §4's four preconditions; run `diff -r <source> <second-root>` (§7) and stop if it is
+not silent; retire the second committed root; **replace §8's alarm on a context that is already
+required** (§4); confirm the repo's gates green **on `main`, by run id, not by merge**; close only
 the board rows whose subject that repo's retirement actually dissolved.
+
+> **THE PER-REPO CALLER STEP IS GONE — it was *"retire that repo's `skill-union-assert` caller"*, and
+> there is no longer any such caller to retire.** [`#1715`](https://github.com/FS-GG/.github/issues/1715)
+> closed 2026-07-28 08:04:47Z by retiring the caller **fleet-wide** in the three receivers that had one
+> (SDD, Rendering, Governance), so this is no longer per-receiver work and a stage-1 worker should not
+> go looking for it. What replaced it — each receiver's own required `skill-view-check` — is §5.1, and
+> it is already standing on all three. **If a future receiver is found wiring a `skill-union` caller,
+> that is a regression to report, not a step to perform.**
 
 > **THE CALLER STEP IS NOT VACUOUS, AND THIS SENTENCE SAID IT WAS.** It read *"(note: zero receivers
 > have wired one — `registry/repos.yml:268-271` — so this step is vacuous today and costs nothing)"*.
@@ -618,10 +788,8 @@ is the thing that has to be true *before* a retirement, not after one. Dry run i
 | after | `git status --porcelain` | **0 changed paths** |
 
 **SDD agrees with Templates and not with `.github`: `rm -rf <second-root>` was NOT required.** Git
-replaced the symlink with the restored directory by itself. Two receivers now say the step is
-unnecessary and the producer says it is required, so the balance of evidence is firmly that this is a
-property of the tree; the step stays because it is harmless when unnecessary and fatal to omit when it
-is not.
+replaced the symlink with the restored directory by itself. (SDD's run was a dry run in a throwaway
+clone; SDD was refused and never retired.)
 
 **One thing this rollback surfaced that Templates' could not.** `diff -r .claude/skills .agents/skills`
 on the *restored* tree is not silent: it prints `Only in .agents/skills: skill-manifest.json`. That is
@@ -630,6 +798,35 @@ a view of the other root cannot carry, and which the retirement deletes with `gi
 **nothing**. The rollback restores it correctly; the *retirement* is what has to notice it first. **Run
 `diff -r <source> <second-root>` before retiring any receiver** — a non-empty diff in the second-root
 direction is a file with no home in the view.
+
+**Re-run against the THIRD and FOURTH receivers, `FS.GG.Audio` and `FS.GG.Net`, 2026-07-28** — and
+unlike SDD's, these are rollbacks of **real, merged retirements**, replayed from each squash commit in
+a throwaway clone: check out the squash, generate the view exactly as a fresh checkout does, then
+revert **with no `rm -rf` first**.
+
+| step | command | `FS.GG.Audio` @ `52a358f` | `FS.GG.Net` @ `602f47a` |
+|---|---|---|---|
+| retired state | `skill-view generate --source .claude/skills --roots ".agents/skills"` | `.agents/skills: generated (link)`; `20/20 declared skill(s) visible`; `.agents/skills -> ../.claude/skills` | `.agents/skills: generated (link)`; `4/4 declared skill(s) visible` |
+| retired state | `git status --porcelain` | **0 changed paths** | **0 changed paths** |
+| rollback | `git revert --no-edit <squash>`, **no `rm -rf`** | rc **0** | rc **0** |
+| restored | `git ls-files .agents/skills` / `find .agents -type l` | **39** tracked files in a real directory / **0** symlinks | **23** / **0** symlinks |
+| prove | `diff -r .claude/skills .agents/skills` | **identical** (rc 0) | **identical** (rc 0) |
+| prove | `skill-union-assert.sh --product .` | **exit 0** — `in-every-root=20/20 byte-identical=20/20 byte-differing=0` | **exit 0** — `in-every-root=4/4 byte-identical=4/4 byte-differing=0` |
+| after | `git status --porcelain` | **0 changed paths** | **0 changed paths** |
+
+**THE TALLY IS NOW THREE RECEIVERS AGAINST THE PRODUCER'S ONE.** `FS.GG.Templates`, `FS.GG.Audio` and
+`FS.GG.Net` — every receiver actually retired — each restore correctly from `git revert` **alone**, and
+in each case git replaced the symlink with the restored directory by itself. (`FS.GG.SDD` agrees, on a
+dry run of a retirement that never happened, and is not counted in the three.) The single tree that
+required `rm -rf` remains `.github` itself at `0ea5396` — the **producer**, whose second root is a kit
+source rather than materialized output (§6 *"Not in this order"*).
+
+So the stated path's `rm -rf` line is now, on the measured evidence, **unnecessary on every receiver
+tried**. It stays in the transcript regardless, and the reason is asymmetry rather than doubt: the step
+is a no-op when unnecessary and the failure it prevents is a `git revert` that cannot restore a
+directory, which is exactly the situation in which the rollback is being run and the worst moment to
+discover it. **Do not delete the step. Do not be surprised when it reports nothing to remove. And do
+not let three green receivers talk you out of running it on the producer.**
 
 ---
 
