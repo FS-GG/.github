@@ -39,6 +39,55 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Kit</PackageId>
+    <!-- 0.16.0 -> 0.17.0 (.github#1710 piece 2, ADR-0067 §8/§3). ONE packed member moves:
+         `scripts/skill-view` — `check` grows the two lanes SEVEN RECEIVERS EACH HAND-WROTE, and a
+         `selftest` subcommand that demonstrates every lane can fire.
+         WHAT THIS REPLACES, MEASURED 2026-07-28. ADR-0067 §9 phase 4 retired each receiver's second
+         COMMITTED skill root; §8 forbids trading a loud failure for a quiet one, so all seven shipped
+         a replacement alarm in their own retirement change. The result was seven implementations of
+         ONE invariant — `scripts/check-skill-view-roots.sh` at 23,050 / 21,353 / 18,346 / 18,277 /
+         14,864 bytes on SDD / Audio / Rendering / Game / Governance, `tests/composition/
+         skill-view-roots.sh` on Net, `tests/composition/lib/skill-view-roots.sh` on Templates. A 55%
+         size spread across files asserting the same thing, all written in one day, by a phase whose
+         stated purpose is removing hand-copies. They were not a parallel MECHANISM — `skill-view` was
+         already a kit-delivered source and `FsggKitCheckSkillView` already ran in every receiver —
+         they were two lanes bolted onto it because `check` did not cover them. Now it does.
+         MINOR, not patch, and not major. Not major because the member SET is unchanged (28), every
+         destination and mode is unchanged, no materialize property is added or altered, and every
+         EXISTING invocation behaves identically — the 36 pre-existing legs of `tests/skill-view/
+         run.sh` pass unmodified, and the new lanes are reachable ONLY through new opt-in flags. Not
+         patch because it is not the prose repair 0.15.1 was: a receiver ACTS on this, by deleting its
+         own alarm and calling `check` with the `receiver-proj` flag instead, which is a different runtime contract
+         than 0.16.0 offered.
+         THE COLLAPSE RAISES THE BAR RATHER THAN LEVELLING IT (#1710: do not weaken an alarm to make
+         the collapse easier). Three ways, each measured:
+           * PARTIAL VIEWS are graded per-skill by IDENTITY. All seven hand-copies compared DIRECTORY
+             COUNTS (`find … -type d | wc -l`), which passes a view whose skills are named nothing
+             like the live root's. `selftest` case "right count, wrong name" is that gap, and it reds.
+           * THE DANGLING/ABSENT SPLIT is `classify_root`'s, which has always been correct. Rendering's
+             and Governance's copies guard absence with a bare `[[ ! -e ]]`, which FOLLOWS symlinks,
+             leaving their dangling branch unreachable and the class misattributed. Fixed by
+             construction, not by repair — the same defect FS.GG.Audio#212 paid for at `26d2bb7`.
+           * THE TRACKED-VIEW-ROOT LANE is ADOPTED from FS.GG.Net's copy, the only one of the seven
+             that had it, and now runs for every receiver. A re-committed view root resolves perfectly
+             on Linux and passes every other copy's resolution lane, while being exactly the committed
+             symlink ADR-0067 §6 rejects on measurement.
+         WHAT IS A PARAMETER RATHER THAN A COPY: the `absent-ok "<why>"` flag. An absent view root stays RED
+         by default; a receiver whose alarm runs on a BARE checkout (Audio, Game) must excuse it or
+         fire on every green build, while one that generates first (SDD, Rendering, Governance) must
+         not. The reason is REQUIRED and printed, because what else catches an absent root DIFFERS per
+         receiver and must be measured: on Game the kit's own check reds a required job; on Audio it
+         does not, because `kit / coordination-kit` grades `<FsggKitSkillRoots>` bytes only and the
+         materialize job is not required. An `absent-ok` with an EMPTY reason is refused.
+         NOT DONE HERE, DELIBERATELY: #1710's AC1 — moving `Fsgg<Repo>GenerateSkillView` INTO the kit.
+         It is blocked on `scripts/repos-audit.sh`'s #1759 view-root sweep, which reds a receiver that
+         declares a view root with no LOCAL target ordered `BeforeTargets="FsggKitCheckSkillView"`; a
+         kit-owned target would make all seven legitimately stop declaring one and red the daily
+         sweep. Filed separately with that as its first task. No `FsggKit*` target is added or
+         reordered in this release, so no receiver's generate wiring changes.
+         NOTE, like 0.15.0/0.15.1: this touches a `kit:` CONTENT source in registry/repos.yml, so
+         `kit-published-coherence`'s PR arm sees it. -->
+
     <!-- 0.15.1 -> 0.16.0 (.github#1761, the coord-engine 0.14.0 release). ONE packed member moves:
          `dist/dotnet/.config/dotnet-tools.json` — the engine pin, 0.13.0 -> 0.14.0. It is a hashed
          `kit:` source (#1077), which is why `engine-pin-coherence` cannot be cleared without paying
@@ -173,7 +222,7 @@
          NOT DONE HERE: `scripts/lint-shell.sh` runs at `-S warning`, and SC1091 is an `info`, so
          this repo's own shell gate is structurally blind to the defect it shipped. That is
          .github#1719 and is deliberately left alone — no severity floor moves in this release. -->
-    <Version>0.16.0</Version>
+    <Version>0.17.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

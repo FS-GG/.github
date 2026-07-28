@@ -669,23 +669,50 @@ Three consequences the map has to carry, because they change what a green gate m
   from that receiver's own `FsggKitSkillRoots`, so each adopter's verdict now covers 28 files where it
   covered 51, with no gate edit and no effect on any other receiver. A green there is a smaller claim
   than it was, and deliberately so: the bytes it stopped grading are the ones that stopped existing.
-- **Nothing in the kit contract watches a view root's MEMBERSHIP.** `FsggKitCheckSkillView` asserts a
-  declared view root's content; if the root is later dropped from `FsggKitViewSkillRoots` it reports
-  *"nothing to assert"* and `coordination-sync` stops looking at it — both green, root gone from the
-  runtime contract (measured on **five** adopters independently). Each adopting repo therefore owes
-  its own membership assertion on a check that gates its merges, **and owes it in a shape its own
-  required checks can hold**. The shape is settled **6–1**: Templates' rides its required `composition`
-  check; Audio's `scripts/check-skill-view-roots.sh` rides the required `Build + test` job; Game's rides
-  `Build-config drift check`; Governance's and SDD's ride `skill-view-check`; Rendering's rides
-  `Deterministic gate`. **`FS.GG.Net`'s does not ride a required context at all**, which is
-  [#1727](https://github.com/FS-GG/.github/issues/1727) and is the shape to avoid. Seven hand-copies of
-  one assertion is the cost [#1710](https://github.com/FS-GG/.github/issues/1710) named and still owns.
-  **Every lane needs a can-fire demonstration, and the demonstration must itself be mutation-tested**:
+- **A view root's MEMBERSHIP is watched by the kit as of FS.GG.Kit 0.17.0, and was not before.**
+  `FsggKitCheckSkillView` asserts a declared view root's *content*; if the root is later dropped from
+  `FsggKitViewSkillRoots` it reports *"nothing to assert"* and `coordination-sync` stops looking at it —
+  both green, root gone from the runtime contract (measured on **five** adopters independently). For
+  one day each adopting repo owed its own membership assertion, and the result was **seven hand-written
+  implementations of one invariant** with a 55% size spread, which is the cost
+  [#1710](https://github.com/FS-GG/.github/issues/1710) named and has now collected.
+
+  **The collapse (`#1710` piece 2).** `scripts/skill-view check` — already a kit-delivered source, already
+  run by `FsggKitCheckSkillView` in every receiver — now owns all three lanes: the **roots declaration**
+  (the union of `FsggKitSkillRoots` and `FsggKitViewSkillRoots` must be the runtime root set), the
+  **view resolution** (absent / dangling / text-file / not-a-directory / partial), and a **tracked view
+  root**. No new delivery mechanism was built; the seven receivers had bolted two lanes onto an existing
+  seam because `check` did not cover them.
+
+  It **raises** the bar rather than levelling it: partial views are graded per-skill by *identity* where
+  all seven copies compared directory counts; the dangling/absent split is `classify_root`'s, fixing
+  Rendering's and Governance's symlink-following `[[ ! -e ]]` by construction; and the tracked-view-root
+  lane is **adopted from `FS.GG.Net`'s copy**, the only one of the seven that had it, and now runs for
+  all of them.
+
+  **One parameter, and it costs a measurement.** `--absent-ok "<why>"`: absence stays RED by default,
+  and a receiver whose alarm runs on a bare checkout must excuse it or fire on every green build. The
+  reason is required and printed, because what else catches an absent root differs per receiver — on
+  Game the kit's own check reds a required job; on Audio it does not, because `kit / coordination-kit`
+  grades `FsggKitSkillRoots` bytes only and the materialize job is not required. The **required-context
+  name** the alarm rides stays per-receiver by construction — it is the workflow line that invokes it,
+  not a parameter of the tool.
+
+  **Every lane needs a can-fire demonstration, and the demonstration must itself be mutation-tested.**
   Audio's shipped copy guarded its view lane with `[[ ! -e ]]`, which follows symlinks, so a *dangling*
   view root — §8's headline class — reported green until
-  [FS.GG.Audio#212](https://github.com/FS-GG/FS.GG.Audio/issues/212) fixed it, and
-  [FS.GG.Templates#324](https://github.com/FS-GG/FS.GG.Templates/issues/324) is open because the fleet's
-  oldest alarm has no view-resolution lane at all.
+  [FS.GG.Audio#212](https://github.com/FS-GG/FS.GG.Audio/issues/212) fixed it. That rule is now
+  structural: `skill-view selftest` ships **in the tool**, so a receiver runs the same demonstration
+  rather than a copy of it, and every negative case asserts the *specific diagnostic class* its branch
+  emits. Eight mutations were run against it and each was caught by a named case; **one initially
+  survived** and the demo grew the discriminating fixture that fails it.
+
+  **Adoption is per-receiver and sequenced (ADR-0067 §9): nothing is retired before its replacement is
+  proven there.** `FS.GG.Templates` and `FS.GG.Net` are the first adopters, because they were the two
+  broken ones — [FS.GG.Templates#324](https://github.com/FS-GG/FS.GG.Templates/issues/324) (no
+  view-resolution lane at all) and [#1727](https://github.com/FS-GG/.github/issues/1727) (an alarm on no
+  required context) are fixed **by construction** rather than by repairing code about to be deleted.
+  Until a receiver has adopted, it keeps its local copy.
 - **A repo that wires the `skill-union` receiver caller could not hold a view root at all — and that
   caller is now RETIRED.** Measured 2026-07-28 on `FS.GG.SDD@387adc6`: `skill-union-assert.yml` is a
   reusable workflow, so it checks the caller out and asserts over that checkout, and a root that only
