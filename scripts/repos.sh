@@ -983,20 +983,32 @@ cmd_validate() {
     | group_by(.)[] | select(length>1)[0]')"
   [ -z "$ddups" ] || err "kit client/config rows share a receiver destination: $ddups"
 
-  # --- THE #1077 INVARIANT: the shim and its engine manifest ride the kit TOGETHER ---
-  # `scripts/fsgg-coord` execs `fs.gg.coord.cli`, so a receiver that gets the shim but not the
-  # `.config/dotnet-tools.json` that restores the engine has a tool it CANNOT run. That was the live
-  # state: the shim rode coordination-kit (6 receivers), the manifest rode build-config (4), and
-  # templates/audio fell in the gap — invisible to every gate because none asked "can this receiver run
-  # the engine?" (#1077, epic #266). Both are kit rows now, so the two receiver sets are EQUAL by
-  # construction; this asserts they cannot silently drift apart again — if the kit delivers the shim, it
-  # must deliver the manifest. Keyed on the delivered PATHS, not row ids, so a rename cannot slip past.
-  local shimmanifest; shimmanifest="$(echo "$json" | jq -r '
-    ( [ (.kit // [])[] | if .kind=="client" then .source elif .kind=="config" then .dest else empty end ] ) as $d
-    | if ($d | index("scripts/fsgg-coord")) and (($d | index(".config/dotnet-tools.json")) | not)
-      then "MISSING" else "" end')"
-  [ "$shimmanifest" != "MISSING" ] \
-    || err "the coordination kit delivers the fsgg-coord shim (scripts/fsgg-coord) but NOT the engine manifest (.config/dotnet-tools.json): a receiver would get a tool it cannot run (#1077). Add a 'kind: config' kit row whose dest is '.config/dotnet-tools.json', or the shim and its manifest have drifted onto different fabrics again."
+  # --- THE #1077 INVARIANT MOVED OUT OF THIS FILE (#1615, ADR-0068) — DO NOT RE-ADD IT HERE ---
+  # This is where the shim/manifest co-fabric rule lived from #1077 until 2026-07-28. It asserted: if
+  # the kit delivers `scripts/fsgg-coord`, it must also deliver `.config/dotnet-tools.json`, because a
+  # receiver with the shim and no engine manifest has a tool it CANNOT run. That was a live defect —
+  # the shim rode coordination-kit (6 receivers), the manifest rode build-config (4), and
+  # templates/audio fell in the gap, invisible to every gate because none asked "can this receiver run
+  # the engine?" (#1077, epic #266).
+  #
+  # THE INVARIANT IS NOT RETIRED. It is asserted somewhere it can actually see the answer.
+  #
+  # The rule above was `f(this roster)`: it constrained which FABRIC two rows rode, and inferred the
+  # receiver property from that arrangement. It was therefore blind in both directions that matter —
+  # a receiver that deleted its own `.config/dotnet-tools.json` by hand stayed green, and a receiver
+  # that obtained an engine some other way read as broken. #1615 moved the engine manifest off the kit
+  # entirely (Renovate bumps `fs.gg.coord.cli` per repo now), which would have left this rule asserting
+  # a coupling the roster no longer has — a gate contradicting its own registry.
+  #
+  # Its replacement is `scripts/repos-audit.sh`'s engine-manifest sweep: for every repo with
+  # `receives: coordination-kit`, read that repo's ACTUAL `.config/dotnet-tools.json` and require it to
+  # declare `fs.gg.coord.cli`. That is `f(roster, receiver tree)` — strictly stronger than what stood
+  # here, because it grades the property #1077 wanted rather than the arrangement that used to imply
+  # it. It reds daily and it names the hole ("FS.GG.Templates receives the kit and declares no
+  # engine"), which the construction argument could never do.
+  #
+  # WHY NOT BOTH. A weaker duplicate of a rule that is checked properly elsewhere is exactly ADR-0058's
+  # restate-don't-derive defect, and it would red on the correct roster from tomorrow onward.
 
   # --- THE #1696 INVARIANT: skill-view and the two libraries it SOURCES ride the kit TOGETHER ---
   # Exactly #1077's shape, one tool over, and it is not hypothetical: `scripts/skill-view` does

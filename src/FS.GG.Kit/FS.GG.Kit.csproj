@@ -222,9 +222,18 @@
          NOT DONE HERE: `scripts/lint-shell.sh` runs at `-S warning`, and SC1091 is an `info`, so
          this repo's own shell gate is structurally blind to the defect it shipped. That is
          .github#1719 and is deliberately left alone — no severity floor moves in this release. -->
-    <Version>0.17.0</Version>
+    <!-- 0.17.0 -> 0.18.0, a MINOR: the materialize contract loses a member (#1615, ADR-0068).
+         `dist/dotnet/.config/dotnet-tools.json` is no longer a `kit:` row, so this package stops
+         delivering `.config/dotnet-tools.json` into receivers — 9 kit members become 8. That is a
+         REMOVAL from the delivered set, which is why it is not a patch.
+         NOT BREAKING, and the distinction is measured rather than assumed: the file is TRACKED in all
+         seven receivers, so none loses its engine when it takes this version — the kit simply stops
+         overwriting a file the receiver now owns, and Renovate bumps `fs.gg.coord.cli` in it directly.
+         #1077's "receives the tool => can run the tool" is asserted by `repos-audit`'s engine-manifest
+         sweep from this release onward, not by kit membership. -->
+    <Version>0.18.0</Version>
 
-    <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
+    <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
     <Company>FS-GG</Company>
     <PackageTags>fsgg;coordination;kit;skills;dotnet</PackageTags>

@@ -255,7 +255,15 @@ OFFER_FILE="$(mktemp)"
 # read AT a candidate bump branch's head. Same staging-then-grade split as the kit-pin sweep, for the
 # same reason: the verdict program parses XML and JSON, and bash must not.
 OFFER_DIR="$(mktemp -d)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR"' EXIT
+# The engine-manifest sweep's ledger (#1615), same line-oriented shape: `finding`, `refusal`,
+# `undetermined`, `ok`. This one FETCHES its own subject rather than riding the kit-pin staging: it
+# grades `.config/dotnet-tools.json`, which no other sweep reads, and its receiver set is WIDER than
+# the kit-pin sweep's (every coordination-kit receiver, not only the package-delivery ones), so
+# riding that staging would silently narrow it. See THE ENGINE-MANIFEST SWEEP.
+ENGMAN_FILE="$(mktemp)"
+# Where it stages each receiver's tool manifest, so the verdict program parses JSON and bash does not.
+ENGMAN_DIR="$(mktemp -d)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -1946,6 +1954,122 @@ print("\n".join(out))
 PY
 )
 
+# --- THE ENGINE-MANIFEST SWEEP (#1615) -----------------------------------------------------------
+#
+# WHAT IT ASSERTS. Every repo with `receives: coordination-kit` has a `.config/dotnet-tools.json`
+# that declares `fs.gg.coord.cli` with a usable version. In one sentence: *a repo that receives the
+# `fsgg-coord` shim can actually run the engine the shim execs.*
+#
+# WHY IT EXISTS. This IS #1077's invariant. Until 2026-07-28 it was obtained by ARRANGEMENT: the
+# shim and the engine manifest were both `kit:` rows, so their receiver sets were equal by
+# construction and `repos.sh validate` refused to let them separate. #1615 (ADR-0068) took the
+# manifest off the kit — an engine version bump was editing hashed kit content, which staled
+# `registry/repos.lock`, reddened `kit-published-coherence`, and obliged a full republish plus a
+# seven-receiver fan-out to move one integer in one JSON file (four of the nine republishes measured
+# on 2026-07-27/28 went through that row alone). Renovate's nuget manager bumps the receivers
+# directly now: `/(^|/)dotnet-tools\.json$/` is one of its four SHIPPED `managerFilePatterns`.
+#
+# WHY THE REPLACEMENT IS STRICTLY STRONGER, and this is the point of it rather than a consolation.
+# The old rule was `f(this roster)`. It could only ever say which FABRIC two rows rode, and inferred
+# the receiver property from that arrangement — so it was blind in exactly the direction that
+# matters: a receiver that DELETED its own `.config/dotnet-tools.json` by hand stayed green forever,
+# because nothing ever read that repo's tree. This is `f(roster, receiver tree)`. It names the hole
+# ("FS.GG.Templates receives the kit and declares no engine") where the construction argument could
+# only ever prevent one origin of it and say nothing when it recurred by another route.
+#
+# THE SUBJECT IS EVERY RECEIVER, NOT EVERY *PACKAGE* RECEIVER — deliberately, and unlike the kit-pin
+# sweep beside it. That sweep narrows to `--kit-delivery package` because a byte-copy receiver
+# legitimately has no `PackageReference` to grade. There is no equivalent excuse here: a byte-copy
+# receiver gets the SAME `scripts/fsgg-coord` shim and needs the same engine to exec, so narrowing
+# would carve the #1077 defect's two original victims back out of the check written to replace it.
+#
+# WHAT IT DOES NOT ASSERT, said out loud so the terminal line is not misread (#266). It does not
+# grade the engine VERSION — whether a receiver's `fs.gg.coord.cli` is the newest published one is
+# the kit-pin sweep's shape, one package over, and is deliberately not this sweep's question.
+# #1077's invariant was never "runs the newest engine"; it was "can run the engine at all", and
+# widening it here would red the whole fleet on the day the engine ships a version, which is the
+# opposite of what #1615 bought.
+MANIFEST_PY=$(cat <<'PY'
+import json, os, sys
+
+STAGE, MANIFEST = sys.argv[1], sys.argv[2]
+TOOL = "fs.gg.coord.cli"
+PATH = ".config/dotnet-tools.json"
+
+out = []
+def emit(kind, repo, msg):
+    out.append("%s\t%s\t%s" % (kind, repo, msg))
+
+with open(MANIFEST, encoding="utf-8") as fh:
+    rows = [ln.rstrip("\n").split("\t") for ln in fh if ln.strip()]
+
+for row in rows:
+    repo, rel = row[0], row[1]
+
+    # `-` is the staging loop's word for "the read succeeded and the file is NOT THERE". That is an
+    # ANSWER, and it is this sweep's headline finding: the repo receives the shim and holds no tool
+    # manifest at all, which is precisely the state #1077 found FS.GG.Templates and FS.GG.Audio in.
+    if rel == "-":
+        emit("finding", repo,
+             f"receives the coordination kit — so it holds the `scripts/fsgg-coord` shim — and has NO "
+             f"`{PATH}` at all, so `dotnet tool restore` installs no engine and every `fsgg-coord` "
+             f"invocation in that repo dies at resolution. This is #1077's ORIGINAL defect, which used "
+             f"to be prevented by construction (the manifest was a kit row) and is now asserted here "
+             f"instead (#1615, ADR-0068). REMEDY: add `{PATH}` declaring `{TOOL}`; copy "
+             f"`dist/dotnet/.config/dotnet-tools.json` from FS-GG/.github as the starting shape.")
+        continue
+
+    with open(os.path.join(STAGE, rel), encoding="utf-8") as fh:
+        raw = fh.read()
+
+    # A manifest that will not parse is a REFUSAL, never a finding and never a pass. `dotnet tool
+    # restore` would fail on it too, so the repo is certainly broken — but this sweep cannot say
+    # whether the tool is DECLARED, and "I could not evaluate this" must not borrow either verdict's
+    # words (#266). A re-run reproduces it, so it is a permanent no-verdict, not an undetermined.
+    try:
+        doc = json.loads(raw)
+    except Exception as exc:
+        emit("refusal", repo,
+             f"`{PATH}` is not valid JSON ({exc}), so this sweep cannot tell whether `{TOOL}` is "
+             f"declared in it. Nothing is asserted about this repo's engine. (`dotnet tool restore` "
+             f"would also fail on this file, so it is very likely broken — but that is a different "
+             f"claim from the one this sweep makes, and it is not this sweep's to make.)")
+        continue
+
+    if not isinstance(doc, dict) or not isinstance(doc.get("tools"), dict):
+        emit("refusal", repo,
+             f"`{PATH}` parses as JSON but has no object at `.tools`, so it is not a tool manifest "
+             f"this sweep knows how to read. Nothing is asserted about this repo's engine.")
+        continue
+
+    entry = doc["tools"].get(TOOL)
+    if entry is None:
+        # THE OTHER HEADLINE FINDING, and the one the fabric rule could NEVER have caught: the file
+        # exists, `dotnet tool restore` succeeds, and the engine simply is not in it.
+        declared = ", ".join(sorted(doc["tools"])) or "nothing at all"
+        emit("finding", repo,
+             f"receives the coordination kit — so it holds the `scripts/fsgg-coord` shim — and its "
+             f"`{PATH}` does NOT declare `{TOOL}`. It declares: {declared}. `dotnet tool restore` "
+             f"succeeds and still installs no engine, so the shim dies at resolution: a tool the repo "
+             f"receives and cannot run (#1077). NOTE this is the case the OLD fabric rule was blind "
+             f"to — it constrained which fabric two rows rode in FS-GG/.github and never read this "
+             f"file. REMEDY: add a `{TOOL}` entry with a version and the `fsgg-coord-engine` command.")
+        continue
+
+    version = entry.get("version") if isinstance(entry, dict) else None
+    if not isinstance(version, str) or not version.strip():
+        emit("refusal", repo,
+             f"`{PATH}` declares `{TOOL}` with no usable `version` string, so this sweep cannot say "
+             f"the repo can restore an engine and will not pretend the declaration alone is enough. "
+             f"Nothing is asserted about this repo's engine.")
+        continue
+
+    emit("ok", repo, f"declares {TOOL} {version} in {PATH} — it can restore the engine its shim execs.")
+
+print("\n".join(out))
+PY
+)
+
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
@@ -2786,6 +2910,76 @@ else
   fi
 fi
 
+# --- the engine-manifest sweep (#1615) -----------------------------------------------------------
+#
+# #1077's invariant, asserted against the receivers' actual trees instead of arranged for by two kit
+# rows sharing a fabric. See THE ENGINE-MANIFEST SWEEP for the full argument.
+#
+# ITS SUBJECT IS `$kit_all_receivers`, NOT `$kit_roster`. The kit-pin sweep above narrows to
+# `--kit-delivery package`; this one must not, because a byte-copy receiver gets the same shim and
+# needs the same engine. Using the wrong variable here would carve #1077's two original victims back
+# out of the check written to replace it, and the run would still say OK.
+engman_findings=0; engman_refusals=0; engman_undet=0; engman_ok=0; engman_receivers=0; engman_read=0
+engman_graded=0
+: > "$ENGMAN_DIR/manifest.tsv"
+if [ "$kit_cap_declared" -eq 1 ]; then
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    engman_receivers=$((engman_receivers + 1))
+    slug="${repo//\//__}"
+    mkdir -p "$ENGMAN_DIR/$slug"
+    frc=0; body="$(get_repo_file "$repo" ".config/dotnet-tools.json")" || frc=$?
+    if [ "$frc" -eq "$RC_UNREACHABLE" ]; then
+      # A read that FAILED is not a repo without a manifest. Conflating the two would report the
+      # org's most alarming finding — "this receiver cannot run its own shim" — every time GitHub
+      # rate-limited us, and would teach the operator to ignore it (#266).
+      printf 'undetermined\t%s\treading .config/dotnet-tools.json failed — %s\n' "$repo" "$(gh_last_err)" >> "$ENGMAN_FILE"
+      continue
+    fi
+    engman_read=$((engman_read + 1))
+    if [ "$frc" -ne 0 ]; then
+      # 404 — the read SUCCEEDED and the file is not there. An answer, and this sweep's headline.
+      printf '%s\t-\n' "$repo" >> "$ENGMAN_DIR/manifest.tsv"
+      continue
+    fi
+    printf '%s' "$body" > "$ENGMAN_DIR/$slug/tools.json"
+    printf '%s\t%s\n' "$repo" "$slug/tools.json" >> "$ENGMAN_DIR/manifest.tsv"
+  done <<< "$kit_all_receivers"
+fi
+
+if [ "$kit_cap_declared" -eq 0 ]; then
+  echo "repos-audit: engine-manifest (#1615) — this roster declares no '$KIT_CAP' capability, so this sweep has no subject and graded nothing. NOTHING was asserted about whether any repo can run the fsgg-coord shim it receives."
+elif [ "$engman_receivers" -eq 0 ]; then
+  echo "repos-audit: engine-manifest (#1615) — the roster declares '$KIT_CAP' and lists NO receiver for it, so this sweep graded nothing. NOTHING was asserted; that is not a clean bill."
+else
+  python3 -c "$MANIFEST_PY" "$ENGMAN_DIR" "$ENGMAN_DIR/manifest.tsv" >> "$ENGMAN_FILE" \
+    || die "the engine-manifest verdict program failed to run. That is not a clean sweep — no receiver's engine declaration was graded."
+
+  engman_count() { grep -cE "^$1"$'\t' "$ENGMAN_FILE" 2>/dev/null || true; }
+  engman_findings="$(engman_count finding)"
+  engman_refusals="$(engman_count refusal)"
+  engman_undet="$(engman_count undetermined)"
+  engman_ok="$(engman_count ok)"
+
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      finding)      echo "::error::repos-audit: engine-manifest — $a $b" ;;
+      refusal)      echo "::error::repos-audit: engine-manifest REFUSED a manifest it cannot grade — $a: $b" ;;
+      undetermined) echo "::error::repos-audit: engine-manifest — $a: $b" ;;
+      ok)           echo "  ok: $a $b" ;;
+    esac
+  done < "$ENGMAN_FILE"
+
+  # GRADED counts the receivers this sweep reached a verdict about. An unread receiver is NOT in it,
+  # so the denominator and the numerator cannot silently converge on a run that read nothing.
+  engman_graded=$(( engman_ok + engman_findings + engman_refusals ))
+  if [ "$engman_graded" -eq 0 ]; then
+    echo "repos-audit: engine-manifest (#1615) — none of the $engman_receivers $KIT_CAP receiver(s) could be read, so NOTHING was asserted about whether any of them can run the fsgg-coord shim it receives. That is not a clean bill."
+  else
+    echo "repos-audit: engine-manifest (#1615) — graded $engman_graded of $engman_receivers $KIT_CAP receiver(s): $engman_ok declare fs.gg.coord.cli, $engman_findings do NOT, $engman_refusals refusal(s), $engman_undet undetermined. This is f(roster, receiver tree) and it replaces the repos.sh validate co-fabric rule #1077 used to carry (ADR-0068) — that rule read only THIS repo's roster, so a receiver that deleted its own manifest stayed green. It does NOT grade the engine VERSION; that is the kit-pin sweep's shape, one package over."
+  fi
+fi
+
 # DELIBERATELY NOT folded into `$undetermined`. That counter's diagnostic says "could not determine
 # WIRING for N repo(s)", and an unreadable Directory.Packages.props is not a wiring question — the
 # per-capability lines a few rows up would be saying "0 undetermined" while the exit-2 message
@@ -2846,7 +3040,7 @@ fi
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
-   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ]; then
+   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
@@ -2872,6 +3066,10 @@ if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdic
   # distinction that matters to a caller, and the one this sentence has to keep. Each step's own
   # reason is annotated above; this line must not overwrite it with a guess.
   [ "$sparse_noverdict" -eq 0 ] || echo "::error::repos-audit: could not read the git tree behind $sparse_noverdict cross-repo sparse-checkout step(s), so rule (4) — do the named directories exist? — did not run for them. Nothing was proven about those steps; this is a failure to READ (the API's tree, or this audit's own checkout — each step's reason is named above), not an under-fetching checkout." >&2
+  # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
+  # tool manifest is not a wiring question, and it must not be reported as a repo that CANNOT RUN its
+  # shim — that is this sweep's loudest finding and the one an operator must be able to trust (#266).
+  [ "$engman_undet" -eq 0 ] || echo "::error::repos-audit: could not read the .config/dotnet-tools.json of $engman_undet coordination-kit receiver(s), so nothing was proven about whether they can run the fsgg-coord shim they receive. This is a failure to READ, not a missing engine declaration — do NOT read it as one." >&2
   exit 2
 fi
 
@@ -2909,6 +3107,17 @@ if [ "$viewgen_refusals" -ne 0 ]; then
   exit 3
 fi
 
+# A receiver whose tool manifest this sweep cannot READ AS A MANIFEST joins the permanent
+# no-verdicts on the same argument once more: the fetch succeeded, the bytes are in hand, and the
+# question "is the engine declared?" still has no answer — so it is neither "can run it" (#266) nor
+# "cannot run it" (#320), and a re-run reproduces it exactly. Note this is NOT the same claim as
+# "the manifest is broken": a file that will not parse certainly breaks `dotnet tool restore`, but
+# saying so is a different assertion from the one this sweep makes, and it is not this sweep's to make.
+if [ "$engman_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $engman_refusals coordination-kit receiver(s) have a .config/dotnet-tools.json this sweep REFUSES to grade — it does not parse as JSON, carries no .tools object, or declares fs.gg.coord.cli with no usable version. Nothing was asserted about whether they can run the fsgg-coord shim they receive. Not transient: a re-run reproduces it. The annotations above name each one." >&2
+  exit 3
+fi
+
 # A gap and an unrostered adopter are one exit code because they are one CLASS: the audit ran to
 # completion and found the roster and the real wiring disagreeing. Both are deterministic, neither is
 # transient, and both are fixed by a commit — they differ only in WHICH side is wrong, and the
@@ -2943,14 +3152,21 @@ fi
 # "nobody has proposed fixing it" — and the second must not be able to vanish silently if the first
 # is ever restructured. An alarm whose firing depends on a neighbouring alarm's implementation is the
 # leg that survives its own mutation, which is the defect this whole area keeps rediscovering.
+#
+# A coordination-kit receiver that cannot run the shim it receives joins them a SIXTH subject across,
+# and it is the whole of #1615's AC2: the audit ran to completion and found a repo holding
+# `scripts/fsgg-coord` with no engine for it to exec. Deterministic, not transient, fixed by a commit
+# in that receiver. It is a FINDING and not a no-verdict because the sweep DID reach an answer, from
+# here, by reading that repo's tree — which is exactly the capability the rule it replaces never had.
 offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
-   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ]; then
+   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
+  [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   exit 1
 fi
@@ -2979,4 +3195,12 @@ if [ "$offer_subjects" -gt 0 ]; then
   echo "repos-audit: OK — all $offer_subjects behind receiver(s) have a CURRENT kit bump open; the proposal step is working and what remains is a review in each repo."
 else
   echo "repos-audit: OK — no receiver was behind, so none needed a bump proposed. Nothing is claimed about Renovate's scheduling, which this audit cannot observe."
+fi
+# Its own line, on the argument every terminal line in this block is made on: a sweep that graded
+# nobody has not earned a clean bill, and the claim must name what it covers. "Can run the engine" is
+# NOT "runs the newest engine" — this line deliberately does not say the second thing (#1615/#266).
+if [ "$engman_graded" -gt 0 ]; then
+  echo "repos-audit: OK — all $engman_graded graded $KIT_CAP receiver(s) declare fs.gg.coord.cli, so every repo that receives the fsgg-coord shim can restore the engine it execs (#1077's invariant, asserted per ADR-0068). Nothing is claimed about which engine VERSION they pin."
+else
+  echo "repos-audit: OK — NO receiver's engine manifest was graded, so nothing is claimed about whether any repo can run the fsgg-coord shim it receives."
 fi

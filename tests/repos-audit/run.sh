@@ -195,6 +195,48 @@ XML
 # no_receiver_proj <repo> — the repo ships no receiver project at all.
 no_receiver_proj() { local slug="${1//\//__}"; rm -f "$FIX/$slug/receiver.proj"; }
 
+# --- the engine-manifest sweep's world (#1615) ---------------------------------------------------
+#
+# tool_manifest <repo> <shape> — write a `.config/dotnet-tools.json` in one of the shapes the sweep
+# grades. `absent` is not a shape written here; it is `<slug>.notools`, because a 404 has to come
+# from the STUB rather than from an empty file — an empty file is a parse failure, which is a
+# different verdict, and a fixture that conflated them would let the headline finding pass as one.
+#
+#   declared    — declares fs.gg.coord.cli with a version. THE GREEN, and the real fleet's shape:
+#                 all seven receivers measured 2026-07-28 declare it at 0.14.0.
+#   missing     — a VALID manifest that simply does not declare the engine. THE FINDING the old
+#                 fabric rule could never see: `dotnet tool restore` succeeds and installs no engine.
+#   noversion   — declares the engine with an empty version. REFUSED: a declaration that cannot
+#                 restore is not a pass, and this sweep will not pretend the name alone is enough.
+#   notjson     — will not parse. REFUSED.
+#   nottools    — parses, but carries no `.tools` object. REFUSED.
+tool_manifest() { local slug="${1//\//__}" shape="$2"
+  mkdir -p "$FIX/$slug"; rm -f "$FIX/$slug.notools"
+  case "$shape" in
+    declared)  cat > "$FIX/$slug/dotnet-tools.json" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]}}}
+JSON
+               ;;
+    missing)   cat > "$FIX/$slug/dotnet-tools.json" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fake-cli":{"version":"6.1.4","commands":["fake"]}}}
+JSON
+               ;;
+    noversion) cat > "$FIX/$slug/dotnet-tools.json" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"commands":["fsgg-coord-engine"]}}}
+JSON
+               ;;
+    notjson)   printf 'this is not json\n' > "$FIX/$slug/dotnet-tools.json" ;;
+    nottools)  printf '{"version":1,"isRoot":true}\n' > "$FIX/$slug/dotnet-tools.json" ;;
+    absent)    rm -f "$FIX/$slug/dotnet-tools.json"; : > "$FIX/$slug.notools" ;;
+    *) echo "tool_manifest: unknown shape '$shape'" >&2; return 1 ;;
+  esac
+}
+# The manifest every repo is served unless a leg says otherwise, so the legs that predate this sweep
+# stay green. See the `toolman` arm of the gh stub.
+cat > "$FIX/_default.tools" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]}}}
+JSON
+
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
@@ -275,6 +317,12 @@ case "$path" in
                                   kind=pinlocal; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   */contents/Directory.Packages.props)
                                   kind=pinroot; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
+  # The engine-manifest sweep's one read (#1615). It MUST be matched before the `*)` fallback: that
+  # arm echoes the repo NAME as the body, which would reach the verdict program as unparseable JSON
+  # and report every receiver in the org as a REFUSAL — a fixture-shaped failure that looks exactly
+  # like a real one.
+  */contents/.config/dotnet-tools.json)
+                                  kind=toolman; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   # The git TREE endpoint (#1556) — how rule (4) reaches a repository whose checkout the audit does
   # not hold. The real path carries a query string (`?recursive=1`), which is part of the request the
   # audit makes and is therefore matched here rather than stripped: a call that forgot `recursive=1`
@@ -320,6 +368,9 @@ fi
 # Only the TREE read fails: the repo still lists and its workflows still read, so the audit gets all
 # the way to grading a real cross-repo checkout and THEN loses the index it needs (#1556 criterion 2).
 [ "$kind" = tree ] && [ -f "$FIX/$slug.failtree" ] && apifail 403
+# Only the tool-manifest read fails: lets a fixture prove that an unreadable manifest is an
+# UNDETERMINED run and never the fabricated finding "this receiver cannot run its own shim" (#1615).
+[ "$kind" = toolman ] && [ -f "$FIX/$slug.failtools" ] && apifail 403
 
 case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
@@ -340,6 +391,14 @@ case "$kind" in
             else cat "$FIX/_default.pin"; fi ;;
   pinroot)  [ -f "$FIX/$slug/Directory.Packages.props" ] || notfound
             cat "$FIX/$slug/Directory.Packages.props" ;;
+  # A repo with no explicit tool-manifest fixture is served the DEFAULT declaring `fs.gg.coord.cli`,
+  # for the same reason the default pin and the default tree exist: the ~200 legs that predate #1615
+  # care nothing about the engine manifest and must not each have to declare one. `<slug>.notools`
+  # suppresses the fallback and 404s — that is how a leg models the receiver #1077 actually found,
+  # holding the shim with no manifest at all.
+  toolman)  if [ -f "$FIX/$slug/dotnet-tools.json" ]; then cat "$FIX/$slug/dotnet-tools.json"
+            elif [ -f "$FIX/$slug.notools" ]; then notfound
+            else cat "$FIX/_default.tools"; fi ;;
   # A repo with no explicit tree fixture serves the DEFAULT one, for the same reason the default pin
   # exists: the ~130 legs that predate #1556 must not each have to declare a tree. `<slug>.gonetree`
   # suppresses it — that is how a leg models a repository whose tree the API says is not there.
@@ -383,7 +442,10 @@ chmod +x "$STUB/gh"
 # The TREE shaping is cleared here too (#1556), for exactly the reason the pin shaping is: a leg that
 # made a repository's git tree unreadable must not leave it unreadable for the next leg, which would
 # turn one deliberate no-verdict into a run-wide exit 2 and mask whatever that leg was really about.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
+# The TOOL-MANIFEST shaping is cleared here too (#1615), for exactly the reason the pin shaping is:
+# a leg that gave a receiver no engine declaration must not leave it that way for the next leg, which
+# would turn one deliberate finding into a run-wide exit 1 and mask whatever that leg was about.
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props" "$FIX/$slug.notools" "$FIX/$slug.failtools" "$FIX/$slug/dotnet-tools.json"; }
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -2901,6 +2963,217 @@ unset GH_CALL_LOG
 
 unpin FS-GG/FS.GG.Rendering
 offer_clear FS-GG/FS.GG.Rendering
+
+# --- the engine-manifest sweep (#1615) -----------------------------------------------------------
+#
+# WHAT THESE LEGS ARE FOR. #1615 moved the engine tool manifest OFF the `kit:` block, which deleted
+# `repos.sh validate`'s #1077 co-fabric rule. AC2 forbids deleting that rule without replacing it,
+# so this sweep IS the replacement and these legs are what make the replacement worth having. The
+# rule it replaces was `f(this repo's roster)`; this is `f(roster, receiver tree)`, and leg (2) is
+# the case the old rule was structurally blind to.
+#
+# THE MUTATION PROOF IS LEG (M), and it is not decoration. Eight checks that could not fail were
+# found in this codebase on 2026-07-28 — one of them inside the PR written against that very class.
+# Legs (1)-(5) would ALL still pass against a sweep that graded nothing and printed a clean bill,
+# provided the exit codes happened to line up; (M) is the one that reads the sweep's own subject
+# count and proves the finding came from the receiver's tree rather than from a constant.
+
+# A run against a roster other than the fixture's default. Same shape every alternate-roster leg in
+# this file uses: the flag cannot simply be appended to `run`, which already supplies `--registry`.
+run_reg() { local reg="$1"; shift
+  PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
+    bash "$AUDIT" --registry "$reg" --repos-sh "$REPOS_SH" "$@"; }
+
+# (0) NOTHING TO ASSERT IS NOT A CLEAN BILL. A roster whose coordination-kit capability is spelled
+#     something else entirely has no subject for this sweep, and must say so rather than printing the
+#     sentence a real sweep earns.
+NOKITREG="$WORK/engman-nokitcap.yml"
+cat > "$NOKITREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coord-kit] }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coord-kit] }
+capabilities:
+  - { id: coord-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run_reg "$NOKITREG" 2>&1)" && rc=0 || rc=$?
+{ printf '%s' "$out" | grep -q 'engine-manifest (#1615) — this roster declares no' \
+    && printf '%s' "$out" | grep -q 'NOTHING was asserted about whether any repo can run the fsgg-coord shim' \
+    && ! printf '%s' "$out" | grep -q 'can restore the engine it execs'; } \
+  && ok "engine-manifest: a roster with no coordination-kit capability asserts NOTHING, never a pass" \
+  || bad "a sweep with no subject must claim nothing (#266)" "rc=$rc: $out"
+
+# (1) THE GREEN, and it is the real fleet's shape — all seven receivers declare fs.gg.coord.cli
+#     0.14.0, measured 2026-07-28. If this leg fails, legs (2)-(5) prove nothing.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering declared
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q '2 declare fs.gg.coord.cli' \
+    && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
+  && ok "engine-manifest: a receiver declaring the engine its shim execs is GREEN" \
+  || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
+
+# (2) THE LEG THAT CAN FAIL, AND THE ONE THE OLD RULE COULD NOT — #1615 AC2. A receiver with a
+#     PERFECTLY VALID manifest that simply does not declare the engine. `dotnet tool restore`
+#     succeeds, the file is right there, and the shim still dies at resolution. The co-fabric rule
+#     this replaces read only THIS repo's roster and would have been green on this org forever.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering missing
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'engine-manifest — FS-GG/FS.GG.Rendering receives the coordination kit' \
+    && printf '%s' "$out" | grep -q 'does NOT declare `fs.gg.coord.cli`' \
+    && printf '%s' "$out" | grep -q '1 coordination-kit receiver(s) hold the fsgg-coord shim and declare NO'; } \
+  && ok "engine-manifest: a valid manifest WITHOUT the engine is a FINDING (#1615 AC2, #1077)" \
+  || bad "the case the fabric rule was blind to must red here" "rc=$rc: $out"
+
+# (3) NO MANIFEST AT ALL — #1077's original defect, verbatim. This is the state FS.GG.Templates and
+#     FS.GG.Audio were actually in before #1077: holding the shim, holding no engine manifest.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering absent
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'has NO `.config/dotnet-tools.json` at all' \
+    && printf '%s' "$out" | grep -q "#1077's ORIGINAL defect"; } \
+  && ok "engine-manifest: a receiver with NO tool manifest is a FINDING naming #1077's defect" \
+  || bad "the original defect must be reported, not skipped as 'no subject'" "rc=$rc: $out"
+
+# (4) …and neither is a WIRING gap. Same separation every sweep in this file draws: the receiver
+#     wires its capability perfectly and still cannot run its tool. A red that named wiring would
+#     send an operator to a workflow that is correct (#327/#335).
+{ printf '%s' "$out" | grep -q '2 wired, 0 gap(s)' \
+    && ! printf '%s' "$out" | grep -q 'declared receiver(s) have not wired'; } \
+  && ok "engine-manifest: a missing engine declaration is not reported as a wiring gap" \
+  || bad "the finding must name its own subject" "$out"
+
+# (5) A DECLARATION THAT CANNOT RESTORE IS REFUSED, NOT PASSED. The engine is named and has no
+#     version, so `dotnet tool restore` cannot install it — but "declared" is not the question this
+#     sweep answers, and it will not let the NAME alone stand in for the capability. "I could not
+#     grade this" shares a code with neither "it is fine" (#266) nor "it is broken" (#320).
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering noversion
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] \
+    && printf '%s' "$out" | grep -q 'REFUSED a manifest it cannot grade' \
+    && printf '%s' "$out" | grep -q 'no usable `version` string' \
+    && ! printf '%s' "$out" | grep -q 'does NOT declare'; } \
+  && ok "engine-manifest: a versionless declaration is a PERMANENT no-verdict, never a pass" \
+  || bad "a declaration that cannot restore must refuse, not pass" "rc=$rc: $out"
+
+# (6) AN UNPARSEABLE MANIFEST IS REFUSED — and the annotation deliberately does NOT claim the repo
+#     is broken. It very likely is (restore would fail too), but that is a different assertion from
+#     the one this sweep makes, and a sweep that overstates its reach is the thing #266 is about.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering notjson
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'is not valid JSON'; } \
+  && ok "engine-manifest: an unparseable manifest REFUSES rather than reporting a missing engine" \
+  || bad "unparseable must not be reported as undeclared" "rc=$rc: $out"
+
+# (7) AN UNREADABLE MANIFEST IS RETRYABLE, and it must NOT become this sweep's headline finding.
+#     This is the leg that keeps the alarm trustworthy: if a rate limit rendered as "this receiver
+#     cannot run its own shim", the operator would learn to ignore the one line that matters most.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering declared
+: > "$FIX/FS-GG__FS.GG.Rendering.failtools"
+out="$(run 2>&1)" && rc=0 || rc=$?
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failtools"
+{ [ "$rc" -eq 2 ] \
+    && printf '%s' "$out" | grep -q 'could not read the .config/dotnet-tools.json of 1' \
+    && printf '%s' "$out" | grep -q 'This is a failure to READ, not a missing engine declaration' \
+    && ! printf '%s' "$out" | grep -q 'hold the fsgg-coord shim and declare NO'; } \
+  && ok "engine-manifest: an unreadable manifest is UNDETERMINED (exit 2), never the finding" \
+  || bad "a failed read must not be reported as a receiver that cannot run its shim" "rc=$rc: $out"
+
+# (M) THE MUTATION PROOF — #1615's "a leg that can fail", discharged by measurement rather than by
+#     assertion. Legs (1)-(7) pin verdicts; this one proves the verdict is a FUNCTION OF THE
+#     RECEIVER'S TREE and not of anything constant.
+#
+#     Three mutations, each of which MUST change the answer:
+#       (a) the subject count tracks the ROSTER — a third receiver makes it 3, so the sweep is
+#           iterating the roster and not a hardcoded pair;
+#       (b) the sweep READ each repo — the gh call log carries one `toolman` read per receiver;
+#       (c) flipping ONE receiver's manifest flips the verdict and NOTHING else, so the finding is
+#           attributable to that repo's bytes.
+#
+#     (a) and (b) together are what a check that "could not fail" cannot survive: a sweep that
+#     returned a constant would keep its count at 2 and make zero reads.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering; wire FS-GG/FS.GG.Governance
+tool_manifest FS-GG/FS.GG.SDD declared
+tool_manifest FS-GG/FS.GG.Rendering declared
+tool_manifest FS-GG/FS.GG.Governance declared
+THREEREG="$WORK/engman-three.yml"
+cat > "$THREEREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,    full: FS-GG/.github,          role: authority, receives: [labels] }
+  - { id: sdd,        full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: rendering,  full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: governance, full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+ENGLOG="$WORK/calls-engman.log"; : > "$ENGLOG"
+out3="$(GH_CALL_LOG="$ENGLOG" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
+          bash "$AUDIT" --registry "$THREEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc3=0 || rc3=$?
+toolman_reads="$(grep -cE '^toolman'$'\t' "$ENGLOG" || true)"
+# (c) — one receiver's bytes change, and ONLY that receiver's verdict moves.
+tool_manifest FS-GG/FS.GG.Governance missing
+out3m="$(run_reg "$THREEREG" 2>&1)" && rc3m=0 || rc3m=$?
+{ [ "$rc3" -eq 0 ] && printf '%s' "$out3" | grep -q 'graded 3 of 3 coordination-kit receiver(s)' \
+    && [ "$toolman_reads" -eq 3 ] \
+    && [ "$rc3m" -eq 1 ] \
+    && printf '%s' "$out3m" | grep -q 'engine-manifest — FS-GG/FS.GG.Governance receives' \
+    && printf '%s' "$out3m" | grep -q '2 declare fs.gg.coord.cli, 1 do NOT' \
+    && ! printf '%s' "$out3m" | grep -q 'FS-GG/FS.GG.SDD receives the coordination kit' \
+    && ! printf '%s' "$out3m" | grep -q 'FS-GG/FS.GG.Rendering receives the coordination kit'; } \
+  && ok "engine-manifest: MUTATION-PROVEN — subject count tracks the roster (3), the sweep made 3 tree reads, and flipping ONE receiver's manifest flips ONLY that receiver's verdict" \
+  || bad "the sweep must be f(roster, receiver tree) — a constant would survive every other leg" \
+         "rc3=$rc3 reads=$toolman_reads rc3m=$rc3m
+--- baseline ---
+$out3
+--- mutated ---
+$out3m"
+
+# (M2) THE SUBJECT IS EVERY RECEIVER, NOT EVERY *PACKAGE* RECEIVER. The kit-pin sweep beside this one
+#      narrows to `--kit-delivery package`; using that variable here would carve byte-copy receivers
+#      out of the check — and byte-copy receivers get the SAME shim and need the SAME engine, so they
+#      are exactly #1077's two original victims. This leg fails if anyone "tidies" the sweep onto
+#      `$kit_roster`, which is the most plausible future edit and is silently wrong.
+ENGBCREG="$WORK/engman-bytecopy.yml"
+cat > "$ENGBCREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared
+tool_manifest FS-GG/FS.GG.Rendering missing      # the BYTE-COPY receiver is the broken one
+out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'graded 2 of 2 coordination-kit receiver(s)' \
+    && printf '%s' "$out" | grep -q 'engine-manifest — FS-GG/FS.GG.Rendering receives'; } \
+  && ok "engine-manifest: a BYTE-COPY receiver is swept too — the sweep uses every coordination-kit receiver, not only the package ones (#1077's two victims)" \
+  || bad "narrowing to --kit-delivery package would carve out the repos this check exists for" "rc=$rc: $out"
+
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering declared
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }

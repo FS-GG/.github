@@ -25,7 +25,7 @@
 # `capabilities:` row declaring how it is DETECTED at a receiver — a word that is legal to receive and
 # impossible to check is a green nobody earned (#628):
 #   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [push:     authority-pushed]
-#   coordination-kit   — coordination skills, the fsgg-coord client + the engine manifest [workflow: coordination-coherence.yml]
+#   coordination-kit   — coordination skills + the fsgg-coord/skill-view clients [workflow: coordination-coherence.yml]
 #   build-config       — the org-shared .NET build config from FS.GG.Kit [materializer: build-config]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
@@ -153,10 +153,13 @@ repos:
 # that lets a repo restore `fs.gg.coord.cli` (the engine `scripts/fsgg-coord` execs) used to ride
 # build-config — so templates and audio, kept off build-config for the reasons above (all about how they
 # BUILD), held the `fsgg-coord` shim (a `coordination-kit` row → 6 receivers) with NO engine to exec.
-# That manifest is now a `coordination-kit` row too (see `kit:` below), so it reaches every kit receiver
-# regardless of build-config adoption, and `repos.sh validate` refuses to let the shim and the manifest
-# ride different fabrics again. The engine question was asked and answered HERE, not silently inherited
-# from the build decision above.
+# #1077 fixed that by making the manifest a `coordination-kit` row too, so it reached every kit receiver
+# regardless of build-config adoption. #1615 (ADR-0068, 2026-07-28) took the manifest OFF the kit again —
+# not back onto build-config, but out of the copying fabrics entirely: each receiver now owns its own
+# `.config/dotnet-tools.json` and Renovate bumps `fs.gg.coord.cli` in it directly. The engine question is
+# still asked and answered HERE and still not inherited from the build decision above; what changed is
+# that the answer is now CHECKED (the `repos-audit` engine-manifest sweep reds when a kit receiver's tree
+# declares no engine) rather than obtained as a side effect of two rows sharing a fabric.
 #
 # So the claim this roster makes is falsifiable and exactly as strong as reality: **a repo receives
 # build-config iff it explicitly enables package materialization AND enforces its generated result in
@@ -385,14 +388,35 @@ kit:
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board }
   - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord }
-  # The engine tool manifest (#1077). `scripts/fsgg-coord` execs `fs.gg.coord.cli` — the typed engine —
-  # and THIS `.config/dotnet-tools.json` is what lets a receiver `dotnet tool restore` it. It rode
-  # `build-config` (4 receivers) while the shim above rode this kit (6), so templates and audio held a
-  # shim they could not run. Carrying it here makes "receives the tool ⇒ can run the tool" STRUCTURAL,
-  # and `validate` asserts the shim row and this row never separate onto different fabrics again.
-  # A `kind: config` row names its own `dest`: the client's destination IS its source path, a config's
-  # is not (canonical under dist/dotnet/ so pin-coherence still finds it; delivered to .config/).
-  - { id: coord-engine-manifest,   kind: config, source: dist/dotnet/.config/dotnet-tools.json, dest: .config/dotnet-tools.json }
+  # THE ENGINE TOOL MANIFEST IS NO LONGER A KIT ROW (#1615, 2026-07-28, ADR-0068). Read that ADR
+  # before re-adding it — this is a decision, not an omission.
+  #
+  # It WAS one, from #1077 until today, and the reasoning was good: `scripts/fsgg-coord` execs
+  # `fs.gg.coord.cli`, and `.config/dotnet-tools.json` is what lets a receiver `dotnet tool restore`
+  # it. The manifest rode `build-config` (4 receivers) while the shim above rode this kit (6), so
+  # FS.GG.Templates and FS.GG.Audio held a shim with no engine to exec. Putting both on one fabric
+  # made *"receives the tool ⇒ can run the tool"* STRUCTURAL, and `repos.sh validate` refused to let
+  # the two rows separate again.
+  #
+  # WHAT IT COST, counted rather than argued. The pin is a HASHED kit source, so bumping
+  # `fs.gg.coord.cli` by one integer edited kit content, staled `registry/repos.lock`, reddened
+  # `kit-published-coherence` on `main`, and obliged a full FS.GG.Kit republish plus a seven-receiver
+  # fan-out. Of the nine kit republishes measured on 2026-07-27/28, FOUR went through this row alone
+  # (#1507, #1517, #1523, and kit 0.16.0) and not one of the nine carried a change to a skill. It also
+  # made Renovate PR #1340 structurally unmergeable for five days: Renovate cannot run `repos.sh
+  # relock`, so a +1/-1 bump to this file could never go green.
+  #
+  # THE INVARIANT IS NOT DROPPED — IT IS ASSERTED INSTEAD OF ARRANGED FOR. #1077's rule constrained
+  # THIS repo's roster: two rows must share a fabric. Its replacement constrains the RECEIVERS' actual
+  # trees: `scripts/repos-audit.sh`'s engine-manifest sweep reds daily unless every repo with
+  # `receives: coordination-kit` has a `.config/dotnet-tools.json` declaring `fs.gg.coord.cli`. That is
+  # strictly stronger — a receiver that deletes its manifest by hand was invisible to the fabric rule
+  # and is caught by the sweep. Delivery of the VERSION is now Renovate's nuget manager, which already
+  # reads `/(^|/)dotnet-tools\.json$/` as one of its four shipped `managerFilePatterns`.
+  #
+  # `dist/dotnet/.config/dotnet-tools.json` REMAINS in this repo as `.github`'s own canonical manifest
+  # and as `pin-coherence`'s subject. It is simply no longer copied into anybody else's tree.
+  #
   # ADR-0067 §9's REPLACEMENT, and the two library files without which it does not start (#1696).
   #
   # `scripts/skill-view` is the phase-2 generated view + §8's loud absence check (#1635). §9 forbids
@@ -406,8 +430,11 @@ kit:
   # tool that cannot run — #1077's shim-without-its-engine-manifest defect, one tool over. They ride
   # as `kind: config` because a config row names its own dest and a client's dest IS its source
   # basename: `kind: client` would land `scripts/lib/roots.sh` at `scripts/roots.sh`, where nothing
-  # sources it. `repos.sh validate` asserts the three never separate again, exactly as it does for the
-  # shim and its manifest.
+  # sources it. `repos.sh validate` asserts the three never separate again — and since #1615 took the
+  # engine manifest off this fabric (ADR-0068), this is the ONLY co-fabric rule `validate` still
+  # carries. It survives for a reason the manifest's did not: `skill-view` sources these two files at
+  # startup from ITS OWN delivered directory, so the coupling is internal to one kit payload and a
+  # receiver-side sweep could not observe it any earlier than the tool's first invocation.
   #
   # TWO COSTS, both real and both accepted. (1) These are the first kit rows under `scripts/lib/`, a
   # directory four receivers already keep their own files in — checked 2026-07-28, and no receiver

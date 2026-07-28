@@ -32,14 +32,29 @@
 # partition is now a `.github` commit and nothing more: no republish, no seven-receiver fan-out.
 # `tests/coord-engine-parity/shim.sh` §3f MEASURES that rather than asserting it.
 #
-# WHAT THIS DOES **NOT** FIX, SAID PLAINLY (.github#1586's filer correction, and criterion 5 with it).
-# The other three of the six — #1507, #1517, #1523 — were ENGINE changes, and they oblige a republish
-# through a different door: `dist/dotnet/.config/dotnet-tools.json` pins the engine's version and IS a
-# kit row (`id: coord-engine-manifest`, added by #1077 so that "receives the tool ⇒ can run the tool" is
-# structural, with `repos.sh validate` refusing to let the shim and the manifest ride different fabrics).
-# So an engine version bump still republishes the kit and still stales seven receivers. That half is a
-# question about kit OWNERSHIP — it overturns #1077 and edits `registry/repos.yml` — and it is filed
-# separately rather than smuggled in here. The fan-out is REDUCED by this change, not removed.
+# THE OTHER DOOR IS NOW SHUT TOO (.github#1615, 2026-07-28, ADR-0068).
+#
+# THIS PARAGRAPH USED TO SAY, and the wording is kept because it records what was true: *"WHAT THIS
+# DOES NOT FIX, SAID PLAINLY (#1586's filer correction, and criterion 5 with it). The other three of
+# the six — #1507, #1517, #1523 — were ENGINE changes, and they oblige a republish through a different
+# door: `dist/dotnet/.config/dotnet-tools.json` pins the engine's version and IS a kit row… The fan-out
+# is REDUCED by this change, not removed."*
+#
+# #1615 removed it. `coord-engine-manifest` is no longer a `kit:` row: the engine's version reaches
+# receivers through Renovate's nuget manager (`/(^|/)dotnet-tools\.json$/` is one of its four shipped
+# `managerFilePatterns`), so an engine bump edits no kit content, stales no `registry/repos.lock`, and
+# obliges no republish. With the partition split above, BOTH doors are shut and #1586's criterion 5 —
+# retired as unachievable between #1586 and #1615 — is meetable again.
+#
+# #1077's INVARIANT DID NOT GO WITH IT, and that was the substance of #1615 rather than a formality.
+# "Receives the tool ⇒ can run the tool" used to be true BY CONSTRUCTION (two rows, one fabric,
+# `repos.sh validate` refusing to separate them). It is now ASSERTED: `scripts/repos-audit.sh`'s
+# engine-manifest sweep reads every `coordination-kit` receiver's own `.config/dotnet-tools.json` daily
+# and reds unless it declares `fs.gg.coord.cli`. Strictly stronger — the old rule read only this repo's
+# roster, so a receiver that deleted its manifest by hand stayed green forever.
+#
+# `tests/coord-engine-parity/shim.sh` §3f legs (c) and (d) MEASURE both halves rather than asserting
+# them: (c) that the manifest has no kit row, (d) that the replacement sweep exists.
 #
 # AN ABSENT GUARD IS NOT A CLEAN BILL OF HEALTH. The obvious failure of a split like this is that the
 # loaded half goes missing and the guards silently stop existing — #266's signature, which this file
