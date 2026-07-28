@@ -36,6 +36,10 @@ on:
       - ".github/workflows/required-context-coherence-selftest.yml"
       # The fixture pins the REAL callee: renaming a job in it must break this fixture, here.
       - ".github/workflows/lock-range-coherence.yml"
+      # And the REAL kit-materialize.yml, for the same reason: the #1815 leg derives BOTH kit-bump
+      # contexts from this working tree's copy, so deleting or renaming either job must red here,
+      # in the pull request that did it — not in the nightly sweep, after a receiver is armed.
+      - ".github/workflows/kit-materialize.yml"
   push:
     branches: [main]
     paths:
@@ -43,6 +47,7 @@ on:
       - "tests/required-contexts/**"
       - ".github/workflows/required-context-coherence-selftest.yml"
       - ".github/workflows/lock-range-coherence.yml"
+      - ".github/workflows/kit-materialize.yml"
   workflow_dispatch:
 
 permissions:

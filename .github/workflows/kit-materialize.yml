@@ -93,12 +93,26 @@
 # never a pass. `tests/kit-bump-shape/run.sh` asserts this job resolves the rule from a step output and
 # not from a literal ref, and mutating that `ref:` back to `main` fires the leg.
 #
-# THE CONTEXT NAME IS A CONTRACT, AND THIS IS THE ONE PLACE IT IS DEFINED:
+# THE CONTEXT NAMES ARE A CONTRACT, AND THIS IS THE ONE PLACE THEY ARE DEFINED. THERE ARE TWO,
+# BECAUSE A CHECK RUN CARRIES ONE BOOLEAN AND THIS JOB REACHES FIVE VERDICTS (#1815):
 #
-#     materialize / kit-bump-shape
-#     ^^^^^^^^^^^   ^^^^^^^^^^^^^^
-#     |             the `name:` of the `bump-shape` job below — DEFINED HERE, ONCE, and nowhere else.
+#     materialize / kit-bump-shape          materialize / kit-bump-mechanical
+#     ^^^^^^^^^^^   ^^^^^^^^^^^^^^                        ^^^^^^^^^^^^^^^^^^
+#     |             the `name:` of the `bump-shape` job   the `name:` of the `bump-mechanical`
+#     |             below — DEFINED HERE, ONCE.           job below — DEFINED HERE, ONCE.
 #     the caller job id, `materialize`, in all seven receivers' .github/workflows/kit-materialize.yml
+#
+# THEY ASK DIFFERENT QUESTIONS, AND THAT IS THE WHOLE OF #1815:
+#
+#     kit-bump-shape       "is this bump CONTAMINATED?"     green = no.  Green on 0, 2 AND 4.
+#     kit-bump-mechanical  "does this bump NEED A HUMAN?"   green = no.  Green on 0 and 2 ONLY.
+#
+# #1726's sketch was `mechanical` (automergeable) vs `mechanical + repair` (**green, not automerged**).
+# The verdict WAS split — both halves are green on `kit-bump-shape`, faithfully — and "not automerged"
+# was never given a mechanism, because once automerge fires on a boolean, green IS automerged. The
+# second context is that mechanism. It does NOT change what the first one means, and it does NOT red
+# class 4 org-wide: `kit-bump-shape` still says a repair-carrying bump is clean, which is why
+# FS.GG.Rendering#1088 was right to merge. The second says it still wants reading. Neither is armed.
 #
 # GitHub names a reusable-workflow check `<caller job display> / <callee job display>`, and a job's
 # display name is its `name:` if it has one, else its id — so the right-hand half is this file's job
@@ -163,6 +177,18 @@ jobs:
     name: kit-bump-shape
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # THE VERDICT, HANDED TO `bump-mechanical` BELOW SO THE TWO CONTEXTS CANNOT DISAGREE (#1815).
+    # One evaluation, two renderings of it — never two evaluations that might drift.
+    #
+    # EXACTLY TWO STEPS WRITE IT: `probe` (its own refusals, and the abstention) and `report` (the
+    # pinned rule's own exit code). `report` wins when it ran, because it is the later and better
+    # answer. Every OTHER way this job can end — a failed restore, a multi-line step output, an
+    # unresolvable `kit/v<version>` tag, a runner that died — writes NOTHING, so this evaluates to
+    # the EMPTY STRING. That is deliberate and it is the #266 default: the consumer reds on empty,
+    # so a job that reached no verdict can never be read as one that reached `mechanical`. A new
+    # failure path added below inherits that safety WITHOUT being listed here.
+    outputs:
+      verdict: ${{ steps.report.outputs.verdict || steps.probe.outputs.verdict }}
     steps:
       # The PR's real head, not the synthetic merge commit: the subject is what the author pushed.
       # fetch-depth 0 so `base...head` has a merge base to resolve against.
@@ -211,6 +237,7 @@ jobs:
               echo "This job had no pull-request base/head to diff. It reports on pull requests and"
               echo "cannot say anything about any other event. This is not a pass."; } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::kit-bump-shape: no pull-request base/head; refusing rather than abstaining." >&2
+            echo "verdict=3" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           if ! diff_out="$(git diff -U0 --no-renames "$BASE...$HEAD" 2>&1)"; then
@@ -219,6 +246,7 @@ jobs:
               echo "from anything else. This is not a pass and not a failure of the pull request."
               echo; echo '```'; printf '%s\n' "$diff_out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::kit-bump-shape: could not read the diff $BASE...$HEAD." >&2
+            echo "verdict=3" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           # COUNTED, NOT `grep -q`. `-q` exits on the first match and closes the pipe, which SIGPIPEs
@@ -237,6 +265,13 @@ jobs:
             echo "Resolving the pinned rule and letting it decide."
           else
             echo "moved=false" >> "$GITHUB_OUTPUT"
+            # THE ABSTENTION, AS A VERDICT CODE — the same `2` the pinned rule would have returned,
+            # reached here for free. `bump-mechanical` reads it and stays GREEN, because "no pin
+            # moved" is a real finding from a real diff, not a failure to evaluate: it says this
+            # pull request is not a kit bump, so there is no bump here for a human to read. That is
+            # NOT a claim that the pull request is mergeable, and nothing merges on it — see the
+            # `bump-mechanical` job for why greening it is what keeps arming from wedging a repo.
+            echo "verdict=2" >> "$GITHUB_OUTPUT"
             { echo "### kit-bump-shape: abstains — no FS.GG.Kit pin declaration changed (this is not a pass)"; echo
               echo "No line added or removed by this pull request declares an \`FS.GG.Kit\` package"
               echo "version, and every entry in the diff is a plain add/modify/delete — so no pin moved"
@@ -365,6 +400,7 @@ jobs:
       # was right; redding that class is exactly the "the guard parks the bumps a human most wants
       # automated" failure that re-scoped #1587.
       - name: Report the shape
+        id: report
         if: steps.probe.outputs.moved == 'true'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -386,6 +422,7 @@ jobs:
               echo "pass; and it deliberately does NOT fall back to the hub's \`main\` (.github#1772)."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::kit-bump-shape: FS-GG/.github@$RULE_SHA carries no shape rule." >&2
+            echo "verdict=3" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           rc=0
@@ -415,9 +452,141 @@ jobs:
             *) headline="unknown verdict code $rc" ;;
           esac
           { echo "### kit-bump-shape: $headline"; echo; echo '```'; printf '%s\n' "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # THE VERDICT CODE, PUBLISHED FOR `bump-mechanical` — written BEFORE the exit below, because
+          # `exit 1` ends the step and an output written after it would never exist. `$rc` here is the
+          # code AFTER the 2 -> 3 remap above, so a rule that rejected the argv is a REFUSAL to both
+          # contexts and an abstention to neither (#266).
+          echo "verdict=$rc" >> "$GITHUB_OUTPUT"
           case "$rc" in
             0|2|4) exit 0 ;;
             *)     exit 1 ;;
+          esac
+
+  # ── the automerge boolean (.github#1815) ──────────────────────────────────────────────────────
+  # `kit-bump-shape` above is green on `mechanical`, on `mechanical + repair` AND on `abstain`, so a
+  # required context built on it cannot express #1587's "automerge the mechanical class only". A check
+  # run carries ONE BOOLEAN across the branch-protection / automerge boundary: `automergeType: pr`
+  # merges through GitHub's merge API, which reads that boolean, and Renovate's own pre-merge poll
+  # reads the same one. Neither can see an exit code, a step summary, or an annotation. So the
+  # decision needs a SECOND boolean, and this job is it.
+  #
+  # IT RE-EVALUATES NOTHING. It reads `bump-shape`'s verdict code and renders it. Two consequences,
+  # both deliberate:
+  #
+  #   * THE TWO CONTEXTS CANNOT DISAGREE. One rule ran, once, at one pinned commit. A second job that
+  #     re-derived the verdict could grade the same pull request two ways, and the day it did, the
+  #     one a human read would not be the one automerge obeyed.
+  #   * ABSTENTION STAYS CHEAP (#1508). This job installs nothing, checks nothing out, and reads no
+  #     credential. A non-bump pull request in seven repositories pays a runner and a `case`. The
+  #     alternative — an independent job repeating pass one — would make every pull request in the
+  #     fleet pay a second `fetch-depth: 0` checkout, and every real bump a second SDK and restore.
+  #
+  # `if: ${{ !cancelled() }}` IS LOAD-BEARING AND IS NOT A #1508 GATE. `needs:` alone SKIPS this job
+  # when `bump-shape` fails — and GitHub reports a skipped job as `conclusion: skipped`, which branch
+  # protection counts as SATISFIED. So without this line the mapping inverts itself exactly where it
+  # matters: `not mechanical` and `REFUSED`, the two classes that MUST never automerge, would be
+  # the two that report green. That is the "ten checks that could not fail" class, and it is the one
+  # mutation in tests/kit-bump-shape/run.sh that this job most needs. It is not the `if:` #1508
+  # forbids: that one SUPPRESSES the check run on some pull requests, and this one exists to make the
+  # job run on MORE of them. The only input it excludes is a cancelled run, where no verdict exists to
+  # report and the pull request gets a fresh run anyway.
+  #
+  # NOTHING HERE IS ARMED. `materialize / kit-bump-mechanical` is required in ZERO repositories, and
+  # `scripts/repos.sh require-context` was not invoked in any mode by the change that added it (#1815
+  # is deliberately not #1587). Read the arming trade in
+  # docs/coordination/reusable-workflow-contract.md before it is: a RED non-required context already
+  # stops Renovate's automerge, because Renovate polls the branch's COMBINED status and not the
+  # required subset — so #1587 can enforce the decision with nothing armed at all, and arming buys
+  # branch protection as a second enforcer at the price of making class 4 need an admin.
+  bump-mechanical:
+    name: kit-bump-mechanical
+    needs: bump-shape
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Does this bump need a human?
+        env:
+          VERDICT: ${{ needs.bump-shape.outputs.verdict }}
+        run: |
+          set -uo pipefail
+          # THE MAPPING. `kit-bump-shape` answers "is this contaminated?"; this answers "does this
+          # need a human?". They are different questions and they differ on exactly one class — 4 —
+          # which is the whole reason this job exists.
+          #
+          #   0  mechanical            SUCCESS  pin plus materializer output; nothing to read.
+          #   2  abstains              SUCCESS  evaluated, and NOT A KIT BUMP: no pin declaration
+          #                                     changed, so there is no bump for a human to read.
+          #                                     This is the #1508 property that makes arming SAFE —
+          #                                     it is why a docs pull request in an armed receiver is
+          #                                     not blocked forever by a guard that has nothing to
+          #                                     say about it. It asserts nothing about the pull
+          #                                     request's mergeability and nothing automerges on it:
+          #                                     #1587's rule matches FS.GG.Kit alone, and a diff that
+          #                                     moves the FS.GG.Kit pin CANNOT reach this arm (pass
+          #                                     one is a strict superset of the rule's non-abstention,
+          #                                     asserted by tests/kit-bump-shape/run.sh legs 34/35).
+          #   4  mechanical + repair   FAILURE  clean, and a person must still read the receiver-
+          #                                     authored files it names. `kit-bump-shape` stays GREEN
+          #                                     here — merging FS.GG.Rendering#1088 was CORRECT — and
+          #                                     this is #1726's "green, not automerged", as a boolean.
+          #   1  not mechanical        FAILURE  read it in full.
+          #   3  REFUSED               FAILURE  no verdict was reached. Never a pass (#266).
+          #   ''/other                 FAILURE  `bump-shape` ended without publishing a verdict at
+          #                                     all — a failed restore, an unresolvable kit/v tag, a
+          #                                     dead runner, or a path added later that writes none.
+          #                                     "I could not evaluate this" is not "it passed" (#266),
+          #                                     and this arm is what makes that the DEFAULT.
+          case "$VERDICT" in
+            0) { echo "### kit-bump-mechanical: MECHANICAL — no human need read this bump"; echo
+                 echo "The pinned shape rule graded this pull request \`mechanical\` (exit 0): the"
+                 echo "FS.GG.Kit pin, plus what the materializer produces, and nothing else. This is"
+                 echo "the one class #1587 automerges. See \`kit-bump-shape\` for the itemised report."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "kit-bump-mechanical: verdict 0 (mechanical) — automergeable."
+               exit 0 ;;
+            2) { echo "### kit-bump-mechanical: not a kit bump — nothing to automerge (this is not a pass)"; echo
+                 echo "No line added or removed by this pull request declares an \`FS.GG.Kit\` package"
+                 echo "version, so this reporter has no bump to grade. That is not a statement that"
+                 echo "this pull request is mergeable, correct, or reviewed — only that the question"
+                 echo "this context answers (\"does this kit bump need a human?\") does not arise here."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "kit-bump-mechanical: verdict 2 (abstains) — no kit bump to grade."
+               exit 0 ;;
+            4) { echo "### kit-bump-mechanical: NEEDS A HUMAN — mechanical + receiver-side repair"; echo
+                 echo "The pinned shape rule graded this \`mechanical + repair\` (exit 4). The bump is"
+                 echo "not contaminated — \`kit-bump-shape\` is GREEN and merging this may well be"
+                 echo "exactly right — but it carries receiver-authored files that ride the bump, and"
+                 echo "\`kit-bump-shape\` names them. Read those, then merge it yourself."
+                 echo; echo "This context is RED so that automerge does not do it for you (#1815)."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "::error::kit-bump-mechanical: verdict 4 (mechanical + receiver-side repair) — a person must read the receiver-authored files kit-bump-shape names. Not automergeable." >&2
+               exit 1 ;;
+            1) { echo "### kit-bump-mechanical: NEEDS A HUMAN — not mechanical"; echo
+                 echo "The pinned shape rule graded this \`not mechanical\` (exit 1): it changes kit"
+                 echo "territory in a way the materializer would not produce. \`kit-bump-shape\` is red"
+                 echo "too, and names what decided it. Read this bump in full."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "::error::kit-bump-mechanical: verdict 1 (not mechanical) — read this bump in full. Not automergeable." >&2
+               exit 1 ;;
+            3) { echo "### kit-bump-mechanical: REFUSED — no verdict could be reached (this is not a pass)"; echo
+                 echo "The shape rule reached no verdict on this pull request, so nothing here says it"
+                 echo "is mechanical. \`kit-bump-shape\` carries the refusal and its remedy. A refusal"
+                 echo "is not an abstention and is never a pass (#266) — so this context is RED, and"
+                 echo "an unevaluated bump cannot be automerged."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "::error::kit-bump-mechanical: verdict 3 (refused) — the rule reached no verdict, so this bump is not known to be mechanical. Not automergeable." >&2
+               exit 1 ;;
+            *) { echo "### kit-bump-mechanical: REFUSED — kit-bump-shape published no verdict (this is not a pass)"; echo
+                 echo "The \`kit-bump-shape\` job ended without publishing a verdict code — it received"
+                 printf '%s\n' "\`${VERDICT:-<empty>}\`. That is a job that failed before it could grade"
+                 echo "anything (a failed restore, an unresolvable \`kit/v<version>\` tag, a runner that"
+                 echo "died), or a new failure path in it that writes no verdict. Read that job's log."
+                 echo; echo "Reporting this as a pass would be \"I could not evaluate it\" spelled as \"I"
+                 echo "evaluated it and it passed\", which is what #266 forbids. So it is RED."
+               } >> "$GITHUB_STEP_SUMMARY"
+               echo "::error::kit-bump-mechanical: kit-bump-shape published no verdict (got '${VERDICT:-<empty>}'), so this pull request is not known to be a mechanical bump. Not automergeable." >&2
+               exit 1 ;;
           esac
 
   materialize:
