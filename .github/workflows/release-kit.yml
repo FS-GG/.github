@@ -17,7 +17,9 @@ name: release-kit
 # Publishing, no stored key), the byte-identical .nupkg, no re-pack.
 #
 # Version is the EVALUATED csproj <Version> (msbuild -getProperty), never a grep and never pinned in this
-# header. A tag is a COHERENCE CHECK against it, never the source of truth. The kit ships STABLE (no
+# header. A tag is a COHERENCE CHECK against it — and, since .github#1772, ALSO the ref the fleet resolves
+# a bump-shape rule from, which is why it is a precondition below rather than decoration. The kit ships
+# STABLE (no
 # -preview): the shared Renovate preset sets ignoreUnstable=true, so a prerelease would be invisible to the
 # fabric that is supposed to carry it — refuse rather than ship it silently.
 #
@@ -30,6 +32,17 @@ name: release-kit
 # — that is how its verdict became a pure function of the receiver's tree instead of the hub's moving
 # `main` (ADR-0067 §2, #1584) — so an untagged published version is one whose bump PRs can only be
 # refused. The check is in "Resolve version + publish decision" below.
+#
+# AND THE TAG IS GUARDED AFTER PUBLICATION TOO (.github#1784). This gate is publish-time only, and a
+# tag is a mutable ref: deleted or force-moved a minute later, it silently recreates the very defect
+# #1772 closed and nothing here would ever look again. Two things close that. A repository TAG RULESET
+# — `kit-release-tags-are-immutable`, over `refs/tags/kit/v*`, rules deletion + non_fast_forward +
+# update, zero bypass actors — refuses the mutation at the source. And `kit-published-coherence`'s
+# `--tag-arm` re-checks, on main and on a schedule, that every version nuget.org serves still has a
+# tag resolving to the commit recorded in that version's published `.nuspec` (`<repository
+# commit=...>`) — the ruleset is itself a mutable setting, so the detection is what proves it is
+# still there. 0.1.0 and 0.4.0 were tagged retroactively from exactly that binding; see those tag
+# objects, which state what they assert and on what evidence.
 #
 # ⚠ THE nuget.org POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner must
 # create a Trusted Publishing policy for: Repository Owner `FS-GG` · Repository `.github` · Workflow file
@@ -110,7 +123,9 @@ jobs:
             # EVERY PUBLISHED VERSION MUST NAME AN IMMUTABLE HUB COMMIT (.github#1772).
             #
             # A tag-push release gets this for free; a manual publish did not, and two versions in
-            # this package's history (0.1.0 and 0.4.0) have no `kit/v*` tag at all. That was harmless
+            # this package's history (0.1.0 and 0.4.0) shipped with no `kit/v*` tag at all — since
+            # closed by .github#1784, which tagged both at the commits their published nuspecs name,
+            # so every version on the feed now has one. That was harmless
             # while the tag was decoration. It is not any more: the receiver-side `kit-bump-shape`
             # reporter resolves the rule it runs from `kit/v<the version the receiver pins>`, so a
             # published version with no tag is a version whose bump PRs can only be REFUSED — the
