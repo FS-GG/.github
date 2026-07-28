@@ -326,9 +326,10 @@ B1 and B2 are both kit-content changes, so they land together, in one republish,
 > unfiltered, which `repos-audit` reads as armed — but the event B4 was waiting for **has happened**.
 > The roster's own `skill-union` capability prose still says *"No framework repo has wired the receiver
 > caller yet (measured 2026-07-27: zero `uses:` of skill-union-assert.yml in any of the seven)"*
-> (`registry/repos.yml:268`); that sentence is one day stale and is filed as
-> [#1716](https://github.com/FS-GG/.github/issues/1716) rather than corrected here, because this
-> document is not the roster.
+> (`registry/repos.yml:268`). **That sentence was true when it was written and false 87 minutes
+> later**: it landed at 2026-07-27 01:07 (`#1505`) and SDD's caller landed at 2026-07-27 02:34
+> (`a066e0b`). It is filed as [#1716](https://github.com/FS-GG/.github/issues/1716) rather than
+> corrected here, because this document is not the roster.
 
 ---
 
@@ -383,8 +384,10 @@ the board rows whose subject that repo's retirement actually dissolved.
 > **THE CALLER STEP IS NOT VACUOUS, AND THIS SENTENCE SAID IT WAS.** It read *"(note: zero receivers
 > have wired one — `registry/repos.yml:268-271` — so this step is vacuous today and costs nothing)"*.
 > That was true of `FS.GG.Templates`, which recorded the decision not to wire one (Templates#313), and
-> it was **already false of `FS.GG.SDD`** when it was written: SDD's caller landed in `a066e0b` and its
-> `skill-union / skill-union` context is **required under `enforce_admins`**. On SDD this step is the
+> it was **already false of `FS.GG.SDD`** when it was written: SDD's caller landed at 2026-07-27 02:34
+> (`a066e0b`), a day before this order, and its `skill-union / skill-union` context is **required under
+> `enforce_admins`**. It was written by trusting `registry/repos.yml`'s prose instead of the receiver's
+> workflows, which is the one thing this order's own §4 says not to do. On SDD this step is the
 > single most expensive one in the list and it is what stopped stage 2 — B5. Generalising one
 > receiver's cost to the roster is the mistake this order has now made twice (the first was reading
 > Templates' empty `.codex/skills` as the receiver-wide shape; SDD's holds **28** repo-owned skills).
