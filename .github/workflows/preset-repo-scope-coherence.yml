@@ -71,6 +71,7 @@ jobs:
           set -euo pipefail
           npm install --no-save --no-audit --no-fund "renovate@${RENOVATE_VERSION}"
           echo "RENOVATE_CONFIG_VALIDATOR=$PWD/node_modules/.bin/renovate-config-validator" >> "$GITHUB_ENV"
+          echo "RENOVATE_DIR=$PWD/node_modules/renovate" >> "$GITHUB_ENV"
 
       # The schema run, FIRST because it is the cheapest real finding — and it is NOT this gate.
       # Measured against this very binary: the wrong repo scope validates perfectly clean while
@@ -94,3 +95,18 @@ jobs:
       # roster" is TRUE and dependency management is broken org-wide.
       - name: Run the preset-repo-scope-coherence fixture
         run: bash tests/preset-repo-scope-coherence/run.sh
+
+      # WHAT RENOVATE ACTUALLY DECIDES, as opposed to what this preset can be argued to say (#1798).
+      # Every step above grades the config; this one RUNS it — the real nuget extractor over the real
+      # manifest bytes, then the real applyPackageRules per (repo, file, dep). It exists because the
+      # failure it catches is silent in the direction no gate watches: a disable that outlives its
+      # reason proposes nothing, and a non-proposal is not an error (#1533). #1615 removed the engine
+      # tool manifest from the kit and left the rule that disabled it standing in all seven receivers,
+      # so ADR-0068's only delivery path was switched off for six hours with every gate green.
+      #
+      # It carries its own negative control — re-inject the deleted rule and require the verdict to
+      # FLIP — so it cannot degrade into a step that says "enabled" about everything (#266).
+      - name: Drive default.json through Renovate's real matcher
+        env:
+          REPO_ROOT: .
+        run: node tests/preset-repo-scope-coherence/drive-package-rules.mjs

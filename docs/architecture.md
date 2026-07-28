@@ -864,12 +864,20 @@ install is what keeps the composition honest. See the
   edited kit content and obliged a republish plus a seven-receiver fan-out (four of the nine
   republishes measured on 2026-07-27/28, none of which carried a skill change). **Each receiver now
   owns its own manifest**; `dist/dotnet/.config/dotnet-tools.json` remains this repo's canonical copy
-  and `engine-pin-coherence`'s subject. **The intended per-repo delivery is Renovate, and it is NOT
-  live yet** — `default.json`'s `packageRules[5]` still disables `.config/dotnet-tools.json` in all
-  seven receivers, a rule written when the file was kit-materialized and correct until ADR-0068
-  removed its premise ([#1798](https://github.com/FS-GG/.github/issues/1798)). Until that lands each
-  receiver's engine *version* moves only by hand. The *declaration* is asserted daily either way, so
-  #1077's invariant holds throughout — what is missing is convergence, not the engine. #1077's invariant is
+  and `engine-pin-coherence`'s subject. **Per-repo delivery is Renovate, and it is live**
+  ([#1798](https://github.com/FS-GG/.github/issues/1798), 2026-07-28). It was not, for the six hours
+  between the two: `default.json`'s `packageRules[5]` disabled `.config/dotnet-tools.json` in all
+  seven receivers — a rule written when the file was kit-materialized, correct for its whole life, and
+  left standing when ADR-0068 removed its premise. That rule is now deleted, and the fact is
+  **asserted rather than recorded**: `tests/preset-repo-scope-coherence/drive-package-rules.mjs`
+  drives the preset through Renovate's real `applyPackageRules` on every CI run and reds if the
+  receiver copy ever goes disabled or the `dist/dotnet/` baseline ever goes unmanaged. A second leg
+  ties the preset to the roster biconditionally — the manifest is disabled *iff* the `kit:` block
+  delivers it — so re-adding either half without the other cannot pass quietly again.
+  **What is still missing is CONVERGENCE, not delivery**: nothing yet reds when a receiver's engine
+  *version* falls behind and no bump is ever offered ([#1803](https://github.com/FS-GG/.github/issues/1803)) —
+  `repos-audit`'s bump-offer sweep grades `FS.GG.Kit` only. The *declaration* is asserted daily either
+  way, so #1077's invariant holds throughout. #1077's invariant is
   preserved by **assertion rather than arrangement**: `repos-audit`'s engine-manifest sweep reads
   every `coordination-kit` receiver's actual manifest daily — `f(roster, receiver tree)`, strictly
   stronger than the roster rule it replaces, which never read a receiver at all.

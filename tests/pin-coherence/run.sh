@@ -120,6 +120,16 @@ make_repo() {
   mkdir -p "$root/registry"
   cp "$REPO_ROOT/registry/repos.yml" "$root/registry/repos.yml"
 
+  # The REAL dist/dotnet/ baseline, for the same reason a THIRD time (#1798). It is the set of files
+  # this repo keeps MANAGED and no `ignorePaths` entry may reach — derived from the tree since the
+  # engine tool manifest stopped being a synced file (ADR-0068) and stayed a managed one. A stub, or
+  # an absent directory, would make that set empty; an empty set makes every ignorePaths entry
+  # innocent, and the #678 legs below would pass by having nothing to protect rather than by
+  # protecting it. The gate REFUSES an empty baseline for that reason, so this copy is what keeps
+  # these repos gradeable at all.
+  mkdir -p "$root/dist"
+  cp -R "$REPO_ROOT/dist/dotnet" "$root/dist/dotnet"
+
   cat > "$root/renovate.json" <<'JSON'
 {
   "extends": ["github>FS-GG/.github"],
@@ -735,15 +745,24 @@ fi
 
 echo
 echo "--- the synced receiver file must be UNMANAGED, and by the right mechanism (#678) ---"
-# Renovate bumping a receiver's SYNCED .config/dotnet-tools.json opens a PR the build-config drift
+# Renovate bumping a receiver's SYNCED copy of a materialized file opens a PR the build-config drift
 # gate must reject, in every receiver, forever (FS.GG.Game#278). The rule that stops it is easy to
 # write in two ways that are silently wrong, and renovate-config-validator calls both valid — so
 # each wrong way gets a leg here.
+#
+# THE SUBJECT OF THE `matchFileNames` LEGS IS NOW `Directory.Packages.props`, NOT THE TOOL MANIFEST
+# (#1798). It was `.config/dotnet-tools.json` for as long as that file was kit-materialized; ADR-0068
+# ended that, the preset rule went with it, and these legs would otherwise have mutated a rule that
+# no longer exists — passing while asserting nothing. They did not silently do so: this fixture's
+# `edit_json` refuses a mutation that changes nothing ("vacuous fixture"), which is what surfaced
+# them. The `ignorePaths` legs below are UNCHANGED and still name the manifest, because their subject
+# was never the synced set — it is the dist/dotnet/ BASELINE, which the manifest never left.
 
 # The trap #678 itself proposed. ignorePaths matches by SUBSTRING (`file.includes(ignorePath)`), so
 # this ALSO un-manages dist/dotnet/.config/dotnet-tools.json — the org source of truth, and the one
 # pin Renovate has ever bumped in this repo (#660). It would freeze the baseline while looking like
-# a fix.
+# a fix. Since ADR-0068 that baseline is also the engine pin's ONLY entry point into the org, so the
+# leg matters more now than when it was written, not less.
 IGN="$(make_repo ignorepaths)"
 edit_json "$IGN/default.json" 'd["ignorePaths"] = [".config/dotnet-tools.json"]'
 must_fail "ignorePaths on a synced file is refused (it swallows dist/dotnet/ by substring)" \
@@ -755,8 +774,8 @@ BROAD="$(make_repo broad-glob)"
 edit_json "$BROAD/default.json" '
 for r in d["packageRules"]:
     p = r.get("matchFileNames") or []
-    if ".config/dotnet-tools.json" in p:
-        p[p.index(".config/dotnet-tools.json")] = "**/.config/dotnet-tools.json"
+    if "Directory.Packages.props" in p:
+        p[p.index("Directory.Packages.props")] = "**/Directory.Packages.props"
 '
 must_fail "a leading **/ on the synced-file rule is refused (it reaches dist/dotnet/)" \
   "$BROAD" "$FEED" "reaches beyond the receiver's copy"
@@ -765,7 +784,7 @@ must_fail "a leading **/ on the synced-file rule is refused (it reaches dist/dot
 NORULE="$(make_repo no-synced-rule)"
 edit_json "$NORULE/default.json" '
 d["packageRules"] = [r for r in d["packageRules"]
-                     if ".config/dotnet-tools.json" not in (r.get("matchFileNames") or [])]
+                     if "Directory.Packages.props" not in (r.get("matchFileNames") or [])]
 '
 must_fail "deleting the synced-file rule is refused" \
   "$NORULE" "$FEED" "declares no \`matchFileNames:"
@@ -792,7 +811,7 @@ must_fail "even a WORKING ignorePaths glob is refused (fragile by coincidence)" 
 # leaves every earlier `enabled: false` sitting in the config looking correct.
 REEN="$(make_repo reenabled-later)"
 edit_json "$REEN/default.json" '
-d["packageRules"].append({"matchFileNames": [".config/dotnet-tools.json"], "enabled": True})
+d["packageRules"].append({"matchFileNames": ["Directory.Packages.props"], "enabled": True})
 '
 must_fail "a LATER rule re-enabling the synced file is refused (last rule wins)" \
   "$REEN" "$FEED" "is the LAST rule matching"
@@ -801,7 +820,7 @@ must_fail "a LATER rule re-enabling the synced file is refused (last rule wins)"
 NARROW="$(make_repo narrowed-rule)"
 edit_json "$NARROW/default.json" '
 for r in d["packageRules"]:
-    if ".config/dotnet-tools.json" in (r.get("matchFileNames") or []):
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
         r["matchUpdateTypes"] = ["major"]
 '
 must_fail "narrowing the disable with an extra matcher is refused" \
@@ -1154,7 +1173,7 @@ gate.assert_required_pins(pins)
 assert pins, "no pins found in the real repo"
 
 # The REAL preset must disable every synced receiver file, anchored (#678).
-gate.assert_synced_files_unmanaged(f"{root}/default.json")
+gate.assert_synced_files_unmanaged(f"{root}/default.json", root)
 
 # ...and the list must still equal the one sync-build-config.sh actually syncs (#794, #902). A
 # fourth FILES entry would otherwise land a fourth un-mergeable PR in every receiver, silently.
@@ -1162,25 +1181,163 @@ gate.assert_synced_list_is_complete(root)
 
 # ...and the org source of truth must still be a pin this gate can SEE. The whole hazard of #678 is
 # a rule that un-manages dist/dotnet/ while looking like a fix, so assert the positive half against
-# the real tree rather than trusting the shape check alone: sync-build-config.sh's canonical copy
-# must exist and carry the tool pin Renovate bumps here (#660).
-# Named, not indexed. This leg json.loads the file and reads `.tools`, which is true of exactly ONE
-# member of SYNCED_RECEIVER_FILES — it rode on [0] back when the tuple had a single entry, and #794
-# grew it to three. Sorting that tuple would hand this line an XML .props file and a JSONDecodeError
-# dressed up as a repo-structure failure.
-_tools_rel = ".config/dotnet-tools.json"
-assert _tools_rel in gate.SYNCED_RECEIVER_FILES, f"{_tools_rel} is no longer a synced file"
-tools = f"{root}/dist/dotnet/{_tools_rel}"
+# the real tree rather than trusting the shape check alone: the canonical copy must exist and carry
+# the tool pin Renovate bumps here (#660).
+#
+# THIS LEG READS THE BASELINE, NOT THE SYNCED SET (#1798). It used to assert
+# `".config/dotnet-tools.json" in gate.SYNCED_RECEIVER_FILES` and then open `dist/dotnet/` + that
+# entry — which fused "this file is synced into receivers" to "this repo manages its own copy". They
+# came apart the moment ADR-0068 took the manifest off the kit: it is not synced anywhere any more,
+# and it is MORE important than ever that this repo keeps bumping it, because Renovate's bump in each
+# receiver's own file is now the pin's ONLY delivery path. Reading it out of the tuple would have
+# made this leg red for the change that was correct, and — worse — would have gone green again the
+# moment somebody "fixed" that by deleting the leg.
+_tools_rel = "dist/dotnet/.config/dotnet-tools.json"
+_baseline = gate.baseline_managed_paths(root)
+assert _tools_rel in _baseline, (
+    f"{_tools_rel} is not in the managed baseline {_baseline!r} — the engine pin has no entry point "
+    f"into the org at all (.github#660, ADR-0068, #1798)"
+)
+assert _tools_rel not in {f"dist/dotnet/{f}" for f in gate.SYNCED_RECEIVER_FILES}, (
+    f"{_tools_rel} is back in the SYNCED set. ADR-0068 took the engine tool manifest off the kit; if "
+    f"it is genuinely synced again the preset owes it a disable rule and #1798's whole result is "
+    f"reversed — decide that deliberately, do not let this leg pass it through"
+)
 import json as _json, os as _os
+tools = f"{root}/{_tools_rel}"
 assert _os.path.exists(tools), f"the org source of truth is missing: {tools}"
 _pins = _json.load(open(tools, encoding="utf-8")).get("tools") or {}
 assert _pins, f"{tools} declares no tools — nothing for Renovate to keep fresh (#660)"
+assert "fs.gg.coord.cli" in _pins, (
+    f"{tools} no longer declares fs.gg.coord.cli — the pin ADR-0068 hands to Renovate is not in the "
+    f"file Renovate bumps (#1077, #1798)"
+)
 print(f"ok: {len(pins)} pin(s); every REQUIRED_PINS entry present; FS.GG.* routed to {', '.join(hosts)}")
-print(f"ok: receiver {', '.join(gate.SYNCED_RECEIVER_FILES)} disabled; dist/dotnet/ still declares "
-      f"{len(_pins)} managed tool pin(s)")
+print(f"ok: receiver {', '.join(gate.SYNCED_RECEIVER_FILES)} disabled; baseline "
+      f"{', '.join(_baseline)} managed here, declaring {len(_pins)} tool pin(s)")
 PY
 )" && rc=0 || rc=$?
 if [ "${rc:-0}" -eq 0 ]; then ok "real repo: required pins present, bump mechanism configured"; else bad "real repo structure" "$out"; fi
+
+echo
+echo "--- the SYNCED set and the MANAGED baseline are two facts (.github#1798) ---"
+# WHY THIS SECTION EXISTS. `dist/dotnet/.config/dotnet-tools.json` played two roles through one
+# tuple: "synced into receivers, so disable Renovate there" and "this repo's own managed baseline,
+# so no ignorePaths entry may reach it". ADR-0068 (#1615) ended the first and left the second
+# untouched — and because the second was DERIVED from the first, correctly removing the manifest
+# from the synced set would silently have withdrawn the #678 substring protection from the very
+# baseline that had just become the fleet's only delivery path for the engine pin.
+#
+# Every leg below is a MUTATION. A gate asserted only on the tree it was written for is a gate that
+# passed over a live bug (#266), and this repo found ten checks that could not fail on 2026-07-28
+# alone — two of them inside PRs written against that very class. Both directions are driven: the
+# states that must red, AND the states that must NOT, because a gate that reds on everything is as
+# useless as one that reds on nothing and is much harder to notice.
+out="$(python3 - "$REPO_ROOT" "$GATE" <<'PY' 2>&1
+import importlib.util, json, os, shutil, sys, tempfile
+root, gate_path = sys.argv[1:3]
+spec = importlib.util.spec_from_file_location("gate", gate_path)
+gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
+
+FAILS = []
+KIT_ANCHOR = "  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord }"
+
+
+def tree():
+    """A tree with exactly the four files these two assertions read."""
+    d = tempfile.mkdtemp()
+    for rel in ("default.json", "scripts/sync-build-config.sh", "registry/repos.yml"):
+        os.makedirs(os.path.join(d, os.path.dirname(rel)), exist_ok=True)
+        shutil.copy(os.path.join(root, rel), os.path.join(d, rel))
+    shutil.copytree(os.path.join(root, "dist/dotnet"), os.path.join(d, "dist/dotnet"))
+    return d
+
+
+def add_kit_row(d, row):
+    p = os.path.join(d, "registry/repos.yml")
+    src = open(p, encoding="utf-8").read()
+    assert KIT_ANCHOR in src, "the kit: block's client row moved — this fixture can no longer edit it"
+    open(p, "w", encoding="utf-8").write(src.replace(KIT_ANCHOR, KIT_ANCHOR + "\n" + row))
+
+
+def edit_preset(d, fn):
+    p = os.path.join(d, "default.json")
+    cfg = json.load(open(p, encoding="utf-8"))
+    fn(cfg)
+    json.dump(cfg, open(p, "w", encoding="utf-8"), indent=2)
+
+
+def grade(d, label, want, expect=None):
+    """want: 'green' | 'red'. Runs BOTH assertions, exactly as the CI guard above does."""
+    errs = []
+    for fn, args in (("assert_synced_list_is_complete", (d,)),
+                     ("assert_synced_files_unmanaged", (os.path.join(d, "default.json"), d))):
+        try:
+            getattr(gate, fn)(*args)
+        except Exception as e:  # noqa: BLE001 — every raise here is a verdict
+            errs.append(str(e))
+    got = "red" if errs else "green"
+    if got != want:
+        FAILS.append(f"{label}: want {want}, got {got}" + (f" — {errs[0][:200]}" if errs else ""))
+    elif expect and not any(expect in e for e in errs):
+        FAILS.append(f"{label}: red as required, but no message named {expect!r} — a red that "
+                     f"misnames its cause sends the reader to the wrong file")
+    print(f"   {'ok  ' if got == want else 'FAIL'} — {label} ({got})")
+
+
+# L0 — the tree as landed. Not decoration: L1-L7 mean nothing if the fixed state does not pass.
+grade(tree(), "L0 as landed: rule deleted, manifest off the kit", "green")
+
+# L1 — THE REGRESSION LEG. Put the manifest back on the kit and the preset owes it a disable again.
+# This is the state ADR-0068 reversed, and the gate must demand the rule back rather than shrug.
+d = tree(); add_kit_row(d, "  - { id: coord-engine-manifest, kind: config, source: dist/dotnet/.config/dotnet-tools.json, dest: .config/dotnet-tools.json }")
+grade(d, "L1 manifest re-added to the kit, preset silent", "red", ".config/dotnet-tools.json")
+
+# L2 — ...and the demand is on the DERIVED set, not satisfiable by adding a preset rule alone.
+# Without this leg L1 would be discharged by re-adding the rule and leaving the tuple stale, which
+# is how the preset and the roster drifted apart in the first place.
+edit_preset(d, lambda c: c["packageRules"].append({
+    "description": ["re-added by hand", "fsgg-repo-scope: receives=coordination-kit"],
+    "matchFileNames": [".config/dotnet-tools.json"],
+    "matchRepositories": ["FS-GG/FS.GG.Audio"], "enabled": False}))
+grade(d, "L2 kit row + preset rule, SYNCED_RECEIVER_FILES unedited", "red", "SYNCED_RECEIVER_FILES")
+
+# L3 — A `kind: config` row Renovate has NO MANAGER FOR demands nothing. This is the leg for the
+# cause that took pin-coherence to NO VERDICT on main from 2026-07-28T09:22Z (run 30346280541):
+# #1696's two shell libraries were reported as files "Renovate will propose the un-mergeable PR
+# against, forever". There is no manager for a .sh. A gate blinded by a false demand is a gate that
+# was not watching when the real drift landed underneath it six hours later.
+d = tree(); add_kit_row(d, "  - { id: lib-x, kind: config, source: scripts/lib/x.sh, dest: scripts/lib/x.sh }")
+grade(d, "L3 a .sh kind:config row demands no preset rule", "green")
+
+# L4 — AC2, and the reason this whole split exists. The #678 trap must STILL be refused now that the
+# manifest has left the synced set: `ignorePaths` is a SUBSTRING test, so this entry un-manages
+# dist/dotnet/.config/dotnet-tools.json — the engine pin's only entry point into the org.
+d = tree(); edit_preset(d, lambda c: c.__setitem__("ignorePaths", [".config/dotnet-tools.json"]))
+grade(d, "L4 ignorePaths ['.config/dotnet-tools.json'] — the #678 trap", "red", "dist/dotnet/.config/dotnet-tools.json")
+
+# L5 — ...and the SHORTER spellings are worse, not safer: the less you write the more of the path it
+# occurs inside. Tested in Renovate's direction (`entry in source`), never the intuitive one.
+d = tree(); edit_preset(d, lambda c: c.__setitem__("ignorePaths", [".config"]))
+grade(d, "L5 ignorePaths ['.config'] — shorter, and it swallows more", "red", "dist/dotnet/.config/dotnet-tools.json")
+
+# L6 — the surviving .props disable is still REQUIRED. #1798 removed one rule; it must not have
+# loosened the gate on the rule that stayed, which is the failure a "tidy" refactor produces.
+d = tree(); edit_preset(d, lambda c: c.__setitem__("packageRules", [r for r in c["packageRules"] if "matchFileNames" not in r]))
+grade(d, "L6 the surviving .props disable deleted", "red", "Directory.Build.props")
+
+# L7 — "I could not look" is never "I looked, and it is fine" (#266). With no package file under
+# dist/dotnet/ the baseline set is empty, and an empty set makes every ignorePaths entry innocent —
+# the vacuous pass this gate must refuse rather than report.
+d = tree(); shutil.rmtree(os.path.join(d, "dist/dotnet")); os.makedirs(os.path.join(d, "dist/dotnet"))
+grade(d, "L7 dist/dotnet/ emptied — refuses, never green", "red", "BASELINE")
+
+if FAILS:
+    print("\n".join(FAILS)); sys.exit(1)
+print(f"ok: 8 mutation legs, both directions, all as specified")
+PY
+)" && rc=0 || rc=$?
+if [ "${rc:-0}" -eq 0 ]; then ok "synced-set vs managed-baseline: 8 mutation legs (#1798)"; else bad "synced-set vs managed-baseline mutations" "$out"; fi
 
 echo
 echo "$pass passed, $failcount failed."

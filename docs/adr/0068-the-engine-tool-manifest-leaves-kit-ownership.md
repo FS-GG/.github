@@ -127,7 +127,45 @@ This correction is recorded here rather than only on the issue, because a reader
 directly is the one who would otherwise inherit the error — the corpus's most common defect, and the
 one `check-adr-coherence.py` exists to hunt.
 
+#### ✅ RESOLVED the same day — `#1798`, and what it cost to make the sentence true
+
+`packageRules[5]` is **deleted**. The delivery path this ADR asserted is now live, and — this is the
+part worth carrying forward — it is *asserted by something that runs* rather than by this paragraph.
+
+- **Measured before, through Renovate's real code, not inferred.** At renovate 43.281.1,
+  `applyPackageRules` returned `enabled=false, skipReason=package-rules` for **both** tools in
+  **every** receiver. Independently, every receiver's Renovate Dependency Dashboard listed
+  `.config/dotnet-tools.json` under `nuget` with **zero** dependencies while the file declared two —
+  the dashboard drops deps carrying a `skipReason` (`dist/workers/repository/package-files.js`). Two
+  different observations of the same switched-off path.
+- **Measured after**: the same driver returns MANAGED for both tools in all seven receivers, and
+  still MANAGED for `dist/dotnet/.config/dotnet-tools.json` here.
+- **The leg that can fail** is `tests/preset-repo-scope-coherence/drive-package-rules.mjs`, run on
+  every CI pass of that workflow. It carries a negative control that re-injects the deleted rule and
+  requires the verdict to flip, so it cannot decay into a step that reports "enabled" about
+  everything. A second leg, in the same fixture, ties the preset to the roster **biconditionally**:
+  the manifest is disabled *if and only if* the `kit:` block delivers it. That is the check whose
+  absence let this ADR land with its own delivery path switched off.
+- **The removal was not a one-line deletion**, and the reason is worth recording. `SYNCED_RECEIVER_FILES`
+  in `check-pin-coherence.py` *required* a preset disable for every authority-synced file, so the
+  rule could not be deleted while the manifest sat in that tuple. Removing it there exposed a
+  coupling: the same tuple also derived the set of `dist/dotnet/` paths that no `ignorePaths` entry
+  may reach. Left alone, the correct removal would have **withdrawn the `#678` substring protection
+  from `dist/dotnet/.config/dotnet-tools.json` in the very change that made it the fleet's only
+  delivery path**. The two facts are now derived separately (`BASELINE_MANAGED_PATHS`).
+
+**No bump PR was observed, and that is a measurement rather than a gap.** All seven receivers pin
+`fs.gg.coord.cli 0.14.0` and `fake-cli 6.1.4`, and both are the newest versions their feeds serve —
+so there is nothing for Renovate to propose today, and a correct configuration and a broken one look
+identical from the outside. That is precisely why the evidence above is a *driver* and a *dashboard
+diff* rather than a PR link: waiting for a bump to appear would have made the check unrunnable until
+the next engine release.
+
 ### Why the delivery mechanism is not in doubt
+
+> **Both arguments below are weaker than they read, and `#1798` is what they missed.** Kept verbatim
+> rather than quietly rewritten, because the shape of the error is the useful part: each is *necessary*
+> evidence presented as *sufficient*. Read the two rebuttals under them before relying on either.
 
 Renovate's nuget manager already reads tool manifests: `/(^|/)dotnet-tools\.json$/` is one of its four
 **shipped** `managerFilePatterns`, read out of renovate 43.281.1's own
@@ -137,6 +175,24 @@ manager, not a regex this org maintains, and not new.
 More persuasively: `default.json` also records that `fs.gg.coord.cli` is **the only `FS.GG.*` bump PR
 Renovate has ever opened in this repo**. The path this decision relies on is the one path in this org
 that has demonstrably worked unattended.
+
+**Rebuttal to the first.** That the manager *matches the file* says nothing about whether the org
+preset leaves it enabled. It did not: `packageRules[5]` disabled it in all seven receivers, and a
+shipped `managerFilePatterns` entry is exactly as true in a repo where every dep in that file comes
+back `skipReason: package-rules`. "Renovate can read this file" and "Renovate will propose a bump
+here" are different claims, and only the second is the decision's premise.
+
+**Rebuttal to the second, and it is the sharper one.** `#660` was opened in **`FS-GG/.github`** —
+which is *not* a `coordination-kit` receiver, is not in `matchRepositories`, and was therefore the one
+repository in the org the obstacle did not cover. The strongest supporting fact came from the only
+place that could not have exhibited the defect. A demonstration that a path works *somewhere* is not a
+demonstration that it works *where the decision routes it*, and the seven repos the decision actually
+depends on were the seven where it was switched off.
+
+**What would have settled it, and now does:** running the preset through
+`applyPackageRules` for each `(receiver, .config/dotnet-tools.json, dep)` triple, which takes seconds
+and answers the question asked. `tests/preset-repo-scope-coherence/drive-package-rules.mjs` does that
+on every CI run of that workflow.
 
 ### What this does *not* claim
 

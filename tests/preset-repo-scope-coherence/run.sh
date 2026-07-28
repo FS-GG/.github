@@ -106,16 +106,19 @@ case "$out" in
   *) bad "the shipped tree's summary must name a subject count" "$out" ;;
 esac
 
-# The shipped preset must scope BOTH fabrics. If a future edit re-fuses them into one rule this leg
-# reds, which is the intended outcome: the split is the finding, not an implementation detail.
+# The shipped preset must scope the build-config fabric. If a future edit fuses it with anything else
+# this leg reds, which is the intended outcome: the split is the finding, not an implementation detail.
 case "$out" in
   *"build-config"*) ok "the shipped preset scopes a rule to build-config" ;;
   *) bad "the shipped preset must scope a rule to build-config" "$out" ;;
 esac
-case "$out" in
-  *"coordination-kit"*) ok "the shipped preset scopes a rule to coordination-kit" ;;
-  *) bad "the shipped preset must scope a rule to coordination-kit" "$out" ;;
-esac
+# THERE IS NO LONGER A SECOND, coordination-kit FABRIC HERE, AND THAT IS THE POINT (#1798). This leg
+# used to demand one unconditionally. The demand was correct while the kit delivered
+# `.config/dotnet-tools.json`; ADR-0068 (#1615) ended that, and an unconditional demand would now
+# require the very rule that switches the engine pin's only delivery path off in all seven receivers.
+# Whether a coordination-kit rule is owed is a fact about the ROSTER, so it is asserted where the
+# roster is read — leg 9 below, in both directions.
+ok "no unconditional coordination-kit demand; leg 9 derives it from the roster instead"
 
 # 2. A MINIMAL COHERENT TREE IS GREEN.
 t="$(mktree)"
@@ -288,34 +291,82 @@ sed -i 's#, dest: .config/dotnet-tools.json##' "$t/registry/repos.yml"
 expect "$t" 3 "a kit config row with no \`dest\` is NO VERDICT (rule 4 must not switch itself off)"
 rm -rf "$t"
 
-# 9. WHAT ACTUALLY CATCHES LEG 8, ON THE REAL TREE. The shipped preset must scope
-#    `.config/dotnet-tools.json` to coordination-kit — SEVEN receivers, not four. A tidy fix that
-#    narrows it to the build-config four re-enables a byte-checked kit file in templates, audio and
-#    net. Asserted against the SHIPPED preset, where the file names are real.
-"$PY" - "$ROOT/default.json" <<'PY'
-import json, sys
+# 9. WHAT ACTUALLY CATCHES LEG 8, ON THE REAL TREE — AND IT IS AN `IF AND ONLY IF` (#1798).
+#
+#    THIS LEG USED TO ASSERT THE MANIFEST RULE EXISTS, and that was right for as long as the kit
+#    delivered the manifest. It asserted the SEVEN-receiver scoping precisely so the tidy #1552 fix —
+#    narrowing to the build-config four — could not re-enable a byte-checked kit file in templates,
+#    audio and net. That defect is real and this leg still refuses it.
+#
+#    But written as "the rule must exist" it was HALF a check, and the missing half is what #1798 is.
+#    #1615/ADR-0068 took `.config/dotnet-tools.json` off the `kit:` block. The rule's entire
+#    justification — "a receiver's copy is materialized, so a bump is a guaranteed-red PR" — went with
+#    it, and the rule stayed. Nothing reddened: not this fixture (it wanted the rule THERE), not
+#    check-preset-repo-scope-coherence (its rule 4 fires only when a file the kit DOES deliver
+#    declares the wrong fabric — a file the kit no longer delivers is inert to it), not
+#    renovate-config-validator (the config is valid). ADR-0068's only delivery path for the engine pin
+#    was switched off in all seven receivers, and the way anyone found out was a human asking why
+#    Renovate was quiet in FS.GG.Net.
+#
+#    So the assertion is now BICONDITIONAL and DERIVED FROM THE ROSTER, in both directions:
+#      * the kit delivers the manifest  => the preset MUST disable it, scoped to coordination-kit;
+#      * the kit does not deliver it    => the preset MUST NOT disable it, because the only thing
+#                                          such a rule can still do is stop the pin ever moving.
+#    Neither direction is a judgement call a future editor has to remember, and re-adding the kit row
+#    flips this leg's demand automatically rather than leaving a rule nothing re-checks.
+"$PY" - "$ROOT/default.json" "$ROOT/registry/repos.yml" <<'PY'
+import json, re, sys
+
 doc = json.load(open(sys.argv[1], encoding="utf-8"))
+roster = open(sys.argv[2], encoding="utf-8").read()
+
+MANIFEST_DEST = ".config/dotnet-tools.json"
+
+# Does the kit DELIVER it? Read the roster's `kind: config` rows the same narrow way
+# check-pin-coherence.py does — a regex over the owning file, not a new YAML dependency.
+delivered = False
+for row in re.finditer(r"^\s*-\s*\{[^}]*\bkind:\s*config\b[^}]*\}", roster, re.MULTILINE):
+    d = re.search(r"\bdest:\s*([^,}\s]+)", row.group(0))
+    if d and d.group(1) == MANIFEST_DEST:
+        delivered = True
+
 rules = [r for r in doc["packageRules"]
-         if r.get("enabled") is False and ".config/dotnet-tools.json" in (r.get("matchFileNames") or [])]
-if len(rules) != 1:
-    print(f"expected exactly one rule disabling .config/dotnet-tools.json, found {len(rules)}")
-    sys.exit(1)
-rule = rules[0]
-if rule["matchFileNames"] != [".config/dotnet-tools.json"]:
-    print(f"the manifest must be scoped ALONE, not fused with the props: {rule['matchFileNames']}")
-    sys.exit(1)
-if not any(p.strip() == "fsgg-repo-scope: receives=coordination-kit" for p in rule["description"]):
-    print("the manifest rule must declare receives=coordination-kit, not build-config")
-    sys.exit(1)
-for repo in ("FS-GG/FS.GG.Audio", "FS-GG/FS.GG.Net", "FS-GG/FS.GG.Templates"):
-    if repo not in rule["matchRepositories"]:
-        print(f"{repo} holds a byte-checked .config/dotnet-tools.json and must stay suppressed")
+         if r.get("enabled") is False and MANIFEST_DEST in (r.get("matchFileNames") or [])]
+
+if delivered:
+    if len(rules) != 1:
+        print(f"registry/repos.yml's kit: block DELIVERS {MANIFEST_DEST}, so every receiver holds a "
+              f"materialized copy and a Renovate bump there is a guaranteed-red PR (#794). The preset "
+              f"must carry exactly one rule disabling it; found {len(rules)}.")
         sys.exit(1)
+    rule = rules[0]
+    if rule["matchFileNames"] != [MANIFEST_DEST]:
+        print(f"the manifest must be scoped ALONE, not fused with the props: {rule['matchFileNames']}")
+        sys.exit(1)
+    if not any(p.strip() == "fsgg-repo-scope: receives=coordination-kit" for p in rule["description"]):
+        print("the manifest rule must declare receives=coordination-kit, not build-config")
+        sys.exit(1)
+    for repo in ("FS-GG/FS.GG.Audio", "FS-GG/FS.GG.Net", "FS-GG/FS.GG.Templates"):
+        if repo not in rule["matchRepositories"]:
+            print(f"{repo} holds a byte-checked {MANIFEST_DEST} and must stay suppressed")
+            sys.exit(1)
+    print(f"kit DELIVERS {MANIFEST_DEST}; the preset disables it, coordination-kit-scoped")
+else:
+    if rules:
+        print(f"registry/repos.yml's kit: block does NOT deliver {MANIFEST_DEST} (ADR-0068 took it off "
+              f"in #1615), so every receiver AUTHORS its own copy and nothing compares it to anything. "
+              f"A disable here cannot be suppressing churn — there is none left to suppress. What it "
+              f"does is stop Renovate ever proposing the fs.gg.coord.cli bump, which ADR-0068 made the "
+              f"pin's ONLY delivery path to the fleet. Found {len(rules)} such rule(s): "
+              f"{[r.get('matchRepositories') for r in rules]}. Delete it, or put the manifest back on "
+              f"the kit and mean it (.github#1798).")
+        sys.exit(1)
+    print(f"kit does NOT deliver {MANIFEST_DEST}; the preset correctly leaves it managed")
 PY
 if [ "$?" -eq 0 ]; then
-  ok "the SHIPPED manifest rule is scoped to coordination-kit, kit-only receivers included"
+  ok "the preset disables the manifest IF AND ONLY IF the roster's kit: block delivers it (#1798)"
 else
-  bad "the shipped manifest rule must stay scoped to the coordination-kit receivers" "see above"
+  bad "preset/roster disagree about who owns .config/dotnet-tools.json" "see above"
 fi
 
 # --------------------------------------------------------------------------------------------

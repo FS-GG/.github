@@ -544,16 +544,58 @@ def assert_no_stray_secret_templates(cfg: dict, config_path: str) -> None:
         )
 
 
-# The receiver-side path of every file scripts/sync-build-config.sh copies byte-for-byte out of
-# dist/dotnet/. A receiver's copy is SYNCED, not authored (ADR-0006, sync-not-fork), and the
-# build-config drift gate — a REQUIRED check in adopting repos — fails any PR that changes one.
+# The receiver-side path of every file the AUTHORITY syncs byte-for-byte into a receiver's tree. A
+# receiver's copy is SYNCED, not authored (ADR-0006, sync-not-fork), and the build-config drift gate
+# — a REQUIRED check in adopting repos — fails any PR that changes one. So Renovate must be disabled
+# against these paths IN RECEIVERS: a bump is a PR that structurally cannot merge, forever (#794).
 #
-# .config/dotnet-tools.json stays FIRST: _offence() reports the first source path an ignorePaths
-# entry is a substring of, and the #678 legs assert that message names dist/dotnet/.config/... .
+# `.config/dotnet-tools.json` WAS THE FIRST ENTRY HERE AND IS NOT ANY MORE (#1798, ADR-0068). It was
+# correct for as long as it was true: #1077 made the engine tool manifest a `kind: config` kit row,
+# so all seven coordination-kit receivers held a materialized copy. #1615 took it back OFF the kit —
+# each receiver now OWNS its manifest, coordination-sync compares it against nothing, and the ONLY
+# delivery path the engine pin has left is a Renovate bump in the receiver's own file. Keeping it
+# here did not merely become pointless: this tuple is what `assert_synced_files_unmanaged` REQUIRES a
+# `matchFileNames` + `enabled: false` preset rule for, so its presence here was actively holding the
+# preset rule that switched ADR-0068's delivery mechanism off in all seven receivers.
+#
+# THIS TUPLE IS DERIVED, NOT DECIDED — `assert_synced_list_is_complete` reds unless it equals its
+# owners' union — so the way to change it is to change an owner, and the way to re-add the manifest
+# is to make it an authority-synced file again.
 SYNCED_RECEIVER_FILES = (
-    ".config/dotnet-tools.json",
     "Directory.Build.props",
     "Directory.Packages.props",
+)
+
+# THE OTHER ROLE THE TUPLE ABOVE USED TO PLAY, AND IT DOES NOT FOLLOW FROM IT (#1798).
+#
+# `SYNCED_SOURCE_PATHS` below was `dist/dotnet/` + each synced file, and it is what `_offence()`
+# tests `ignorePaths` entries against. That fused two different claims onto one list:
+#
+#   (A) "this file is synced INTO receivers, so Renovate must be disabled there" — the tuple above;
+#   (B) "this repo's own copy under dist/dotnet/ is MANAGED and an ignorePaths substring must never
+#       reach it" — which is a fact about THIS repo and has nothing to do with syncing.
+#
+# `dist/dotnet/.config/dotnet-tools.json` left (A) and did NOT leave (B): ADR-0068 says in as many
+# words that it "REMAINS in this repo as `.github`'s own canonical manifest", it is
+# `engine-pin-coherence`'s subject, and it is #660 — the one FS.GG.* bump PR Renovate has ever opened
+# here. Had (B) been left derived from (A), removing the manifest from the synced set would have
+# silently withdrawn the #678 substring protection from the very baseline #678 was written to
+# protect, in the same commit that made that baseline the fleet's only delivery path. That is the
+# failure this split exists to make impossible, and it is why (B) is derived from the TREE — every
+# package file actually present under dist/dotnet/ — rather than from (A).
+BASELINE_DIR = "dist/dotnet"
+
+# Renovate's nuget manager's four SHIPPED managerFilePatterns, read out of 43.281.1's own
+# dist/modules/manager/nuget/index.js `defaultConfig` rather than the docs. They decide which files
+# under dist/dotnet/ Renovate can propose a bump against at all — the only ones (B) can be about, and
+# the only ones a `kind: config` kit row could ever have needed a preset rule for.
+#
+# HARD-CODED HERE AND RE-DERIVED IN THE FIXTURE: this gate is offline Python and must not depend on
+# npm, but a hand-copied list of somebody else's constant is exactly the thing that rots silently. So
+# tests/preset-repo-scope-coherence/drive-package-rules.mjs reads the array out of the pinned
+# renovate and reds if it has moved. The list is written by hand; forgetting it is not quiet.
+_NUGET_MANAGER_FILE_RE = re.compile(
+    r"(?:^|/)(?:[^/]+\.(?:cs|fs|vb|sql)proj|[^/]+\.(?:props|targets)|dotnet-tools\.json|global\.json)$"
 )
 
 # The repo the synced files are AUTHORED in. Every path above means the opposite thing here: in a
@@ -599,10 +641,43 @@ SOURCE_OF_TRUTH_REPO = "FS-GG/.github"
 # plain repo name". A finding that names the wrong cause is barely better than no finding.
 _AUTHORITY_SAFE_ENTRY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9.][A-Za-z0-9._-]*$")
 
-# The org source of truth for each synced file: the copy that lives HERE and must stay MANAGED, so
-# that Renovate keeps bumping the baseline (#660, #677). Every check below is ultimately about
-# protecting these paths, not about the receiver copy.
-SYNCED_SOURCE_PATHS = tuple(f"dist/dotnet/{f}" for f in SYNCED_RECEIVER_FILES)
+def baseline_managed_paths(root: str) -> tuple:
+    """Every package file this repo keeps under dist/dotnet/ — role (B) above, derived from the TREE.
+
+    These are the copies that live HERE and must stay MANAGED, so that Renovate keeps bumping the
+    baseline (#660, #677). This used to be `dist/dotnet/` + SYNCED_RECEIVER_FILES, which made it a
+    COROLLARY of the synced set; #1798 is what that cost. When ADR-0068 took the engine tool manifest
+    off the kit, the manifest correctly left the synced set — and would have taken its own baseline
+    copy's substring protection with it, in the same change that made that baseline the fleet's only
+    delivery path for the engine pin. The two facts are independent, so they are read independently.
+
+    Reading the tree rather than a list is the same move `assert_synced_list_is_complete` makes for
+    the other role, and for the same reason (#902's census rot): add a package file to dist/dotnet/
+    and it is protected without an edit here. Filtered by the nuget manager's own file patterns
+    because an `ignorePaths` entry reaching a file no manager extracts costs nothing — the gate must
+    report what Renovate would actually stop bumping, not every path that happens to be in there.
+
+    Fail CLOSED. `dist/dotnet/` is this repo's baseline and cannot legitimately be empty of package
+    files; "I could not find the baseline" must never read as "the baseline is safe" (#266).
+    """
+    base = os.path.join(root, BASELINE_DIR)
+    found: list[str] = []
+    for dirpath, _dirnames, filenames in os.walk(base):
+        for name in filenames:
+            rel = os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/")
+            if _NUGET_MANAGER_FILE_RE.search(rel):
+                found.append(rel)
+    if not found:
+        raise GateError(
+            f"{BASELINE_DIR}/ holds no file Renovate's nuget manager would extract. That directory is "
+            f"this repo's dependency BASELINE — the source of truth every receiver's build config is "
+            f"materialized from, and the one place Renovate actually opens FS.GG.* bumps (#660). An "
+            f"empty answer here is a gate that cannot see its subject, not a repo with nothing to "
+            f"protect, so it refuses rather than reporting green over it (#266)."
+        )
+    # Sorted, so the offence message below names a stable path. `.config/dotnet-tools.json` sorts
+    # first under `dist/dotnet/`, which is what the #678 legs assert the message names.
+    return tuple(sorted(found))
 
 # The only keys the disabling rule may carry. Any other key is a MATCHER, and a matcher narrows the
 # rule — `matchUpdateTypes: ["major"]` would leave every minor bump proposing the un-mergeable PR
@@ -623,6 +698,17 @@ def _kit_config_dests(root: str) -> set:
     and belongs in the disabled set for the very same reason. `.config/dotnet-tools.json` moved onto
     this fabric in #1077, so the synced set is now the UNION of two owners; this reads the second one
     the same narrow way FILES is read from its owner (a regex over the owning file, not a new YAML dep).
+
+    ONLY THE ROWS RENOVATE COULD ACTUALLY BUMP, and that filter is not a detail (#1798). The premise
+    of the union is "a synced copy Renovate would happily propose a bump against"; a `kind: config`
+    row whose dest no Renovate manager extracts has no bump to suppress, so demanding a preset rule
+    for it is demanding a rule that could never do anything. That premise held for as long as the
+    kit's only `kind: config` row WAS the tool manifest. #1696 added `scripts/lib/roots.sh` and
+    `scripts/lib/args.sh` — shell libraries `scripts/skill-view` sources — and this function reported
+    them as files "Renovate will propose the un-mergeable PR against in every receiver, forever".
+    Nothing of the kind: there is no manager for a `.sh`. That false demand took `pin-coherence` to a
+    NO VERDICT on `main` from 2026-07-28T09:22Z (run 30346280541) — a gate blinded, on the day the
+    real drift landed underneath it, by insisting on a rule for two files that never needed one.
     """
     path = os.path.join(root, "registry", "repos.yml")
     try:
@@ -633,7 +719,7 @@ def _kit_config_dests(root: str) -> set:
     dests = set()
     for row in re.finditer(r"^\s*-\s*\{[^}]*\bkind:\s*config\b[^}]*\}", src, re.MULTILINE):
         d = re.search(r"\bdest:\s*([^,}\s]+)", row.group(0))
-        if d:
+        if d and _NUGET_MANAGER_FILE_RE.search(d.group(1)):
             dests.add(d.group(1))
     return dests
 
@@ -687,7 +773,7 @@ def assert_synced_list_is_complete(root: str) -> None:
         )
 
 
-def assert_synced_files_unmanaged(preset_path: str) -> None:
+def assert_synced_files_unmanaged(preset_path: str, root: str | None = None) -> None:
     """A synced receiver file must be disabled with matchFileNames — NEVER with ignorePaths.
 
     Renovate proposing a bump against a receiver's synced copy opens a PR that structurally cannot
@@ -739,18 +825,29 @@ def assert_synced_files_unmanaged(preset_path: str) -> None:
     except ValueError as e:
         raise GateError(f"the org Renovate preset {preset_path!r} is not valid JSON: {e}") from e
 
-    # (1) No ignorePaths entry may reach a synced file — tested in RENOVATE'S direction.
+    # The baseline this preset must never un-manage (role (B), #1798). `default.json` lives at the
+    # repo root, so the preset's own directory IS the root unless a caller says otherwise — and
+    # baseline_managed_paths() refuses rather than returning an empty tuple, so a wrong root here
+    # cannot degrade into "no paths to protect, therefore nothing to report" (#266).
+    baseline_paths = baseline_managed_paths(root if root is not None else (os.path.dirname(preset_path) or "."))
+
+    # (1) No ignorePaths entry may reach a managed baseline file — tested in RENOVATE'S direction.
     offenders: list[str] = []
 
     def _offence(entry: str) -> str | None:
         # Renovate's own substring branch, verbatim: `file.includes(ignorePath)`. Anything that
-        # occurs inside the source-of-truth path un-manages it, however short.
-        for src in SYNCED_SOURCE_PATHS:
+        # occurs inside a BASELINE path un-manages it, however short. Keyed on the baseline rather
+        # than on the synced set (#1798): `dist/dotnet/.config/dotnet-tools.json` stopped being
+        # synced when ADR-0068 took it off the kit and did NOT stop being the baseline Renovate
+        # bumps here (#660) — it is now the ONLY way the engine pin enters the org at all.
+        for src in baseline_paths:
             if entry in src:
                 return f"it is a SUBSTRING of {src}, which Renovate would therefore stop managing"
         # The minimatch branch is not modelled (see the docstring). Refuse conservatively: an entry
-        # naming a synced file is either the literal trap above or a glob that works by coincidence.
-        for rel in SYNCED_RECEIVER_FILES:
+        # naming one of these files is either the literal trap above or a glob that works by
+        # coincidence. Both the receiver-side synced paths and the baseline's own basenames, because
+        # a receiver copy and its baseline share a basename and either spelling is the same trap.
+        for rel in (*SYNCED_RECEIVER_FILES, *baseline_paths):
             if os.path.basename(rel) in entry or rel in entry:
                 return f"it names {rel}, whose only safe home is a matchFileNames packageRule"
         return None
@@ -771,12 +868,14 @@ def assert_synced_files_unmanaged(preset_path: str) -> None:
     walk(cfg, "")
     if offenders:
         raise GateError(
-            f"{preset_path} uses `ignorePaths` to reach a synced build-config file, at: "
-            f"{'; '.join(offenders)}. ignorePaths matches by SUBSTRING "
+            f"{preset_path} uses `ignorePaths` to reach a file this repo's dist/dotnet/ BASELINE "
+            f"must keep managed, at: {'; '.join(offenders)}. ignorePaths matches by SUBSTRING "
             f"(`file.includes(ignorePath)`), so it cannot separate a receiver's copy from THIS "
             f"repo's dist/dotnet/ source of truth — the one pin Renovate actually bumps here "
             f"(#660). Use a packageRule with `matchFileNames` + `enabled: false`, which anchors "
-            f"(.github#678)."
+            f"(.github#678). This is keyed on the baseline, not on the synced set: since ADR-0068 "
+            f"`dist/dotnet/.config/dotnet-tools.json` is no longer synced anywhere and is still the "
+            f"engine pin's only entry point into the org (.github#1798)."
         )
 
     # (2) Each synced file must actually BE disabled, by an anchored matchFileNames rule.
@@ -1766,7 +1865,7 @@ def main(argv: list[str]) -> int:
         # Runs before the feed is read: it needs no network, and a preset that un-manages the org
         # source of truth is a finding whether or not the feed happens to be reachable today.
         assert_synced_list_is_complete(root)
-        assert_synced_files_unmanaged(preset)
+        assert_synced_files_unmanaged(preset, root)
         print(
             f"ok: {', '.join(SYNCED_RECEIVER_FILES)} is disabled for receivers via matchFileNames "
             f"+ a positive matchRepositories allow-list that does not name {SOURCE_OF_TRUTH_REPO}, "
