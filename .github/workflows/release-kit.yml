@@ -24,6 +24,13 @@ name: release-kit
 # Release by pushing a tag `kit/v<version>` matching the csproj <Version>; or run manually
 # (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
 #
+# EITHER WAY THE TAG MUST EXIST AND MUST POINT AT THE COMMIT BEING PACKED (.github#1772). A manual
+# publish used to need no tag, and 0.1.0 and 0.4.0 shipped without one. The receiver-side
+# `kit-bump-shape` reporter now resolves the rule it runs from `kit/v<the version the receiver pins>`
+# — that is how its verdict became a pure function of the receiver's tree instead of the hub's moving
+# `main` (ADR-0067 §2, #1584) — so an untagged published version is one whose bump PRs can only be
+# refused. The check is in "Resolve version + publish decision" below.
+#
 # ⚠ THE nuget.org POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner must
 # create a Trusted Publishing policy for: Repository Owner `FS-GG` · Repository `.github` · Workflow file
 # `release-kit.yml` · package `FS.GG.Kit`, and `vars.NUGET_ORG_PUBLISH` must be `true` (it already is — the
@@ -100,6 +107,34 @@ jobs:
             fi
             echo "push=true" >> "$GITHUB_OUTPUT"
           elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            # EVERY PUBLISHED VERSION MUST NAME AN IMMUTABLE HUB COMMIT (.github#1772).
+            #
+            # A tag-push release gets this for free; a manual publish did not, and two versions in
+            # this package's history (0.1.0 and 0.4.0) have no `kit/v*` tag at all. That was harmless
+            # while the tag was decoration. It is not any more: the receiver-side `kit-bump-shape`
+            # reporter resolves the rule it runs from `kit/v<the version the receiver pins>`, so a
+            # published version with no tag is a version whose bump PRs can only be REFUSED — the
+            # ADR-0067 §2 alternative being to read the hub's moving `main`, which is exactly the
+            # #1584 defect #1772 closed.
+            #
+            # So the tag is now a PRECONDITION of publishing, not a way of triggering it, and it must
+            # point at the commit being packed — a tag on some other commit would resolve the rule out
+            # of a tree that is not this release. Fail closed and name the remedy; a publish that
+            # skipped this would ship a version the fleet cannot pin a rule to, and nothing downstream
+            # could tell that from a tag someone simply forgot.
+            tag="kit/v$version"
+            tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
+                        "refs/tags/$tag" "refs/tags/$tag^{}" \
+                      | awk -v p="refs/tags/$tag^{}" -v b="refs/tags/$tag" \
+                          '$2==p {peeled=$1} $2==b {plain=$1} END {print (peeled ? peeled : plain)}')"
+            if [ -z "$tagged" ]; then
+              echo "::error::refusing to publish FS.GG.Kit $version: no tag $tag exists. Every published version must name an immutable hub commit (.github#1772) — the kit-bump-shape reporter resolves its rule from kit/v<pin>. Push the tag instead: \`git tag $tag $GITHUB_SHA && git push origin $tag\` (which also releases)."
+              exit 1
+            fi
+            if [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "::error::refusing to publish FS.GG.Kit $version: $tag points at $tagged, not the commit being packed ($GITHUB_SHA). The tag is what the fleet resolves the kit-bump-shape rule from, so it must be this tree."
+              exit 1
+            fi
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
             echo "push=false" >> "$GITHUB_OUTPUT"
