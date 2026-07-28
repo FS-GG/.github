@@ -366,21 +366,37 @@ cat > "$WORK/view-conflict.proj" <<EOF
   <PropertyGroup>
     <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
     <FsggKitReceiverRoot>$WORK/recv-conflict</FsggKitReceiverRoot>
+    <FsggKitSkillRoots>.claude/skills;.agents/skills</FsggKitSkillRoots>
     <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>
   </PropertyGroup>
 </Project>
 EOF
-# .agents/skills is in the DEFAULT FsggKitSkillRoots, so this proj declares it both materialized and
-# generated. Silently picking either reading destroys something: materializing overwrites a view, and
-# viewing deletes the only copies. It must refuse.
+# THE CONFLICT IS DECLARED, NOT INHERITED (ADR-0067 §9 stage 2, .github#1676). This fixture used to
+# name `.agents/skills` as a view root ONLY, and relied on it also being in the DEFAULT
+# FsggKitSkillRoots to create the overlap. Stage 2 narrowed that default to one root, so the overlap
+# silently disappeared and this leg stopped testing a conflict at all — it passed because there was
+# nothing to refuse. A leg whose subject is manufactured by a default is a leg that evaporates when
+# the default moves (.github#1849). Both properties now name the root explicitly.
+#
+# Silently picking either reading destroys something: materializing overwrites a view, and viewing
+# deletes the only copies. It must refuse.
 if dotnet msbuild "$WORK/view-conflict.proj" -t:FsggKitMaterialize -nologo >/dev/null 2>&1; then
   fail "a root declared BOTH materialized and view was accepted — the materializer picked a disposition silently"
 fi
 echo "   a root named in two dispositions is refused, not resolved"
 
-echo "== 3h. no view roots declared: the kit behaves exactly as 0.14.0 did =="
-# The safety of the whole change is this default. A receiver that takes the bump and configures
-# nothing must materialize both roots and retire nothing (#1696 is stage 0; phase 4 owns retirement).
+echo "== 3h. the DEFAULT dispositions: one materialized root, one generated view =="
+# THE LEG THAT PINS THE DEFAULT, and stage 2 is precisely a change to it (ADR-0067 §9, .github#1676).
+#
+# It used to read "no view roots declared: the kit behaves exactly as 0.14.0 did" and assert that a
+# receiver configuring nothing materialized BOTH roots — because FsggKitViewSkillRoots was empty by
+# default and #1696 was stage 0, which deliberately retired nothing. Stage 1 is now 7 of 7, so the
+# default describes the END STATE instead: ONE materialized root, and `.agents/skills` as a generated
+# VIEW.
+#
+# THE RUNTIME CONTRACT IS UNCHANGED — it is the union of the materialized and view roots, still
+# ADR-0065's two — so this leg asserts the union AND the disposition. Asserting only that the skills
+# are readable at both roots would pass just as well on the second byte-copy stage 2 exists to stop.
 recv5="$WORK/recv-default"; mkdir -p "$recv5"
 cat > "$WORK/default.proj" <<EOF
 <Project>
@@ -393,13 +409,22 @@ cat > "$WORK/default.proj" <<EOF
 </Project>
 EOF
 dotnet msbuild "$WORK/default.proj" -t:FsggKitMaterialize -nologo >/dev/null \
-  || fail "the DEFAULT materialize (no view roots) failed — the new property is not inert by default"
+  || fail "the DEFAULT materialize failed — a receiver that configures nothing must still get a
+  working kit, and stage 2's defaults must not require any receiver-side wiring"
+# THE UNION: every skill visible at BOTH runtime roots, which is what the contract promises.
 for root in .claude/skills .agents/skills; do
   for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
-    [ -f "$recv5/$root/$s/SKILL.md" ] || fail "default materialize lost a root: $root/$s"
+    [ -f "$recv5/$root/$s/SKILL.md" ] || fail "default materialize lost a runtime root: $root/$s"
   done
 done
-echo "   both roots still materialized with no configuration; FsggKitViewSkillRoots is inert by default"
+# THE DISPOSITION: one of those two is a GENERATED VIEW, not a second copy. Without this the leg above
+# is satisfied by exactly the duplication ADR-0067 retired.
+[ -L "$recv5/.agents/skills" ] || [ -L "$recv5/.agents/skills/check-board" ] \
+  || fail "the default materialized .agents/skills as a real directory of real files — stage 2's
+  default must make it a generated VIEW, or the narrowing bought nothing"
+[ ! -L "$recv5/.claude/skills" ] \
+  || fail "the default made the SOURCE root a link — the materialized root must hold the real bytes"
+echo "   default: one materialized root + one generated view; the runtime union is still ADR-0065's two"
 
 echo "== 4. a tampered kit file is a LOUD failure =="
 cp -r "$WORK/unpacked/kit" "$WORK/tampered"
