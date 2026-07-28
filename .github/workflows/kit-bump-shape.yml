@@ -7,12 +7,17 @@
 # receiver's bump carries DELETIONS under roots that are not in `FsggKitSkillRoots`, and a guard
 # reading only that property refuses the one bump that carries the retirement, on all seven.
 #
-# THIS WORKFLOW IS THE GATE'S OWN FIXTURE, NOT THE RECEIVER-SIDE CHECK. The verdict belongs on a
-# receiver's bump PR, where the diff and the restored target package both exist; arming it there is
-# #1587's remaining work (its ungated job, and #1613's branch-protection writer to make it REQUIRED
-# in the seven receivers). What this repo can prove — and what #1587 AC 2 and #1693 AC 2/3 ask for
-# in as many words — is that the rule admits the measured shape and REFUSES a contaminated one.
-# That is decidable here, offline, and is what runs below.
+# THIS WORKFLOW IS THE RULE'S OWN FIXTURE, NOT THE RECEIVER-SIDE CHECK. The verdict belongs on a
+# receiver's bump PR, where the diff and the restored target package both exist. THE PRODUCER THAT
+# PUTS IT THERE NOW EXISTS (#1713): the `bump-shape` job in `.github/workflows/kit-materialize.yml`,
+# which all seven receivers already call, reporting the context `materialize / kit-bump-shape`.
+#
+# THAT CONTEXT IS REQUIRED IN NO REPOSITORY, DELIBERATELY. #1587's automerge was re-scoped on
+# 2026-07-28 — the producer keeps its priority as a defect and automerge is re-decided once the
+# producer has run over real fan-outs — so what ships is a REPORTER, and arming it is a later,
+# separate decision (#1712 AC2 is discharged by that change, not by this one). What this repo can
+# prove, offline and with no credential, is that the rule admits the measured shape, REFUSES a
+# contaminated one, and separates the third class (#1726) from both. That is what runs below.
 #
 # No `schedule:`: the subject is entirely in this tree, so nothing can stale it between pushes.
 name: kit-bump-shape
@@ -23,6 +28,10 @@ on:
       - "scripts/check-kit-bump-shape.py"
       - "tests/kit-bump-shape/**"
       - ".github/workflows/kit-bump-shape.yml"
+      # The RECEIVER-SIDE PRODUCER (#1713) lives in kit-materialize.yml, and two of the legs below
+      # read that file: the context name it publishes, and the fact that its job carries no `if:`.
+      # Without this entry a rename or a gate on that job would land with this fixture never running.
+      - ".github/workflows/kit-materialize.yml"
       - "src/FS.GG.Kit/build/**"
   push:
     branches: [main]
@@ -30,6 +39,10 @@ on:
       - "scripts/check-kit-bump-shape.py"
       - "tests/kit-bump-shape/**"
       - ".github/workflows/kit-bump-shape.yml"
+      # The RECEIVER-SIDE PRODUCER (#1713) lives in kit-materialize.yml, and two of the legs below
+      # read that file: the context name it publishes, and the fact that its job carries no `if:`.
+      # Without this entry a rename or a gate on that job would land with this fixture never running.
+      - ".github/workflows/kit-materialize.yml"
       - "src/FS.GG.Kit/build/**"
   workflow_dispatch:
 

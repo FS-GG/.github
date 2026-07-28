@@ -74,15 +74,63 @@ WHY VIEW ROOTS ARE ADMITTED, AND WHY THEY ARE STILL READ SEPARATELY
   filed to avoid. `FsggKitViewSkillRoots` is EMPTY by default, so no receiver has one today; this admits
   the first one that does, with no edit here.
 
+THE MIDDLE CLASS, AND WHY A TWO-VALUED ANSWER IS NOT WORTH REPORTING (.github#1726, #1713)
+  #1587's premise — "the class of change is provably mechanical" — was measured on 2026-07-28 against
+  the seven receivers being brought current in one morning. THREE OF THE SEVEN needed genuine
+  receiver-side changes, so measured coverage of the two-valued rule is about 4 of 7, and the cases it
+  excludes are exactly the ones a human would most want automated.
+
+  `FS.GG.Rendering#1088` is the decisive one. 36 files: the pin, 29 materialized paths, 5 kit-owned
+  clients/configs — and `scripts/materialize-skill-roots.sh`, a file RENDERING WROTE, whose stale
+  three-root expectation 0.15.0 invalidated. That repair cannot land before the bump (at the old pin
+  the expectation is correct) or after it (the bump is red until it lands). It has to ride the bump,
+  and merging it was right.
+
+  So the answer this script owes a reader is not pass/fail. It is WHICH OF THESE THREE:
+
+    mechanical         the pin and what the materializer produces, and nothing else.
+    mechanical+repair  all of that, PLUS receiver-authored files a human wrote. The kit's own
+                       territory is exactly as the materializer left it; the reading a human owes
+                       this PR is the listed receiver files and nothing more.
+    not mechanical     anything else — the kit's OWN territory does not match what the materializer
+                       would have produced, so nothing in this diff can be taken on trust.
+
+  That distinction is the whole value: it turns "seven PRs a human must read" into "three PRs a human
+  must read", and it does it without gating anything.
+
+  A FINDING IS A REPAIR ONLY IF IT IS BOTH:
+    1. OUTSIDE KIT TERRITORY — not a destination this package declares in `kit-manifest.tsv` (any
+       kind, INCLUDING build-config rows a receiver has not opted into: content appearing at a
+       destination the receiver does not receive is the kit's territory going wrong, not a repair),
+       and not under any declared root, live or retired or view; and
+    2. AN ADD OR A MODIFY. A deletion is never a repair. Deleting is the materializer's own
+       vocabulary — the managed-skill-directory sweep, the retired-root sweep, the view-root sweep —
+       and a deletion this script cannot attribute to one of them is precisely the thing it exists to
+       catch. A human who genuinely must delete one of their own files alongside a bump gets
+       `not mechanical` and a read, which is the safe direction.
+
+  A single kit-territory finding makes the whole PR `not mechanical`, however many repairs sit beside
+  it. The milder class is not a union; it is a statement about the kit's half being clean.
+
 FAIL CLOSED (epic #266). "I could not decide" is never spelled like "I decided, and it's fine":
 
     exit 0  MECHANICAL     — the diff is exactly the admissible class. Safe to automerge.
-    exit 1  CONTAMINATED   — a kit bump carrying something outside it. Automerge must not fire.
+    exit 1  NOT-MECHANICAL — a kit bump whose KIT territory carries something the materializer would
+                             not have produced, or which deletes a file no sweep accounts for.
+                             Automerge must not fire.
     exit 2  NOT-A-KIT-BUMP — no `FS.GG.Kit` pin change in this diff. The guard ABSTAINS; abstention is
                              not a pass, and #1587's automerge must treat it as "do not merge".
     exit 3  REFUSED        — the inputs cannot support a verdict (no manifest, no skill rows, a root
-                             declared in two of the three properties, an unreadable diff, a rename).
+                             declared in two of the three properties, an unreadable diff, a rename,
+                             or a pin change with no package/properties to judge it against).
                              Never guessed.
+    exit 4  MECHANICAL+REPAIR — mechanical in kit territory, plus receiver-authored files a human
+                             wrote. NOT a pass: automerge fires on 0 ALONE. It is a REPORT that the
+                             reading this PR needs is bounded, and names its bounds.
+
+  Exit 4 rather than a sub-case of 0 is the #266 rule applied to the new class: an automerge rule, a
+  shell `if`, and a human skimming a check list must all be able to tell "no human need read this"
+  from "read these three files", and they must not be able to confuse either with a refusal.
 
 HOW A CALLER PRODUCES THE INPUTS — all three are derivations, none is a restatement:
 
@@ -97,6 +145,14 @@ HOW A CALLER PRODUCES THE INPUTS — all three are derivations, none is a restat
   receiver that overrides a root set is judged by what it actually declares, not by the package default.
   The `--kit-dir` version is read from the package's nuspec and asserted equal to the pin the diff moves
   to, so pointing this at the wrong package is a refusal rather than a wrong verdict.
+
+  `--kit-dir` AND `--properties` ARE OPTIONAL, AND ONLY BECAUSE OF WHAT THAT BUYS A RECEIVER-SIDE
+  CALLER. Whether a diff moves the pin at all is decided from the diff alone, before any package is
+  needed — so a caller may run this with three arguments to get the abstention (exit 2) for free, and
+  pay for a .NET SDK, a restore and an MSBuild evaluation ONLY on the pull requests that actually move
+  the pin. That is what makes the receiver-side reporter cheap enough to run UNGATED on every pull
+  request, which #1508 requires of anything a branch might one day require. Omitting them on a diff
+  that DOES move the pin is a REFUSAL (exit 3), never a pass and never an abstention.
 """
 
 from __future__ import annotations
@@ -108,7 +164,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MECHANICAL, CONTAMINATED, NOT_A_KIT_BUMP, REFUSED = 0, 1, 2, 3
+MECHANICAL, NOT_MECHANICAL, NOT_A_KIT_BUMP, REFUSED, MECHANICAL_PLUS_REPAIR = 0, 1, 2, 3, 4
 
 PACKAGE = "FS.GG.Kit"
 
@@ -253,13 +309,22 @@ class Shape:
         self.skills: set[str] = set()
         self.skill_dests: set[str] = set()
         self.flat: set[str] = set()
+        # EVERY non-skill destination the package declares, whether or not THIS receiver opts into it.
+        # `flat` is what the materializer may WRITE here; this is what belongs to the KIT here. They
+        # differ by exactly the build-config rows of a receiver that does not receive build-config,
+        # and that difference is load-bearing: a `Directory.Build.props` appearing in such a
+        # receiver's bump is the kit's own territory being written by something that is not the
+        # materializer, which is `not mechanical` — never a receiver-authored repair.
+        self.declared_dests: set[str] = set()
         for kind, dest in rows:
             if kind == "skill":
                 self.skills.add(dest.split("/", 1)[0])
                 self.skill_dests.add(dest)
             elif kind in ("client", "config"):
                 self.flat.add(dest)
+                self.declared_dests.add(dest)
             elif kind == "build-config":
+                self.declared_dests.add(dest)
                 # Opt-in, per receiver. A receiver that does not receive build-config never has these
                 # written, so admitting them unconditionally would widen the class for four repos that
                 # cannot produce them.
@@ -298,6 +363,25 @@ class Shape:
 
     def delete_only_roots(self) -> list[str]:
         return self.retired + self.view
+
+    def territory(self, path: str) -> str:
+        """"kit" if this path belongs to the package's own surface here, else "receiver".
+
+        This is a WIDER question than `writable()`, and deliberately so. `writable()` asks "would the
+        materializer have produced exactly this?"; this asks "is this the kit's ground at all?" —
+        which is what decides whether a finding is a receiver-authored repair (readable, bounded) or
+        the kit's own output being wrong (not readable at all without checking the whole diff).
+
+        Kit ground is every destination the TARGET package declares, plus everything under every root
+        it declares in ANY of the three dispositions. Nothing here is a list; both come from the
+        package and the receiver's own evaluation of it, exactly as the admissible class does.
+        """
+        if path in self.declared_dests:
+            return "kit"
+        for root in self.live + self.retired + self.view:
+            if path == root or path.startswith(root + "/"):
+                return "kit"
+        return "receiver"
 
 
 def changed_paths(repo: Path, base: str, head: str) -> list[tuple[str, str]]:
@@ -403,8 +487,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--repo", required=True, type=Path, help="receiver checkout to read the diff from")
     parser.add_argument("--base", required=True, help="the PR's base ref")
     parser.add_argument("--head", required=True, help="the PR's head ref")
-    parser.add_argument("--kit-dir", required=True, type=Path, help="the TARGET version's extracted package")
-    parser.add_argument("--properties", required=True, type=Path, help="`dotnet msbuild -getProperty:` JSON")
+    # Optional so a caller can buy the abstention (exit 2) for the price of a git diff — see the
+    # module docstring. A pin change with these missing is a REFUSAL, never a pass.
+    parser.add_argument("--kit-dir", type=Path, help="the TARGET version's extracted package")
+    parser.add_argument("--properties", type=Path, help="`dotnet msbuild -getProperty:` JSON")
     parser.add_argument("--json", action="store_true", help="emit the verdict as one object")
     args = parser.parse_args(argv)
 
@@ -421,6 +507,18 @@ def main(argv: list[str]) -> int:
             }
             code = NOT_A_KIT_BUMP
         else:
+            missing = [
+                flag
+                for flag, value in (("--kit-dir", args.kit_dir), ("--properties", args.properties))
+                if value is None
+            ]
+            if missing:
+                raise Refused(
+                    f"this diff MOVES the {PACKAGE} pin, so a shape verdict needs {' and '.join(missing)}. "
+                    "Run again with the target version's extracted package and the receiver's evaluated "
+                    "properties. A caller that omits them gets a refusal and never an abstention: "
+                    "'no package to judge against' must not be spelled like 'this is not a kit bump'."
+                )
             shape = Shape(args.kit_dir, read_properties(args.properties))
             if len(pins) != 1:
                 raise Refused(
@@ -450,7 +548,11 @@ def main(argv: list[str]) -> int:
                 )
 
             verdicts = classify(shape, entries, pin_path)
-            findings = [(s, p, why) for s, p, why in verdicts if why]
+            findings = [(s, p, why, shape.territory(p)) for s, p, why in verdicts if why]
+            # A REPAIR: outside kit territory, and written rather than removed. Both halves are
+            # argued in the module docstring; neither is a heuristic over path names.
+            repairs = [f for f in findings if f[3] == "receiver" and f[0] in ("A", "M")]
+            blocking = [f for f in findings if f not in repairs]
             # The pin is counted as the pin and NOT as a materialized output. Folding it into the
             # modified count makes the summary say "9 materialized outputs" for a diff carrying 8,
             # and a summary a human is meant to check by hand must not be off by one.
@@ -458,8 +560,14 @@ def main(argv: list[str]) -> int:
             for status, path in entries:
                 if path != pin_path:
                     counts[status] += 1
+            if not findings:
+                name, code = "mechanical", MECHANICAL
+            elif not blocking:
+                name, code = "mechanical+repair", MECHANICAL_PLUS_REPAIR
+            else:
+                name, code = "not-mechanical", NOT_MECHANICAL
             verdict = {
-                "verdict": "mechanical" if not findings else "contaminated",
+                "verdict": name,
                 "target": shape.version,
                 "pin": {"path": pin_path, "from": pin_info["from"], "to": pin_info["to"]},
                 "roots": {
@@ -470,9 +578,12 @@ def main(argv: list[str]) -> int:
                 "buildConfig": shape.build_config,
                 "skills": sorted(shape.skills),
                 "changed": {"added": counts["A"], "modified": counts["M"], "deleted": counts["D"]},
-                "findings": [{"status": s, "path": p, "why": why} for s, p, why in findings],
+                "findings": [
+                    {"status": s, "path": p, "why": why, "territory": t} for s, p, why, t in findings
+                ],
+                "repairs": [p for _, p, _, _ in repairs],
+                "blocking": [p for _, p, _, _ in blocking],
             }
-            code = MECHANICAL if not findings else CONTAMINATED
     except Refused as error:
         if args.json:
             print(json.dumps({"verdict": "refused", "reason": str(error)}, indent=2))
@@ -503,14 +614,49 @@ def main(argv: list[str]) -> int:
         )
         return code
 
-    lines = "\n".join(f"    {f['status']}  {f['path']}\n        {f['why']}" for f in verdict["findings"])
+    if code == MECHANICAL_PLUS_REPAIR:
+        changed = verdict["changed"]
+        repaired = "\n".join(
+            f"    {f['status']}  {f['path']}" for f in verdict["findings"] if f["territory"] == "receiver"
+        )
+        # stdout, and NOT `::error::`. This class is a REPORT, not a refusal: FS.GG.Rendering#1088 is
+        # the measured instance, and merging it was right. Naming the class in words is #1726 AC 3 —
+        # a reader must not have to deduce "a receiver-authored repair rode this bump" from a path list.
+        print(
+            f"report: MECHANICAL + RECEIVER-SIDE REPAIR — {PACKAGE} bump to {verdict['target']}, pin "
+            f"{verdict['pin']['path']} {verdict['pin']['from']} -> {verdict['pin']['to']}. Kit "
+            f"territory is exactly what the materializer produces ({changed['added']} added / "
+            f"{changed['modified']} modified output(s), {changed['deleted']} swept deletion(s)), and "
+            f"{len(verdict['repairs'])} receiver-authored file(s) ride along:\n{repaired}\n"
+            "A repair that can only ride its bump is an expected class, not a contamination "
+            "(.github#1726: FS.GG.Rendering#1088's `scripts/materialize-skill-roots.sh` could not land "
+            "before the bump, because at the old pin its expectation was correct, nor after it, "
+            "because the bump was red until it landed). THIS IS NOT A PASS — automerge fires on the "
+            "`mechanical` verdict ALONE. What it says is that the reading this pull request needs is "
+            "bounded, and these are its bounds."
+        )
+        return code
+
+    lines = "\n".join(
+        f"    {f['status']}  {f['path']}  [{f['territory']} territory]\n        {f['why']}"
+        for f in verdict["findings"]
+    )
+    repaired = verdict["repairs"]
+    aside = (
+        f"\n{len(repaired)} receiver-authored change(s) ride along too ({', '.join(repaired)}); they "
+        "are not what makes this verdict — the kit-territory finding(s) above are."
+        if repaired
+        else ""
+    )
     print(
-        f"::error::check-kit-bump-shape: this {PACKAGE} bump to {verdict['target']} carries "
-        f"{len(verdict['findings'])} change(s) OUTSIDE the mechanical class, so it must not "
-        f"automerge (.github#1587 AC 2):\n{lines}\n"
+        f"::error::check-kit-bump-shape: this {PACKAGE} bump to {verdict['target']} is NOT MECHANICAL "
+        f"— {len(verdict['blocking'])} change(s) the materializer would not have produced, so it must "
+        f"not automerge (.github#1587 AC 2):\n{lines}{aside}\n"
         f"Admissible: the pin; the target manifest's client/config destinations; "
         f"<root>/<skill destination> for root in {verdict['roots']['live']}; and DELETIONS ONLY under "
-        f"<root>/<skill>/ for root in {verdict['roots']['live'] + verdict['roots']['retired'] + verdict['roots']['view']}.",
+        f"<root>/<skill>/ for root in {verdict['roots']['live'] + verdict['roots']['retired'] + verdict['roots']['view']}. "
+        "A receiver-authored file ADDED or MODIFIED beside all of that is the milder `mechanical+repair` "
+        "class (exit 4); a DELETION, or anything inside kit territory, is this one.",
         file=sys.stderr,
     )
     return code
