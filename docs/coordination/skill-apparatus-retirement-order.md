@@ -34,7 +34,7 @@ Sorting the seven by that distinction:
 | `skill-union-assert` | **RETIRES** | Its subject is *"every skill … present in every root and byte-identical across them"* (`registry/repos.yml:226`). With a generated view there is **one object**, so divergence is not detected-and-absent, it is **structurally impossible**. `scripts/skill-view-parity.sh` checks that claim rather than assuming it, and reported it on every resolved tree measured below. |
 | the second committed root, per repo | **RETIRES** | This *is* the copy. |
 | kit materialization | **NARROWS** | Two roots → one. The package still ships and still materializes. |
-| `coordination-coherence` (+ `coordination-sync --check`) | **NARROWS** | Its skill paths halve. It also covers `scripts/fsgg-coord` and `.config/dotnet-tools.json`, which are **not** skills and are untouched by this rewrite. It does not dissolve. |
+| `coordination-coherence` (+ `coordination-sync --check`) | **NARROWS** | Its skill paths halve. It also covers `scripts/fsgg-coord` and `.config/dotnet-tools.json`, which are **not** skills and are untouched by this rewrite. It does not dissolve. **Measured on the first retirement (2026-07-28, `FS.GG.Templates`): 51 graded files → 28, green both sides, with NO gate edit** — `coordination-sync`'s pin verifier derives its roots from the receiver's own `FsggKitSkillRoots`, so a receiver narrows this gate by moving its own property. The narrowing needs no hub change and reaches no other receiver. |
 | `kit-published-coherence` | **UNCHANGED** | Compares the published nupkg's manifest to the staged one. The kit still publishes. |
 | the kit Renovate bump loop | **UNCHANGED** | The kit still versions and still needs bumping. |
 | **the kit-pin freshness sweep** | **UNCHANGED — and this is why it goes last** | *"Is receiver R's pin current?"* is a question about **distribution**. Resolve-don't-copy does not answer it and does not remove it. §9 orders it retired last; phase 4's measurement is that it has **no retirement trigger at all** under the decided end state. It goes last, and on today's evidence it does not go. |
@@ -44,6 +44,18 @@ apparatus as their subject, but most of them are about **distribution** — bump
 receiver fan-out — not about duplication. They do not dissolve when the copy goes. `#1676` expected a
 bulk `SUPERSEDED` closure; the measured answer is that **the closure is real but it is downstream of a
 retirement that has not happened yet**, and closing those rows now would close live subjects.
+
+> **RE-MEASURED AFTER THE FIRST RETIREMENT ACTUALLY HAPPENED (2026-07-28, `FS.GG.Templates`): still
+> ZERO rows close, and the reason is now sharper than "not yet".** Of 66 live rows, 40 mention the
+> apparatus. Not one of them has *"a receiver commits its skills twice"* as its subject: they are
+> distribution (`#1587`, `#1615`, `#1607`), `.github`'s own tree (`#1531`, `#1685`, `#1706`), the
+> corpus's currency (`#1703`), or the coord engine. And the repo where the duplication fact **did**
+> change has **zero open board rows of its own** — `FS.GG.Templates` is not on the board at all.
+>
+> So the bulk closure this rewrite promised is not merely deferred, it is **mis-sized**. Retiring the
+> copy on one receiver dissolves no row because no row was ever opened about that receiver's copy; the
+> duplication was a standing cost nobody filed. A closure will come from `#1685` and `#1706` when
+> `.github`'s **own** duplicate roots go (§6 "Not in this order"), not from the receiver sequence.
 
 ---
 
@@ -142,6 +154,49 @@ exists**, which is blocker B2 below.
 > *only* thing between the fleet and stage 1. Re-run §4's four preconditions on R's own tree the day R is
 > retired, exactly as this section already says; do not read 0.15.0's existence as any repo's eligibility.
 
+> **UPDATED 2026-07-28, later the same day. The verdict is 1 of 7: `FS.GG.Templates`, and it is DONE.**
+> `FS.GG.Templates#320` merged (`8f649bc`) and took **0.15.0**. `#1693`'s own worker had already corrected
+> the paragraph above: `#1587`'s diff-shape guard **does not exist yet**, so nothing was ever mechanically
+> refusing the bumps — they were unmerged because nothing automerges them, and a hand merge was available
+> the whole time. Do not carry "B3 blocks the fleet" forward; carry "each receiver's bump has to land, and
+> five of the six remaining have no current one".
+>
+> §4's four preconditions, re-run on `FS.GG.Templates@8f649bc` **that day** rather than inherited from
+> phase 3's fleet-wide 8/8:
+>
+> | precondition | measured |
+> |---|---|
+> | 1 — `scripts/skill-view` present and executable in R | **yes**, 21,851 bytes, and it ran: it produced the view and its own `check` passed over it |
+> | 2 — parity AGREE on R's tree, and again on R's resolved equivalent | **AGREE / AGREE.** Committed tree: `old=ok new=ok` over 4 ids in 2 roots. Resolved half-view: same, with byte-identity reported *"STRUCTURALLY IMPOSSIBLE to violate here — every configured root resolves to the same object … Checked, not assumed."* |
+> | 3 — half-view, not all-view | **half-view** (`.claude/skills` tracked source, `.agents/skills` generated), so `#1685` is not engaged |
+> | 4 — second root not left committed | **satisfied by the retirement commit itself** — the deletions and the generate are the same change, which is the only order `skill-view` permits: it refused to generate while the root was still tracked, measured |
+>
+> Retired on `FS.GG.Templates` as [#323](https://github.com/FS-GG/FS.GG.Templates/pull/323), squash
+> `531b01b`. **Stage 1 order deviated deliberately**: §6 lists `FS.GG.Net` first on blast radius, and
+> eligibility outranks blast radius — §9 forbids retiring where the replacement is unproven, and Net has
+> no bump PR at all. Templates was the only eligible repo, and it is also the only receiver with **no
+> `gate.yml` and no `build-config`**, so it runs no second materialize that a view root could red.
+>
+> **Two things the first retirement measured that §4 did not ask for, and which every later receiver
+> owes:**
+>
+> 1. **The view must be generated in the receiver project, not in a workflow.** An uncommitted root is
+>    absent in every fresh checkout, and `FsggKitCheckSkillView` runs on **every** materialize — so a
+>    fresh clone of the retirement commit *without* a generate step fails with *"view skill root
+>    '.agents/skills' is ABSENT or a DANGLING link"*, and the receiver's next Renovate kit bump would red
+>    on a tree nobody touched. Templates ships `FsggTemplatesGenerateSkillView`, a target with
+>    `BeforeTargets="FsggKitCheckSkillView"` that runs **the receiver's own pinned `scripts/skill-view`**.
+>    Not a hub workflow step: a workflow step only covers the trees that run that workflow, and a hub
+>    script would put hub state back inside a receiver's verdict (`#1584`).
+> 2. **The retirement removes the only gate that would notice the root leaving the contract later, and the
+>    same change must replace it.** Measured on a tree with `FsggKitViewSkillRoots` emptied: the
+>    materialize is green (*"nothing to assert"*), `coordination-sync --check --against-pin` is green (it
+>    reads `FsggKitSkillRoots` alone), and the root is simply gone from the runtime contract — the exact
+>    silent class ADR-0067 §8 exists to prevent. Templates' replacement is
+>    `tests/composition/lib/skill-view-roots.sh`, asserting the union is ADR-0011's two on its **required**
+>    `composition` check, with an offline can-fire demo that drives the assertion (both `bad` arms mutated
+>    to `ok`; the demo red both times).
+
 ### The per-receiver sequence 0.15.0 makes available (stage 1, per repo)
 
 Measured end-to-end by `src/FS.GG.Kit/verify-package.sh` §3f, on a receiver tree holding a stale
@@ -171,7 +226,7 @@ materialized `.agents/skills` and one skill of its own:
 | **B1** | The kit does not deliver `scripts/skill-view` (or the absence-check wiring) to receivers. Precondition 1 fails on all seven. | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `scripts/skill-view` is a `kit:` row, as are the two libraries it sources at startup — `repos.sh validate` now refuses a kit that separates them, because a receiver holding the tool without them would read as satisfying precondition 1 while the tool exits non-zero on every run. **Re-read precondition 1 as written**: "present *and executable*" means it runs, and the kit's own gate proves that by running the materialized copy from a receiver tree. |
 | **B2** | The materializer has exactly two states for a root: `FsggKitSkillRoots` (materialize into it) and `FsggKitRetiredSkillRoots` (delete the kit's directories from it) — `src/FS.GG.Kit/build/FS.GG.Kit.props:19,25`. There is **no third state** for *"still a declared runtime root, but generated locally rather than materialized"*, which is exactly what a view root is. Without it a receiver's second root stays committed, and `scripts/skill-view:331` then refuses to generate the view there. ADR-0065 §Retiring a root forbids the receiver hand-deleting it — *"A receiver never hand-deletes a mirror; the materializer that created it is the thing that removes it."* | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `FsggKitViewSkillRoots` is the third state — a root that stays in the runtime contract, is not materialized into, has its previously-materialized kit directories swept by the materializer, and is then **asserted visible** (`FsggKitCheckSkillView`, ADR-0067 §8). ADR-0065 §A root's three dispositions records the contract. **Empty by default**, so it retires nothing until a receiver's own stage-1 change sets it. |
 | **B3** | [`#1693`](https://github.com/FS-GG/.github/issues/1693) — `#1587`'s diff-shape guard refuses the 0.14.0 bump on all seven receivers, so no kit change reaches any receiver today regardless. 0 of 7 are current (SDD 0.10.0; five at 0.8.0; Audio 0.6.0). | open |
-| **B4** | `scripts/repos-audit.sh:1841` requires a receiver's gate to be armed on a change to a **committed** skill root. A generated root cannot be armed that way. Repairing this is **sanctioned** — ADR-0067 says the apparatus *"keeps running unchanged, and keeps being repaired"* until §9's order reaches it — but it must precede the first receiver retirement, and it **must not be confused with retiring the sweep**, which is last. | open, unfiled — raise with the first receiver |
+| **B4** | `scripts/repos-audit.sh:1841` requires a receiver's gate to be armed on a change to a **committed** skill root. A generated root cannot be armed that way. Repairing this is **sanctioned** — ADR-0067 says the apparatus *"keeps running unchanged, and keeps being repaired"* until §9's order reaches it — but it must precede the first receiver retirement, and it **must not be confused with retiring the sweep**, which is last. | **NOT a blocker for a receiver that never wired the caller — measured 2026-07-28 on the first retirement.** The arming check at `repos-audit.sh:1909` is reached only when a repo BOTH declares `skill-union` and calls the workflow (`declared=1 && calls_it=1`). Zero receivers call it (`registry/repos.yml`'s `skill-union` row; Templates#313 recorded the decision not to), so every receiver lands on the **GAP** branch instead — before the retirement and after it, identically. `FS.GG.Templates` was a `skill-union` gap on 2026-07-27 and is a `skill-union` gap now, for the same reason and with no new red. **Still open, and still precedes the first receiver that DOES wire a caller** — which is a different, later event than "the first receiver retirement", and this row conflated the two. |
 
 B1 and B2 are both kit-content changes, so they land together, in one republish, and then ride B3.
 
@@ -201,6 +256,21 @@ before the largest:
 5. `FS.GG.Game`
 6. `FS.GG.SDD`
 7. `FS.GG.Rendering` — largest skill tree (`.claude=50`, measured at `registry/repos.yml:234-236`), last.
+
+> **ACTUAL ORDER, 2026-07-28: `FS.GG.Templates` went first, and the list above is now a preference
+> rather than a sequence.** §9 forbids retiring where the replacement is unproven, so **eligibility
+> outranks blast radius** — and eligibility is a fact about a receiver's pin, which this list cannot
+> predict. `FS.GG.Net` is still the smallest surface and it has **no bump PR at all**; ordering the
+> queue by size would have meant waiting for the smallest repo while the one repo that *could* be
+> proven sat idle. Read the list as "when two receivers are both eligible, take the smaller".
+>
+> Blast radius was not ignored, it was re-measured: Templates is the only receiver with **no `gate.yml`
+> and no `build-config`**, so it runs no second `FsggKitMaterialize` outside `kit-materialize.yml` — the
+> four `build-config` receivers (SDD, Rendering, Governance, Game) each run one in their own
+> `build-config-drift` job and will need the generate reachable from that tree too.
+>
+> **Retired 1 of 7. Remaining: Net, Audio, Governance, Game, SDD, Rendering — all still stage 0**
+> (`#1587` owns delivery and is itself `Blocked`).
 
 For each: re-run §4's four preconditions; retire the second committed root; confirm the repo's gates
 green **on `main`, by run id, not by merge**; retire that repo's `skill-union-assert` caller (**note: zero
@@ -262,6 +332,23 @@ working tree holds where the restored directory goes.
 The rollback was exercised against the **producer**, because §4 measured that no receiver is eligible to
 be the first repo. It must be re-run against the first receiver before the second is touched
 (`#1676` AC 3).
+
+**Re-tested against the first RECEIVER, 2026-07-28** — `FS.GG.Templates` at the retirement commit, with
+the view generated exactly as a checkout produces it (`.agents/skills -> ../.claude/skills`):
+
+| step | command | observed |
+|---|---|---|
+| retired state | `dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize` | `all 23 kit skill file(s) visible` at the view root; `git status --porcelain` → **0 changed paths** |
+| rollback | `git revert --no-edit <retirement-commit>` | rc 0; `.agents/skills` back to **23 tracked files in a real directory**, 0 symlinks |
+| prove | `skill-union-assert.sh --product .` / `diff -r .claude/skills .agents/skills` | `OK — all roots hold the byte-identical union` (exit 0) / identical |
+| after | `git status --porcelain` | **0 changed paths** |
+
+**One correction to the stated path, from this measurement: `rm -rf <second-root>` was NOT required on
+this receiver.** Git replaced the symlink with the restored directory by itself. It *was* required on
+`.github` at `0ea5396`, so the difference is a property of the tree rather than of the mechanism and the
+step stays in the path — it is harmless when unnecessary. Both orderings were run against Templates
+(`rm -rf` first, and revert alone) and **both land at 0 changed paths and a green old gate**. Do not
+drop the step on the strength of one repo; do not be surprised when it reports nothing to remove.
 
 ---
 

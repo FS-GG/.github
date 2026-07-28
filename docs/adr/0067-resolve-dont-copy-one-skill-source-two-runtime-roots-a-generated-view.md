@@ -139,6 +139,45 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > ADR-0014 Decision 5 and ADR-0065's root set remain amended *in direction only* and stay in force,
 > because no mechanism was retired.
 
+> **STAGE 1 EXECUTED on ONE receiver, 2026-07-28 — `FS.GG.Templates`, and only it
+> ([#1676](https://github.com/FS-GG/.github/issues/1676),
+> [FS.GG.Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323)).** That repo's
+> `.agents/skills` is no longer a second committed copy: it is a **view root** (ADR-0065 §A root's three
+> dispositions) resolved from `.claude/skills` at checkout. 23 committed files stopped existing; the
+> runtime root set is **unchanged**, because it is the union of `FsggKitSkillRoots` and
+> `FsggKitViewSkillRoots` and the union still holds ADR-0011's two.
+>
+> §9's precondition was re-run **on that tree, that day**, not inherited: `skill-view-parity.sh` AGREE on
+> the committed tree and AGREE again on its resolved half-view equivalent, where the byte-identity fact
+> the old gate owns is reported *structurally impossible to violate* — every root resolving to the same
+> object, checked rather than assumed. The other six receivers do not carry 0.15.0 and nothing was
+> retired on them.
+>
+> **What that first retirement measured, which the note above could only predict:**
+>
+> - `coordination-coherence` **narrowed exactly as sorted** — 51 graded files to 28 — and stayed green,
+>   with **no gate edit anywhere**: it derives its roots from `FsggKitSkillRoots`, so a receiver moving a
+>   root to the view disposition narrows the gate by moving its own property.
+> - `skill-union-assert`'s retirement on a receiver is **vacuous, not deferred**: zero receivers ever
+>   wired a caller (`registry/repos.yml`'s `skill-union` row, and Templates#313 recorded the decision not
+>   to), so there was nothing to retire. The gate that actually goes is the *duplication*, and it went.
+> - **The retirement opens a hole that ADR-0067 §8 forbids, and the same change must close it.** Once a
+>   root is a view, *both* kit gates go quiet if it is later dropped from the contract:
+>   `coordination-sync --check` stops looking at it, and `FsggKitCheckSkillView` reports *"nothing to
+>   assert"*. Measured on a mutated tree — materialize green, `coordination-coherence` green, the root
+>   gone from the runtime contract. So a receiver retirement is only complete when it also lands an
+>   assertion that its runtime root set is still the declared one; Templates' rides its own required
+>   `composition` check. **Every later receiver owes the same, and a retirement without it is the
+>   loud-for-quiet trade §8 rules out.**
+> - **The view must be generated where it is asserted, not in a workflow.** An uncommitted root is
+>   absent in every fresh checkout, and `FsggKitCheckSkillView` runs on every materialize — so a
+>   receiver needs the generate *in its receiver project*, immediately before the assertion, or its next
+>   Renovate kit bump reds on a tree nobody touched. §8's checkout half
+>   ([#1700](https://github.com/FS-GG/.github/issues/1700)) is a different, still-open half of this.
+>
+> **AC 7 remains unreachable as written** and this changes nothing about that: the freshness sweep goes
+> last, and its subject survives the rewrite.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
