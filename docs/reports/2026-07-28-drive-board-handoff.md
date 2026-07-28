@@ -106,7 +106,13 @@ Recorded because the next reader will otherwise trust the same sources the same 
 
 **ADR-0070 step 4**: make `.claude/skills` generated in **one** receiver, prove the §8 alarm reds on an ungenerated tree **there**, then per repo under ADR-0067 §9. Only after that does anything get deleted.
 
-**Read before starting it**: `FS.GG.Rendering/skill-view-check.yml` was adjudicated JUSTIFIED with a **recorded expiry** — *"if the repo returns to two committed copies, the verdict must be re-taken."* ADR-0070 moves it the other way, to **zero** committed copies, which the expiry does not cover. That verdict must be re-taken against the new tree, not inherited. It would be the third gate to decay after being justified, and the first to decay deliberately.
+**Three things to read before starting it**, all found after ADR-0070 was written and none of them fatal to it:
+
+1. **`#1855` — the root holds content no package can regenerate.** ADR-0070 §1 is scoped to **kit-derived** content precisely because of this, and §1.1 names the obstacle. FS.GG.SDD's producer-authoritative `.claude/skills/skill-manifest.json` was rehomed *into* that root the same day by `FS.GG.SDD#771`, and without it SDD's required `gate` dies at *"producer manifest missing"*. FS.GG.Audio holds 16 of its own `fs-gg-sdd-*` skills there. ADR-0065 §Retiring a root — which ADR-0070 leaves unchanged — permits only the materializer to remove such a file. **The `#771` decision and the ADR-0070 decision were taken hours apart by the same driver and interact; neither anticipated the other.**
+
+2. **The restore does not currently reach the materialize.** Six of seven receivers carry a repo-root solution and **none lists `.config/kit/FS.GG.Kit.receiver.proj`** (FS.GG.Templates has no repo-root solution — NOT MEASURED). So an ordinary `dotnet restore <solution>` does not run the materialize, and *"restore is a precondition"* does not yet deliver what it promises. Together with `#1845`'s measurement — **0 of 842 runs on `main`** — this is the gap step 4 has to close first.
+
+3. **`FS.GG.Rendering/skill-view-check.yml`** was adjudicated JUSTIFIED with a **recorded expiry** — *"if the repo returns to two committed copies, the verdict must be re-taken."* ADR-0070 moves it the other way, to **zero** committed copies, which the expiry does not cover. That verdict must be re-taken against the new tree, not inherited. It would be the third gate to decay after being justified, and the first to decay deliberately.
 
 **The open decisions**, none of which gates anything: `#1737` (a human-park records *that* someone must act, not who or why), `FS.GG.SDD#754` (how the core should represent "present but unreadable"), `FS.GG.SDD#778` (manifest rows still resolving through `.agents/skills`).
 
