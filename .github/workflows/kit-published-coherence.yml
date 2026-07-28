@@ -145,26 +145,38 @@ jobs:
       - name: Is the newest published FS.GG.Kit coherent with canonical?
         run: python scripts/check-kit-published-coherence.py
 
-      # .github#1784. `#1772` made `kit/v<version>` the ref the receiver-side `materialize /
-      # kit-bump-shape` reporter resolves its RULE from — so a release marker became a trust anchor.
-      # A tag is a MUTABLE ref and `release-kit.yml`'s gate is publish-time only, so a tag deleted or
-      # force-moved AFTERWARDS silently recreates the defect #1772 closed and nothing would notice.
+      # .github#1784, WIDENED TO EVERY RELEASE NAMESPACE BY .github#1790. `#1772` made
+      # `kit/v<version>` the ref the receiver-side `materialize / kit-bump-shape` reporter resolves
+      # its RULE from — so a release marker became a trust anchor. A tag is a MUTABLE ref and
+      # `release-kit.yml`'s gate is publish-time only, so a tag deleted or force-moved AFTERWARDS
+      # silently recreates the defect #1772 closed and nothing would notice.
+      #
+      # THIS STEP'S SUBJECT IS NOT THE KIT'S, and that is worth reading twice given the workflow it
+      # sits in. `#1784` was 21-for-21 clean on `kit/v*` — it caught nothing on its own subject. The
+      # same method applied to the four namespaces it did not reach found a real disagreement in each
+      # of two of them (`coord-engine/v0.1.0`, `new-sdd-fullstack/v0.1.1-preview.1`) and a published
+      # version with no tag at all (`drivers/v0.5.0`). The clean control is what made those findings
+      # rather than noise. It runs here because it shares this file's feed reader and nuspec parse;
+      # splitting it into its own gate is how two gates end up disagreeing about the feed (#263).
       #
       # It belongs on THIS job for the same reason everything else here does: the subject is the feed
       # plus a hub ref, and both move without any pull request touching a file. A `paths:` filter or a
       # PR-only arm could never see a tag someone moved by hand.
       #
       # The comparand is the published .nuspec's `<repository commit=...>`, not a list — see the
-      # checker's docstring. A repository TAG RULESET ("kit-release-tags-are-immutable", covering
-      # refs/tags/kit/v*, rules: deletion + non_fast_forward + update, no bypass actors) shuts the
-      # hole at the source; this is the detection that proves the ruleset is still there and still
-      # doing its job, because a ruleset is itself a mutable setting.
+      # checker's docstring. A repository TAG RULESET ("release-tags-are-immutable", id 19899954 —
+      # RENAMED from "kit-release-tags-are-immutable" by #1790 because it now covers refs/tags/kit/v*,
+      # coord-engine/v*, drivers/v*, new-sdd-workspace/v* and new-sdd-fullstack/v*; rules: deletion +
+      # non_fast_forward + update, no bypass actors, `creation` deliberately NOT a rule so releases
+      # can still push tags) shuts the hole at the source; this is the detection that proves the
+      # ruleset is still there and still doing its job, because a ruleset is itself a mutable setting
+      # with no history in this repository.
       #
       # `if: ${{ !cancelled() }}` so a red from the staleness step above does not ABORT this one.
       # The two subjects are independent — a stale kit and a moved tag are different defects with
       # different remedies — and a stale kit is exactly the state most likely to coincide with
       # someone doing tag surgery. Without this, the first red masks the second for as long as it
       # stands. It is NOT `continue-on-error`: this step's own failure still reds the job.
-      - name: Do the kit/v* tags still resolve to the commits their packages were packed from?
+      - name: Do the release tags still resolve to the commits their packages were packed from?
         if: ${{ !cancelled() }}
         run: python scripts/check-kit-published-coherence.py --tag-arm
