@@ -633,33 +633,35 @@ object — and what is asserted instead is *visibility*, because an absent root,
 defaults empty, and turning it on is per-receiver work sequenced by
 [the retirement order](coordination/skill-apparatus-retirement-order.md).
 
-**FIVE of the seven receivers hold a view root as of 2026-07-28, and the picture above has flipped
-from rule to exception.** Counted rather than carried forward — `git ls-files .agents/skills` on a
-shallow clone of each rostered receiver, because the running total in the records was two retirements
-stale ([#1754](https://github.com/FS-GG/.github/issues/1754)):
+**EVERY rostered receiver holds a view root as of 2026-07-28, and the picture above has flipped from
+rule to exception.** Each generates `.agents/skills` from `.claude/skills`, and **no receiver's runtime
+root set changed** — it is the union of `FsggKitSkillRoots` and `FsggKitViewSkillRoots`, and that union
+is still ADR-0011's two.
 
-| receiver | second committed root | retired by |
-|---|---|---|
-| `FS.GG.Templates` | gone (23 files) | [#1676](https://github.com/FS-GG/.github/issues/1676) → [Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323), stage 1 |
-| `FS.GG.Audio` | gone (39 files) | [#1720](https://github.com/FS-GG/.github/issues/1720) → [Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), stage 3 |
-| `FS.GG.Net` | gone (23 files) | stage 4 (`602f47a`) |
-| `FS.GG.Game` | gone | stage 4/5 window |
-| `FS.GG.Governance` | gone (34 files) | [#1748](https://github.com/FS-GG/.github/issues/1748) → [Governance#337](https://github.com/FS-GG/FS.GG.Governance/pull/337), stage 5 (`4daa25f`) |
-| `FS.GG.SDD` | **52 files, still committed** | refused at stage 2 |
-| `FS.GG.Rendering` | **70 files, still committed** | claimed, [#1747](https://github.com/FS-GG/.github/issues/1747) |
+> **This map deliberately carries NO retirement count, and this paragraph is where one used to be.** It
+> said *"FIVE of the seven receivers"* over a seven-row table of squashes and file counts, and it was
+> stale within the hour — the third file to go stale the same way on the same day, while citing the
+> issue filed about the first two. **The count lives in exactly one place: the standing verdict in
+> [the retirement order](coordination/skill-apparatus-retirement-order.md) §4**, which carries the
+> per-receiver mechanisms, squash shas, file counts and the command that produced them. Read it there.
+> Do not restate it here — see [#1750](https://github.com/FS-GG/.github/issues/1750).
 
-Each adopter generates `.agents/skills` from `.claude/skills`, and **no adopter's runtime root set
-changed** — it is the union of `FsggKitSkillRoots` and `FsggKitViewSkillRoots`, and that union is still
-ADR-0011's two.
-
-**The adopters are deliberately unalike, and that is the useful fact.** Templates is the thin receiver —
+**The receivers are deliberately unalike, and that is the useful fact.** Templates is the thin receiver —
 no `gate.yml`, no repo-owned skills in the audited roots. Audio has a `gate.yml` and **16 `fs-gg-sdd-*`
-skills it owns inside both audited roots**. Governance is a `build-config` receiver with eight required
-contexts, a substantial F# suite and **11 repo-owned skills in the retired `.codex/skills`**. All three
-were cheap, and for one reason: `diff -r` between the two audited roots was **silent** on each, so
-nothing lived only in the copy being retired. What predicts a receiver's cost is that diff and whether
-it wires a union caller — not how large or framework-shaped the repo is. `FS.GG.SDD` is the
-counter-case on both counts.
+skills it owns inside both audited roots**. Game is the large-harness receiver: 18 required contexts and
+17 repo-owned skills. Governance is a `build-config` receiver with eight required contexts and a
+substantial F# suite. All were cheap, and for one reason: `diff -r` between the two audited roots was
+**silent** on each, so nothing lived only in the copy being retired. **What predicts a receiver's cost is
+that diff and whether it wires a union caller — not how large or framework-shaped the repo is.**
+
+**`diff -r` is necessary but NOT sufficient, and this is the finding that outlives the sequence.** It
+compares two directories' *contents*; it can never see a third file that **names** one of them. On
+`FS.GG.Rendering` both roots were byte-identical and `.template.config/template.json` still vendored the
+retired root into the shipped `dotnet new` payload — `dotnet new install` failed loudly and **`dotnet
+pack` did not fail at all**, silently shipping 1843 entries instead of 1914. The companion check is a
+grep for path references graded by kind: **a literal file path fails closed; a directory or glob
+reference fails open**, because the tooling treats a missing directory as an empty set. It is stated
+with both measured data points in the retirement order §6.
 
 Three consequences the map has to carry, because they change what a green gate means:
 
@@ -670,14 +672,20 @@ Three consequences the map has to carry, because they change what a green gate m
 - **Nothing in the kit contract watches a view root's MEMBERSHIP.** `FsggKitCheckSkillView` asserts a
   declared view root's content; if the root is later dropped from `FsggKitViewSkillRoots` it reports
   *"nothing to assert"* and `coordination-sync` stops looking at it — both green, root gone from the
-  runtime contract (measured on **three** adopters independently). Each adopting repo therefore owes
+  runtime contract (measured on **five** adopters independently). Each adopting repo therefore owes
   its own membership assertion on a check that gates its merges, **and owes it in a shape its own
-  required checks can hold**: Templates' rides its required `composition` check; Audio has no
-  composition harness so its `scripts/check-skill-view-roots.sh` rides the required `Build + test` job;
-  Governance ports Audio's script onto its required `skill-view-check` context. **`FS.GG.Net`'s does
-  not ride a required context at all**, which is [#1727](https://github.com/FS-GG/.github/issues/1727)
-  and is the shape to avoid. Three hand-copies of one assertion is the cost
-  [#1710](https://github.com/FS-GG/.github/issues/1710) named and still owns.
+  required checks can hold**. The shape is settled **6–1**: Templates' rides its required `composition`
+  check; Audio's `scripts/check-skill-view-roots.sh` rides the required `Build + test` job; Game's rides
+  `Build-config drift check`; Governance's and SDD's ride `skill-view-check`; Rendering's rides
+  `Deterministic gate`. **`FS.GG.Net`'s does not ride a required context at all**, which is
+  [#1727](https://github.com/FS-GG/.github/issues/1727) and is the shape to avoid. Seven hand-copies of
+  one assertion is the cost [#1710](https://github.com/FS-GG/.github/issues/1710) named and still owns.
+  **Every lane needs a can-fire demonstration, and the demonstration must itself be mutation-tested**:
+  Audio's shipped copy guarded its view lane with `[[ ! -e ]]`, which follows symlinks, so a *dangling*
+  view root — §8's headline class — reported green until
+  [FS.GG.Audio#212](https://github.com/FS-GG/FS.GG.Audio/issues/212) fixed it, and
+  [FS.GG.Templates#324](https://github.com/FS-GG/FS.GG.Templates/issues/324) is open because the fleet's
+  oldest alarm has no view-resolution lane at all.
 - **A repo that wires the `skill-union` receiver caller could not hold a view root at all — and that
   caller is now RETIRED.** Measured 2026-07-28 on `FS.GG.SDD@387adc6`: `skill-union-assert.yml` is a
   reusable workflow, so it checks the caller out and asserts over that checkout, and a root that only

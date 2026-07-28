@@ -15,9 +15,20 @@ that produced it appears with it.
 > **Where the live state is.** The retirement count lives in **one** place — §4's *standing verdict* —
 > and every other block in this document is a dated, append-only record of an attempt. If you are
 > updating this document after a stage, change the standing verdict and **append**; do not edit a
-> historical block to carry a new headline, and do not add a second count anywhere. This document went
-> stale three times on 2026-07-28 because the count was spread across four prose blocks in two
-> sections, and no single edit could bring it current.
+> historical block to carry a new headline, and **do not add a second count anywhere, in this file or
+> any other.** This document went stale three times on 2026-07-28 because the count was spread across
+> four prose blocks in two sections and no single edit could bring it current — and a **fourth** time
+> after that consolidation, because four receivers retired in ninety minutes while three separate
+> workers queued their rows rather than contend for this file. Consolidation made the repair one edit;
+> it could not make anyone able to take the lock.
+>
+> **`docs/architecture.md` carried a second count until 2026-07-28 and no longer does.** It now points
+> at §4's standing verdict. There is exactly one count in the repository; keep it that way, and see
+> [`#1750`](https://github.com/FS-GG/.github/issues/1750).
+>
+> **The receiver sequence is COMPLETE — 7 of 7.** Nothing in §6's *stage 1* is dispatchable. What is
+> still open is §6's stage 2 (the fleet-wide narrowing) and stage 3 (the freshness sweep, which on
+> today's evidence is reached and then declined), plus the open rows §4 and §8 name.
 
 ---
 
@@ -144,37 +155,70 @@ verdict.
    tracks, with no override** — so a repo whose second root is still committed cannot have a view
    generated there at all.
 
-### The standing verdict — 2026-07-28 08:10Z: **3 of 7 retired**
+### The standing verdict — 2026-07-28 09:55Z: **7 of 7 retired. The receiver sequence is COMPLETE.**
 
-> **`FS.GG.Templates`, `FS.GG.Audio`, `FS.GG.Net` are retired. `FS.GG.SDD` was attempted and refused.
-> `FS.GG.Game` is IN FLIGHT.**
+> **No receiver commits its skills twice. Nothing is in flight.** `FS.GG.SDD` was refused at attempt 2
+> and retired at attempt 8, after the two findings that refused it were fixed in that repo.
 >
-> | stage | receiver | outcome | mechanism | second root at the attempt |
-> |---|---|---|---|---|
-> | 1 | `FS.GG.Templates` | **RETIRED** | [Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323), squash `531b01b` | 4 skills, 23 files |
-> | 2 | `FS.GG.SDD` | **REFUSED** — B5; no PR was ever opened against it | — | 32 skills + `skill-manifest.json`, 52 files |
-> | 3 | `FS.GG.Audio` | **RETIRED** | [Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), squash `52a358f` | 20 skills, 39 files |
-> | 4 | `FS.GG.Net` | **RETIRED** | [Net#45](https://github.com/FS-GG/FS.GG.Net/pull/45), squash `602f47a` | 4 skills, 23 files |
-> | 5 | `FS.GG.Game` | **IN FLIGHT** — [`#1734`](https://github.com/FS-GG/.github/issues/1734) | — | 21 skills committed |
+> **Counted, not carried forward**, and counted from the *tree* rather than from any report:
 >
-> **Stage 5's outcome is deliberately absent, and this absence is load-bearing.** `#1734` was open and
-> held when this block was written. An unobserved outcome written into this record is precisely the
-> defect this section keeps acquiring — do not fill the row in from a PR title, an issue body, or the
-> fact that earlier stages succeeded. Fill it in from `FS.GG.Game@main`, or leave it.
+> ```
+> # per receiver in registry/repos.yml:114-120, against that repo's main
+> gh api "repos/FS-GG/<R>/git/trees/<main-sha>?recursive=1" \
+>   --jq '[.tree[]|select(.type=="blob")|select(.path|startswith(".agents/skills/"))]|length'
+> gh api "repos/FS-GG/<R>/contents/.agents/skills"          # expect 404
+> ```
 >
-> Still committing a second root, re-read from each repo's `main` on 2026-07-28:
-> `FS.GG.Governance` (15 skills), `FS.GG.Game` (21), `FS.GG.SDD` (32 + the manifest),
-> `FS.GG.Rendering` (50).
+> **All seven return `0` tracked blobs and `404`** — in fact zero `.agents/**` tree entries of any
+> kind. The tree read is the load-bearing half: the contents endpoint answers a secondary rate limit
+> with **403**, and a 403 is *"I could not evaluate this"*, which is never a 404 (`#266`). This sweep
+> was rate-limited twice before it produced a number, which is why it is dated **09:55Z** and not
+> earlier. **A 09:20Z sweep could not have said 7 of 7**: `FS.GG.SDD`'s retirement merged at
+> **09:37:46Z**, so before that the honest answer was 6 of 7.
+>
+> | attempt | receiver | outcome | mechanism | merged | second root at the attempt |
+> |---|---|---|---|---|---|
+> | 1 | `FS.GG.Templates` | **RETIRED** | [Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323), squash `531b01b` | 03:14:36Z | 4 skills, **23** files |
+> | 2 | `FS.GG.SDD` | **REFUSED** — B5 + `skill-manifest.json`; no PR was ever opened | — | — | 32 skills + the manifest, 52 files |
+> | 3 | `FS.GG.Audio` | **RETIRED** | [Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), squash `52a358f` | 07:24:38Z | 20 skills, **39** files |
+> | 4 | `FS.GG.Net` | **RETIRED** | [Net#45](https://github.com/FS-GG/FS.GG.Net/pull/45), squash `602f47a` | 07:25:08Z | 4 skills, **23** files |
+> | 5 | `FS.GG.Game` | **RETIRED** | [Game#519](https://github.com/FS-GG/FS.GG.Game/pull/519), squash `b1d4fbd` | 08:21:59Z | 21 skills, **41** files |
+> | 6 | `FS.GG.Governance` | **RETIRED** | [Governance#337](https://github.com/FS-GG/FS.GG.Governance/pull/337), squash `4daa25f` | 08:45:21Z | 15 skills, **34** files |
+> | 7 | `FS.GG.Rendering` | **RETIRED** | [Rendering#1125](https://github.com/FS-GG/FS.GG.Rendering/pull/1125), squash `63f08ba` | 09:01:09Z | 50 skills, **70** files |
+> | 8 | `FS.GG.SDD` | **RETIRED** — the retry | [SDD#779](https://github.com/FS-GG/FS.GG.SDD/pull/779), squash `730a214` | 09:37:46Z | 32 skills, **51** files |
+>
+> Every file count above is the number of paths under `.agents/skills/` the squash reports with
+> `status: removed`, read from `repos/FS-GG/<R>/commits/<squash>` — not the number the retiring
+> worker stated. They agree, with **one correction**: stage 2 recorded **52** tracked files on
+> `FS.GG.SDD` and the retirement removed **51**, because `FS.GG.SDD#771` moved `skill-manifest.json`
+> into the surviving root in between.
+>
+> **"Stage" is ambiguous in this record, and the table above fixes it by numbering ATTEMPTS.** Two
+> blocks below both call themselves *stage 5* — `FS.GG.Game`'s and `FS.GG.Governance`'s — because one
+> numbered attempts and the other numbered receivers-actually-retired. Both were right about their own
+> ordinal and neither could see the other. Governance is the **sixth attempt** and the **fifth
+> receiver retired**; the historical blocks are left as they were written, and this table is the
+> tie-breaker.
 
-**This heading carries the count, and nothing below it does.** The blocks under it are dated,
+**This heading carries the count, and nothing anywhere else does.** The blocks under it are dated,
 append-only records; when the count changes, change *this* line and append a record, never edit a
-record to carry a new headline. That rule exists because it was learned the expensive way: this
-document has been stale **three separate times on 2026-07-28** — after stage 1 it said 0 of 7, after
-stage 3 it said 1 of 7, and `#1723` (which was filed to fix the second of those) was itself
-**two stages out of date** by the time a worker reached it, asking for a count of 2 when the truth was
-3. A count spread across four prose blocks in two sections cannot be updated atomically, so it is now
-in one place. The mechanism that would stop a *fourth* recurrence is filed as
-[`#1750`](https://github.com/FS-GG/.github/issues/1750); it is deliberately not built here.
+record to carry a new headline. That rule was learned the expensive way — this document was stale
+**three separate times on 2026-07-28**: after attempt 1 it said 0 of 7, after attempt 3 it said 1 of
+7, and `#1723` (filed to fix the second of those) was itself **two attempts out of date** by the time
+a worker reached it, asking for a count of 2 when the truth was 3.
+
+> **It went stale a FOURTH time, and `#1723`'s consolidation is not what failed.** This block said
+> *"3 of 7"* while four more receivers retired under it, because four retirements in ninety minutes
+> each queued their record rather than contending for this file (`#1754`, `#1756`, and `#1723`'s own
+> Game comment). Consolidating the count made the repair **one edit instead of four**; it did not make
+> anyone able to take the lock. The fourth recurrence is a *scheduling* fact, not a layout one.
+>
+> **And the count was living in a THIRD file the whole time.** `docs/architecture.md` carried its own
+> *"FIVE of the seven receivers hold a view root"* headline with its own seven-row table — stale in
+> the same way, and citing `#1754` while doing it. It has been reduced to a pointer at this block in
+> the same change that wrote this one. **There is now exactly one count in the repository. Do not add
+> a second.** The checker that would catch a fifth recurrence is
+> [`#1750`](https://github.com/FS-GG/.github/issues/1750); it is deliberately not built here.
 
 #### How the verdict got here (historical — do not read as current)
 
@@ -410,6 +454,15 @@ exists**, which is blocker B2 below.
 > works on all three shapes is `coordination-sync --check --against-pin`, which reports the resolved
 > version (*"all N materialized file(s) match the FS.GG.Kit 0.15.0 this tree pins"*) without naming a
 > file at all. **Prefer it.**
+>
+> > **ALL SEVEN ARE NOW MEASURED, and the three unknowns above resolved to the SAME location — there is
+> > no fourth shape.** `FS.GG.Governance`, `FS.GG.Game` and `FS.GG.Rendering` each pin in
+> > `Directory.Packages.local.props` (Game's at `:36`), which is `FS.GG.SDD`'s. So the fleet has **three
+> > distinct locations, not four**: inline (Templates), `Directory.Packages.props` under CPM (Net,
+> > Audio), and `Directory.Packages.local.props` (SDD, Game, Governance, Rendering). **Game's stage
+> > report calls itself *"a FOURTH pin location"*; it is a fourth data point for the same third
+> > location, and the distinction is the whole of `#1725`.** Recording it as a new location would have
+> > been the same class of error `#1725` was filed about.
 
 > **THE §8 REPLACEMENT ALARM HAS BEEN HAND-BUILT THREE TIMES, IN THREE DIFFERENT SHAPES, AND ONE OF
 > THEM CANNOT BLOCK A MERGE.** §4's stage-1 finding 2 says the retirement removes the only gate that
@@ -436,6 +489,71 @@ exists**, which is blocker B2 below.
 > assertion and predicted exactly this hand-copy; it has now happened three times out of three.
 > [`#1730`](https://github.com/FS-GG/.github/issues/1730) was filed and closed when Audio landed with no
 > alarm at all.
+
+> **THE §8 ALARM'S SHAPE IS NOW SETTLED, 6–1 — and the block above is superseded rather than edited.**
+> Seven receivers, seven hand-built alarms, read back from each repo's workflows and branch protection:
+>
+> | receiver | the alarm | rides | required? |
+> |---|---|---|---|
+> | `FS.GG.Templates` | `tests/composition/lib/skill-view-roots.sh` | the inherited `composition` check | **yes** |
+> | `FS.GG.Audio` | `scripts/check-skill-view-roots.sh`, as a step | `Build + test (locked restore, net10.0, headless)` | **yes** |
+> | `FS.GG.Net` | `tests/composition/skill-view-roots.sh`, in a **new job** | nothing — it is its own job | **NO** ([`#1727`](https://github.com/FS-GG/.github/issues/1727)) |
+> | `FS.GG.Game` | `scripts/check-skill-view-roots.sh`, **first** step | `Build-config drift check (shared-build-config)` | **yes** |
+> | `FS.GG.Governance` | `scripts/check-skill-view-roots.sh` | `skill-view-check` | **yes** |
+> | `FS.GG.Rendering` | `scripts/check-skill-view-roots.sh` | `Deterministic gate` | **yes** |
+> | `FS.GG.SDD` | `scripts/check-skill-view-roots.sh` | `skill-view-check` | **yes** |
+>
+> **Ride a context that is ALREADY REQUIRED.** Adding a new job is the tempting move — tidier, isolates
+> the concern — and it is the move that silently drops the alarm's authority, because a new job's
+> context is not required until somebody POSTs it and nothing in the retirement makes them. Audio's
+> shape — a repo-owned script inside a job the branch already requires — was **ported** to Game,
+> Governance, Rendering and SDD rather than re-derived, and Templates reaches the same place through an
+> inherited context. **`FS.GG.Net` is the sole outlier**, and it is now a population of one rather than
+> a pattern. *Which* required job is a per-repo judgement; the four later receivers each picked one
+> whose subject already **is** that repo's kit receiver contract, and Game's goes before `setup-dotnet`
+> so a failed restore below it cannot turn the assertion into a step that never ran.
+>
+> **EVERY LANE NEEDS A CAN-FIRE DEMONSTRATION, AND THE DEMONSTRATION ITSELF MUST BE MUTATION-TESTED.**
+> This is the hardest-won finding in the §8 story, and hand-copying is what found it:
+>
+> * **Audio's shipped alarm reported a DANGLING view root as GREEN** — ADR-0067 §8's own headline class
+>   passing the alarm written to catch it. The guard was `[[ ! -e "$view" ]]`, and **`-e` follows
+>   symlinks**, so `.agents/skills -> ../does-not-exist` answered it exactly as a missing path does, and
+>   the `! -d` branch carrying the dangling message was **unreachable for the case it names**. Game's
+>   worker found it while porting, fixed it there (`! -e && ! -L`, plus a dedicated dangling branch),
+>   and filed [`FS.GG.Audio#212`](https://github.com/FS-GG/FS.GG.Audio/issues/212) — **since repaired in
+>   Audio at `26d2bb7`; that issue is CLOSED.**
+> * **Why it survived upstream is the generalisable half.** Audio's can-fire demo drove the
+>   *declaration* lane over six fixtures and was thorough. The *view* lane — the only one that reads the
+>   filesystem — **had no demo at all**. A lane without a demonstration is not a weaker lane, it is an
+>   unobserved one.
+> * **SDD mutated the DEMONSTRATION, which is the standard from here.** Collapsing its absence test back
+>   to a bare `[[ ! -e ]]` — `FS.GG.Audio#212` exactly — drops `can-fire(resolve)` from 5/5 to **4/5**
+>   and reds the alarm. That is what makes a demo not a tautology.
+> * **[`FS.GG.Templates#324`](https://github.com/FS-GG/FS.GG.Templates/issues/324) is OPEN, and is a
+>   wider gap than Audio's was.** Templates' alarm has **no view-resolution lane at all** — no
+>   `assert_view_resolves`, and nothing else in its composition harness asserts `.agents/skills` on
+>   disk. Dangling, text-file (`core.symlinks=false`, ADR-0067 §6) and partial view roots are each
+>   **unobserved** there, exit 0 with no diagnostic in both runtimes. **The fleet's oldest alarm is its
+>   weakest**, which is what you would expect and nobody checked.
+> * **`FS.GG.Net`'s alarm has NO can-fire demonstration this worker could find**, and no measurement
+>   that Net's own alarm *reds* on the mutated tree. `#1721`'s report proves the **required set** goes
+>   green there — that is the hole, not the alarm's response to it. **That is "I could not evaluate
+>   this", and it is never "I evaluated it and it passed" (`#266`).** Net is the outlier twice —
+>   unrequired *and* undemonstrated — and both halves belong on `#1727`.
+>
+> **The `absent outright` carve-out does NOT transfer; re-decide it per receiver.** Audio and Game treat
+> an absent view root as green-by-design, because nothing at the path is the normal pre-materialize
+> state of a bare checkout there and reddening it would fire on every green build. Governance, Rendering
+> and SDD treat absence as **RED**, because their host job *generates the view immediately before
+> asserting it*, so absence means the generate step was removed. Measured on SDD with the
+> receiver-project target deleted: `-t:FsggKitMaterialize` on a bare checkout of the retired tree fails
+> *"view skill root '.agents/skills' is ABSENT or a DANGLING link"* — and that is the command its
+> **required** `Shared-build-config drift check` runs. **Copy the shape; re-decide the carve-out.**
+>
+> [`#1710`](https://github.com/FS-GG/.github/issues/1710) owns collapsing these into one kit-shipped
+> assertion and predicted exactly this hand-copy. **It has happened seven times out of seven** — and,
+> awkwardly for its own case, the copying is the only reason two of the defects above were ever found.
 
 > **STAGE 5 EXECUTED ON `FS.GG.Governance`, 2026-07-28 — the first retirement B5's clearance MADE
 > POSSIBLE rather than merely failed to block** ([#1748](https://github.com/FS-GG/.github/issues/1748),
@@ -514,6 +632,140 @@ exists**, which is blocker B2 below.
 > [`FS.GG.Governance#338`](https://github.com/FS-GG/FS.GG.Governance/issues/338). **It is also the
 > answer to "is this repo's own checker a safety net for the retirement?" — it is not**, and a worker on
 > a later receiver should not treat a repo-local materializer as one.
+
+> **ATTEMPTS 5, 7 AND 8 — `FS.GG.Game`, `FS.GG.Rendering` and `FS.GG.SDD`, 2026-07-28. Written from
+> the retiring workers' own measurements, which they queued rather than contended for.** These three
+> rows were owed to this document by `#1754` and `#1756`. Each retiring worker deliberately did not
+> declare `docs/coordination` — `shrike-44a4` (Game) queued theirs as a comment on `#1723`,
+> `#1747`'s worker filed `#1756`, and `merlin-efdc` (SDD) queued theirs on `#1760`. **Three workers
+> chose the queue over the contention and the record went stale as a result; that trade is `#1732`'s
+> subject and the alternative was serialising four retirements behind a prose file.** What is below
+> is transcribed from those three reports and their squashes; where this worker re-derived a number
+> it says so, and where it could not it says that instead.
+>
+> §4's four preconditions, re-run per receiver on that receiver's own pre-retirement tree:
+>
+> | precondition | `FS.GG.Game@acef7d0` | `FS.GG.Rendering@44981d8` | `FS.GG.SDD@f0e3d97` |
+> |---|---|---|---|
+> | 1 — `scripts/skill-view` present and executable | **yes**, **23,671** bytes, mode 0755, `lib/args.sh` + `lib/roots.sh` beside it; it ran | **yes**, 21,851 bytes, mode 0755, both libraries; it ran and produced the view | **yes**; it ran and produced the view |
+> | 2 — parity AGREE on the tree and on its resolved equivalent | **AGREE / AGREE** over **21 ids in 2 roots**, `byte-differing=0`; re-run a **third** time on merged `main` at `b1d4fbd` — AGREE | **AGREE / AGREE** over **50 ids in 2 roots**, `byte-differing=0` | **AGREE / AGREE** over **32 ids in 2 roots**, `byte-differing=0`; re-run a **third** time on merged `main` at `730a214` — AGREE. Stage 2's population is **confirmed**, not inherited |
+> | 3 — half-view, not all-view | **half-view**, `#1685` unengaged | **half-view**, `#1685` unengaged | **half-view**, `#1685` unengaged |
+> | 4 — second root not left committed | satisfied by the retirement commit; `skill-view` refused to generate while it was tracked — **exit 2**, measured | satisfied by the retirement commit | satisfied by the retirement commit |
+> | kit pin | **0.15.1**, `Directory.Packages.local.props:36` | **0.15.0**, `Directory.Packages.local.props` | **0.15.0** |
+> | B5 reach — does R wire a `skill-union` caller? | **no**, `grep -rl skill-union .github/` empty, re-verified that day | **was one of the three**; `skill-union.yml` gone at `44981d8`, required contexts hold `skill-view-check` and no union gate | **was one of the three**; caller retired at `83b1f75`, `skill-view-check` required at `37f2b85`, landed producer-first |
+> | `diff -r <source> <second-root>` | **silent** | **silent**, exit 0, verbatim: no output | **`Only in .claude/skills: skill-manifest.json`** — see below |
+>
+> **`FS.GG.SDD`'s `diff -r` is the model of a CORRECT asymmetry, and it is worth more than a silent
+> one.** The output is not empty, and that is fine, because the direction that decides a retirement is
+> `Only in .agents/skills:` — **that half is empty**. `FS.GG.SDD#771` deliberately moved the
+> producer-authoritative manifest into the **surviving** root, which is precisely where stage 2's
+> finding 2 said it had to go. A worker who reads "the diff must be silent" as the rule will stop on
+> this tree for the wrong reason. **The rule is directional: nothing may live only in the root being
+> retired.**
+>
+> SDD's worker hardened past `diff -r` in a way that supersedes it and should be the standard from
+> here: **51 tracked paths per root, identical relative path sets, identical git modes, and identical
+> BLOB IDS** — `git ls-files -s` with the root prefix stripped diffs to nothing. That compares the
+> *index*, not the worktree, and it is a strictly stronger statement than `diff -r`.
+>
+> **`FS.GG.Game`'s three numbers that this document would otherwise have propagated wrong**
+> (`shrike-44a4`, and all three are re-derivable):
+>
+> 1. **`scripts/skill-view` is 23,671 bytes on a 0.15.1 receiver, not the 21,851 recorded for
+>    Templates, SDD and Audio.** `#1718` rewrote the file and 0.15.1 carries it. Every
+>    precondition-1 row in this document reads as if that size were a constant. **It is a
+>    per-kit-version fact**, and any digest carried forward from a 0.15.0 stage is stale — the 0.15.1
+>    `skill-view` digest is `c0bfe2dc8a4e…`, published 07:30:03Z.
+> 2. `#1734` said Game's roots held 20 skills. They held **21** — the issue's enumeration omitted the
+>    kit's fourth skill, `pnext-item`. 17 own + 4 kit = 21, **41** tracked files per root.
+> 3. Game's report calls its pin location *"a FOURTH pin location"*. **It is not, and this correction
+>    matters because `#1725` is about exactly this class of claim.** Game pins in
+>    `Directory.Packages.local.props`, which is **SDD's location**. There are **three** distinct
+>    locations across the seven receivers — inline (Templates), `Directory.Packages.props` (Net,
+>    Audio), `Directory.Packages.local.props` (SDD, Game, Governance, Rendering) — and Game is a
+>    fourth *data point*, not a fourth location. `#1725`'s table lists Governance, Game and Rendering
+>    as unmeasured; all three are now measured and all three are the third location.
+>
+> **What `FS.GG.Rendering` measured that no earlier receiver could, and it is the most important thing
+> in this block: `diff -r` is NECESSARY but NOT SUFFICIENT.** Rendering's `diff -r` was silent, exit
+> 0, 50 ids and 70 files byte-identical across both roots — and the retirement still shipped a broken
+> artifact past a green gate. `.template.config/template.json` vendored the **repo-root**
+> `.agents/skills/` into the `dotnet new` template (`include: ["speckit-*/**"]`,
+> `lifecycle == "spec-kit"`), so the retired root is an input to every job that installs, scaffolds,
+> audits, **packs** or publishes that template. Measured on a bare clone of the retirement commit:
+>
+> * `dotnet new install .` → `[Error][MV012] Source '.agents/skills/' in template does not exist`, and
+>   the template does not load at all;
+> * **`dotnet pack` does NOT fail.** It shipped **1843 entries instead of 1914, none under
+>   `content/.agents/skills/`**. A green publish could have produced a broken artifact.
+>
+> **`diff -r` compares two directories' CONTENTS. It can never see a third file that NAMES one of
+> them.** Both roots agreed byte for byte; the dependency was on the **path**. CI caught this, not the
+> worker. The predictor this demands is in §6, sharpened by a second data point on SDD. Owned by
+> [`FS.GG.Rendering#1126`](https://github.com/FS-GG/FS.GG.Rendering/issues/1126).
+>
+> **`FS.GG.SDD` is the second data point, and it fails the OTHER way — which is what makes the
+> predictor actionable.** SDD holds 16 × `<EmbeddedResource Include="../../.claude/skills/…/SKILL.md" />`
+> in `src/FS.GG.SDD.Commands/FS.GG.SDD.Commands.fsproj`. Same class of reference, opposite behaviour:
+> repointing them at `.agents/skills` on a bare retired checkout dies **loudly**, `FSC error FS0078:
+> Unable to find the file`. SDD also searched and found a **stated negative** — no `.template.config`
+> outside `tests/fixtures/`, nothing naming `.agents/**` as a build or packaging input, and
+> `dotnet pack` producing the same 5 packages and 73 entries before and after, 0 under `.agents` in
+> either.
+>
+> **`FS.GG.SDD#770` moved from MASKED to REACHABLE, and §7 now has to say so.** SDD's
+> `materialize-skill-roots.fsx` still keeps the view root in its write set; `--mode link` used to
+> collapse that to `changed: 0`. On a **bare checkout with no view** — the normal post-retirement
+> state — `--check` is exit 1 with **51 DRIFT**, and **write mode exits 0 and creates a REAL
+> `.agents/skills` of 51 files with `git status --porcelain` at 0 lines**. `skill-view generate` then
+> **refuses** it (*"exists, is not a symlink, and carries no `.skill-view` receipt"*, exit 2),
+> reddening two required contexts, with `rm -rf .agents/skills` the only repair and **nothing printing
+> it**. No workflow runs the driver in write mode, so nothing is red today. It is not fixed and it is
+> not this document's to fix — but it is the one case in the whole record where `rm -rf
+> <second-root>` is the answer to something, and §7 records it there.
+>
+> **Green on `main` by run id.** `FS.GG.Game` at `b1d4fbd`: **26 check runs, 26 success, 0 red, 0
+> pending**, all 18 required contexts among them — `Build-config drift check (shared-build-config)`
+> **90219785231**, `kit / coordination-kit` **90219792211**, `Deterministic gate` **90219785130** /
+> **90219785119**. `FS.GG.Rendering` at `63f08ba`: `Deterministic gate` **90228387824**, `API
+> compatibility gate` **90228387832**, `kit / coordination-kit` **90228379597**, `skill-view-check`
+> **90228379510**, all `success`. `FS.GG.SDD` at `730a214`: `skill-view-check` **90236697312**,
+> `kit / coordination-kit` **90236699144**, `Shared-build-config drift check` **90236701029**,
+> `API compatibility gate` **90236700980**, `Deterministic gate` **90236700974**, all `success`. In
+> each case the worker reports having read the job log rather than the tick, and quotes the new legs
+> firing.
+>
+> **`.codex/skills` was not touched on any of the three**, again: Game **17** before and after,
+> Rendering **46**, SDD **28**. ADR-0065 §Retiring a root forbids hand-deleting them and none of these
+> attempts did.
+
+> **THE REMAINING GATE-SHAPED QUESTION IS OPEN, AND THIS DOCUMENT DOES NOT ANSWER IT.**
+> [`#1759`](https://github.com/FS-GG/.github/issues/1759) asks whether `.github/workflows/kit-materialize.yml`
+> is B5's shape on a second gate — a `uses:` of the hub workflow running the materialize over a bare
+> checkout, which no caller can add a generate step to. If it holds, a retirement is not complete when
+> the second root stops being committed, and every retired receiver has a latent red.
+>
+> **What this worker verified first-hand, 2026-07-28 09:55Z:** all seven receivers declare
+> `<FsggKitSkillRoots>.claude/skills</…>` and `<FsggKitViewSkillRoots>.agents/skills</…>`, git-ignore
+> the view root, **and carry a receiver-project target `Fsgg<Repo>GenerateSkillView` with
+> `BeforeTargets="FsggKitCheckSkillView"`** — read out of each repo's
+> `.config/kit/FS.GG.Kit.receiver.proj` on `main`. That target is the *mechanism* that would make
+> `kit-materialize.yml` a non-event, because it runs inside the materialize and therefore inside the
+> callee's own checkout. **Its presence on 7 of 7 is measured. Whether the build is green is not** —
+> this worker did not run it.
+>
+> **`#1759`'s holder (`tern-f6ba`) reports it REFUTED**, on a bare shallow clone of all seven running
+> `-t:FsggKitMaterialize`: seven `Build succeeded`, seven `skill-view check: OK`, `git status` empty on
+> all seven, and — the part that makes it not vacuous — **mutation-proven** by deleting that generate
+> target from a copy of Governance's tree, which reds with `#1748`'s exact text. On that reading the
+> affected set is **0 of 7** and `#1748`'s finding was a real failure mode on an intermediate tree,
+> before `FsggGovernanceGenerateSkillView` landed in the same PR.
+>
+> **`#1759` is nevertheless recorded here as OPEN and UNRESOLVED.** It is open on the board, the
+> refutation is that worker's to land on their own item, and this worker ran none of those builds.
+> Phase 4's receiver sequence is complete; **"complete" is not "sound"**, and this document does not
+> get to convert somebody else's unlanded measurement into its own verdict. If `#1759` closes as
+> refuted this sentence is still true; if it reopens, nothing here has to be repaired.
 
 ### The per-receiver sequence 0.15.0 makes available (stage 1, per repo)
 
@@ -717,16 +969,22 @@ B1 + B2 in one kit change and one republish; B3; then the seven bumps land. Noth
 
 ### Stage 1 — per receiver, one at a time, each proven before the next
 
-Roster order, cheapest blast radius first, so that the rollback path is exercised on the smallest tree
-before the largest:
+**This list is a PREFERENCE and it is now spent — every receiver on it is retired. It carries no
+per-receiver status, deliberately: the outcomes live in §4's standing verdict and nowhere else.**
+It was written as roster order, cheapest blast radius first, so the rollback path would be exercised on
+the smallest tree before the largest:
 
-1. `FS.GG.Net` — no Renovate config (`default.json:12`), no `build-config`; the smallest surface. — **RETIRED (stage 4)**
-2. `FS.GG.Audio` — **RETIRED (stage 3)**
-3. `FS.GG.Templates` — **RETIRED (stage 1)**
+1. `FS.GG.Net` — no Renovate config (`default.json:12`), no `build-config`; the smallest surface.
+2. `FS.GG.Audio`
+3. `FS.GG.Templates`
 4. `FS.GG.Governance`
-5. `FS.GG.Game` — **stage 5 IN FLIGHT** ([`#1734`](https://github.com/FS-GG/.github/issues/1734))
-6. `FS.GG.SDD` — attempted at stage 2 and **refused**; B5 has since cleared but findings 2 and 3 stand
+5. `FS.GG.Game`
+6. `FS.GG.SDD`
 7. `FS.GG.Rendering` — largest skill tree (`.claude=50`, measured at `registry/repos.yml:234-236`), last.
+
+**The order that actually happened was Templates, Audio, Net, Game, Governance, Rendering, SDD** — see
+§4's standing verdict, which is the only place that sequence is recorded. This list predicted the first
+receiver wrong and the last receiver wrong, for the reason the note below already gives.
 
 > **ACTUAL ORDER, 2026-07-28: `FS.GG.Templates` went first, and the list above is now a preference
 > rather than a sequence.** §9 forbids retiring where the replacement is unproven, so **eligibility
@@ -752,10 +1010,82 @@ before the largest:
 > written.** The count is in §4's standing verdict and **only** there; this paragraph deliberately no
 > longer carries one, because carrying it in two sections is how it went stale three times in one day.
 
-For each: re-run §4's four preconditions; run `diff -r <source> <second-root>` (§7) and stop if it is
-not silent; retire the second committed root; **replace §8's alarm on a context that is already
-required** (§4); confirm the repo's gates green **on `main`, by run id, not by merge**; close only
-the board rows whose subject that repo's retirement actually dissolved.
+For each: re-run §4's four preconditions; run **both** of the two cheap predictors below and stop if
+either fires; retire the second committed root; **replace §8's alarm on a context that is already
+required**, with a can-fire demonstration per lane (§4); confirm the repo's gates green **on `main`, by
+run id, not by merge**; close only the board rows whose subject that repo's retirement actually
+dissolved.
+
+#### The two cheap predictors — run BOTH, because the first cannot see what the second finds
+
+**1. `diff -r <source> <second-root>` — necessary, and it is DIRECTIONAL.** A non-empty
+`Only in <second-root>:` is a file with no home in the view: the retirement deletes it and
+`git status` reports **nothing**. It fired exactly once in seven receivers — `FS.GG.SDD`'s
+`skill-manifest.json` — and that one receiver is the one that stalled on content. **The other direction
+is not a failure.** SDD's post-`#771` tree prints `Only in .claude/skills: skill-manifest.json` and is
+correct: the producer-authoritative file belongs in the surviving root. Read the direction, not the
+exit code. Stronger still, and free: compare `git ls-files -s` with each root prefix stripped — that
+compares blob ids in the *index* rather than bytes in the worktree.
+
+**2. `grep` for path references to the root being retired — and grade them by KIND.** This is the
+predictor `diff -r` structurally cannot be:
+
+```
+grep -rn '\.agents/skills' <repo> \
+  --include='*.json' --include='*.props' --include='*.targets' \
+  --include='*.fsproj' --include='*.csproj' --include='*.yml' --include='*.yaml' \
+  --exclude-dir=.agents --exclude-dir=.claude
+```
+
+> **`diff -r` answers *"does anything live only in the copy being retired?"*. It can never answer
+> *"does anything NAME the copy being retired?"* — a path in a template manifest, a packaging glob, a
+> test fixture. On `FS.GG.Rendering` both roots agreed byte for byte and the dependency was on the
+> **path**.**
+>
+> **The rule is NOT "does anything mention the root". It is: does anything reference it as a DIRECTORY
+> OR A GLOB, rather than as a literal file path?** Two measured data points, and they fail in opposite
+> directions:
+>
+> | receiver | the reference | kind | what happened |
+> |---|---|---|---|
+> | `FS.GG.Rendering` | `.template.config/template.json` vendoring `.agents/skills/` into the `dotnet new` payload | **directory** | **FAILS OPEN.** `dotnet new install .` dies `[MV012]`, but **`dotnet pack` does not fail** — it silently shipped **1843 entries instead of 1914**, none under `content/.agents/skills/`. A green publish could have produced a broken artifact. |
+> | `FS.GG.SDD` | 16 × `<EmbeddedResource Include="../../.claude/skills/…/SKILL.md" />` | **literal file path** | **FAILS CLOSED.** Counterfactual measured: repoint them at `.agents/skills` on a bare retired checkout and the build dies `FSC error FS0078: Unable to find the file`. |
+>
+> **The dangerous ones are the directory and glob references, because the tooling treats a missing
+> directory as an EMPTY SET and ships a smaller artifact rather than an error.** That is what makes this
+> a check with a verdict instead of a grep that returns noise. A hit that resolves to a literal file
+> path is loud on its own and needs nothing; a hit that names a directory or a glob is the one to chase.
+>
+> **A stated negative is a result.** SDD ran the same sweep and found no `.template.config` outside
+> `tests/fixtures/` and nothing naming `.agents/**` as a build or packaging input, then *proved* it:
+> `dotnet pack` gave the same 5 packages and 73 entries before and after, 0 under `.agents` in either.
+> Report the negative with the command that produced it.
+>
+> **CI caught Rendering's, not the worker.** Owned by
+> [`FS.GG.Rendering#1126`](https://github.com/FS-GG/FS.GG.Rendering/issues/1126) — whether that payload
+> should source the tracked root instead.
+
+#### What actually predicted per-receiver cost, over seven receivers and eight attempts
+
+**Not repo size and not repo shape.** That generalisation was made at attempt 2 from `FS.GG.SDD`
+(framework-shaped ⇒ expensive) and falsified at attempt 3 by `FS.GG.Audio` — a `gate.yml` and **16
+repo-owned `fs-gg-sdd-*` skills inside the root being retired**, and still cheap, because those 16 sat
+in **both** audited roots so the view reproduces them and `diff -r` was silent. `FS.GG.Game` repeated
+the falsification at a larger scale: **18 required contexts, 17 repo-owned skills, a `build-config`
+receiver**, and the cheapest retirement after Templates, for the same reason. What predicted cost was
+**the two checks above, plus (historically) whether R wired a `skill-union` caller** — the latter moot
+fleet-wide since `#1715`.
+
+**Do not read the attempt count as the evidence count.** `FS.GG.Templates` and `FS.GG.Net` are the
+**same shape** — the same 4 kit skill ids (`check-board`, `cross-repo-coordination`,
+`intra-repo-parallel-work`, `pnext-item`), **23** files each, zero repo-owned skills in the audited
+roots. Reading the stage count as that many independent confirmations overstates the evidence, and this
+document has already had to retract one such overstatement.
+
+**A record that only records what held is not a record.** Attempt 2's cost generalisation is written
+down here *because* it was wrong; the previous version of this document would have carried it forward
+into Governance, Game and Rendering — each framework-shaped, each priced expensive on an argument Audio
+had already falsified.
 
 > **THE PER-REPO CALLER STEP IS GONE — it was *"retire that repo's `skill-union-assert` caller"*, and
 > there is no longer any such caller to retire.** [`#1715`](https://github.com/FS-GG/.github/issues/1715)
@@ -814,12 +1144,37 @@ sitting where a real directory belongs.
 
 ```
 git revert --no-edit <retirement-commit>     # restores the committed second root
-rm -rf <second-root>                          # discard the leftover generated view
+rm -rf <second-root>                          # PRODUCER-ONLY in practice — see the settled verdict below
 scripts/skill-union-assert.sh                 # the old gate, over the restored copied tree
 ```
 
-The `rm -rf` is required and is not optional tidying: `git revert` will not replace a symlink that the
-working tree holds where the restored directory goes.
+> **SETTLED — this line used to read *"the `rm -rf` is required and is not optional tidying"*, and that
+> is FALSIFIED for every receiver ever measured.** `git revert` **alone** restores the root correctly on
+> all seven: a real directory with the right tracked file count, `find .agents -type l` → **0**, `diff -r`
+> identical, the old union gate exit 0, and `git status --porcelain` → **0 changed paths**. Git replaces
+> the symlink with the restored directory by itself. The measurements are in the per-receiver transcripts
+> below and they are unanimous.
+>
+> **The one tree that needed it is `.github` itself at `0ea5396` — the producer**, whose second root is
+> a kit *source* rather than materialized output (§6 *"Not in this order"*). So it is a property of that
+> tree, not of the mechanism.
+>
+> **The step stays in the stated path anyway, and the reason is asymmetry rather than doubt**: it is a
+> no-op when unnecessary, and the failure it prevents is a `git revert` that cannot restore a directory
+> — discovered at the exact moment you are rolling back. **Do not delete the step. Do not be surprised
+> when it reports nothing to remove. Do not let seven green receivers talk you out of running it on the
+> producer.** This document will not carry another *"N receivers against the producer's one"* tally;
+> N is 7, the sequence is over, and counting further proves nothing new.
+>
+> **There is exactly one place `rm -rf <second-root>` is the answer to something, and it is not
+> rollback.** On `FS.GG.SDD`, `scripts/materialize-skill-roots.fsx` still keeps the view root in its
+> write set ([`FS.GG.SDD#770`](https://github.com/FS-GG/FS.GG.SDD/issues/770), **open**). Run in write
+> mode on a bare post-retirement checkout it **exits 0 and creates a real `.agents/skills` of 51 files
+> with a clean `git status`**; `skill-view generate` then refuses that directory (*"exists, is not a
+> symlink, and carries no `.skill-view` receipt"*, exit 2), reddening two required contexts — and
+> `rm -rf .agents/skills` is the only repair, with **nothing printing it**. No workflow runs the driver
+> in write mode, so nothing is red today. The retirement did not cause this; it moved it from **masked
+> to reachable**, because `--mode link` used to collapse the write set to `changed: 0`.
 
 **Tested**, 2026-07-28, on `.github`'s own tree at `0ea5396` (13 skills, both roots committed):
 
@@ -931,6 +1286,32 @@ it was silent before the retirement too. That is the expected outcome and it is 
 the diff is a cheap check whose *negative* result is the whole point, and four of five receivers have
 now paid nothing for it.
 
+**Re-run against `FS.GG.Game`, `FS.GG.Rendering` and `FS.GG.SDD` — 2026-07-28, the last three, which
+complete the roster** (`#1676` AC 3). Each in a throwaway clone, view generated exactly as a fresh
+checkout produces it, then `git revert --no-edit <retirement commit>` **with no `rm -rf` first**:
+
+| step | `FS.GG.Game` | `FS.GG.Rendering` | `FS.GG.SDD` |
+|---|---|---|---|
+| retired state, `git status --porcelain` | **0 changed paths** | **0 changed paths** | **0 changed paths** |
+| `git revert`, no `rm -rf` | rc **0** | rc **0** | rc **0** |
+| restored | **41** tracked files in a real directory | **70** tracked files in **50** real directories; `test -d .agents/skills -a ! -L` → YES | **51** tracked files in a real directory |
+| `find .agents -type l` | **0** | **0** | **0** |
+| `diff -r .claude/skills .agents/skills` | identical | identical (rc 0) | back to its **one deliberate line**, `Only in .claude/skills: skill-manifest.json` |
+| `skill-union-assert.sh --product .` | exit 0 — `in-every-root=21/21 byte-identical=21/21` | exit 0 — `in-every-root=50/50 byte-identical=50/50` | exit 0 — `in-every-root=32/32` |
+| `git status --porcelain` after | **0 changed paths** | **0 changed paths** | **0 changed paths** |
+| `rm -rf` needed? | **NO** | **NO** — both orderings run, both land at 0 | **NO** |
+
+**That is the whole roster: seven receivers, seven clean `git revert` rollbacks, zero needing
+`rm -rf`.** The verdict is settled at the top of this section rather than restated here as an
+eighth tally.
+
+**Rendering's rollback restores something a rollback cannot fix, and this is the sharpest limit in
+§7.** `git revert` puts the 70 files back, so the tree is correct — and
+`.template.config/template.json` was *already* broken by the retirement in a way `diff -r`,
+`skill-union-assert` and `git status` all report as fine (`dotnet pack` shipping 1843 entries instead
+of 1914, silently). **A rollback proves the tree can be restored. It proves nothing about whether the
+retirement was safe to make.** Those are different questions and §7 only ever answered the first.
+
 ---
 
 ## 8. What this order does NOT authorize
@@ -941,3 +1322,24 @@ now paid nothing for it.
   direction only** and stay in force until a change actually lands a mechanism retirement — ADR-0067 §9,
   and `#1676` AC 5. **No such change has landed**, so this document amends none of them.
 - Closing a board row whose subject has not dissolved. See §1.
+- **Reading "the receiver sequence is complete" as "the receiver sequence is sound."** Completeness is a
+  fact about seven trees and it is measured. Soundness is a different claim and this document does not
+  make it.
+
+## 9. What is still open after 7 of 7
+
+Recorded here so that "complete" is never read as "finished". None of these is retired, fixed or
+answered by this document, and each has an owner:
+
+| row | what it is | state |
+|---|---|---|
+| [`#1759`](https://github.com/FS-GG/.github/issues/1759) | is `kit-materialize.yml` B5's shape on a second gate? If it were, every retired receiver would have a latent red | **OPEN.** Its holder reports it refuted on all seven, mutation-proven; that measurement is theirs to land. §4 records why this document does not convert it into a verdict |
+| [`#1727`](https://github.com/FS-GG/.github/issues/1727) | `FS.GG.Net`'s §8 alarm is not a required context — **and this worker could find no can-fire demonstration for it either** | **OPEN**, now on both counts |
+| [`FS.GG.Templates#324`](https://github.com/FS-GG/FS.GG.Templates/issues/324) | Templates' alarm has no view-resolution lane at all; dangling, text-file and partial view roots are unobserved | **OPEN** |
+| [`FS.GG.SDD#770`](https://github.com/FS-GG/FS.GG.SDD/issues/770) | the view root is still in `materialize-skill-roots.fsx`'s write set; the retirement moved it from masked to **reachable** (§7) | **OPEN** |
+| [`FS.GG.Governance#338`](https://github.com/FS-GG/FS.GG.Governance/issues/338) | the same write-set defect in Governance's own `materialize-skill-roots.sh`; `--check` fails on an untouched `main` and no workflow runs it | **OPEN** |
+| [`FS.GG.Rendering#1126`](https://github.com/FS-GG/FS.GG.Rendering/issues/1126) | should the `dotnet new` payload source the tracked root instead of the retired one? | **OPEN** |
+| [`#1710`](https://github.com/FS-GG/.github/issues/1710) | collapse seven hand-copied §8 alarms into one kit-shipped assertion | **OPEN**; seven hand-copies now paid |
+| [`#1750`](https://github.com/FS-GG/.github/issues/1750) | a checker that compares §4's standing verdict against the receivers' trees | **OPEN**, and deliberately not built here |
+| [`#1725`](https://github.com/FS-GG/.github/issues/1725) | the kit pin is not in the same file on every receiver | all seven now measured — **three** distinct locations (§4) |
+| §6 stage 2 / stage 3 | the fleet-wide narrowing, then the freshness sweep last | not started; §1 measures that stage 3 is reached and then **declined** |
