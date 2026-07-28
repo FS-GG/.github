@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-28** — RECONCILE (.github; .github#1823, PR #1827): reconciled 2 sha256 row(s) — `p-add` (operator) and `padd-item` (driver) — from `.github`'s own producer manifest (`registry/driver-skill-manifest.json`), which PR #1827 regenerated. Both bodies changed in that PR: they defined `Backlog` as *"only for an explicit parking decision"*, and `#1823` made `Backlog` the column every `scripts/fsgg-coord add` writes when the caller names none, so the sentence had become the opposite of the contract. `check-board` carries the same staleness and was deliberately NOT reconciled here: it is `coordination-kit` content, so correcting it requires an `FS.GG.Kit` `<Version>` bump and a release — filed as `.github#1833`. registry = manifest = bytes.
+
 - **2026-07-27** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
