@@ -130,7 +130,7 @@
 # ADR-0015 §3's "same PR" is unsatisfiable — this document lives in .github and its validator in
 # FS.GG.SDD, no PR spans two repos — which ADR-0037 (.github#689) amends to the two-PR order above.
 schemaVersion: 3
-updated: "2026-07-27"
+updated: "2026-07-28"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -307,7 +307,7 @@ skills:
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: padd-item,              scope: driver,  owner: .github,         source: .github/.claude/skills/padd-item/SKILL.md, sha256: 028316b22d32384d3b7c3f0bccac4191e0b16dfc7595f769a1a93510218277af, materializes-when: always }
+  - { id: padd-item,              scope: driver,  owner: .github,         source: .github/.claude/skills/padd-item/SKILL.md, sha256: f77540a387627a13ed88133e259eee6fc8d956213a23b18097977bcc07520aca, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -325,4 +325,4 @@ skills:
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: p-add,                  scope: operator,owner: .github,         source: .github/.claude/skills/p-add/SKILL.md, sha256: 44de53fbacc74f6e8be0227cd45549f93a14ee9f3b12a39c63859ebf6d4a1f9e, materializes-when: "false" }
+  - { id: p-add,                  scope: operator,owner: .github,         source: .github/.claude/skills/p-add/SKILL.md, sha256: fd120ff7eafe56d93e2066c7130983eef606f74ebb63fe07daaf458d0a8ba12e, materializes-when: "false" }
