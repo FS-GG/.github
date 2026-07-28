@@ -662,6 +662,92 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > survives the rewrite, and nothing here touched it. With these four records landed, `#1676` AC 5 is
 > discharged and the parent is closeable.
 
+> **§9 DISCHARGED, 7 OF 7 — the per-receiver retirement of the hand-written §8 alarm, 2026-07-28**
+> ([`#1777`](https://github.com/FS-GG/.github/issues/1777), the per-repo half of
+> [`#1710`](https://github.com/FS-GG/.github/issues/1710)).
+>
+> `#1710` shipped the shared implementation and **retired nothing**, correctly: §9 forbids retiring a
+> receiver's local copy before the replacement is proven **in that repo**. That proof is now on record
+> for all seven, and every local copy is deleted. The fleet is on `FS.GG.Kit` **0.17.0**, each pin read
+> back from `main` over the API. **119,692 bytes across seven files are gone** — 95,890 of them in the
+> five `#1777` retired (SDD 23,050 · Audio 21,353 · Rendering 18,346 · Game 18,277 · Governance 14,864),
+> the other two by `#1710`'s worker (Templates 10,798 · Net 13,004). One invariant, seven
+> implementations, a 113% size spread, all written on 2026-07-28.
+>
+> | receiver | pin bump | adoption | copy deleted | absence policy | required context the alarm rides |
+> |---|---|---|---|---|---|
+> | `FS.GG.Templates` | `#327` | `#325` `f7ff8f6` | 10,798 B | `--absent-ok` | `composition` |
+> | `FS.GG.Net` | `#50` | `#47` `fec519d` | (its own name) | `--absent-ok` | `Build + test (locked restore)` |
+> | `FS.GG.SDD` | `#773` `1bd301b` | `#780` `15773b7` | **23,050 B** | RED (host generates first) | `skill-view-check` |
+> | `FS.GG.Audio` | `#214` `bbc8ca5` | `#216` `e489678` | 21,353 B | `--absent-ok` | `Build + test (locked restore, net10.0, headless)` |
+> | `FS.GG.Rendering` | `#1123` `b4a951c` | `#1127` `6890f13` | 18,346 B | RED (host generates first) | `Deterministic gate` |
+> | `FS.GG.Game` | `#520` `7c689c6` | `#521` `123052a` | 18,277 B | `--absent-ok` | `Build-config drift check (shared-build-config)` |
+> | `FS.GG.Governance` | `#335` `98fa76c` | `#339` `3f1cd25` | 14,864 B | RED (host generates first) | `skill-view-check` |
+>
+> **THE ORDER WAS STRICT PER RECEIVER, AND THE SPLIT IS FORCED RATHER THAN STYLISTIC.** Bump → observe
+> the kit's alarm reporting in that repo, by run id and by **job log** → delete the local copy →
+> re-prove the mutation. The pin bump lands as its **own** pull request because `materialize /
+> kit-bump-shape` refuses a bump carrying receiver-authored edits ([`#1726`](https://github.com/FS-GG/.github/issues/1726));
+> that refusal happens to enforce §9's ordering, since the replacement must be on the tree before the
+> copy leaves it.
+>
+> **THE MUTATION WAS RE-PROVEN ON EVERY RECEIVER, ON ITS OWN TREE, AT 0.17.0** — not inherited from the
+> receiver next door, and not from the measurement the deleted script's own header recorded at 0.15.0.
+> With `<FsggKitViewSkillRoots>` emptied and the view root deleted, on each of SDD, Audio, Rendering,
+> Game and Governance:
+>
+> ```
+> dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize
+>     -> "no view skill roots declared (FsggKitViewSkillRoots is empty) — nothing to assert."   exit 0
+> coordination-sync --check --against-pin --repo <receiver> .
+>     -> "OK — all 28/30 materialized file(s) match the FS.GG.Kit 0.17.0 this tree pins."        exit 0
+>        (that second one IS the required context `kit / coordination-kit`)
+> scripts/skill-view check --source .claude/skills --tree . --receiver-proj <proj>
+>     -> ::error:: [roots-declaration] …                                                        exit 1
+> ```
+>
+> The required set is green on exactly the tree the alarm exists to fail, and the shared implementation
+> reds it where the deleted one did — **including where `--absent-ok` is in force**, because that excuse
+> is scoped to view roots and the membership lane fires *before* the roots loop.
+>
+> **A CORRECTION TO THIS RECORD'S OWN EARLIER CLAIM, MEASURED RATHER THAN REPEATED.** The `#1710` block
+> above says Rendering's and Governance's copies "still carry the bare `[[ ! -e ]]` Audio paid for —
+> misattributing a dangling link and leaving their own dangling branch dead code". The first half is
+> exact; a reader can take the second half for Audio's failure, and it is not. Measured on both trees
+> on 2026-07-28, `.agents/skills` pointed at a nonexistent target:
+>
+> | | Rendering / Governance copy | `skill-view check` |
+> |---|---|---|
+> | verdict | **exit 1** | **exit 1** |
+> | class | *"declared runtime root '.agents/skills' does not exist"* | `[dangling-root] … resolves to nothing (-> ../nonexistent-target)` |
+>
+> **Both RED.** Those two copies treat absence as a failure, so the dangling case falls into the absent
+> branch and is *misattributed*; FS.GG.Audio's treated absence as **expected**, so its dangling root went
+> **green** — that one was the silent pass ([`FS.GG.Audio#212`](https://github.com/FS-GG/FS.GG.Audio/issues/212),
+> fixed at `26d2bb7`). A misattributed class still matters, because a diagnostic naming the wrong cause
+> sends the reader to the wrong repair; it is simply not the same defect, and inflating it would be the
+> shape [`#266`](https://github.com/FS-GG/.github/issues/266) is about pointed the other way.
+>
+> **THE COLLAPSE RAISED THE BAR, DEMONSTRATED ON A RECEIVER'S TREE RATHER THAN ARGUED.** Every one of the
+> seven compared partial views by `find … -type d | wc -l`. On `FS.GG.Audio`, a fixture of **20 impostor
+> directories** — `live=20 view=20`, none named like the live root's — **passes** that comparison, and the
+> shared implementation reports **20** `[missing-skill]` findings. The tracked-view-root lane, adopted from
+> `FS.GG.Net`'s copy, now runs for all seven.
+>
+> **`FS.GG.Game` WAS THE FLEET'S LAST `offer-none`, AND IT WAS REPAIRED THE WAY `#1768` SAYS TO.** Its
+> Renovate dashboard still listed `FS.GG.Kit 0.15.1` under *Detected Dependencies* with nothing under
+> *Open*, hours after 0.16.0 and 0.17.0 published — `#1768`'s failure mode (a), a dashboard that has not
+> re-extracted. The documented human action is one tick of the dashboard's `<!-- manual job -->`
+> checkbox, **not** a hand-forced branch; ticked on `FS.GG.Game#7`, and `#520` appeared minutes later
+> with `0.17.0` read **from the pin file at its head ref**, never from the title.
+>
+> **What this record does NOT claim.** Nothing here changes which contexts are required — the
+> `FS.GG.Net` question is [`#1727`](https://github.com/FS-GG/.github/issues/1727) and is untouched. No
+> kit release was cut ([`#1615`](https://github.com/FS-GG/.github/issues/1615) /
+> [`#1769`](https://github.com/FS-GG/.github/issues/1769) are sequenced after this fan-out so receivers
+> bump once rather than three times). `#1710`'s piece 1 — moving `Fsgg<Repo>GenerateSkillView` into the
+> kit — remains blocked on teaching `repos-audit.sh`'s §6.1 sweep, exactly as recorded above.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
