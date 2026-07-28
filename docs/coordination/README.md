@@ -171,6 +171,11 @@ first caller).
 
 `.agent-skill-roots` is the transport/parity declaration: `.claude/skills` and `.agents/skills` must
 remain complete byte-identical mirrors. It is not a request for every host to catalog every root.
+That mirroring is what [ADR-0067](../adr/0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md)
+replaces with one source and a generated view, and **it is still in force** — the sequencing, the
+per-repo preconditions and what actually retires are written down in
+[the skill-apparatus retirement order](skill-apparatus-retirement-order.md), which as of 2026-07-28 has
+retired nothing on any repo.
 Invoke a skill through the selector the active host supports (Codex CLI/IDE uses `$skill-name` or
 `/skills`; other hosts may provide a picker). Do not treat a literal `/skill-name` in historical prose
 as universally executable syntax.
