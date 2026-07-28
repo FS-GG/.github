@@ -845,6 +845,29 @@ KIT_SKILL_SRCS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind sk
 [ -n "$KIT_SKILL_SRCS" ] \
   || die "no 'kind: skill' kit item declared in $REG — the coordination kit requires at least one."
 
+# The kit's `kind: client` executables: READ from the registry, not named here (.github#1696).
+#
+# This block used to be a literal `scripts/fsgg-coord` inside `managed()` — the invented-location bug
+# the skills block above warns about in as many words, three rows over, and latent only because the
+# kit had exactly one client row for its whole existence. Adding a second (`scripts/skill-view`, the
+# ADR-0067 §9 replacement) made it observable immediately: `stage-kit.sh` DERIVES the package's
+# manifest from this same registry, so the package carried the new client while this byte-copy writer
+# did not — and `--check --against-pin`, which reads the package's manifest, reported the receiver
+# this very script had just written as DRIFT (missing). Two distribution paths for one kit, disagreeing
+# about what the kit IS, is exactly what ADR-0058 and #338 exist to prevent.
+#
+# A client's dest IS its source path (`repos.sh validate` enforces that), so unlike a config there is
+# nothing to zip — but the SOURCE still comes from the registry rather than from a convention.
+# Fail-closed like the skills read, and for the same reason: ADR-0062 defines the kit to carry a
+# client, so "the registry declares none" is a broken registry, not a smaller kit.
+client_rc=0
+KIT_CLIENT_SRCS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind client --registry "$REG")" \
+  || client_rc=$?
+[ "$client_rc" -eq 0 ] \
+  || die "could not read the kit client list from $REG (repos.sh exited $client_rc)."
+[ -n "$KIT_CLIENT_SRCS" ] \
+  || die "no 'kind: client' kit item declared in $REG — the coordination kit requires at least one."
+
 # The kit's `kind: config` files: plain files delivered to a receiver path that is NOT their source —
 # .config/dotnet-tools.json, the manifest that lets a receiver `dotnet tool restore` the engine the
 # fsgg-coord client execs (#1077). Read source AND dest from the registry (a config NAMES its dest, so
@@ -876,8 +899,11 @@ done <<< "$KIT_CONFIG_PAIRS"
 
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
-  printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
   local r src name s d full rel
+  while IFS= read -r src; do
+    [ -n "$src" ] || continue
+    printf '%s::%s\n' "$src" "$src"    # client: its dest IS its source path (repos.sh validate)
+  done <<< "$KIT_CLIENT_SRCS"
   for src in $KIT_SKILL_SRCS; do
     name="${src##*/}"
     [ -d "$SRC_ROOT/$src" ] || die "canonical kit skill source missing: $src"
@@ -934,8 +960,15 @@ wants_exec() { [ -x "$SRC_ROOT/$1" ]; }        # $1 = rel_src
 # ...and that rule is only as good as the mode it reads. If THIS checkout has lost the client's +x bit,
 # `wants_exec` answers "no" everywhere and BOTH arms quietly stop caring — the same fail-open, one level
 # up, that #315 already cost this script. A source we cannot trust is not a verdict: fail closed.
-[ -x "$SRC_ROOT/scripts/fsgg-coord" ] \
-  || die "canonical scripts/fsgg-coord is not executable in $SRC_ROOT — refusing to distribute or certify a kit whose client cannot run ('chmod +x scripts/fsgg-coord')."
+# Asserted over EVERY declared client, not just the first one to have existed (.github#1696). The
+# guard's subject is "a kit whose client cannot run", and a kit with two clients has two ways to be
+# that kit — `scripts/skill-view` losing its +x bit fails open in precisely the way this line was
+# written to close.
+while IFS= read -r _client; do
+  [ -n "$_client" ] || continue
+  [ -x "$SRC_ROOT/$_client" ] \
+    || die "canonical $_client is not executable in $SRC_ROOT — refusing to distribute or certify a kit whose client cannot run ('chmod +x $_client')."
+done <<< "$KIT_CLIENT_SRCS"
 
 if [ "$mode" = "apply" ]; then
   # Managed skill directories are closed sets. Remove files a prior kit version declared but the

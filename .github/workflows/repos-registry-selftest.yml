@@ -36,6 +36,14 @@ on:
       # the kit's `kind: config` source — the engine manifest (#1077). A plain file, so it is named
       # exactly (no wildcard). run.sh's coverage assertion checks it is here on both triggers.
       - "dist/dotnet/.config/dotnet-tools.json"
+      # ADR-0067 §9's replacement and the two libraries it sources at startup (#1696). Named exactly,
+      # for the same reason as the manifest above: they are plain files, not a root. `scripts/lib/**`
+      # would over-trigger on gate.py and sparse.py, which are NOT kit sources — and the wildcards
+      # above are wildcards only because a per-SKILL list went stale (#334); a two-file list that
+      # `repos.sh validate` and run.sh both re-derive from the roster cannot.
+      - "scripts/skill-view"
+      - "scripts/lib/args.sh"
+      - "scripts/lib/roots.sh"
       # capability workflows — `capabilities:` names the reusable workflow that audits each one, and
       # validate now proves it EXISTS and really carries a `workflow_call:` trigger (#503). That makes
       # registry/repos.yml's validity depend on these files, so renaming, deleting, or un-reusing one
@@ -63,6 +71,9 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "dist/dotnet/.config/dotnet-tools.json"   # the kit's engine-manifest config source (#1077)
+      - "scripts/skill-view"                      # ADR-0067 §9's replacement (#1696)
+      - "scripts/lib/args.sh"                     # ...and the two libraries it sources at startup
+      - "scripts/lib/roots.sh"
       - ".github/workflows/**"
   workflow_dispatch:
 

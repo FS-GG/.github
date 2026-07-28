@@ -50,6 +50,26 @@
             // removed, so a receiver's OWN skill under a retired root is left alone (and the root
             // then stays, non-empty, which is the correct outcome — it is no longer ours to police).
             public string RetiredSkillRoots { get; set; }
+
+            // Roots that are STILL declared runtime roots but whose content is GENERATED locally
+            // (`scripts/skill-view generate`) rather than materialized here — ';'-separated
+            // (ADR-0065 §Retiring a root as amended, ADR-0067 §6, .github#1696). Empty by default.
+            //
+            // WHY THIS IS NOT `RetiredSkillRoots` UNDER ANOTHER NAME, even though the sweep below
+            // treats them alike. A retired root LEAVES the runtime contract; a view root STAYS in
+            // it. The materializer's behaviour coincides — neither is copied into, both are swept —
+            // and every OTHER reader's behaviour diverges: `.agent-skill-roots`,
+            // `Fsgg.Schemas.agentSkillRoots`, `coordination-sync` and `KitDigest` must keep counting
+            // a view root and must stop counting a retired one. Spelling them the same property
+            // would make the kit assert something false about the runtime surface in order to reuse
+            // eight lines of deletion.
+            //
+            // WHY A SWEEP AT ALL. A receiver's second root is COMMITTED today. `scripts/skill-view`
+            // refuses to generate over a root git tracks, with no override (skill-view:331), and
+            // ADR-0065 forbids the receiver hand-deleting the mirror. The materializer that created
+            // those copies is the only thing permitted to remove them, so it is the thing that does.
+            public string ViewSkillRoots { get; set; }
+
             // The build-config capability (Directory.Build.props / Directory.Packages.props) reaches
             // only 4 of the receivers and .github imports rather than copies it, so it is OPT-IN: a
             // consumer that wants it sets FsggKitMaterializeBuildConfig=true. Off, build-config rows are
@@ -105,6 +125,41 @@
                     // A root cannot be both live and retired; the live set wins and the entry is ignored.
                     if (t.Length > 0 && !roots.Contains(t)) retiredRoots.Add(t);
                 }
+
+                // VIEW ROOTS, and their conflicts are REFUSED rather than resolved. The retired set
+                // above lets the live set win silently, which is safe there because both readings
+                // end with the kit's skills present at that path. Here they do not: reading a view
+                // root as live MATERIALIZES committed copies into a path the receiver has arranged
+                // to be a generated symlink, and reading a live root as a view DELETES the only
+                // copies it has. There is no defensible default between those, so a root named in
+                // two dispositions is a receiver configuration error and is named as one.
+                var viewRoots = new List<string>();
+                foreach (var r in (ViewSkillRoots ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var t = r.Trim();
+                    if (t.Length == 0) continue;
+                    if (roots.Contains(t))
+                    {
+                        Log.LogError("FS.GG.Kit: '" + t + "' is declared in BOTH FsggKitSkillRoots and " +
+                            "FsggKitViewSkillRoots. A root is either materialized into or generated as a view, " +
+                            "never both — remove it from one (ADR-0065 §Retiring a root, .github#1696).");
+                        continue;
+                    }
+                    if (retiredRoots.Contains(t))
+                    {
+                        Log.LogError("FS.GG.Kit: '" + t + "' is declared in BOTH FsggKitRetiredSkillRoots and " +
+                            "FsggKitViewSkillRoots. A retired root LEAVES the runtime contract and a view root " +
+                            "STAYS in it; they cannot both be true of one path (ADR-0065 §Retiring a root, .github#1696).");
+                        continue;
+                    }
+                    viewRoots.Add(t);
+                }
+                // RETURN BEFORE TOUCHING THE TREE. A contradictory root set is not a finding to
+                // report alongside a completed materialize: under one reading of it this task copies
+                // into a path the receiver arranged to be a link, writing THROUGH that link into the
+                // very source the view resolves to. Falling through to the manifest loop and failing
+                // afterwards would do the damage and then complain about it.
+                if (Log.HasLoggedErrors) return false;
 
                 var clients = new List<ITaskItem>();
                 var nonClients = new List<ITaskItem>();
@@ -302,6 +357,74 @@
                             "FS.GG.Kit: removed now-empty retired skill root " + retiredRootDir + ".");
                     }
                 }
+
+                // VIEW ROOTS (.github#1696). Same deletion, a different reason, and one guard the
+                // retired sweep does not need.
+                //
+                // The retirement this completes is of the COPY, not of the root: the path stays a
+                // declared runtime root and `scripts/skill-view generate` will put a view there. The
+                // materializer removes the committed copies because it wrote them and because
+                // ADR-0065 forbids the receiver removing them by hand — and because until they are
+                // gone `skill-view:331` refuses to generate over a root git still tracks. Removing
+                // the now-empty root directory is likewise required and not tidiness: `generate`
+                // refuses to REPLACE a directory that is neither a symlink nor carries its own
+                // `.skill-view` receipt, so an empty leftover would block the very view it is
+                // waiting for.
+                //
+                // THE GUARD. A view root that has ALREADY been generated is a symlink to the live
+                // source (or, where the filesystem refuses one, a copy carrying a `.skill-view`
+                // receipt). Sweeping either would be a catastrophe rather than a no-op: through the
+                // symlink, `Directory.Delete(stale, true)` would recurse into `.claude/skills` and
+                // destroy the canonical tree the view is a view OF. So a root that is already a view
+                // is left entirely alone — there is nothing of ours under it to remove, and what is
+                // under it is the source. (The retired sweep guards the same hazard one level down,
+                // at the individual skill entry; here the ROOT itself is the link, so the guard has
+                // to be one level up.)
+                foreach (var view in viewRoots)
+                {
+                    var viewRootDir = Path.Combine(ReceiverRoot, view.Replace('/', Path.DirectorySeparatorChar));
+                    if (!Directory.Exists(viewRootDir)) continue;
+                    var viewInfo = new DirectoryInfo(viewRootDir);
+                    if ((viewInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+                    {
+                        Log.LogMessage(MessageImportance.Low,
+                            "FS.GG.Kit: view skill root " + viewRootDir + " is a generated link — not swept.");
+                        continue;
+                    }
+                    if (File.Exists(Path.Combine(viewRootDir, ".skill-view")))
+                    {
+                        Log.LogMessage(MessageImportance.Low,
+                            "FS.GG.Kit: view skill root " + viewRootDir + " carries a .skill-view receipt — not swept.");
+                        continue;
+                    }
+                    foreach (var skillName in kitSkillNames)
+                    {
+                        var stale = Path.Combine(viewRootDir, skillName);
+                        if (!Directory.Exists(stale)) continue;
+                        var info = new DirectoryInfo(stale);
+                        if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+                        {
+                            info.Delete();
+                            Log.LogMessage(MessageImportance.High,
+                                "FS.GG.Kit: unlinked stale view at " + stale + " (.github#1696).");
+                            continue;
+                        }
+                        Directory.Delete(stale, true);
+                        Log.LogMessage(MessageImportance.High,
+                            "FS.GG.Kit: removed materialized copy " + stale + " — this root is now a generated view (.github#1696).");
+                    }
+                    // Only if nothing of the receiver's own is left, exactly as above. A surviving
+                    // entry is theirs; and it is also a problem they must resolve, because
+                    // `skill-view generate` cannot put a view where their directory stands. The
+                    // §8 assertion below says so in those words rather than this loop guessing.
+                    if (Directory.GetFileSystemEntries(viewRootDir).Length == 0)
+                    {
+                        Directory.Delete(viewRootDir);
+                        Log.LogMessage(MessageImportance.High,
+                            "FS.GG.Kit: removed now-empty view skill root " + viewRootDir +
+                            " — generate the view with: scripts/skill-view generate --source <live root>");
+                    }
+                }
                 }
 
                 ClientFiles = clients.ToArray();
@@ -325,11 +448,149 @@
     </Task>
   </UsingTask>
 
+  <!--
+    ADR-0067 §8's LOUD ABSENCE CHECK, over the roots nothing else can vouch for (.github#1696).
+
+    WHY THIS TASK HAS TO EXIST AT ALL. Every root MaterializeKit copies into is verified file by file
+    against the manifest's sha256 — that is ADR-0062's load-bearing half, and it is why a materialize
+    failure is loud today. A VIEW root gets none of that, by construction: the kit deliberately does
+    not write it, so the kit would have nothing to say when it is empty, dangling, or a Windows
+    text-file symlink. Phase 1 measured all three of those as **exit 0 with no diagnostic in BOTH
+    runtimes** (Claude Code 2.1.220, Codex CLI 0.145.0) — an agent that quietly has no skills. ADR-0067
+    §8 is explicit about the trade: *"a rewrite that removes the loud failure and adds the quiet one is
+    worse than no rewrite."* Introducing the view-root disposition without this check WOULD be that
+    rewrite. So it ships in the same change, and it is an ERROR, not a warning.
+
+    IT IS SCOPED TO VIEW ROOTS, deliberately. Live roots are already covered, per file and per byte,
+    by the materialize itself; re-asserting them here would be a second gate answering a question that
+    already has an owner. With no view roots declared — the default — there is nothing this can say,
+    and it says so rather than reporting a pass it did not earn.
+
+    THE EXPECTED SET IS THE PACKAGE'S OWN MANIFEST, never a directory listing of the root being
+    judged. Deriving "what should be visible" from what IS visible is the vacuous-pass shape (epic
+    #266): an empty view root would then satisfy itself. It is also not a SUBSET manifest — this is
+    every skill file the kit ships, which is exactly the set the kit is answerable for, and a
+    receiver's own skills are not policed because they were never the kit's to deliver.
+  -->
+  <UsingTask TaskName="CheckSkillView" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$([MSBuild]::NormalizePath('$(MSBuildToolsPath)', 'Microsoft.Build.Tasks.Core.dll'))">
+    <Task>
+      <Code Type="Class" Language="cs">
+        <![CDATA[
+        using System;
+        using System.Collections.Generic;
+        using System.IO;
+        using Microsoft.Build.Framework;
+        using Microsoft.Build.Utilities;
+
+        public class CheckSkillView : Task
+        {
+            public string KitDir { get; set; }
+            public string ReceiverRoot { get; set; }
+            public string ViewSkillRoots { get; set; }
+
+            public override bool Execute()
+            {
+                var viewRoots = new List<string>();
+                foreach (var r in (ViewSkillRoots ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var t = r.Trim();
+                    if (t.Length > 0) viewRoots.Add(t);
+                }
+                if (viewRoots.Count == 0)
+                {
+                    // Not a pass — an absence of subject. Said out loud so that a receiver who wired
+                    // this target and expected it to be watching something is not reassured by silence.
+                    Log.LogMessage(MessageImportance.High,
+                        "FS.GG.Kit: no view skill roots declared (FsggKitViewSkillRoots is empty) — nothing to assert.");
+                    return true;
+                }
+
+                var manifest = Path.Combine(KitDir, "kit-manifest.tsv");
+                if (!File.Exists(manifest))
+                {
+                    Log.LogError("FS.GG.Kit: kit-manifest.tsv not found under " + KitDir + " — the package is malformed.");
+                    return false;
+                }
+
+                // Every skill file the kit ships, receiver-relative WITHIN a root.
+                var expected = new List<string>();
+                foreach (var raw in File.ReadAllLines(manifest))
+                {
+                    var line = raw.Trim();
+                    if (line.Length == 0) continue;
+                    var f = line.Split('\t');
+                    if (f.Length < 4 || f[0] != "skill") continue;
+                    expected.Add(f[2].Replace('/', Path.DirectorySeparatorChar));
+                }
+                // "I found nothing to look for" and "everything I looked for is there" are opposite
+                // facts, and only one of them is a pass (epic #266, and skill-view's own rule).
+                if (expected.Count == 0)
+                {
+                    Log.LogError("FS.GG.Kit: kit-manifest.tsv names no skill files — refusing to certify a view root " +
+                        "against an EMPTY expected set, which every root would satisfy.");
+                    return false;
+                }
+
+                foreach (var view in viewRoots)
+                {
+                    var dir = Path.Combine(ReceiverRoot, view.Replace('/', Path.DirectorySeparatorChar));
+
+                    // The three silent classes phase 1 measured, named SEPARATELY — a diagnostic that
+                    // names the wrong cause sends the reader to the wrong repair.
+                    if (!Directory.Exists(dir))
+                    {
+                        if (File.Exists(dir))
+                            Log.LogError("FS.GG.Kit: view skill root '" + view + "' is a FILE, not a directory. " +
+                                "This is what a COMMITTED symlink looks like after `git -c core.symlinks=false` " +
+                                "checkout (the git-for-Windows default without Developer Mode) — the body is the " +
+                                "link target as text. Both runtimes resolve ZERO skills here and exit 0 saying " +
+                                "nothing. Delete it and run: scripts/skill-view generate --source <live root>");
+                        else
+                            Log.LogError("FS.GG.Kit: view skill root '" + view + "' is ABSENT or a DANGLING link. " +
+                                "The view was never generated, or its target moved, so this runtime resolves ZERO " +
+                                "skills and exits 0 while doing it (ADR-0067 §8). Run: " +
+                                "scripts/skill-view generate --source <live root>");
+                        continue;
+                    }
+
+                    var missing = new List<string>();
+                    foreach (var rel in expected)
+                        if (!File.Exists(Path.Combine(dir, rel))) missing.Add(rel.Replace(Path.DirectorySeparatorChar, '/'));
+
+                    if (missing.Count == 0)
+                    {
+                        Log.LogMessage(MessageImportance.High,
+                            "FS.GG.Kit: view skill root '" + view + "' — all " + expected.Count + " kit skill file(s) visible.");
+                        continue;
+                    }
+
+                    // Bounded, because the interesting fact is WHICH class of failure this is, and a
+                    // wholly ungenerated view would otherwise print the entire kit.
+                    var shown = Math.Min(missing.Count, 10);
+                    var list = string.Join(", ", missing.GetRange(0, shown).ToArray());
+                    Log.LogError("FS.GG.Kit: view skill root '" + view + "' exists but " + missing.Count + " of " +
+                        expected.Count + " kit skill file(s) are NOT visible there: " + list +
+                        (missing.Count > shown ? ", …" : "") +
+                        ". A partly-visible root is the same silent failure as an empty one — the runtime " +
+                        "loads what it finds and reports nothing. Regenerate the view: " +
+                        "scripts/skill-view generate --source <live root>  (if the root holds the receiver's own " +
+                        "directories, `generate` cannot replace it — move them under the live root first).");
+                }
+
+                return !Log.HasLoggedErrors;
+            }
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
   <!-- Public entry point. Invoke explicitly (`dotnet build -t:FsggKitMaterialize`) or let it run as part
        of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
   <Target Name="FsggKitMaterialize">
     <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)"
-                    RetiredSkillRoots="$(FsggKitRetiredSkillRoots)"
+                    RetiredSkillRoots="$(FsggKitRetiredSkillRoots)" ViewSkillRoots="$(FsggKitViewSkillRoots)"
                     IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)" AdoptBuildConfig="$(FsggKitAdoptBuildConfig)">
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
       <Output TaskParameter="NonClientFiles" ItemName="_FsggKitNonClient" />
@@ -346,6 +607,21 @@
           Command="chmod a-x @(_FsggKitNonClient->'&quot;%(FullPath)&quot;', ' ')" />
     <Exec Condition="'$(OS)' != 'Windows_NT' And '@(_FsggKitClient)' != ''"
           Command="chmod a+x @(_FsggKitClient->'&quot;%(FullPath)&quot;', ' ')" />
+  </Target>
+
+  <!-- §8's assertion, separately invocable and automatically run.
+       AUTOMATIC: `AfterTargets="FsggKitMaterialize"` means every materialize — every local one, and
+       every `kit-materialize.yml` run on a bump PR — asserts the view roots it just swept, with NO
+       receiver wiring at all. That is the property that matters: a check a receiver has to remember
+       to wire is a check that reaches the repos which did not need it.
+       SEPARATELY INVOCABLE: `dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitCheckSkillView`
+       is one line in a receiver's own gate.yml and asserts the view on EVERY pull request, without
+       materializing anything. §8 wants the assertion in CI; a materialize only happens on bump PRs,
+       so a receiver that wants it on all of them adds that line. It needs no arguments and no
+       expected-set of its own — the package it references carries both. -->
+  <Target Name="FsggKitCheckSkillView" AfterTargets="FsggKitMaterialize">
+    <CheckSkillView KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)"
+                    ViewSkillRoots="$(FsggKitViewSkillRoots)" />
   </Target>
 
   <Target Name="FsggKitMaterializeOnBuild"

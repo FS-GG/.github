@@ -28,6 +28,8 @@ skills as real files — ADR-0011 — and the client must be executable):
 | every file in each skill directory | `<skill-root>/<name>/<relative-path>`, for each root in `FsggKitSkillRoots` |
 | `fsgg-coord` client | `scripts/fsgg-coord` (made executable) |
 | engine tool manifest | `.config/dotnet-tools.json` |
+| `skill-view` client | `scripts/skill-view` (made executable) |
+| `skill-view`'s libraries | `scripts/lib/args.sh`, `scripts/lib/roots.sh` |
 
 Every copy is **content-addressed and mode-addressed**: the materialize verifies each file's SHA-256
 and executable bit against the package (`kit/kit-manifest.tsv`), removes undeclared files from managed
@@ -61,8 +63,19 @@ are — this is the write arm that replaces that copy, not a live per-build inpu
 | property | default | meaning |
 |---|---|---|
 | `FsggKitReceiverRoot` | referencing project's dir | repo root the kit materializes into |
-| `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | skill roots to materialize into |
+| `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | skill roots to **materialize into**. Since 0.15.0 this is no longer the same thing as the runtime root set — see `FsggKitViewSkillRoots` |
 | `FsggKitRetiredSkillRoots` | `.codex/skills` | roots the contract has retired — the materializer removes the kit's own skill directories from each, so a receiver never hand-deletes a mirror (ADR-0065 as amended by ADR-0067 §5) |
+| `FsggKitViewSkillRoots` | *(empty)* | roots that are **still runtime roots** but whose content is a locally **generated view** (`scripts/skill-view generate`), not a materialized copy. The materializer does not copy into one, removes the copies an older package put there, and then **asserts every kit skill is visible** and fails the build if not (ADR-0067 §8, ADR-0065 §Retiring a root, `.github#1696`) |
+
+The three root properties are three **dispositions**, and a root may appear in at most one — the
+materializer refuses a root named twice rather than picking. The **runtime** root set (what
+`.agent-skill-roots`, `Fsgg.Schemas.agentSkillRoots`, `coordination-sync` and `KitDigest` must agree
+on) is `FsggKitSkillRoots` ∪ `FsggKitViewSkillRoots`: moving a root from the first to the second keeps
+that union constant, which is exactly why it is not a root retirement.
+
+`FsggKitCheckSkillView` runs automatically after every materialize and is also invocable on its own —
+`dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitCheckSkillView` — for a receiver that wants
+§8's assertion on **every** pull request rather than only on kit-bump PRs.
 | `FsggKitMaterializeOnBuild` | `true` | materialize as part of the build; `false` to run `-t:FsggKitMaterialize` explicitly |
 | `FsggKitMaterializeBuildConfig` | `false` | also materialize `Directory.Build.props` + `Directory.Packages.props` to the repo root |
 

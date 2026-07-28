@@ -102,8 +102,32 @@
          this change, because that arm keys on the six `kit:` CONTENT sources in registry/repos.yml
          and this diff touched none of them — it changed the package's own build logic instead. The
          republish obligation was real anyway. Gap filed; do not read that arm's green as "no
-         republish owed". -->
-    <Version>0.14.0</Version>
+         republish owed".
+
+         0.15.0 (.github#1696, ADR-0067 §9 stage 0 / ADR-0065 §Retiring a root as amended) — DELIVER
+         THE REPLACEMENT, and give the materializer a state for a generated root. MINOR.
+         The MEMBER SET GROWS for the first time since this package existed: 25 -> 28.
+           * `scripts/skill-view` (kind: client, executable at scripts/skill-view) — ADR-0067 §9's
+             phase-2 replacement. No published FS.GG.Kit had EVER carried it, 0.14.0 included, so
+             §9's precondition 1 ("the replacement is present and executable in R") failed on all
+             seven receivers for a reason bumping could not fix: a perfectly current receiver still
+             had no replacement. That is what made phase 4 (#1676) reach zero repos.
+           * `scripts/lib/args.sh` + `scripts/lib/roots.sh` (kind: config) — sourced by skill-view at
+             startup. Without them the row above would deliver a tool that cannot run while
+             precondition 1 read as satisfied; `repos.sh validate` now asserts the three never
+             separate, exactly as it does for the shim and its engine manifest (#1077).
+           * `FsggKitViewSkillRoots` — the third root disposition, EMPTY BY DEFAULT, plus the
+             `FsggKitCheckSkillView` assertion (§8) that a view root's skills are actually visible.
+         MINOR, not patch: three new members reach every receiver's disk at new paths, and a new
+         materialize property changes what the build logic can be asked to do. Not major, and this is
+         the load-bearing claim of the number — NOTHING RETIRES HERE. `FsggKitSkillRoots` and
+         `FsggKitRetiredSkillRoots` keep their 0.14.0 values, `FsggKitViewSkillRoots` defaults empty,
+         so a receiver materializing 0.15.0 gets exactly 0.14.0's two roots plus three new files.
+         Retirement is per-repo, one at a time, and is phase 4's to authorize
+         (docs/coordination/skill-apparatus-retirement-order.md §6).
+         NOTE, unlike 0.14.0: this change DOES touch the `kit:` CONTENT sources in
+         registry/repos.yml, so `kit-published-coherence`'s PR arm sees it. -->
+    <Version>0.15.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

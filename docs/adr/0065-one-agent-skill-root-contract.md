@@ -6,6 +6,7 @@
 - **Amends:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5; interacts with [ADR-0019](0019-org-repo-roster-registry-and-coordination-kit.md) and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md)
 - **Clarifies:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 1 and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md): a skill is a directory transport unit, while runtime catalog exposure is a host policy over those materialized directories.
 - **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). The ordered root set is now TWO: `.claude/skills`, `.agents/skills`.** ADR-0067 decided the direction and explicitly said it decided *"the direction, not the flip"*; the flip was authorised on `#1636` by the maintainer on 2026-07-27 and lands with this amendment, in the same change, as ADR-0067's Consequences require. `.codex/skills` is retired. This record otherwise stays IN FORCE, and its transport contract — including the prohibition on deleting a mirror to hide a duplicate — is **unchanged and still governs**: see §Decision and §Retiring a root, which is what makes this an amendment rather than a violation of it. ADR-0067 §6's *generated view* is a separate, later mechanism and is **not** landed here; both roots remain committed copies today.
+- **Amended by:** [#1696](https://github.com/FS-GG/.github/issues/1696) — **2026-07-28, `FS.GG.Kit` 0.15.0.** A declared path now has **three** dispositions, not two: materialized, **view** (still a runtime root, content generated locally by `scripts/skill-view`), and retired. See §A root's three dispositions. The runtime root set is the union of the first two, so it is **unchanged** — nothing is retired by that amendment, `FsggKitViewSkillRoots` defaults empty, and §Retiring a root is untouched and still governs.
 
 ## Context
 
@@ -92,6 +93,59 @@ forever. `FS.GG.Kit` therefore declares `FsggKitRetiredSkillRoots` alongside `Fs
 removes the kit's own skill directories from each retired root on the receiver's next restore — leaving
 any skill the receiver itself put there untouched. A receiver never hand-deletes a mirror; the
 materializer that created it is the thing that removes it.
+
+## A root's three dispositions, and why a *view root* is a third one
+
+> **AMENDED 2026-07-28 ([#1696](https://github.com/FS-GG/.github/issues/1696)), delivered in
+> `FS.GG.Kit` 0.15.0.** ADR-0067 §6's *generated view* is no longer a later mechanism with nowhere to
+> live: this section gives it a disposition in the transport contract. Nothing is retired by that
+> amendment — `FsggKitViewSkillRoots` defaults **empty**, and moving a root into it is a per-repo
+> decision that ADR-0067 §9 and
+> [the retirement order](../coordination/skill-apparatus-retirement-order.md) authorize, one receiver
+> at a time.
+
+§Retiring a root above draws the line between *hiding* a duplicate and *deciding* a root is
+unnecessary. A generated view is on neither side of it, and that is exactly why the transport contract
+had to grow rather than be reinterpreted. This record's own Consequences already say that adding **or
+removing** a runtime root is a contract migration; a view root removes none.
+
+A declared path is in exactly **one** of three dispositions:
+
+| disposition | in the runtime contract? | who puts content there | kit property |
+|---|---|---|---|
+| **materialized root** | yes | the kit, by content-addressed copy | `FsggKitSkillRoots` |
+| **view root** | **yes** | the repo, by `scripts/skill-view generate`, at checkout | `FsggKitViewSkillRoots` |
+| **retired root** | no | nobody; the kit's copies are swept away | `FsggKitRetiredSkillRoots` |
+
+**The runtime root set is the union of the first two.** That union — not `FsggKitSkillRoots` alone —
+is what `Fsgg.Schemas.agentSkillRoots`, a checked-in `.agent-skill-roots`, `coordination-sync` and
+`KitDigest` must agree with. Moving a root from materialized to view holds the union constant, which
+is the precise sense in which it is **not** a retirement: both runtimes still load skills from that
+path, and every consumer of the root set still counts it. Moving a root to *retired* shrinks the
+union, and that is the contract migration §Retiring a root governs.
+
+**Why the third state was necessary rather than convenient.** Without it a receiver is wedged between
+three individually correct rules, which `#1696` measured on all seven of them:
+
+- the kit had only "materialize into it" and "delete from it", so the second root stayed **committed**;
+- `scripts/skill-view` **refuses to generate over a root git tracks, with no override** — deliberately,
+  because a generator able to delete committed skills would be executing a retirement by accident;
+- and this record forbids the receiver hand-deleting the mirror to escape.
+
+The materializer that wrote the copies is the only thing permitted to remove them, so it is the thing
+that does — the same reasoning that produced `FsggKitRetiredSkillRoots`, one state further along. It
+removes the kit's own skill directories from a view root, then the now-empty root itself, and leaves
+any skill the receiver put there untouched. A root that is **already** a view — a symlink, or a copy
+carrying a `.skill-view` receipt — is not swept at all: it holds the source, not a copy of it.
+
+**A view root's content is asserted, never assumed.** A root the kit does not write is a root the kit's
+content-addressed verification cannot vouch for, and ADR-0067 §8 measured all three ways that goes
+wrong — an absent root, a dangling link, and a `core.symlinks=false` checkout of a committed symlink —
+as *exit 0 with no diagnostic in both runtimes*. So the materialize **asserts** every kit skill is
+visible at each view root and fails the build when it is not (`FsggKitCheckSkillView`, also invocable
+on its own so a receiver can run it on every pull request rather than only on kit-bump PRs). Adding
+this disposition without that assertion would trade a loud failure for a silent one, which ADR-0067 §8
+rules out in as many words.
 
 ## Consequences
 

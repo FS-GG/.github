@@ -341,3 +341,28 @@ kit:
   # A `kind: config` row names its own `dest`: the client's destination IS its source path, a config's
   # is not (canonical under dist/dotnet/ so pin-coherence still finds it; delivered to .config/).
   - { id: coord-engine-manifest,   kind: config, source: dist/dotnet/.config/dotnet-tools.json, dest: .config/dotnet-tools.json }
+  # ADR-0067 §9's REPLACEMENT, and the two library files without which it does not start (#1696).
+  #
+  # `scripts/skill-view` is the phase-2 generated view + §8's loud absence check (#1635). §9 forbids
+  # retiring the old apparatus in a repo whose replacement is not present, and until this row existed
+  # NO published FS.GG.Kit carried it — 0.14.0 included — so precondition 1 of the retirement order
+  # (docs/coordination/skill-apparatus-retirement-order.md §4) failed on all seven receivers for a
+  # reason no amount of BUMPING would have fixed. A perfectly current receiver still had no replacement.
+  #
+  # The two `lib/` rows are not padding and not a convenience. `skill-view` SOURCES both at startup
+  # (lines 87-89) and dies on the missing one, so a kit that delivered the tool alone would deliver a
+  # tool that cannot run — #1077's shim-without-its-engine-manifest defect, one tool over. They ride
+  # as `kind: config` because a config row names its own dest and a client's dest IS its source
+  # basename: `kind: client` would land `scripts/lib/roots.sh` at `scripts/roots.sh`, where nothing
+  # sources it. `repos.sh validate` asserts the three never separate again, exactly as it does for the
+  # shim and its manifest.
+  #
+  # TWO COSTS, both real and both accepted. (1) These are the first kit rows under `scripts/lib/`, a
+  # directory four receivers already keep their own files in — checked 2026-07-28, and no receiver
+  # holds an `args.sh` or a `roots.sh`, so nothing is clobbered today. A future kit row landing under
+  # that path must re-check. (2) `scripts/lib/args.sh` and `scripts/lib/roots.sh` are shared by most
+  # of this repo's own scripts, so editing EITHER now obliges an FS.GG.Kit republish and a seven-
+  # receiver fan-out. `kit-published-coherence` enforces that; do not be surprised by it.
+  - { id: skill-view,              kind: client, source: scripts/skill-view }
+  - { id: skill-view-lib-args,     kind: config, source: scripts/lib/args.sh,  dest: scripts/lib/args.sh }
+  - { id: skill-view-lib-roots,    kind: config, source: scripts/lib/roots.sh, dest: scripts/lib/roots.sh }

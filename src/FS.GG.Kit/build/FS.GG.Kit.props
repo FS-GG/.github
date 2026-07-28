@@ -24,6 +24,45 @@
          listing it here is a no-op on receivers: the materializer only walks FsggKitSkillRoots. -->
     <FsggKitRetiredSkillRoots Condition="'$(FsggKitRetiredSkillRoots)' == ''">.codex/skills</FsggKitRetiredSkillRoots>
 
+    <!-- VIEW ROOTS — the THIRD disposition, ';'-separated (ADR-0065 §Retiring a root, .github#1696).
+         Empty by default, and that default is the whole safety of this property: it changes NOTHING
+         for any receiver until that receiver opts in, so shipping the mechanism retires nothing
+         (ADR-0067 §9, which owns the retirement).
+
+         A view root is a root that is STILL IN THE RUNTIME CONTRACT — both runtimes must find skills
+         there, and `Fsgg.Schemas.agentSkillRoots` / `.agent-skill-roots` / `coordination-sync` /
+         `KitDigest` still count it — but whose CONTENT is generated locally at checkout by
+         `scripts/skill-view generate` rather than materialized into by this package. It is exactly
+         what `FsggKitSkillRoots` and `FsggKitRetiredSkillRoots` between them could not express, and
+         the gap is not cosmetic: without it a receiver's second root stays COMMITTED, and
+         `scripts/skill-view:331` then refuses to generate over a root git tracks, with no override.
+         The receiver was wedged between three correct rules.
+
+         Declaring it RETIRED instead would be wrong twice: the root would drop out of the runtime
+         contract while both runtimes still read it, and the root-set declarations above would then
+         disagree with what the runtimes actually load.
+
+         THE RUNTIME ROOT SET IS THE UNION. `FsggKitSkillRoots` is now the set this package
+         MATERIALIZES INTO, not the runtime surface; the runtime surface is
+         `FsggKitSkillRoots` + `FsggKitViewSkillRoots`, and THAT union is what must equal
+         `.agent-skill-roots` / `agentSkillRoots`. A receiver that moves a root from the first
+         property to this one keeps the union constant, which is why the move is not a root retirement.
+
+         WHAT THE MATERIALIZER DOES WITH ONE (build/FS.GG.Kit.targets):
+           1. it does NOT copy skills into it — the view is generated, not transported;
+           2. it REMOVES the kit's own skill directories an older package materialized there, exactly
+              as it does for a retired root, so the receiver never hand-deletes a mirror (ADR-0065's
+              transport contract) and `skill-view generate` is no longer refused for a tracked root;
+           3. it then ASSERTS every kit skill is visible there and FAILS LOUD when it is not — the
+              §8 half. A root nothing materializes into is a root nothing verifies, and ADR-0067 §8
+              is explicit that "a rewrite that removes the loud failure and adds the quiet one is
+              worse than no rewrite." That assertion is also invocable on its own, with no
+              materialize, as `-t:FsggKitCheckSkillView`.
+
+         A root may not appear in more than one of the three properties; the materializer refuses,
+         rather than silently picking a disposition. -->
+    <FsggKitViewSkillRoots Condition="'$(FsggKitViewSkillRoots)' == ''"></FsggKitViewSkillRoots>
+
     <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
          materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->
     <FsggKitMaterializeOnBuild Condition="'$(FsggKitMaterializeOnBuild)' == ''">true</FsggKitMaterializeOnBuild>
