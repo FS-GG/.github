@@ -611,11 +611,28 @@ content-addressed **directory** data: each producer manifest retains the canonic
 relative path, digest, executable mode, and the whole-tree digest. ONE `mirror`/`verify` library
 (`Fsgg.SkillMirror`, FS.GG.Contracts ≥ 1.4.0) owns all orchestrated fan-out, and the
 standalone spec-kit lane runs a vendored byte-equivalent as its single materialize
-step. The invariant — three byte-identical union roots, nothing dangling — is
+step. The invariant — **two** byte-identical union roots, nothing dangling — is
 asserted where skills are produced (`doctor`, per-skill `sha256` in
 `scaffold-provenance`) *and* where they are consumed: the Templates composition gate
 enforces it hard in both lanes via the reusable `skill-union-assert.sh`
 (`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
+The root set was **three** until [#1636](https://github.com/FS-GG/.github/issues/1636) retired
+`.codex/skills` (ADR-0065 as amended by [ADR-0067](adr/0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5):
+it was Codex's *other* native root, so it carried no runtime the remaining two do not.
+
+**A declared root now has three dispositions, and only two of them are copies**
+([#1696](https://github.com/FS-GG/.github/issues/1696), `FS.GG.Kit` 0.15.0, ADR-0065
+§A root's three dispositions). A root is *materialized* (the kit copies into it), a *view*
+(still a runtime root, but generated locally from the live root by `scripts/skill-view` — which
+`FS.GG.Kit` also delivers now), or *retired* (out of the contract, its copies swept by the
+materializer that wrote them). **The runtime root set is the union of the first two, so the
+picture above is unchanged**; what moves is which of them holds bytes of its own. Under a view root
+the byte-identity invariant is not asserted but **structurally impossible to violate** — there is one
+object — and what is asserted instead is *visibility*, because an absent root, a dangling link and a
+`core.symlinks=false` checkout are all exit 0 and silent in both runtimes (ADR-0067 §8). No repo holds
+a view root yet: the property defaults empty, and turning it on is per-receiver work sequenced by
+[the retirement order](coordination/skill-apparatus-retirement-order.md).
+
 ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
 That declaration is the **transport/parity** contract, not a command to expose duplicate catalog

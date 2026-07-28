@@ -242,7 +242,14 @@ TRACK="$WORK/tracks-registry"; mkdir -p "$TRACK/scripts/lib" "$TRACK/registry"
 cp "$SYNC" "$TRACK/scripts/coordination-sync"
 cp "$REPO_ROOT"/scripts/lib/*.sh "$TRACK/scripts/lib/"   # every lib it sources at load — see the fakeroot note
 cp "$REPO_ROOT/scripts/repos.sh" "$TRACK/scripts/repos.sh"
-cp "$REPO_ROOT/scripts/fsgg-coord" "$TRACK/scripts/fsgg-coord"
+# EVERY `kind: client` source, derived from the registry rather than named here (.github#1696): the
+# distributor's source-existence guard runs before the read this leg is about, so a client this fake
+# root omits would die on the missing file and the phantom-dir assertion below could never be reached.
+# Deriving it also means a future client row needs no edit here — the same rule the assertion tests.
+while IFS= read -r _c; do
+  [ -n "$_c" ] || continue
+  mkdir -p "$TRACK/$(dirname "$_c")"; cp "$REPO_ROOT/$_c" "$TRACK/$_c"
+done < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --kind client --registry "$REPO_ROOT/registry/repos.yml")
 mkdir -p "$TRACK/.claude"; cp -r "$REPO_ROOT/.claude/skills" "$TRACK/.claude/skills"
 cp "$REPO_ROOT/registry/repos.yml" "$TRACK/registry/repos.yml"
 # `kit:` is the last top-level key and its rows are one-line flow mappings, so a row appends cleanly.
@@ -420,7 +427,12 @@ cp -r "$REPO_ROOT/scripts/lib" "$EXROOT/scripts/lib"
 cp "$SYNC" "$EXROOT/scripts/coordination-sync"
 cp "$REPO_ROOT/scripts/repos.sh" "$EXROOT/scripts/repos.sh"
 cp "$REPO_ROOT/registry/repos.yml" "$EXROOT/registry/repos.yml"
-cp "$REPO_ROOT/scripts/fsgg-coord" "$EXROOT/scripts/fsgg-coord"
+mapfile -t CLIENT_SRCS < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --kind client \
+                            --registry "$REPO_ROOT/registry/repos.yml")
+for src in "${CLIENT_SRCS[@]}"; do
+  [ -n "$src" ] || continue
+  mkdir -p "$EXROOT/$(dirname "$src")"; cp "$REPO_ROOT/$src" "$EXROOT/$src"
+done
 for src in "${SKILL_SRCS[@]}"; do
   mkdir -p "$EXROOT/$src"; cp "$REPO_ROOT/$src/SKILL.md" "$EXROOT/$src/SKILL.md"
 done
