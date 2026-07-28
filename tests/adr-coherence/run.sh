@@ -35,6 +35,30 @@ expect() {
   PASS=$((PASS + 1))
 }
 
+# Like expect(), but asserts EVERY remaining argument appears in the output. A multi-target field
+# that reports only ONE of its findings is the .github#1637 defect half-fixed, and a single-needle
+# assertion cannot tell the difference. Usage: expect_all <want> <dir> <name> <needle>...
+expect_all() {
+  local want="$1" dir="$2" name="$3"; shift 3
+  local rc=0 out needle
+  out="$(python3 "$SCRIPT" --dir "$dir" 2>&1)" || rc=$?
+  if [ "$rc" != "$want" ]; then
+    printf '  FAIL  %s\n        expected exit %s, got %s\n        %s\n' "$name" "$want" "$rc" "${out//$'\n'/$'\n'        }"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  for needle in "$@"; do
+    if ! printf '%s' "$out" | grep -qi -- "$needle"; then
+      printf '  FAIL  %s\n        exit %s was right, but the message never said %q\n        %s\n' \
+        "$name" "$rc" "$needle" "${out//$'\n'/$'\n'        }"
+      FAIL=$((FAIL + 1))
+      return
+    fi
+  done
+  printf '  ok    %s (exit %s, %s needle(s))\n' "$name" "$rc" "$#"
+  PASS=$((PASS + 1))
+}
+
 # A well-formed record. $1=num $2=status $3=extra body lines
 record() {
   cat <<EOF
@@ -121,6 +145,85 @@ expect 0 "$L8" "" "a ~~NNNN~~ tombstone row with no file is LEGAL"
 L9="$TMP/shape"; cp -r "$L1" "$L9"
 sed -i '/\*\*Affects:\*\*/d' "$L9/0001-one.md"
 expect 1 "$L9" "Affects" "a record missing a header field is a FINDING"
+
+# ------------------------------------------- legs 10 & 11: A FIELD NAMING N RECORDS DECLARES N
+# .github#1637. The declaration scan used to stop at the first `.`, and every ADR cross-reference
+# is a markdown link ending in `.md` — so a field naming three records declared exactly ONE, and
+# the other two links were never examined. Measured on ADR-0067, whose three-target `**Amends:**`
+# field yielded `['0011']` while two deliberately stripped back-markers reported "all bidirectional".
+#
+# These two legs are a pair and only the pair is a test. Leg 10 alone would pass on a gate that
+# read nothing; leg 11 is the one the old scan FAILED, and it must name BOTH missing ends, because
+# a fix that widens from one target to two is still the same defect at N=3.
+multi() { # $1=dir  $2..=numbers whose back-marker to KEEP
+  local dir="$1"; shift
+  mkdir -p "$dir"
+  local n status
+  for n in 0001 0002 0003; do
+    status="Accepted"
+    case " $* " in *" $n "*) status="Accepted — amended by [ADR-0004](0004-four.md)";; esac
+    record "$n" "$status" "" > "$dir/$n-$n.md"
+  done
+  # ONE field, THREE targets, each a markdown link whose target ends in `.md`.
+  record 0004 "Accepted" \
+    "- **Amends:** [ADR-0001](0001-0001.md) §1, [ADR-0002](0002-0002.md) §2, and [ADR-0003](0003-0003.md) §3" \
+    > "$dir/0004-four.md"
+  cat > "$dir/README.md" <<'EOF'
+| ADR | Title | Status |
+|---|---|---|
+| [0001](0001-0001.md) | One | Accepted |
+| [0002](0002-0002.md) | Two | Accepted |
+| [0003](0003-0003.md) | Three | Accepted |
+| [0004](0004-four.md) | Four | Accepted |
+EOF
+}
+
+L10="$TMP/multi-target-ok"; multi "$L10" 0001 0002 0003
+expect 0 "$L10" "" "a THREE-target Amends field with all three back-markers is clean"
+
+L11="$TMP/multi-target-broken"; multi "$L11" 0001
+expect_all 1 "$L11" "a three-target field missing TWO back-markers names BOTH (not just the first)" \
+  "0002-0002.md:1 — ONE-SIDED" "0003-0003.md:1 — ONE-SIDED"
+
+# ------------------------------------------- leg 12: WIDENING MUST NOT MANUFACTURE LINKS
+# The other half of #1637: reading to the end of the clause instead of the first `.` must not
+# start reading every four-digit number as a record. Each non-target below names a record that
+# has NO back-marker, so a manufactured link is an immediate FINDING here, not a silent pass —
+# and each of the five was checked by deleting its guard and watching this leg go red:
+#
+#   [#0003](…/issues/3)   an issue number                 (guard: no `#` before it)
+#   0002f19a              a digest                        (guard: no word character after it)
+#   §0001                 a section reference             (guard: no `§` before it)
+#   ; interacts with …    a clause that is NOT a claim    (guard: `;` closes the clause)
+#   . ADR-0003 stays …    a NEW sentence about a record   (guard: sentence-ending `.` closes it)
+#
+# `2026-07-28` is here for realism and is the one negative this leg CANNOT prove: a date is
+# refused twice over — by the `-0` that follows it, and because no ADR is numbered 2026 — so
+# deleting either guard leaves the leg green. It is pinned by the reference pattern's own
+# comment, not by this corpus.
+#
+# The `;` case is not hypothetical: ADR-0065's real header reads
+# `**Amends:** [ADR-0014](…) Decision 5; interacts with [ADR-0019](…) and [ADR-0062](…)`.
+L12="$TMP/no-manufactured-links"; mkdir -p "$L12"
+record 0001 "Accepted" "" > "$L12/0001-one.md"
+record 0002 "Accepted" "" > "$L12/0002-two.md"
+record 0003 "Accepted" "" > "$L12/0003-three.md"
+record 0004 "Accepted — amended by [ADR-0005](0005-five.md)" "" > "$L12/0004-four.md"
+record 0005 "Accepted" "$(cat <<'EOF'
+- **Amends:** [ADR-0004](0004-four.md) §1 — landed 2026-07-28 as [#0003](https://github.com/FS-GG/.github/issues/3), digest 0002f19a, §0001 unchanged; interacts with [ADR-0001](0001-one.md) and [ADR-0002](0002-two.md)
+- **Supersedes:** [ADR-0004](0004-four.md) §2 in full. ADR-0003, ADR-0002 and ADR-0001 stay in force, unamended.
+EOF
+)" > "$L12/0005-five.md"
+cat > "$L12/README.md" <<'EOF'
+| ADR | Title | Status |
+|---|---|---|
+| [0001](0001-one.md) | One | Accepted |
+| [0002](0002-two.md) | Two | Accepted |
+| [0003](0003-three.md) | Three | Accepted |
+| [0004](0004-four.md) | Four | Accepted |
+| [0005](0005-five.md) | Five | Accepted |
+EOF
+expect 0 "$L12" "" "a date, an issue number, a digest, a §ref and a non-claim clause are NOT targets"
 
 printf '\nadr-coherence fixture: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
