@@ -633,31 +633,47 @@ object — and what is asserted instead is *visibility*, because an absent root,
 defaults empty, and turning it on is per-receiver work sequenced by
 [the retirement order](coordination/skill-apparatus-retirement-order.md).
 
-**ONE repo holds a view root as of 2026-07-28: `FS.GG.Templates`**
+**TWO repos hold a view root as of 2026-07-28: `FS.GG.Templates` and `FS.GG.Audio`**
 ([#1676](https://github.com/FS-GG/.github/issues/1676) → [FS.GG.Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323),
-ADR-0067 §9 phase 4 stage 1). Its `.agents/skills` is generated from `.claude/skills`; 23 committed
-files stopped existing and its runtime root set is unchanged. The other six receivers still commit
-both roots, so **the picture above is the fleet's picture and this is the exception, not yet the rule**.
-Two consequences the map has to carry, because they change what a green gate means:
+ADR-0067 §9 phase 4 stage 1; [#1720](https://github.com/FS-GG/.github/issues/1720) →
+[FS.GG.Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), stage 3). Each generates
+`.agents/skills` from `.claude/skills`; **23 committed files stopped existing on Templates and 39 on
+Audio**, and neither repo's runtime root set changed. The other five receivers still commit both
+roots, so **the picture above is the fleet's picture and this is the exception, not yet the rule**.
+
+**The two adopters are deliberately unalike, and that is the useful fact.** Templates is the thin
+receiver — no `gate.yml`, no repo-owned skills in the audited roots. Audio has a `gate.yml` and **16
+`fs-gg-sdd-*` skills it owns inside both audited roots**, and it was still cheap to retire, because
+those 16 were in *both* roots: `diff -r` between the roots was silent, so nothing lived only in the
+copy being retired. What predicts a receiver's cost is that diff and whether it wires a union caller —
+not how large or framework-shaped the repo is. `FS.GG.SDD` is the counter-case on both counts.
+
+Three consequences the map has to carry, because they change what a green gate means:
 
 - `coordination-coherence` **narrows automatically** on a repo that does this — it derives its roots
-  from that receiver's own `FsggKitSkillRoots`, so Templates' verdict now covers 28 files where it
+  from that receiver's own `FsggKitSkillRoots`, so each adopter's verdict now covers 28 files where it
   covered 51, with no gate edit and no effect on any other receiver. A green there is a smaller claim
   than it was, and deliberately so: the bytes it stopped grading are the ones that stopped existing.
 - **Nothing in the kit contract watches a view root's MEMBERSHIP.** `FsggKitCheckSkillView` asserts a
   declared view root's content; if the root is later dropped from `FsggKitViewSkillRoots` it reports
   *"nothing to assert"* and `coordination-sync` stops looking at it — both green, root gone from the
-  runtime contract (measured). Each adopting repo therefore owes its own membership assertion on a
-  check that gates its merges; Templates' rides its required `composition` check.
+  runtime contract (measured on **both** adopters independently). Each adopting repo therefore owes its
+  own membership assertion on a check that gates its merges, **and owes it in a shape its own required
+  checks can hold**: Templates' rides its required `composition` check, Audio has no composition
+  harness so its `scripts/check-skill-view-roots.sh` rides the required `Build + test` job. Both are
+  hand-copies of the same assertion, which is the cost
+  [#1710](https://github.com/FS-GG/.github/issues/1710) named and still owns — two receivers have paid
+  it, four more would.
 - **A repo that wires the `skill-union` receiver caller cannot hold a view root at all** — measured
   2026-07-28 on `FS.GG.SDD@387adc6`, and it is why the second receiver was **refused** rather than
   retired ([#1715](https://github.com/FS-GG/.github/issues/1715)). `skill-union-assert.yml` is a
   reusable workflow: it checks the caller out and asserts over that checkout, so a root that only
   exists after a local `generate` is *absent* in its subject — `configured root is absent`, exit 2, on
   a context SDD makes **required under `enforce_admins`**. The same gate is exit 0 on that layout once
-  the view exists, so the conflict is with the *checkout*, not the *layout*. `FS.GG.Templates` has no
-  such caller, which is part of why it could go first. Two receivers are not a fleet: the map's picture
-  is still the fleet's, and the exception now has an exception of its own.
+  the view exists, so the conflict is with the *checkout*, not the *layout*. Neither `FS.GG.Templates`
+  nor `FS.GG.Audio` wires such a caller, which is part of why they could go; `FS.GG.Rendering` and
+  `FS.GG.Governance` do, and are blocked with SDD behind #1715. Two adopters are not a fleet: the map's
+  picture is still the fleet's, and the exception now has an exception of its own.
 
 ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
