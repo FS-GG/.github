@@ -3521,13 +3521,19 @@ module Client =
     /// consulted, so none of the four rows above can hide behind it, and the two `#1740` closed are closed
     /// again here by a mechanism that does not depend on a cache tier or on a local queue file.
     ///
-    /// **THIS IS THE SCHEDULER'S OWN CLAIM UNIVERSE, NOT A NEW ONE.** `Scan.snapshot` takes
+    /// **THE SWEEP IS THE SCHEDULER'S OWN, NOT A NEW ONE.** `Scan.snapshot` takes
     /// `candidates = scoped.Rows` — every row, with NO column filter — reads body and markers for each OPEN
     /// one, and then sweeps `Reads.openIssues` for *"a claim on an issue whose column flip failed (the board
     /// says Ready, the lock says held), or on one that never reached the board at all"*. That is
-    /// `take`/`next`/`batch`, on every scheduling poll. This scan now answers over the same universe the
-    /// scheduler decides over, which is what #353 asked for when it repo-scoped this call: a `widen` that
-    /// disagrees with `take` about who holds what is incoherent whichever way it errs.
+    /// `take`/`next`/`batch`, on every scheduling poll. So this reads what the scheduler already reads, on
+    /// a verb run far less often, which is what #353 was reaching for when it repo-scoped this call: a
+    /// `widen` that disagrees with `take` about who holds what is incoherent whichever way it errs.
+    ///
+    /// **THAT IS NOT THE SAME AS "THE SAME UNIVERSE", AND AN EARLIER DRAFT OF THIS COMMENT SAID IT WAS.**
+    /// Two differences survive, both listed under #266 below: `Scan.snapshot` reserves a stale-but-unreaped
+    /// marker (`reserver`, not `winner`) and it reserves a MARKERLESS `In progress` row as `RUnowned`. The
+    /// second is column-derived by construction, so a scan that never reads the column cannot reproduce it,
+    /// and no amount of care here would. Both predate this change; neither is fixed by it.
     ///
     /// **AND IT IS CHEAPER THAN THE COLUMN-DERIVED SCAN IT REPLACES — MEASURED, NOT ESTIMATED** (#1086 got
     /// this same trade wrong by an order of magnitude by estimating; the first draft of `.github#1779` got
@@ -3546,9 +3552,15 @@ module Client =
     /// states are *"free here"*, plus one marker read PER COLLIDING ROW — in the incident that produced
     /// #1740, exactly one; on the measurement above, zero, because nothing collided. The old scan's marker
     /// reads were per `In progress` row **whether or not its tokens could ever collide**, so on a busy
-    /// board this strictly shrinks the REST cost too. The pathological case is a `Paths: any` chore lock,
-    /// which collides with everything and therefore reads every colliding row's marker — the same number
-    /// the scheduler already pays on every poll, and bounded by the repo's open-issue count.
+    /// board this strictly shrinks the REST cost too.
+    ///
+    /// The upper bound is the repo's open-issue count, reached when a declaration collides with every other
+    /// one — the same number `Scan.snapshot` already pays on every poll. **It is NOT reached by a
+    /// `Paths: any` chore lock, though an earlier draft of this comment said so.** `TouchSet.parse` maps
+    /// `any` to `DeclaredChore` and `TouchSet.conflicts` answers `[]` for it in either direction (#1103 leg
+    /// 8: *"a chore reserves nothing, so it conflicts with nothing"*), so a chore lock is the CHEAPEST row
+    /// here, not the most expensive. Worth stating, because the wrong version of that sentence also implies
+    /// `widen` would report a collision against an `any` chore, and it never does.
     ///
     /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
     ///
@@ -3561,6 +3573,17 @@ module Client =
     ///   only by `reap`"*). So the scheduler and this gate can give opposite answers about one marker.
     ///   That divergence predates this change and is neither introduced nor fixed by it — it is about
     ///   which MARKERS count, where this is about which ROWS are looked at. Filed as `.github#1792`.
+    /// - A **MARKERLESS row the board calls `In progress`**. `Scan.snapshot` reserves it as `RUnowned` —
+    ///   *"something is evidently editing those files"* — and that reservation is read off the COLUMN, so
+    ///   a scan that never reads the column cannot reproduce it by construction. `take` will therefore
+    ///   refuse to schedule against a surface this gate calls DISJOINT. The old scan here did not reserve
+    ///   it either (it required a `winner`), so this is not a regression; it is the same "which markers
+    ///   count" question as the row above, and it is on `.github#1792`.
+    /// - An issue whose list entry is **malformed**. `Reads.openIssues` drops an element with no numeric
+    ///   `number` and reads an absent/non-string `body` as `""`, which parses to `Undeclared` — a confident
+    ///   "declares nothing" about a row nobody could read, where the old per-candidate `Reads.issueBody`
+    ///   would have propagated an `Error`. That is `openIssues`' behaviour, shared with `Scan.snapshot`,
+    ///   and this change puts it on the gate that has nothing downstream. Filed as `.github#1794`.
     let private activeCollisions
         (ctx: Context)
         (opts: Options)

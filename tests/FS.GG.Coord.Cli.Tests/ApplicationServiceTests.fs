@@ -563,7 +563,14 @@ module ApplicationServiceTests =
         Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
 
     [<Fact>]
-    let ``#1740 cause 1: a claim landing inside the scan-cache window still collides`` () =
+    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and no board read decides it`` () =
+        // THE NAME CHANGED WITH THE MECHANISM, AND IT HAD TO. As #1740 wrote it, this leg drove the column
+        // through a stale cache window and asserted the cache tier fixed it. Since #1779 nothing on this
+        // path reads a board, so the `column` ref below is a DEAD INPUT — the assertion would pass
+        // identically with it frozen. A test whose name promises a cache-tier check it can no longer make is
+        // the #266 shape in a test file, so it says what it now proves: this state collides, and it does so
+        // WITHOUT a board read (`world.GraphQlCalls = 0`, asserted at the end — which is the one thing here
+        // that a re-introduced board scan would break, and the reason to keep the leg rather than delete it).
         let dir = cacheDir ()
 
         // The column is a `ref` the TEST moves, not something the transport counts — a fixture that flipped
@@ -594,6 +601,11 @@ module ApplicationServiceTests =
             Assert.Equal("otter-9c21", str "worker" collision)
             Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
             Assert.Equal(6, code)
+
+            // TWO commands ran against this world and NEITHER asked GraphQL anything. That is what makes
+            // the cache window irrelevant rather than merely survived, and it is the assertion that fails
+            // if a board read ever returns to this path — where the verdict assertions above would not.
+            Assert.Equal(0, world.GraphQlCalls)
         finally
             try
                 Directory.Delete(dir, true)
@@ -706,9 +718,7 @@ module ApplicationServiceTests =
     // satisfied by `activeCollisions _ _ _ _ = every other open issue`, and both positive legs above would
     // still pass. Each varies ONE thing against the `#1779 not-on-board` leg, and each must be DISJOINT.
     //
-    // The `queue` legs are the ones #1740 wrote, and they are kept — not as a queue test (the queue is not
-    // read any more) but as the assertion that it ISN'T: a scan that quietly reintroduced a queue-derived
-    // candidate set would go on passing the positive legs and would fail here.
+    // These four are what carry that weight. The `queue` theory further down does NOT — see its own note.
 
     [<Fact>]
     let ``#1779 control: colliding TOKENS with no claim marker reserve NOTHING`` () =
@@ -759,9 +769,19 @@ module ApplicationServiceTests =
     // Every row below was a #1740 NEGATIVE leg asserting `DISJOINT` — a queue entry that is not a live claim
     // on this row, so the scan "correctly" fell back to the `Ready` column. But the FIXTURE underneath them
     // never changed: #75 has a live marker declaring the file we are asking for, in every one. `DISJOINT`
-    // was the wrong answer in all six, for the reason above; the queue's precision was buying a false
-    // verdict. So they are inverted rather than deleted — they are now the assertion that the queue reading
-    // is GONE, and a scan that reinstated it would fail exactly here while passing everything else.
+    // was the wrong answer in all six; the queue's precision was buying a false verdict. So they are
+    // INVERTED rather than deleted — the record of a check that pinned the defect as correct behaviour is
+    // worth more than the six lines it costs, and deleting it would leave the next reader to rediscover why
+    // `runWithQueue None` flipped.
+    //
+    // WHAT THEY ARE WORTH, STATED HONESTLY, BECAUSE AN EARLIER DRAFT OF THIS NOTE OVERCLAIMED IT. It said
+    // "a scan that reinstated a queue-derived candidate set would fail exactly here". That is true only of a
+    // FULL revert (candidates = rows filtered by column-or-queue). A UNION reinstatement — `openIssues` ∪
+    // queue-derived, which is closer to what a well-meaning re-patch would write — passes all six, because
+    // the marker path already answers OVERLAP for #75. So these six rows are ONE assertion repeated with
+    // dead inputs: `issueRef`/`boardTitle`/`field`/`value` reach no code, which is precisely the property
+    // being asserted. The mutant that kills a queue-derived candidate set is M6 in the PR's matrix, and it
+    // is killed by the two `#1779` positive legs above, not by these.
     [<Theory>]
     // No queue at all — the permanently-failed write, which nothing will ever replay.
     [<InlineData("", "", "", "")>]
