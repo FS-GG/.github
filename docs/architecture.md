@@ -863,8 +863,13 @@ install is what keeps the composition honest. See the
   by construction — but the kit is content-addressed, so bumping `fs.gg.coord.cli` by one integer
   edited kit content and obliged a republish plus a seven-receiver fan-out (four of the nine
   republishes measured on 2026-07-27/28, none of which carried a skill change). **Each receiver now
-  owns its own manifest** and Renovate bumps it directly; `dist/dotnet/.config/dotnet-tools.json`
-  remains this repo's canonical copy and `engine-pin-coherence`'s subject. #1077's invariant is
+  owns its own manifest**; `dist/dotnet/.config/dotnet-tools.json` remains this repo's canonical copy
+  and `engine-pin-coherence`'s subject. **The intended per-repo delivery is Renovate, and it is NOT
+  live yet** — `default.json`'s `packageRules[5]` still disables `.config/dotnet-tools.json` in all
+  seven receivers, a rule written when the file was kit-materialized and correct until ADR-0068
+  removed its premise ([#1798](https://github.com/FS-GG/.github/issues/1798)). Until that lands each
+  receiver's engine *version* moves only by hand. The *declaration* is asserted daily either way, so
+  #1077's invariant holds throughout — what is missing is convergence, not the engine. #1077's invariant is
   preserved by **assertion rather than arrangement**: `repos-audit`'s engine-manifest sweep reads
   every `coordination-kit` receiver's actual manifest daily — `f(roster, receiver tree)`, strictly
   stronger than the roster rule it replaces, which never read a receiver at all.
