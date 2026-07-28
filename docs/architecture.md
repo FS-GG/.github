@@ -703,7 +703,16 @@ Three consequences the map has to carry, because they change what a green gate m
   workflow and runs `-t:FsggKitMaterialize` on a bare checkout, where a view root does not exist.
   A receiver cannot put a `generate` step in a workflow it does not own — so the generate belongs in
   the **receiver project** (`BeforeTargets="FsggKitCheckSkillView"`), which is the only placement that
-  reaches every tree the materialize runs in. Every remaining `build-config` receiver owes it.
+  reaches every tree the materialize runs in. **The obligation is on every receiver that declares a
+  view root — not on the `build-config` four** (`.github#1759`): `FsggKitCheckSkillView` is
+  `AfterTargets="FsggKitMaterialize"`, so it runs on *every* materialize, and all seven receivers wire
+  `kit-materialize.yml`, not the four its own header names (`#1724`). Measured on a bare clone of all
+  seven on 2026-07-28: **every one already carries the target and every one builds green**, so the
+  suspected fleet-wide red does not exist — it was reported from an intermediate tree, before
+  Governance's target landed in the same pull request. Delete that one target from a copy of a retired
+  tree and the command reds, which is what makes the green mean something. What holds the count at
+  zero is **seven independent hand-copies** (`#1710` piece 1 owns removing them), so `repos-audit.sh`
+  sweeps every receiver project daily and reds when a declared view root has nothing generating it.
 
 ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
