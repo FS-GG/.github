@@ -39,7 +39,23 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Kit</PackageId>
-    <!-- 0.12.0 (.github#1594): the packed `pnext-item` skill gains an ENGINE-CURRENCY step — the worker
+    <!-- 0.15.1 -> 0.16.0 (.github#1761, the coord-engine 0.14.0 release). ONE packed member moves:
+         `dist/dotnet/.config/dotnet-tools.json` — the engine pin, 0.13.0 -> 0.14.0. It is a hashed
+         `kit:` source (#1077), which is why `engine-pin-coherence` cannot be cleared without paying
+         this republish.
+         MINOR, not patch, and not major. Not major because no member is added or removed and no
+         receiver-visible file moves destination — the member set and the materialize contract are
+         unchanged. NOT PATCH, and the precedent is this comment block's own: 0.11.0, 0.12.0 and
+         0.13.0 each took a MINOR for exactly this change, on the reasoning that the pin decides
+         WHICH ENGINE BINARY every receiver `exec`s, so receiver behaviour changes and a patch would
+         understate it. It understates it more than usual here: FS.GG.Coord.Cli 0.14.0 is itself a
+         BREAKING minor (#1646 — `claim`/`take` now REFUSE a `worker` flag naming somebody else over
+         another worker's live lock, a call 0.13.0 permitted), and #1628 changes which item `batch`
+         and `next` select for the same board. A receiver that materializes this kit gets both.
+         This is the #1615 fan-out firing exactly as that item predicts — the pin is a kit row, so an
+         engine bump republishes the kit and stales every receiver. #1615 was DECIDED as option (c),
+         the coupling is KEPT, so this republish is expected and re-opens nothing.
+         PRIOR — 0.12.0 (.github#1594): the packed `pnext-item` skill gains an ENGINE-CURRENCY step — the worker
          checks the SHARED checkout's engine against `origin/main` under the engine's own source trees
          before its first board write, and escalates when it cannot repair it. MINOR, not patch. Not
          patch because this is not the prose repair 0.8.1 (edc8404) was: it adds a REQUIRED step to the
@@ -157,7 +173,7 @@
          NOT DONE HERE: `scripts/lint-shell.sh` runs at `-S warning`, and SC1091 is an `info`, so
          this repo's own shell gate is structurally blind to the defect it shipped. That is
          .github#1719 and is deliberately left alone — no severity floor moves in this release. -->
-    <Version>0.15.1</Version>
+    <Version>0.16.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
