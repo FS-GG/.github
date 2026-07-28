@@ -231,7 +231,29 @@
          overwriting a file the receiver now owns, and Renovate bumps `fs.gg.coord.cli` in it directly.
          #1077's "receives the tool => can run the tool" is asserted by `repos-audit`'s engine-manifest
          sweep from this release onward, not by kit membership. -->
-    <Version>0.18.0</Version>
+    <!-- 0.19.0 — ADR-0067 §9 STAGE 2, and a MINOR because it changes what a receiver that configures
+         NOTHING gets (.github#1676, #1867, #1868).
+
+         TWO DEFAULTS MOVED, and the runtime contract did not:
+           FsggKitSkillRoots      `.claude/skills;.agents/skills` -> `.claude/skills`
+           FsggKitViewSkillRoots  (empty)                         -> `.agents/skills`
+         The runtime surface is the UNION of the two, still ADR-0065's two roots. A root moving from
+         the first property to the second keeps the union constant — which is why this is a NARROWING
+         of what the package MATERIALIZES INTO, not a root retirement.
+
+         NOT BREAKING FOR ANY CURRENT RECEIVER, measured rather than assumed: all seven already declare
+         both properties inline with exactly these values (2026-07-28), so every receiver's EVALUATED
+         answer is unchanged by this release. What changes is the answer for a receiver that does not
+         say — before, it materialized real bytes into a root that is meant to be generated.
+
+         AND THE PACKAGE NOW ESTABLISHES THE VIEW IT ASSERTS (#1867). New target
+         FsggKitGenerateSkillView, `AfterTargets="FsggKitMaterialize"` and deliberately NOT
+         `BeforeTargets="FsggKitCheckSkillView"` — repair on materialize, detect on check. Wiring it
+         into the check path would repair the tree it is about to grade and make ADR-0067 §8's absence
+         classes unreachable there; that boundary is mutation-proven in verify-package.sh. Receivers
+         KEEP their own generate targets: those serve the check path, which this one does not
+         (#1869). -->
+    <Version>0.19.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
