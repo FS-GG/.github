@@ -221,3 +221,66 @@ touches the verifier, so the tool cannot rot, and its headline leg *is* the outa
 `gate.yml` against this repo's real `lock-range-coherence.yml` with the job renamed, asserting Audio
 deadlocks. (The scheduled workflow itself needs the App and a live protection read, so like
 `coordination-propagate` it has no offline fixture — only the script it drives does.)
+
+## A worked instance: `materialize / kit-bump-shape`
+
+The receiver-side kit-bump reporter ([#1713](https://github.com/FS-GG/.github/issues/1713)) is this
+page's contract in use, and it is recorded here because the next person to reach for
+`repos.sh require-context` will need both halves of it.
+
+**The context string is `materialize / kit-bump-shape`.** Composed, as always, from the two halves
+this page is about:
+
+```
+materialize / kit-bump-shape
+^^^^^^^^^^^   ^^^^^^^^^^^^^^
+|             the `name:` of the `bump-shape` job in FS-GG/.github
+|             .github/workflows/kit-materialize.yml — THE ONE PLACE IT IS DEFINED
+the caller job id, `materialize`, in all seven receivers'
+.github/workflows/kit-materialize.yml (verified identical across SDD, Rendering,
+Governance, Templates, Game, Audio and Net)
+```
+
+It cannot be guessed from convention. The receivers' existing required contexts show both shapes —
+bare job names (`Deterministic gate`, `API compatibility gate (breaking-change → SemVer major)`) and
+`workflow / job` (`kit / coordination-kit`, `skill-union / skill-union`) — so whatever eventually arms
+this must be handed the literal above:
+
+```sh
+scripts/repos.sh require-context --context 'materialize / kit-bump-shape' --receives coordination-kit
+```
+
+Two things keep that literal honest. [`check-reusable-job-ids.py`](../../scripts/check-reusable-job-ids.py)
+makes renaming the callee half a loud, opt-out-able breaking change, exactly as it does for
+`lock-ranges / lock-ranges`. And [`tests/kit-bump-shape/run.sh`](../../tests/kit-bump-shape/run.sh)
+asserts the string *and* the absence of an `if:` on the job, so neither the documented context nor the
+producibility of it can drift away from the workflow in silence.
+
+### The ordering constraint: never arm a context before its producer reports
+
+**`repos.sh require-context --apply` for a context nothing produces holds every pull request in every
+targeted repository at *"Expected — waiting for status to be reported"*, permanently.** GitHub does not
+fail such a PR; it waits, and the only repair is another `administration: write` call. That is not a
+hypothetical: the writer's dry run over the seven `coordination-kit` receivers reported **6 would-add,
+1 failed** at a moment when no receiver-side producer existed at all, and running it would have wedged
+six repositories. `required-context-coherence.yml` would have gone red across all six on the next
+sweep — after the damage.
+
+So the sequence is fixed, and each step's evidence is named:
+
+1. **Land the producer.** For this context, the `bump-shape` job in the reusable `kit-materialize.yml`,
+   which reaches all seven receivers with no receiver-side edit because all seven already call it.
+2. **Observe it REPORT on a real pull request.** `gh api repos/<r>/commits/<sha>/check-runs` must show
+   the context by name. A workflow that *should* report is not a producer.
+3. **Prove producibility statically**, which needs no write at all:
+   `python3 scripts/check-required-contexts.py --repo FS-GG/<r> --root <checkout> --protection <a
+   payload naming the context>`. This is the same derivation the daily sweep runs, and it answers
+   "could this context ever report?" without arming anything.
+4. **Only then** consider `--apply` — and run the dry run first, which needs only
+   `administration: read` and is what proves step 1 actually happened.
+
+The reporter shipped under #1713 stops at step 2 on purpose. #1587's automerge was re-scoped on
+2026-07-28: the producer keeps its priority as a defect and automerge is re-decided once the producer
+has run over real fan-outs, so nothing is armed and `materialize / kit-bump-shape` is required in no
+repository. A `failure` conclusion from it therefore blocks no merge — it is how a reviewer sees, in a
+check list, which of seven fanned-out bump PRs need reading.

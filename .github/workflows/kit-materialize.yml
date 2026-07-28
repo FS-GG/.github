@@ -36,6 +36,54 @@
 #
 # Restore/materialize is anonymous: FS.GG.Kit ships to PUBLIC nuget.org (release-kit.yml dual-publishes,
 # ADR-0012/0013), and the receiver's hermetic nuget.config resolves it there — no org-feed credential.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# THE SECOND JOB, `bump-shape`, IS THE RECEIVER-SIDE KIT-BUMP REPORTER (.github#1713).
+#
+# WHY IT LIVES HERE AND NOWHERE ELSE. It has to report on a RECEIVER's pull request, where the diff
+# and the restored target package both exist. Every route to a receiver was considered and all but
+# one is forbidden:
+#   * hand-copying a workflow into seven repos is the defect class #1507/#1510/#1515/#1528/#1538
+#     closed, and ADR-0067 §5 forbids adding a new copy while the copying is being retired;
+#   * materializing a workflow FILE through the kit cannot work — the App installation token that
+#     pushes the materialize commit has `contents: write` and not `workflows: write`, so the push
+#     that carried it would be rejected;
+#   * a receiver cannot add a step to a `uses:` job (a caller job that invokes a reusable workflow
+#     takes no steps at all).
+# All seven receivers ALREADY call this workflow, ungated, on `pull_request` into `main`. A job added
+# here therefore reaches all seven with ZERO receiver-side edits — the same route `kit / coordination-kit`
+# and `lock-ranges / lock-ranges` already take.
+#
+# THE CONTEXT NAME IS A CONTRACT, AND THIS IS THE ONE PLACE IT IS DEFINED:
+#
+#     materialize / kit-bump-shape
+#     ^^^^^^^^^^^   ^^^^^^^^^^^^^^
+#     |             the `name:` of the `bump-shape` job below — DEFINED HERE, ONCE, and nowhere else.
+#     the caller job id, `materialize`, in all seven receivers' .github/workflows/kit-materialize.yml
+#
+# GitHub names a reusable-workflow check `<caller job display> / <callee job display>`, and a job's
+# display name is its `name:` if it has one, else its id — so the right-hand half is this file's job
+# `name:` and nothing else. Whatever eventually ARMS this (`scripts/repos.sh require-context --context
+# 'materialize / kit-bump-shape' --receives coordination-kit`) must be handed that exact string; it
+# cannot be guessed from convention, because the receivers' existing contexts show both shapes (bare
+# job names like `Deterministic gate`, and `workflow / job` like `kit / coordination-kit`).
+# `check-reusable-job-ids.py` already makes renaming the callee half a loud breaking change, and
+# `tests/kit-bump-shape/run.sh` asserts the literal, so the documented string and the workflow cannot
+# drift apart in silence. Recorded for a reader in docs/coordination/reusable-workflow-contract.md.
+#
+# NOTHING HERE ARMS ANYTHING, AND ARMING IT TODAY WOULD BE THE OUTAGE THIS JOB EXISTS TO PREVENT.
+# `scripts/repos.sh require-context --apply` for a context WITH NO PRODUCER holds every pull request
+# in six repositories at "Expected — waiting for status to be reported", permanently (#1713's founding
+# measurement; #1508 is the checker that would have reported it, after the damage). The ordering is:
+# land the producer, watch it REPORT on real bumps, and only then consider requiring it — with the
+# dry run, which needs only `administration: read`, as the proof that a producer exists. That
+# sequence is written down in docs/coordination/reusable-workflow-contract.md, where the next person
+# to reach for `--apply` will hit it.
+#
+# IT REPORTS; IT GATES NOTHING. The context is required in no repository, so a `failure` conclusion
+# here blocks no merge — it is how a reviewer sees, in a check list, which of seven fanned-out bump
+# PRs need reading. #1587's automerge is deferred and re-decided separately; it would fire on the
+# `mechanical` verdict ALONE, and this job never makes that decision for it.
 
 name: kit-materialize
 
@@ -63,6 +111,134 @@ permissions:
   contents: read
 
 jobs:
+  # ── the reporter (.github#1713) ────────────────────────────────────────────────────────────────
+  # UNGATED, and no `paths:` anywhere on the route: GitHub creates NO check run for a job a filter
+  # excluded, and branch protection cannot tell that from "has not reported yet" (#1508). A context
+  # anyone might one day require must therefore report on EVERY pull request, including the ones this
+  # has nothing to say about — which it answers with an ABSTENTION, never a pass (#266).
+  #
+  # It mints no App token and reads no secret, deliberately. The `materialize` job below needs one
+  # because it PUSHES; this one only reads, and an ungated job that runs on any pull request — a fork
+  # head included — must not be the place a credential is handled.
+  bump-shape:
+    name: kit-bump-shape
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # The PR's real head, not the synthetic merge commit: the subject is what the author pushed.
+      # fetch-depth 0 so `base...head` has a merge base to resolve against.
+      - name: Check out the receiver at the pull request's head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The rule beside it, from the repo this workflow already lives in. FS-GG/.github is PUBLIC, so
+      # this needs no token and no secret. It tracks `main` — the same moving ref the callers already
+      # pin this workflow at, so the coupling is not a new one; and because this context is required
+      # nowhere, a hub change moves a REPORT rather than a receiver's merge verdict (#1584's concern
+      # is about required contexts, and this is deliberately not one).
+      - name: Check out the shape rule
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: main
+          path: .kit-bump-shape
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      # PASS ONE — free. Whether the diff moves the FS.GG.Kit pin is decided from the diff ALONE, so
+      # the overwhelming majority of pull requests (every human one) finish here, in seconds, with no
+      # SDK and no restore. That is what makes an ungated job on seven repositories affordable.
+      - name: Does this pull request move the FS.GG.Kit pin?
+        id: probe
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+          rc=0
+          out="$(python3 .kit-bump-shape/scripts/check-kit-bump-shape.py \
+                   --repo . --base "$BASE" --head "$HEAD" 2>&1)" || rc=$?
+          printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # Only 2 (abstain) and 3 (a pin moved, but there is nothing to judge it against yet) are
+          # reachable without a package. Anything else means the rule changed under this workflow.
+          case "$rc" in
+            2) { echo "### kit-bump-shape: abstains"; echo; echo '```'; printf '%s\n' "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" ;;
+            3) : ;;
+            *) echo "::error::kit-bump-shape: pass one returned $rc, which it cannot. Refusing to report a verdict." >&2; exit 1 ;;
+          esac
+
+      - name: Set up .NET
+        if: steps.probe.outputs.rc != '2'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      # The two derived inputs. RECEIVER_PROJECT is env-passed, never interpolated into the script —
+      # the org's uniform anti-injection pattern. `-getProperty` is the RECEIVER's own evaluation of
+      # the target package, so a receiver that overrides a root set is judged by what it declares;
+      # and the package location + version come from the restore's own assets file rather than from
+      # a guess about which version happens to be in the runner's package cache.
+      - name: Restore the target package and evaluate the receiver's root declarations
+        if: steps.probe.outputs.rc != '2'
+        id: inputs
+        env:
+          RECEIVER_PROJECT: ${{ inputs.receiver-project }}
+        run: |
+          set -euo pipefail
+          dotnet restore "$RECEIVER_PROJECT" -v minimal
+          assets="$(dirname "$RECEIVER_PROJECT")/obj/project.assets.json"
+          version="$(jq -r '.libraries | keys[] | select(startswith("FS.GG.Kit/"))' "$assets" | cut -d/ -f2)"
+          folder="$(jq -r '.packageFolders | keys[0]' "$assets")"
+          [ -n "$version" ] && [ -n "$folder" ] || { echo "::error::kit-bump-shape: $assets names no restored FS.GG.Kit." >&2; exit 1; }
+          echo "kit-dir=${folder%/}/fs.gg.kit/${version}" >> "$GITHUB_OUTPUT"
+          dotnet msbuild "$RECEIVER_PROJECT" \
+            -getProperty:FsggKitSkillRoots,FsggKitRetiredSkillRoots,FsggKitViewSkillRoots,FsggKitMaterializeBuildConfig \
+            > "$RUNNER_TEMP/kit-props.json"
+
+      # PASS TWO — the verdict. The exit code is the contract (0 mechanical, 1 not mechanical,
+      # 2 abstain, 3 refused, 4 mechanical + receiver-side repair) and this step's only job is to
+      # render it where a reviewer will see it, then choose a conclusion:
+      #
+      #   0 / 4  success — 0 needs no reading at all; 4 needs exactly the files it names.
+      #   1 / 3  failure — read this one. It BLOCKS NOTHING: the context is required nowhere.
+      #
+      # 4 is a success on purpose. FS.GG.Rendering#1088 is the measured instance of it and merging it
+      # was right; redding that class is exactly the "the guard parks the bumps a human most wants
+      # automated" failure that re-scoped #1587.
+      - name: Report the shape
+        if: steps.probe.outputs.rc != '2'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          KIT_DIR: ${{ steps.inputs.outputs.kit-dir }}
+        run: |
+          set -uo pipefail
+          rc=0
+          out="$(python3 .kit-bump-shape/scripts/check-kit-bump-shape.py \
+                   --repo . --base "$BASE" --head "$HEAD" \
+                   --kit-dir "$KIT_DIR" --properties "$RUNNER_TEMP/kit-props.json" 2>&1)" || rc=$?
+          printf '%s\n' "$out"
+          case "$rc" in
+            0) headline="mechanical — pin plus materializer output only; no human need read this bump" ;;
+            4) headline="mechanical + receiver-side repair — read ONLY the receiver-authored files named below" ;;
+            1) headline="NOT mechanical — this bump changes kit territory in a way the materializer would not; read it in full" ;;
+            2) headline="abstains — no FS.GG.Kit pin change (this is not a pass)" ;;
+            3) headline="REFUSED — no verdict could be reached. This is not a pass and not a failure of the bump" ;;
+            *) headline="unknown verdict code $rc" ;;
+          esac
+          { echo "### kit-bump-shape: $headline"; echo; echo '```'; printf '%s\n' "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          case "$rc" in
+            0|4) exit 0 ;;
+            *)   exit 1 ;;
+          esac
+
   materialize:
     name: Materialize the kit from its pin
     runs-on: ubuntu-latest

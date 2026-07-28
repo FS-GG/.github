@@ -136,6 +136,17 @@ run_leg() {
   if [ "$rc" = "$want" ]; then ok "$name (exit $rc)"; else bad "$name — expected exit $want, got $rc" "$LEG_OUT"; fi
 }
 
+# The same, with NO package and NO evaluated properties — the cheap first pass a receiver-side caller
+# makes on EVERY pull request before it pays for an SDK, a restore and an MSBuild evaluation
+# (.github#1713). Only two answers are reachable from a git diff alone, and neither may be a pass.
+run_leg_bare() {
+  local want="$1" name="$2" repo="$3" rc=0
+  GIT "$repo" add -A
+  GIT "$repo" commit -q -m "bump" --allow-empty
+  LEG_OUT="$(python3 "$GATE" --repo "$repo" --base base --head HEAD 2>&1)" || rc=$?
+  if [ "$rc" = "$want" ]; then ok "$name (exit $rc)"; else bad "$name — expected exit $want, got $rc" "$LEG_OUT"; fi
+}
+
 fresh() { # $1 = leg name -> echoes a fresh receiver dir
   local d="$WORK/$1"
   rm -rf "$d"; make_receiver "$d" >/dev/null 2>&1; echo "$d"
@@ -184,9 +195,19 @@ esac
 
 echo "== it still refuses what it exists to refuse =="
 
-# 3 — #1587 AC 2: a contaminated tree. One hand-edited source file rides along.
-d=$(fresh contaminated); apply_bump "$d"; echo "a change nobody reviewed" >> "$d/src/app.txt"
-run_leg 1 "a bump carrying an unrelated source edit is contaminated" "$d" "$PKG" "$WORK/props.json"
+# 3 — the MIDDLE CLASS (#1726 / #1713). One hand-edited receiver source file rides along. Kit
+# territory is untouched, so this is `mechanical+repair` (exit 4) and NOT a pass — see legs 21-27,
+# which measure the class on the real pull request it was filed from.
+d=$(fresh repair); apply_bump "$d"; echo "a change nobody reviewed" >> "$d/src/app.txt"
+run_leg 4 "a bump carrying a receiver-authored source edit is mechanical + repair, not contamination" "$d" "$PKG" "$WORK/props.json"
+case "$LEG_OUT" in
+  *"MECHANICAL + RECEIVER-SIDE REPAIR"*"src/app.txt"*) ok "  and names the class in words, then the file (#1726 AC 3)" ;;
+  *) bad "  the report did not name the class and the receiver-authored file" "$LEG_OUT" ;;
+esac
+case "$LEG_OUT" in
+  *"NOT A PASS"*) ok "  and says the milder verdict is still not a pass (#266)" ;;
+  *) bad "  the report did not say it is not a pass" "$LEG_OUT" ;;
+esac
 
 # 4 — #1693 AC 2: a deletion under a root the target version does NOT declare retired. The extra
 # root must exist AT THE BASE — a create-then-delete inside the same `base...head` range cancels
@@ -307,6 +328,238 @@ cat > "$WORK/props-short.json" <<'EOF'
 EOF
 d=$(fresh short-props); apply_bump "$d"
 run_leg 3 "properties missing FsggKitViewSkillRoots are REFUSED, not defaulted" "$d" "$PKG" "$WORK/props-short.json"
+
+echo "== the counterexample, at full size: FS.GG.Rendering#1088 (#1726 AC 1) =="
+
+# THE REAL 36 PATHS, not a reconstruction. `gh api repos/FS-GG/FS.GG.Rendering/pulls/1088/files`,
+# 2026-07-28: head 06a2a7748a0d642c5139ed34a47559bf0f6182c9, base f822e88ae874757ac0b7768dac4d60dace909f42,
+# merged 2d64ee55c71ef2dfba6e312244e039d68a246a2d, `chore(deps): update dependency fs.gg.kit to 0.15.0`.
+# The five classes below are that listing, partitioned; they sum to 36 and the fixture asserts it.
+#
+# THE PROPERTIES ARE THE ONES THAT PR WAS JUDGED UNDER, read from `.config/kit/FS.GG.Kit.receiver.proj`
+# AT ITS HEAD SHA — where the file declared `FsggKitMaterializeBuildConfig=true` and NO root
+# overrides, so the roots are 0.15.0's package defaults. Rendering has since moved `.agents/skills`
+# to the view disposition (#1747); reading today's file would judge that PR under a tree it never had.
+R1088_SKILL_DESTS="
+check-board/SKILL.md
+check-board/agents/openai.yaml
+check-board/references/deep-detail.md
+check-board/references/judgement-findings.md
+check-board/references/mechanical-reconciliation.md
+cross-repo-coordination/SKILL.md
+cross-repo-coordination/agents/openai.yaml
+cross-repo-coordination/references/coherent-releases.md
+cross-repo-coordination/references/contract-changes.md
+cross-repo-coordination/references/deep-detail.md
+cross-repo-coordination/references/mailbox-and-board.md
+intra-repo-parallel-work/SKILL.md
+intra-repo-parallel-work/agents/openai.yaml
+intra-repo-parallel-work/references/deep-detail.md
+intra-repo-parallel-work/references/protocol-facts.md
+intra-repo-parallel-work/references/worktrees-and-overlap.md
+pnext-item/SKILL.md
+pnext-item/agents/openai.yaml
+pnext-item/references/command-contracts.md
+pnext-item/references/deep-detail.md
+pnext-item/references/findings-and-filing.md
+pnext-item/references/merge-and-release.md
+pnext-item/references/performance-first.md
+"
+# The three skill files the bump actually rewrote, in EACH of the two live roots (6 of the 36).
+R1088_TOUCHED="pnext-item/SKILL.md pnext-item/references/command-contracts.md pnext-item/references/deep-detail.md"
+
+# 0.15.0's non-skill rows, with the kinds registry/repos.yml `kit:` declares (#1696 added the last
+# three). `build-config` is Directory.Build.props + Directory.Packages.props, from sync-build-config.sh.
+mkdir -p "$WORK/pkg-1088/kit"
+printf '<?xml version="1.0"?><package><metadata><id>FS.GG.Kit</id><version>0.15.0</version></metadata></package>\n' \
+  > "$WORK/pkg-1088/fs.gg.kit.nuspec"
+{
+  for dest in $R1088_SKILL_DESTS; do printf 'skill\tskills/%s\t%s\t%s\tfalse\n' "$dest" "$dest" "$SHA"; done
+  printf 'client\tclient/fsgg-coord\tscripts/fsgg-coord\t%s\ttrue\n' "$SHA"
+  printf 'client\tclient/skill-view\tscripts/skill-view\t%s\ttrue\n' "$SHA"
+  printf 'config\tconfig/dotnet-tools.json\t.config/dotnet-tools.json\t%s\tfalse\n' "$SHA"
+  printf 'config\tconfig/args.sh\tscripts/lib/args.sh\t%s\tfalse\n' "$SHA"
+  printf 'config\tconfig/roots.sh\tscripts/lib/roots.sh\t%s\tfalse\n' "$SHA"
+  printf 'build-config\tbuild-config/Directory.Build.props\tDirectory.Build.props\t%s\tfalse\n' "$SHA"
+  printf 'build-config\tbuild-config/Directory.Packages.props\tDirectory.Packages.props\t%s\tfalse\n' "$SHA"
+} > "$WORK/pkg-1088/kit/kit-manifest.tsv"
+make_props "$WORK/props-1088.json" ".claude/skills;.agents/skills" ".codex/skills" "" "true"
+
+# Rendering AT f822e88: pinned 0.14.0 in Directory.Packages.local.props (its OWN file — not a
+# build-config member, which is why it is a legal pin location here), three committed skill roots
+# holding all 23 kit destinations, the one client and the one config the kit shipped at 0.14.0, and
+# `scripts/materialize-skill-roots.sh` — the file Rendering wrote, which the bump had to repair.
+make_1088_base() { # $1 = dir
+  local d="$1" root dest
+  mkdir -p "$d/scripts/lib" "$d/.config"
+  cat > "$d/Directory.Packages.local.props" <<'EOF'
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="FS.GG.Kit" Version="0.14.0" />
+  </ItemGroup>
+</Project>
+EOF
+  for root in .claude/skills .agents/skills .codex/skills; do
+    for dest in $R1088_SKILL_DESTS; do
+      mkdir -p "$d/$root/$(dirname "$dest")"
+      echo "0.14.0 $dest" > "$d/$root/$dest"
+    done
+  done
+  echo "0.14.0 client"  > "$d/scripts/fsgg-coord"
+  echo "0.14.0 tools"   > "$d/.config/dotnet-tools.json"
+  # DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills" — the stale three-root expectation.
+  echo 'DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"' > "$d/scripts/materialize-skill-roots.sh"
+  GIT "$d" init -q -b main
+  GIT "$d" add -A
+  GIT "$d" commit -q -m "FS.GG.Rendering at FS.GG.Kit 0.14.0 (f822e88, in miniature)"
+  GIT "$d" tag base
+}
+
+# The 35 paths the materializer and Renovate between them produced.
+apply_1088_mechanical() { # $1 = dir
+  local d="$1" root dest
+  sed -i 's/Version="0.14.0"/Version="0.15.0"/' "$d/Directory.Packages.local.props"
+  for root in .claude/skills .agents/skills; do
+    for dest in $R1088_TOUCHED; do echo "0.15.0 $dest" > "$d/$root/$dest"; done
+  done
+  echo "0.15.0 client" > "$d/scripts/fsgg-coord"
+  echo "0.15.0 tools"  > "$d/.config/dotnet-tools.json"
+  echo "0.15.0 view"   > "$d/scripts/skill-view"
+  echo "0.15.0 args"   > "$d/scripts/lib/args.sh"
+  echo "0.15.0 roots"  > "$d/scripts/lib/roots.sh"
+  rm -rf "$d/.codex/skills"
+}
+
+# The 36th: the receiver-authored repair. `.codex/skills` left the contract at 0.14.0, so the
+# three-root expectation is now wrong — and it is wrong ONLY from this commit onward.
+apply_1088_repair() { echo 'DEFAULT_ROOTS=".claude/skills .agents/skills"' > "$1/scripts/materialize-skill-roots.sh"; }
+
+fresh_1088() { local d="$WORK/$1"; rm -rf "$d"; make_1088_base "$d" >/dev/null 2>&1; echo "$d"; }
+
+# 21 — the fixture is the real diff, or it proves nothing. A leg built from a path list that has
+# drifted from the pull request would still go green, which is the failure mode this asserts away.
+d=$(fresh_1088 r1088); apply_1088_mechanical "$d"; apply_1088_repair "$d"
+GIT "$d" add -A; GIT "$d" commit -q -m "chore(deps): update dependency fs.gg.kit to 0.15.0"
+n=$(GIT "$d" diff --no-renames --name-only base...HEAD | wc -l | tr -d ' ')
+if [ "$n" = 36 ]; then ok "the FS.GG.Rendering#1088 fixture carries all 36 of the pull request's paths"
+else bad "the FS.GG.Rendering#1088 fixture carries $n paths, not the pull request's 36"; fi
+
+# 22 — THE DECIDED VERDICT (#1726 AC 1). 35 mechanical paths plus one receiver-authored repair.
+rc=0
+LEG_OUT="$(python3 "$GATE" --repo "$d" --base base --head HEAD --kit-dir "$WORK/pkg-1088" --properties "$WORK/props-1088.json" 2>&1)" || rc=$?
+if [ "$rc" = 4 ]; then ok "FS.GG.Rendering#1088 is MECHANICAL + REPAIR (exit 4)"
+else bad "FS.GG.Rendering#1088 — expected exit 4, got $rc" "$LEG_OUT"; fi
+case "$LEG_OUT" in
+  *"scripts/materialize-skill-roots.sh"*) ok "  and names scripts/materialize-skill-roots.sh as the file to read" ;;
+  *) bad "  the report did not name the receiver-authored file" "$LEG_OUT" ;;
+esac
+case "$LEG_OUT" in
+  *"1 receiver-authored file(s)"*) ok "  and bounds the reading at exactly one file of the thirty-six" ;;
+  *) bad "  the report did not bound the reading" "$LEG_OUT" ;;
+esac
+
+echo "== and each verdict class reds when its own cause is mutated =="
+
+# 23 — MUTATION of leg 22: drop the repair and the SAME 35 paths are plain `mechanical`. This is what
+# proves leg 22's exit 4 is caused by `scripts/materialize-skill-roots.sh` and not by the other 35.
+d=$(fresh_1088 r1088-nofix); apply_1088_mechanical "$d"
+run_leg 0 "MUTATION: FS.GG.Rendering#1088 WITHOUT the repair is plain mechanical" "$d" "$WORK/pkg-1088" "$WORK/props-1088.json"
+
+# 24 — MUTATION: the same receiver-authored file, DELETED instead of edited. A deletion is the
+# materializer's own vocabulary and this script can attribute this one to no sweep, so the milder
+# class is not available: a human reads the whole diff.
+d=$(fresh_1088 r1088-del); apply_1088_mechanical "$d"; rm -f "$d/scripts/materialize-skill-roots.sh"
+run_leg 1 "MUTATION: DELETING the receiver-authored file is not-mechanical, not a repair" "$d" "$WORK/pkg-1088" "$WORK/props-1088.json"
+
+# 25 — MUTATION: move the extra edit INSIDE kit territory. Same count, same statuses, different
+# ground — and the verdict must flip, or `territory` is decorative.
+d=$(fresh_1088 r1088-kit); apply_1088_mechanical "$d"
+mkdir -p "$d/.codex/skills/pnext-item"; echo "written back" > "$d/.codex/skills/pnext-item/SKILL.md"
+run_leg 1 "MUTATION: the same-sized edit INSIDE kit territory is not-mechanical" "$d" "$WORK/pkg-1088" "$WORK/props-1088.json"
+
+# 26 — MUTATION: a repair AND a kit-territory finding together. The milder class is not a union, and
+# the message must say which of the two decided it.
+d=$(fresh_1088 r1088-both); apply_1088_mechanical "$d"; apply_1088_repair "$d"
+mkdir -p "$d/.codex/skills/pnext-item"; echo "written back" > "$d/.codex/skills/pnext-item/SKILL.md"
+run_leg 1 "MUTATION: a repair BESIDE a kit-territory finding is not-mechanical" "$d" "$WORK/pkg-1088" "$WORK/props-1088.json"
+case "$LEG_OUT" in
+  *"they are not what makes this verdict"*) ok "  and says the repair is not what decided it" ;;
+  *) bad "  the refusal blamed the repair, or said nothing about it" "$LEG_OUT" ;;
+esac
+
+# 27 — MUTATION: the OTHER direction on build-config. Rendering receives it; a receiver that does not
+# would have the same `Directory.Packages.props` write land in KIT territory as a finding, never as a
+# repair — which is why `declared_dests` reads every row's dest and `flat` reads only the opted-in ones.
+d=$(fresh_1088 r1088-bc); apply_1088_mechanical "$d"; echo "<Project />" > "$d/Directory.Packages.props"
+run_leg 0 "MUTATION: a build-config write IS mechanical for Rendering, which receives build-config" "$d" "$WORK/pkg-1088" "$WORK/props-1088.json"
+make_props "$WORK/props-1088-nobc.json" ".claude/skills;.agents/skills" ".codex/skills" "" "false"
+d=$(fresh_1088 r1088-bc-off); apply_1088_mechanical "$d"; echo "<Project />" > "$d/Directory.Packages.props"
+run_leg 1 "MUTATION: the SAME write is not-mechanical (kit territory) for a receiver that does not" "$d" "$WORK/pkg-1088" "$WORK/props-1088-nobc.json"
+case "$LEG_OUT" in
+  *"kit territory"*) ok "  and attributes it to kit territory, not to a receiver-authored repair" ;;
+  *) bad "  the refusal did not say whose ground the finding is on" "$LEG_OUT" ;;
+esac
+
+echo "== the cheap first pass a receiver-side reporter makes on every pull request (#1713) =="
+
+# 28 — no pin change, no package: the abstention costs a git diff and nothing else. This is what lets
+# the receiver-side job run UNGATED on every pull request without an SDK (#1508's requirement that a
+# producible context be produced on EVERY pull request, not just the ones with a paths: match).
+d=$(fresh bare-nopin); echo "new client" > "$d/scripts/fsgg-coord"
+run_leg_bare 2 "with no package at all, a PR that moves no pin still ABSTAINS" "$d"
+
+# 29 — and the same call on a diff that DOES move the pin is a REFUSAL, never an abstention. If this
+# leg ever returned 2, every receiver's bump PR would report 'not a kit bump' the moment a restore
+# failed — the #266 fail-open this whole file exists to keep shut.
+d=$(fresh_1088 bare-pin); apply_1088_mechanical "$d"
+run_leg_bare 3 "with no package, a PR that DOES move the pin is REFUSED, not abstained" "$d"
+case "$LEG_OUT" in
+  *"--kit-dir"*"--properties"*) ok "  and names both inputs it was not given" ;;
+  *) bad "  the refusal did not name the missing inputs" "$LEG_OUT" ;;
+esac
+
+echo "== the receiver-side producer's context name is a contract (#1713 AC 2) =="
+
+# 30 — the context a receiver's branch protection would one day require is `<caller job> / <callee
+# job display>`, and the right-hand half is defined in exactly ONE place: the `name:` of the
+# `bump-shape` job in this repo's reusable kit-materialize.yml. `check-reusable-job-ids.py` already
+# makes renaming it a loud, opt-out-able breaking change; this asserts the string ITSELF, so the
+# documented context and the workflow cannot drift apart silently.
+#
+# Read with the standard library ALONE, like everything else here: this fixture installs nothing, and
+# `actions/setup-python` does not ship PyYAML. The block is delimited by indentation, which is
+# sufficient for a file this test also constrains.
+JOBREAD='
+import io, sys
+want = sys.argv[2]
+block, inside = [], False
+for line in io.open(sys.argv[1], encoding="utf-8"):
+    if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":"):
+        inside = line.strip() == "bump-shape:"
+        continue
+    if inside:
+        block.append(line)
+if want == "name":
+    got = [l.split(":", 1)[1].strip() for l in block if l.startswith("    name:")]
+    print(got[0] if got else "bump-shape")
+else:
+    print("gated" if any(l.startswith("    if:") for l in block) else "ungated")
+'
+WF="$HERE/../../.github/workflows/kit-materialize.yml"
+CONTEXT_CALLEE="$(python3 -c "$JOBREAD" "$WF" name)"
+if [ "$CONTEXT_CALLEE" = "kit-bump-shape" ]; then
+  ok "kit-materialize.yml publishes the callee context name 'kit-bump-shape'"
+else
+  bad "kit-materialize.yml publishes '$CONTEXT_CALLEE', not 'kit-bump-shape' — every receiver's caller job id is 'materialize', so the context is 'materialize / <this>'"
+fi
+# 31 — and the job must be UNGATED. An `if:` on it, or a paths filter on the workflow, is #1508's
+# deadlock: GitHub creates no check run at all for a filtered-out job, and a branch that required
+# the context would hold every pull request at "Expected — waiting for status to be reported".
+if [ "$(python3 -c "$JOBREAD" "$WF" gate)" = "ungated" ]; then
+  ok "  and the job carries no 'if:' — it reports on every pull request (#1508)"
+else
+  bad "  the bump-shape job is gated by an 'if:' — a filtered-out job creates NO check run (#1508)"
+fi
 
 echo
 echo "kit-bump-shape: $pass passed, $failcount failed"
