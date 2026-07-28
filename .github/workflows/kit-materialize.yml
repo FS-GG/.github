@@ -25,14 +25,26 @@
 #     the second pass materializes 0-written -> no diff -> no commit -> no push, so there is no loop.
 #   * PROVISIONING (the fs-gg-cross-repo-dispatch App secrets resolve AND this repo is in the App
 #     installation with contents:write) is CONTINUOUSLY asserted by lockfile-sync.yml's `preflight` job,
-#     which runs UNGATED on every PR in exactly the four repos that adopt this workflow (SDD, Rendering,
-#     Governance, Templates — the confirmed-provisioned set, #145 header). That gate names the repo, the
-#     secret, and the fix on the FIRST PR after adoption, months before any bump PR. Re-implementing it
-#     here would be a 340-line restatement of a check that already fires on the same PRs; instead this
-#     job's own token mint is the backstop — if a repo were somehow de-provisioned, lockfile-sync's
-#     preflight on the same PR reds it with the full remedy, and this mint fails loud rather than silent.
-#     A receiver that adopts kit-materialize WITHOUT lockfile-sync must not rely on that composition —
-#     none exists today (all four adopters carry both), and the fan-out keeps them paired.
+#     which runs UNGATED on every PR in ALL SEVEN repos that adopt this workflow (#1724). This argument
+#     used to say "exactly the four repos (SDD, Rendering, Governance, Templates — the confirmed-
+#     provisioned set, #145 header)". The count was four when it was written and has been SEVEN since;
+#     measured 2026-07-29, every one of SDD, Rendering, Governance, Templates, Game, Audio and Net
+#     carries BOTH `kit-materialize.yml` and `lockfile-sync.yml`, and all seven are `kit-delivery:
+#     package` in registry/repos.yml. The composition the argument rests on therefore holds more widely
+#     than it claimed, not less — the roster was stale, the safety property was not.
+#
+#     PROVISIONING IS ALSO NOW MEASURED DIRECTLY ON ALL SEVEN, not only inferred from the preflight.
+#     On 2026-07-29 a `workflow_dispatch` materialize was run on each receiver's default branch
+#     (#1853): every one MINTED the App installation token and reported `materialize` as
+#     `conclusion: success` — which is the provisioning assertion performed rather than delegated.
+#
+#     That gate names the repo, the secret, and the fix on the FIRST PR after adoption, months before
+#     any bump PR. Re-implementing it here would be a 340-line restatement of a check that already
+#     fires on the same PRs; instead this job's own token mint is the backstop — if a repo were somehow
+#     de-provisioned, lockfile-sync's preflight on the same PR reds it with the full remedy, and this
+#     mint fails loud rather than silent. A receiver that adopts kit-materialize WITHOUT lockfile-sync
+#     must not rely on that composition — none exists today (all SEVEN adopters carry both), and the
+#     fan-out keeps them paired.
 #
 # Restore/materialize is anonymous: FS.GG.Kit ships to PUBLIC nuget.org (release-kit.yml dual-publishes,
 # ADR-0012/0013), and the receiver's hermetic nuget.config resolves it there — no org-feed credential.
