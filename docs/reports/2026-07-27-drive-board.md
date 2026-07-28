@@ -327,3 +327,101 @@ categorisation with no board field behind it, so no reviewer can reproduce it; a
 `FS.GG.SDD` rows are the SkillMirror/doctor **library**, not `.github`'s copying apparatus. ADR-0067's
 `Affects` line does name FS.GG.SDD, so the claim survives — but bulk closure there depends on phases
 2–4 reaching that library, which `#1635`/`#1674`/`#1676` do not currently say they will.
+
+---
+
+## 11. Phase 4, as of 2026-07-28 07:30Z — in flight, not finished
+
+This report is landed with phase 4 open rather than held until it closes. Holding a finished document
+against an unfinished decision is how the stale premises catalogued in §3 got made, and §10's claim
+that *"six receivers remain at stage 0 behind `#1587`"* has already expired — which is the point.
+
+### Kit delivery: solved by hand, and `#1587` was never the gate
+
+`#1587` (automerge) was described throughout this run as phase 4's blocker. It is not, and §10 is wrong
+where it implies otherwise. It gates **unattended** delivery. Delivery itself was five open Renovate
+bump PRs; landing them took one morning:
+
+| receiver | pin | how |
+|---|---|---|
+| FS.GG.SDD | 0.15.0 | already current |
+| FS.GG.Templates | 0.15.0 | already current |
+| FS.GG.Governance | 0.15.0 | PR #333 → `2d37fa1`, clean and green |
+| FS.GG.Audio | 0.15.0 | PR #209 → `1f9c58c`, clean and green |
+| FS.GG.Net | 0.15.0 | PR #42 → `e97186a`, clean and green |
+| FS.GG.Rendering | 0.15.0 | PR #1088 → `2d64ee5`, **after a receiver-side repair** |
+| FS.GG.Game | 0.8.0 | PR #514 red on `#1718` — the kit's own `scripts/skill-view` |
+
+**Six of seven.** The five-repo `coordination-coherence` red named in this session's opening handoff is
+cleared.
+
+Two of those were not mechanical, and both are now filed:
+
+- **Rendering** needed `scripts/materialize-skill-roots.sh` fixed *in the bump PR*. Its checker verified
+  the kit class across three roots; 0.15.0 retired one, so the correct sweep read as receiver drift. The
+  repair cannot land before the bump (at 0.8.0 it is wrong) or after (the bump is red until it lands).
+  **`#1587`'s shape guard would have refused this PR** — `#1726`.
+- **Game** is red on a kit defect: `scripts/skill-view`, shipped first in 0.15.0, sources `lib/args.sh`
+  and `lib/roots.sh` with no `source-path=SCRIPTDIR`. The four receivers already on 0.15.0 are green
+  while carrying the identical broken file — Game owns the org's only SC1091 guard, and `.github`'s own
+  `lint-shell.sh` runs at `-S warning` where SC1091 is invisible (`#1718`, `#1719`).
+
+### Renovate: diagnosed, and it was not the preset
+
+§10 left Audio and Net's dashboards unexplained. Ticking each dashboard's `<!-- manual job -->` checkbox
+resolved both. Audio re-extracted and produced its bump. Net re-extracted, correctly detected
+`0.8.0 → 0.15.0` against the post-`#1580` preset, and was holding the branch under
+`<!-- unlimit-branch= -->` — **a rate limit, not a preset fault**. Ticking that produced PR #42 within
+four minutes. No portal access was needed.
+
+### What phase 4 actually retired: 1 of 7, and stage 2 refused
+
+- **Stage 1** — FS.GG.Templates retired (§10 above).
+- **Stage 2** — FS.GG.SDD **measured and retired nothing**, deliberately. `FS.GG.SDD@main` is unchanged
+  at `387adc6`, verified. It found blocker **B5** (`#1715`): a receiver wiring a `skill-union` caller
+  cannot be retired, because the reusable assertion runs over a bare checkout and a generated view root
+  does not exist in one — `configured root is absent`, exit 2 — and a `uses:` job cannot add a generate
+  step. The retirement order's §6 had priced this step at zero on the premise that *"zero receivers have
+  wired one"*; SDD's caller landed `a066e0b` a day before that sentence was written.
+
+B5 reaches **three** receivers — SDD, Rendering, Governance — measured by reading each receiver's
+`.github/workflows/` directly. `registry/repos.yml` still asserts none do (`#1716`).
+
+**Decided 2026-07-28, shape (b):** retire the caller, swap in `skill-view check --source <root>`. The
+reason is this report's own recurring subject. On a half-view the existing gate's two headline
+invariants become tautologies — `union_ids()` enumerates with `find` and no `-L`, so a view root
+contributes zero ids, and presence is then tested with `[ -d ]` through the symlink and cannot fail. It
+would keep reporting `success` on a required context under `enforce_admins` while asserting nothing.
+That is `#266` in its most expensive form: a green indistinguishable from a green that means something.
+
+**AC7 is retired as unachievable**, with the measurement, on the precedent of `#1586`'s criterion 5. The
+freshness sweep's subject — *"is receiver R's pin current?"* — survives the rewrite entirely; it was
+never inside the sequence it claimed to be last in. Independently confirmed: Rendering's
+`kit / coordination-kit` was **green on `main` at pin 0.8.0**. The coherence gate grades content against
+the declared pin and has nothing to say about the pin being seven versions stale. AC7 assumed the two
+instruments were one.
+
+`#1676` is now a parent with per-repo children (`#1720` Audio, `#1721` Net) rather than one row whose
+single claim serialised seven independent retirements.
+
+### Credential and protection, both closed
+
+- **`#1712`** — the dispatch App's grant. Checked rather than accepted: the App *declared*
+  `administration: write` while the **installation** still carried `read`, which is a pending permission
+  request needing per-installation owner approval. After approval, re-read and verified `write`. Then
+  the dry run found the grant was not the last gate — `kit-bump-shape` **has no receiver-side producer**
+  (`#1713`), and `--apply` would have required a context nothing produces in six repositories, holding
+  every PR at *"Expected — waiting for status to be reported"*. `#266` inverted, caught only because
+  `#1613` made dry run the default.
+- **`#1714`** — `FS.GG.Net`'s `main` had no protection of any kind: `branches/main/protection` 404,
+  `rulesets` empty, the only one of seven. Now armed with its three verdict contexts,
+  `enforce_admins: true`, `strict: false`. The roster sweep reads **7 repos: 0 would-add, 7 unchanged,
+  0 failed**. Closed.
+
+### What this section does not claim
+
+Phase 4 is **not** done. Four workers are live on `#1715`, `#1718`, `#1720` and `#1721` as this lands,
+and their results are not in this document. One repo of seven is retired. The honest statement is that
+the rewrite is proceeding, that every blocker found so far was found by executing rather than planning,
+and that three separate workers today returned items un-done with measurements rather than stamping
+them — which is the behaviour this report spent §5 arguing for.
