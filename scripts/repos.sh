@@ -39,6 +39,19 @@
 #                                                           # SKILL.md's bytes; file -> sha256 of the file.
 #                                                           # NOT Fsgg.SkillMirror.sha256 — deliberately (see
 #                                                           # the `digest()` header, .github#1585)
+#
+#   repos.sh require-context   --context <ctx> --receives <cap> [--branch <b>] [--only <full>]
+#                              [--apply] [--registry <file>]
+#                                                           # ADD <ctx> to the CLASSIC required status
+#                                                           # checks of every repo the roster says
+#                                                           # receives <cap>. Dry-run unless --apply.
+#                                                           # ADD-ONLY: it cannot remove anything.
+#   repos.sh unrequire-context --context <ctx> --receives <cap> --confirm-remove <ctx>
+#                              [--branch <b>] [--only <full>] [--apply] [--registry <file>]
+#                                                           # REMOVE <ctx>. A SEPARATE verb with a
+#                                                           # SEPARATE confirmation that must repeat
+#                                                           # the exact context name. Never reachable
+#                                                           # from require-context (#1613).
 #   repos.sh -h | --help
 #
 # Exit: 0 = ok; 1 = a validation violation (each printed with ::error::); 2 = misconfiguration.
@@ -361,6 +374,300 @@ cmd_kit() {
   [ -f "$reg" ] || die "registry not found: $reg"
   yaml2json "$reg" | jq -r --arg f "$field" --arg k "$kind" \
     '(.kit // [])[] | select($k == "" or .kind == $k) | .[$f]'
+}
+
+# ---- the scoped branch-protection writer (.github#1613) -----------------------------------------
+#
+# WHY IT EXISTS. `.github#1587` needs the kit-bump diff-shape guard (`scripts/check-kit-bump-shape.py`,
+# #1693) to be a REQUIRED status context in each kit receiver, because Renovate's `automergeType: pr`
+# merges through GitHub's merge API, which consults branch protection and nothing else — a check that
+# is merely PRESENT is one automerge walks straight past. Before this, the only branch-protection
+# access anywhere in scripts/ was a single GET (`check-required-contexts.py`), so arming seven repos
+# meant seven hand-edits with no dry run, no read-back, and no record of what changed.
+#
+# WHAT IT MUST NEVER BECOME, and this is the ITEM, not decoration. This tool can weaken protection
+# across the whole roster. **Adding a required context and REMOVING one are different operations with
+# different authority.** So they are different SUBCOMMANDS, and the removal one additionally demands
+# `--confirm-remove <the exact context name>`. There is deliberately no `--remove` flag, no `--op`, no
+# `--mode`: nothing a caller types on `require-context` can make it delete anything, because the verb
+# is what selects the operation and the verb is not an argument.
+#
+# THE ENDPOINTS ARE THE REAL GUARANTEE, not the flag parsing. This script names exactly two API paths
+# (`rsc_read_path`, `rsc_write_path`) and both live under `…/protection/required_status_checks`:
+#
+#   GET    …/protection/required_status_checks            read the current contexts
+#   POST   …/protection/required_status_checks/contexts   APPEND contexts — cannot delete
+#   DELETE …/protection/required_status_checks/contexts   delete named contexts
+#
+# The `contexts` FIELD is deprecated in favour of `checks` (a `{context, app_id}` array), and the
+# collection sub-resource above is chosen anyway, deliberately. `checks` is only reachable through a
+# PATCH of the whole `required_status_checks` object, which means read-modify-write on a structure
+# that also carries `strict` — one more field a bug can clear. The collection endpoint takes a delta,
+# so there is nothing to accidentally omit. It also registers the context with `app_id: null`, which
+# is "any app may report this" — the correct and non-narrowing choice for a context produced by
+# whichever workflow run happens to report it. The GET below reads BOTH shapes, so this tool is
+# correct against a branch that has already migrated.
+#
+# It NEVER names `…/branches/<b>/protection` itself. That matters more than any check we could write:
+# the bare protection endpoint is a whole-object PUT, so a payload that merely OMITS `enforce_admins`
+# or `required_pull_request_reviews` DISABLES them. A tool that used it would be one forgotten field
+# away from unprotecting seven repositories. The narrow resource this uses does not contain those
+# fields at all, so no bug in this file can reach them. `enforce_admins: true` is live on several of
+# these repos; nothing here can see it, let alone change it.
+#
+# IT NEVER CREATES PROTECTION. A 404 from the read means the branch has no CLASSIC required-status-
+# checks block, and the only way to create one is the whole-object PUT above. So a 404 is reported as
+# a per-repo FAILURE and the sweep exits non-zero — arming that repo is a human decision about how a
+# branch is governed, not a side effect of adding one context.
+#
+# CLASSIC STORE ONLY, SAID OUT LOUD. A branch may be governed by classic protection, by a REPOSITORY
+# RULESET, or by both, and the two stores do not report each other (`check-required-contexts.py`'s
+# header, #574). The two stack, so making a context required in the classic store is SUFFICIENT for it
+# to be required — which is all the add path claims. The remove path claims less, and says so: it
+# removes from the classic store, and a ruleset may still require the context afterwards. Under-
+# promising is the safe direction for a removal.
+#
+# CREDENTIAL, MEASURED 2026-07-28, AND THIS IS NOT AUTOMATION YET. Reading protection needs
+# `administration: read`; writing needs `administration: write`. NEITHER is a valid `permissions:`
+# scope for a workflow's GITHUB_TOKEN — declaring one is a startup validation error that produces no
+# check run at all (#478's blind spot, hit for real by #1575). The org dispatch App holds
+# `administration: READ` (the #574 org grant, 2026-07-17) and that is what
+# required-context-coherence.yml mints. **No credential in this org can run the APPLY path today**:
+# raising the App's grant to `administration: write` is an org-owner action, not a change in this
+# repo. So this ships as an OPERATOR tool driven by a `GH_TOKEN` that carries the scope (an App token
+# minted from a raised grant, or a human PAT with admin on the target repos), and it says so when the
+# token cannot: a 403 on the write is reported as "this token lacks administration: write on <repo>",
+# never as a generic outage. The DRY RUN needs only `administration: read`, so it is runnable from the
+# existing App grant today and is the half that can be automated now.
+#
+# DRY RUN BY DEFAULT, READ BACK ALWAYS, FAIL CLOSED ON PARTIAL APPLICATION. Nothing is written without
+# `--apply`. After every write the contexts are RE-READ and compared against the exact expected set —
+# an HTTP 200 is not evidence, and a write that returns 200 while the read-back disagrees is a
+# failure, not a success. If it arms four repos and the fifth fails, it reports every repo's outcome,
+# exits non-zero, and does not retry: a half-armed roster is worse than none because it looks done.
+# `--only` exists for exactly that recovery — it NARROWS the roster-derived set and can never extend
+# it, so finishing a partial application is still a roster-derived operation, not a hand list.
+#
+# THE TARGET SET IS THE ROSTER. `--receives <cap>` resolves through the same query every other fabric
+# uses. There is no `--repo`, no repo list, and no file of targets: a list here would be the fifth
+# copy of a fact that already exists, which is the defect class #1507/#1510/#1515/#1528/#1538 closed.
+
+# THE ONLY TWO API PATHS THIS SCRIPT EVER NAMES. Functions, so there is exactly one literal of each
+# to audit — tests/repos-registry/run.sh greps this file for the forbidden ones.
+rsc_read_path()  { printf 'repos/%s/branches/%s/protection/required_status_checks' "$1" "$2"; }
+rsc_write_path() { printf 'repos/%s/branches/%s/protection/required_status_checks/contexts' "$1" "$2"; }
+
+GH_OUT=""; GH_ERR=""
+# gh_api_capture <gh api args…> — stdout into GH_OUT, stderr into GH_ERR, gh's rc returned. stderr is
+# captured rather than passed through because the HTTP STATUS is a verdict here: 404 means "no classic
+# block" (a finding about the repo) and 403 means "this token cannot" (a finding about the credential),
+# and collapsing them into "it failed" is the #320 conflation this repo has paid for twice.
+gh_api_capture() {
+  local errf rc=0
+  errf="$(mktemp "${TMPDIR:-/tmp}/repos-protect.XXXXXX")"
+  GH_OUT="$(gh api "$@" 2>"$errf")" || rc=$?
+  GH_ERR="$(cat "$errf")"; rm -f "$errf"
+  return "$rc"
+}
+# The HTTP status gh named on the last call, or "" if it named none.
+gh_http_status() { printf '%s' "$GH_ERR" | sed -n 's/.*(HTTP \([0-9][0-9]*\)).*/\1/p' | tail -n1; }
+
+# read_contexts <repo> <branch> — the CURRENT required contexts, one per line, sorted.
+# rc 0 = read it; 4 = no classic required-status-checks block (404); 5 = could not read.
+# The two stores GitHub keeps are unioned at READ time by check-required-contexts.py; here only the
+# classic one is read, because it is the only one this tool can write and reporting a ruleset context
+# in `before=` would imply this tool could remove it.
+read_contexts() {
+  local rc=0
+  gh_api_capture "$(rsc_read_path "$1" "$2")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    case "$(gh_http_status)" in 404) return 4 ;; *) return 5 ;; esac
+  fi
+  # BOTH shapes: `contexts` is the deprecated string array and `checks` the current
+  # {context, app_id} array. A repo migrated to `checks` reports an EMPTY `contexts`, and reading only
+  # that would say "nothing is required here" about a fully protected branch — then the add path would
+  # report every context as newly added and the read-back comparison would be against a fiction.
+  printf '%s' "$GH_OUT" | jq -r '[ (.contexts // [])[], ((.checks // [])[] | .context) ] | unique | .[]'
+}
+
+fmt_set() { paste -sd',' - 2>/dev/null | sed 's/,/, /g'; }
+
+# scope_hint <read|write> — the extra sentence a 403 earns, and only a 403. A missing SCOPE and a
+# transient outage look identical in a diagnostic that just prints the error, and they are repaired
+# completely differently: one is an org-owner grant, the other is waiting. Neither read nor write
+# scope is grantable to a workflow GITHUB_TOKEN (#478/#1575), so the hint has to name what WOULD work.
+scope_hint() {
+  [ "$(gh_http_status)" = 403 ] || return 0
+  if [ "$1" = write ]; then
+    printf ' — this token lacks administration: write on it. No GITHUB_TOKEN can hold that scope; use an App token minted from an administration:write grant, or a PAT with admin on this repo.'
+  else
+    printf ' — this token lacks administration: read on it. The org dispatch App holds that grant (#574); a GITHUB_TOKEN cannot.'
+  fi
+}
+
+# protect_sweep <op> <ctx> <cap> <branch> <apply> <only> <registry>
+#
+# `<op>` is a LITERAL written by the subcommand — `cmd_require_context` passes `add`, and
+# `cmd_unrequire_context` is the only thing in this file that passes `remove`. It is never derived
+# from argv, so there is no command line that makes the add verb delete. That is the invariant
+# tests/repos-registry/run.sh mutates and asserts, at the source AND on the recorded API traffic.
+protect_sweep() {
+  local op="$1" ctx="$2" cap="$3" branch="$4" apply="$5" only="$6" reg="$7"
+  # A context name is compared as a LINE — `grep -Fx`, and set equality over newline-separated lists.
+  # A multi-line value would silently mean something else to every one of those comparisons, and the
+  # place that would first show up is the read-back saying "match" about a set it never checked. No
+  # real GitHub context contains a newline, so this is a refusal, not a limitation.
+  case "$ctx" in
+    *$'\n'*) die "$op-context: --context must be a SINGLE LINE — every comparison in this tool is line-oriented, and a multi-line context would make the read-back verify something other than what was written." ;;
+  esac
+  command -v gh >/dev/null 2>&1 || die "gh not found (required by $op-context)."
+  [ -f "$reg" ] || die "registry not found: $reg"
+
+  local targets; targets="$(cmd_list --receives "$cap" --field full --registry "$reg")"
+  [ -n "$targets" ] \
+    || die "no repo in the roster receives '$cap' — refusing to sweep an EMPTY target set, which would report success having armed nothing (#503's vacuous green)."
+  if [ -n "$only" ]; then
+    # NARROWS, never extends. `--only` naming a repo outside the capability's roster set would be a
+    # hand-picked target, which is the whole thing this tool refuses to have.
+    printf '%s\n' "$targets" | grep -Fxq -- "$only" \
+      || die "--only '$only' is not among the repos that receive '$cap' — it narrows the roster-derived set and can never extend it. Roster set: $(printf '%s\n' "$targets" | fmt_set)"
+    targets="$only"
+  fi
+
+  echo "repos-protect: op=$op context='$ctx' capability=$cap branch=$branch apply=$apply store=classic"
+  [ "$apply" = yes ] || echo "repos-protect: DRY RUN — nothing will be written. Re-run with --apply to write."
+
+  local nchange=0 nsame=0 nfail=0 repo before after want rc
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    rc=0; before="$(read_contexts "$repo" "$branch")" || rc=$?
+    if [ "$rc" -eq 4 ]; then
+      echo "::error::repos-protect: $repo: branch '$branch' has NO classic required-status-checks block. This tool will not CREATE one — that is a whole-object PUT of the protection resource, the one call that can disable enforce_admins or review requirements by omission. Arm the branch by hand, then re-run." >&2
+      nfail=$((nfail + 1)); continue
+    elif [ "$rc" -ne 0 ]; then
+      echo "::error::repos-protect: $repo: could not READ $branch's required status checks$(scope_hint read) — $GH_ERR" >&2
+      nfail=$((nfail + 1)); continue
+    fi
+
+    # The expected post-state, computed BEFORE any write, so the read-back has something independent
+    # to be compared against. `add` is a union and `remove` a difference; both are exact.
+    #
+    # `|| true` on both, and it is not defensive noise: with `pipefail`, a `grep` that matches nothing
+    # returns 1, and the two cases where it matches nothing are REAL — an empty `before`, and removing
+    # the last remaining required context. Without it the sweep would `set -e` out mid-roster, having
+    # written to some repos and reported on none of them, which is the fail-open this whole tool is
+    # built to refuse.
+    if [ "$op" = add ]; then
+      want="$(printf '%s\n%s\n' "$before" "$ctx" | grep -v '^$' | LC_ALL=C sort -u || true)"
+    else
+      want="$(printf '%s\n' "$before" | grep -v '^$' | grep -Fxv -- "$ctx" | LC_ALL=C sort -u || true)"
+    fi
+
+    if [ "$want" = "$before" ]; then
+      if [ "$op" = remove ]; then
+        # Naming a context that is not there is not a no-op worth being quiet about: the operator
+        # believes they are removing something, and the tool disagreeing silently is how a typo
+        # becomes "done". A removal must name an EXISTING context, exactly.
+        echo "::error::repos-protect: $repo: '$ctx' is NOT among $branch's classic required contexts, so there is nothing to remove. before=[$(printf '%s\n' "$before" | fmt_set)]" >&2
+        nfail=$((nfail + 1)); continue
+      fi
+      echo "repos-protect: $repo  before=[$(printf '%s\n' "$before" | fmt_set)]  after=[$(printf '%s\n' "$before" | fmt_set)]  UNCHANGED (already required)"
+      nsame=$((nsame + 1)); continue
+    fi
+
+    if [ "$apply" != yes ]; then
+      echo "repos-protect: $repo  before=[$(printf '%s\n' "$before" | fmt_set)]  after=[$(printf '%s\n' "$want" | fmt_set)]  WOULD-$(echo "$op" | tr '[:lower:]' '[:upper:]')"
+      nchange=$((nchange + 1)); continue
+    fi
+
+    rc=0
+    case "$op" in
+      # APPEND-ONLY by construction: POST to the contexts collection cannot delete a member. This is
+      # the strongest statement available that the add path cannot reduce protection — it is not a
+      # guard that could be bugged around, it is an endpoint that has no delete semantics.
+      add)    gh_api_capture --method POST   "$(rsc_write_path "$repo" "$branch")" -f "contexts[]=$ctx" >/dev/null || rc=$? ;;
+      remove) gh_api_capture --method DELETE "$(rsc_write_path "$repo" "$branch")" -f "contexts[]=$ctx" >/dev/null || rc=$? ;;
+      *)      die "protect_sweep: unknown op '$op' — this is a bug in repos.sh, not a call error." ;;
+    esac
+    if [ "$rc" -ne 0 ]; then
+      echo "::error::repos-protect: $repo: the $op WRITE failed$(scope_hint write) — $GH_ERR" >&2
+      # NO BLIND RETRY. A write that failed for an unknown reason may have partially applied, and a
+      # second attempt cannot tell "it did not happen" from "it happened and the response was lost".
+      nfail=$((nfail + 1)); continue
+    fi
+
+    # READ BACK. Never infer success from the write's own response — that response is the same server
+    # telling us what it thinks it did, and the whole point of the read is a second, independent
+    # observation. It is compared for EQUALITY with `want`, not merely for `$ctx` being present:
+    # equality is what catches a context that vanished while we were adding a different one.
+    rc=0; after="$(read_contexts "$repo" "$branch")" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "::error::repos-protect: $repo: the $op write reported success and the READ-BACK failed, so the applied state is UNKNOWN — re-read it by hand before assuming anything: $GH_ERR" >&2
+      nfail=$((nfail + 1)); continue
+    fi
+    if [ "$after" != "$want" ]; then
+      echo "::error::repos-protect: $repo: READ-BACK MISMATCH — expected=[$(printf '%s\n' "$want" | fmt_set)] actual=[$(printf '%s\n' "$after" | fmt_set)]. The write returned success and the branch does not hold the expected set; an HTTP 200 is not evidence. NOT retried." >&2
+      nfail=$((nfail + 1)); continue
+    fi
+    echo "repos-protect: $repo  before=[$(printf '%s\n' "$before" | fmt_set)]  after=[$(printf '%s\n' "$after" | fmt_set)]  $(echo "${op}ED" | tr '[:lower:]' '[:upper:]')"
+    nchange=$((nchange + 1))
+  done < <(printf '%s\n' "$targets")
+
+  local verb="would-$op"
+  if [ "$apply" = yes ]; then verb="${op}ed"; fi
+  echo "repos-protect: $((nchange + nsame + nfail)) repo(s): $nchange $verb, $nsame unchanged, $nfail failed"
+  if [ "$nfail" -gt 0 ]; then
+    echo "::error::repos-protect: FAILED on $nfail repo(s) — see the per-repo lines above. A partially armed roster is worse than an unarmed one because it looks done, so this exits non-zero and nothing was retried." >&2
+    exit 1
+  fi
+}
+
+# ADD ONLY. There is no flag here that removes anything, and `--confirm-remove` is deliberately an
+# UNKNOWN ARG rather than an accepted-and-ignored one: a flag that is tolerated on the wrong verb is a
+# flag someone will believe did something.
+cmd_require_context() {
+  local ctx="" cap="" branch="main" apply=no only="" reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --context)   need_val require-context "$@"; ctx="$2";    shift 2 ;;
+      --receives)  need_val require-context "$@"; cap="$2";    shift 2 ;;
+      --branch)    need_val require-context "$@"; branch="$2"; shift 2 ;;
+      --only)      need_val require-context "$@"; only="$2";   shift 2 ;;
+      --registry)  need_val require-context "$@"; reg="$2";    shift 2 ;;
+      --apply)     apply=yes; shift 1 ;;
+      *)           die "require-context: unknown arg '$1'. This verb ADDS a required context and does nothing else — removal is 'repos.sh unrequire-context', a separate verb with a separate confirmation (#1613)." ;;
+    esac
+  done
+  [ -n "$ctx" ] || die "require-context: --context <name> is required."
+  [ -n "$cap" ] || die "require-context: --receives <capability> is required — the target set is derived from the roster, never hand-listed."
+  protect_sweep add "$ctx" "$cap" "$branch" "$apply" "$only" "$reg"
+}
+
+# REMOVE ONLY, and the confirmation is the point. `--confirm-remove` must REPEAT the exact context
+# name: a bare boolean flag can be pasted from a previous command and carry over to a context it was
+# never meant for, whereas a value that must equal `--context` cannot be reused without being reread.
+# Weakening protection should cost a deliberate act of typing.
+cmd_unrequire_context() {
+  local ctx="" cap="" branch="main" apply=no only="" reg="$REG_DEFAULT" confirm="" sawconfirm=no
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --context)        need_val unrequire-context "$@"; ctx="$2";    shift 2 ;;
+      --receives)       need_val unrequire-context "$@"; cap="$2";    shift 2 ;;
+      --branch)         need_val unrequire-context "$@"; branch="$2"; shift 2 ;;
+      --only)           need_val unrequire-context "$@"; only="$2";   shift 2 ;;
+      --registry)       need_val unrequire-context "$@"; reg="$2";    shift 2 ;;
+      --confirm-remove) need_val unrequire-context "$@"; confirm="$2"; sawconfirm=yes; shift 2 ;;
+      --apply)          apply=yes; shift 1 ;;
+      *)                die "unrequire-context: unknown arg '$1'." ;;
+    esac
+  done
+  [ -n "$ctx" ] || die "unrequire-context: --context <name> is required."
+  [ -n "$cap" ] || die "unrequire-context: --receives <capability> is required — the target set is derived from the roster, never hand-listed."
+  [ "$sawconfirm" = yes ] \
+    || die "unrequire-context: REFUSING to remove a required context without --confirm-remove '$ctx'. Removing a required status check lowers a repository's merge bar, so it is a deliberate act with its own confirmation and never a side effect of another operation (#1613)."
+  [ "$confirm" = "$ctx" ] \
+    || die "unrequire-context: --confirm-remove '$confirm' does not match --context '$ctx'. Name the exact context being removed — a confirmation that does not have to be reread is not a confirmation."
+  protect_sweep remove "$ctx" "$cap" "$branch" "$apply" "$only" "$reg"
 }
 
 cmd_validate() {
@@ -748,6 +1055,11 @@ case "${1:-}" in
   caps)     shift; cmd_caps "$@" ;;
   received) shift; cmd_received "$@" ;;
   kit)      shift; cmd_kit "$@" ;;
+  # TWO VERBS, TWO AUTHORITIES (#1613). The operation is selected HERE, by the word the caller typed,
+  # and is never an argument to either — so no flag on `require-context` can make it remove, and the
+  # removal verb cannot be reached by accident from the routine one.
+  require-context)   shift; cmd_require_context "$@" ;;
+  unrequire-context) shift; cmd_unrequire_context "$@" ;;
   digest)   shift; [ $# -ge 1 ] || die "digest: <path> required."; digest "$1" ;;
   -h|--help|help|"") usage ;;
   *)        die "unknown command '${1:-}' (try: repos.sh --help)." ;;
