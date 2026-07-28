@@ -768,28 +768,69 @@ fi
 # there is nothing for a `workflow:`/`caller:` detector to see and inventing one that matched a
 # FILENAME would certify the shape instead of the subject.
 #
-# What is pinned now, and both halves are still decisions that rot silently:
+# THE EXPECTATION CHANGED AGAIN ON 2026-07-28 (#1742) AND BOTH PRIOR ONES ARE RECORDED HERE ON PURPOSE.
+# The set has now been emptied. Its history, newest last:
 #
-#   the four that remain — audio, game, net, templates — NEVER wired a caller. Their rows are gaps the
-#     scheduled audit reports, exactly as before, and they are kept so the sweep still has a non-empty
-#     target set while whether to delete them is decided with the per-repo retirement sequence (#1676,
-#     #1587). A worker must NOT read one of those rows as an instruction to wire a caller.
-#   `.github` does NOT — it is the SOURCE of the assertion and asserts its own roots with
-#     skill-roots-selfcheck.yml. Rostering the authority would demand a `uses:` of its own reusable
+#   audio,game,governance,net,rendering,sdd,templates  — every framework repo (#1504)
+#   audio,game,net,templates                           — after #1715 retired the caller and the three
+#                                                        that WIRED one dropped it
+#   (empty)                                            — after #1742: the four that only ever DECLARED
+#                                                        it dropped the word too
+#
+# WHY EMPTY IS THE PINNED ANSWER AND NOT A REGRESSION. Those four never wired a caller, so the only act
+# that could ever have discharged their rows was wiring the retired shape — which #1715 forbids. A row
+# satisfiable only by doing the forbidden thing is a trap, and it held `repos-audit` red continuously
+# from 2026-07-27T11:37Z, hiding every new finding behind a standing one (#1611 category D, #1582).
+# Their skill-view subject is NOT ungated: all seven receivers generate `<FsggKitViewSkillRoots>` before
+# the kit's `FsggKitCheckSkillView`, swept in both directions by #1759 and #1785.
+#
+# THE CAPABILITY ROW ITSELF SURVIVES, with `receivers: none` + a reason — asserted separately below.
+# That is the half that keeps this honest: repos-audit still scans EVERY rostered repo for a real
+# caller and fails if it finds one, so "nobody receives skill-union" is falsifiable rather than merely
+# declared. Deleting the row instead would have made wiring the retired shape invisible, which is the
+# one mistake #1715 is trying to prevent.
+#
+#   `.github` is out, as it always was — it is the SOURCE of the assertion and asserts its own roots
+#     with skill-roots-selfcheck.yml. Rostering the authority would demand a `uses:` of its own reusable
 #     workflow, which is the phantom-adopter failure repos-audit refuses by name. Its coherence is
 #     proven, it is simply proven here rather than by this capability.
 su_receivers="$(bash "$REPOS_SH" list --receives skill-union --field id | sort | tr '\n' ',')"
-if [ "$su_receivers" = "audio,game,net,templates," ]; then
-  ok "skill-union: only the four that never wired a caller remain, and the authority is still out (#1715)"
+if [ -z "$su_receivers" ]; then
+  ok "skill-union: no repo declares the retired shape, and the authority is still out (#1715, #1742)"
 else
-  bad "skill-union: the receiver set is not the four residual repos (#1504, #1715)" \
+  bad "skill-union: the retired capability has receivers again (#1504, #1715, #1742)" \
       "declared: $su_receivers
-expected: audio,game,net,templates,
+expected: (empty)
 governance/rendering/sdd were REMOVED by #1715: the caller is retired because on a generated view its
 two invariants are tautologies, and their replacement is a required skill-view-check context.
-Re-adding one of them means re-creating the blocker #1715 cleared — read
-docs/coordination/skill-apparatus-retirement-order.md §5.1 before changing this line.
+audio/game/net/templates were REMOVED by #1742: they never wired a caller, and after #1715 they never
+may, so their rows were standing instructions to re-create the blocker #1715 cleared.
+Re-adding ANY of them means wiring the retired shape — read
+docs/coordination/skill-apparatus-retirement-order.md §5.1 and the skill-union capability row in
+registry/repos.yml before changing this line.
 The AUTHORITY must stay out: it is the assertion's source and dogfoods it via skill-roots-selfcheck.yml."
+fi
+
+# THE OTHER HALF OF #1742, AND IT IS WHAT STOPS THE LINE ABOVE BECOMING A MUTE BUTTON. An empty receiver
+# set is only honest while the capability row is still there declaring `receivers: none` WITH a reason
+# and WITH its detector: that is what makes repos-audit keep sweeping the org in the reverse direction.
+# Delete the row and the receiver set is still empty, this file still says ok, and nothing anywhere
+# would ever notice a repo wiring the retired caller. So assert the row, not just the absence.
+# `caps` emits id<TAB>workflow<TAB>script<TAB>materializer<TAB>caller<TAB>push<TAB>receivers<TAB>reason.
+# Read the fields POSITIONALLY rather than grepping the whole line: `skill-union` is its own id AND its
+# own caller value, so a substring match cannot tell the row existing from the detector surviving, and
+# the reason prose below mentions both words several times over.
+su_row="$(bash "$REPOS_SH" caps | awk -F'\t' '$1=="skill-union"{print $5"|"$7"|"(length($8)>0?"reason":"BLANK")}')"
+if [ "$su_row" = "skill-union|none|reason" ]; then
+  ok "skill-union: the capability row survives its receiver set — detector + 'receivers: none' + reason intact, so the reverse sweep still runs (#1742)"
+else
+  bad "skill-union: the capability row lost its detector, its 'receivers: none' claim, or its reason (#1742)" \
+      "caller|receivers|reason = ${su_row:-<no skill-union row at all>}
+expected: skill-union|none|reason
+An empty receiver set plus NO capability row is not 'retired', it is UNSWEPT: repos-audit would stop
+scanning for a real caller entirely, so a repo wiring the shape #1715 retired would be invisible in
+both directions. #1742 declined exactly this (shape 2) on the record. Restore the row with
+'receivers: none' and a reason, or re-open that decision first."
 fi
 
 # The byte-copy PUSH arm (build-config-propagate.yml) was RETIRED in #1262 (ADR-0062): build config now

@@ -29,12 +29,15 @@
 #   build-config       — the org-shared .NET build config from FS.GG.Kit [materializer: build-config]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
-#   skill-union        — RETIRED SHAPE (#1715). The FULL union over the repo's OWN committed roots,
-#                        over ADR-0065's two as amended by ADR-0067 §5 — NOT "three": #1636 narrowed the
-#                        contract, the reusable workflow's `roots` default and repos-audit's detector
-#                        both already probe exactly two, and this line was the last place saying three
-#                        (#1716). Four rows still declare it and none may wire a new caller; the
-#                        replacement is the receiver's own `skill-view check`. [caller: skill-union]
+#   skill-union        — RETIRED SHAPE, AND NOW `receivers: none` (#1715, then #1742). The FULL union
+#                        over the repo's OWN committed roots, over ADR-0065's two as amended by
+#                        ADR-0067 §5 — NOT "three": #1636 narrowed the contract, the reusable
+#                        workflow's `roots` default and repos-audit's detector both already probe
+#                        exactly two, and this line was the last place saying three (#1716). NO row
+#                        may declare it and none may wire a new caller; the replacement is the
+#                        receiver's own `skill-view check`. The word stays legal and the detector
+#                        stays live ON PURPOSE — that is what sweeps the org in the reverse direction
+#                        and catches anyone who wires the retired caller anyway. [caller: skill-union]
 #
 # A `receives` row is a CLAIM ABOUT REALITY, and it goes stale silently. `lockfile-sync` is the
 # proof: six repos really wired the reusable workflow, nobody added the rows, and `repos-audit`
@@ -142,18 +145,20 @@ authority: FS-GG/.github
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.
-  # NOT skill-union, for these three ALONE and for a decided reason (#1715, 2026-07-28): they are the
-  # only rostered repos that ever wired the receiver caller, and the caller is retired. Their skill
+  # NOT skill-union — and as of #1742 (2026-07-28) that is true of EVERY row in this block, not just
+  # these three. The capability now records `receivers: none`; see its row for the decision and for
+  # why the two alternatives were declined. These three are called out separately only because they
+  # are the ones that ever WIRED the receiver caller (#1715); the other four never did. Their skill
   # gate is now their own `skill-view-check` required context, which this fabric does not detect
   # BECAUSE IT IS NOT A `uses:` OF ANYTHING HERE. See the skill-union capability row for the
-  # measurement that retired the shape, and do not re-add these words expecting a green.
+  # measurement that retired the shape, and do not re-add this word to any row expecting a green.
   - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
   - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
   - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
-  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below.
-  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package, absence-cover: required }
-  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
-  - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package, absence-cover: required }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below.
+  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
+  - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
@@ -354,28 +359,78 @@ capabilities:
   # that greps for a workflow FILENAME would certify the shape rather than the subject — exactly the
   # bare-`uses:` failure the `caller:` detector below exists to avoid.
   #
-  # THE FOUR ROWS THAT REMAIN — templates, game, audio, net — NEVER WIRED A CALLER, and after #1715
-  # they must not. Each is a GAP the scheduled audit reports, exactly as it did before this change, and
-  # the honest reading of each is now "declares a capability whose shape the org has retired", not
-  # "owes an adoption". Whether those four rows are deleted (and this capability recorded
-  # `receivers: none`) is a decision that belongs with the per-repo retirement sequence — #1676 and
-  # #1587 — not to the change that cleared B5, so it is FILED rather than taken here. Until then, a
-  # worker who reads a `receives: skill-union` row as an instruction to wire a caller would be
-  # re-creating the blocker #1715 just cleared: DO NOT. The remedy for one of those four repos is the
-  # `skill-view-check` gate above, and its sequencing lives in
+  # THE LAST FOUR ROWS ARE GONE, AND THIS CAPABILITY NOW HAS NO RECEIVER SET (#1742, 2026-07-28).
+  #
+  # templates, game, audio and net declared `receives: skill-union` and NEVER wired a caller — which is
+  # why their four GAPs predate #1715 rather than being caused by it. #1715 left them alone on purpose
+  # (deleting a capability's whole receiver set is a decision about the fabric, not a consequence of
+  # clearing B5) and FILED the decision as #1742. This is that decision, taken: the rows are deleted and
+  # the capability records `receivers: none`.
+  #
+  # WHY. A `receives` row is a CLAIM ABOUT REALITY and it is also an INSTRUCTION — the header of this
+  # file says the first and every worker who has ever read a gap treats it as the second. After #1715
+  # the only act that could have discharged one of those four rows is wiring the retired caller, which
+  # #1715 forbids in as many words. A row that can be satisfied only by doing the forbidden thing is
+  # not a backlog item; it is a trap, and it kept `repos-audit` red continuously from 2026-07-27T11:37Z
+  # so that five sweeps added the same day (#1759, #1768, #1783, #1615, #1785) each landed into a script
+  # whose top-level verdict was already failing. A gate that is always red is indistinguishable from a
+  # gate that never runs (#1611 category D, #1582) — the standing finding was costing more than the
+  # rows were worth.
+  #
+  # AND THE SUBJECT DOES NOT GO UNGATED, which was the open question #1742 raised about this shape.
+  # Measured 2026-07-28 on the live org: all seven receivers, these four included, declare
+  # `<FsggKitViewSkillRoots>` and generate it in their own `Fsgg<Repo>GenerateSkillView` target ahead of
+  # the kit's `FsggKitCheckSkillView` assertion, and BOTH halves are swept here in both directions —
+  # by the view-root generate sweep (#1759) and the absence-cover sweep (#1785). Those four therefore
+  # keep a live, org-graded skill-view assertion; what they lose is a row demanding a caller that must
+  # not be built. What NOBODY has, these four and the three that dropped the row alike, is cross-root
+  # BYTE identity outside the kit's four skills — that is #1743, it is already filed and owned, it is
+  # org-wide rather than specific to these four, and keeping a retired row here could not have closed
+  # it, because the retired caller is precisely the thing that may not be wired.
+  #
+  # SHAPE (2) — DELETE THE CAPABILITY ROW TOO — DECLINED, and recorded rather than passed over in
+  # silence. It is the tidier edit and it destroys the only thing still doing work here: the
+  # reverse-direction sweep. With `receivers: none` the audit goes on scanning EVERY rostered repo for
+  # a real caller and FAILS if it finds one ("that recorded claim is now FALSE"). Since #1715's whole
+  # risk is a worker wiring the retired shape anyway, that sweep is now this row's PRIMARY value, not a
+  # leftover from when it had adopters. Deleting the row would make the one mistake the org is trying to
+  # prevent completely invisible — and would also delete `repos.sh validate`'s subject-exists rule that
+  # keeps skill-union-assert.yml honest.
+  #
+  # SHAPE (3) — KEEP THE ROWS, RESTATE THE DETECTOR — DECLINED on the record, twice over. Keeping them
+  # as they stand requires the forbidden wiring (above). Redefining the detector to match what
+  # `skill-view check` actually is cannot be done honestly, and the paragraph above this one is the
+  # argument, unchanged: the replacement has no `uses:` of this authority, so there is nothing
+  # structural for a `workflow:`/`caller:` detector to see, and a detector that matched a workflow
+  # FILENAME would certify the shape instead of the subject — the exact bare-`uses:` failure the
+  # `caller:` detector exists to avoid, and a green nobody earned (#628). A receiver's verdict being a
+  # function of the receiver (#1584) is the property that makes the replacement GOOD and this fabric
+  # blind to it; that is a feature, and inventing a detector to paper over it would trade a real gate
+  # for a comfortable one.
+  #
+  # DO NOT RE-ADD `skill-union` TO ANY ROW, and do not wire a caller. The remedy for any of these seven
+  # repos is the `skill-view-check` gate described above; its sequencing lives in
   # docs/coordination/skill-apparatus-retirement-order.md §5 B5 and §6.
   - id: skill-union
     caller: skill-union
+    receivers: none
     reason: >-
-      RETIRED SHAPE, kept only to sweep the four rows that still declare it (#1715). The FULL union
-      over a repo's OWN committed skill roots, asserted by a skill-union-assert.yml caller aimed at the
-      repository root with the default roots, on a trigger that fires when any of them changes.
-      Compound because the assertion is subject-parameterised: a call aimed at a generated product, or
-      narrowed with roots:, proves nothing about the committed roots, so a bare uses: detector would be
-      a green nobody earned (#628). Distinct from coordination-kit, which proves only the kit-owned
-      four-skill subset — the subset was green on three partitioned trees for as long as they existed
-      (#1504). It asserts nothing at all once a root is a generated view, which is why the three repos
-      that wired it no longer do; see the block above.
+      RETIRED SHAPE with NO receiver, and the row is kept for the REVERSE sweep alone (#1715, #1742).
+      The FULL union over a repo's OWN committed skill roots, asserted by a skill-union-assert.yml
+      caller aimed at the repository root with the default roots, on a trigger that fires when any of
+      them changes. It asserts nothing at all once a root is a generated view — union_ids() enumerates
+      with find and no -L so a view root contributes zero ids, and presence is [ -d ] through the
+      symlink and cannot fail — so both of its headline invariants become tautologies and the org
+      retired it (#1715, shape (b)). The three repos that wired it dropped the caller then; the four
+      that only ever DECLARED it dropped the word in #1742. No repo may wire a new one; the replacement
+      is the receiver's own skill-view check, which this fabric deliberately cannot detect. This row
+      survives its own receiver set because the detector still sweeps every rostered repo for a real
+      caller: if anyone wires the retired shape, this claim is falsified and the audit reds. Compound
+      because the assertion is subject-parameterised — a call aimed at a generated product, or narrowed
+      with roots:, proves nothing about the committed roots (FS.GG.Rendering's template-base caller is
+      exactly that, and deliberately does not count), so a bare uses: detector would be a green nobody
+      earned (#628). Distinct from coordination-kit, which proves only the kit-owned four-skill subset
+      (#1504).
 
   # ADOPTED (#519). Was `receivers: none` + a reason, on the grounds that "whether the six
   # framework repos SHOULD adopt it is a live org question". That question was decided YES, and
