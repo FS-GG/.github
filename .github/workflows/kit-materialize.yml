@@ -137,6 +137,66 @@
 # here blocks no merge — it is how a reviewer sees, in a check list, which of seven fanned-out bump
 # PRs need reading. #1587's automerge is deferred and re-decided separately; it would fire on the
 # `mechanical` verdict ALONE, and this job never makes that decision for it.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# THE ON-DEMAND ARM (.github#1845), AND WHY A MATERIALIZE STILL NEVER WRITES `main`.
+#
+# THE MEASUREMENT THAT FORCED IT (#1834, `4fadc88`). Every receiver's caller triggered on
+# `pull_request` ALONE — no `workflow_dispatch` in any of the seven — and the `materialize` job below
+# was further gated to `renovate/*` same-repo heads. **Across 842 runs in all seven receivers, ZERO
+# ran on `main`.** Meanwhile `kit / coordination-kit` runs 9-69 times a DAY in the same repos and has
+# gone red 534 times in ~24 days, and its DRIFT summary told the reader to *"re-run the materialize
+# on this branch"*. There was no button. A remedy naming an action nobody can perform is #842's
+# `lockfile-sync` hole one fabric over, and the heal tail it left was the interval between merged
+# `renovate/*` pull requests: mean 27-84h, p90 70-265h, **max 167-312h (7-13 days)**.
+#
+# SO THE `materialize` JOB NOW HAS TWO ARMS, and `github.event_name` is the ONLY thing that selects
+# between them. The dispatch arm is UNCONDITIONAL — see the `if:` on the job, where the reason is
+# spelled out, because a conditional dispatch arm is the #1815 fail-open in the one place an operator
+# would never look for it.
+#
+# WHAT IT MAY WRITE, WHICH IS THE WHOLE OF THE DESIGN:
+#
+#   dispatched on the repository's DEFAULT branch   ->  a NEW branch `kit-materialize/repair-<run>`,
+#                                                       never the default branch itself
+#   dispatched on ANY OTHER branch                  ->  that branch, in place
+#   `pull_request` on a `renovate/*` same-repo head ->  that head, in place (UNCHANGED)
+#
+# `main` IS NOT REFUSED BECAUSE IT IS PROTECTED. It is refused because a materialize WRITES, so it is
+# a repair and not a check — and `kit / coordination-kit` is a REQUIRED CONTEXT precisely so that the
+# kit's bytes are graded BEFORE they reach `main`. A bot that pushed the repair straight to `main`
+# would bypass the very gate whose red caused the repair, and land ungraded bytes into the branch
+# every other receiver's contexts have already passed on. Routing the repair through a branch is not
+# a concession to branch protection; it is the gate continuing to do its job. (It is also the only
+# arm this workflow can PROVE it may take: the App installation token holds `contents: write` — #1713,
+# and lockfile-sync.yml's preflight asserts exactly that and nothing more — which is enough to CREATE
+# a ref and push to it, and says nothing about `pull_requests: write`. So this workflow pushes a branch
+# and prints the compare URL rather than opening the pull request itself. Per #266 an unasserted scope
+# is not a scope.)
+#
+# AND IT NEVER WRITES A REF IT DID NOT CREATE, on the repair arm: if `kit-materialize/repair-<run>`
+# somehow already exists on the remote, that is a REFUSAL, not a force-push. `github.run_id` is unique
+# per run, so this cannot fire on any ordinary run — it is there so that the one rule the repair arm
+# has ("the default branch is never touched") cannot be defeated by a collision.
+#
+# #1533 IS UNTOUCHED BY THIS. The repair branch is `kit-materialize/repair-*`, never `renovate/*`, so
+# Renovate never sees a foreign-authored commit on a branch it owns and the `gitIgnoredAuthors` trap
+# below is not reached from this arm at all.
+#
+# WHO CAN PRESS IT: `workflow_dispatch` requires WRITE access to the receiver. A fork contributor has
+# no path here and must run the materialize locally — which is why `coordination-coherence.yml`'s
+# DRIFT summary now names BOTH routes and says which reader each one is for, rather than naming one
+# that most readers cannot take (#1845 AC5).
+#
+# THE REPORTER JOBS ARE `pull_request`-ONLY, AND THAT IS NOT A #1508 GATE. `bump-shape` reports on a
+# pull request's DIFF; a dispatched run has no pull request, so the probe would refuse (correctly, and
+# loudly) and every on-demand repair would come back RED on two contexts that had nothing to say. An
+# operator who learns to ignore red on the repair button is the failure this avoids. The `if:` used is
+# `github.event_name == 'pull_request'`, which is TRUE ON EVERY PULL REQUEST WITHOUT EXCEPTION — so the
+# check run is still created on 100% of them and the #1508 deadlock remains impossible. That property
+# was previously asserted STRUCTURALLY ("the job carries no `if:`"); `tests/kit-bump-shape/run.sh` now
+# asserts it SEMANTICALLY instead, by evaluating the real expression against every pull-request shape,
+# which is a strict superset of the old leg and is mutation-proven in both directions.
 
 name: kit-materialize
 
@@ -165,16 +225,33 @@ permissions:
 
 jobs:
   # ── the reporter (.github#1713) ────────────────────────────────────────────────────────────────
-  # UNGATED, and no `paths:` anywhere on the route: GitHub creates NO check run for a job a filter
-  # excluded, and branch protection cannot tell that from "has not reported yet" (#1508). A context
-  # anyone might one day require must therefore report on EVERY pull request, including the ones this
-  # has nothing to say about — which it answers with an ABSTENTION, never a pass (#266).
+  # NO `paths:` ANYWHERE ON THE ROUTE, and an `if:` that is TRUE ON EVERY PULL REQUEST: GitHub creates
+  # NO check run for a job a filter excluded, and branch protection cannot tell that from "has not
+  # reported yet" (#1508). A context anyone might one day require must therefore report on EVERY pull
+  # request, including the ones this has nothing to say about — which it answers with an ABSTENTION,
+  # never a pass (#266).
+  #
+  # `github.event_name == 'pull_request'` DOES NOT NARROW THAT (.github#1845). It is a tautology on
+  # the event this job reports about, so the check run is still created on 100% of pull requests and
+  # the #1508 deadlock stays impossible. What it excludes is the on-demand `workflow_dispatch` run the
+  # `materialize` job below now serves, where there IS no pull request: this job's probe would refuse
+  # for want of a base/head — the right answer to the wrong question — and every operator-triggered
+  # repair would come back red on two contexts that had nothing to say about it. Branch protection is
+  # never waiting on a dispatched run, so nothing can deadlock on the skip; the only thing it changes
+  # is that a repair run is not spuriously red.
+  #
+  # THIS IS THE ONE `if:` ON THIS JOB AND IT MUST STAY A TAUTOLOGY OVER `pull_request`. Narrowing it
+  # by head ref, base branch, author, label or paths reintroduces #1508 exactly. That is asserted
+  # SEMANTICALLY rather than structurally — `tests/kit-bump-shape/run.sh` evaluates this real
+  # expression against every pull-request shape the fixture can build and fails if ANY of them skips —
+  # which is a strict superset of the "carries no `if:`" leg it replaced, and is mutation-proven.
   #
   # It mints no App token and reads no secret, deliberately. The `materialize` job below needs one
-  # because it PUSHES; this one only reads, and an ungated job that runs on any pull request — a fork
-  # head included — must not be the place a credential is handled.
+  # because it PUSHES; this one only reads, and a job that runs on any pull request — a fork head
+  # included — must not be the place a credential is handled.
   bump-shape:
     name: kit-bump-shape
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # THE VERDICT, HANDED TO `bump-mechanical` BELOW SO THE TWO CONTEXTS CANNOT DISAGREE (#1815).
@@ -498,10 +575,16 @@ jobs:
   # stops Renovate's automerge, because Renovate polls the branch's COMBINED status and not the
   # required subset — so #1587 can enforce the decision with nothing armed at all, and arming buys
   # branch protection as a second enforcer at the price of making class 4 need an admin.
+  # `github.event_name == 'pull_request'` IS CARRIED HERE FOR THE SAME REASON AND WITH THE SAME
+  # PROPERTY (.github#1845): it is a tautology on the event this context reports about, so the check
+  # run is still created on 100% of pull requests, and it stops a dispatched repair run from reporting
+  # `REFUSED — kit-bump-shape published no verdict` about a pull request that does not exist. It is
+  # ANDed with `!cancelled()` rather than replacing it — dropping `!cancelled()` is still the
+  # inversion described above, and the fixture drives both terms separately.
   bump-mechanical:
     name: kit-bump-mechanical
     needs: bump-shape
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -593,15 +676,92 @@ jobs:
     name: Materialize the kit from its pin
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # BOT BRANCHES THAT MOVE THE FS.GG.Kit PIN WITHOUT RE-MATERIALIZING, same-repo only (never fork
-    # heads — a fork push would 403, and we never auto-commit to an untrusted head). Renovate is the
-    # only bot that edits the receiver's central <PackageVersion>; it is the byte-copy sync PR's
-    # replacement, so the branch prefix is `renovate/`. Evaluated in the caller's event context.
-    # Non-kit renovate/* PRs are harmless: the materialize is idempotent (0 written -> no diff -> no push).
+    # TWO ARMS, SELECTED BY `github.event_name` AND BY NOTHING ELSE.
+    #
+    # ARM 1 — `pull_request`, UNCHANGED. Bot branches that move the FS.GG.Kit pin without
+    # re-materializing, same-repo only (never fork heads — a fork push would 403, and we never
+    # auto-commit to an untrusted head). Renovate is the only bot that edits the receiver's central
+    # <PackageVersion>; it is the byte-copy sync PR's replacement, so the branch prefix is `renovate/`.
+    # Evaluated in the caller's event context. Non-kit renovate/* PRs are harmless: the materialize is
+    # idempotent (0 written -> no diff -> no push).
+    #
+    # ARM 2 — `workflow_dispatch`, AND IT IS UNCONDITIONAL. THAT IS THE POINT (.github#1845, #1815).
+    # A skipped job reports `conclusion: skipped`, which branch protection counts as SATISFIED and
+    # which a human reads as a tick. So the ONE thing a repair button must never do is skip: an
+    # operator who followed the DRIFT summary, pressed Run workflow, and got a green run in which this
+    # job silently did nothing would be strictly worse off than with no button at all — they would
+    # believe the repair had happened. Every refusal on this arm is therefore made INSIDE the job,
+    # where it is an `exit 1` that says why, and never by this expression. If you are tempted to add
+    # `&& <anything>` to the dispatch term, that is the mutation `tests/kit-bump-shape/run.sh` exists
+    # to catch, and it will.
+    #
+    # `github.event_name == 'pull_request' &&` is spelled on arm 1 for precision, not for safety:
+    # `pull_request_target` also populates `github.event.pull_request`, and no receiver should be able
+    # to reach an App-token push from that event by adding a trigger. The `plan` step below refuses
+    # any event that is neither, so loosening this expression cannot open that door in silence either.
     if: >-
-      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'workflow_dispatch' ||
+      ( github.event_name == 'pull_request' &&
+        startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+        github.event.pull_request.head.repo.full_name == github.repository )
     steps:
+      # WHAT THIS RUN IS ALLOWED TO WRITE, DECIDED BEFORE A CREDENTIAL IS MINTED AND IN ONE PLACE.
+      #
+      # The whole `main` decision is the four lines under `workflow_dispatch)` below: if the dispatched
+      # ref IS the repository's default branch, the push target is a NEW branch and the default branch
+      # is not written. See the file header for why that is the gate doing its job rather than a
+      # concession to branch protection.
+      #
+      # `github.event.repository.default_branch` is read from the event payload — no API call, no
+      # extra scope. An EMPTY value is a refusal and never a guess: `main` is not hardcoded anywhere
+      # here, because a receiver whose default branch were something else would then have this job
+      # push straight to it while believing it had not (#266).
+      - name: Decide what this run may write
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          DISPATCH_REF: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          refuse() {
+            { echo "### kit-materialize: REFUSED — nothing was materialized and nothing was written"; echo
+              printf '%s\n' "$1"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-materialize: $1" >&2
+            exit 1
+          }
+          case "$EVENT" in
+            pull_request)
+              [ -n "$PR_HEAD" ] || refuse "this is a \`pull_request\` run with no head ref, so there is no branch to materialize onto."
+              printf 'checkout-ref=%s\n' "$PR_HEAD"  >> "$GITHUB_OUTPUT"
+              printf 'push-target=%s\n'  "$PR_HEAD"  >> "$GITHUB_OUTPUT"
+              printf 'in-place=true\n'               >> "$GITHUB_OUTPUT"
+              echo "pull_request arm: materializing onto the bump branch \`$PR_HEAD\` in place."
+              ;;
+            workflow_dispatch)
+              [ -n "$DISPATCH_REF" ] || refuse "this dispatched run names no ref, so there is nothing to check out."
+              [ -n "$DEFAULT_BRANCH" ] || refuse "the event payload carries no \`repository.default_branch\`, so this job cannot tell whether \`$DISPATCH_REF\` IS the default branch. It refuses rather than assuming it is not — assuming would push a repair straight to the branch this job must never write (.github#1845, #266)."
+              printf 'checkout-ref=%s\n' "$DISPATCH_REF" >> "$GITHUB_OUTPUT"
+              if [ "$DISPATCH_REF" = "$DEFAULT_BRANCH" ]; then
+                printf 'push-target=kit-materialize/repair-%s\n' "$RUN_ID" >> "$GITHUB_OUTPUT"
+                printf 'in-place=false\n' >> "$GITHUB_OUTPUT"
+                echo "workflow_dispatch arm on the DEFAULT branch \`$DISPATCH_REF\`: any repair goes to a new branch, and \`$DISPATCH_REF\` is not written."
+              else
+                printf 'push-target=%s\n' "$DISPATCH_REF" >> "$GITHUB_OUTPUT"
+                printf 'in-place=true\n' >> "$GITHUB_OUTPUT"
+                echo "workflow_dispatch arm on \`$DISPATCH_REF\` (not the default branch, which is \`$DEFAULT_BRANCH\`): materializing in place."
+              fi
+              ;;
+            *)
+              # UNREACHABLE THROUGH THE `if:` ABOVE, AND HERE ANYWAY. This is the arm that makes
+              # loosening that expression a loud failure instead of a silent App-token push from an
+              # event nobody reviewed — `pull_request_target` above all, which carries a
+              # `github.event.pull_request` and would otherwise walk straight into arm 1's shape.
+              refuse "this workflow was reached from a \`$EVENT\` event. It materializes and PUSHES with an App installation token, and the only two events it will do that from are \`pull_request\` (a same-repo \`renovate/*\` head) and \`workflow_dispatch\`. Refusing." ;;
+          esac
+
       - name: Mint App installation token (contents:write on this repo)
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -609,10 +769,10 @@ jobs:
           app-id: ${{ secrets.app-id }}
           private-key: ${{ secrets.app-private-key }}
 
-      - name: Checkout PR branch
+      - name: Check out the ref this run materializes
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.plan.outputs.checkout-ref }}
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
@@ -633,6 +793,12 @@ jobs:
           dotnet build "$RECEIVER_PROJECT" -t:FsggKitMaterialize -v minimal
 
       - name: Commit and push if the kit changed
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_PLACE: ${{ steps.plan.outputs.in-place }}
+          PUSH_TARGET: ${{ steps.plan.outputs.push-target }}
+          CHECKOUT_REF: ${{ steps.plan.outputs.checkout-ref }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
           # The materialize writes ONLY managed kit files; the receiver project's obj/ and bin/ are
@@ -640,6 +806,21 @@ jobs:
           # nothing drifted (a non-kit renovate PR, or the pin already matched), there is no commit.
           if [ -z "$(git status --porcelain)" ]; then
             echo "Kit already matches the pin — nothing to materialize."
+            # ON THE ON-DEMAND ARM THIS IS AN ANSWER, NOT A NO-OP, and it has to say so. An operator
+            # got here because `kit / coordination-kit` was red and its summary sent them; "nothing to
+            # repair" tells them the drift is not the committed kit against its pin — which is a real
+            # finding about their tree, and the opposite of "I repaired it" (#266).
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              { echo "### kit-materialize: NOTHING TO REPAIR on \`$CHECKOUT_REF\`"; echo
+                echo "The materialize ran and wrote no file: the committed kit on \`$CHECKOUT_REF\`"
+                echo "already matches the \`FS.GG.Kit\` version this repository pins. **No commit was"
+                echo "made and no branch was written.**"; echo
+                echo "This is not \"the repair succeeded\" — it is \"there was nothing here to repair\"."
+                echo "If \`kit / coordination-kit\` is red, re-read its annotations: an INCONCLUSIVE"
+                echo "verdict (a feed outage, or a pin the feed does not serve) is not drift, and a"
+                echo "\`DRIFT\` on a branch other than this one is not fixed from here."
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
             exit 0
           fi
           # The App pushed this branch, so the App authors the commit. GitHub links a bot commit to its
@@ -665,8 +846,52 @@ jobs:
           # Note this is NOT a fight with Renovate: once ignored, Renovate force-pushes the branch on
           # update, this job re-runs on the new head, and its second pass materializes 0 files -> no diff
           # -> no commit. The loop is the designed one and it terminates.
+          #
+          # ON THE REPAIR ARM THIS PARAGRAPH IS NOT REACHED IN THE SENSE THAT MATTERS: the branch is
+          # `kit-materialize/repair-*`, never `renovate/*`, so Renovate never sees a foreign-authored
+          # commit on a branch it owns and cannot mark anything abandoned. The identity is kept
+          # identical anyway — one bot, one author, one address to keep in step with default.json.
           git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git add -A
-          git commit -m 'chore: materialize FS.GG.Kit (dotnet build -t:FsggKitMaterialize)'
-          git push
+          if [ "$IN_PLACE" = "true" ]; then
+            git commit -m 'chore: materialize FS.GG.Kit (dotnet build -t:FsggKitMaterialize)'
+            git push
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              { echo "### kit-materialize: repaired \`$CHECKOUT_REF\` in place"; echo
+                echo "\`$CHECKOUT_REF\` is not this repository's default branch, so the refreshed kit"
+                echo "was committed and pushed straight to it. \`kit / coordination-kit\` re-runs on the"
+                echo "new head; that run, not this one, is the verdict on the repair."
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+          # ── THE REPAIR ARM: the default branch is never written (.github#1845) ──────────────────
+          # `--exit-code` is the whole guard: this run pushes ONLY to a ref it created. `run_id` is
+          # unique per run so a collision is not something an ordinary run can reach — it is here so
+          # that "the default branch is not written" cannot be defeated by one, and so that a
+          # collision is a refusal rather than a force-push over somebody's branch.
+          if git ls-remote --exit-code --heads origin "$PUSH_TARGET" >/dev/null 2>&1; then
+            { echo "### kit-materialize: REFUSED — the repair branch already exists"; echo
+              echo "\`$PUSH_TARGET\` is already a branch on this remote. This job pushes only to a ref"
+              echo "it creates, so it will not write over one. Delete that branch, or re-run this"
+              echo "workflow (the branch name carries the run id, so a fresh run picks a fresh name)."
+              echo "**\`$CHECKOUT_REF\` was not written.**"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-materialize: refusing to write the existing branch $PUSH_TARGET; $CHECKOUT_REF was not written." >&2
+            exit 1
+          fi
+          git commit -m "chore: materialize FS.GG.Kit on demand (repair for ${CHECKOUT_REF})"
+          git push origin "HEAD:refs/heads/$PUSH_TARGET"
+          { echo "### kit-materialize: REPAIR READY ON A BRANCH — \`$CHECKOUT_REF\` WAS NOT WRITTEN"; echo
+            echo "\`$CHECKOUT_REF\` is this repository's **default branch**. A materialize WRITES, so it"
+            echo "is a repair and not a check, and \`kit / coordination-kit\` is a required context"
+            echo "precisely so the kit's bytes are graded *before* they reach it. Pushing the repair"
+            echo "straight there would bypass the gate whose red sent you here, so the repair is on a"
+            echo "branch instead and the gate grades it on the way back in (.github#1845)."; echo
+            echo "**Open the pull request:**"; echo
+            echo "  $REPO_URL/compare/${CHECKOUT_REF}...${PUSH_TARGET}?expand=1"; echo
+            echo "Branch: \`$PUSH_TARGET\` — the refreshed kit, committed by this workflow, and nothing"
+            echo "else. If \`kit / coordination-kit\` is green on that pull request, the drift is gone."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Repair pushed to $PUSH_TARGET; $CHECKOUT_REF was not written."
