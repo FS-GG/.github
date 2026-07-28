@@ -285,8 +285,15 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              and land it (#697/#720); reports the preconditions it checked,
                                              then transfers the claim
 
-  add    <ref>                               put an issue ON the board, idempotently (#861) — the metered
-                                             verb the GraphQL monopoly rule names (#586); prints the item id
+  add    <ref> [--status S]                  put an issue ON the board, idempotently (#861) — the metered
+                                             verb the GraphQL monopoly rule names (#586); prints the item id.
+                                             Status DEFAULTS TO `Backlog` (#1823): a row with no Status is
+                                             invisible to EVERY scheduler, and 14 were filed that way in one
+                                             day before anything said so. Backlog is visible to triage and
+                                             NOT startable — promotion to Ready stays a deliberate act. The
+                                             default only ever fills an EMPTY column: a row that already
+                                             carries a Status keeps it, so re-running `add` cannot overwrite
+                                             one somebody set. `--status S` names the column instead
   set-field <ref> <field> <value>            write one board field (empty value clears)
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   flush  [--dry-run]                         REPLAY the board writes an exhausted budget queued — the verb
@@ -605,7 +612,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FSnapshot -> Only [ Decide; LanesView ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
-        | FStatus -> Only [ Ready; Release ]
+        //
+        // `Add` joined it for .github#1823. `add` DEFAULTS the column to `Backlog`, and "when the caller
+        // gives none" is only a meaningful clause if there is a way to give one — so the flag is the
+        // other half of that default, not decoration. Scoped here rather than left `Global` for #867's
+        // own reason: a `--status` accepted and ignored is a green exit telling the caller something
+        // happened which did not.
+        | FStatus -> Only [ Ready; Release; Add ]
 
         | FMint -> Only [ WhoAmI ]
         | FLocal -> Only [ Who ]
