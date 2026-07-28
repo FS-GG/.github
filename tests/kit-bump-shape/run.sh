@@ -845,6 +845,103 @@ else
   bad "  these run even when no pin moved:$unconditional — the SDK/restore cost is no longer paid only by bumps"
 fi
 
+
+# ---------------------------------------------------------------------------------------------
+# THE OUTPUT-INJECTION GUARD, DRIVEN BOTH WAYS (.github#1797)
+#
+# WHY THESE LEGS EXIST. The guard that stops a pull-request-controlled `folder` forging extra
+# `key=value` lines into `$GITHUB_OUTPUT` was written as:
+#
+#     case "$version$folder" in *"$(printf '\n')"*|*"$(printf '\r')"*) … exit 1 ;; esac
+#
+# Command substitution STRIPS TRAILING NEWLINES, so `$(printf '\n')` is the EMPTY STRING and that
+# arm is `*""*` — i.e. `*`. It matched everything. From 12:30Z to 15:0xZ on 2026-07-28 the guard
+# refused EVERY bump PR in EVERY receiver: a check that cannot PASS, shipped inside the pull
+# request that was hardening this very block (#1772/#1780). Three sibling 0.18.0 bump branches
+# were red simultaneously (FS.GG.Templates#328, and Audio/Net runs 30369036247 / 30369118964).
+#
+# WHAT THE LEGS HAVE TO COVER, and it is the lesson rather than the line: the original had only
+# ever been exercised with hostile input, where "refuse" is the right answer and a `*` pattern is
+# indistinguishable from a correct one. So BOTH directions are asserted here — refuse the newline
+# AND the lone `\r`, and ACCEPT a clean pair. A leg set that omitted the accept case would
+# reproduce the defect in the test, which is exactly how this shipped.
+#
+# THE GUARD IS EXTRACTED FROM THE WORKFLOW, NEVER RESTATED (ADR-0058). A copy of the `case` pasted
+# here would pass forever while the workflow said something else — the #1059 class, in the fixture
+# written to catch it. `WF` is already resolved above.
+# STDLIB ONLY, NO PyYAML — this fixture's job installs neither PyYAML nor dotnet, which is the
+# point of it ("no network, no dotnet"). An earlier draft of these legs used `yaml.safe_load` and
+# died on `ModuleNotFoundError` in CI. It FAILED rather than passing, because the extraction guard
+# below treats "I could not read the guard" as a finding and not a verdict (#266) — which is the
+# behaviour these legs are supposed to have, demonstrated on themselves.
+echo
+guard="$(python3 - "$WF" <<'PY'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'^([ \t]*)case "\$version\$folder" in\n.*?^\1esac$', src, re.S | re.M)
+if not m:
+    sys.stderr.write("could not locate the version/folder case in the workflow\n"); sys.exit(1)
+indent = m.group(1)
+print("\n".join(l[len(indent):] if l.startswith(indent) else l
+                for l in m.group(0).splitlines()))
+PY
+)" || guard=""
+
+if [ -z "$guard" ]; then
+  bad "#1797: could not extract the version/folder shape guard from kit-materialize.yml — these legs did not run, and that is NOT a verdict about the guard"
+else
+  # drive <version> <folder> -> "refused" | "accepted"; runs the REAL extracted case under bash,
+  # which is what Actions runs a shell-less `run:` block as on ubuntu-latest.
+  drive() {
+    bash -c '
+      set -uo pipefail
+      version="$1"; folder="$2"
+      '"$guard"'
+      echo accepted
+    ' _ "$1" "$2" 2>/dev/null | tail -1
+  }
+
+  # (1) THE ACCEPT CASE — the leg whose absence let the bug ship. A real restored pair.
+  if [ "$(drive '0.18.0' '/home/runner/.nuget/packages/')" = "accepted" ]; then
+    ok "#1797: a clean single-line version + folder is ACCEPTED — the guard can PASS"
+  else
+    bad "#1797: the guard refuses a legitimate restored pair — every bump PR in all seven receivers is blocked (this is the 2026-07-28 defect)"
+  fi
+
+  # (2) …and it is not accepting because it never fires. A LITERAL newline in the folder — the
+  #     real attack: a fork's nuget.config can put `&#xA;` in globalPackagesFolder.
+  if [ "$(drive '0.18.0' "$(printf '/tmp/a\nkit-dir=/evil')")" != "accepted" ]; then
+    ok "#1797: a folder carrying a literal NEWLINE is REFUSED — \$GITHUB_OUTPUT cannot be forged"
+  else
+    bad "#1797: a multi-line folder was accepted — the guard cannot FIRE, and a fork can forge step outputs"
+  fi
+
+  # (3) The carriage return separately, because it is the arm that was NOT degenerate and a
+  #     "simplification" to `wc -l` (which counts newlines) would silently drop it.
+  if [ "$(drive '0.18.0' "$(printf '/tmp/a\rkit-dir=/evil')")" != "accepted" ]; then
+    ok "#1797: a lone CARRIAGE RETURN is REFUSED too — a newline-counting rewrite would miss this"
+  else
+    bad "#1797: a \\r-carrying folder was accepted — Actions treats CR as a line break in \$GITHUB_OUTPUT"
+  fi
+
+  # (4) The version side is guarded as well, not only the folder.
+  if [ "$(drive "$(printf '0.18.0\nkit-version=99')" '/home/runner/.nuget/packages/')" != "accepted" ]; then
+    ok "#1797: a multi-line VERSION is refused too — both halves of the concatenation are guarded"
+  else
+    bad "#1797: only the folder is guarded; a forged version reaches \$GITHUB_OUTPUT"
+  fi
+
+  # (5) THE REGRESSION LEG, and the one that names the defect rather than its symptom. The bug was
+  #     a pattern that DEGENERATES TO THE EMPTY STRING. Assert the guard does not spell it that
+  #     way, so a revert to `"$(printf '\n')"` reds here with the reason attached even if somebody
+  #     also weakened legs (1)-(4).
+  if printf '%s' "$guard" | grep -q '\$(printf'; then
+    bad "#1797: the guard matches on a COMMAND SUBSTITUTION — \$(printf '\\n') strips the trailing newline and is the empty string, making the arm '*' and the check unable to pass" "$guard"
+  else
+    ok "#1797: the guard does not build its pattern with a command substitution — the construct that made it '*'"
+  fi
+fi
+
 echo
 echo "kit-bump-shape: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
