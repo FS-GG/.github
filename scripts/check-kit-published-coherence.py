@@ -187,6 +187,7 @@ Exit 0 = the newest published FS.GG.Kit carries the same coordination-kit bytes 
 from __future__ import annotations
 
 import argparse
+import http.client
 import io
 import json
 import os
@@ -195,6 +196,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -237,6 +239,9 @@ TAG_PREFIX = "kit/v"
 # the fallback for a local run. This is asserted AGAINST the nuspec rather than read FROM it: taking
 # the remote from the artifact would let a package published out of a fork redirect its own check.
 DEFAULT_REPOSITORY = "FS-GG/.github"
+# The forge whose refs the #1772 resolver reads. Asserted as part of the repository IDENTITY, because
+# a slug match alone accepts that slug on any host.
+FORGE_HOST = "github.com"
 _HEX40 = re.compile(r"\A[0-9a-f]{40}\Z")
 # The #1772 resolver accepts a bare `x.y.z` and nothing else, so that is the tag grammar this arm
 # matches. A `kit/v*` ref outside it (`kit/vnext`, `kit/v1.2`) can never be resolved from a pin and is
@@ -274,6 +279,14 @@ def _fetch_nuspec(version: str) -> bytes:
         raise GateError(
             f"nuget.org unreachable while reading the {PACKAGE} {version} .nuspec: {e.reason}"
         ) from e
+    except (TimeoutError, OSError, http.client.HTTPException) as e:
+        # `resp.read()` raises these DIRECTLY — a socket timeout or a truncated body is neither an
+        # HTTPError nor a URLError, so without this clause the most likely failure of 23 sequential
+        # fetches on a flaky feed escapes as a traceback instead of the module's stated GateError.
+        # Still red either way; this makes it red with a reason.
+        raise GateError(
+            f"the {PACKAGE} {version} .nuspec download from nuget.org failed mid-read: {e!r}"
+        ) from e
 
 
 def nuspec_repository_commit(version: str, nuspec: bytes, *, repository: str) -> str:
@@ -306,14 +319,34 @@ def nuspec_repository_commit(version: str, nuspec: bytes, *, repository: str) ->
             f"(commit={element.get('commit')!r}). SourceLink writes this at pack time; a package "
             f"without it cannot anchor its own tag."
         )
-    url = (element.get("url") or "").strip()
-    normalized = url.rstrip("/").removesuffix(".git").lower()
-    if not normalized.endswith("/" + repository.lower()):
+    if (origin := _repository_origin(element.get("url") or "")) != (FORGE_HOST, repository.lower()):
         raise GateError(
-            f"the published {PACKAGE} {version} .nuspec was packed from {url!r}, not {repository} — "
-            f"its commit names a history whose tags are not the ones the fleet resolves against."
+            f"the published {PACKAGE} {version} .nuspec was packed from "
+            f"{element.get('url')!r} (host {origin[0]!r}, repository {origin[1]!r}), not "
+            f"{FORGE_HOST}/{repository} — its commit names a history whose tags are not the ones "
+            f"the fleet resolves against."
         )
     return commit
+
+
+def _repository_origin(url: str) -> tuple[str, str]:
+    """`(host, owner/name)` for a nuspec repository url. Compared WHOLE, never by suffix.
+
+    A bare `endswith("/" + slug)` test was the first draft and it is not an identity check: it
+    accepts `https://evil.example.com/FS-GG/.github` (any host) and
+    `https://github.com/attacker/mirror#https://github.com/FS-GG/.github` (the real slug in a
+    fragment). Both would let a package assert a commit against tags it has nothing to do with,
+    which is the one thing this function exists to prevent. Lowercasing happens BEFORE the `.git`
+    strip so a `.GIT` suffix is not left behind to fail a real url.
+    """
+    lowered = url.strip().lower().rstrip("/")
+    if lowered.endswith(".git"):
+        lowered = lowered[: -len(".git")]
+    if scp := re.match(r"\Agit@([^:/]+):(.+)\Z", lowered):  # git@github.com:owner/name
+        return scp.group(1), scp.group(2).strip("/")
+    split = urllib.parse.urlsplit(lowered)
+    host = split.netloc.rsplit("@", 1)[-1].split(":", 1)[0]  # drop userinfo and port
+    return host, split.path.strip("/")
 
 
 def remote_kit_tags(remote: str) -> dict[str, str]:
@@ -393,9 +426,29 @@ def run_tag_arm(
             if len(parts) != 2:
                 raise GateError(f"canned published line {lineno} is not `<version>\\t<commit>`: {raw!r}")
             version, commit = parts[0].strip(), parts[1].strip().lower()
-            # Constrained EXACTLY as the live nuspec read is, and refused with the same words. A
-            # canned input the gate validates more loosely than its real subject is a fixture that
-            # can green a shape production would red.
+            # Constrained EXACTLY as the live read is, and refused with the same words. A canned
+            # input the gate validates more loosely than its real subject is a fixture that can green
+            # a shape production would red — so every narrowing the live branch performs below is
+            # performed here too: the prerelease filter, the version parse, and uniqueness.
+            # Parsed HERE, before anything else looks at it, and NOT at report time:
+            # `sorted(..., key=parse_version)` inside the failure report would raise while rendering
+            # a real verdict and throw the diagnosis away. This must also come before the prerelease
+            # filter, which parses the version itself and would otherwise raise first with a message
+            # that does not say which line is wrong.
+            try:
+                parse_version(version)
+            except GateError as e:
+                raise GateError(
+                    f"canned published line {lineno} names {version!r}, which is not a NuGet "
+                    f"version: {e}"
+                ) from e
+            if is_prerelease(version):
+                continue
+            if version in bindings:
+                raise GateError(
+                    f"canned published line {lineno} repeats version {version!r}; the feed's "
+                    f"versions are unique, so a duplicate would silently overwrite its own subject."
+                )
             if not _HEX40.match(commit):
                 raise GateError(
                     f"the published {PACKAGE} {version} .nuspec <repository> names no 40-hex commit "
@@ -415,6 +468,18 @@ def run_tag_arm(
             bindings[version] = nuspec_repository_commit(
                 version, _fetch_nuspec(version), repository=repository
             )
+
+    # AN EMPTY SUBJECT IS NOT A PASS, and this must be said ONCE, below both branches. Stating it only
+    # inside the live branch is exactly how the first draft of this arm shipped a fail-open: an empty
+    # canned list produced zero comparisons and then printed "ok: all 0 stable version(s) ... has not
+    # moved since publication" — a check reporting a measurement it never took (#266). Review caught
+    # it; the leg that keeps it caught is `an empty published set is unresolved, not a pass`.
+    if not bindings:
+        raise GateError(
+            f"this arm resolved ZERO published {PACKAGE} versions to check tags for. That is not "
+            f"'every tag is fine' — it is a subject that could not be read, and the two must never "
+            f"share an exit code."
+        )
 
     tags = parse_ls_remote_tags(read_canned(canned_tags, "ls-remote tag list")) if canned_tags \
         else remote_kit_tags(remote)

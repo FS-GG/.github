@@ -159,5 +159,12 @@ jobs:
       # refs/tags/kit/v*, rules: deletion + non_fast_forward + update, no bypass actors) shuts the
       # hole at the source; this is the detection that proves the ruleset is still there and still
       # doing its job, because a ruleset is itself a mutable setting.
+      #
+      # `if: ${{ !cancelled() }}` so a red from the staleness step above does not ABORT this one.
+      # The two subjects are independent — a stale kit and a moved tag are different defects with
+      # different remedies — and a stale kit is exactly the state most likely to coincide with
+      # someone doing tag surgery. Without this, the first red masks the second for as long as it
+      # stands. It is NOT `continue-on-error`: this step's own failure still reds the job.
       - name: Do the kit/v* tags still resolve to the commits their packages were packed from?
+        if: ${{ !cancelled() }}
         run: python scripts/check-kit-published-coherence.py --tag-arm

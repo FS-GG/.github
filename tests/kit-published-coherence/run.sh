@@ -459,6 +459,17 @@ must_pass "every published version's tag resolves to its artifact's commit" "has
 tagarm
 must_pass "an annotated tag is compared by its PEELED commit, not its tag object" "has not moved since publication"
 
+# ...and in the REVERSED emission order. The row above is git's real order, so on its own it cannot
+# tell "peeled always wins" apart from "the last row wins" — a single-dict rewrite would pass it.
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.17.0^{}\n' "$C2"
+  printf '%s\trefs/tags/kit/v0.17.0\n' "$C3"
+} > "$TAGREFS"
+tagarm
+must_pass "the peeled commit wins whichever order ls-remote emits the two rows in" \
+  "has not moved since publication"
+
 # HOLE 2 — measured on the live fleet as 0.1.0 and 0.4.0: published, no tag. A receiver pinned there
 # cannot have its rule resolved at all, so this is the leg that decides whether old pins are gradable.
 {
@@ -545,6 +556,41 @@ tagarm
 must_fail "a published version whose nuspec binds no commit is unresolved" "cannot anchor its own tag"
 
 printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+
+# THE FAIL-OPEN REVIEW CAUGHT IN THIS PULL REQUEST'S FIRST DRAFT. "an empty subject is not a pass"
+# was stated only inside the LIVE branch, so an empty canned list produced zero comparisons and then
+# printed `ok: all 0 stable version(s) ... has not moved since publication` — a check reporting a
+# measurement it never took, at exit 0. Both branches now share one guard; these are its legs.
+: > "$TAGPUB"
+tagarm
+must_fail "an empty published set is unresolved, not a pass" "resolved ZERO published"
+
+printf '   \n\n' > "$TAGPUB"
+tagarm
+must_fail "a whitespace-only published set is unresolved, not a pass" "resolved ZERO published"
+
+# The canned branch must NARROW its subject exactly as the live branch does, or a fixture can encode
+# a subject production could never produce, and legs start proving things about nothing.
+printf '0.16.0-preview.1\t%s\n' "$C1" > "$TAGPUB"
+tagarm
+must_fail "a prerelease is filtered from the canned subject, exactly as it is from the feed" \
+  "resolved ZERO published"
+
+{
+  printf '0.16.0\t%s\n' "$C1"
+  printf '0.16.0\t%s\n' "$C2"
+} > "$TAGPUB"
+tagarm
+must_fail "a duplicate canned version is refused, not silently last-wins" "repeats version"
+
+# Parsed at READ time on purpose: `sorted(..., key=parse_version)` inside the failure report would
+# raise while rendering a real verdict and throw the diagnosis away.
+printf 'notaversion\t%s\n' "$C1" > "$TAGPUB"
+tagarm
+must_fail "a canned version that is not a NuGet version is refused at read time" \
+  "which is not a NuGet version"
+
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
 tagarm --tag-arm-tags "$WORK/no-such-refs.txt"
 must_fail "an unreadable tag list is unresolved" "cannot read the canned ls-remote tag list"
 
@@ -624,16 +670,35 @@ refuses(
 # against, so its commit cannot anchor a FS-GG/.github tag.
 refuses(
     f'<repository type="git" url="https://github.com/someone/.github" commit="{COMMIT}" />',
-    "not FS-GG/.github",
+    "not github.com/FS-GG/.github",
     "a package packed from another repository",
 )
-# The prefix trap, the same one touched_kit_sources() spells out: a suffix match without the
-# separator would accept `.../evil-FS-GG/.github`.
-refuses(
-    f'<repository type="git" url="https://github.com/x/evil-FS-GG/.github" commit="{COMMIT}" />',
-    "not FS-GG/.github",
-    "a repository whose slug merely ends with the real one",
-)
+# THE THREE WAYS A SUFFIX MATCH IS NOT AN IDENTITY CHECK. The first draft tested
+# `endswith("/" + slug)`; review demonstrated it accepting all three of these. The comparison is
+# now (host, owner/name) compared WHOLE.
+for hostile, why in [
+    # the prefix trap, the same one touched_kit_sources() spells out
+    ("https://github.com/x/evil-FS-GG/.github", "a slug that merely ENDS WITH the real one"),
+    # the real slug, on someone else's server
+    ("https://evil.example.com/FS-GG/.github", "the real slug on a FOREIGN HOST"),
+    # the real slug hidden in a fragment, so the url ends with it while resolving elsewhere
+    ("https://github.com/attacker/mirror#https://github.com/FS-GG/.github",
+     "the real slug buried in a URL FRAGMENT"),
+]:
+    refuses(
+        f'<repository type="git" url="{hostile}" commit="{COMMIT}" />',
+        "not github.com/FS-GG/.github",
+        why,
+    )
+# ...while the forms a REAL publish can legitimately produce are still accepted. Lowercasing has to
+# happen before the `.git` strip, or a `.GIT` suffix survives and reds a genuine package.
+for benign in (
+    "https://github.com/FS-GG/.github",
+    "HTTPS://GitHub.com/FS-GG/.github.GIT",
+    "git@github.com:FS-GG/.github.git",
+):
+    ok_url = nuspec(f'<repository type="git" url="{benign}" commit="{COMMIT}" />')
+    assert gate.nuspec_repository_commit("0.17.0", ok_url, repository=REPO) == COMMIT, benign
 try:
     gate.nuspec_repository_commit("0.17.0", b"<package", repository=REPO)
 except gate.GateError as e:
@@ -649,6 +714,11 @@ fi
 
 # The canned inputs are LOCKED behind the same switch as every other arm's, and for the same reason:
 # each replaces a read of this arm's subject with an answer supplied on the command line.
+#
+# Each flag is tested ALONE, deliberately: supplying both would still pass if the lock's flag list
+# had lost one of them. And each assertion names THE FLAG, not just "Refusing to run" — that phrase
+# is shared with the misdirection refusal, and if the lock were ever removed these commands would
+# fall through to a live read whose DNS/timeout failure would otherwise read as the leg passing.
 for flag_pair in "--tag-arm-published=$TAGPUB" "--tag-arm-tags=$TAGREFS"; do
   flag="${flag_pair%%=*}"
   value="${flag_pair#*=}"
@@ -656,8 +726,23 @@ for flag_pair in "--tag-arm-published=$TAGPUB" "--tag-arm-tags=$TAGREFS"; do
   out="$(env -u FSGG_KIT_COHERENCE_FIXTURE_OK python3 "$GATE" --tag-arm "$flag" "$value" 2>&1)"
   rc=$?
   set -e
-  must_fail "$flag is refused without the fixture opt-in" "Refusing to run"
+  must_fail "$flag is refused without the fixture opt-in" \
+    "$flag read canned input and are NOT a coherence signal"
 done
+
+# The two lock-refusal branches the OTHER arms take. Neither was covered, and each is a distinct
+# message naming a distinct running arm.
+set +e
+out="$(python3 "$GATE" --tag-arm --changed-files "$CHANGED" 2>&1)"; rc=$?
+set -e
+must_fail "a pr-arm input on the tag arm is refused, not ignored" \
+  "are --pr-arm inputs and mean nothing to the tag arm"
+
+set +e
+out="$(python3 "$GATE" --pr-arm --tag-arm-tags "$TAGREFS" 2>&1)"; rc=$?
+set -e
+must_fail "a tag-arm input on the pr arm is refused, not ignored" \
+  "are --tag-arm inputs and mean nothing to the PR arm"
 
 set +e
 out="$(python3 "$GATE" --tag-arm-tags "$TAGREFS" --lock "$LOCK" --fixture-manifest "$CANON" \
@@ -666,16 +751,19 @@ set -e
 must_fail "a tag-arm input on the published arm is refused, not ignored" \
   "are --tag-arm inputs and mean nothing to the published-package arm"
 
+# Both refusals below use the phrase "different arms with different subjects", so each asserts the
+# PAIR it names as well — otherwise either leg would pass on the other's message.
 set +e
 out="$(python3 "$GATE" --pr-arm --tag-arm 2>&1)"; rc=$?
 set -e
-must_fail "the pr and tag arms refuse to run at once" "different arms with different subjects"
+must_fail "the pr and tag arms refuse to run at once" \
+  "--pr-arm and --tag-arm are different arms with different subjects"
 
 set +e
 out="$(python3 "$GATE" --tag-arm --fixture-manifest "$CANON" --canonical-manifest "$CANON" 2>&1)"; rc=$?
 set -e
 must_fail "the tag arm and the manifest fixture refuse to run at once" \
-  "different arms with different subjects"
+  "--tag-arm and the manifest fixture flags are different arms"
 
 # THE ARM MUST BE WIRED. A checker nothing runs is the .github#1606 shape, and this one's whole
 # purpose is to notice a change made OUTSIDE any pull request — so it belongs on the job whose
@@ -695,6 +783,14 @@ assert any("--tag-arm" in ln for ln in directives), (
 )
 assert not any("continue-on-error" in ln for ln in directives), (
     "the published job gained continue-on-error; a tag defect would report green"
+)
+# The tag arm must not be ABORTED by the staleness step above it. They are independent subjects with
+# independent remedies, and a stale kit is the state most likely to coincide with tag surgery.
+tag_step = re.search(r"(?ms)^      - name: Do the kit/v\* tags still resolve.*?\n(.*?)(?=^      - |\Z)", job)
+assert tag_step, "the tag-arm step is not where this assertion expects it"
+assert "!cancelled()" in tag_step.group(1), (
+    "the tag-arm step is not conditioned on !cancelled(), so a red from the staleness step above it "
+    "masks a moved tag for as long as the staleness stands"
 )
 PY
 then
