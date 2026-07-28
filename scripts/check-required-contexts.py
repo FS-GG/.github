@@ -26,7 +26,15 @@ neither side can see and no check asserted. See docs/coordination/reusable-workf
 WHAT IT ASSERTS. For the repo it is pointed at:
 
   every context in `branches/<branch>/protection`'s required status checks
-      is PRODUCIBLE — reported by some workflow in the working tree on EVERY pull request.
+      is PRODUCIBLE — reported by some workflow in the working tree on EVERY pull request,
+      and DURABLE   — every cross-repo `uses:` its producers cross tracks a ref this org has
+                      decided a required verdict may rest on (.github#1783; see the block on
+                      ACCEPTED_MOVING_REFS below, which IS that decision).
+
+The two are separate defects with separate repairs. A context that never reports deadlocks the repo
+at "Expected — waiting for status to be reported". A context that reports through a moving foreign
+ref merges, and then answers differently tomorrow on byte-identical content — which branch
+protection cannot defend against at all, because a green required check is not a durable statement.
 
 "Producible" means reported on EVERY pull request, and that definition is load-bearing (.github#1508).
 It is deliberately NOT the weaker "produced by some workflow that triggers on `pull_request`" this
@@ -89,6 +97,8 @@ HOW A CONTEXT IS DERIVED (this is GitHub's naming, and getting it wrong would ma
 EVERY ONE OF THESE IS AN ERROR, NOT A SKIP
   - A required context no `pull_request` workflow can produce      (the repo is deadlocked, or will be)
   - A required context produced only behind a `paths:` filter      (deadlocked for most PRs — #1508)
+  - A required context whose producer reaches its callee through a cross-repo `uses:` at a ref that is
+    neither a 40-hex commit nor an ACCEPTED_MOVING_REF                             (no verdict — #1783)
   - A required context whose producers are ALL filtered, in a combination whose joint coverage cannot
     be computed, or whose filter is written in a shape that cannot be read (both exit 3, no verdict)
   - A workflow, on either side, that will not parse
@@ -121,7 +131,9 @@ Usage:
   check-required-contexts.py --repo <owner/name> [--root <dir>] [--branch main]
                              [--protection <file>]   # a saved classic payload; skips that API call
                              [--rules <file>]        # a saved ruleset payload; skips that API call
-Exit: 0 = every required context is producible; 1 = at least one can never report; 2 = no verdict,
+Exit: 0 = every required context is producible AND durable; 1 = at least one can never report, or
+rests on a ref a required verdict may not rest on (both are findings about a required check, and the
+message says which); 2 = no verdict,
 RETRYABLE — the API could not be read (rate limit, outage); 3 = no verdict, PERMANENT — protection
 is unreadable for want of permission, a workflow will not parse, a callee is missing, or a matrix
 cannot be enumerated.
@@ -158,6 +170,29 @@ REMOTE_USES_RE = re.compile(
 )
 # `uses: ./.github/workflows/<file>` — a local one, always resolved against the working tree.
 LOCAL_USES_RE = re.compile(r"^\./\.github/workflows/(?P<file>[^/]+\.ya?ml)$")
+
+# A 40-hex commit. The only ref that is immutable by construction: a tag is not (.github#1784).
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+# THE DECISION OF .github#1783, IN THE FORM SOMETHING EXECUTES.
+#
+# ADR-0067 §2: a gate's verdict MUST be a pure function of (tree under test, pinned ref). A required
+# context produced through a cross-repo `uses:` at a MOVING ref is not that — the org measured the
+# cost as `FS.GG.SDD#724`, green on merged SHA 0376309 at 08:15Z and red on byte-identical content at
+# 08:21Z (.github#1584). Eleven required contexts across all seven receivers are produced that way
+# today, every one of them `@main`.
+#
+# #1783 DECIDED to accept `@main` for those calls rather than pin them, and the reasoning — including
+# why pinning `uses:` would NOT by itself have discharged §2 — is in
+# docs/coordination/reusable-workflow-contract.md, "Reusable-workflow calls are NOT pinned". Read it
+# before widening this set: adding a ref here is re-deciding that, and it is a decision, not a fix
+# for a red gate.
+#
+# What the decision does NOT accept is any OTHER moving ref. `@main` is a tip the hub's own required
+# checks have passed; `@some-branch`, `@v1` or a fork's ref is a required verdict sourced from a tree
+# nobody gated, and nothing detected that before this. A 40-hex commit is accepted because it is the
+# property §2 actually asks for.
+ACCEPTED_MOVING_REFS = frozenset({"main"})
 
 GH_TRIES = int(os.environ.get("FSGG_CONTEXT_TRIES", "3"))
 GH_RETRY_DELAY = float(os.environ.get("FSGG_CONTEXT_RETRY_DELAY", "2"))
@@ -465,8 +500,23 @@ def jobs_of(doc: dict, what: str) -> dict:
     return jobs
 
 
-def contexts_of(doc: dict, what: str, wf: Workflows, prefix: str = "", depth: int = 0) -> set[str]:
-    """Every check-run name the jobs of `doc` produce, prefixed by any calling job's display name."""
+def contexts_of(
+    doc: dict,
+    what: str,
+    wf: Workflows,
+    prefix: str = "",
+    depth: int = 0,
+    crossings: dict[str, set[str]] | None = None,
+) -> set[str]:
+    """Every check-run name the jobs of `doc` produce, prefixed by any calling job's display name.
+
+    `crossings`, when given, is filled in as a side effect: context -> the set of CROSS-REPO `uses:`
+    strings that had to be followed to reach it. That is the provenance #1783's ref check judges, and
+    it is collected HERE rather than by a second walk because the derivation and the provenance are
+    the same traversal — two walks would be two chances to disagree about which callee produced what
+    (ADR-0067 §3). The same dict is threaded to every depth: a context's name accumulates its callers'
+    prefixes as it is derived, so the key a nested call records is already the final context string.
+    """
     if depth > MAX_DEPTH:
         raise GateError(
             f"{what}: reusable-workflow nesting exceeded {MAX_DEPTH} levels — a cycle, or deeper "
@@ -490,27 +540,68 @@ def contexts_of(doc: dict, what: str, wf: Workflows, prefix: str = "", depth: in
                     f"one that matched by luck would be a green verdict over a real deadlock."
                 )
             if "uses" in job:
-                callee = wf.callee(str(job["uses"]), subject)
-                out |= contexts_of(callee, f"{job['uses']}", wf, prefix=f"{display} / ",
-                                   depth=depth + 1)
+                uses = str(job["uses"]).strip()
+                callee = wf.callee(uses, subject)
+                produced = contexts_of(callee, uses, wf, prefix=f"{display} / ",
+                                       depth=depth + 1, crossings=crossings)
+                out |= produced
+                if crossings is not None and REMOTE_USES_RE.match(uses):
+                    for context in produced:
+                        crossings.setdefault(context, set()).add(uses)
             else:
                 out.add(display)
     return out
 
 
-def producible_contexts(root: str, repo: str) -> tuple[set[str], dict[str, list[str]], list[str]]:
+def unsound_crossings(uses_strings: set[str]) -> list[str]:
+    """The cross-repo `uses:` calls in a context's provenance that a REQUIRED verdict may not rest on.
+
+    Returns one clause per offending call, ready to be joined into a finding. Empty means every
+    crossing is either an accepted moving ref or an immutable commit.
+    """
+    out: list[str] = []
+    for uses in sorted(uses_strings):
+        m = REMOTE_USES_RE.match(uses)
+        if not m:  # a local `./` call: resolved against the caller's own tree, pinned by definition
+            continue
+        repo, ref = m.group("repo"), m.group("ref").strip()
+        if repo != AUTHORITY:
+            out.append(
+                f"`uses: {uses}` resolves its callee from {repo}, which is not the org authority "
+                f"{AUTHORITY}. Half of this required context would then be a job id in a repository "
+                f"outside the org's own review and gates"
+            )
+            continue
+        if SHA_RE.match(ref) or ref in ACCEPTED_MOVING_REFS:
+            continue
+        out.append(
+            f"`uses: {uses}` tracks the ref {ref!r}, which is neither a 40-hex commit nor one of the "
+            f"moving refs this org has DECIDED a required verdict may rest on "
+            f"({', '.join(sorted(ACCEPTED_MOVING_REFS))})"
+        )
+    return out
+
+
+def producible_contexts(
+    root: str, repo: str
+) -> tuple[set[str], dict[str, list[str]], list[str], dict[str, set[str]]]:
     """Every context the repo reports on an ARBITRARY pull request, and the two ways of falling short.
 
-    Returns (always, filtered, non_pr):
+    Returns (always, filtered, non_pr, crossings):
 
       always    contexts reported on EVERY pull request — the only set a required context may live in.
       filtered  context -> the path-filtered workflow(s) that are its ONLY producers, so it reports on
                 some pull requests and not others (.github#1508). Keyed for the message, because
                 "which filter" is the whole of the repair.
       non_pr    contexts produced only by workflows that do not trigger on a PR at all.
+      crossings context -> the cross-repo `uses:` calls its derivation followed (.github#1783).
 
-    The last two exist so a finding can name WHICH way the context falls short — "only on push",
+    The middle two exist so a finding can name WHICH way the context falls short — "only on push",
     "only when .claude/skills/** changes" — rather than the useless "no workflow produces it".
+
+    `crossings` is collected only for the PR-triggered workflows. A context nothing reports on a pull
+    request is already a finding of its own, and grading the ref of a call that can never deadlock
+    anything would be a second alarm about the same defect.
     """
     wf = Workflows(root, repo)
     d = os.path.join(root, ".github", "workflows")
@@ -524,6 +615,7 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], dict[str, list[
     pr_contexts: set[str] = set()
     filtered: dict[str, list[PathFilter]] = {}
     non_pr: list[str] = []
+    crossings: dict[str, set[str]] = {}
     for path in files:
         rel = os.path.relpath(path, root)
         with open(path, encoding="utf-8") as fh:
@@ -531,7 +623,7 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], dict[str, list[
         if any(e in triggers(doc) for e in PR_EVENTS):
             # A path filter must not cost us the DERIVATION: the finding names the context, so it has
             # to be derived exactly here, and an unparsable filtered workflow is still exit 3.
-            produced = contexts_of(doc, rel, wf)
+            produced = contexts_of(doc, rel, wf, crossings=crossings)
             path_filters = pr_path_filters(doc, rel)
             if path_filters is None:
                 pr_contexts |= produced
@@ -566,7 +658,7 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], dict[str, list[
         if filters_cover_every_pr(fs):
             pr_contexts.add(context)
             del filtered[context]
-    return pr_contexts, filtered, non_pr
+    return pr_contexts, filtered, non_pr, crossings
 
 
 def classic_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
@@ -755,9 +847,10 @@ def main(argv: list[str]) -> int:
         )
         return OK
 
-    pr_contexts, filtered, non_pr = producible_contexts(args.root, args.repo)
+    pr_contexts, filtered, non_pr, crossings = producible_contexts(args.root, args.repo)
 
     findings: list[str] = []
+    ref_findings: list[str] = []
     audited = 0
     skipped: list[str] = []
 
@@ -771,6 +864,25 @@ def main(argv: list[str]) -> int:
             continue
         audited += 1
         if context in pr_contexts:
+            # It reports. The remaining question is whether it reports a DURABLE verdict, which is a
+            # different defect with a different repair: a context sourced through a moving cross-repo
+            # ref answers differently on byte-identical content depending on when it ran, so a green
+            # merge is a statement about the clock (ADR-0067 §2, .github#1584, #1783).
+            unsound = unsound_crossings(crossings.get(context, set()))
+            if unsound:
+                ref_findings.append(
+                    f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, and its "
+                    f"producer reaches the callee that names it through a call this org has not "
+                    f"decided a required verdict may rest on: {'; '.join(unsound)}. The verdict is "
+                    f"then a function of whatever that ref pointed at when the job happened to run — "
+                    f"not of the tree under test — so a pull request can be green and red on "
+                    f"byte-identical content, with no commit in this repo between them "
+                    f"(ADR-0067 §2; `FS.GG.SDD#724` is the measured instance, .github#1584). Pin the "
+                    f"call at a 40-hex commit, or return it to a ref the decision accepts. The "
+                    f"decision, and why these calls are NOT pinned today, is in "
+                    f"docs/coordination/reusable-workflow-contract.md."
+                )
+                continue
             print(f"  ok   {context}")
             continue
 
@@ -850,18 +962,29 @@ def main(argv: list[str]) -> int:
             f"failure to audit, not a clean audit."
         )
 
-    if findings:
-        for f in findings:
+    if findings or ref_findings:
+        for f in findings + ref_findings:
             print(f"::error::check-required-contexts: {f}", file=sys.stderr)
-        print(
-            f"\n{len(findings)} required context(s) can never report, of {audited} audited. "
-            f"This repo is deadlocked, or will be on its next pull request.",
-            file=sys.stderr,
-        )
+        # The two findings are NOT the same defect and must not be summarised as one. "This repo is
+        # deadlocked" over a repo whose contexts all report — they just report a verdict that moves —
+        # would send the reader to branch protection for a problem that lives in a `uses:` line.
+        summary = []
+        if findings:
+            summary.append(
+                f"{len(findings)} required context(s) can never report — this repo is deadlocked, "
+                f"or will be on its next pull request"
+            )
+        if ref_findings:
+            summary.append(
+                f"{len(ref_findings)} required context(s) report a verdict that is not a function "
+                f"of the tree under test"
+            )
+        print(f"\n{'; '.join(summary)}. Of {audited} audited.", file=sys.stderr)
         return FINDING
 
     print(
-        f"ok: every required context is producible — {audited} audited"
+        f"ok: every required context is producible, and every cross-repo `uses:` its producers "
+        f"cross is one a required verdict may rest on — {audited} audited"
         + (f", {len(skipped)} skipped (not GitHub Actions)" if skipped else "")
         + f", against {len(pr_contexts)} context(s) this repo reports on EVERY pull request"
         + (

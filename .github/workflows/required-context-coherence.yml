@@ -9,6 +9,14 @@
 # repo stops merging, no commit in it changed, and the cause is a commit somewhere else. A plain typo
 # in a protection setting deadlocks it identically. That is the silent outage this exists to break.
 #
+# SINCE .github#1783 IT ALSO ASSERTS THE OTHER HALF OF THAT SENTENCE — "tracked at a MOVING ref". A
+# required context is not merely a string that must report; it is a verdict that must be about the
+# tree under test (ADR-0067 §2). So the script now also grades the ref of every cross-repo `uses:` a
+# required context's producer crosses, and reds a receiver whose caller has drifted onto a ref the org
+# has not decided a required verdict may rest on. `@main` IS accepted, deliberately and with the
+# measurements, and the eleven required contexts that use it across all seven receivers stay green —
+# see docs/coordination/reusable-workflow-contract.md, "Reusable-workflow calls are NOT pinned".
+#
 # #549 shipped the PREVENTIVE half — reusable-job-id-coherence.yml catches the rename HERE, on the PR
 # that would cause it, with no credential. This is the DETECTION half for everything that gate cannot
 # see from the source side: a typo authored in a RECEIVER's protection, a context required before its
@@ -180,14 +188,23 @@ jobs:
 
           case "$rc" in
             0) echo "::notice::$REPO: every required context is producible."; exit 0 ;;
-            1) echo "::error::$REPO: a required status check names a context that does NOT report on"
-               echo "::error::every pull request — this repo is (or will be) deadlocked: GitHub holds"
+            1) echo "::error::$REPO: a required status check is unsound. THE LOG ABOVE SAYS WHICH OF"
+               echo "::error::THE TWO IT IS, and they are different repairs — do not assume the first."
+               echo "::error::(a) IT CANNOT REPORT — this repo is (or will be) deadlocked: GitHub holds"
                echo "::error::the PR at 'Expected — waiting for status to be reported'. Either no"
                echo "::error::pull_request workflow produces the context at all (fix the protection"
                echo "::error::setting or the job name it points at), or its only producer is"
                echo "::error::PATH-FILTERED, so the check run is never created on a PR the filter"
                echo "::error::excludes (.github#1508 — drop the paths: filter, or stop requiring it)."
-               echo "::error::The log above says which, and names the workflow and filter."
+               echo "::error::(b) IT REPORTS, BUT NOT ABOUT THIS TREE (.github#1783) — its producer"
+               echo "::error::reaches the callee naming it through a cross-repo 'uses:' at a ref no"
+               echo "::error::required verdict may rest on, so the answer moves with that ref rather"
+               echo "::error::than with the subject (ADR-0067 §2; .github#1584 is the measured cost)."
+               echo "::error::NOTHING IS DEADLOCKED in this case and merges are not blocked — which is"
+               echo "::error::what makes it the quieter defect. Repair it in the RECEIVER's caller: pin"
+               echo "::error::the call at a 40-hex commit, or return it to '@main'. The decision that"
+               echo "::error::accepts '@main' and no other moving ref is in"
+               echo "::error::docs/coordination/reusable-workflow-contract.md."
                exit 1 ;;
             2) echo "::error::$REPO: the protection/rulesets read kept failing (exit 2, retryable) after"
                echo "::error::3 attempts — a rate limit or outage, not a verdict. This self-heals on the"
