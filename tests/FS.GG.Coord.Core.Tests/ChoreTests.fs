@@ -330,6 +330,138 @@ module ChoreTests =
 
         Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ i ])
 
+    // ---- BLOCKER-CLEARED must RESPECT the human-park sentinel it would otherwise overwrite (#1644) ----
+    //
+    // ADR-0045's `Blocked on: human/...` body line is how the board says "a PERSON must act before this is
+    // startable". `Schedulability` step 3b already refuses to HAND such an item out. This rule could still
+    // WRITE `Ready` onto it — and that write is the whole incident: a promotion nothing reverses (with every
+    // blocker resolved, STATUS-NOT-BLOCKED cannot push it back; once it is not `Blocked`, `BLOCKED-NO-REASON`
+    // stops watching it), turning "a human must decide this" into "a worker may pick this up".
+    //
+    // The pair below is the shape #620 requires: the SAME fixture with and without the parking record. #620's
+    // remedy — a `Blocked` row whose blockers are all closed is invisible to every scheduler, so promote it —
+    // is correct and must stay firing for every item that carries no park.
+
+    [<Fact>]
+    let ``#1644 BLOCKER-CLEARED does NOT promote a row parked on a human DECISION — the sentinel it must respect`` () =
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                HumanBlock = Some AwaitingHumanDecision }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1644 the SAME fixture WITHOUT the parking record still promotes — #620's remedy is intact`` () =
+        // The other half of the pair, and the one that makes the half above a NARROWING rather than a
+        // deletion. Identical in every field but `HumanBlock`.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                HumanBlock = None }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1644 EVERY human-park sentinel holds the flip — derived from the union, so a third case cannot escape`` () =
+        // Hand-listing the two cases would be the fifth copy of the vocabulary this module keeps refusing to
+        // write: correct today, and silently short by one the day ADR-0045 grows a `human/review`. Derived
+        // from the union, an added case widens this loop instead of slipping past it — and `noFields` throws
+        // on a case carrying a field rather than dropping it.
+        let sentinels = everyCaseOf<HumanBlock> noFields
+
+        // NON-VACUITY. An empty list satisfies the `for` below by iterating nothing, and this test would
+        // report green over a sentinel set it never generated — the #266 shape, inside the guard for it.
+        Assert.NotEmpty(sentinels)
+
+        for hb in sentinels do
+            let i =
+                { item 1 with
+                    Status = Blocked
+                    Blockers = [ blocker 2 BlockerClosed ]
+                    HumanBlock = Some hb }
+
+            Assert.True(
+                List.isEmpty (derive [ i ]),
+                $"a %A{hb} park was PROMOTED: %A{derive [ i ] |> List.map (fun c -> c.Kind.RuleId)}"
+            )
+
+    [<Fact>]
+    let ``#1644 an UNREAD body HOLDS the flip — HumanBlock=None cannot tell "no sentinel" from "we did not look" (#266)`` () =
+        // THE FAIL-CLOSED LEG, and the one that makes this a fix rather than a half of one. `Snapshot.parse`
+        // renders an unreadable body as `HumanBlock = None` — the same value as "declares no sentinel" —
+        // because `HumanBlock option` has nowhere to put "I could not look". A gate that keyed on
+        // `HumanBlock.IsSome` alone would therefore promote a PARKED row whose body read failed, which is
+        // the fail-open wearing the fix's clothes.
+        //
+        // `TouchSet.Unreadable` is the fact that disambiguates: it is "we did not read the body", parsed off
+        // the SAME body by the SAME parse, and `Client.enrichBoardFacts` already consults it for exactly
+        // this collapse on `Class`. Note `HumanBlock = None` here — that is the point: the hold comes from
+        // the touch-set, not from a sentinel we can see.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                HumanBlock = None
+                TouchSet = Unreadable "rate limited" }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1644 a body we DID read with no sentinel still promotes — the hold is the failed read, not the field`` () =
+        // The mate of the leg above, over the same axis. Without it, "unread holds the flip" is satisfied by
+        // a rule that holds the flip for EVERY touch-set, and the fail-closed claim would be untestable.
+        for ts in [ Undeclared; DeclaredNone; DeclaredChore; Declared [ Matchable "src/" ] ] do
+            let i =
+                { item 1 with
+                    Status = Blocked
+                    Blockers = [ blocker 2 BlockerClosed ]
+                    HumanBlock = None
+                    TouchSet = ts }
+
+            Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1644 the park gate does NOT reach an item whose blockers still HOLD — the blocker gate is first`` () =
+        // The park NARROWS the flip condition; it is not a second thing that can trigger or suppress one.
+        // An open blocker is still what governs, and the sentence a reader gets is still about the blocker.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerOpen ]
+                HumanBlock = Some AwaitingHumanDecision }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1644 the park is read ONLY by BLOCKER-CLEARED — a parked Ready item still derives STATUS-NOT-BLOCKED`` () =
+        // Scoped to the `Blocked → Ready` flip, exactly as the ADR-0050 predicate gate is. A parked row
+        // wearing `Ready` over an OPEN blocker is still falsely advertised, and the rule that pushes it back
+        // to `Blocked` must keep firing — suppressing it would leave the park sitting in the one column that
+        // invites a worker, which is the failure this item is about, arrived at from the other side.
+        let i =
+            { item 1 with
+                Status = Ready
+                Blockers = [ blocker 2 BlockerOpen ]
+                HumanBlock = Some AwaitingHumanDecision }
+
+        Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1644 a parked CLOSED issue is still CLOSED-ISSUE-NOT-DONE — the park gates the flip, not the board`` () =
+        // The park must not become a blanket "derive nothing about this item". A closed issue wearing a live
+        // column is a projection error whatever its body says, and a human-park that suppressed it would be
+        // a new way for the board to lie, introduced by the fix for a way it lied.
+        let i =
+            { item 1 with
+                State = Closed
+                Status = Ready
+                HumanBlock = Some AwaitingHumanDecision }
+
+        Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ i ])
+
     // ---- STATUS-NOT-BLOCKED: do not advertise work that cannot start ---------------------------------
 
     [<Fact>]
@@ -606,7 +738,7 @@ module ChoreTests =
         Assert.Empty(derive [ i ])
 
     [<Fact>]
-    let ``NO rule reads the touch-set — so Undeclared, none, and unread alike are never a chore`` () =
+    let ``every rule but BLOCKER-CLEARED ignores the touch-set — Undeclared, none, chore and unread alike`` () =
         // Stated as INVARIANCE over a DEFECTIVE item, not as emptiness over a healthy one. This replaces two
         // tests (`UNDECLARED-PATHS is never a chore`, `an unreadable touch-set is never a chore`) that each
         // set one touch-set on an item with nothing else wrong and asserted `Assert.Empty`. Both passed
@@ -618,12 +750,28 @@ module ChoreTests =
         // the derivation must be identical for every case, and it goes red the day a rule starts reading the
         // field — which is exactly when somebody needs to be told, since the fix for a bad touch-set is an
         // ISSUE edit and chores only ever write to the BOARD.
+        //
+        // **AND THAT DAY CAME (.github#1644), SO THE TITLE OF THIS TEST CHANGED WITH THE RULE.** It read
+        // "NO rule reads the touch-set", which the guard above was built to falsify — and it would NOT have
+        // gone red, because the subject here is a CLOSED issue and the new reader (`BLOCKER-CLEARED`) needs
+        // an OPEN one. A green test carrying a claim the code had stopped honouring is this repo's own named
+        // defect class, so the claim is now the true one: `BLOCKER-CLEARED` reads `Unreadable` as a
+        // BODY-READ RECEIPT (see the #1644 block above, which pins that half); every other rule ignores the
+        // field, which is what this pins.
         let defective = { item 1 with State = Closed; Status = Ready }
 
         Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ defective ])
 
-        for ts in [ Undeclared; DeclaredNone; Declared [ Matchable "src/" ]; Unreadable "rate limited" ] do
+        for ts in [ Undeclared; DeclaredNone; DeclaredChore; Declared [ Matchable "src/" ]; Unreadable "rate limited" ] do
             Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ { defective with TouchSet = ts } ])
+
+        // STATUS-NOT-BLOCKED too, over an OPEN item — the population `BLOCKER-CLEARED`'s new read actually
+        // reaches. Pinning invariance only on a closed issue would leave "every OTHER rule" asserted about
+        // the one state where no other rule could have read the field anyway.
+        let advertised = { item 1 with State = Open; Status = Ready; Blockers = [ blocker 2 BlockerOpen ] }
+
+        for ts in [ Undeclared; DeclaredNone; DeclaredChore; Declared [ Matchable "src/" ]; Unreadable "rate limited" ] do
+            Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ { advertised with TouchSet = ts } ])
 
     [<Fact>]
     let ``a healthy board yields no chores at all`` () =

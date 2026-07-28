@@ -162,6 +162,22 @@ module Chore =
         /// closed (#266). An item declaring no predicate (`Item.Predicate = None`) is ungated and flips as
         /// today (ADR-0050 decision 5 — a general prose predicate is not mechanically evaluable).
         ///
+        /// ...AND NEVER ON AN ITEM PARKED ON A HUMAN (.github#1644). ADR-0045's `Blocked on: human/decision`
+        /// / `human/action` body sentinel says a PERSON must act before the item is startable, and
+        /// `Schedulability` step 3b refuses such an item outright. This is the one mechanical rule that
+        /// could overwrite that judgement, and the overwrite does not heal: `Ready` is the column that
+        /// advertises the row, `lint`'s `BLOCKED-NO-REASON` only watches a `Blocked` one, and
+        /// `STATUS-NOT-BLOCKED` cannot push it back with every blocker resolved. So an automated promotion
+        /// would silently convert *"a human must decide this"* into *"a worker may pick this up"* — the
+        /// exact conversion ADR-0045's sentinel exists to prevent.
+        ///
+        /// It FAILS CLOSED on a body nobody read, and that clause is load-bearing rather than defensive.
+        /// `Item.HumanBlock = None` means BOTH "declares no sentinel" and "we did not look" — the option has
+        /// nowhere to put the second — so gating on `IsSome` alone would promote a parked row whose body
+        /// read failed. The fact IS recorded, one field over: `TouchSet.Unreadable` is "we did not read the
+        /// body", off the same body, and the flip is held on it. See `derive`'s note below, which this
+        /// makes the ONE exception to.
+        ///
         /// Never on a RESERVED item: that `Blocked` is most likely the holder's own, and their column wins
         /// (#331). See "the reserver owns the column" below.
         | BlockerCleared of resolved: string list
@@ -385,9 +401,16 @@ module Chore =
     /// sentence used to claim. That was false and could not have been otherwise: a blocker we failed to
     /// resolve does not make the ISSUE's closedness unknown, so `CLOSED-ISSUE-NOT-DONE` still fires next to a
     /// `BlockerUnknown` — correctly. Suppressing a rule over a fact it never reads is not caution, it is a
-    /// second way to be wrong. `TouchSet` is the limit case: no rule reads it at all, so `Unreadable` cannot
-    /// suppress anything, and the chores an unreadable touch-set does not produce are ones nothing here
-    /// produces anyway (see `ChoreTests`, which pins that rather than implying it).
+    /// second way to be wrong.
+    ///
+    /// `TouchSet` HAS EXACTLY ONE READER, AND THIS SENTENCE USED TO SAY IT HAD NONE. Until .github#1644 it
+    /// read *"no rule reads it at all, so `Unreadable` cannot suppress anything"* — true when written, and
+    /// false the moment `BLOCKER-CLEARED` began consulting `Unreadable` as its BODY-READ RECEIPT. It is
+    /// still the only reader and it still reads no path token: the parked-item gate needs the one fact
+    /// `HumanBlock option` cannot carry — *did anybody read the body the sentinel would live on?* — and
+    /// `TouchSet.Unreadable` is that fact, lifted off the same body by the same parse. Every OTHER rule
+    /// ignores the field entirely, and `ChoreTests` pins both halves: invariance across every touch-set for
+    /// the rules that do not read it, and the fail-closed hold for the one that does.
     val derive: items: Item list -> Chore list
 
     /// OFFER **AT MOST ONE** CHORE — condition 3's bound, and it is a hard one.

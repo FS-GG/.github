@@ -152,7 +152,9 @@ module Types =
           /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
           ItemPr: int option
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
-          /// declares no such line. When present it refuses scheduling regardless of `TouchSet`.
+          /// declares no such line. When present it refuses scheduling regardless of `TouchSet` — AND it
+          /// holds `BLOCKER-CLEARED` off the row (.github#1644). `None` is ambiguous ("no sentinel" vs "the
+          /// body was never read"); `TouchSet.Unreadable` is the fact that tells them apart. See Types.fsi.
           HumanBlock: HumanBlock option
           /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
           /// manifest (ADR-0050 call-site B / .github#1203). `None` means the item declares no such
