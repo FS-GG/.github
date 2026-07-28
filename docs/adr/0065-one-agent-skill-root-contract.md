@@ -99,11 +99,39 @@ materializer that created it is the thing that removes it.
 
 > **AMENDED 2026-07-28 ([#1696](https://github.com/FS-GG/.github/issues/1696)), delivered in
 > `FS.GG.Kit` 0.15.0.** ADR-0067 §6's *generated view* is no longer a later mechanism with nowhere to
-> live: this section gives it a disposition in the transport contract. Nothing is retired by that
-> amendment — `FsggKitViewSkillRoots` defaults **empty**, and moving a root into it is a per-repo
+> live: this section gives it a disposition in the transport contract. Nothing was retired by that
+> amendment — `FsggKitViewSkillRoots` defaulted **empty**, and moving a root into it was a per-repo
 > decision that ADR-0067 §9 and
 > [the retirement order](../coordination/skill-apparatus-retirement-order.md) authorize, one receiver
 > at a time.
+>
+> **AMENDED AGAIN 2026-07-29 ([#1676](https://github.com/FS-GG/.github/issues/1676) stage 2,
+> [#1868](https://github.com/FS-GG/.github/pull/1868)), delivered in `FS.GG.Kit` 0.19.0. THE DEFAULTS
+> ABOVE HAVE MOVED, AND THE SENTENCE THEY ARE IN IS NOW HISTORY RATHER THAN CONTRACT.**
+>
+> | property | 0.15.0 – 0.18.0 | 0.19.0 |
+> |---|---|---|
+> | `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | `.claude/skills` |
+> | `FsggKitViewSkillRoots` | *(empty)* | `.agents/skills` |
+>
+> The **ordered root set is unchanged** and this is not a retirement: the runtime surface is the
+> UNION of the materialized and view roots, and that union is still the TWO this record declares. A
+> root moving from the first property to the second keeps the union constant, which is precisely why
+> §5's set and §Retiring a root are both untouched here.
+>
+> What changed is that the view disposition is now the **default** rather than a per-repo opt-in. The
+> empty default was the safety of the mechanism *while receivers were adopting one at a time*, and
+> ADR-0067 §9's precondition for stage 2 is that they all have — **stage 1 is 7 of 7**, and every
+> receiver already declares both properties inline with exactly these values, so no receiver's
+> EVALUATED answer changes with this release. It changes what a receiver gets when it does not say.
+>
+> `FS.GG.Kit` 0.19.0 also makes the package ESTABLISH a declared view root
+> ([#1867](https://github.com/FS-GG/.github/pull/1867)): `FsggKitGenerateSkillView`, ordered
+> `AfterTargets="FsggKitMaterialize"` and deliberately **not** `BeforeTargets="FsggKitCheckSkillView"`
+> — repair on materialize, detect on check. A receiver's own generate target is therefore **not**
+> redundant: it serves the check path, which the kit's does not
+> ([#1869](https://github.com/FS-GG/.github/issues/1869)). Nothing should delete one on the strength
+> of this release.
 
 > **AMENDED 2026-07-28, IN A `coordination-kit` RECEIVER ONLY — [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1
 > and §5 ([#1837](https://github.com/FS-GG/.github/issues/1837)), and it has NOT executed: that record
