@@ -81,9 +81,13 @@ scaffolded project ships companion *process skills* that wrap them.**
 
 When you scaffold with `lifecycle=sdd`, the `fsgg-sdd` CLI **seeds the `fs-gg-sdd-*`
 process skills** and — as the **sole mirror authority** (ADR-0011) — fans the
-byte-identical **union** of process + provider skills into both agent-skill roots
-(`.claude/skills/` for Claude Code and `.agents/skills/` for Codex, which discovers it
-natively), so the runtimes are interchangeable. Unlike `/speckit-plan`, these
+byte-identical **union** of process + provider skills into the **two** agent-skill roots
+[ADR-0065](https://github.com/FS-GG/.github/blob/main/docs/adr/0065-one-agent-skill-root-contract.md)
+declares — `.claude/skills/` for Claude Code and `.agents/skills/` for Codex, which
+discovers that root natively — so the two runtimes are interchangeable. There is no third
+runtime: `.agents/skills/` is Codex's *own* second native root, and `.codex/skills/` was
+retired on 2026-07-28 (ADR-0065 §Runtime exposure and §Retiring a root are where that
+stands; the measurement is ADR-0067 §5). Unlike `/speckit-plan`, these
 skills don't *contain* the lifecycle logic — they **tell the agent when and how to
 shell out to the real `fsgg-sdd` commands**, and which strict authoring-contract
 grammars to respect (see [Load-bearing authoring contracts](lifecycle.md#load-bearing-authoring-contracts)).
