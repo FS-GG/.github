@@ -5355,6 +5355,15 @@ module Client =
             eprint "fsgg-coord-engine: item-id takes <ref>."
             ExitError
 
+    /// The column `add` writes when the caller names none (.github#1823).
+    ///
+    /// **`Backlog`, and not `Ready`.** `Backlog` is visible to triage and NOT startable without a
+    /// deliberate promotion, which is `drive-board`'s existing backlog-triage contract — it promotes only
+    /// evidenced actionable work to `Ready`. Defaulting to `Ready` would auto-schedule work nobody has
+    /// read; defaulting to NOTHING was the defect (14 rows in one day, every one found by accident).
+    [<Literal>]
+    let private AddDefaultStatus = "Backlog"
+
     /// `add <ref>` — put an issue on the board (#861).
     ///
     /// The verb `check-graphql-monopoly` (#586) names as the compliant alternative to `gh project
@@ -5363,6 +5372,37 @@ module Client =
     /// it; this goes through the one transport, which does all three.
     ///
     /// Idempotent by #421's rule and not by a `try`: see `Board.addItem`. Re-running it is free of a write.
+    ///
+    /// ---- THE STATUS DEFAULT (.github#1823) --------------------------------------------------------
+    ///
+    /// `add` used to leave `Status` UNSET, and a row with no `Status` is invisible to every scheduler —
+    /// `Schedulability` says so in as many words: *"no Status on the board: invisible to every scheduler,
+    /// and nobody set it."* Fourteen rows were filed that way on 2026-07-28, in three batches, and EVERY
+    /// instance was found by accident by a driver reading `batch` output for an unrelated reason. Nothing
+    /// reported any of them. Each was filed in good faith by a worker discharging a real item and
+    /// following the documented flow — file the finding, `add` it to the board. The step that made the row
+    /// schedulable was undocumented at the point of use and silently optional, which is #1644's subject
+    /// arriving one layer down: no scheduler reads prose, and an unscheduled row is prose.
+    ///
+    /// **THE DEFAULT ONLY EVER FILLS AN EMPTY COLUMN, AND THAT IS THE WHOLE RISK OF THIS CHANGE.** `add`
+    /// is idempotent (#861) — a close-out pass, a retry, or two workers racing the same follow-up all
+    /// reach it — so a naive "set Status on add" would walk a live `In progress` row back to `Backlog` and
+    /// DESTROY information rather than add it. That is the one direction this can be wrong, and it is why
+    /// the already-on-board arm READS the column before it decides, and why an unreadable column is left
+    /// alone rather than defaulted (#266: a column we could not read is not a column we may call empty).
+    ///
+    /// The freshly-added arm skips that read on purpose, and it is not a shortcut: `addProjectV2ItemById`
+    /// creates an item with NO field values, and #421's guard means `AddedToBoard` only follows a read
+    /// that DEFINITELY said not-on-board. There is no column there to preserve, so there is no point to
+    /// spend on the once-per-filing verb's hot path (#418).
+    ///
+    /// **AND IT SAYS SO.** Silence is how the defect worked: a filer who is told nothing assumes the row
+    /// is schedulable. The stderr note names the column and states that the row is NOT startable yet.
+    ///
+    /// COST, over `Board.addItem`'s own (3 GraphQL on a real add, 1 when it is already there): +1 for the
+    /// Status mutation, and on the already-on-board path +1 for the column read that decides whether it
+    /// may fire. `add` is a once-per-filing verb, so that is a rounding error on a 5,000/hr budget (#418)
+    /// against fourteen rows nobody could schedule.
     let addCmd (ctx: Context) (opts: Options) : int =
         match opts.Args with
         | [ refArg ] ->
@@ -5408,18 +5448,102 @@ module Client =
                 | Ok board ->
                     match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
                     | Error e -> fail e
+                    | Ok outcome ->
+
                     // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
                     // filing procedure, so a close-out pass, a retry, or two workers racing the same
                     // follow-up all reach it — and none of them is an error. It says so on stderr and puts
                     // the id on stdout, so a caller piping it gets an id either way.
-                    | Ok(Board.AlreadyOnBoard id) ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
-                        printfn "%s" id
-                        ExitGreen
-                    | Ok(Board.AddedToBoard id) ->
-                        eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
-                        printfn "%s" id
-                        ExitGreen
+                    let itemId, alreadyThere =
+                        match outcome with
+                        | Board.AlreadyOnBoard id ->
+                            eprint $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
+                            id, true
+                        | Board.AddedToBoard id ->
+                            eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
+                            id, false
+
+                    // THE ID GOES OUT BEFORE THE COLUMN IS SETTLED, unconditionally. `add`'s promise is
+                    // "this issue is on the board, here is its item id", and that promise is already kept
+                    // by the time we get here. Every Status outcome below is a note ABOUT a row that is
+                    // boarded; none of them may swallow the id a caller is piping.
+                    printfn "%s" itemId
+
+                    // THE IDENTITY IS RESOLVED HERE, AFTER THE ROW IS BOARDED, AND NEVER BEFORE IT.
+                    //
+                    // The deferral queue is keyed on the worker id, so a board write needs one — but #1823
+                    // explicitly REFUSED to make `add` refuse: *"`add` is called mid-item by a worker who
+                    // has just found something outside its touch-set, and a refusal at that moment is how a
+                    // finding ends up in a report instead of on the board."* Resolving before the add would
+                    // turn a working `add` into a refusal for any caller with no identity ladder, which is
+                    // that same failure wearing this change's badge. So the column is what degrades, loudly
+                    // and by name, and `add`'s own promise is untouched.
+                    let write (value: string) (why: string) : int =
+                        match Identity.resolve opts.Worker with
+                        | Error msg ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} IS on the board, but Status was NOT set to '%s{value}' — this process could not derive a worker id, and a board write is queued against one. %s{msg}"
+
+                            ExitGreen
+
+                        | Ok w ->
+
+                        let outcome =
+                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set value) w.Id
+
+                        match outcome with
+                        | Ok Board.Written ->
+                            eprint $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
+                            ExitGreen
+                        | _ ->
+                            // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
+                            // NOT land and the exact command that finishes it. The verdict stays green:
+                            // the ROW IS BOARDED, which is what `add` was asked to do and what its stdout
+                            // now says — and reporting a red here would send a filer back to re-run `add`
+                            // rather than to the one-field write that is actually owed.
+                            boardWriteNote ref "Status" value outcome
+                            ExitGreen
+
+                    match opts.Status with
+                    // AC2 — AN EXPLICIT STATUS STILL WINS. `--status` is the caller naming the column, so
+                    // it is written whatever is there: this is `set-field <ref> Status <S>` reached from
+                    // `add`, and #1823 makes only the DEFAULT conditional. A flag accepted and then
+                    // silently declined would be #867's defect, on the flag #867 is about.
+                    | Some explicit ->
+                        write explicit $"you named it with --status (an explicit column always wins over the #1823 default)."
+
+                    | None when not alreadyThere ->
+                        // Freshly created: a new project item carries no field values, so there is nothing
+                        // to preserve and nothing to read.
+                        write
+                            AddDefaultStatus
+                            $"the #1823 default, because you named none. The row is ON the board and VISIBLE to triage, but NOT startable: a scheduler takes `Ready`, and promoting it there is a deliberate act. Use `--status <column>` to choose, or `set-field %s{ref.Short} Status Ready` once it is triaged."
+
+                    | None ->
+                        // AC4 — THE IDEMPOTENCE ARM. Read before writing, and prefer whatever is already
+                        // there. This is the arm a "just set Status on add" change gets wrong.
+                        match Board.itemStatus ctx.Transport board ref.Owner ref.Repo ref.Number with
+                        | Error e ->
+                            // #266. NOT MEASURED is not `Ok None`. We could not read the column, so we may
+                            // not assert it is empty, and defaulting on an unread column is exactly how
+                            // this change would destroy information instead of adding it.
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} is on the board, but its Status could NOT BE READ (%s{Errors.explain e}) — so the #1823 default was NOT applied. That is a read that did not happen, not an empty column, and defaulting over one would overwrite whatever is really there. Check it:  scripts/fsgg-coord ready --all --repo %s{ref.Repo}"
+
+                            ExitGreen
+
+                        | Ok(Some existing) ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} already has Status='%s{statusWireName existing}' — LEFT AS IT IS. The #1823 default only ever fills an EMPTY column, so re-running `add` never walks a row somebody set back to Backlog."
+
+                            ExitGreen
+
+                        | Ok None ->
+                            // On the board with no Status — the fourteen rows' condition, repaired by the
+                            // same `add` that would have filed them right.
+                            write
+                                AddDefaultStatus
+                                $"the #1823 default: it was ALREADY on the board with NO Status at all, which is invisible to every scheduler. The row is now VISIBLE to triage and still NOT startable — promoting it to Ready is a deliberate act."
         | _ ->
             eprint "fsgg-coord-engine: add takes <ref> (a URL, owner/repo#n, or repo#n)."
             ExitError
@@ -5777,6 +5901,16 @@ module Client =
                             else
                                 []
 
+                        // STATUS-UNSET (.github#1823 AC5) — `CLASS-UNSET`'s sibling, and an `error` on
+                        // `NO-TOUCH-SET`'s terms: "no worker can ever pick this up" is exactly what an
+                        // unset column means, reached one step earlier than an unusable touch-set. It
+                        // costs NO read — the column is already in the scan — so it is not gated on
+                        // `bodyNeeded` and cannot be the #266 shape `classFindings` warns about.
+                        let statusUnsetFindings =
+                            match LintApplication.statusVerdict r.State r.Status with
+                            | Some detail -> [ mk "STATUS-UNSET" "error" r detail ]
+                            | None -> []
+
                         // One body read serves the touch-set rules, the human-block rule, and the epic
                         // body-child-refs.
                         let bodyNeeded = isTouchSetCandidate || isEpic || isHumanBlockCandidate
@@ -5801,7 +5935,16 @@ module Client =
 
                             match epicResult with
                             | Error e -> Error e
-                            | Ok epic -> classify (acc @ tsFindings @ hbFindings @ clsFindings @ doneOpenNote @ epic) rest
+                            | Ok epic ->
+                                classify
+                                    (acc
+                                     @ tsFindings
+                                     @ hbFindings
+                                     @ clsFindings
+                                     @ statusUnsetFindings
+                                     @ doneOpenNote
+                                     @ epic)
+                                    rest
 
                 // The BLOCKER-CYCLE rule (#1090) — the one lint rule that is NOT per-item, and could not be.
                 // A `Blocked by` ring passes every per-item blocker check (#343/#476/#602/#620), because
