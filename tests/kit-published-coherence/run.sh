@@ -683,17 +683,17 @@ def nuspec(body: str) -> bytes:
 
 # The real shape, namespaced exactly as nuget.org serves it.
 good = nuspec(f'<repository type="git" url="https://github.com/FS-GG/.github" commit="{COMMIT}" />')
-assert gate.nuspec_repository_commit("0.17.0", good, repository=REPO) == COMMIT, "real nuspec shape"
+assert gate.nuspec_repository_commit("0.17.0", good, repository=REPO, package="FS.GG.Kit", prefix="kit/v") == COMMIT, "real nuspec shape"
 
 # Same, with a .git suffix and a trailing slash — both are the same repository.
 for url in ("https://github.com/FS-GG/.github.git", "https://github.com/FS-GG/.github/"):
     variant = nuspec(f'<repository type="git" url="{url}" commit="{COMMIT}" />')
-    assert gate.nuspec_repository_commit("0.17.0", variant, repository=REPO) == COMMIT, url
+    assert gate.nuspec_repository_commit("0.17.0", variant, repository=REPO, package="FS.GG.Kit", prefix="kit/v") == COMMIT, url
 
 
 def refuses(body: str, wanted: str, what: str) -> None:
     try:
-        gate.nuspec_repository_commit("0.17.0", nuspec(body), repository=REPO)
+        gate.nuspec_repository_commit("0.17.0", nuspec(body), repository=REPO, package="FS.GG.Kit", prefix="kit/v")
     except gate.GateError as e:
         assert wanted in str(e), f"{what}: wrong reason: {e}"
         return
@@ -756,9 +756,9 @@ for benign in (
     "git@github.com:FS-GG/.github.git",
 ):
     ok_url = nuspec(f'<repository type="git" url="{benign}" commit="{COMMIT}" />')
-    assert gate.nuspec_repository_commit("0.17.0", ok_url, repository=REPO) == COMMIT, benign
+    assert gate.nuspec_repository_commit("0.17.0", ok_url, repository=REPO, package="FS.GG.Kit", prefix="kit/v") == COMMIT, benign
 try:
-    gate.nuspec_repository_commit("0.17.0", b"<package", repository=REPO)
+    gate.nuspec_repository_commit("0.17.0", b"<package", repository=REPO, package="FS.GG.Kit", prefix="kit/v")
 except gate.GateError as e:
     assert "not parsable XML" in str(e), e
 else:
@@ -841,10 +841,10 @@ out="$(python3 "$GATE" --tag-arm \
   --tag-arm-published "drivers/v=$NSPUB2"  --tag-arm-tags "drivers/v=$NSREFS2" 2>&1)"; rc=$?
 set -e
 must_fail "a red namespace does not abort the others" "MOVED    drivers/v0.9.0"
-grep -q "kit/v\*  FS.GG.Kit: 1 published version(s), 1 anchored — every tag resolves" <<<"$out" \
+grep -q "kit/v\*  FS.GG.Kit: 1 published version(s), every one anchored by its own .nuspec — every tag resolves" <<<"$out" \
   && ok "the clean namespace beside a red one is still measured and still reported" \
   || bad "the clean namespace beside a red one is still reported" "$out"
-grep -q "2 release-tag namespace(s) in .*, 2 measured over 2 published version(s)" <<<"$out" \
+grep -q "2 of 5 declared release-tag namespace(s) selected in .*, 2 measured over 2 published version(s)" <<<"$out" \
   && ok "the headline counts namespaces measured and versions compared" \
   || bad "the headline counts namespaces measured and versions compared" "$out"
 
@@ -878,7 +878,53 @@ must_fail "the same namespace canned twice is refused, not last-wins" "twice; th
 set +e
 out="$(python3 "$GATE" --tag-arm --namespace nope/v 2>&1)"; rc=$?
 set -e
-must_fail "--namespace naming nothing is refused, not an empty green" "no release namespace matches"
+must_fail "--namespace naming nothing is refused, not an empty green" \
+  "which are not declared release namespaces"
+
+# ...and a selection that is individually valid but intersects to NOTHING is refused too. Both parts
+# name real things, so the refusal above cannot see it; without this the arm would measure zero
+# namespaces and report a pass.
+set +e
+out="$(python3 "$GATE" --tag-arm --namespace kit/v \
+  --tag-arm-published "drivers/v=$NSPUB2" --tag-arm-tags "drivers/v=$NSREFS2" 2>&1)"; rc=$?
+set -e
+must_fail "a selection that intersects to nothing is refused, not an empty green" \
+  "no release namespace matches"
+
+# A namespace that could not be READ must not take the others down with it, and must not be counted
+# as measured — the aggregation property, from the UNRESOLVED side rather than the MOVED side.
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+printf '%s\trefs/tags/kit/v0.16.0\n' "$C1" > "$TAGREFS"
+set +e
+out="$(python3 "$GATE" --tag-arm \
+  --tag-arm-published "kit/v=$TAGPUB"     --tag-arm-tags "kit/v=$TAGREFS" \
+  --tag-arm-published "drivers/v=$NSPUB2" --tag-arm-tags "drivers/v=$WORK/no-such.txt" 2>&1)"; rc=$?
+set -e
+must_fail "one UNRESOLVED namespace reds the run on its own" "UNRESOLVED — NOT MEASURED"
+grep -q "kit/v\*  FS.GG.Kit: 1 published version(s)" <<<"$out" \
+  && ok "a namespace beside an UNRESOLVED one is still measured and reported" \
+  || bad "a namespace beside an UNRESOLVED one is still measured" "$out"
+grep -q "2 of 5 declared release-tag namespace(s) selected in .*, 1 measured" <<<"$out" \
+  && ok "an UNRESOLVED namespace is not counted among the measured ones" \
+  || bad "an UNRESOLVED namespace is not counted among the measured" "$out"
+
+# A namespace whose CLASSIFICATION raises (not its read) must also stay contained. Two tags that
+# canonicalise to one version but resolve to different commits is the shape that does it — and until
+# review it was raised OUTSIDE the per-namespace try, so one such namespace aborted all five.
+printf '0.9.0\t%s\n' "$C2" > "$NSPUB2"
+{
+  printf '%s\trefs/tags/drivers/v0.9.0\n' "$C2"
+  printf '%s\trefs/tags/drivers/v0.9.0.0\n' "$C3"
+} > "$NSREFS2"
+set +e
+out="$(python3 "$GATE" --tag-arm \
+  --tag-arm-published "kit/v=$TAGPUB"     --tag-arm-tags "kit/v=$TAGREFS" \
+  --tag-arm-published "drivers/v=$NSPUB2" --tag-arm-tags "drivers/v=$NSREFS2" 2>&1)"; rc=$?
+set -e
+must_fail "an ambiguous tag set is UNRESOLVED for its namespace alone" "resolve to different commits"
+grep -q "kit/v\*  FS.GG.Kit: 1 published version(s)" <<<"$out" \
+  && ok "a classification failure does not abort the namespaces beside it" \
+  || bad "a classification failure does not abort the namespaces beside it" "$out"
 
 # THE DECISION LOGIC, DRIVEN DIRECTLY. Everything above hands the arm canned READS; these drive the
 # shipped classifier and renderer against the REAL RECORDED_DISAGREEMENTS and the REAL namespace
@@ -933,6 +979,83 @@ for record in gate.RECORDED_DISAGREEMENTS:
     _, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
     assert "SPENT " in stdout, "a spent record must be printed"
 
+    # 5. THE DISAGREEMENT IS REPAIRED — also SPENT, and this is the one review caught. Agreement
+    #    takes the success path, so a suppression entry for a defect that no longer exists would
+    #    otherwise sit in the list forever, unlooked-at, which is precisely the rot the record
+    #    claims it cannot have.
+    v = gate.classify_namespace(
+        ns, {record.version: record.nuspec_commit}, {record.version: record.nuspec_commit}
+    )
+    assert not v.red and not v.recorded, "agreement is agreement"
+    assert v.spent, "a record whose disagreement was REPAIRED must be reported SPENT"
+    _, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
+    assert "SPENT " in stdout, "a repaired record must be printed SPENT"
+
+    # 6. A VERSION LITERAL THAT DIFFERS ONLY BY NUGET NORMALISATION IS THE SAME VERSION. The feed
+    #    normalises what it serves and a tag carries what the release author typed, so an exact
+    #    string compare reds a `v1.0` tag against a published `1.0.0` — fail-closed, but a false red
+    #    on main. Driven on the record, so the join and the pin are exercised together.
+    #    The two ways a literal legitimately varies: a stable version gains a padding segment
+    #    (`1.0` / `1.0.0` / `1.0.0.0` are one NuGet version), and a prerelease suffix folds case.
+    if gate.is_prerelease(record.version):
+        head, _, pre = record.version.partition("-")
+        alias = f"{head}-{pre.upper()}"
+    else:
+        alias = record.version + ".0"
+    assert alias != record.version, alias
+    v = gate.classify_namespace(
+        ns, {record.version: record.nuspec_commit}, {alias: record.tag_commit}
+    )
+    assert v.recorded and not v.missing, (
+        f"{alias} and {record.version} are the same NuGet version: {v}"
+    )
+
+    # ...but two DIFFERENT commits under one canonical version is an ambiguity, not a join: nothing
+    # can say which one a pin resolves, so it is unresolved rather than silently last-wins.
+    try:
+        gate.classify_namespace(
+            ns, {record.version: record.nuspec_commit},
+            {record.version: record.tag_commit, alias: "b" * 40},
+        )
+    except gate.GateError as e:
+        assert "resolve to different commits" in str(e), e
+    else:
+        raise AssertionError("two commits under one canonical version were silently joined")
+
+# THE SUPPRESSION LIST IS PINNED AS A SET, not merely as well-formed entries. Everything above
+# proves each record behaves; nothing above notices a THIRD record appearing. For a list whose entire
+# justification is "it cannot rot into cover", adding to it must be a deliberate act that fails this
+# fixture until someone updates this line — the same discipline as EXPECTED_LEGS below, and the same
+# discipline RELEASE_NAMESPACES gets from the workflow-completeness leg.
+EXPECTED_RECORDS = {
+    ("coord-engine/v", "0.1.0"),
+    ("new-sdd-fullstack/v", "0.1.1-preview.1"),
+}
+actual = {(r.prefix, r.version) for r in gate.RECORDED_DISAGREEMENTS}
+assert actual == EXPECTED_RECORDS, (
+    "RECORDED_DISAGREEMENTS changed. Every entry SUPPRESSES a red, so a new one is a decision that "
+    "belongs in a pull request someone read, not a line that slipped in:\n"
+    f"  added:   {sorted(actual - EXPECTED_RECORDS)}\n"
+    f"  removed: {sorted(EXPECTED_RECORDS - actual)}"
+)
+assert len(actual) == len(gate.RECORDED_DISAGREEMENTS), "duplicate (prefix, version) records"
+
+# ...and the CODE refuses a duplicate too, not just this fixture's view of the shipped list. The two
+# guard different things: the assertion above sees the list as authored, this sees what happens if a
+# duplicate ever reaches the classifier — one entry silently overwriting the other, leaving a
+# survivor that speaks for a state nobody wrote.
+duplicated = gate.RECORDED_DISAGREEMENTS[0]
+saved = gate.RECORDED_DISAGREEMENTS
+gate.RECORDED_DISAGREEMENTS = saved + (duplicated,)
+try:
+    gate.classify_namespace(by_prefix[duplicated.prefix], {}, {})
+except gate.GateError as e:
+    assert "more than once" in str(e), e
+else:
+    raise AssertionError("a duplicated record was silently collapsed")
+finally:
+    gate.RECORDED_DISAGREEMENTS = saved
+
 # EVERY RECORD MUST NAME A DECLARED NAMESPACE, or it silently speaks for nothing.
 for record in gate.RECORDED_DISAGREEMENTS:
     assert record.prefix in by_prefix, f"recorded disagreement for unknown namespace {record.prefix}"
@@ -950,12 +1073,30 @@ v = gate.measure_namespace(
     orphan, remote="file:///nonexistent", repository="FS-GG/.github",
     canned_published=None, canned_tags=None,
 )
-assert v.uncovered and not v.red, "an uncovered namespace is declared, not a failure"
-code, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
+assert v.uncovered and not v.red, "an uncovered namespace is declared, not a per-namespace failure"
+code, stdout, stderr = gate.render_tag_arm([v], "FS-GG/.github")
 assert "UNCOVERED — NOT MEASURED" in stdout, stdout
-assert "1 release-tag namespace(s)" in stdout and "0 measured" in stdout, (
+assert "0 measured" in stdout, (
     "an uncovered namespace must not be counted among the measured ones:\n" + stdout
 )
+# ...AND THE RUN AS A WHOLE IS NOT A PASS. The per-namespace "an empty subject is not a pass" guard
+# has an aggregate twin: a run in which NOTHING was measured printed `ok: … 0 measured` and exited 0
+# — a check reporting a measurement it never took, at exit 0, which is the whole of epic #266. The
+# EXIT CODE is asserted here and not only the words, because the exit code is what CI reads.
+assert code == 1, f"a run that measured nothing must not exit 0:\n{stdout}"
+assert "NOTHING WAS MEASURED" in stderr, stderr
+
+# The same holds when several namespaces are all uncovered — the guard is on the aggregate, not on
+# the count of verdicts.
+code, stdout, stderr = gate.render_tag_arm([v, v], "FS-GG/.github")
+assert code == 1 and "NOTHING WAS MEASURED" in stderr, stdout + stderr
+
+# ...and one measured namespace beside an uncovered one is NOT "nothing measured".
+measured = gate.classify_namespace(
+    by_prefix["kit/v"], {"1.0.0": "a" * 40}, {"1.0.0": "a" * 40}
+)
+code, stdout, _ = gate.render_tag_arm([v, measured], "FS-GG/.github")
+assert code == 0 and "1 measured" in stdout, stdout
 PY
 then
   ok "the recorded-disagreement pin, the SPENT report, and the UNCOVERED branch all behave"
@@ -971,8 +1112,9 @@ if python3 - "$GATE" "$HERE/../../.github/workflows" <<'PY'
 import glob
 import importlib.util
 import os
-import re
 import sys
+
+import yaml
 
 spec = importlib.util.spec_from_file_location("gate", sys.argv[1])
 gate = importlib.util.module_from_spec(spec)
@@ -980,12 +1122,35 @@ sys.modules["gate"] = gate
 spec.loader.exec_module(gate)
 
 declared = {ns.prefix for ns in gate.RELEASE_NAMESPACES}
+
+# PARSED AS YAML, NOT MATCHED WITH A REGEX. The first draft used
+# `re.findall(r"tags:\s*\[\s*'([^']+?)\*'\s*\]", text)`, which matches ONLY flow-style single-quoted
+# triggers. All four release workflows happen to be written that way today, so the leg was green and
+# looked complete — while an ordinary block-style trigger
+#
+#     on:
+#       push:
+#         tags:
+#           - 'foo/v*'
+#
+# would be invisible, `uncovered` would stay empty, and this leg would PASS while the namespace it
+# was written to catch went unchecked. That is the same defect class as the gap #1790 closed, inside
+# the leg meant to prevent it (#1790 review). PyYAML is already a declared dependency of this job.
 found = {}
 for path in sorted(glob.glob(os.path.join(sys.argv[2], "release-*.yml"))):
-    text = open(path, encoding="utf-8").read()
-    for prefix in re.findall(r"tags:\s*\[\s*'([^']+?)\*'\s*\]", text):
-        found[prefix] = os.path.basename(path)
+    doc = yaml.safe_load(open(path, encoding="utf-8"))
+    assert isinstance(doc, dict), path
+    # `on:` is YAML 1.1's boolean true — PyYAML parses the KEY as True, not as the string "on".
+    triggers = doc.get("on", doc.get(True)) or {}
+    push = (triggers or {}).get("push") or {}
+    tags = push.get("tags") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    for pattern in tags:
+        assert pattern.endswith("*"), f"{path}: unexpected tag trigger {pattern!r}"
+        found[pattern[:-1]] = os.path.basename(path)
 assert found, "no release workflow declares a tag trigger — this leg would prove nothing"
+assert len(found) >= 4, f"expected at least 4 tag-triggered release workflows, found {found}"
 
 uncovered = {p: w for p, w in found.items() if p not in declared}
 assert not uncovered, (
@@ -1057,7 +1222,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=93
+EXPECTED_LEGS=99
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
