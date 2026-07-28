@@ -1720,6 +1720,17 @@ wire_sparse() {
     # An EXPRESSION. The runner resolves it from values this audit cannot see, so there is no
     # repository to ask for a tree — a permanent boundary, never a read to retry.
     cone-expression)   printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: ${{ inputs.upstream }}\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    # A DOT-PREFIXED repository that is NOT the authority (#1608). GitHub lets a repository NAME
+    # begin with a dot — `.github` itself is the proof — and an org's next one (`.allstar`,
+    # `.github-private`) is an ordinary rostered sibling. Both literal-shape guards used to reject
+    # the whole class, so its tree was never fetched and rule (4) silently never ran for it.
+    cone-dotted)       printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.allstar\n          sparse-checkout: |\n            scripts/check-foo.py\n' ;;
+    # THE SHAPES THAT MUST STILL BE REFUSED once the class is widened for a leading dot. `a..b` is
+    # the path-traversal shape the slug is built out of; `FS_GG/x` is an OWNER carrying `_`, which
+    # is what made the cache slug non-injective — `FS_GG/x` and `FS/GG__x` both slug to `fs_gg__x`,
+    # so one repository's patterns could be graded against another's tree.
+    cone-dotdot)       printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/a..b\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    cone-owner-us)     printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS_GG/x\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
 
     # --- SHAPES THE RULE REFUSES rather than grades. A skip is how a coherence gate fails open.
     negated)     printf '%s          sparse-checkout-cone-mode: false\n          sparse-checkout: |\n            /scripts/\n            !/scripts/lib/\n' "$head" ;;
@@ -1914,6 +1925,131 @@ out="$(run_logged "$WORK/calls.expr" 2>&1)" && rc=0 || rc=$?
     && ! grep -q '^tree' "$WORK/calls.expr"; } \
   && ok "sparse: an EXPRESSION repository is ungraded, costs no call, and is not a no-verdict (#1556)" \
   || bad "a non-literal repository must be a boundary, not a fetch" "rc=$rc: $out"
+
+# --- A REPOSITORY NAME MAY BEGIN WITH A DOT (#1608) ----------------------------------------------
+#
+# The two literal-`owner/name` guards #1556 added — one Python, one bash — both required the NAME
+# component to start with an alphanumeric. `.github` starts with a dot, so the repository this org
+# fetches more than any other was classified as an expression the runner resolves, UNGRADED at exit
+# 0, with a sentence that is simply false about it. Every dot-prefixed rostered repository was
+# unreachable the same way: its tree was never fetched and rule (4) silently never ran for it.
+#
+# THE ROSTER HERE CARRIES A DOT-PREFIXED SIBLING THAT IS NOT THE AUTHORITY, because the authority is
+# normally answered one branch earlier (it is the tree the audit holds) and a leg that only used
+# `.github` would be green for the wrong reason. `.allstar` is on the roster, is not the authority,
+# and is therefore reached exactly like any other sibling: fetched, then graded.
+DOTREG="$WORK/dotted.yml"
+cat > "$DOTREG" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: .allstar,  full: FS-GG/.allstar,        role: framework, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
+YAML
+
+# A cone-mode FILE name against the dot-prefixed sibling. It is a FINDING — the tree was fetched and
+# rule (4) ran — and the numbers are pinned, because "0 finding(s)" is also what the old UNGRADED
+# produced. Against the unfixed guards this leg reds three ways at once: exit 0 instead of 1, the
+# false "not a literal `owner/name`" sentence, and `ran for 0 of 1`.
+wire FS-GG/FS.GG.SDD; unwired FS-GG/.allstar; wire_sparse FS-GG/FS.GG.Rendering cone-dotted
+# The assignments prefix the `bash` INVOCATION, not the `out=` assignment: a prefix on a bare
+# assignment list would set them in this shell — unexported, so the stub two processes down would
+# never see `GH_CALL_LOG`, and `$STUB` would leak onto PATH for every later leg. Same trap
+# `run_logged` documents, one layer out.
+: > "$WORK/calls.dotted"
+out="$(GH_CALL_LOG="$WORK/calls.dotted" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 \
+       REPOS_AUDIT_RETRY_DELAY=0 bash "$AUDIT" --registry "$DOTREG" --repos-sh "$REPOS_SH" 2>&1)" \
+  && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'selects no tracked path' \
+    && printf '%s' "$out" | grep -q 'FS.GG.Rendering/.github/workflows/fetch.yml' \
+    && printf '%s' "$out" | grep -q '0 step(s) UNGRADED' \
+    && printf '%s' "$out" | grep -q 'ran for 1 of 1 graded cross-repo step(s)' \
+    && ! printf '%s' "$out" | grep -q 'not a literal `owner/name`' \
+    && grep -q '^tree.*\.allstar' "$WORK/calls.dotted"; } \
+  && ok "sparse: a DOT-PREFIXED rostered repository is fetched and GRADED, not called an expression (#1608)" \
+  || bad "a repository name beginning with a dot must be a literal owner/name" \
+         "rc=$rc calls=$(cat "$WORK/calls.dotted" 2>&1): $out"
+# `.allstar` exists only for the roster above. Left behind it is inert (no later roster names it), but
+# a fixture that leaves state for the next leg to trip over is how the last few defects here started.
+noflows FS-GG/.allstar
+
+# ...and the widening did not open the two shapes the guard exists for. `a..b` is the traversal
+# shape the cache slug is built from; `FS_GG/x` is an owner carrying `_`, which is what made the
+# slug non-injective and is not a login GitHub can issue. Both stay a permanent boundary, and both
+# must cost no API call: the second is the leg that reds on the UNFIXED guard, which accepted the
+# underscore owner and got as far as calling it off-roster instead.
+for spec in "cone-dotdot:a..b" "cone-owner-us:an owner carrying an underscore"; do
+  mode="${spec%%:*}"; what="${spec#*:}"
+  wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering "$mode"
+  out="$(run_logged "$WORK/calls.$mode" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+      && printf '%s' "$out" | grep -q 'not a literal `owner/name`' \
+      && ! printf '%s' "$out" | grep -q 'not on this audit' \
+      && ! grep -q '^tree' "$WORK/calls.$mode"; } \
+    && ok "sparse: $what is still refused as a shape, and costs no call (#1608)" \
+    || bad "widening the name class must not admit $what" \
+           "rc=$rc calls=$(cat "$WORK/calls.$mode" 2>&1): $out"
+done
+
+# AN UNREADABLE ORIGIN IS A FAILURE TO READ, NOT A BOUNDARY (#1608, #266).
+#
+# `origin_repository()`'s own docstring calls None "a legitimate answer (a tree with no origin, a git
+# that will not run)". In that state the audit does not know WHICH repository its checkout is, so it
+# cannot decide whether a step's `repository:` names the tree it holds — and it must not answer as
+# though it had. The unfixed code fell straight through to the foreign path and, because the guard
+# there rejected `.github`, reported the authority as "its `repository:` is not a literal
+# `owner/name`": a sentence about a repository that is nothing but a literal `owner/name`, classified
+# as a PERMANENT boundary at exit 0, over a read that FAILED.
+#
+# The stub breaks exactly one git question and leaves the rest of git working, so the leg is about a
+# checkout whose identity cannot be read rather than about a machine with no git.
+REALGIT="$(command -v git)"
+cat > "$STUB/git" <<GITSTUB
+#!/usr/bin/env bash
+for arg in "\$@"; do [ "\$arg" = get-url ] && exit 128; done
+exec "$REALGIT" "\$@"
+GITSTUB
+chmod +x "$STUB/git"
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+rm -f "$STUB/git"
+# Asserted on the REASON and on the verdict KIND, not on the exit code: exit 2 alone is satisfied by
+# any unrelated no-verdict, and the defect was never the code — it was the sentence and the class.
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q "could not read its own checkout's origin" \
+    && printf '%s' "$out" | grep -q 'could not read the git tree behind 1 cross-repo' \
+    && printf '%s' "$out" | grep -q '1 step(s) UNGRADED' \
+    && ! printf '%s' "$out" | grep -q 'not a literal `owner/name`'; } \
+  && ok "sparse: an UNREADABLE ORIGIN is a no-verdict naming the origin, not a boundary naming the shape (#1608)" \
+  || bad "an unreadable origin must be a read failure, not a permanent boundary" "rc=$rc: $out"
+
+# THE BANNED PIPELINE, ASSERTED STRUCTURALLY (#1608). `… | grep -q …` under `set -o pipefail` reports
+# 141 when the writer takes SIGPIPE, so the `if` reads FALSE even though grep MATCHED — measured at 7
+# in 10 on the incident this script devotes twenty lines to. The roster membership test in
+# `sparse_tree_ensure` was written that way, where the misreading declares a ROSTERED repository
+# off-roster: UNGRADED at exit 0, the fail-open direction, non-deterministically.
+#
+# IT CANNOT BE CAUGHT BEHAVIOURALLY. The race needs the writer to still be blocked on a full 64KiB
+# pipe buffer, and ~8 rostered repos are a few hundred bytes — so a runtime leg would be green over
+# the defect on every roster this org will ever have, which is the vacuous-fixture shape (#266) in
+# the fixture asserting a #266 rule. The checkable claim is about the SOURCE: no live `grep -q` in
+# this file is fed by a pipe. Comment lines are excluded — the twenty-line explanation quotes the
+# banned shape on purpose, and a check that could not tell prose from code would forbid saying why.
+#
+# `[^|]` BEFORE THE BAR IS LOAD-BEARING: `cmd || grep -qxF … <<< "$x"` is an OR of two commands, not a
+# pipeline, and nothing in it can SIGPIPE. Matching it would make this leg red over the correct shape
+# and the obvious way to quiet it would be to rewrite working code — a check that punishes the thing
+# it exists to encourage.
+BANNED_PIPE="$(grep -nE '[^|]\|[[:space:]]*grep[[:space:]]+-[A-Za-z]*q' "$AUDIT" \
+                 | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
+[ -z "$BANNED_PIPE" ] \
+  && ok "sparse: no live \`grep -q\` in repos-audit.sh is fed by a PIPE — grep's status is grep's own (#1608)" \
+  || bad "a pipe into \`grep -q\` is 141 under pipefail, so the test reads FALSE on a match" "$BANNED_PIPE"
 
 # CRITERION 5. NO EXTRA API CALL WHEN NO STEP FETCHES A NON-AUTHORITY REPO. A weekly audit must not
 # gain ten round-trips for a hole that is usually empty, and the only honest way to check a claim
