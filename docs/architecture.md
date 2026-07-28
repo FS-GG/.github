@@ -708,11 +708,28 @@ Three consequences the map has to carry, because they change what a green gate m
   survived** and the demo grew the discriminating fixture that fails it.
 
   **Adoption is per-receiver and sequenced (ADR-0067 §9): nothing is retired before its replacement is
-  proven there.** `FS.GG.Templates` and `FS.GG.Net` are the first adopters, because they were the two
+  proven there.** `FS.GG.Templates` and `FS.GG.Net` were the first adopters, because they were the two
   broken ones — [FS.GG.Templates#324](https://github.com/FS-GG/FS.GG.Templates/issues/324) (no
   view-resolution lane at all) and [#1727](https://github.com/FS-GG/.github/issues/1727) (an alarm on no
   required context) are fixed **by construction** rather than by repairing code about to be deleted.
-  Until a receiver has adopted, it keeps its local copy.
+
+  **7 of 7 as of 2026-07-28, and every local copy is deleted**
+  ([#1777](https://github.com/FS-GG/.github/issues/1777)). The fleet is on `FS.GG.Kit` 0.17.0, each pin
+  read back from `main`; **119,692 bytes across seven files** are gone. The order was strict per
+  receiver — bump → observe the kit's alarm reporting in that repo *by run id and by job log* → delete
+  the copy → **re-prove the mutation on that tree**, at 0.17.0 rather than inheriting the measurement the
+  deleted script's own header recorded at 0.15.0. On every one of the five: with
+  `FsggKitViewSkillRoots` emptied and the view root deleted, the materialize is green, the required
+  `kit / coordination-kit` is green, and the shared alarm **reds** — including where `--absent-ok` is in
+  force, because that excuse is scoped to view roots and the membership lane fires before the roots loop.
+  The pin bump lands as its own pull request, because `materialize / kit-bump-shape` refuses a bump
+  carrying receiver-authored edits ([#1726](https://github.com/FS-GG/.github/issues/1726)) — a refusal
+  that happens to enforce §9's ordering.
+
+  **The `[[ ! -e ]]` claim above, measured rather than repeated.** Rendering's and Governance's copies
+  **red** on a dangling view root and *misattribute* the class as "does not exist"; Audio's treated
+  absence as *expected*, so its dangling root went **green**. Only the last was a silent pass. A
+  misattributed class still sends the reader to the wrong repair, and it is not the same defect.
 - **A repo that wires the `skill-union` receiver caller could not hold a view root at all — and that
   caller is now RETIRED.** Measured 2026-07-28 on `FS.GG.SDD@387adc6`: `skill-union-assert.yml` is a
   reusable workflow, so it checks the caller out and asserts over that checkout, and a root that only
