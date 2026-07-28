@@ -178,6 +178,58 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > **AC 7 remains unreachable as written** and this changes nothing about that: the freshness sweep goes
 > last, and its subject survives the rewrite.
 
+> **STAGE 2 ATTEMPTED ON `FS.GG.SDD` AND REFUSED, 2026-07-28 — §9's precondition is what refused it
+> ([#1676](https://github.com/FS-GG/.github/issues/1676)).** SDD is the second receiver to carry
+> `FS.GG.Kit` 0.15.0 (`317f692`), it passes all four of the order's §4 preconditions on its own tree
+> that day, and **nothing was retired on it**. No PR was opened against that repository; the whole
+> attempt lived in a throwaway clone of `387adc6`, and the measurements are in
+> [`docs/coordination/skill-apparatus-retirement-order.md`](../coordination/skill-apparatus-retirement-order.md)
+> §4 and §7.
+>
+> The parity verdict was **re-derived, not inherited from Templates**: AGREE on the committed tree
+> (`old=ok new=ok`, **32 ids in 2 roots**) and AGREE again on the resolved half-view, where byte
+> identity is reported *"STRUCTURALLY IMPOSSIBLE to violate here — every configured root resolves to
+> the same object … Checked, not assumed."* Half-view throughout, so
+> [#1685](https://github.com/FS-GG/.github/issues/1685) was never engaged. The rollback was re-run
+> against SDD as `#1676` AC 3 requires and lands at **0 changed paths** with the old gate green —
+> `rm -rf <second-root>` not required, agreeing with Templates against `.github`.
+>
+> **Three things stopped it, and the first is a §9 refusal rather than a scheduling one.**
+>
+> 1. **`skill-union-assert` does not retire quietly on a receiver that wired a caller.** SDD's caller is
+>    live and its `skill-union / skill-union` context is **required under `enforce_admins`**; the
+>    reusable workflow behind it checks the caller out and asserts over that checkout, so a generated
+>    root is simply **absent** in its subject — measured **exit 2** on the retired tree, exit 0 once the
+>    view exists. That workflow's own header refuses the obvious lift as a decision rather than a
+>    tidy-up. So the replacement for a required gate does not exist, and §9 says nothing is retired
+>    before its replacement is proven. Recorded as blocker **B5** in the order and filed as
+>    [#1715](https://github.com/FS-GG/.github/issues/1715).
+> 2. **A view can lose a file that git reports nothing about.**
+>    `.agents/skills/skill-manifest.json` is SDD's producer-authoritative process-skill manifest, it
+>    exists in **no other root**, and a view of `.claude/skills` does not carry it. After the dry-run
+>    retirement the file is gone and `git status --porcelain` is empty. SDD's **required** `gate` then
+>    dies at `producer manifest missing`, with the view generated and without it. This is a class the
+>    §5 root-set retirement never met, because a *retired* root keeps its files on disk while a
+>    *view* root replaces them.
+> 3. **A view root is not yet subtracted from a receiver's own write set.**
+>    `scripts/materialize-skill-roots.fsx` derives its write set as the declared roots minus
+>    `FsggKitRetiredSkillRoots`, with no term for `FsggKitViewSkillRoots`, so it still plans writes into
+>    a generated root (`writes : 102`, `changed : 0` only because `--mode link` makes both paths one
+>    object). That is FS.GG.SDD#767's re-creation hazard one disposition over. Filed as
+>    [`FS.GG.SDD#770`](https://github.com/FS-GG/FS.GG.SDD/issues/770); finding 2 is
+>    [`FS.GG.SDD#771`](https://github.com/FS-GG/FS.GG.SDD/issues/771).
+>
+> **The generalisation stage 1 offered was too cheap, and this is the correction.** Templates is a thin
+> receiver: no `gate.yml`, no `build-config`, no repo-owned skills in the audited roots, no union
+> caller, and an empty `.codex/skills`. SDD is a framework receiver: its own tests read its own roots
+> from the repo path in a bare checkout, its required gate re-runs the materializer's `--check` there,
+> it wires the union gate, and its `.codex/skills` still holds **28 skills it owns**, which ADR-0065
+> §Retiring a root forbids anyone hand-deleting and which this attempt did not touch. **Per-repo means
+> per-repo cost, not one repo's cost applied seven times.**
+>
+> AC 7 is unchanged and still unreachable as written; the freshness sweep was not touched, and nothing
+> here was retired to make a checkbox pass.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
