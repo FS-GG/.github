@@ -658,6 +658,50 @@
        materializing anything. §8 wants the assertion in CI; a materialize only happens on bump PRs,
        so a receiver that wants it on all of them adds that line. It needs no arguments and no
        expected-set of its own — the package it references carries both. -->
+  <!-- GENERATE THE VIEW, IN THE KIT, ONCE — ADR-0067 §9 stage 2 (.github#1676).
+       §6.1's rule is that a view root is untracked and git-ignored by construction, so it is ABSENT in
+       every fresh checkout, and "a gate whose subject is one must generate it in a file the receiver
+       owns — never in a workflow step". Receivers obeyed that by each hand-writing a target:
+       FsggSddGenerateSkillView, FsggNetGenerateSkillView, FsggAudioGenerateSkillView,
+       FsggGameGenerateSkillView, … — SEVEN near-identical copies of one Exec, in seven receiver
+       projects. That is the copying ADR-0067 exists to retire, one level up from the roots it retired.
+
+       The rule said "in a file the receiver owns" because the alternative considered was a workflow
+       step. THIS file is a third option that satisfies it better: the receiver project IMPORTS this
+       package, so the target runs in the receiver's own build, in every tree, with no receiver wiring
+       — the same property the comment below claims for FsggKitCheckSkillView, and for the same reason.
+
+       ORDERING IS THE WHOLE POINT. It runs AFTER the materialize (which writes scripts/skill-view and
+       sweeps the kit's own directories out of the view root, so `skill-view generate` is no longer
+       refused for a tracked root) and BEFORE the §8 assertion (which fails loud on an absent view).
+       Without this, defaulting FsggKitViewSkillRoots to a real root would red every receiver that had
+       not hand-written its own target — measured on this branch: the kit-package `verify` job's fresh
+       receiver has no such target, and stage 2's default made it fail.
+
+       A RECEIVER THAT ALREADY HAS ITS OWN TARGET IS UNHARMED: generate is idempotent (it re-points a
+       symlink, or rewrites identical bytes), so the seven can be removed per repo, on their own
+       schedule, rather than in a flag day.
+
+       IT RUNS ON THE MATERIALIZE PATH ONLY, AND THAT BOUNDARY IS THE WHOLE SAFETY OF IT.
+       `BeforeTargets="FsggKitCheckSkillView"` would be the obvious wiring and it is WRONG: §8's check
+       is separately invocable (`-t:FsggKitCheckSkillView`) and that is how receivers run it per-PR,
+       with no materialize. A generate that fired there would repair the tree it was about to grade,
+       and §8's absence classes — [dangling-root], [text-file-root] (the `core.symlinks=false`
+       checkout ADR-0067 §6 measured), [missing-skill] — would stop being reachable on the one path
+       that exists to detect them. Phase 1 (.github#1621) measured every one of those as EXIT 0 WITH
+       NO DIAGNOSTIC in both runtimes: an agent that quietly has no skills. Repairing them where we
+       are already writing is right; repairing them where we are only GRADING is the quiet failure §8
+       says is worse than no rewrite.
+
+       So: REPAIR on materialize, DETECT on check. This target is ordered before the check by
+       declaration order under the same AfterTargets trigger, which the verify suite asserts. -->
+  <Target Name="FsggKitGenerateSkillView"
+          AfterTargets="FsggKitMaterialize"
+          Condition="'$(FsggKitViewSkillRoots)' != '' And '$(OS)' != 'Windows_NT'">
+    <Exec WorkingDirectory="$(FsggKitReceiverRoot)"
+          Command="bash scripts/skill-view generate --source $(FsggKitSkillRoots) --roots &quot;$(FsggKitViewSkillRoots.Replace(';',' '))&quot;" />
+  </Target>
+
   <Target Name="FsggKitCheckSkillView" AfterTargets="FsggKitMaterialize">
     <CheckSkillView KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)"
                     ViewSkillRoots="$(FsggKitViewSkillRoots)" />
