@@ -10,6 +10,9 @@
 #   3. MATERIALIZES — a receiver gets the skills on disk in every root, the client executable, and the
 #      engine manifest at .config/ (ADR-0062's load-bearing half); build-config is withheld unless the
 #      consumer opts in, and (3b) lands at the receiver root when it does — global.json never carried.
+#      (3e) ADR-0067 §9's replacement is not merely PRESENT but RUNS from the receiver's own tree, and
+#      (3f/3g/3h) a VIEW root is swept, never copied into, certified or LOUDLY refused, refused outright
+#      when a root is named in two dispositions, and wholly inert when none is declared (.github#1696).
 #   4. FAILS LOUD — a tampered kit file is a build ERROR, never a silently missing/stale file (ADR-0014).
 set -euo pipefail
 
@@ -205,6 +208,157 @@ done
 [ ! -e "$recv/.claude/skills/check-board/undeclared.txt" ] \
   || fail "extra undeclared file survived closed-set skill materialization"
 echo "   auxiliary reference reached all roots with its mode; stale undeclared file removed"
+
+echo "== 3e. the phase-4 REPLACEMENT is delivered and RUNS on a receiver (.github#1696) =="
+# ADR-0067 §9 precondition 1 is "the replacement is present and EXECUTABLE in R", and #1696 measured
+# that no published kit had ever satisfied it. `[ -x ]` alone would not measure it either: skill-view
+# sources two libraries at startup, so a receiver could hold an executable file that dies on line 87
+# while precondition 1 read as satisfied. So this leg RUNS the tool from the receiver's own tree.
+[ -x "$recv/scripts/skill-view" ]      || fail "skill-view not materialized executable at scripts/skill-view"
+[ -f "$recv/scripts/lib/args.sh" ]     || fail "skill-view's lib/args.sh not materialized at scripts/lib/args.sh"
+[ -f "$recv/scripts/lib/roots.sh" ]    || fail "skill-view's lib/roots.sh not materialized at scripts/lib/roots.sh"
+( cd "$recv" && ./scripts/skill-view check --source .claude/skills --tree . >/dev/null 2>&1 ) \
+  || fail "the materialized scripts/skill-view could not run in the receiver tree (its libraries did not arrive, or it is broken)"
+echo "   scripts/skill-view + lib/args.sh + lib/roots.sh materialized; the tool RUNS from the receiver tree"
+
+echo "== 3f. a VIEW root: swept, never copied into, and CERTIFIED — or the build fails (.github#1696) =="
+recv4="$WORK/recv-view"; mkdir -p "$recv4"
+# A receiver mid-migration: `.claude/skills` is the live root, `.agents/skills` is being turned into a
+# generated view, and it still holds the copies an OLDER kit materialized there — plus one skill of the
+# receiver's own, which is not the kit's to remove.
+mkdir -p "$recv4/.agents/skills/check-board" "$recv4/.agents/skills/receiver-own-skill"
+printf 'stale kit copy\n' > "$recv4/.agents/skills/check-board/SKILL.md"
+printf 'the receiver own skill\n' > "$recv4/.agents/skills/receiver-own-skill/SKILL.md"
+cat > "$WORK/view.proj" <<EOF
+<Project>
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
+  <PropertyGroup>
+    <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
+    <FsggKitReceiverRoot>$recv4</FsggKitReceiverRoot>
+    <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>
+    <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>
+  </PropertyGroup>
+</Project>
+EOF
+# PASS 1 — the sweep runs, and then §8 REFUSES to certify a root with no view in it. The refusal is
+# the point: a view root is a root the kit does not write, so it is a root nothing else can vouch for.
+if dotnet msbuild "$WORK/view.proj" -t:FsggKitMaterialize -nologo >/dev/null 2>&1; then
+  fail "materialize SUCCEEDED with an ungenerated view root — ADR-0067 §8's absence check is not firing"
+fi
+[ ! -e "$recv4/.agents/skills/check-board" ] \
+  || fail "view root still carries the kit's materialized check-board copy after materialize"
+[ -f "$recv4/.agents/skills/receiver-own-skill/SKILL.md" ] \
+  || fail "the view-root sweep destroyed a skill the kit does not own"
+for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
+  [ -f "$recv4/.claude/skills/$s/SKILL.md" ] || fail "live root not materialized while a view root was declared: $s"
+  [ ! -e "$recv4/.agents/skills/$s" ]        || fail "the materializer COPIED into a view root: $s"
+done
+echo "   pass 1: kit copies swept from the view root, the receiver's own skill kept, nothing copied in, §8 refused to certify"
+
+# The receiver resolves its own skill (moving it under the live source is the migration ADR-0067 §6
+# describes), and the now-empty root is removed BY THE MATERIALIZER — never by hand (ADR-0065).
+rm -rf "$recv4/.agents/skills/receiver-own-skill"
+if dotnet msbuild "$WORK/view.proj" -t:FsggKitMaterialize -nologo >/dev/null 2>&1; then
+  fail "materialize SUCCEEDED with an absent view root"
+fi
+[ ! -e "$recv4/.agents/skills" ] \
+  || fail "the materializer left an empty view root behind — skill-view generate refuses to replace one"
+echo "   pass 2: the now-empty view root removed by the materializer, so the view can be generated there"
+
+# PASS 3 — generate the view WITH THE TOOL THE KIT JUST DELIVERED, then materialize again. This is the
+# whole point of the item in one command: a receiver, holding only what the package gave it, produces
+# its own second root and the kit certifies it.
+( cd "$recv4" && ./scripts/skill-view generate --source .claude/skills --tree . --roots ".agents/skills" >/dev/null ) \
+  || fail "the materialized skill-view could not generate the view root"
+# Either shape skill-view can produce, because the sweep has to recognise BOTH as "already a view":
+# a symlink where the filesystem allows one, a copy carrying a `.skill-view` receipt where it does not.
+[ -L "$recv4/.agents/skills" ] || [ -f "$recv4/.agents/skills/.skill-view" ] \
+  || fail "skill-view produced neither a link nor a .skill-view-receipted copy at the view root"
+dotnet msbuild "$WORK/view.proj" -t:FsggKitMaterialize -nologo >/dev/null \
+  || fail "materialize FAILED over a correctly generated view root — §8's check rejects a valid view"
+for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
+  [ -f "$recv4/.agents/skills/$s/SKILL.md" ] || fail "skill not visible through the generated view: $s"
+  [ -f "$recv4/.claude/skills/$s/SKILL.md" ] || fail "the view-root sweep RECURSED THROUGH THE LINK and destroyed the live root: $s"
+done
+# And the assertion stands alone, with no materialize — the shape a receiver wires into its own gate.
+dotnet msbuild "$WORK/view.proj" -t:FsggKitCheckSkillView -nologo >/dev/null \
+  || fail "FsggKitCheckSkillView failed as a standalone target over a valid view"
+echo "   pass 3: view generated by the delivered tool, certified by the kit, live root intact through the link"
+
+# A COPY-mode view — what skill-view produces where the filesystem refuses a symlink (the
+# `core.symlinks=false` Windows case is exactly a receiver that cannot have the link shape). The sweep
+# must recognise the `.skill-view` receipt as "already a view" and leave it alone, or the second
+# materialize would delete the generated copies and the check would then fail over its own doing.
+rm -f "$recv4/.agents/skills"
+( cd "$recv4" && ./scripts/skill-view generate --source .claude/skills --tree . --roots ".agents/skills" --mode copy >/dev/null ) \
+  || fail "skill-view could not generate a COPY-mode view"
+[ -f "$recv4/.agents/skills/.skill-view" ] || fail "copy-mode view carries no .skill-view receipt"
+dotnet msbuild "$WORK/view.proj" -t:FsggKitMaterialize -nologo >/dev/null \
+  || fail "materialize FAILED over a COPY-mode view root — the .skill-view receipt guard is not recognised"
+for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
+  [ -f "$recv4/.agents/skills/$s/SKILL.md" ] || fail "the sweep destroyed a COPY-mode view it should have left alone: $s"
+done
+echo "   a copy-mode view (the filesystem-refuses-symlinks shape) is recognised by its receipt and not swept"
+
+# The three silent classes phase 1 measured must each be LOUD here.
+rm -rf "$recv4/.agents/skills"; ln -s "$recv4/nowhere" "$recv4/.agents/skills"
+if dotnet msbuild "$WORK/view.proj" -t:FsggKitCheckSkillView -nologo >/dev/null 2>&1; then
+  fail "a DANGLING view root was certified — both runtimes would resolve zero skills and exit 0"
+fi
+rm -rf "$recv4/.agents/skills"; printf '../.claude/skills\n' > "$recv4/.agents/skills"
+if dotnet msbuild "$WORK/view.proj" -t:FsggKitCheckSkillView -nologo >/dev/null 2>&1; then
+  fail "a TEXT-FILE view root (core.symlinks=false checkout) was certified"
+fi
+rm -rf "$recv4/.agents/skills"; mkdir -p "$recv4/.agents/skills/check-board"
+cp "$recv4/.claude/skills/check-board/SKILL.md" "$recv4/.agents/skills/check-board/SKILL.md"
+if dotnet msbuild "$WORK/view.proj" -t:FsggKitCheckSkillView -nologo >/dev/null 2>&1; then
+  fail "a PARTLY populated view root was certified — a partial root is as silent as an empty one"
+fi
+echo "   dangling link, core.symlinks=false text file, and a partial root each rejected"
+
+echo "== 3g. a root cannot hold two dispositions at once =="
+cat > "$WORK/view-conflict.proj" <<EOF
+<Project>
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
+  <PropertyGroup>
+    <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
+    <FsggKitReceiverRoot>$WORK/recv-conflict</FsggKitReceiverRoot>
+    <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>
+  </PropertyGroup>
+</Project>
+EOF
+# .agents/skills is in the DEFAULT FsggKitSkillRoots, so this proj declares it both materialized and
+# generated. Silently picking either reading destroys something: materializing overwrites a view, and
+# viewing deletes the only copies. It must refuse.
+if dotnet msbuild "$WORK/view-conflict.proj" -t:FsggKitMaterialize -nologo >/dev/null 2>&1; then
+  fail "a root declared BOTH materialized and view was accepted — the materializer picked a disposition silently"
+fi
+echo "   a root named in two dispositions is refused, not resolved"
+
+echo "== 3h. no view roots declared: the kit behaves exactly as 0.14.0 did =="
+# The safety of the whole change is this default. A receiver that takes the bump and configures
+# nothing must materialize both roots and retire nothing (#1696 is stage 0; phase 4 owns retirement).
+recv5="$WORK/recv-default"; mkdir -p "$recv5"
+cat > "$WORK/default.proj" <<EOF
+<Project>
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
+  <PropertyGroup>
+    <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
+    <FsggKitReceiverRoot>$recv5</FsggKitReceiverRoot>
+  </PropertyGroup>
+</Project>
+EOF
+dotnet msbuild "$WORK/default.proj" -t:FsggKitMaterialize -nologo >/dev/null \
+  || fail "the DEFAULT materialize (no view roots) failed — the new property is not inert by default"
+for root in .claude/skills .agents/skills; do
+  for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
+    [ -f "$recv5/$root/$s/SKILL.md" ] || fail "default materialize lost a root: $root/$s"
+  done
+done
+echo "   both roots still materialized with no configuration; FsggKitViewSkillRoots is inert by default"
 
 echo "== 4. a tampered kit file is a LOUD failure =="
 cp -r "$WORK/unpacked/kit" "$WORK/tampered"

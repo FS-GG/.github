@@ -130,14 +130,46 @@ Preconditions 2 and 3 are satisfiable — the parity harness measured 8/8 AGREE 
 re-measured the resolved half-view shape green. Precondition 4 is **not reachable by any mechanism that
 exists**, which is blocker B2 below.
 
+> **UPDATED 2026-07-28 ([#1696](https://github.com/FS-GG/.github/issues/1696)).** Both statements above
+> were true of every kit up to and including 0.14.0 and are **no longer true of the package**. `FS.GG.Kit`
+> **0.15.0** delivers `scripts/skill-view` (with the two libraries it sources) and gives precondition 4 a
+> mechanism: `FsggKitViewSkillRoots`, the third root disposition, whose sweep is what un-tracks a
+> receiver's second root without anybody hand-deleting a mirror.
+>
+> **The verdict is still 0 of 7, and for a different reason.** Precondition 1 asks about repo R's tree,
+> not about the newest package, and no receiver has taken the bump: `#1587`'s diff-shape guard refuses it
+> on all seven ([`#1693`](https://github.com/FS-GG/.github/issues/1693), B3 below), which is now the
+> *only* thing between the fleet and stage 1. Re-run §4's four preconditions on R's own tree the day R is
+> retired, exactly as this section already says; do not read 0.15.0's existence as any repo's eligibility.
+
+### The per-receiver sequence 0.15.0 makes available (stage 1, per repo)
+
+Measured end-to-end by `src/FS.GG.Kit/verify-package.sh` §3f, on a receiver tree holding a stale
+materialized `.agents/skills` and one skill of its own:
+
+1. In R's `.config/kit/FS.GG.Kit.receiver.proj`: drop the view root from `FsggKitSkillRoots` and name it
+   in `FsggKitViewSkillRoots`. The **union is unchanged**, so R's runtime root set is unchanged.
+2. `dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize`. The materializer removes the
+   kit's own skill directories from the view root and then the now-empty root, and **fails loudly**
+   because no view has been generated there yet. That failure is the §8 assertion doing its job, not a
+   defect — a root nothing materializes into is a root nothing else can vouch for. Any skill R itself put
+   under that root survives and must be moved under the live source before the root can become a view.
+3. Commit the deletions (this is the retirement of the *copy*) plus the `.gitignore` line.
+4. `scripts/skill-view generate --source <live root>` — the tool the same package delivered. It is no
+   longer refused, because the root is no longer tracked.
+5. Re-run the materialize: green, with `all N kit skill file(s) visible` at the view root. Wire
+   `-t:FsggKitCheckSkillView` into R's `gate.yml` so the assertion runs on every PR and not only on
+   kit-bump PRs.
+6. Re-run §7's rollback transcript against R before the next receiver is touched (`#1676` AC 3).
+
 ---
 
 ## 5. The blockers, in the order they must clear
 
 | id | blocker | state |
 |---|---|---|
-| **B1** | The kit does not deliver `scripts/skill-view` (or the absence-check wiring) to receivers. Precondition 1 fails on all seven. | **filed by this item** |
-| **B2** | The materializer has exactly two states for a root: `FsggKitSkillRoots` (materialize into it) and `FsggKitRetiredSkillRoots` (delete the kit's directories from it) — `src/FS.GG.Kit/build/FS.GG.Kit.props:19,25`. There is **no third state** for *"still a declared runtime root, but generated locally rather than materialized"*, which is exactly what a view root is. Without it a receiver's second root stays committed, and `scripts/skill-view:331` then refuses to generate the view there. ADR-0065 §Retiring a root forbids the receiver hand-deleting it — *"A receiver never hand-deletes a mirror; the materializer that created it is the thing that removes it."* | **filed by this item** |
+| **B1** | The kit does not deliver `scripts/skill-view` (or the absence-check wiring) to receivers. Precondition 1 fails on all seven. | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `scripts/skill-view` is a `kit:` row, as are the two libraries it sources at startup — `repos.sh validate` now refuses a kit that separates them, because a receiver holding the tool without them would read as satisfying precondition 1 while the tool exits non-zero on every run. **Re-read precondition 1 as written**: "present *and executable*" means it runs, and the kit's own gate proves that by running the materialized copy from a receiver tree. |
+| **B2** | The materializer has exactly two states for a root: `FsggKitSkillRoots` (materialize into it) and `FsggKitRetiredSkillRoots` (delete the kit's directories from it) — `src/FS.GG.Kit/build/FS.GG.Kit.props:19,25`. There is **no third state** for *"still a declared runtime root, but generated locally rather than materialized"*, which is exactly what a view root is. Without it a receiver's second root stays committed, and `scripts/skill-view:331` then refuses to generate the view there. ADR-0065 §Retiring a root forbids the receiver hand-deleting it — *"A receiver never hand-deletes a mirror; the materializer that created it is the thing that removes it."* | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `FsggKitViewSkillRoots` is the third state — a root that stays in the runtime contract, is not materialized into, has its previously-materialized kit directories swept by the materializer, and is then **asserted visible** (`FsggKitCheckSkillView`, ADR-0067 §8). ADR-0065 §A root's three dispositions records the contract. **Empty by default**, so it retires nothing until a receiver's own stage-1 change sets it. |
 | **B3** | [`#1693`](https://github.com/FS-GG/.github/issues/1693) — `#1587`'s diff-shape guard refuses the 0.14.0 bump on all seven receivers, so no kit change reaches any receiver today regardless. 0 of 7 are current (SDD 0.10.0; five at 0.8.0; Audio 0.6.0). | open |
 | **B4** | `scripts/repos-audit.sh:1841` requires a receiver's gate to be armed on a change to a **committed** skill root. A generated root cannot be armed that way. Repairing this is **sanctioned** — ADR-0067 says the apparatus *"keeps running unchanged, and keeps being repaired"* until §9's order reaches it — but it must precede the first receiver retirement, and it **must not be confused with retiring the sweep**, which is last. | open, unfiled — raise with the first receiver |
 
@@ -150,6 +182,12 @@ B1 and B2 are both kit-content changes, so they land together, in one republish,
 ### Stage 0 — unblock (no retirement)
 
 B1 + B2 in one kit change and one republish; B3; then the seven bumps land. Nothing is retired here.
+
+> **B1 + B2 LANDED 2026-07-28 as `FS.GG.Kit` 0.15.0 ([#1696](https://github.com/FS-GG/.github/issues/1696)),
+> and retired nothing** — `FsggKitSkillRoots` and `FsggKitRetiredSkillRoots` hold their 0.14.0 values and
+> `FsggKitViewSkillRoots` defaults empty, so a receiver that takes the bump and configures nothing gets
+> 0.14.0's two roots plus three new files. **Stage 0 is not complete**: B3 is untouched and is now the
+> whole of it. `#1693` is not `#1696`'s to fix and the payload reaches **zero receivers** until it clears.
 
 ### Stage 1 — per receiver, one at a time, each proven before the next
 

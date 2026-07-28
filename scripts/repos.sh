@@ -691,6 +691,22 @@ cmd_validate() {
   [ "$shimmanifest" != "MISSING" ] \
     || err "the coordination kit delivers the fsgg-coord shim (scripts/fsgg-coord) but NOT the engine manifest (.config/dotnet-tools.json): a receiver would get a tool it cannot run (#1077). Add a 'kind: config' kit row whose dest is '.config/dotnet-tools.json', or the shim and its manifest have drifted onto different fabrics again."
 
+  # --- THE #1696 INVARIANT: skill-view and the two libraries it SOURCES ride the kit TOGETHER ---
+  # Exactly #1077's shape, one tool over, and it is not hypothetical: `scripts/skill-view` does
+  # `. lib/args.sh` and `. lib/roots.sh` at startup (lines 87-89), before parsing a single argument,
+  # so a receiver holding the tool without either library has a replacement that exits non-zero on
+  # every invocation — and ADR-0067 §9's precondition 1 ("the replacement is present and executable
+  # in R") would read as SATISFIED, because the file is right there. That is the coherent-but-
+  # unusable class (#1504), and the retirement order's whole per-repo gate rests on that precondition
+  # meaning what it says. Keyed on delivered PATHS, not row ids, so a rename cannot slip past.
+  local viewlibs; viewlibs="$(echo "$json" | jq -r '
+    ( [ (.kit // [])[] | if .kind=="client" then .source elif .kind=="config" then .dest else empty end ] ) as $d
+    | if ($d | index("scripts/skill-view")) | not then ""
+      else [ "scripts/lib/args.sh", "scripts/lib/roots.sh" ] | map(select(. as $l | ($d | index($l)) | not)) | join(" ")
+      end')"
+  [ -z "$viewlibs" ] \
+    || err "the coordination kit delivers scripts/skill-view but NOT the librar(y|ies) it sources at startup: $viewlibs — a receiver would get ADR-0067 §9's replacement in a form that cannot run, while precondition 1 read as satisfied (#1696, and #1077's shape one tool over). Add a 'kind: config' kit row for each missing path, or remove the skill-view row."
+
   # --- content-addressed kit: repos.lock is exactly the digests of the declared sources ---
   # The lock must be a REGENERATION of the roster, not merely consistent with it: a source the lock
   # omits is an unguarded kit item (fail-open, #266 — the receiver's bytes would drift with nothing
