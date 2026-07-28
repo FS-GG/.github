@@ -1,0 +1,105 @@
+# Mutation legs for FS-GG/FS.GG.Rendering `.github/workflows/skill-view-check.yml` (.github#1830).
+#
+# THE GATE THIS ADJUDICATES IS NOT A NEUTRAL ONE. It is the REQUIRED replacement `#1715` named when it
+# retired the `skill-union` caller, and the caller it replaced had become structurally incapable of
+# failing: `union_ids()` enumerated with `find` and no `-L`, so the view root contributed ZERO ids;
+# every id in `in-every-root=50/50` came from the tracked root alone; `byte-identical=50/50` was 50
+# comparisons of a file with itself; and root presence was `[ -d ]` THROUGH the symlink. In 21 runs the
+# successor has never been red either, so the prior here is not neutral and the burden is not "can it
+# fail" — it is "is it a tautology on a PARTIAL VIEW, the way its predecessor was."
+#
+# WHAT THE GATE ASSERTS, recorded so a future reader can re-judge it against a CHANGED TREE rather than
+# trusting a date (`#1810`'s standing note: "mutation-proven 2026-07-28" alone will rot exactly like
+# the eleven never-fired selftests did):
+#
+#   Every skill the SOURCE directory declares is visible at every runtime root the contract still
+#   names, with ADR-0067 §8's absence classes reported separately.
+#
+# Two structural differences from the predecessor carry that, and R4 is the one that measures it:
+#   * the expected set is `ids_from_source(--source)` and NEVER derived from the roots — `do_check`
+#     refuses (exit 2) an empty expected set rather than reporting "everything is visible" over
+#     nothing. The predecessor's tautology began exactly where its id set came from the thing under test.
+#   * presence is per-skill and per-FILE, `[ -e "$root/$id/SKILL.md" ]`, not `[ -d "$root" ]`.
+#
+# THE STATED EXPIRY CONDITION FOR THIS VERDICT. `.agents/skills` is a whole-directory symlink to
+# `.claude/skills`, so a view cannot diverge from what it is a view of and the gate deliberately does
+# not byte-compare the two roots. **If this repo ever goes back to committing two independent copies,
+# the per-skill lane at the view root becomes 50 tests of a file against itself and this verdict must
+# be re-taken.** Two of the ten dead checks found on 2026-07-27/28 fired correctly for a while and
+# became tautologies when the tree moved underneath them; this is that condition written down.
+#
+# RUN IT IN A THROWAWAY CLONE, and generate the view ONCE before the sweep — never inside a
+# `command:`. See README.md in this directory for why that would silently disarm three of these four.
+
+mutations:
+  - id: rendering-skill-view-absent-root
+    gate: FS-GG/FS.GG.Rendering .github/workflows/skill-view-check.yml
+    kind: path
+    op: delete
+    command: [bash, scripts/skill-view, check, --source, .claude/skills, --tree, .]
+    target: .agents/skills
+    breaks: >-
+      the generated view root, leaving the tree in the state EVERY fresh checkout starts in — a clean
+      clone, a new worktree and a cold runner alike, since ADR-0067 phase 4 untracked and git-ignored
+      it. Phase 1 measured this exact state as exit 0 with NO diagnostic in both Claude Code and Codex
+      CLI: an agent that quietly has no skills.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+    note: >-
+      The anchor is produced by the GATE and the mutation edits the SUBJECT, so they are genuinely
+      different files and the producer-integrity hash is a real check rather than a formality.
+
+  - id: rendering-skill-view-dangling-root
+    gate: FS-GG/FS.GG.Rendering .github/workflows/skill-view-check.yml
+    kind: path
+    op: retarget
+    replace: ../.claude/skills-that-do-not-exist
+    command: [bash, scripts/skill-view, check, --source, .claude/skills, --tree, .]
+    target: .agents/skills
+    breaks: >-
+      the view's RESOLUTION while leaving the path in place — `ls` still shows a link and it resolves
+      to nothing. This is the class `FS.GG.Audio#212`'s alarm could not reach, because `[[ ! -e ]]`
+      follows symlinks and a dangling one reads as absent; the gate must name it as its own class.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+
+  - id: rendering-skill-view-text-file-root
+    gate: FS-GG/FS.GG.Rendering .github/workflows/skill-view-check.yml
+    kind: path
+    op: replace-with-file
+    replace: ../.claude/skills
+    command: [bash, scripts/skill-view, check, --source, .claude/skills, --tree, .]
+    target: .agents/skills
+    breaks: >-
+      the view root's TYPE, reproducing ADR-0067 §6's `core.symlinks=false` shape — a committed
+      symlink checked out by git-for-Windows without Developer Mode arrives as a one-line regular file
+      naming its target. Both runtimes resolve zero skills over it and exit 0.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+
+  - id: rendering-skill-view-partial-view
+    gate: FS-GG/FS.GG.Rendering .github/workflows/skill-view-check.yml
+    kind: path
+    op: partial-view
+    find: check-board
+    command: [bash, scripts/skill-view, check, --source, .claude/skills, --tree, .]
+    target: .agents/skills
+    breaks: >-
+      the view's COMPLETENESS without breaking its resolution — the root is replaced by a real
+      directory of per-skill symlinks with exactly one omitted, so it resolves, it enumerates, and it
+      is wrong. THIS IS THE `#1715` PROBE AND THE ONE LEG THIS FILE EXISTS FOR: the predecessor scored
+      50/50 over a root contributing zero ids and could not have seen this. A gate that passes the
+      other three legs and fails this one is decorative in exactly the way its predecessor was.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+    note: >-
+      A whole-directory symlink makes a partial view UNREPRESENTABLE, which is why this state has to
+      be constructed rather than edited into place, and why `MutationKind.PATH` had to exist at all.
