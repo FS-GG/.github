@@ -292,11 +292,34 @@ tracks the fixing rate because the findings are real.
 > the categorisation was eyeballed and that bulk closure *"depends on phases 2–4 reaching that library"*
 > — was closer to right than the recommendation it was attached to.
 >
-> **And phase 4 is blocked on something that was on nobody's board:** `scripts/skill-view` is **not a
-> `kit:` row**, so no published FS.GG.Kit — 0.14.0 included — has ever delivered the phase-2 replacement.
-> A perfectly current receiver would still have no replacement. That is strictly upstream of `#1693`,
-> which this report had treated as the binding constraint. Filed as `.github#1696`; `#1676` is now
-> `Blocked by` it, with no `FSGG-DONE` claimed.
+> **And phase 4 was blocked on something that was on nobody's board:** `scripts/skill-view` was **not a
+> `kit:` row**, so no published FS.GG.Kit — 0.14.0 included — had ever delivered the phase-2 replacement.
+> A perfectly current receiver would still have had no replacement. Fixed by `.github#1696` (Kit 0.15.0).
+>
+> ### Settled: there is no bulk closure. The duplication was a cost, not a backlog.
+>
+> Phase 4 **stage 1 subsequently landed** — FS.GG.Templates' second committed root retired, 23 files,
+> `coordination-coherence` and the required `composition` gate green on `main`. With a real retirement
+> executed on a real receiver, the question could finally be measured instead of argued:
+>
+> > Of 66 live rows, **40 mention the apparatus. Not one has "a receiver commits its skills twice" as
+> > its subject.** And **FS.GG.Templates has zero open board rows at all.**
+>
+> They are about *distribution* (`#1587`, `#1615`, `#1607`), `.github`'s **own** tree (`#1531`, `#1685`,
+> `#1706`), corpus currency (`#1703`), or the coord engine. **The bulk closure is mis-sized, not
+> deferred** — the duplication was a standing cost that nobody ever filed as a row, so retiring it closes
+> nothing. This report claimed the opposite in three successive drafts. It is wrong, and this is the
+> measurement that closes it.
+>
+> What the retirement *did* buy is real and separate: 23 files no longer committed twice in Templates,
+> `coordination-coherence` narrowing 51→28 graded files **with no gate edit** (it derives roots from the
+> receiver's own `FsggKitSkillRoots`), and — from §5 earlier — the Codex catalog down from 99% of its
+> ceiling to 46%.
+>
+> **Phase 4 is not done and its worker refused to say otherwise.** AC7 remains unreachable as written
+> (the freshness sweep's subject survives the rewrite entirely), and six receivers remain at stage 0
+> behind `#1587`. `#1676` was set back to `Ready` rather than stamped — the second time that item has
+> declined a false completion.
 
 **Caveats on (1), from review.** The "roughly half the live rows are propagation machinery" claim was
 independently re-tested and **holds** — 32/76 strict, 41/76 generous. But it is an *eyeballed*
