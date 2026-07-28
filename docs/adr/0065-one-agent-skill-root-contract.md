@@ -6,7 +6,7 @@
 - **Amends:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5; interacts with [ADR-0019](0019-org-repo-roster-registry-and-coordination-kit.md) and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md)
 - **Clarifies:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 1 and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md): a skill is a directory transport unit, while runtime catalog exposure is a host policy over those materialized directories.
 - **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). The ordered root set is now TWO: `.claude/skills`, `.agents/skills`.** ADR-0067 decided the direction and explicitly said it decided *"the direction, not the flip"*; the flip was authorised on `#1636` by the maintainer on 2026-07-27 and lands with this amendment, in the same change, as ADR-0067's Consequences require. `.codex/skills` is retired. This record otherwise stays IN FORCE, and its transport contract — including the prohibition on deleting a mirror to hide a duplicate — is **unchanged and still governs**: see §Decision and §Retiring a root, which is what makes this an amendment rather than a violation of it. ADR-0067 §6's *generated view* is a separate, later mechanism and is **not** landed here; both roots remain committed copies today.
-- **Amended by:** [#1696](https://github.com/FS-GG/.github/issues/1696) — **2026-07-28, `FS.GG.Kit` 0.15.0.** A declared path now has **three** dispositions, not two: materialized, **view** (still a runtime root, content generated locally by `scripts/skill-view`), and retired. See §A root's three dispositions. The runtime root set is the union of the first two, so it is **unchanged** — nothing is retired by that amendment, `FsggKitViewSkillRoots` defaults empty, and §Retiring a root is untouched and still governs.
+- **Amended by:** [#1696](https://github.com/FS-GG/.github/issues/1696) — **2026-07-28, `FS.GG.Kit` 0.15.0.** A declared path now has **three** dispositions, not two: materialized, **view** (still a runtime root, content generated locally by `scripts/skill-view`), and retired. See §A root's three dispositions. The runtime root set is the union of the first two, so it is **unchanged** — nothing is retired by that amendment, `FsggKitViewSkillRoots` defaults empty, and §Retiring a root is untouched and still governs. **FIRST EXERCISED 2026-07-28 by [#1676](https://github.com/FS-GG/.github/issues/1676) on `FS.GG.Templates` ([#323](https://github.com/FS-GG/FS.GG.Templates/pull/323)) — one receiver, not the fleet.** §A root's three dispositions records what that first exercise measured, including the one thing the disposition does **not** carry on its own.
 
 ## Context
 
@@ -137,6 +137,25 @@ that does — the same reasoning that produced `FsggKitRetiredSkillRoots`, one s
 removes the kit's own skill directories from a view root, then the now-empty root itself, and leaves
 any skill the receiver put there untouched. A root that is **already** a view — a symlink, or a copy
 carrying a `.skill-view` receipt — is not swept at all: it holds the source, not a copy of it.
+
+> **FIRST EXERCISED 2026-07-28 ([#1676](https://github.com/FS-GG/.github/issues/1676), ADR-0067 §9 phase 4
+> stage 1), on `FS.GG.Templates` and no other receiver.** It moved `.agents/skills` from materialized to
+> view, dropped 23 committed files, and held the union at ADR-0011's two. `coordination-coherence`
+> narrowed from 51 graded files to 28 and stayed green **with no gate edit** — it derives its roots from
+> `FsggKitSkillRoots`, so a receiver narrows that gate by moving its own property. §Retiring a root was
+> not invoked and did not need to be: no root left the set, and the mirror was removed by the
+> materializer that wrote it.
+>
+> **What that exercise found, and what every later receiver owes because of it.** Moving a root to this
+> disposition **removes the only gate that could notice the root leaving the contract later**. If a
+> subsequent change empties `FsggKitViewSkillRoots`, `coordination-sync --check` stops looking at that
+> path (it reads `FsggKitSkillRoots` alone) and `FsggKitCheckSkillView` reports *"no view skill roots
+> declared … nothing to assert"* — measured, both green, on a tree whose second runtime root was gone.
+> The assertion below covers a view root's **content**; nothing in this contract covers its **membership**.
+> So a receiver adopting this disposition must also land, in the same change, an assertion that its
+> runtime root set is still the declared one, on a check that gates its own merges. `FS.GG.Templates`
+> rides its required `composition` check. Without that, the retirement trades ADR-0067 §8's loud failure
+> for the silent one §8 rules out — one level up from the failure mode the paragraph below closes.
 
 **A view root's content is asserted, never assumed.** A root the kit does not write is a root the kit's
 content-addressed verification cannot vouch for, and ADR-0067 §8 measured all three ways that goes
