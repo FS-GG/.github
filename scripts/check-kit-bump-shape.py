@@ -301,7 +301,14 @@ class Shape:
 
 
 def changed_paths(repo: Path, base: str, head: str) -> list[tuple[str, str]]:
-    """(status, path) for the PR's diff. Renames are REFUSED, not decomposed by guesswork."""
+    """(status, path) for the PR's diff, as add/modify/delete and nothing else.
+
+    `--no-renames` is deliberate and is the whole reason only three statuses appear: a rename arrives
+    as a delete plus an add, and each half is then judged on its own merits against the class. That is
+    the STRICTER reading — a rename out of a materialized path is a deletion the materializer did not
+    make, and rename detection would have hidden it behind an `R`. Anything git still reports (a
+    typechange `T`, an unmerged `U`) is refused rather than mapped onto one of the three.
+    """
     raw = git(repo, "diff", "--no-renames", "--name-status", "-z", f"{base}...{head}")
     fields = [f for f in raw.split("\0") if f]
     if len(fields) % 2 != 0:
