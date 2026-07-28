@@ -259,8 +259,44 @@ explicit call on whether the interim need survives ADR-0067 §9).
 tracks the fixing rate because the findings are real.
 
 1. **ADR-0067 phases 2→4** (`#1635`, `#1674`, `#1676`) plus the authorized **§5** flip (`#1636`).
-   Retiring the copying apparatus is the only mechanism that produces `SUPERSEDED` in bulk.
 2. **Enforce `#266` as a rule** rather than re-filing it. Ten instances above; every fix has been local.
+
+> ### Correction: the "bulk closure" claim is weaker than first written
+>
+> The first two drafts said retiring the copying apparatus *"is the only mechanism that produces
+> `SUPERSEDED` in bulk"*. **Phase 4 executed and measured otherwise, and the claim is withdrawn as
+> stated.**
+>
+> `#1676`'s worker sorted the 18 live rows whose subject is this apparatus by a distinction the earlier
+> categorisation missed: **duplication within a repo** versus **distribution between repos**. Only the
+> first dissolves. Sorted that way, of ADR-0067's own list of seven pieces:
+>
+> | piece | fate under the rewrite |
+> |---|---|
+> | `skill-union-assert` | **retires** |
+> | the second committed root | **retires** |
+> | kit materialization | **narrows** (keeps non-skill subjects) |
+> | `coordination-coherence` | **narrows** (keeps non-skill subjects) |
+> | `kit-published-coherence` | **unchanged** |
+> | the Renovate bump loop | **unchanged** |
+> | the kit-pin freshness sweep | **unchanged** — its subject, *"is receiver R's pin current?"*, survives entirely |
+>
+> So most of the propagation cluster is about **distribution**, and distribution is what ADR-0067 §4
+> explicitly declined to change when it rejected a monorepo. `#1676` therefore closed **zero** rows as
+> `SUPERSEDED` — deliberately, because closing them would have closed live subjects.
+>
+> **What survives of the recommendation:** the rewrite is still the right work, it still removes real
+> duplication (§5 alone cut the Codex catalog 6335 → 3174 chars and deleted a per-machine config block),
+> and phases 2 and 3 landed clean with 8/8 repos measured in agreement. What does **not** survive is the
+> expectation that finishing it collapses the board. The reviewer's caveat on the earlier draft — that
+> the categorisation was eyeballed and that bulk closure *"depends on phases 2–4 reaching that library"*
+> — was closer to right than the recommendation it was attached to.
+>
+> **And phase 4 is blocked on something that was on nobody's board:** `scripts/skill-view` is **not a
+> `kit:` row**, so no published FS.GG.Kit — 0.14.0 included — has ever delivered the phase-2 replacement.
+> A perfectly current receiver would still have no replacement. That is strictly upstream of `#1693`,
+> which this report had treated as the binding constraint. Filed as `.github#1696`; `#1676` is now
+> `Blocked by` it, with no `FSGG-DONE` claimed.
 
 **Caveats on (1), from review.** The "roughly half the live rows are propagation machinery" claim was
 independently re-tested and **holds** — 32/76 strict, 41/76 generous. But it is an *eyeballed*
