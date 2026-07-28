@@ -772,19 +772,28 @@ contracts:
       condition gates the enforcing flip; it now waits on the typed validator assertion shipping and a
       green skill-registry-coherence. See coherence id `skill-registry-published`.
   - id: game-sim-core
-    version: "0.12.0"         # MINOR 0.12.0 (Game#509/PR#511, merge 84fb3073, tag v0.12.0, run 30211544521): schema-v1 machine receipt export derived only from an opaque production-journey proof and bound to the same-execution JUnit report; coherent Core/Render/Harness set. PRIOR — MINOR 0.11.0 (Game#507/PR#508, merge 71d5fc53, tag v0.11.0, run 30208622071): additive deterministic production-journey Harness surface.
-    package-version: "0.12.0" # Core/Render/Harness 0.12.0 independently verified on GitHub Packages and nuget.org; all 29/9/19 payload files are byte-identical excluding nuget.org signing. PRIOR — 0.11.0 independently verified across both feeds.
+    version: "0.13.0"         # MINOR 0.13.0 (Game#526/PR#531, merge a2eef0cb, tag v0.13.0, run 30395301449): additive bounded Fable lockstep profile with canonical .NET/Fable oracle bytes; coherent Core/Render/Harness set. PRIOR — MINOR 0.12.0: schema-v1 production-journey receipt export.
+    package-version: "0.13.0" # Core/Render/Harness 0.13.0 independently verified on GitHub Packages and nuget.org; package payloads match excluding nuget.org signing. PRIOR — 0.12.0 independently verified across both feeds.
     owner: game
     # ADR-0022: the platform's new BOTTOM layer. A BCL-only (FSharp.Core-only) deterministic simulation
     # core that reaches up to nothing — holds the primitives extracted from FS.GG.UI.Canvas (Rng /
     # FixedStep / Pathfinding / SpatialGrid) and the Geometry collision module extracted from
     # FS.GG.UI.Scene (P0 Option D, reimplemented over Game.Core's own BCL-only Point/Rect). Builds +
     # tests headless (zero Skia / zero Scene). Public surface baseline committed (11 types).
-    surface: "FS.GG.Game.Core package — Rng / FixedStep / Loop / Pathfinding / SpatialGrid / Geometry / Manifold / Ballistics / Grids / Visibility / Fov / Los / Ai / Primitives (Point/Rect/Cell), BCL-only"
+    surface: "FS.GG.Game.Core package — BCL-only deterministic simulation primitives plus the packaged fs-gg-game-core-fable-lockstep-v1 bounded Fable source/profile and canonical oracle"
     consumers: [rendering]   # Rendering's template game/sample-pack profiles + Canvas.Tests re-homed to it (ADR-0022 P5, Rendering#155)
+    profiles:
+      fable-lockstep:
+        identity: "fs-gg-game-core-fable-lockstep-v1"
+        package: "FS.GG.Game.Core@0.13.0"
+        toolchain: ".NET 10 / FSharp.Core 10.1.302 / Fable 5.13.0 / Fable.Package.SDK 1.4.0 / Node 26"
+        exact: "Cell ordering; Edges.edgeBetween; Los.lineOfSightBy; Pathfinding.astar"
+        portable: "packaged float value types"
+        dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
+        oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: game-scene-adapter
-    version: "0.12.0"         # coherent MINOR 0.12.0; Render moves with Core/Harness while Harness adds the producer-owned schema-v1 journey receipt and same-execution report binding. PRIOR — coherent MINOR 0.11.0 with the typed in-process production-journey surface.
-    package-version: "0.12.0" # Core/Render/Harness 0.12.0 independently verified on GitHub Packages and nuget.org; all 29/9/19 payload files are byte-identical excluding nuget.org signing. PRIOR — 0.11.0 independently verified across both feeds.
+    version: "0.13.0"         # coherent MINOR 0.13.0; Render/Harness move with Core while Core adds the bounded Fable lockstep profile. PRIOR — coherent MINOR 0.12.0 with schema-v1 journey receipts.
+    package-version: "0.13.0" # Core/Render/Harness 0.13.0 independently verified on GitHub Packages and nuget.org; package payloads match excluding nuget.org signing. PRIOR — 0.12.0 independently verified across both feeds.
     owner: game
     # ADR-0022 §2: the render edge. A pure Scene adapter projecting FS.GG.Game.Core primitives
     # (Point/Rect/Cell, pathfinding routes) onto FS.GG.UI.Scene drawables. The ONE place in FS.GG.Game
@@ -939,10 +948,10 @@ dependencies:
   # downloaded from both feeds and carries <FsGgAudioVersion>0.5.0.
   - { from: rendering, to: audio,      via: "fs-gg-audio@0.5.0 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
-  # ADVANCED to game-scene-adapter@0.12.0 with the 2026-07-26 coherent Game schema-v1
-  # production-journey receipt release (.github#1487, Game#509/PR#511);
+  # ADVANCED to game-scene-adapter@0.13.0 with the 2026-07-28 coherent Game bounded-Fable
+  # profile release (Game#526/PR#531);
   # its Rendering dependency remains the stable FS.GG.UI.Scene@0.5.0 pin shipped by Game#109/PR#115.
-  - { from: game,      to: rendering,  via: "game-scene-adapter@0.12.0 -> FS.GG.UI.Scene@0.5.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "game-scene-adapter@0.13.0 -> FS.GG.UI.Scene@0.5.0 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
   - { from: game,      to: rendering,  via: "keyboard-input@0.5.0 -> FS.GG.UI.KeyboardInput@0.5.0 (FS.GG.Game.Render default command→key keymap consumes the Keymap surface; FS.GG.Game#109 / PR #115, merged against the published stable 0.5.0; .github#365, ADR-0028)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
