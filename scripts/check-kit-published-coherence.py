@@ -117,9 +117,19 @@ or rate-limited nuget.org means we cannot tell whether the bump is sufficient, a
 not merge. The network is only reached once a kit source IS touched, so an outage cannot block PRs
 that had no obligation in the first place.
 
-THE TAG ARM (`--tag-arm`, .github#1784). `#1772` promoted `kit/v*` from decoration to a TRUST
-ANCHOR. The receiver-side `materialize / kit-bump-shape` reporter resolves the rule it runs like
-this:
+THE TAG ARM (`--tag-arm`, .github#1784, WIDENED TO EVERY RELEASE NAMESPACE BY .github#1790).
+
+ITS SUBJECT IS THE WHOLE REPOSITORY'S RELEASE TAGS, NOT THE KIT'S — read that before the rest of
+this section, because the file it lives in is named for the kit and that is now a name that
+under-describes one of its three arms. It lives here anyway, and deliberately: it shares the feed
+reader, the NuGet ordering, the nuspec parse and the `ls-remote` parse with the arms above, and
+`#263` is the standing lesson that two implementations of "what does the feed serve" is how two
+gates end up disagreeing. `#1790` AC2 says so in as many words — *"prefer generalising it to writing
+a second one"*. The namespace table below is the whole of the widening; nothing else about the arm
+changed shape.
+
+`#1772` promoted `kit/v*` from decoration to a TRUST ANCHOR. The receiver-side
+`materialize / kit-bump-shape` reporter resolves the rule it runs like this:
 
     dotnet restore  ->  project.assets.json names the resolved FS.GG.Kit version
     that version    ->  the tag `kit/v<version>`
@@ -141,17 +151,45 @@ Every FS.GG.Kit `.nuspec` on nuget.org carries SourceLink's repository binding:
     <repository type="git" url="https://github.com/FS-GG/.github" commit="<40-hex>" />
 
 A published package is IMMUTABLE; a tag is not. So the nuspec is a fixed point the mutable ref can
-be measured against, and the measurement needs no record anyone has to maintain. Measured across all
-23 published versions on 2026-07-28: every one binds a commit, and every one of the 21 that had a
-tag agreed with it exactly. That is why this arm can assert equality rather than mere existence.
+be measured against, and the measurement needs no record anyone has to maintain.
 
-    for every STABLE version nuget.org serves:
+    for every version nuget.org serves, in every release namespace below:
         the nuspec must bind a 40-hex commit in THIS repository,
-        the tag `kit/v<version>` must exist,
+        the tag `<prefix><version>` must exist,
         and `git ls-remote` (peeled) must resolve it to exactly that commit.
 
+WHY THE KIT'S CLEAN RESULT IS WHAT MAKES THE WIDENING WORTH ANYTHING (.github#1790). Measured on
+2026-07-28, `kit/v*` was 21 of 21 correct and is 24 of 24 today: on its own subject `#1784` caught
+NOTHING. That is not a wasted gate, it is the control. The same method one namespace over found a
+disagreement nobody had ever looked for, and a clean control is what makes it a finding rather than
+noise. `#1790` therefore extends the method to every namespace this repository publishes from, and
+the extension immediately paid twice more. Measured live, all five:
+
+    namespace                 pkg                     feed  anchored  verdict
+    kit/v*                    FS.GG.Kit                 24     24/24  all agree
+    coord-engine/v*           FS.GG.Coord.Cli           15     15/15  0.1.0 DISAGREES (#1790)
+    drivers/v*                FS.GG.Drivers             11     11/11  0.5.0 had NO TAG (#1790)
+    new-sdd-workspace/v*      FS.GG.NewSddWorkspace      6       6/6   all agree
+    new-sdd-fullstack/v*      FS.GG.NewSddFullstack      1       1/1   0.1.1-preview.1 DISAGREES
+
+EVERY VERSION THE FEED SERVES, PRERELEASE INCLUDED — and that widening is not tidiness. `#1784`
+filtered to STABLE, inherited from the arms above where stable-ness decides what "newest" means. For
+tag integrity it decides nothing: "does this tag still name the commit that produced this artifact?"
+is exactly as well-posed for a prerelease. The filter was load-bearing in the wrong direction —
+`new-sdd-fullstack/v0.1.1-preview.1` is the ONLY version that package ever published, so a
+stable-only subject would have reported that namespace as having nothing to check, and the
+disagreement sitting in it would have stayed invisible a second time.
+
+THE ANCHOR IS VERIFIED PER NAMESPACE, NEVER ASSUMED. Each row below DECLARES that its package binds
+a commit; the arm then reads the artifact and reds if it does not. A namespace whose packages carry
+no `<repository commit=…>` has no fixed point at all, and the answer to that is to record it as
+UNCOVERED (`anchor=None` below) — never to substitute a weaker comparand such as a maintained list,
+which is the exact failure mode this arm exists to remove. All five namespaces are anchored today,
+57 of 57 published versions; the uncovered branch is declared, tested, and currently unused.
+
 WHAT THIS ARM CANNOT ASSERT, stated because a check whose limits are unwritten gets trusted past
-them (#266):
+them (#266). This is `#1784`'s list and it transfers verbatim — a widened check inherits its limits
+as well as its method:
 
   * It does not prove the nuspec's commit is HONEST. The same pack that produced the package wrote
     it, so a publish from a compromised or hand-crafted tree could name any sha. What it proves is
@@ -161,18 +199,38 @@ them (#266):
     can restore today.
   * It does not check the tag's TREE against the package's bytes. That is the default arm's job for
     the newest version, and it is not re-derivable for old ones (stage-kit.sh has itself moved).
-  * A `kit/v*` tag with NO published version is reported, never red. Between `release-kit.yml`
+  * A release tag with NO published version is reported, never red. Between a release workflow
     pushing a tag and nuget.org indexing the package there is a window in which precisely that is
-    true, and a red there would make every release red `main` on its way through.
+    true — today's releases needed 14 and 18 cache-busted feed polls — and a red there would make
+    every release red `main` on its way through. Two such tags exist right now for reasons that are
+    not a window at all (`drivers/v0.4.0`, `new-sdd-fullstack/v0.1.0-preview.1`: cut, never served),
+    and they are reported in exactly the same words.
 
-THE ASYMMETRY IS DELIBERATE, and it is the only direction that can be a defect: `#1772` already made
-the tag a PRECONDITION of publishing (`release-kit.yml` refuses unless `kit/v<version>` exists AND
-points at the commit being packed), so any release that publishes at all satisfies this arm on the
-way in. A violation therefore means the tag moved AFTERWARDS — which is the whole subject.
+THE ASYMMETRY IS DELIBERATE for `kit/v*`, and only there: `#1772` made the tag a PRECONDITION of
+publishing (`release-kit.yml` refuses unless `kit/v<version>` exists AND points at the commit being
+packed), so any kit release that publishes at all satisfies this arm on the way in, and a violation
+means the tag moved AFTERWARDS. The other four release workflows check only that the tag's VERSION
+STRING equals the evaluated project `<Version>` — which is why `coord-engine/v0.1.0` and
+`new-sdd-fullstack/v0.1.1-preview.1` could be wrong from birth: at both tagged commits the project
+already declared the right version, and a later re-run packed the artifact from a different commit.
+So in those namespaces a disagreement is "the tag moved, OR the tag was never the pack source", and
+the arm reports the fact rather than a cause it cannot know.
+
+RECORDED DISAGREEMENTS (`RECORDED_DISAGREEMENTS`, .github#1790), and why this is not the maintained
+list the arm refuses to have. Two tags are wrong TODAY and were wrong before anyone looked. Moving
+them is available and was declined — see the record on each entry — so without something the arm
+reds forever, and a gate that is red by design teaches exactly one lesson: "FAILED is noise, merge
+anyway" (`check-engine-freshness.py` spells the same trade out). The record is therefore PINNED, not
+an exemption: it names the namespace, the version, the commit the tag resolves to today AND the
+commit the artifact names, and it applies only when ALL FOUR still hold. The comparand is unchanged
+— still the artifact, never the record. Move either tag again, in either direction, and the record
+stops matching and the arm reds. Let a recorded version fall off the feed and the record is reported
+SPENT rather than silently kept. The list cannot rot into cover for a defect it does not already
+describe, which is the only property that makes it different in kind from "compare against memory".
 
 Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
         scripts/check-kit-published-coherence.py --pr-arm [--base <ref-or-sha>]
-        scripts/check-kit-published-coherence.py --tag-arm [--remote <url>]
+        scripts/check-kit-published-coherence.py --tag-arm [--remote <url>] [--namespace kit/v]
 
 `--fixture-manifest <tsv> --canonical-manifest <tsv>` compares canned manifests and refuses to run
 unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/ sets. A test hook
@@ -232,7 +290,7 @@ REPOS_TOOL = os.path.join(REPO_ROOT, "scripts", "repos.sh")
 COORDINATION_KINDS = frozenset({"skill", "client", "config"})
 _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 
-# --- the tag arm (.github#1784) -------------------------------------------------------------------
+# --- the tag arm (.github#1784, widened to every release namespace by .github#1790) ----------------
 # The tag scheme the #1772 resolver uses. Written once here; the workflow restates nothing.
 TAG_PREFIX = "kit/v"
 # The repository a published kit must name. `GITHUB_REPOSITORY` is authoritative in CI; the literal is
@@ -243,10 +301,143 @@ DEFAULT_REPOSITORY = "FS-GG/.github"
 # a slug match alone accepts that slug on any host.
 FORGE_HOST = "github.com"
 _HEX40 = re.compile(r"\A[0-9a-f]{40}\Z")
-# The #1772 resolver accepts a bare `x.y.z` and nothing else, so that is the tag grammar this arm
-# matches. A `kit/v*` ref outside it (`kit/vnext`, `kit/v1.2`) can never be resolved from a pin and is
-# reported as unmatched rather than parsed into a version this arm would then invent.
-_KIT_TAG_REF = re.compile(r"\Arefs/tags/" + re.escape(TAG_PREFIX) + r"(\d+\.\d+\.\d+)(\^\{\})?\Z")
+
+# THE TWO TAG GRAMMARS, and why there are two rather than one.
+#
+# `BARE_TRIPLE` is the #1772 resolver's grammar: it accepts a bare `x.y.z` and nothing else, so a
+# `kit/v*` ref outside it (`kit/vnext`, `kit/v1.2`) can never be selected by a receiver's pin. Such a
+# ref is skipped rather than parsed into a version this arm would then demand a package for.
+#
+# `NUGET_VERSION` is the full NuGet version literal, and it is the right grammar everywhere else
+# because nothing resolves those namespaces FROM A PIN. Their consumers derive the ref by string
+# concatenation from a version the FEED served (`check-engine-freshness.py` does exactly
+# `coord-engine/v` + newest-on-feed), so every literal the feed can serve is a ref that must be
+# checkable — including the prerelease literals `new-sdd-workspace` and `new-sdd-fullstack` shipped.
+# Narrowing them to `BARE_TRIPLE` would silently drop `new-sdd-fullstack/v0.1.1-preview.1`, which is
+# where one of the two live disagreements lives.
+BARE_TRIPLE = r"\d+\.\d+\.\d+"
+NUGET_VERSION = r"\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]+)?"
+
+
+@dataclass(frozen=True)
+class TagNamespace:
+    """One release-tag namespace and the artifact that anchors it (.github#1790).
+
+    `package` is the nuget.org id whose published `.nuspec` is the immutable comparand. `None` means
+    THIS NAMESPACE HAS NO ARTIFACT ANCHOR: it is reported UNCOVERED, loudly, on every run, and no
+    weaker comparand is substituted for it. That branch is declared and tested; no namespace uses it
+    today, because all five were measured and all five bind a commit on every published version.
+    """
+
+    prefix: str          # the ref prefix, e.g. "kit/v"
+    package: str | None  # the nuget.org id whose nuspec anchors it, or None = no anchor
+    grammar: str         # BARE_TRIPLE or NUGET_VERSION — which version literals are refs at all
+    note: str            # what resolves this namespace, i.e. what a moved tag would break
+
+    @property
+    def ref_pattern(self) -> re.Pattern[str]:
+        return re.compile(
+            r"\Arefs/tags/" + re.escape(self.prefix) + r"(" + self.grammar + r")(\^\{\})?\Z"
+        )
+
+
+# EVERY release-tag namespace this repository publishes from. A namespace absent from this table is
+# the gap .github#1790 is: `#1784` shut `kit/v*` and nothing reached the other four, so the one real
+# disagreement in the repository sat one namespace over from a check that was 21-for-21 clean.
+RELEASE_NAMESPACES: tuple[TagNamespace, ...] = (
+    TagNamespace(
+        prefix="kit/v",
+        package="FS.GG.Kit",
+        grammar=BARE_TRIPLE,
+        note="the receiver-side `materialize / kit-bump-shape` reporter resolves the RULE it runs "
+        "from this tag, peeled to a commit (.github#1772)",
+    ),
+    TagNamespace(
+        prefix="coord-engine/v",
+        package="FS.GG.Coord.Cli",
+        grammar=NUGET_VERSION,
+        note="scripts/check-engine-freshness.py resolves `coord-engine/v<newest on the feed>` and "
+        "counts wire-surface commits since it — a moved tag moves that baseline (.github#1075)",
+    ),
+    TagNamespace(
+        prefix="drivers/v",
+        package="FS.GG.Drivers",
+        grammar=NUGET_VERSION,
+        note="the driver skill bytes the SDD CLI pins and materializes at scaffold time (ADR-0054); "
+        "the tag is the only record of which tree produced a given driver payload",
+    ),
+    TagNamespace(
+        prefix="new-sdd-workspace/v",
+        package="FS.GG.NewSddWorkspace",
+        grammar=NUGET_VERSION,
+        note="the workspace scaffolder tool (ADR-0016); the tag is the only record of which tree "
+        "produced a published scaffolder",
+    ),
+    TagNamespace(
+        prefix="new-sdd-fullstack/v",
+        package="FS.GG.NewSddFullstack",
+        grammar=NUGET_VERSION,
+        note="the RETIRED predecessor of new-sdd-workspace (ADR-0016 update 2026-07-04b). Retired is "
+        "not exempt: its tags still assert which tree produced the packages nuget.org still serves",
+    ),
+)
+
+
+@dataclass(frozen=True)
+class RecordedDisagreement:
+    """A tag that is wrong TODAY, recorded rather than moved (.github#1790).
+
+    PINNED ON BOTH COMMITS. It suppresses the red only while the tag still resolves to
+    `tag_commit` AND the artifact still names `nuspec_commit`. Move the tag anywhere — including to
+    the commit the artifact names — and the record stops matching, so the arm reds and someone has to
+    say what changed. That is what keeps it from becoming the maintained list this arm exists to
+    replace: it cannot describe a state it was not written against.
+    """
+
+    prefix: str
+    version: str
+    tag_commit: str
+    nuspec_commit: str
+    issue: str
+    why: str
+
+
+# The two disagreements .github#1790 measured, and the decision taken on each. Both were WRONG FROM
+# BIRTH rather than moved afterwards: at each tagged commit the project already declared the version
+# in question, and a later re-run packed the artifact from a different commit — in both cases the
+# commit that wired the nuget.org dual-publish. Re-pointing either would make the record true at the
+# cost of mutating a marker that has been cited for a year, using precisely the force-move the
+# `release-tags-are-immutable` ruleset now refuses; excluding them would scope the check away from
+# versions whose anchor is perfectly trustworthy. Recording keeps history honest and keeps the gate
+# able to fail. See the GitHub Release attached to each tag for the same statement where a reader of
+# the tag will find it.
+RECORDED_DISAGREEMENTS: tuple[RecordedDisagreement, ...] = (
+    RecordedDisagreement(
+        prefix="coord-engine/v",
+        version="0.1.0",
+        tag_commit="94b044b1e575fc9da0105c32bd063b0f387a5eef",
+        nuspec_commit="78c3b5492263a33016e9e3bcac7816a14e9bb237",
+        issue=".github#1790",
+        why="the tag was pushed at the 0.1.0 release commit; the package nuget.org serves was packed "
+        "ten minutes and one merge later, by the run that wired the nuget.org dual-publish (#624/"
+        "#625). Both commits declare <Version>0.1.0</Version>, so the double-bind #1784 requires "
+        "cannot tell them apart and only the artifact can. NOT re-pointed: it is cited in "
+        "docs/2026-07-15-phase-d-corpus-through-shim-plan.md and moving it is the exact mutation "
+        "the ruleset created for this issue exists to refuse.",
+    ),
+    RecordedDisagreement(
+        prefix="new-sdd-fullstack/v",
+        version="0.1.1-preview.1",
+        tag_commit="2e73e5a02099947108663a1edace1214c56647a6",
+        nuspec_commit="775a11eec882e2184ea9a18a5f759bb54a9ba143",
+        issue=".github#1790",
+        why="the same shape, in a namespace nothing had ever checked: tag at the version-bump commit, "
+        "artifact packed 5h29m later by the commit that wired the nuget.org dual-publish (#157). "
+        "Both commits declare <Version>0.1.1-preview.1</Version>. NOT re-pointed: the package is "
+        "RETIRED (renamed to FS.GG.NewSddWorkspace), nothing resolves the tag, and mutating a dead "
+        "namespace's history buys nothing that recording does not.",
+    ),
+)
 
 
 def _repository_slug() -> str:
@@ -255,42 +446,44 @@ def _repository_slug() -> str:
     return slug or DEFAULT_REPOSITORY
 
 
-def _fetch_nuspec(version: str) -> bytes:
-    """The published .nuspec for FS.GG.Kit@version, from the flat container.
+def _fetch_nuspec(package: str, version: str) -> bytes:
+    """The published .nuspec for `package`@`version`, from the flat container.
 
-    The nuspec is served as its own ~1 KB document, so this arm does not pay for 23 .nupkg
-    downloads to read 23 one-line bindings. Any failure raises — an unreadable nuspec is a version
+    The nuspec is served as its own ~1 KB document, so this arm does not pay for 57 .nupkg
+    downloads to read 57 one-line bindings. Any failure raises — an unreadable nuspec is a version
     whose tag CANNOT BE CHECKED, and #266 is precisely that "I could not evaluate this" must never
     be reported as "I evaluated it and it passed".
     """
-    lid = PACKAGE.lower()
-    url = f"{NUGET_ORG}/{lid}/{version}/{lid}.nuspec"
+    lid = package.lower()
+    url = f"{NUGET_ORG}/{lid}/{version.lower()}/{lid}.nuspec"
     req = urllib.request.Request(url, headers={"User-Agent": "fsgg-check-kit-coherence"})
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             return resp.read()
     except urllib.error.HTTPError as e:
         raise GateError(
-            f"cannot read the published {PACKAGE} {version} .nuspec from nuget.org "
+            f"cannot read the published {package} {version} .nuspec from nuget.org "
             f"(HTTP {e.code} {e.reason}) — the feed serves this version, so its tag binding is a "
             f"question this gate must answer, and an unanswerable one is not a pass."
         ) from e
     except urllib.error.URLError as e:
         raise GateError(
-            f"nuget.org unreachable while reading the {PACKAGE} {version} .nuspec: {e.reason}"
+            f"nuget.org unreachable while reading the {package} {version} .nuspec: {e.reason}"
         ) from e
     except (TimeoutError, OSError, http.client.HTTPException) as e:
         # `resp.read()` raises these DIRECTLY — a socket timeout or a truncated body is neither an
-        # HTTPError nor a URLError, so without this clause the most likely failure of 23 sequential
+        # HTTPError nor a URLError, so without this clause the most likely failure of 57 sequential
         # fetches on a flaky feed escapes as a traceback instead of the module's stated GateError.
         # Still red either way; this makes it red with a reason.
         raise GateError(
-            f"the {PACKAGE} {version} .nuspec download from nuget.org failed mid-read: {e!r}"
+            f"the {package} {version} .nuspec download from nuget.org failed mid-read: {e!r}"
         ) from e
 
 
-def nuspec_repository_commit(version: str, nuspec: bytes, *, repository: str) -> str:
-    """The 40-hex commit the PUBLISHED nuspec binds `version` to.
+def nuspec_repository_commit(
+    version: str, nuspec: bytes, *, repository: str, package: str = PACKAGE, prefix: str = TAG_PREFIX
+) -> str:
+    """The 40-hex commit the PUBLISHED nuspec binds `package`@`version` to.
 
     Parsed as XML, not grepped: the nuspec's namespace has changed across schema versions and a
     regex over markup is how a gate ends up matching a commented-out element. Every absence is a
@@ -302,26 +495,26 @@ def nuspec_repository_commit(version: str, nuspec: bytes, *, repository: str) ->
     try:
         root = ET.fromstring(nuspec)
     except ET.ParseError as e:
-        raise GateError(f"the published {PACKAGE} {version} .nuspec is not parsable XML: {e}") from e
+        raise GateError(f"the published {package} {version} .nuspec is not parsable XML: {e}") from e
     repo_elements = [el for el in root.iter() if el.tag.rsplit("}", 1)[-1] == "repository"]
     if len(repo_elements) != 1:
         raise GateError(
-            f"the published {PACKAGE} {version} .nuspec carries {len(repo_elements)} <repository> "
+            f"the published {package} {version} .nuspec carries {len(repo_elements)} <repository> "
             f"element(s); this arm needs exactly one to know which commit produced the artifact. "
-            f"Without it the tag kit/v{version} can only be compared to a list someone maintains, "
+            f"Without it the tag {prefix}{version} can only be compared to a list someone maintains, "
             f"which is the failure mode .github#1784 exists to remove."
         )
     element = repo_elements[0]
     commit = (element.get("commit") or "").strip().lower()
     if not _HEX40.match(commit):
         raise GateError(
-            f"the published {PACKAGE} {version} .nuspec <repository> names no 40-hex commit "
+            f"the published {package} {version} .nuspec <repository> names no 40-hex commit "
             f"(commit={element.get('commit')!r}). SourceLink writes this at pack time; a package "
             f"without it cannot anchor its own tag."
         )
     if (origin := _repository_origin(element.get("url") or "")) != (FORGE_HOST, repository.lower()):
         raise GateError(
-            f"the published {PACKAGE} {version} .nuspec was packed from "
+            f"the published {package} {version} .nuspec was packed from "
             f"{element.get('url')!r} (host {origin[0]!r}, repository {origin[1]!r}), not "
             f"{FORGE_HOST}/{repository} — its commit names a history whose tags are not the ones "
             f"the fleet resolves against."
@@ -349,39 +542,46 @@ def _repository_origin(url: str) -> tuple[str, str]:
     return host, split.path.strip("/")
 
 
-def remote_kit_tags(remote: str) -> dict[str, str]:
-    """`version -> the commit kit/v<version> resolves to`, read from the remote, PEELED.
+def remote_release_tags(remote: str, ns: TagNamespace) -> dict[str, str]:
+    """`version -> the commit <prefix><version> resolves to`, read from the remote, PEELED.
 
     Peeled on purpose and exactly as the #1772 resolver does it: an annotated tag's own object id is
     not the commit the rule would be checked out at, and comparing it to the nuspec's commit would
     red every annotated release. `refs/tags/X^{}` therefore always wins over `refs/tags/X`.
 
-    A git failure raises. An empty answer does NOT: a repository with no kit tags at all is a real
+    A git failure raises. An empty answer does NOT: a namespace with no tags at all is a real
     (catastrophic) state this arm must report per-version, not a read error to be confused with it.
     """
     try:
         result = subprocess.run(
-            ["git", "ls-remote", "--tags", remote, f"refs/tags/{TAG_PREFIX}*"],
+            ["git", "ls-remote", "--tags", remote, f"refs/tags/{ns.prefix}*"],
             text=True,
             capture_output=True,
             check=False,
             timeout=120,
         )
     except (OSError, subprocess.SubprocessError) as e:
-        raise GateError(f"cannot list {TAG_PREFIX}* tags on {remote!r}: {e}") from e
+        raise GateError(f"cannot list {ns.prefix}* tags on {remote!r}: {e}") from e
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise GateError(
-            f"cannot list {TAG_PREFIX}* tags on {remote!r}"
+            f"cannot list {ns.prefix}* tags on {remote!r}"
             + (f": {detail}" if detail else "")
             + " — a tag set this gate cannot read is an UNRESOLVED verdict for every published "
             "version, never a passing one (#266)."
         )
-    return parse_ls_remote_tags(result.stdout)
+    return parse_ls_remote_tags(result.stdout, ns)
 
 
-def parse_ls_remote_tags(text: str) -> dict[str, str]:
-    """Parse `git ls-remote` output into `version -> peeled commit`. Malformed rows are errors."""
+def parse_ls_remote_tags(text: str, ns: TagNamespace = RELEASE_NAMESPACES[0]) -> dict[str, str]:
+    """Parse `git ls-remote` output into `version -> peeled commit` for ONE namespace.
+
+    Rows outside `ns`'s prefix-and-grammar are skipped, not parsed into a version this arm would then
+    demand a package for. The canned fixture feeds one file per namespace, exactly as `ls-remote`
+    with that namespace's refspec would answer, so a row for a DIFFERENT namespace is skipped here
+    for the same reason the live read never sees it.
+    """
+    pattern = ns.ref_pattern
     direct: dict[str, str] = {}
     peeled: dict[str, str] = {}
     for lineno, raw in enumerate(text.splitlines(), 1):
@@ -393,153 +593,339 @@ def parse_ls_remote_tags(text: str) -> dict[str, str]:
         sha, ref = parts[0].strip().lower(), parts[1].strip()
         if not _HEX40.match(sha):
             raise GateError(f"ls-remote line {lineno} carries a non-sha object id {sha!r}")
-        match = _KIT_TAG_REF.match(ref)
+        match = pattern.match(ref)
         if not match:
-            continue  # not a `kit/v<x.y.z>` ref — no pin can resolve to it; reported, not parsed.
+            continue  # outside this namespace's grammar — no consumer can resolve it.
         (peeled if match.group(2) else direct)[match.group(1)] = sha
     return {**direct, **peeled}
+
+
+def _read_canned(path: str, what: str) -> str:
+    try:
+        return open(path, encoding="utf-8").read()
+    except OSError as e:
+        raise GateError(f"cannot read the canned {what} {path!r}: {e}") from e
+
+
+def parse_canned_bindings(text: str, ns: TagNamespace) -> dict[str, str]:
+    """`version<TAB>commit` rows — the nuspec read, canned. `-` means the artifact binds no commit.
+
+    Constrained EXACTLY as the live read is, and refused with the same words. A canned input the gate
+    validates more loosely than its real subject is a fixture that can green a shape production would
+    red, so every narrowing the live branch performs is performed here too: the version parse and
+    uniqueness. Parsed HERE, before anything else looks at it, and NOT at report time —
+    `sorted(..., key=parse_version)` inside the failure report would raise while rendering a real
+    verdict and throw the diagnosis away.
+    """
+    package = ns.package or "(no anchor)"
+    bindings: dict[str, str] = {}
+    for lineno, raw in enumerate(text.splitlines(), 1):
+        if not raw.strip():
+            continue
+        parts = raw.split("\t")
+        if len(parts) != 2:
+            raise GateError(f"canned published line {lineno} is not `<version>\\t<commit>`: {raw!r}")
+        version, commit = parts[0].strip(), parts[1].strip().lower()
+        try:
+            parse_version(version)
+        except GateError as e:
+            raise GateError(
+                f"canned published line {lineno} names {version!r}, which is not a NuGet "
+                f"version: {e}"
+            ) from e
+        if version in bindings:
+            raise GateError(
+                f"canned published line {lineno} repeats version {version!r}; the feed's "
+                f"versions are unique, so a duplicate would silently overwrite its own subject."
+            )
+        if not _HEX40.match(commit):
+            raise GateError(
+                f"the published {package} {version} .nuspec <repository> names no 40-hex commit "
+                f"(commit={None if commit == '-' else commit!r}). SourceLink writes this at pack "
+                f"time; a package without it cannot anchor its own tag."
+            )
+        bindings[version] = commit
+    return bindings
+
+
+@dataclass(frozen=True)
+class NamespaceVerdict:
+    """One namespace's measured answer. `unresolved` is the #266 state: NOT MEASURED, never clean."""
+
+    ns: TagNamespace
+    published: int = 0
+    missing: tuple[tuple[str, str], ...] = ()             # version, the commit its artifact names
+    moved: tuple[tuple[str, str, str], ...] = ()          # version, tag commit, nuspec commit
+    recorded: tuple[tuple[RecordedDisagreement, str], ...] = ()   # record, the sha the tag holds
+    spent: tuple[RecordedDisagreement, ...] = ()
+    untagged: tuple[str, ...] = ()
+    unresolved: str | None = None
+    uncovered: bool = False
+
+    @property
+    def red(self) -> bool:
+        return bool(self.unresolved) or bool(self.missing) or bool(self.moved)
+
+
+def classify_namespace(
+    ns: TagNamespace, bindings: dict[str, str], tags: dict[str, str]
+) -> NamespaceVerdict:
+    """Compare one namespace's artifact bindings to its tags. PURE — no network, no git.
+
+    Split out from the reading so the fixture can drive the whole decision, including the
+    RECORDED_DISAGREEMENTS pinning, against real inputs rather than a mirror of them.
+    """
+    records = {r.version: r for r in RECORDED_DISAGREEMENTS if r.prefix == ns.prefix}
+    missing: list[tuple[str, str]] = []
+    moved: list[tuple[str, str, str]] = []
+    recorded: list[tuple[RecordedDisagreement, str]] = []
+    for version, commit in bindings.items():
+        resolved = tags.get(version)
+        if resolved is None:
+            missing.append((version, commit))
+        elif resolved == commit:
+            continue
+        else:
+            record = records.get(version)
+            # PINNED ON BOTH COMMITS. A record only speaks for the exact state it was written
+            # against; any movement in either direction falls through to MOVED and reds.
+            if record and record.tag_commit == resolved and record.nuspec_commit == commit:
+                recorded.append((record, resolved))
+            else:
+                moved.append((version, resolved, commit))
+    # A record whose version the feed no longer serves is SPENT, not silently dropped: the list must
+    # never be able to accumulate entries that describe nothing. Not red — an unpublished version is
+    # never red here (see the header) — but always printed.
+    spent = tuple(r for v, r in sorted(records.items()) if v not in bindings)
+    return NamespaceVerdict(
+        ns=ns,
+        published=len(bindings),
+        missing=tuple(sorted(missing, key=lambda row: parse_version(row[0]))),
+        moved=tuple(sorted(moved, key=lambda row: parse_version(row[0]))),
+        recorded=tuple(sorted(recorded, key=lambda row: parse_version(row[0].version))),
+        spent=spent,
+        untagged=tuple(sorted(set(tags) - set(bindings), key=parse_version)),
+    )
+
+
+def measure_namespace(
+    ns: TagNamespace,
+    *,
+    remote: str,
+    repository: str,
+    canned_published: str | None,
+    canned_tags: str | None,
+) -> NamespaceVerdict:
+    """Read one namespace's subject and classify it. Any unreadable subject is UNRESOLVED, not clean."""
+    if ns.package is None:
+        # DECLARED as having no artifact anchor. Reported UNCOVERED on every run and measured by
+        # nothing — the alternative is a comparand this arm does not trust, which is the whole point.
+        return NamespaceVerdict(ns=ns, uncovered=True)
+    try:
+        if canned_published is not None:
+            bindings = parse_canned_bindings(
+                _read_canned(canned_published, "published-version list"), ns
+            )
+        else:
+            live = nuget_org_versions(ns.package)  # raises on 404/unreachable/empty — never []
+            bindings = {
+                version: nuspec_repository_commit(
+                    version,
+                    _fetch_nuspec(ns.package, version),
+                    repository=repository,
+                    package=ns.package,
+                    prefix=ns.prefix,
+                )
+                for version in sorted(live, key=parse_version)
+            }
+
+        # AN EMPTY SUBJECT IS NOT A PASS, and this must be said ONCE, below both branches. Stating it
+        # only inside the live branch is exactly how the first draft of this arm shipped a fail-open:
+        # an empty canned list produced zero comparisons and then printed "ok: all 0 ... version(s)
+        # ... has not moved since publication" — a check reporting a measurement it never took (#266).
+        if not bindings:
+            raise GateError(
+                f"this arm resolved ZERO published {ns.package} versions to check {ns.prefix}* tags "
+                f"for. That is not 'every tag is fine' — it is a subject that could not be read, and "
+                f"the two must never share an exit code."
+            )
+
+        tags = (
+            parse_ls_remote_tags(_read_canned(canned_tags, "ls-remote tag list"), ns)
+            if canned_tags is not None
+            else remote_release_tags(remote, ns)
+        )
+    except GateError as e:
+        return NamespaceVerdict(ns=ns, unresolved=str(e))
+    return classify_namespace(ns, bindings, tags)
+
+
+def render_tag_arm(verdicts: list[NamespaceVerdict], repository: str) -> tuple[int, str, str]:
+    """`(exit code, stdout text, stderr text)` for a measured set of namespaces. PURE."""
+    out: list[str] = []
+    problems: list[str] = []
+    red = any(v.red for v in verdicts)
+
+    for v in verdicts:
+        ns = v.ns
+        if v.uncovered:
+            # NEVER "clean". #266: "I could not evaluate this" is not "I evaluated it and it passed",
+            # and a namespace with no immutable artifact to measure against is exactly that.
+            out.append(
+                f"  {ns.prefix}*  UNCOVERED — NOT MEASURED. No published artifact anchors this "
+                f"namespace, so there is no immutable fixed point its mutable tags can be compared "
+                f"to. Its tags are unchecked; treat them as unverified, not as verified-good. "
+                f"({ns.note})"
+            )
+            continue
+        if v.unresolved:
+            out.append(f"  {ns.prefix}*  UNRESOLVED — NOT MEASURED: {v.unresolved}")
+            problems.append(f"  {ns.prefix}*  UNRESOLVED: {v.unresolved}")
+            continue
+
+        headline = f"{v.published} published version(s), {v.published} anchored"
+        if v.missing or v.moved:
+            verdict = f"{len(v.missing)} MISSING, {len(v.moved)} MOVED"
+        elif v.recorded:
+            verdict = f"{len(v.recorded)} recorded disagreement(s), everything else agrees"
+        else:
+            verdict = "every tag resolves (peeled) to its artifact's commit"
+        out.append(f"  {ns.prefix}*  {ns.package}: {headline} — {verdict}")
+
+        for record, resolved in v.recorded:
+            out.append(
+                f"      RECORDED  {ns.prefix}{record.version} resolves to {resolved}, its artifact "
+                f"was packed from {record.nuspec_commit} ({record.issue}). NOT a pass and not a "
+                f"regression: a known, pinned disagreement. {record.why}"
+            )
+        for record in v.spent:
+            out.append(
+                f"      SPENT     the recorded disagreement for {ns.prefix}{record.version} "
+                f"({record.issue}) names a version the feed no longer serves, so it now describes "
+                f"nothing. Delete it from RECORDED_DISAGREEMENTS, or say what replaced it."
+            )
+        if v.untagged:
+            # NEVER an error. A release workflow pushes the tag BEFORE nuget.org indexes the package,
+            # so this is the normal state of a release in flight; reddening it would make every
+            # release red main on its way through.
+            out.append(
+                f"      note: {len(v.untagged)} {ns.prefix}* tag(s) name no published version "
+                f"({', '.join(v.untagged)}). Not an error — the release workflow pushes the tag "
+                f"before the feed indexes the package, and nothing can pin a version that was "
+                f"never published."
+            )
+
+        for version, commit in v.missing:
+            problems.append(
+                f"    MISSING  {ns.prefix}{version} — published, but no such tag. Its artifact was "
+                f"packed from {commit}; create it with:\n"
+                f"        git tag {ns.prefix}{version} {commit} && "
+                f"git push origin {ns.prefix}{version}"
+            )
+        for version, resolved, commit in v.moved:
+            problems.append(
+                f"    MOVED    {ns.prefix}{version} resolves to {resolved}, but the published "
+                f".nuspec was packed from {commit}. The tag was changed after publication."
+            )
+
+    measured = [v for v in verdicts if not v.uncovered and not v.unresolved]
+    total = sum(v.published for v in measured)
+    header = (
+        f"{'FAILED' if red else 'ok'}: {len(verdicts)} release-tag namespace(s) in {repository}, "
+        f"{len(measured)} measured over {total} published version(s). Each tag is compared to the "
+        f"commit its own published .nuspec was packed from — an immutable artifact, not a "
+        f"maintained list (.github#1784, widened by .github#1790)."
+    )
+    stdout = header + "\n" + "\n".join(out)
+    if not red:
+        return 0, stdout, ""
+    stderr = (
+        "::error::check-kit-published-coherence (tag-arm): release tags no longer agree with the "
+        "packages the fleet restores:\n" + "\n".join(problems) + "\n"
+        "A consumer whose pin names a MISSING tag cannot resolve it at all. A consumer whose pin "
+        "names a MOVED tag resolves a tree that is not that release — the defect .github#1772 "
+        "closed, reopened through a mutable ref. The published .nuspec is the fixed point here: it "
+        "is immutable and the tag is not, so the tag is what to repair. If a tag CANNOT be repaired, "
+        "record it in RECORDED_DISAGREEMENTS with both commits and the reason, as .github#1790 did "
+        "for coord-engine/v0.1.0."
+    )
+    return 1, stdout, stderr
+
+
+def _canned_by_namespace(values: list[str], flag: str) -> dict[str, str]:
+    """`PREFIX=FILE` pairs -> `{prefix: file}`. Every prefix must be a DECLARED namespace.
+
+    Repeatable and prefix-qualified so the fixture can drive several namespaces in one run and prove
+    the aggregation — that one namespace's red does not abort the others, and that every namespace is
+    named in the report. An unknown prefix is refused rather than ignored: a fixture whose canned
+    input silently applies to nothing is a leg that measures nothing while appearing to pass.
+    """
+    out: dict[str, str] = {}
+    known = {ns.prefix for ns in RELEASE_NAMESPACES}
+    for value in values:
+        prefix, sep, path = value.partition("=")
+        if not sep or not prefix.strip() or not path.strip():
+            raise GateError(
+                f"{flag} takes `PREFIX=FILE` (e.g. `kit/v=/tmp/tags.txt`); got {value!r}."
+            )
+        prefix, path = prefix.strip(), path.strip()
+        if prefix not in known:
+            raise GateError(
+                f"{flag} names the unknown release namespace {prefix!r}. Known: "
+                f"{', '.join(sorted(known))}. Refusing rather than silently applying it to nothing."
+            )
+        if prefix in out:
+            raise GateError(f"{flag} names {prefix!r} twice; the second would silently win.")
+        out[prefix] = path
+    return out
 
 
 def run_tag_arm(
     *,
     remote: str,
     repository: str,
-    canned_published: str | None,
-    canned_tags: str | None,
+    only: list[str],
+    canned_published: dict[str, str],
+    canned_tags: dict[str, str],
 ) -> int:
-    """.github#1784. Exit 0 = every published version's tag still resolves to its artifact's commit."""
-
-    def read_canned(path: str, what: str) -> str:
-        try:
-            return open(path, encoding="utf-8").read()
-        except OSError as e:
-            raise GateError(f"cannot read the canned {what} {path!r}: {e}") from e
-
-    # `version<TAB>commit`, one per line — the nuspec read, canned. `-` means the artifact binds no
-    # commit, so the fixture can exercise the unanchorable case without a network.
-    bindings: dict[str, str] = {}
-    if canned_published:
-        for lineno, raw in enumerate(read_canned(canned_published, "published-version list").splitlines(), 1):
-            if not raw.strip():
-                continue
-            parts = raw.split("\t")
-            if len(parts) != 2:
-                raise GateError(f"canned published line {lineno} is not `<version>\\t<commit>`: {raw!r}")
-            version, commit = parts[0].strip(), parts[1].strip().lower()
-            # Constrained EXACTLY as the live read is, and refused with the same words. A canned
-            # input the gate validates more loosely than its real subject is a fixture that can green
-            # a shape production would red — so every narrowing the live branch performs below is
-            # performed here too: the prerelease filter, the version parse, and uniqueness.
-            # Parsed HERE, before anything else looks at it, and NOT at report time:
-            # `sorted(..., key=parse_version)` inside the failure report would raise while rendering
-            # a real verdict and throw the diagnosis away. This must also come before the prerelease
-            # filter, which parses the version itself and would otherwise raise first with a message
-            # that does not say which line is wrong.
-            try:
-                parse_version(version)
-            except GateError as e:
-                raise GateError(
-                    f"canned published line {lineno} names {version!r}, which is not a NuGet "
-                    f"version: {e}"
-                ) from e
-            if is_prerelease(version):
-                continue
-            if version in bindings:
-                raise GateError(
-                    f"canned published line {lineno} repeats version {version!r}; the feed's "
-                    f"versions are unique, so a duplicate would silently overwrite its own subject."
-                )
-            if not _HEX40.match(commit):
-                raise GateError(
-                    f"the published {PACKAGE} {version} .nuspec <repository> names no 40-hex commit "
-                    f"(commit={None if commit == '-' else commit!r}). SourceLink writes this at pack "
-                    f"time; a package without it cannot anchor its own tag."
-                )
-            bindings[version] = commit
-    else:
-        live = nuget_org_versions(PACKAGE)  # raises on 404/unreachable/empty — never []
-        stable = [v for v in live if not is_prerelease(v)]
-        if not stable:
-            raise GateError(
-                f"nuget.org serves no stable version of {PACKAGE} — only prereleases {sorted(live)}. "
-                f"There is nothing whose tag this arm can anchor, and an empty subject is not a pass."
-            )
-        for version in sorted(stable, key=parse_version):
-            bindings[version] = nuspec_repository_commit(
-                version, _fetch_nuspec(version), repository=repository
-            )
-
-    # AN EMPTY SUBJECT IS NOT A PASS, and this must be said ONCE, below both branches. Stating it only
-    # inside the live branch is exactly how the first draft of this arm shipped a fail-open: an empty
-    # canned list produced zero comparisons and then printed "ok: all 0 stable version(s) ... has not
-    # moved since publication" — a check reporting a measurement it never took (#266). Review caught
-    # it; the leg that keeps it caught is `an empty published set is unresolved, not a pass`.
-    if not bindings:
+    """.github#1784/#1790. Exit 0 = every release tag still resolves to its artifact's commit."""
+    # A canned namespace must supply BOTH halves. One half canned and the other read live is a
+    # fixture that reaches the network from a leg whose author believed it could not — and whose
+    # DNS failure would then read as the leg passing.
+    if set(canned_published) ^ set(canned_tags):
         raise GateError(
-            f"this arm resolved ZERO published {PACKAGE} versions to check tags for. That is not "
-            f"'every tag is fine' — it is a subject that could not be read, and the two must never "
-            f"share an exit code."
+            "every canned namespace needs both --tag-arm-published and --tag-arm-tags; "
+            f"{sorted(set(canned_published) ^ set(canned_tags))} has only one half, so the other "
+            "would be read live from a run that believes it is offline."
         )
-
-    tags = parse_ls_remote_tags(read_canned(canned_tags, "ls-remote tag list")) if canned_tags \
-        else remote_kit_tags(remote)
-
-    missing: list[str] = []
-    moved: list[tuple[str, str, str]] = []
-    for version, commit in bindings.items():
-        resolved = tags.get(version)
-        if resolved is None:
-            missing.append(version)
-        elif resolved != commit:
-            moved.append((version, resolved, commit))
-
-    untagged_versions = sorted(set(tags) - set(bindings), key=parse_version)
-
-    if not missing and not moved:
-        note = ""
-        if untagged_versions:
-            # NEVER an error. release-kit.yml pushes the tag BEFORE nuget.org indexes the package, so
-            # this is the normal state of a release in flight; reddening it would make every release
-            # red main on its way through.
-            note = (
-                f"\n  note: {len(untagged_versions)} {TAG_PREFIX}* tag(s) name no published version "
-                f"({', '.join(untagged_versions)}). Not an error — release-kit.yml pushes the tag "
-                f"before the feed indexes the package, and no receiver can pin a version that was "
-                f"never published."
-            )
-        print(
-            f"ok: all {len(bindings)} stable {PACKAGE} version(s) on nuget.org carry a "
-            f"{TAG_PREFIX}<version> tag in {repository}, and every tag still resolves (peeled) to "
-            f"the exact commit its published .nuspec was packed from. The ref .github#1772's "
-            f"bump-shape resolver trusts has not moved since publication.{note}"
+    # When anything is canned, the subject IS the canned namespaces. Otherwise a fixture would fall
+    # through to a live read of the four it did not mention.
+    selected = [
+        ns
+        for ns in RELEASE_NAMESPACES
+        if (ns.prefix in canned_published if canned_published else True)
+        and (not only or ns.prefix in only)
+    ]
+    if not selected:
+        raise GateError(
+            f"no release namespace matches {only!r}. Known: "
+            f"{', '.join(ns.prefix for ns in RELEASE_NAMESPACES)}."
         )
-        return 0
-
-    details: list[str] = []
-    for version in sorted(missing, key=parse_version):
-        details.append(
-            f"    MISSING  {TAG_PREFIX}{version} — published, but no such tag. Its artifact was "
-            f"packed from {bindings[version]}; create it with:\n"
-            f"        git tag {TAG_PREFIX}{version} {bindings[version]} && "
-            f"git push origin {TAG_PREFIX}{version}"
+    verdicts = [
+        measure_namespace(
+            ns,
+            remote=remote,
+            repository=repository,
+            canned_published=canned_published.get(ns.prefix),
+            canned_tags=canned_tags.get(ns.prefix),
         )
-    for version, resolved, commit in sorted(moved, key=lambda row: parse_version(row[0])):
-        details.append(
-            f"    MOVED    {TAG_PREFIX}{version} resolves to {resolved}, but the published .nuspec "
-            f"was packed from {commit}. The tag was changed after publication."
-        )
-    print(
-        f"::error::check-kit-published-coherence (tag-arm): the {TAG_PREFIX}* tags .github#1772's "
-        f"bump-shape resolver trusts no longer agree with the packages the fleet restores "
-        f"({len(missing)} missing, {len(moved)} moved):\n" + "\n".join(details) + "\n"
-        f"A receiver whose pin names a MISSING tag gets a REFUSED from `materialize / "
-        f"kit-bump-shape` and cannot be graded at all. A receiver whose pin names a MOVED tag is "
-        f"graded by a rule from a tree that is not its release — the exact defect .github#1772 "
-        f"closed, reopened through a mutable ref. The published .nuspec is the fixed point here: it "
-        f"is immutable and the tag is not, so the tag is what to repair.",
-        file=sys.stderr,
-    )
-    return 1
+        for ns in selected
+    ]
+    code, stdout, stderr = render_tag_arm(verdicts, repository)
+    print(stdout)
+    if stderr:
+        print(stderr, file=sys.stderr)
+    return code
 
 
 def read_lock_digests(lock_path: str) -> set[str]:
@@ -928,21 +1314,38 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--tag-arm",
         action="store_true",
-        help="the tag-integrity rule (.github#1784): does every published version's kit/v* tag still "
-        "resolve to the commit its artifact was packed from?",
+        help="the tag-integrity rule (.github#1784, every release namespace since #1790): does every "
+        "published version's release tag still resolve to the commit its artifact was packed from?",
     )
     ap.add_argument(
         "--remote",
         default="",
-        help="the git remote whose kit/v* tags are the anchor (default: this repository on github.com)",
+        help="the git remote whose release tags are the anchor (default: this repository on github.com)",
+    )
+    ap.add_argument(
+        "--namespace",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="measure only these release-tag namespaces (repeatable; default: all of "
+        + ", ".join(ns.prefix for ns in RELEASE_NAMESPACES)
+        + "). Narrows the subject, it does not replace a read, so it is not a canned input.",
     )
     ap.add_argument(
         "--tag-arm-published",
-        help="read `<version>\\t<nuspec commit>` rows instead of the feed (tests only)",
+        action="append",
+        default=[],
+        metavar="PREFIX=FILE",
+        help="read `<version>\\t<nuspec commit>` rows for one namespace instead of the feed "
+        "(tests only; repeatable)",
     )
     ap.add_argument(
         "--tag-arm-tags",
-        help="read canned `git ls-remote` output instead of the remote (tests only)",
+        action="append",
+        default=[],
+        metavar="PREFIX=FILE",
+        help="read canned `git ls-remote` output for one namespace instead of the remote "
+        "(tests only; repeatable)",
     )
     args = ap.parse_args(argv)
 
@@ -958,8 +1361,8 @@ def main(argv: list[str]) -> int:
     # read of the arm's subject (the feed's nuspecs, the remote's refs) with an answer supplied on the
     # command line, and an unlocked one is a way to green a gate without measuring anything.
     tag_arm_canned = {
-        "--tag-arm-published": args.tag_arm_published,
-        "--tag-arm-tags": args.tag_arm_tags,
+        "--tag-arm-published": args.tag_arm_published or None,
+        "--tag-arm-tags": args.tag_arm_tags or None,
     }
     supplied = sorted(
         flag for flag, value in {**pr_arm_canned, **tag_arm_canned}.items() if value
@@ -1013,8 +1416,11 @@ def main(argv: list[str]) -> int:
             return run_tag_arm(
                 remote=args.remote.strip() or f"https://github.com/{repository}.git",
                 repository=repository,
-                canned_published=args.tag_arm_published,
-                canned_tags=args.tag_arm_tags,
+                only=args.namespace,
+                canned_published=_canned_by_namespace(
+                    args.tag_arm_published, "--tag-arm-published"
+                ),
+                canned_tags=_canned_by_namespace(args.tag_arm_tags, "--tag-arm-tags"),
             )
         except GateError as e:
             # #266: a tag this arm could not resolve is reported UNRESOLVED, never as valid.

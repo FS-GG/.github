@@ -412,7 +412,7 @@ else
 fi
 
 echo
-echo "== tag-arm (.github#1784) =="
+echo "== tag-arm (.github#1784, every release namespace since .github#1790) =="
 
 # `#1772` made `kit/v<version>` the ref a receiver's bump-shape rule is resolved from. A tag is a
 # MUTABLE ref and a published package is not, so the question these legs are about is never "does the
@@ -422,6 +422,11 @@ echo "== tag-arm (.github#1784) =="
 # Both canned inputs mirror the REAL wire shapes: the tag list is literal `git ls-remote` output, so
 # these legs exercise the shipped parser rather than a hand-written mirror of it (the #1780 review
 # lesson — a fixture that mirrors its subject proves only the mirror).
+#
+# The canned flags are now PREFIX-QUALIFIED (`kit/v=<file>`) and repeatable, because the arm's subject
+# is five namespaces rather than one. The legs below that name only `kit/v` are therefore scoped to
+# `kit/v`: when anything is canned, the arm's subject IS the canned namespaces, so a leg cannot fall
+# through to a live read of the four it did not mention.
 TAGPUB="$WORK/tag-published.tsv"
 TAGREFS="$WORK/tag-refs.txt"
 
@@ -431,7 +436,8 @@ C3=$(printf '3%.0s' {1..40})
 
 tagarm() { # extra args appended
   set +e
-  out="$(python3 "$GATE" --tag-arm --tag-arm-published "$TAGPUB" --tag-arm-tags "$TAGREFS" "$@" 2>&1)"
+  out="$(python3 "$GATE" --tag-arm \
+    --tag-arm-published "kit/v=$TAGPUB" --tag-arm-tags "kit/v=$TAGREFS" "$@" 2>&1)"
   rc=$?
   set -e
 }
@@ -446,7 +452,8 @@ tagarm() { # extra args appended
   printf '%s\trefs/tags/kit/v0.17.0\n' "$C2"
 } > "$TAGREFS"
 tagarm
-must_pass "every published version's tag resolves to its artifact's commit" "has not moved since publication"
+must_pass "every published version's tag resolves to its artifact's commit" \
+  "every tag resolves (peeled) to its artifact's commit"
 
 # PEELING IS LOAD-BEARING, not a detail. An ANNOTATED tag's own object id is not the commit the #1772
 # resolver checks the rule out at; comparing the wrong one would red every annotated release — 8 of
@@ -457,7 +464,8 @@ must_pass "every published version's tag resolves to its artifact's commit" "has
   printf '%s\trefs/tags/kit/v0.17.0^{}\n' "$C2"
 } > "$TAGREFS"
 tagarm
-must_pass "an annotated tag is compared by its PEELED commit, not its tag object" "has not moved since publication"
+must_pass "an annotated tag is compared by its PEELED commit, not its tag object" \
+  "every tag resolves (peeled) to its artifact's commit"
 
 # ...and in the REVERSED emission order. The row above is git's real order, so on its own it cannot
 # tell "peeled always wins" apart from "the last row wins" — a single-dict rewrite would pass it.
@@ -468,7 +476,7 @@ must_pass "an annotated tag is compared by its PEELED commit, not its tag object
 } > "$TAGREFS"
 tagarm
 must_pass "the peeled commit wins whichever order ls-remote emits the two rows in" \
-  "has not moved since publication"
+  "every tag resolves (peeled) to its artifact's commit"
 
 # HOLE 2 — measured on the live fleet as 0.1.0 and 0.4.0: published, no tag. A receiver pinned there
 # cannot have its rule resolved at all, so this is the leg that decides whether old pins are gradable.
@@ -499,7 +507,7 @@ grep -q "was packed from $C2" <<<"$out" \
   printf '%s\trefs/tags/kit/v0.17.0\n' "$C3"
 } > "$TAGREFS"
 tagarm
-must_fail "missing and moved are reported separately" "(1 missing, 1 moved)"
+must_fail "missing and moved are reported separately" "1 MISSING, 1 MOVED"
 
 # A tag naming a version the feed does not serve is the NORMAL state of a release in flight:
 # release-kit.yml pushes the tag, then nuget.org indexes the package. Redding it would make every
@@ -523,7 +531,7 @@ must_pass "a tag whose version is not published yet is reported, never red" "nam
 } > "$TAGREFS"
 tagarm
 must_pass "a kit/v* ref outside the bare x.y.z grammar is ignored, not invented into a version" \
-  "carry a kit/v<version> tag"
+  "every tag resolves (peeled) to its artifact's commit"
 grep -q "name no published version" <<<"$out" \
   && bad "an unparsable kit/v ref must not be reported as an untagged version" "$out" \
   || ok "an unparsable kit/v ref is not reported as an untagged version"
@@ -569,12 +577,49 @@ printf '   \n\n' > "$TAGPUB"
 tagarm
 must_fail "a whitespace-only published set is unresolved, not a pass" "resolved ZERO published"
 
-# The canned branch must NARROW its subject exactly as the live branch does, or a fixture can encode
-# a subject production could never produce, and legs start proving things about nothing.
-printf '0.16.0-preview.1\t%s\n' "$C1" > "$TAGPUB"
+# A PRERELEASE IS A SUBJECT, and .github#1790 changed this deliberately. `#1784` filtered prereleases
+# out, inherited from the arms above where stable-ness decides what "newest" means. For tag integrity
+# it decides nothing — "does this tag still name the commit that produced this artifact?" is exactly
+# as well-posed for a prerelease — and the filter was hiding a real disagreement:
+# `new-sdd-fullstack/v0.1.1-preview.1` is the ONLY version that package ever published, so a
+# stable-only subject reports that whole namespace as having nothing to check.
+{
+  printf '0.16.0-preview.1\t%s\n' "$C1"
+} > "$TAGPUB"
+{
+  printf '%s\trefs/tags/kit/v0.16.0-preview.1\n' "$C1"
+} > "$TAGREFS"
+tagarm --namespace new-sdd-workspace/v --tag-arm-published "new-sdd-workspace/v=$TAGPUB" \
+  --tag-arm-tags "new-sdd-workspace/v=$TAGREFS"
+must_fail "a prerelease-only namespace is MEASURED, not reported as having nothing to check" \
+  "MISSING  new-sdd-workspace/v0.16.0-preview.1"
+
+# ...and the prerelease tag is compared, not merely counted: a prerelease whose tag disagrees is red
+# in exactly the same words as a stable one. This is the leg the live `new-sdd-fullstack` finding
+# would have needed, and the one #1784's filter made impossible.
+{
+  printf '%s\trefs/tags/new-sdd-workspace/v0.16.0-preview.1\n' "$C3"
+} > "$TAGREFS"
+tagarm --namespace new-sdd-workspace/v --tag-arm-published "new-sdd-workspace/v=$TAGPUB" \
+  --tag-arm-tags "new-sdd-workspace/v=$TAGREFS"
+must_fail "a PRERELEASE tag that disagrees with its artifact is red" \
+  "MOVED    new-sdd-workspace/v0.16.0-preview.1 resolves to $C3"
+
+# The kit keeps the NARROWER grammar, and that is not an oversight: the #1772 resolver accepts a bare
+# x.y.z and nothing else, so a `kit/v0.16.0-preview.1` ref can never be selected by a receiver's pin.
+# Same canned refs, different namespace, opposite verdict — which is what makes the per-namespace
+# grammar a real property rather than a comment.
+{
+  printf '%s\trefs/tags/kit/v0.16.0-preview.1\n' "$C1"
+} > "$TAGREFS"
 tagarm
-must_fail "a prerelease is filtered from the canned subject, exactly as it is from the feed" \
-  "resolved ZERO published"
+must_fail "the kit's BARE_TRIPLE grammar still ignores a prerelease ref no pin could resolve" \
+  "MISSING  kit/v0.16.0-preview.1"
+grep -q "name no published version" <<<"$out" \
+  && bad "a prerelease kit/v ref must not be reported as an untagged version" "$out" \
+  || ok "the kit grammar drops a prerelease ref instead of parsing it into a version"
+
+printf '%s\trefs/tags/kit/v0.16.0\n' "$C1" > "$TAGREFS"
 
 {
   printf '0.16.0\t%s\n' "$C1"
@@ -591,11 +636,24 @@ must_fail "a canned version that is not a NuGet version is refused at read time"
   "which is not a NuGet version"
 
 printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
-tagarm --tag-arm-tags "$WORK/no-such-refs.txt"
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "kit/v=$TAGPUB" \
+  --tag-arm-tags "kit/v=$WORK/no-such-refs.txt" 2>&1)"; rc=$?
+set -e
 must_fail "an unreadable tag list is unresolved" "cannot read the canned ls-remote tag list"
 
-tagarm --tag-arm-published "$WORK/no-such-pub.tsv"
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "kit/v=$WORK/no-such-pub.tsv" \
+  --tag-arm-tags "kit/v=$TAGREFS" 2>&1)"; rc=$?
+set -e
 must_fail "an unreadable published list is unresolved" "cannot read the canned published-version list"
+
+# ...and an unreadable subject is UNRESOLVED, never clean (#266). The report must say so in the
+# headline as well as the error stream, because a namespace that could not be measured appearing in a
+# list of measured ones is the exact confusion the epic is about.
+grep -q "UNRESOLVED — NOT MEASURED" <<<"$out" \
+  && ok "an unreadable namespace is reported NOT MEASURED, never as clean" \
+  || bad "an unreadable namespace is reported NOT MEASURED" "$out"
 
 # THE NUSPEC READER ITSELF. The canned rows above hand this arm the RESULT of the nuspec read, so
 # without these legs the one genuinely new parser in the change would have no coverage at all — the
@@ -719,7 +777,7 @@ fi
 # had lost one of them. And each assertion names THE FLAG, not just "Refusing to run" — that phrase
 # is shared with the misdirection refusal, and if the lock were ever removed these commands would
 # fall through to a live read whose DNS/timeout failure would otherwise read as the leg passing.
-for flag_pair in "--tag-arm-published=$TAGPUB" "--tag-arm-tags=$TAGREFS"; do
+for flag_pair in "--tag-arm-published=kit/v=$TAGPUB" "--tag-arm-tags=kit/v=$TAGREFS"; do
   flag="${flag_pair%%=*}"
   value="${flag_pair#*=}"
   set +e
@@ -739,13 +797,13 @@ must_fail "a pr-arm input on the tag arm is refused, not ignored" \
   "are --pr-arm inputs and mean nothing to the tag arm"
 
 set +e
-out="$(python3 "$GATE" --pr-arm --tag-arm-tags "$TAGREFS" 2>&1)"; rc=$?
+out="$(python3 "$GATE" --pr-arm --tag-arm-tags "kit/v=$TAGREFS" 2>&1)"; rc=$?
 set -e
 must_fail "a tag-arm input on the pr arm is refused, not ignored" \
   "are --tag-arm inputs and mean nothing to the PR arm"
 
 set +e
-out="$(python3 "$GATE" --tag-arm-tags "$TAGREFS" --lock "$LOCK" --fixture-manifest "$CANON" \
+out="$(python3 "$GATE" --tag-arm-tags "kit/v=$TAGREFS" --lock "$LOCK" --fixture-manifest "$CANON" \
   --canonical-manifest "$CANON" 2>&1)"; rc=$?
 set -e
 must_fail "a tag-arm input on the published arm is refused, not ignored" \
@@ -765,6 +823,190 @@ set -e
 must_fail "the tag arm and the manifest fixture refuse to run at once" \
   "--tag-arm and the manifest fixture flags are different arms"
 
+echo
+echo "== tag-arm: every release namespace (.github#1790) =="
+
+# AGGREGATION. `#1784`'s arm measured ONE namespace, so nothing could tell it to keep going after a
+# red. With five, a namespace that reds must not abort the four behind it — that is how a single
+# defect hides four more, and .github#1790 exists because four namespaces went unlooked-at for a year.
+NSPUB2="$WORK/ns2-published.tsv"
+NSREFS2="$WORK/ns2-refs.txt"
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+printf '%s\trefs/tags/kit/v0.16.0\n' "$C1" > "$TAGREFS"
+printf '0.9.0\t%s\n' "$C2" > "$NSPUB2"
+printf '%s\trefs/tags/drivers/v0.9.0\n' "$C3" > "$NSREFS2"   # MOVED
+set +e
+out="$(python3 "$GATE" --tag-arm \
+  --tag-arm-published "kit/v=$TAGPUB"      --tag-arm-tags "kit/v=$TAGREFS" \
+  --tag-arm-published "drivers/v=$NSPUB2"  --tag-arm-tags "drivers/v=$NSREFS2" 2>&1)"; rc=$?
+set -e
+must_fail "a red namespace does not abort the others" "MOVED    drivers/v0.9.0"
+grep -q "kit/v\*  FS.GG.Kit: 1 published version(s), 1 anchored — every tag resolves" <<<"$out" \
+  && ok "the clean namespace beside a red one is still measured and still reported" \
+  || bad "the clean namespace beside a red one is still reported" "$out"
+grep -q "2 release-tag namespace(s) in .*, 2 measured over 2 published version(s)" <<<"$out" \
+  && ok "the headline counts namespaces measured and versions compared" \
+  || bad "the headline counts namespaces measured and versions compared" "$out"
+
+# A canned namespace must supply BOTH halves. One canned and one live is a leg that reaches the
+# network from a run whose author believed it was offline — and whose DNS failure then reads as the
+# leg passing. That is the #1008 shape, in a fixture.
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "kit/v=$TAGPUB" \
+  --tag-arm-tags "drivers/v=$NSREFS2" 2>&1)"; rc=$?
+set -e
+must_fail "a half-canned namespace is refused, not silently read live" "has only one half"
+
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "no-such/v=$TAGPUB" \
+  --tag-arm-tags "no-such/v=$TAGREFS" 2>&1)"; rc=$?
+set -e
+must_fail "an unknown namespace prefix is refused, not applied to nothing" \
+  "names the unknown release namespace"
+
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "$TAGPUB" --tag-arm-tags "$TAGREFS" 2>&1)"; rc=$?
+set -e
+must_fail "an unqualified canned path is refused" "takes .PREFIX=FILE."
+
+set +e
+out="$(python3 "$GATE" --tag-arm --tag-arm-published "kit/v=$TAGPUB" \
+  --tag-arm-published "kit/v=$NSPUB2" --tag-arm-tags "kit/v=$TAGREFS" 2>&1)"; rc=$?
+set -e
+must_fail "the same namespace canned twice is refused, not last-wins" "twice; the second would"
+
+set +e
+out="$(python3 "$GATE" --tag-arm --namespace nope/v 2>&1)"; rc=$?
+set -e
+must_fail "--namespace naming nothing is refused, not an empty green" "no release namespace matches"
+
+# THE DECISION LOGIC, DRIVEN DIRECTLY. Everything above hands the arm canned READS; these drive the
+# shipped classifier and renderer against the REAL RECORDED_DISAGREEMENTS and the REAL namespace
+# table, so the two genuinely new behaviours in .github#1790 — the both-commits pin and the UNCOVERED
+# branch — are exercised rather than described.
+if python3 - "$GATE" <<'PY'
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("gate", sys.argv[1])
+gate = importlib.util.module_from_spec(spec)
+sys.modules["gate"] = gate
+spec.loader.exec_module(gate)
+
+by_prefix = {ns.prefix: ns for ns in gate.RELEASE_NAMESPACES}
+assert gate.RECORDED_DISAGREEMENTS, "the record is empty; these legs would prove nothing"
+
+for record in gate.RECORDED_DISAGREEMENTS:
+    ns = by_prefix[record.prefix]
+    bindings = {record.version: record.nuspec_commit}
+
+    # 1. THE EXACT RECORDED STATE — acknowledged, printed, and NOT red.
+    v = gate.classify_namespace(ns, bindings, {record.version: record.tag_commit})
+    assert not v.red, f"{record.prefix}{record.version}: the recorded state must not be red"
+    assert len(v.recorded) == 1 and not v.moved, f"{record.prefix}{record.version}: not recorded"
+    code, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
+    assert code == 0 and "RECORDED " in stdout, "a recorded disagreement must still be PRINTED"
+
+    # 2. THE TAG MOVES AGAIN — the record stops matching, in EITHER direction. This is the whole
+    #    difference between a pinned record and an exemption: an exemption keyed on the version
+    #    alone would green all three of these.
+    for moved_to, why in [
+        ("f" * 40, "moved somewhere new"),
+        (record.nuspec_commit, "moved onto the commit the artifact names"),
+    ]:
+        v = gate.classify_namespace(ns, bindings, {record.version: moved_to})
+        if moved_to == record.nuspec_commit:
+            assert not v.red and not v.recorded, f"{why}: agreement is agreement, not a record"
+        else:
+            assert v.red and v.moved and not v.recorded, f"{why}: must fall through to MOVED"
+
+    # 3. THE ARTIFACT'S COMMIT DIFFERS FROM THE RECORD — a republish under the same version, or a
+    #    record written against a nuspec nobody re-read. Also red.
+    v = gate.classify_namespace(
+        ns, {record.version: "e" * 40}, {record.version: record.tag_commit}
+    )
+    assert v.red and v.moved and not v.recorded, "a record must not speak for a different artifact"
+
+    # 4. THE VERSION LEAVES THE FEED — SPENT, reported, never silently kept and never red.
+    v = gate.classify_namespace(ns, {"99.99.99": "a" * 40}, {"99.99.99": "a" * 40})
+    assert v.spent and not v.red, "a record describing nothing must be reported SPENT"
+    _, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
+    assert "SPENT " in stdout, "a spent record must be printed"
+
+# EVERY RECORD MUST NAME A DECLARED NAMESPACE, or it silently speaks for nothing.
+for record in gate.RECORDED_DISAGREEMENTS:
+    assert record.prefix in by_prefix, f"recorded disagreement for unknown namespace {record.prefix}"
+    assert gate._HEX40.match(record.tag_commit), record.tag_commit
+    assert gate._HEX40.match(record.nuspec_commit), record.nuspec_commit
+    assert record.tag_commit != record.nuspec_commit, "a record must describe a DISAGREEMENT"
+    assert record.why.strip() and record.issue.strip(), "a record must carry its reason and issue"
+
+# THE UNCOVERED BRANCH. A namespace with no artifact anchor is reported NOT MEASURED — never as
+# clean, and never by substituting a weaker comparand for the missing one (#266, .github#1790).
+orphan = gate.TagNamespace(
+    prefix="unanchored/v", package=None, grammar=gate.NUGET_VERSION, note="a namespace with no feed"
+)
+v = gate.measure_namespace(
+    orphan, remote="file:///nonexistent", repository="FS-GG/.github",
+    canned_published=None, canned_tags=None,
+)
+assert v.uncovered and not v.red, "an uncovered namespace is declared, not a failure"
+code, stdout, _ = gate.render_tag_arm([v], "FS-GG/.github")
+assert "UNCOVERED — NOT MEASURED" in stdout, stdout
+assert "1 release-tag namespace(s)" in stdout and "0 measured" in stdout, (
+    "an uncovered namespace must not be counted among the measured ones:\n" + stdout
+)
+PY
+then
+  ok "the recorded-disagreement pin, the SPENT report, and the UNCOVERED branch all behave"
+else
+  bad "the recorded-disagreement pin, the SPENT report, and the UNCOVERED branch all behave"
+fi
+
+# THE TABLE MUST BE COMPLETE, and this is the leg that keeps .github#1790 from being a one-off sweep.
+# The gap #1790 closed was not "the check was wrong" — it was "four namespaces were never in it". A
+# sixth release workflow can reopen exactly that, silently, and no amount of care inside the arm
+# would notice. So the table is compared to the repository's own release triggers.
+if python3 - "$GATE" "$HERE/../../.github/workflows" <<'PY'
+import glob
+import importlib.util
+import os
+import re
+import sys
+
+spec = importlib.util.spec_from_file_location("gate", sys.argv[1])
+gate = importlib.util.module_from_spec(spec)
+sys.modules["gate"] = gate
+spec.loader.exec_module(gate)
+
+declared = {ns.prefix for ns in gate.RELEASE_NAMESPACES}
+found = {}
+for path in sorted(glob.glob(os.path.join(sys.argv[2], "release-*.yml"))):
+    text = open(path, encoding="utf-8").read()
+    for prefix in re.findall(r"tags:\s*\[\s*'([^']+?)\*'\s*\]", text):
+        found[prefix] = os.path.basename(path)
+assert found, "no release workflow declares a tag trigger — this leg would prove nothing"
+
+uncovered = {p: w for p, w in found.items() if p not in declared}
+assert not uncovered, (
+    "a release workflow publishes into a tag namespace RELEASE_NAMESPACES does not name, so its "
+    f"tags are unchecked — the exact gap .github#1790 closed: {uncovered}"
+)
+# The reverse is NOT an error: `new-sdd-fullstack/v*` is retired and has no workflow, and its
+# packages are still served, so it stays in the table. Assert that it is deliberate rather than
+# stale by requiring the row to say so.
+for ns in gate.RELEASE_NAMESPACES:
+    if ns.prefix not in found:
+        assert "RETIRED" in ns.note or "retired" in ns.note, (
+            f"{ns.prefix} has no release workflow and its note does not say why it is still listed"
+        )
+PY
+then
+  ok "every release workflow's tag namespace is in RELEASE_NAMESPACES"
+else
+  bad "every release workflow's tag namespace is in RELEASE_NAMESPACES"
+fi
+
 # THE ARM MUST BE WIRED. A checker nothing runs is the .github#1606 shape, and this one's whole
 # purpose is to notice a change made OUTSIDE any pull request — so it belongs on the job whose
 # subject is already main-plus-the-feed, not on the PR jobs.
@@ -778,15 +1020,21 @@ assert match, "published job missing"
 job = match.group(1)
 directives = [ln for ln in job.splitlines() if ln.strip() and not ln.strip().startswith("#")]
 assert any("--tag-arm" in ln for ln in directives), (
-    "the published job does not run the tag arm — the kit/v* tags .github#1772 resolves rules from "
-    "would be load-bearing and unchecked again:\n" + "\n".join(directives)
+    "the published job does not run the tag arm — the release tags .github#1772 and #1075 resolve "
+    "against would be load-bearing and unchecked again:\n" + "\n".join(directives)
+)
+# It must run UNSCOPED. `--namespace` narrows the subject, and a narrowed live run is how four of
+# five namespaces went unchecked in the first place (.github#1790).
+assert not any("--namespace" in ln for ln in directives), (
+    "the live tag arm is scoped with --namespace, so the namespaces it omits are unchecked — the "
+    "exact gap .github#1790 closed:\n" + "\n".join(directives)
 )
 assert not any("continue-on-error" in ln for ln in directives), (
     "the published job gained continue-on-error; a tag defect would report green"
 )
 # The tag arm must not be ABORTED by the staleness step above it. They are independent subjects with
 # independent remedies, and a stale kit is the state most likely to coincide with tag surgery.
-tag_step = re.search(r"(?ms)^      - name: Do the kit/v\* tags still resolve.*?\n(.*?)(?=^      - |\Z)", job)
+tag_step = re.search(r"(?ms)^      - name: Do the release tags still resolve.*?\n(.*?)(?=^      - |\Z)", job)
 assert tag_step, "the tag-arm step is not where this assertion expects it"
 assert "!cancelled()" in tag_step.group(1), (
     "the tag-arm step is not conditioned on !cancelled(), so a red from the staleness step above it "
@@ -802,3 +1050,18 @@ fi
 echo
 echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
+
+# HOW MANY LEGS ACTUALLY RAN. `$failcount -eq 0` alone cannot tell "every leg passed" from "the
+# script stopped early and the ones that ran happened to pass" — .github#1768 is that exact defect,
+# 157 passing legs while the script was dying mid-run. `set -e` covers a command that FAILS; it does
+# not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
+# heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
+# when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
+EXPECTED_LEGS=93
+if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
+  echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
+       "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
+       "this file; if you did not, the script stopped early (.github#1768)."
+  exit 1
+fi
+echo "kit-published-coherence fixture: all $EXPECTED_LEGS declared legs ran"
