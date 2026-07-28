@@ -60,6 +60,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/kit-bump-shape/run.sh",
       "workflow": ".github/workflows/kit-bump-shape.yml"
+    },
+    {
+      "source": "scripts/check-gate-finding-history.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/gate-finding-history/run.sh",
+      "workflow": ".github/workflows/gate-finding-history-selftest.yml"
     }
   ]
 }
