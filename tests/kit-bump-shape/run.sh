@@ -869,28 +869,21 @@ fi
 # THE GUARD IS EXTRACTED FROM THE WORKFLOW, NEVER RESTATED (ADR-0058). A copy of the `case` pasted
 # here would pass forever while the workflow said something else — the #1059 class, in the fixture
 # written to catch it. `WF` is already resolved above.
+# STDLIB ONLY, NO PyYAML — this fixture's job installs neither PyYAML nor dotnet, which is the
+# point of it ("no network, no dotnet"). An earlier draft of these legs used `yaml.safe_load` and
+# died on `ModuleNotFoundError` in CI. It FAILED rather than passing, because the extraction guard
+# below treats "I could not read the guard" as a finding and not a verdict (#266) — which is the
+# behaviour these legs are supposed to have, demonstrated on themselves.
 echo
 guard="$(python3 - "$WF" <<'PY'
-import re, sys, yaml
-doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-runs = []
-def walk(o):
-    if isinstance(o, dict):
-        if isinstance(o.get("run"), str): runs.append(o["run"])
-        for v in o.values(): walk(v)
-    elif isinstance(o, list):
-        for v in o: walk(v)
-walk(doc)
-# The one `run:` block carrying the shape guard, selected by the thing it protects.
-hits = [r for r in runs if 'case "$version$folder"' in r]
-if len(hits) != 1:
-    sys.stderr.write(f"expected exactly 1 run block with the version/folder case, found {len(hits)}\n")
-    sys.exit(1)
-block = hits[0]
-m = re.search(r'^(\s*)case "\$version\$folder" in.*?^\s*esac', block, re.S | re.M)
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'^([ \t]*)case "\$version\$folder" in\n.*?^\1esac$', src, re.S | re.M)
 if not m:
-    sys.stderr.write("could not extract the case statement\n"); sys.exit(1)
-print(m.group(0))
+    sys.stderr.write("could not locate the version/folder case in the workflow\n"); sys.exit(1)
+indent = m.group(1)
+print("\n".join(l[len(indent):] if l.startswith(indent) else l
+                for l in m.group(0).splitlines()))
 PY
 )" || guard=""
 
