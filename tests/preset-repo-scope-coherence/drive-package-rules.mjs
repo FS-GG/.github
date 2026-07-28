@@ -212,5 +212,85 @@ for (const repo of receivers) {
 await expect(REINJECTED, 'FS-GG/.github', MANIFEST, 'MANAGED',
   `[control] the baseline survives the rule (matchFileNames anchors; ignorePaths would not)`);
 
+// --- 5. the FS.GG.Kit automerge rule (#1587) ------------------------------------------------------
+//
+// WHY THIS LEG EXISTS. `#1587` automerges the MECHANICAL kit bump class and nothing else, with NO
+// context armed anywhere: a red `materialize / kit-bump-mechanical` stops the merge because
+// Renovate's own pre-merge poll reads the branch's COMBINED status. That only holds while RENOVATE
+// does the merging. Renovate's default `platformAutomerge: true` instead hands the merge to GitHub's
+// native auto-merge, which fires on the REQUIRED subset — and a context required NOWHERE is invisible
+// to it, so the `mechanical + repair` class the owner reserved for a person would merge itself.
+// `platformAutomerge: false` in the preset is the whole of what prevents that, and deleting it is
+// SILENT: the config still validates, every other gate stays green, and the first symptom is a
+// repair-carrying bump merged with nobody having read it (FS.GG.Rendering#1088). So the line gets a
+// gate, and leg 5d makes that gate falsifiable rather than decorative.
+
+/** The automerge decision Renovate reaches for one (repo, dep), through the real matcher. */
+async function automergeVerdict(rules, repository, dep) {
+  const res = await applyPackageRules({
+    ...preset,
+    packageRules: rules,
+    repository,
+    packageFile: 'Directory.Packages.props',
+    manager: 'nuget',
+    depName: dep,
+    packageName: dep,
+    datasource: 'nuget',
+    currentValue: '0.18.0',
+  }, 'datasource-merge');
+  // Awaited, for the #1568 reason recorded on `verdict` above: an un-awaited Promise's `.automerge`
+  // is `undefined`, which reads exactly like "automerge is off" and would make this leg unfailable.
+  return { automerge: res.automerge, type: res.automergeType, platform: res.platformAutomerge };
+}
+
+async function expectAutomerge(rules, repository, dep, want, label) {
+  const v = await automergeVerdict(rules, repository, dep);
+  const got = `automerge=${v.automerge} automergeType=${v.type} platformAutomerge=${v.platform}`;
+  const hit = want === 'ON'
+    ? (v.automerge === true && v.type === 'pr' && v.platform === false)
+    : v.automerge !== true;
+  if (hit) ok(`${label} — ${got}`);
+  else bad(label, `wanted automerge ${want}; renovate ${renovateVersion} says ${got}`);
+}
+
+console.log('\n--- 5. FS.GG.Kit automerges as `mechanical`-only, and nothing else does (#1587) ---');
+
+// 5a. the kit itself, in a receiver: on, through a PR, with platform automerge OFF.
+for (const repo of ['FS-GG/FS.GG.Net', 'FS-GG/FS.GG.Templates', 'FS-GG/FS.GG.SDD']) {
+  await expectAutomerge(RULES, repo, 'FS.GG.Kit', 'ON', `${repo} FS.GG.Kit`);
+}
+
+// 5b. AC3 — the rule matches FS.GG.Kit ONLY. A blanket dependency automerge is out of scope, and the
+// guard that makes automerge safe is derived from the KIT's materialize contract: it says nothing
+// about any other package, so a wider match would automerge what nothing is checking.
+for (const dep of ['FS.GG.Contracts', 'FS.GG.SDD.Cli', 'FS.GG.Kit.Extras', 'FSharp.Core']) {
+  await expectAutomerge(RULES, 'FS-GG/FS.GG.Net', dep, 'OFF', `FS-GG/FS.GG.Net ${dep} (not the kit)`);
+}
+
+// 5c. the #660 casing trap, inverted: `matchPackageNames` is a PLAIN STRING here, so it routes to
+// minimatch with `nocase: true` rather than to the case-SENSITIVE regex path. A re-cased pin must
+// still automerge — otherwise the rule silently stops applying the day a pin is spelled differently.
+await expectAutomerge(RULES, 'FS-GG/FS.GG.Net', 'fs.gg.kit', 'ON', 'FS-GG/FS.GG.Net fs.gg.kit (re-cased)');
+
+// 5d. NEGATIVE CONTROL, and the reason legs 5a-5c are worth anything: drop `platformAutomerge: false`
+// from the kit rule and require 5a to FLIP. If it does not, this whole section is measuring nothing
+// and the load-bearing line could be deleted under a green board.
+const NO_PLATFORM_OFF = RULES.map((r) => {
+  if (!(r && Array.isArray(r.matchPackageNames) && r.matchPackageNames.includes('FS.GG.Kit'))) return r;
+  const { platformAutomerge, ...rest } = r;
+  return rest;
+});
+{
+  const v = await automergeVerdict(NO_PLATFORM_OFF, 'FS-GG/FS.GG.Net', 'FS.GG.Kit');
+  if (v.automerge === true && v.platform !== false) {
+    ok(`[control] dropping platformAutomerge:false re-arms GitHub-native auto-merge — ` +
+       `automerge=${v.automerge} platformAutomerge=${v.platform} (leg 5a can fail)`);
+  } else {
+    bad('[control] dropping platformAutomerge:false must flip leg 5a',
+        `it did not: automerge=${v.automerge} platformAutomerge=${v.platform}. Leg 5a is therefore ` +
+        `not testing the line it claims to, and the line could be deleted silently.`);
+  }
+}
+
 console.log(`\n${fails === 0 ? 'all legs green' : `${fails} FAILED`}`);
 process.exit(fails === 0 ? 0 : 1);
