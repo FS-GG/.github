@@ -629,9 +629,26 @@ materializer that wrote them). **The runtime root set is the union of the first 
 picture above is unchanged**; what moves is which of them holds bytes of its own. Under a view root
 the byte-identity invariant is not asserted but **structurally impossible to violate** — there is one
 object — and what is asserted instead is *visibility*, because an absent root, a dangling link and a
-`core.symlinks=false` checkout are all exit 0 and silent in both runtimes (ADR-0067 §8). No repo holds
-a view root yet: the property defaults empty, and turning it on is per-receiver work sequenced by
+`core.symlinks=false` checkout are all exit 0 and silent in both runtimes (ADR-0067 §8). The property
+defaults empty, and turning it on is per-receiver work sequenced by
 [the retirement order](coordination/skill-apparatus-retirement-order.md).
+
+**ONE repo holds a view root as of 2026-07-28: `FS.GG.Templates`**
+([#1676](https://github.com/FS-GG/.github/issues/1676) → [FS.GG.Templates#323](https://github.com/FS-GG/FS.GG.Templates/pull/323),
+ADR-0067 §9 phase 4 stage 1). Its `.agents/skills` is generated from `.claude/skills`; 23 committed
+files stopped existing and its runtime root set is unchanged. The other six receivers still commit
+both roots, so **the picture above is the fleet's picture and this is the exception, not yet the rule**.
+Two consequences the map has to carry, because they change what a green gate means:
+
+- `coordination-coherence` **narrows automatically** on a repo that does this — it derives its roots
+  from that receiver's own `FsggKitSkillRoots`, so Templates' verdict now covers 28 files where it
+  covered 51, with no gate edit and no effect on any other receiver. A green there is a smaller claim
+  than it was, and deliberately so: the bytes it stopped grading are the ones that stopped existing.
+- **Nothing in the kit contract watches a view root's MEMBERSHIP.** `FsggKitCheckSkillView` asserts a
+  declared view root's content; if the root is later dropped from `FsggKitViewSkillRoots` it reports
+  *"nothing to assert"* and `coordination-sync` stops looking at it — both green, root gone from the
+  runtime contract (measured). Each adopting repo therefore owes its own membership assertion on a
+  check that gates its merges; Templates' rides its required `composition` check.
 
 ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
