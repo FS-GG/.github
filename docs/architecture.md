@@ -649,6 +649,15 @@ Two consequences the map has to carry, because they change what a green gate mea
   *"nothing to assert"* and `coordination-sync` stops looking at it — both green, root gone from the
   runtime contract (measured). Each adopting repo therefore owes its own membership assertion on a
   check that gates its merges; Templates' rides its required `composition` check.
+- **A repo that wires the `skill-union` receiver caller cannot hold a view root at all** — measured
+  2026-07-28 on `FS.GG.SDD@387adc6`, and it is why the second receiver was **refused** rather than
+  retired ([#1715](https://github.com/FS-GG/.github/issues/1715)). `skill-union-assert.yml` is a
+  reusable workflow: it checks the caller out and asserts over that checkout, so a root that only
+  exists after a local `generate` is *absent* in its subject — `configured root is absent`, exit 2, on
+  a context SDD makes **required under `enforce_admins`**. The same gate is exit 0 on that layout once
+  the view exists, so the conflict is with the *checkout*, not the *layout*. `FS.GG.Templates` has no
+  such caller, which is part of why it could go first. Two receivers are not a fleet: the map's picture
+  is still the fleet's, and the exception now has an exception of its own.
 
 ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
