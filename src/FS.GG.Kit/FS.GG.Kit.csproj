@@ -126,8 +126,38 @@
          Retirement is per-repo, one at a time, and is phase 4's to authorize
          (docs/coordination/skill-apparatus-retirement-order.md §6).
          NOTE, unlike 0.14.0: this change DOES touch the `kit:` CONTENT sources in
-         registry/repos.yml, so `kit-published-coherence`'s PR arm sees it. -->
-    <Version>0.15.0</Version>
+         registry/repos.yml, so `kit-published-coherence`'s PR arm sees it.
+
+         0.15.1 (.github#1718) — MAKE `scripts/skill-view`'S OWN SOURCES FOLLOWABLE. PATCH.
+         0.15.0 shipped `scripts/skill-view` with two RELATIVE `# shellcheck source=lib/...` pragmas
+         and no file-scoped `# shellcheck source-path=SCRIPTDIR`, so shellcheck resolved them against
+         its own working directory rather than the script's and linted the file with BOTH libraries
+         unread — SC1091 twice, from the repository root, which is how every gate in this org invokes
+         it. This adds the one directive, above the first command, where it is file-scoped.
+         PATCH, and each clause of that is checkable. The MEMBER SET IS UNCHANGED (28), every
+         destination and mode is unchanged, no materialize property is added or altered, and
+         `skill-view`'s RUNTIME BEHAVIOUR is identical — the only bytes that move are a comment
+         block in one `kind: client` member. Nothing a 0.15.0 reader was told is now false, and no
+         receiver has to do anything differently. It is the same class as 0.8.1 (edc8404).
+         WHY IT COULD NOT BE FIXED IN THE RECEIVER, which is what makes this a kit release rather
+         than seven one-line PRs: `scripts/skill-view` is a kit-materialized file, so a directive
+         written into a receiver's tree is reverted by its next FsggKitMaterialize and reds
+         `coordination-sync` in its against-pin check mode in the meantime. FS.GG.Game found it, and
+         the reason only it could is that its shell
+         gate is the only one in the org that runs at `-S info` and treats an unfollowed `source` as
+         a red in its own right — and its 0.15.0 bump (Game#514, run 30321396512) was red on this and
+         nothing else, 28 of 29 checks green. The other six receivers landed 0.15.0 carrying the same
+         broken file because none of them can see the defect; that is not evidence of correctness.
+         WHY THE POSITION IS PART OF THE FIX, measured with the pinned shellcheck 0.11.0: placed next
+         to the `source` lines the directive binds to the NEXT COMMAND ONLY — it clears the
+         `lib/args.sh` finding and leaves the `lib/roots.sh` one standing. It is file-scoped only
+         above the first command. `tests/shell-lint/run.sh` leg 8 asserts the property from two
+         working directories and carries a control that strips the directive and requires both
+         findings back, so removing the line reds the fixture rather than silently un-fixing this.
+         NOT DONE HERE: `scripts/lint-shell.sh` runs at `-S warning`, and SC1091 is an `info`, so
+         this repo's own shell gate is structurally blind to the defect it shipped. That is
+         .github#1719 and is deliberately left alone — no severity floor moves in this release. -->
+    <Version>0.15.1</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
