@@ -3,9 +3,34 @@
 # A consumer repo's CI calls this via `workflow_call` to assert a scaffolded product's agent-skill
 # roots are the byte-identical union of process + product skills — content, not presence. It is
 # the CONSUMER-side arm of ADR-0014: producers (SDD `mirror` / the fs-gg-ui template's single
-# materialize) write the roots; this proves they did so correctly, in EVERY lane. The first caller
-# is the FS.GG.Templates composition gate (FS.GG.Templates#49 / roadmap T3.2), which will call it
-# for both the orchestrated and standalone lanes.
+# materialize) write the roots; this proves they did so correctly, in EVERY lane.
+#
+# THE LIVE CALLERS, MEASURED 2026-07-28 (.github#1643) — NOT A PLAN. These three lines used to read
+# "The first caller is the FS.GG.Templates composition gate (FS.GG.Templates#49 / roadmap T3.2), which
+# will call it for both the orchestrated and standalone lanes." That was a prediction written in the
+# present tense before the subject existed, and it is wrong in three directions at once: Templates is
+# not the first caller, is not a caller of THIS workflow at all, and is not becoming one. What is true:
+#
+#   * FS.GG.Rendering's template-base-skill-union.yml (product-path: template/base, manifest: supplied)
+#     is the live generated-product-shaped caller of this workflow. Its subject is a COMMITTED
+#     subdirectory, which is why a `uses:` can reach it.
+#   * The receiver callers (product-path at its default, over each repo's own committed roots) are the
+#     other kind; see the roster and docs/coordination/skill-union-assertion.md.
+#   * FS.GG.Templates#49 WAS delivered — 2026-07-02, PR Templates#51, commit 574e90c, both the
+#     orchestrated and standalone lanes — but via the pinned, content-addressed dist/skill-union-assert.sh
+#     bundle from inside its composition job, NOT via a `uses:` of this file. That is deliberate and
+#     decided (Templates#313): this workflow is CHECKOUT-SCOPED — it checks the caller out into `caller/`
+#     and asserts `caller/${product-path}` — while Templates' subject is packed -> installed ->
+#     scaffolded -> built into a temp workdir during the run. A separate `uses:` job gets a clean runner
+#     with no such tree, and this workflow has no artifact input to receive one.
+#
+# SO STATE THE LIMIT PLAINLY: this workflow can audit a COMMITTED tree (a runtime root or a
+# subdirectory); it CANNOT audit a tree generated during the run. A caller in that position asserts the
+# union with the dist/ bundle instead. Adding an artifact input to lift that limit is a decision, not a
+# tidy-up — do not infer it from this note.
+#
+# Do not restore a caller PREDICTION here. This banner is the file every wiring reader opens first, and
+# a plan stated in the present tense in it has now had to be repaired twice (#1559, then #1643).
 #
 # It mirrors the `contract-coherence` / `dispatch-sender` reusable pattern: the check lives in one
 # script authored here (scripts/skill-union-assert.sh), sourced from public FS-GG/.github, and this
@@ -25,11 +50,15 @@
 # SUBJECT-PARAMETERISED — it audits whatever `product-path:` names — so a `uses:` of it says nothing at
 # all about WHAT was audited:
 #
-#   * a GENERATED-PRODUCT caller passes `product-path: <subdir>` and audits a scaffolded artifact the
-#     repo produced (FS.GG.Templates#49, the composition gate). Legitimate, and it proves nothing about
-#     the caller's OWN committed skill roots.
+#   * a GENERATED-PRODUCT caller passes `product-path: <subdir>` and audits some tree OTHER than the
+#     repo's own runtime roots (FS.GG.Rendering's template-base-skill-union.yml over template/base).
+#     Legitimate, and it proves nothing about the caller's OWN committed skill roots. The name describes
+#     the caller's SHAPE relative to the receiver contract, not a claim that the subject was generated
+#     during the run — per the limit above, this workflow cannot audit such a subject.
 #   * a COMMITTED-ROOT caller — the receiver contract behind `receives: skill-union` — leaves
-#     `product-path` at its default (or writes `.`), leaves `roots` at ADR-0011's three, and lives in a
+#     `product-path` at its default (or writes `.`), leaves `roots` at the default set (ADR-0065's two,
+#     as amended by ADR-0067 §5 — this said "ADR-0011's three" while the input default 12 lines below
+#     already listed two), and lives in a
 #     workflow whose `pull_request` trigger fires when any of those roots changes. The canonical shape is
 #     in docs/coordination/skill-union-assertion.md; `repos-audit`'s `caller: skill-union` detector
 #     requires both halves in ONE workflow file, because a trigger cannot arm a workflow it is not in.

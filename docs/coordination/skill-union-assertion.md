@@ -160,9 +160,19 @@ above:
 `[partitioned]` / `[divergent]` (the cross-root checks 1–2) are independent of conditions and
 unchanged. **Without `--params` the gate keeps today's superset semantics exactly**, so adoption is
 opt-in per caller — no consumer is forced to change at once. `--params` **requires** `--manifest`
-(the conditions live on the manifest entries; `--params` only supplies the values). The
-[FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) is the first
-caller to pass provenance, enforcing `[missing]`/`[unexpected]` in both lanes.
+(the conditions live on the manifest entries; `--params` only supplies the values).
+
+**Check 4 has no live caller yet — measured 2026-07-28, not predicted.** This line used to name the
+[FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) as "the first
+caller to pass provenance, enforcing `[missing]`/`[unexpected]` in both lanes", in the present tense.
+Templates' gate *is* wired in both lanes (see
+[the generated-subject shape](#the-generated-subject-shape-and-why-templates-is-not-a-uses-caller)), but
+its two arms are `--product` and `--product --manifest --co-tenants`; it passes **no `--params`**, so
+`[missing]`/`[unexpected]` are not enforced anywhere today. `FS.GG.Rendering`'s
+`template-base-skill-union.yml`, the only `uses:` caller with a manifest, supplies no `params:` either.
+The check is implemented and fixture-covered here; adoption is still zero, and this document says so
+rather than naming a caller that a plan once expected. Corrected at
+[#1643](https://github.com/FS-GG/.github/issues/1643).
 
 **The predicate language** is deliberately tiny — evaluable in both the shell gate
 (`eval_condition`) and the Python drift-normalizer (`normalize_when`) without a real expression
@@ -820,7 +830,24 @@ gap is not mistaken for coverage.
 command a worker runs. Running your own gate is not participating in your own fabric, so the detector
 does not match it and the roster does not claim it.
 
-### Auditing a generated product
+### Auditing a subtree of the caller's checkout
+
+**This workflow is checkout-scoped, and that is a capability limit worth reading before you wire it.**
+It runs `actions/checkout` of the caller into `caller/` and asserts `caller/${product-path}`. So the
+subject must be a path **that exists in the caller's committed tree at the ref under test**. It can
+audit a committed subdirectory or a committed runtime root; it **cannot** audit a tree that is
+*generated during the run* — packed, installed, scaffolded or built into a workdir by an earlier job or
+step — because a `uses:` job gets a clean runner with no such tree and this workflow has **no artifact
+input** to receive one.
+
+This heading used to read "Auditing a generated product", which promised the third thing and delivered
+the first. That mismatch is how a repo whose subject is genuinely generated
+([FS.GG.Templates](#the-generated-subject-shape-and-why-templates-is-not-a-uses-caller) below) came to be
+cited under it as this block's first caller — a repo that, for the structural reason above, could never
+have been one. The `product-path: <subdir>` **shape** is still
+called *generated-product-shaped* elsewhere in this document and in `repos-audit`'s detector — that name
+describes the caller's *shape* relative to the receiver contract (it audits something other than the
+repo's own roots), **not** a claim that the subject was generated during the run.
 
 ```yaml
 permissions:
@@ -830,7 +857,7 @@ jobs:
     uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main
     with:
       product-path: "path/to/scaffolded/product"
-      # roots: ".claude/skills .agents/skills"                 # default = ADR-0011's three, always
+      # roots: ".claude/skills .agents/skills"                 # default = ADR-0065's two, always
       #                                                        # passed; the product's own
       #                                                        # .agent-skill-roots is NOT consulted here
       # manifest: "path/to/skill-manifest.json"                # enables the digest cross-check
@@ -847,14 +874,103 @@ shape this document did not previously describe. It is a generated-product-shape
 roster's detector says so out loud rather than counting one as the other. See
 [the ninth audited tree](#the-ninth-audited-tree-fsggrenderings-templatebase) below.
 
+#### The generated-subject shape, and why Templates is not a `uses:` caller
+
 **The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) (roadmap
-T3.2) was to be the first such caller, and it is not one — the issue is closed and the caller was never
-wired.** This document previously said flatly that it "is the first caller", which was a plan read as a
-fact. Measured 2026-07-27: `FS-GG/FS.GG.Templates` contains **no reference to `skill-union` anywhere**
-(code search, 0 hits), so `composition.yml` still uses the "grep for the failure string and skip" shape
-(ADR-0014 F2, consumer half) that #49 was meant to replace. Tracked as
-[Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313). Do not cite Templates as
-precedent for this block until that is true.
+T3.2) is delivered, in both lanes, and has been since 2026-07-02 — and it is deliberately not a `uses:`
+caller of this workflow.** Both halves of what this paragraph used to say were false, in opposite
+directions: it first asserted flatly that Templates "is the first caller" (a plan read as a fact), and
+[#1559](https://github.com/FS-GG/.github/issues/1559) then replaced that with the assertion that the
+caller "was never wired" and that `composition.yml` "still uses the grep-and-skip shape" — the opposite
+wrong fact, stated as a measurement. Corrected at
+[#1643](https://github.com/FS-GG/.github/issues/1643).
+
+Measured 2026-07-28 against `FS-GG/FS.GG.Templates@main` by contents API rather than code search (see
+[Negative existence](#a-negative-existence-claim-needs-a-probe-that-can-say-no) below for why that
+distinction is load-bearing):
+
+| probe | result |
+| --- | --- |
+| `tests/composition/lib/skill-union.sh` | **exists** — blob `468096b`, 47 291 B; defines `assert_skill_union` |
+| `assert_skill_union` callers | `tests/composition/stages/05-build.sh:157` (orchestrated lane, co-tenants `fs-gg-sdd-*`) and `tests/composition/stages/05b-standalone.sh:44` (standalone spec-kit lane, `speckit-*`) — **both lanes** |
+| first landed | [`574e90c`](https://github.com/FS-GG/FS.GG.Templates/commit/574e90cba82653f4c1aab9f2777eb17fa683c1ba), merged **2026-07-02**, PR [Templates#51](https://github.com/FS-GG/FS.GG.Templates/pull/51), which discharged Templates#49 by a closing keyword in its body |
+| the grep-and-skip shape | **retired by that same PR** — it removed the `scaffold.providerWroteSddTree` grep-and-SKIP lockstep ([Templates#47](https://github.com/FS-GG/FS.GG.Templates/issues/47)) in favour of hard failure; `assert_skill_union`'s unreachable-fetch arm calls `bad`, never `skip` |
+| how it runs the assertion | **the same authority script, not a reimplementation** — `dist/skill-union-assert.sh` (the self-contained bundle generated from `scripts/skill-union-assert.sh`), fetched content-addressed at a pinned 40-hex `SKILL_ASSERT_REF` |
+
+So #49 was closed **because it was delivered**. Do cite Templates as precedent — for the *bundle* shape,
+not for the `uses:` block above.
+
+**Why it is not, and will not become, a `uses:` caller** — decided at
+[Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313) and recorded in that repo's
+`composition.yml`: Templates' subject is exactly the tree this workflow cannot reach. It is packed →
+installed → scaffolded → built into a temp workdir *inside* the `composition` job, so it does not exist
+in the checkout, and the checkout-scoped limit stated at the top of this section applies. A `uses:` there
+could only ever name a path **committed to Templates** — which would be that repo's own runtime roots, a
+different subject entirely (see the gap-row note below). **This is a limit of this reusable workflow, not
+a Templates defect.**
+
+**None of this closes `FS.GG.Templates`' `receives: skill-union` row, and this correction must never be
+read as closing it.** That row is about **Templates' own committed runtime roots** and needs a
+committed-root caller — default `product-path`, ADR-0065's roots, and a trigger armed over those roots,
+all in **one** workflow file. Templates has no such workflow, so it remains one of the four open receiver
+gaps listed in [Rollout state](#rollout-state-measured-2026-07-27) below, and no gap count moves either
+way. Two subjects; per [#1504](https://github.com/FS-GG/.github/issues/1504) and
+[#628](https://github.com/FS-GG/.github/issues/628) one green never stands in for the other. Nor was any
+gap count ever affected by the wrong paragraph: `repos-audit`'s `caller:` detector reads workflows
+structurally (YAML→JSON), never via code search, so it was measuring correctly the whole time this
+document was not.
+
+**A generated subject is asserted with the bundle, not with a `uses:`.** That is the supported answer,
+and it is the shape documented under
+[Standalone fetch](#standalone-fetch--supported-and-it-is-dist-not-scripts) below: fetch
+`dist/skill-union-assert.sh` at a pinned 40-char SHA and run it against the workdir from inside the job
+that built it. `skill-union-bundle` reds on any drift between the bundle and its source, so the bundle
+lane asserts the same semantics as this workflow.
+
+**Neither caller passes `params:` yet.** The condition-aware check (ADR-0017, check 4) has **no live
+caller in the org** as of 2026-07-28: Templates' two arms invoke the script as `--product` and as
+`--product --manifest --co-tenants`, with no `--params`; Rendering's `template-base-skill-union.yml`
+supplies `manifest:` and no `params:`. See
+[Condition-aware (check 4)](#condition-aware-check-4----params-adr-0017) above.
+
+### A negative existence claim needs a probe that can say "no"
+
+**`GET /search/code` is not a valid negative existence proof for an FS-GG repository.** This is the
+reusable half of [#1643](https://github.com/FS-GG/.github/issues/1643), and it generalises well past this
+capability, so it is written here rather than left in the issue.
+
+The wrong paragraph corrected above was not a stale index and not a typo. It rested on a code search that
+returned 0 hits — and `/search/code` returns **0 for every term** in a repository that is not
+code-search-indexed. `FS-GG/FS.GG.Templates` is such a repository. Measured 2026-07-27:
+
+| probe | hits |
+| --- | --- |
+| `q=skill-union+repo:FS-GG/FS.GG.Templates` | 0 |
+| `q=composition+repo:FS-GG/FS.GG.Templates` | 0 |
+| `q=repo:FS-GG/FS.GG.Templates+scaffold` | 0 |
+
+The third row is the control, and it is why the first row proves nothing: `scaffold` is unarguably all
+over that repository. The endpoint **cannot distinguish "absent" from "not indexed"** — it emits the same
+`0` either way, so it is a probe that cannot fail, reporting a fact nobody could read off it. That is the
+[#266](https://github.com/FS-GG/.github/issues/266) shape at the measurement layer, and note it points in
+*whichever* direction the reader wants: a 0 here has been used to assert absence, and could as easily be
+used to assert that some other repo is clean.
+
+**Use instead**, in preference order:
+
+1. **A structural detector** — `scripts/repos-audit.sh` parses each workflow YAML→JSON and matches on
+   shape. It never consulted `/search/code`, which is exactly why its gap counts were right while this
+   document's prose was wrong.
+2. **The contents / git API** — `GET /repos/<owner>/<repo>/contents/<path>` distinguishes `200` from
+   `404` at a named path, and `GET /repos/<owner>/<repo>/git/trees/<sha>?recursive=1` enumerates a whole
+   tree. Both answer from the object store, not from an index.
+3. **A clone**, then `grep`. Slowest, and the only one that proves absence of a *string* rather than of a
+   *path*.
+
+**And always run a control.** Whatever the probe, issue it once for a term you *know* is present. A
+negative result from an instrument that has not been shown to produce a positive is not a measurement.
+Every existence claim in this document — the rollout table's per-row commits included — is subject to
+this rule.
 
 ### Rollout state (measured 2026-07-27)
 
@@ -1035,10 +1151,15 @@ subjects, two workflows, two greens, and per [#1504](https://github.com/FS-GG/.g
 [#628](https://github.com/FS-GG/.github/issues/628) one green never stands in for the other. It changes
 no gap count; see the paragraph above for why the count nevertheless moved.
 
-**It is also a caller shape this document had not described** — and, measured 2026-07-27, the **only
-live** generated-product-shaped caller in the org. Templates#49 was to audit a *scaffolded artifact*
-but was closed without wiring anything ([Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313));
-this audits a **committed subdirectory**, which is neither a runtime root nor a generated output. So
+**It is also a caller shape this document had not described** — and, measured 2026-07-28, the **only
+live** generated-product-shaped `uses:` caller in the org. It audits a **committed subdirectory**, which
+is neither a runtime root nor a generated output, and that is precisely why it *can* be a `uses:` caller:
+the subject is in the checkout. Templates#49 audits a genuinely scaffolded artifact, which this workflow
+structurally cannot reach, so it asserts the union with the pinned `dist/` bundle instead — delivered
+2026-07-02 by [Templates#51](https://github.com/FS-GG/FS.GG.Templates/pull/51), decided at
+[Templates#313](https://github.com/FS-GG/FS.GG.Templates/issues/313), corrected here at
+[#1643](https://github.com/FS-GG/.github/issues/1643) (this paragraph previously said it "was closed
+without wiring anything"). So
 the audited set is nine trees, not eight: the eight rostered repository trees in the table above, plus
 this one — recorded here rather than as a ninth row, because that table enumerates rostered
 repositories and this is a subdirectory of one of them.
