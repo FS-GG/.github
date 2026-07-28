@@ -230,6 +230,68 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > AC 7 is unchanged and still unreachable as written; the freshness sweep was not touched, and nothing
 > here was retired to make a checkbox pass.
 
+> **STAGE 3 EXECUTED, 2026-07-28 — `FS.GG.Audio` is the SECOND receiver retired
+> ([#1720](https://github.com/FS-GG/.github/issues/1720),
+> [FS.GG.Audio#210](https://github.com/FS-GG/FS.GG.Audio/pull/210), squash `52a358f`).** That repo's
+> `.agents/skills` is no longer a second committed copy: it is a **view root** resolved from
+> `.claude/skills` at checkout. **39 committed files stopped existing**; the runtime root set is
+> unchanged, because it is the union of `FsggKitSkillRoots` and `FsggKitViewSkillRoots` and that union
+> still holds ADR-0011's two. Stage 2's refusal on `FS.GG.SDD` stands untouched — B5
+> ([#1715](https://github.com/FS-GG/.github/issues/1715)) is open, and the three receivers it binds are
+> still not eligible.
+>
+> **Why the refused receiver did not block this one.** B5 is a property of a receiver that wired a
+> `skill-union` caller, not of the retirement. `FS.GG.Audio` wires none — `grep -rl skill-union
+> .github/` is **empty**, re-verified on `1f9c58c` the day of the retirement rather than inherited from
+> #1720's table, because a caller landing in between is exactly the staleness
+> [#1716](https://github.com/FS-GG/.github/issues/1716) was filed about. Audio's required contexts are
+> `Build + test (locked restore, net10.0, headless)`, `lock-ranges / lock-ranges` and
+> `kit / coordination-kit`; none of them is the union gate. **This is why #1676 was split per repo:**
+> one row over seven repos serialised seven independent retirements behind one refusal.
+>
+> §9's precondition was re-run **on that tree, that day**: parity **AGREE** on the committed tree
+> (`old=ok new=ok`, **20 ids in 2 roots**) and **AGREE** again on the resolved half-view, where byte
+> identity is reported *"STRUCTURALLY IMPOSSIBLE to violate here — every configured root resolves to
+> the same object … Checked, not assumed."* Half-view throughout, so
+> [#1685](https://github.com/FS-GG/.github/issues/1685) was never engaged.
+>
+> **A THIRD receiver shape, and it is neither of the first two.** Stage 2 warned against reading
+> Templates' cost as the per-receiver cost. Audio is the counter-example in the other direction: it has
+> a `gate.yml` and **16 `fs-gg-sdd-*` skills it OWNS inside both audited roots** — so it is not the thin
+> receiver — and the retirement was still cheap, because those 16 were in *both* roots. `diff -r
+> .claude/skills .agents/skills` was **silent**, so nothing lived only in the copy being retired and
+> nothing had to be relocated first. **That check is what generalises, not the cost.** It is the check
+> stage 2 added to the order after SDD's `skill-manifest.json`, and here it did its job by coming back
+> clean. The predictor of cost is the diff and the caller, not the repo's size.
+>
+> **The §8 hole is per-receiver, and closing it is still a hand-copy.** Re-measured on Audio with the
+> root dropped from `FsggKitViewSkillRoots` and deleted: the materialize reports *"no view skill roots
+> declared … nothing to assert"* and succeeds, and `coordination-sync --check --against-pin` reports
+> *"OK — all 28 materialized file(s)"*. Both green, root gone from the runtime contract. Audio's
+> replacement alarm is `scripts/check-skill-view-roots.sh` on its required `Build + test` job, because
+> it has no `composition` harness for Templates' version to live in — a **second** hand-copy of both
+> the alarm and the generate target, which is precisely what
+> [#1710](https://github.com/FS-GG/.github/issues/1710) predicted and still owns. Two receivers have now
+> paid it; four more would.
+>
+> **Rollback re-run against this receiver (#1676 AC 3), before the retirement landed.** `git revert`
+> alone, **with no `rm -rf` first**: `.agents/skills` back to **39 tracked files in a real directory**,
+> `find .agents -type l` → **0**, `diff -r` identical, `skill-union-assert.sh --product .` exit 0, and
+> `git status --porcelain` → **0 changed paths**. **`rm -rf` was NOT required.** Three receivers now
+> say the step is unnecessary and only the producer (`.github@0ea5396`) says it is required, which
+> settles it as a property of the tree; the step stays because it is harmless when unnecessary and
+> fatal to omit when it is not.
+>
+> **`.codex/skills` was not touched, again.** It holds **16** `fs-gg-sdd-*` skills that are Audio's
+> OWN; §5's sweep withdrew only the kit-owned files, and ADR-0065 §Retiring a root forbids anyone
+> hand-deleting the rest. Verified 16 before and 16 after. It is **not** the root this stage retires,
+> and a worker told otherwise should refuse.
+>
+> AC 7 is unchanged and still unreachable as written. The verdict is now **2 of 7 retired, 1 refused,
+> 4 untouched**; the retirement order's §4/§7 rows for this stage are owed and filed as
+> [#1723](https://github.com/FS-GG/.github/issues/1723), because that document was held by another
+> worker for the whole of this item.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,
