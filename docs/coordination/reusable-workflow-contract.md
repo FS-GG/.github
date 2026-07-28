@@ -256,6 +256,66 @@ makes renaming the callee half a loud, opt-out-able breaking change, exactly as 
 asserts the string *and* the absence of an `if:` on the job, so neither the documented context nor the
 producibility of it can drift away from the workflow in silence.
 
+### There are TWO of them, and they answer different questions
+
+[#1815](https://github.com/FS-GG/.github/issues/1815) added a second context to the same job pair,
+because **a check run carries one boolean and the `bump-shape` job reaches five verdicts.**
+
+| context | asks | green on | red on |
+|---|---|---|---|
+| `materialize / kit-bump-shape` | *is this bump contaminated?* | `0` mechanical, `2` abstains, `4` mechanical + repair | `1` not mechanical, `3` refused |
+| `materialize / kit-bump-mechanical` | *does this bump need a human?* | `0` mechanical, `2` abstains | `1`, `3`, **and `4`** |
+
+They differ on exactly one class — `4`, `mechanical + receiver-side repair` — and that difference is
+the entire point. [#1726](https://github.com/FS-GG/.github/issues/1726)'s sketch was `mechanical`
+(automergeable) versus `mechanical + repair` (**green, not automerged**). The verdict *was* split
+faithfully and both halves are green on `kit-bump-shape`; what was never given a mechanism is the
+"not automerged" half, because **once automerge fires on a boolean, green *is* automerged.** Neither
+`automergeType: pr` (which merges through GitHub's merge API, consulting branch protection) nor
+Renovate's own pre-merge poll can read an exit code, a step summary or an annotation. So the decision
+needed a second boolean, and `kit-bump-mechanical` is it.
+
+Read the table the other way round and it says what a reviewer sees on
+[`FS.GG.Rendering#1088`](https://github.com/FS-GG/FS.GG.Rendering/pull/1088), the measured instance of
+class 4, whose merge was **correct**: `kit-bump-shape` **green** — the bump is not contaminated, and
+merging it was right — beside `kit-bump-mechanical` **red** — and a person should be the one doing it.
+Reddening class 4 on the *existing* context was the rejected alternative: it would punish the correct
+action in all seven receivers, and change the meaning of a context that already means something else.
+
+Three properties of the second job are load-bearing, and
+[`tests/kit-bump-shape/run.sh`](../../tests/kit-bump-shape/run.sh) drives all three, both mappings
+extracted from the workflow and executed rather than restated:
+
+* **It re-derives nothing.** It reads `bump-shape`'s `verdict` job output. One rule ran, once, at one
+  pinned commit, so the two contexts cannot grade the same pull request two different ways — and an
+  abstaining pull request still costs a `git diff`, not a second SDK and restore ([#1508](https://github.com/FS-GG/.github/issues/1508)).
+* **`needs: bump-shape` carries `if: ${{ !cancelled() }}`, and dropping it is a fail-open.** `needs:`
+  alone *skips* a dependent when its dependency fails, and GitHub reports a skipped job as
+  `conclusion: skipped`, which branch protection counts as **satisfied**. Without that line the
+  mapping inverts exactly where it matters: `1` and `3` — the two classes that must never automerge —
+  would be the two reporting green.
+* **Empty is red.** Every way `bump-shape` can end without grading anything leaves the output unset,
+  and the consumer reds on unset. "I could not evaluate this" is never "I evaluated it and it passed"
+  ([#266](https://github.com/FS-GG/.github/issues/266)), and that is the *default* here rather than a
+  list somebody must remember to extend.
+
+**Neither context is armed.** `materialize / kit-bump-mechanical` is required in zero repositories,
+and #1815 invoked `scripts/repos.sh require-context` in no mode. Arming is
+[#1587](https://github.com/FS-GG/.github/issues/1587)'s, and before it reaches for `--apply` it should
+know that **it may not need to arm anything at all**:
+
+> Renovate's pre-merge poll reads the branch's **combined** check status, not the required subset. A
+> `kit-bump-mechanical` that is red therefore already stops an automerge with the context required
+> nowhere — which enforces "automerge the `mechanical` class only" while leaving a human free to merge
+> class 4 themselves, exactly as #1726 wanted.
+>
+> **Requiring it buys branch protection as a second, independent enforcer, and costs exactly one
+> thing:** class 4 then needs an admin rather than a reviewer, in that receiver, because a required
+> red context blocks the human too. That is a real trade and #1587 owns it. What requiring it does
+> *not* cost is the rest of the repository's pull requests — `kit-bump-mechanical` is **green on
+> abstention**, so a docs PR that moves no kit pin is not held at a guard with nothing to say about
+> it. That property is what makes the context armable at all, and it is asserted rather than assumed.
+
 ### Where its rule comes from, and why that is not `main`
 
 The `bump-shape` job runs `scripts/check-kit-bump-shape.py`, which lives in this repository. It does
@@ -332,11 +392,17 @@ So the sequence is fixed, and each step's evidence is named:
 5. **Only then** consider `--apply` — and run the dry run first, which needs only
    `administration: read` and is what proves step 1 actually happened.
 
-The reporter shipped under #1713 stops at step 2 on purpose. #1587's automerge was re-scoped on
-2026-07-28: the producer keeps its priority as a defect and automerge is re-decided once the producer
-has run over real fan-outs, so nothing is armed and `materialize / kit-bump-shape` is required in no
-repository. A `failure` conclusion from it therefore blocks no merge — it is how a reviewer sees, in a
-check list, which of seven fanned-out bump PRs need reading.
+The reporter shipped under #1713 stops at step 2 on purpose, and so does the second context #1815
+added beside it: **both** `materialize / kit-bump-shape` and `materialize / kit-bump-mechanical` are
+required in **zero** repositories. A `failure` conclusion from either therefore blocks no merge — it is
+how a reviewer sees, in a check list, which of seven fanned-out bump PRs need reading, and which one
+of those needs a person rather than automerge.
+
+Step 3 has been run for both, in the fixture form and offline:
+[`tests/required-contexts/run.sh`](../../tests/required-contexts/run.sh) derives them from
+FS.GG.Net's real caller and **this repository's own** `kit-materialize.yml`, and asserts that deleting
+either job is caught by name. That is stronger than a dry run — it needs no credential, and it fails
+on the pull request that would break it rather than on the nightly sweep afterwards.
 
 ## Reusable-workflow calls are NOT pinned
 

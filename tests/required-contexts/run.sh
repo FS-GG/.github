@@ -186,6 +186,58 @@ expect "a MISSPELLED required context is the same deadlock, and is caught" \
   1 "REQUIRES the status check 'lock-ranges / lock-range'" "$WT" "$R" FS-GG/FS.GG.Audio
 
 # =============================================================================================
+# 1a2. THE SECOND KIT-BUMP CONTEXT IS PRODUCIBLE (.github#1815, AC 2)
+#
+# `materialize / kit-bump-shape` is green on `mechanical`, on `mechanical + repair` AND on `abstain`,
+# so a required context built on it cannot express #1587's "automerge the mechanical class only" — a
+# check run carries one boolean and that job reaches five verdicts. #1815 adds a SECOND context,
+# `materialize / kit-bump-mechanical`, green iff the pinned rule exits 0.
+#
+# AC 2 is "it is producible, proved in the fixture form BEFORE any --apply", and this is that proof.
+# It is worth more than a dry run: nothing is armed anywhere, and the derivation asserted here is the
+# same one the nightly required-context-coherence sweep runs.
+#
+# BOTH REAL FILES. The caller is FS.GG.Net's ACTUAL .github/workflows/kit-materialize.yml (fetched
+# 2026-07-28; its job id `materialize` is the left half of both context strings), and the callee is
+# THIS WORKING TREE's kit-materialize.yml — so a rename, a `paths:` filter, or a deleted job in the
+# producer fails here, in the pull request that did it. That is why the selftest workflow's `paths:`
+# names kit-materialize.yml, exactly as it already names lock-range-coherence.yml.
+#
+# THE PROTECTION PAYLOAD USES `required_status_checks.checks`, VIA `protect` — which is what
+# check-required-contexts.py reads. The legacy `contexts:` list is a fallback it only consults when
+# `checks` is absent, so a payload that named the new context ONLY in `contexts` would silently audit
+# one context fewer and pass for the wrong reason.
+WK="$WORK/w-kit"; RK="$WORK/r-kitrecv"; mkdir -p "$RK/.github/workflows" "$WK/refs/main"
+cp "$FIX/net-kit-materialize.yml" "$RK/.github/workflows/kit-materialize.yml"
+cp "$REPO_ROOT/.github/workflows/kit-materialize.yml" "$WK/refs/main/kit-materialize.yml"
+protect "$WK" FS-GG/FS.GG.Net main "materialize / kit-bump-shape" "materialize / kit-bump-mechanical"
+expect "#1815: BOTH kit-bump contexts are producible on every PR, from the REAL reusable workflow" \
+  0 "ok: every required context is producible" "$WK" "$RK" FS-GG/FS.GG.Net
+
+# MUTATION — and it is the leg that proves the one above can fail. Delete the `bump-mechanical` job
+# from the callee and the derivation must name the context that can no longer report. Without this,
+# a fixture that asserted producibility of a context nothing produces would pass just as loudly.
+WKG="$WORK/w-kit-gone"
+protect "$WKG" FS-GG/FS.GG.Net main "materialize / kit-bump-shape" "materialize / kit-bump-mechanical"
+python3 - "$REPO_ROOT/.github/workflows/kit-materialize.yml" \
+           "$WKG/refs/main/kit-materialize.yml" <<'PY'
+import os, re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+# The job block, from its `  bump-mechanical:` key to the next top-level job key.
+cut = re.sub(r"^  bump-mechanical:\n(?:.*\n)*?(?=^  [a-z][a-z0-9-]*:$)", "", text, flags=re.M)
+assert cut != text, "kit-materialize.yml has no `bump-mechanical:` job — fix the fixture, not this"
+os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
+open(sys.argv[2], "w", encoding="utf-8").write(cut)
+PY
+expect "#1815 MUTATION: deleting the bump-mechanical job makes the new context unproducible, and is caught" \
+  1 "REQUIRES the status check 'materialize / kit-bump-mechanical'" \
+  "$WKG" "$RK" FS-GG/FS.GG.Net
+# ...and the SURVIVING context is still fine, so the finding is about the deleted job and not about
+# the pair. A mutation that reddened both would not have located anything.
+expect "#1815 MUTATION: and kit-bump-shape is untouched by it — the finding names one context, not two" \
+  1 "1 required context(s)" "$WKG" "$RK" FS-GG/FS.GG.Net
+
+# =============================================================================================
 # 1b. THE REF THE PRODUCER CROSSES (.github#1783). The same real files, mutated one token.
 #
 # A deadlocked context is loud: nothing merges. THIS defect is silent — the context reports, the PR

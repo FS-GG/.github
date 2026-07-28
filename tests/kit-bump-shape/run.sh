@@ -532,16 +532,22 @@ echo "== the receiver-side producer's context name is a contract (#1713 AC 2) ==
 JOBREAD='
 import io, sys
 want = sys.argv[2]
+# argv[3] = which job block to read; `bump-shape` unless named. #1815 added a SECOND job to this
+# workflow, so a reader hard-wired to one job would silently answer about the wrong one.
+jobid = sys.argv[3] if len(sys.argv) > 3 else "bump-shape"
 block, inside = [], False
 for line in io.open(sys.argv[1], encoding="utf-8"):
     if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":"):
-        inside = line.strip() == "bump-shape:"
+        inside = line.strip() == jobid + ":"
         continue
     if inside:
         block.append(line)
 if want == "name":
+    # A job with no `name:` publishes its JOB ID — so the fallback must be the id ASKED FOR, not a
+    # literal. Hard-wiring "bump-shape" here made a DELETED job report the other job'"'"'s name, which
+    # is a wrong answer dressed as a verdict (#266); the #1815 mutation run found it.
     got = [l.split(":", 1)[1].strip() for l in block if l.startswith("    name:")]
-    print(got[0] if got else "bump-shape")
+    print(got[0] if got else (jobid if block else "<no such job>"))
 elif want == "gate":
     print("gated" if any(l.startswith("    if:") for l in block) else "ungated")
 elif want == "pin-include":
@@ -843,6 +849,225 @@ if [ -z "$unconditional" ]; then
   ok "  and every step after it — SDK, restore, ref resolution, rule checkout, verdict — is conditioned on it"
 else
   bad "  these run even when no pin moved:$unconditional — the SDK/restore cost is no longer paid only by bumps"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# THE SECOND CONTEXT: `materialize / kit-bump-mechanical` (.github#1815)
+#
+# WHY IT EXISTS. `kit-bump-shape` is green on `mechanical` (0), on `mechanical + repair` (4) AND on
+# `abstain` (2) — deliberately, and legs 22/27 above measure why 4 must stay green: merging
+# FS.GG.Rendering#1088 was CORRECT. But a check run carries ONE BOOLEAN across the branch-protection
+# and automerge boundary, so that context cannot express #1587's re-decision, "automerge the
+# `mechanical` class only". Nothing reads an exit code there; both `automergeType: pr` (GitHub's
+# merge API, consulting branch protection) and Renovate's own pre-merge poll read the conclusion.
+#
+# So the verdict gets a SECOND rendering, green iff the rule exits 0. The two contexts answer
+# different questions and differ on exactly one class:
+#
+#     kit-bump-shape       "is this bump CONTAMINATED?"    green on 0, 2, 4
+#     kit-bump-mechanical  "does this bump NEED A HUMAN?"  green on 0, 2
+#
+# BOTH MAPPINGS ARE EXTRACTED FROM THE WORKFLOW AND EXECUTED, NEVER RESTATED (ADR-0058) — the same
+# discipline as the #1797 legs below, and for the same reason: a `case` pasted here would pass
+# forever while the workflow said something else. The legs then drive them over ALL FIVE exit codes
+# plus the no-verdict case, in both directions, so neither mapping can be one that cannot fail.
+# ---------------------------------------------------------------------------------------------
+echo
+echo "== the second context, and that it disagrees with the first on exactly one class (#1815) =="
+
+# 39 — the callee half of the second context string, defined in the workflow and nowhere else.
+MECH_CALLEE="$(python3 -c "$JOBREAD" "$WF" name bump-mechanical)"
+if [ "$MECH_CALLEE" = "kit-bump-mechanical" ]; then
+  ok "kit-materialize.yml publishes the second callee context name 'kit-bump-mechanical'"
+else
+  bad "kit-materialize.yml's bump-mechanical job publishes '$MECH_CALLEE', not 'kit-bump-mechanical' — the context #1587 would arm is 'materialize / kit-bump-mechanical'"
+fi
+
+# 40 — THE FAIL-OPEN THIS JOB IS MOST EXPOSED TO, and the one leg that has to be structural because
+# no shell can be driven to show it. The job takes `needs: bump-shape`, and `needs` ALONE SKIPS a
+# dependent when its dependency FAILS. GitHub reports a skipped job as `conclusion: skipped`, which
+# branch protection counts as SATISFIED — so `needs:` without an always-run `if:` inverts the mapping
+# exactly where it matters: `not mechanical` (1) and `REFUSED` (3), the two classes that must NEVER
+# automerge, would be the two that report GREEN. That is the "check that cannot fail" class this
+# repo found ten of on 2026-07-27/28. Mutating the `if:` away, or narrowing it to a condition that
+# is false when `bump-shape` fails, fires this leg.
+MECH_IF="$(python3 -c "$JOBREAD" "$WF" gate bump-mechanical)"
+MECH_RAW="$(python3 -c "$JOBREAD" "$WF" raw bump-mechanical)"
+mech_needs="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    needs: *bump-shape *$')" || mech_needs=0
+mech_always="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    if: *\$\{\{ *!cancelled\(\) *\}\} *$')" || mech_always=0
+if [ "${mech_needs:-0}" -ge 1 ] && [ "${mech_always:-0}" -ge 1 ]; then
+  ok "  and it is 'needs: bump-shape' + 'if: \${{ !cancelled() }}' — it still runs when bump-shape FAILS"
+else
+  bad "  the bump-mechanical job is needs=$mech_needs always=$mech_always (gate: $MECH_IF) — with 'needs:' and no always-run 'if:', GitHub SKIPS it when bump-shape fails, and branch protection counts a skipped job as SATISFIED: verdicts 1 and 3 would report GREEN"
+fi
+
+# 41 — and it must stay CHEAP, for the same reason leg 36 exists. This job runs ungated on every pull
+# request in seven repositories. It re-derives nothing: no checkout, no SDK, no Python, no second
+# clone — it reads the verdict `bump-shape` already reached. An independent job that re-ran pass one
+# would make every non-bump PR in the fleet pay a second `fetch-depth: 0` checkout and every real
+# bump a second restore, which is exactly the ungated cost #1508 forbids.
+MECH_STEPS="$(python3 -c "$JOBREAD" "$WF" steps bump-mechanical)"
+mech_n=0; mech_expensive=""
+while IFS='|' read -r what id cond; do
+  [ -n "$what" ] || continue
+  mech_n=$((mech_n+1))
+  case "$what" in run) : ;; *) mech_expensive="$mech_expensive $what" ;; esac
+done <<EOF
+$MECH_STEPS
+EOF
+if [ "$mech_n" = 1 ] && [ -z "$mech_expensive" ]; then
+  ok "  and it is ONE 'run:' step — no checkout, no SDK, no Python: abstention stays a git diff (#1508)"
+else
+  bad "  the bump-mechanical job has $mech_n step(s), using:$mech_expensive — it re-derives what bump-shape already decided, and every pull request in seven repositories pays for it"
+fi
+
+# 42 — the verdict crosses between the two jobs by a declared job output, and the DEFAULT is empty.
+# Every way bump-shape can end without grading anything — a failed restore, an unresolvable
+# `kit/v<version>` tag, a dead runner, a failure path added later — leaves this unset, and leg 48
+# asserts empty is a FAILURE on the new context. That is what makes #266 the default rather than a
+# list somebody has to remember to extend.
+SHAPE_RAW="$(python3 -c "$JOBREAD" "$WF" raw)"
+if printf '%s\n' "$SHAPE_RAW" | grep -cE '^      verdict: \$\{\{ steps\.report\.outputs\.verdict \|\| steps\.probe\.outputs\.verdict \}\}$' >/dev/null; then
+  ok "  and bump-shape publishes 'verdict' — the rule's own code, falling back to the probe's"
+else
+  bad "  bump-shape does not declare the 'verdict' job output the second context reads" "$SHAPE_RAW"
+fi
+
+# THE TWO MAPPINGS, EXTRACTED FROM THE WORKFLOW. If either cannot be found, that is a FINDING and not
+# a verdict (#266) — the legs below would otherwise silently test nothing, which is how the #1797
+# guard shipped unable to pass.
+mech_case="$(python3 - "$WF" <<'PY'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'^([ \t]*)case "\$VERDICT" in\n.*?^\1esac$', src, re.S | re.M)
+if not m:
+    sys.stderr.write("could not locate the VERDICT mapping in bump-mechanical\n"); sys.exit(1)
+ind = m.group(1)
+print("\n".join(l[len(ind):] if l.startswith(ind) else l for l in m.group(0).splitlines()))
+PY
+)" || mech_case=""
+shape_case="$(python3 - "$WF" <<'PY'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+# The LAST `case "$rc" in` in the file is the conclusion mapping; the earlier one picks the headline.
+ms = list(re.finditer(r'^([ \t]*)case "\$rc" in\n.*?^\1esac$', src, re.S | re.M))
+if not ms:
+    sys.stderr.write("could not locate the rc conclusion mapping in bump-shape\n"); sys.exit(1)
+m = ms[-1]
+if "exit 0" not in m.group(0) or "exit 1" not in m.group(0):
+    sys.stderr.write("the last rc case is not the conclusion mapping\n"); sys.exit(1)
+ind = m.group(1)
+print("\n".join(l[len(ind):] if l.startswith(ind) else l for l in m.group(0).splitlines()))
+PY
+)" || shape_case=""
+
+if [ -z "$mech_case" ] || [ -z "$shape_case" ]; then
+  bad "#1815: could not extract both conclusion mappings from kit-materialize.yml — the legs below did NOT run, and that is not a verdict about either context"
+else
+  ok "both conclusion mappings were extracted from the workflow and are what the legs below run"
+
+  # `success` / `failure` — the two conclusions a job can carry. Anything else means the extracted
+  # code neither exited 0 nor 1, which is a broken leg and must not read as either verdict.
+  mech_conclusion() { # $1 = the verdict code bump-shape published
+    local rc=0
+    env GITHUB_STEP_SUMMARY=/dev/null bash -c '
+      set -uo pipefail
+      VERDICT="$1"
+      '"$mech_case"'
+      exit 99
+    ' _ "$1" >/dev/null 2>&1 || rc=$?
+    case "$rc" in 0) echo success ;; 1) echo failure ;; *) echo "BROKEN($rc)" ;; esac
+  }
+  shape_conclusion() { # $1 = the rule's exit code, after the 2 -> 3 remap
+    local rc=0
+    bash -c '
+      set -uo pipefail
+      rc="$1"
+      '"$shape_case"'
+      exit 99
+    ' _ "$1" >/dev/null 2>&1 || rc=$?
+    case "$rc" in 0) echo success ;; 1) echo failure ;; *) echo "BROKEN($rc)" ;; esac
+  }
+
+  # 43-48 — THE FULL TABLE, both contexts, all five exit codes plus the no-verdict case. Driven in
+  # BOTH directions by construction: if either mapping could not fail, its `failure` rows would fail;
+  # if either could not pass, its `success` rows would. Column 2 is #1815's whole change and column 1
+  # is the proof that #1815 changed nothing about the existing context.
+  #
+  #    verdict           kit-bump-shape   kit-bump-mechanical
+  while read -r code want_shape want_mech what; do
+    [ -n "$code" ] || continue
+    # A heredoc cannot carry an empty field, so the no-verdict row spells it.
+    if [ "$code" = "EMPTY" ]; then code=""; fi
+    got_mech="$(mech_conclusion "$code")"
+    if [ "$got_mech" = "$want_mech" ]; then
+      ok "  kit-bump-mechanical on ${code:-<no verdict>} ($what) is $want_mech"
+    else
+      bad "  kit-bump-mechanical on ${code:-<no verdict>} ($what) is $got_mech, want $want_mech"
+    fi
+    # The existing context, UNCHANGED. A no-verdict bump-shape is a FAILED JOB rather than a
+    # conclusion this mapping chose, so it has no row here — the mapping never runs.
+    if [ "$want_shape" != "-" ]; then
+      got_shape="$(shape_conclusion "$code")"
+      if [ "$got_shape" = "$want_shape" ]; then
+        ok "    and kit-bump-shape on $code is still $want_shape — unchanged by #1815"
+      else
+        bad "    kit-bump-shape on $code is now $got_shape, want $want_shape — #1815 changed the EXISTING context's verdict"
+      fi
+    fi
+  done <<'TABLE'
+0     success   success   mechanical
+2     success   success   abstains
+4     success   failure   mechanical+repair
+1     failure   failure   not-mechanical
+3     failure   failure   REFUSED
+EMPTY -         failure   bump-shape published no verdict
+TABLE
+
+  # 49 — AC 4, END TO END, ON THE REAL SUBJECT. Not a hand-written code: the REAL 36-path
+  # FS.GG.Rendering#1088 diff, graded by the REAL rule, and its exit code fed to the REAL workflow
+  # mappings. This is the whole claim of #1815 in one leg — the pull request whose merge was correct
+  # stays green on `kit-bump-shape`, and stops being automergeable.
+  d=$(fresh_1088 r1088-contexts); apply_1088_mechanical "$d"; apply_1088_repair "$d"
+  GIT "$d" add -A; GIT "$d" commit -q -m "chore(deps): update dependency fs.gg.kit to 0.15.0"
+  rc=0
+  python3 "$GATE" --repo "$d" --base base --head HEAD --kit-dir "$WORK/pkg-1088" \
+    --properties "$WORK/props-1088.json" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" = 4 ]; then
+    if [ "$(shape_conclusion "$rc")" = success ] && [ "$(mech_conclusion "$rc")" = failure ]; then
+      ok "FS.GG.Rendering#1088's real 36 paths: kit-bump-shape SUCCESS, kit-bump-mechanical FAILURE (#1815 AC 4)"
+    else
+      bad "FS.GG.Rendering#1088 (exit 4) grades shape=$(shape_conclusion "$rc") mechanical=$(mech_conclusion "$rc") — want success/failure. Reddening it on kit-bump-shape punishes the merge that was RIGHT; greening it on kit-bump-mechanical automerges the class #1587 reserves for a person"
+    fi
+  else
+    bad "FS.GG.Rendering#1088 graded exit $rc, not 4 — leg 22 should have caught this first"
+  fi
+
+  # 50 — MUTATION, so the row above is not a coincidence of a mapping that reds everything. The SAME
+  # real diff WITHOUT the receiver-authored repair is exit 0, and then it IS automergeable. This is
+  # what proves `kit-bump-mechanical` discriminates the two classes rather than merely refusing.
+  d=$(fresh_1088 r1088-contexts-nofix); apply_1088_mechanical "$d"
+  GIT "$d" add -A; GIT "$d" commit -q -m "chore(deps): update dependency fs.gg.kit to 0.15.0"
+  rc=0
+  python3 "$GATE" --repo "$d" --base base --head HEAD --kit-dir "$WORK/pkg-1088" \
+    --properties "$WORK/props-1088.json" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" = 0 ] && [ "$(mech_conclusion "$rc")" = success ]; then
+    ok "  MUTATION: the SAME 35 paths without the repair are exit 0 and kit-bump-mechanical is GREEN"
+  else
+    bad "  MUTATION: dropping the repair gave exit $rc / $(mech_conclusion "$rc") — kit-bump-mechanical does not discriminate the two classes, it just reds"
+  fi
+
+  # 51 — and the second context must not be spelled as a filter on the first. If `bump-mechanical`
+  # ever grows its own `paths:`-shaped gate — an `if:` conditioned on the event, the branch, or the
+  # verdict being present — a pull request it excluded would create NO check run, and a receiver that
+  # required it would hold every PR at "Expected — waiting for status to be reported" (#1508). The
+  # ONLY `if:` permitted here is the always-run one leg 40 demands.
+  mech_ifs="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    if:')" || mech_ifs=0
+  if [ "${mech_ifs:-0}" = 1 ]; then
+    ok "  and the job carries exactly ONE 'if:' — the always-run one, not a filter that would suppress the check run (#1508)"
+  else
+    bad "  the bump-mechanical job carries $mech_ifs 'if:' conditions — a job an 'if:' excludes creates NO check run, and a repo requiring the context would wait forever (#1508)"
+  fi
 fi
 
 
