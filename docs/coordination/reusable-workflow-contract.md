@@ -404,6 +404,128 @@ FS.GG.Net's real caller and **this repository's own** `kit-materialize.yml`, and
 either job is caught by name. That is stronger than a dry run — it needs no credential, and it fails
 on the pull request that would break it rather than on the nightly sweep afterwards.
 
+## The on-demand materialize, and why one still never writes `main`
+
+> **DECISION ([#1845](https://github.com/FS-GG/.github/issues/1845), 2026-07-28). A materialize can be
+> run from CI on demand, by `workflow_dispatch`, by anyone with write access to the receiver. A
+> materialize **never writes the receiver's default branch**: dispatched there, the repair is pushed to
+> a `kit-materialize/repair-<run>` branch and the operator opens the pull request. Dispatched on any
+> other branch it pushes in place. The `pull_request` / `renovate/*` arm is unchanged.**
+
+### The measurement that forced it
+
+[#1834](https://github.com/FS-GG/.github/issues/1834) (`4fadc88`) asked how long "self-healing at the
+next materialize" actually takes, and the answer turned on reachability:
+
+* every receiver's `kit-materialize.yml` caller triggered on **`pull_request` alone** — **no
+  `workflow_dispatch` in any of the seven** — and the `materialize` job was further gated to
+  `renovate/*` same-repo head refs;
+* `FsggKitMaterializeOnBuild=false` and the receiver project is out of the solution, so no ordinary
+  build materializes ([#1280](https://github.com/FS-GG/.github/issues/1280));
+* **across 842 runs in all seven receivers, ZERO ran on `main`.** Every run was a `pull_request`.
+
+So the heal window was the interval between merged `renovate/*` pull requests: mean 27–84h, p90
+70–265h, **max 167–312h (7–13 days)**, with FS.GG.Audio (n=2) and FS.GG.Net (n=1) reported
+**unmeasured** rather than fast ([#266](https://github.com/FS-GG/.github/issues/266)). Meanwhile
+`kit / coordination-kit` runs **9–69 times a day** in the same repos and went red **534 times in ~24
+days**. The detector observed `main` every 15–100 minutes; the healer never observed it at all — and
+that gate's DRIFT summary told the reader to *"re-run the materialize on this branch"*. There was no
+button. A remedy naming an action nobody can perform is
+[#842](https://github.com/FS-GG/.github/issues/842)'s `lockfile-sync` reachability hole one fabric
+over.
+
+### Adding `workflow_dispatch` to a caller is not enough, and the way it fails is the point
+
+On a dispatched run there is no `github.event.pull_request`, so the old `if:` evaluated **false** and
+the `materialize` job was **skipped**. GitHub reports a skipped job as `conclusion: skipped`, which
+branch protection counts as satisfied and a human reads as a tick
+([#1815](https://github.com/FS-GG/.github/issues/1815)). An operator would have followed the DRIFT
+summary, pressed *Run workflow*, watched a green run, and believed the repair had happened. **That is
+strictly worse than no button**, and no happy-path assertion sees it.
+
+So the hub half is the precondition and it lands first: the `materialize` job's dispatch arm is
+**unconditional**, every refusal on it is an `exit 1` inside the job that says why, and
+[`tests/kit-bump-shape/run.sh`](../../tests/kit-bump-shape/run.sh) evaluates the real expression
+against real event contexts and fails if a dispatched run would skip. Mutating the `if:` back to the
+`renovate/*`-only form reds three legs; conditioning the dispatch arm on anything reds one.
+
+### Why `main` is not written — the argument, which is not "it is protected"
+
+A materialize **WRITES**. It is a repair, not a check, and repairs on the default branch need both a
+mechanism and an authority.
+
+`kit / coordination-kit` is a **required context** precisely so that a receiver's kit bytes are graded
+*before* they reach the default branch. A bot that pushed the repair straight there would bypass the
+very gate whose red caused the repair, and land ungraded bytes into the branch every other receiver's
+contexts have already passed on. Routing the repair through a branch is **the gate continuing to do
+its job**, not a concession to branch protection — and on the way back in, the drift is verified gone
+rather than assumed gone.
+
+It is also the only arm the workflow can *prove* it may take. The App installation token holds
+`contents: write` ([#1713](https://github.com/FS-GG/.github/issues/1713); `lockfile-sync.yml`'s
+preflight asserts exactly that and nothing more), which is enough to **create** a ref and push to it,
+and says nothing about `pull_requests: write`. So the workflow pushes a branch and prints the compare
+URL; it does not open the pull request itself. Per #266 an unasserted scope is not a scope.
+
+Two consequences worth stating rather than discovering:
+
+* **the operator still has to open and merge the pull request.** The button removes the clone, the
+  SDK and the local build; it does not remove the review. On a receiver with no drift on `main` this
+  costs nothing, because the run reports `NOTHING TO REPAIR` and creates no branch.
+* **the branch name is never assumed.** `github.event.repository.default_branch` is read from the
+  event payload; `main` is hardcoded nowhere. An **empty** value is a refusal, not a guess — assuming
+  "not the default branch" is precisely the assumption that writes the one branch this must not.
+
+### Who can press it, and who cannot
+
+`workflow_dispatch` requires **write access** to the receiver. A fork contributor has none, and there
+is no CI route for that reader at all. `coordination-coherence.yml`'s DRIFT summary therefore names
+**three** routes and says which reader each is for — the Renovate PR where it already happened
+automatically, the dispatch button for a writer, and the local `dotnet build … -t:FsggKitMaterialize`
+for everyone else — rather than naming one that most readers cannot take.
+
+### What is NOT decided here
+
+* **The `renovate/*` gate is not loosened.** It exists so the App never auto-commits to an untrusted
+  or human-authored head, and [#1533](https://github.com/FS-GG/.github/issues/1533)'s
+  `gitIgnoredAuthors` trap makes the bot-authorship path load-bearing. The `pull_request` arm is
+  byte-for-byte what it was, and the fixture's control leg asserts that.
+* **A `main`-push arm is DECLINED, not deferred.** The section above is the reason. If it is ever
+  revisited it needs its own answer to the required-context bypass and to #1533, and a mechanism for
+  the authority — not merely a token that happens to be able to push.
+* **A `push:` trigger on `main` is also declined**, for the same reason plus one more: a materialize
+  on every push to `main` is a write on the hot path of every merge, and the `plan` step refuses a
+  `push` event outright so that adding the trigger cannot silently reach the App token.
+* **Recovering a red *pull request* after a hub repair still needs a fresh `pull_request` event, and
+  this button is not that.** GitHub resolves a reusable workflow referenced by a mutable ref **once,
+  at the original run's creation**, and a re-run **re-pins the same stale SHA** — measured on
+  FS.GG.Governance#104, where `gh run rerun --failed` a full day after the repair ran the pre-repair
+  code verbatim ([#721](https://github.com/FS-GG/.github/issues/721); the second resolution, of the
+  *rule* the callee checks out, is [#1786](https://github.com/FS-GG/.github/issues/1786)). A
+  `workflow_dispatch` is a **new run**, so it does resolve the hub's tip at dispatch time — but it is
+  a run of its own with checks of its own, and it does **not** re-report on the pull request. For that
+  the remedy is unchanged: `update-branch`, a push, or close/reopen. Do not read this button as a way
+  to recover a stale check.
+
+### The receiver half is not done in this repository
+
+The hub cannot add `workflow_dispatch` to the seven callers. Those are workflow **files** in the
+receivers, and the App installation token that pushes a materialize commit holds `contents: write`
+and **not** `workflows: write` (#1713) — the same constraint that put the `bump-shape` job in the
+reusable workflow instead of materializing a file into each repo. Each caller therefore needs:
+
+```yaml
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+```
+
+added by a human pull request in that receiver. Until that lands per repo, the button does not exist
+*there* — the reusable half is ready for it, and that is a different statement. It is tracked as its
+own item, and **no run of an on-demand materialize has been observed on any receiver yet**: that is
+`NOT MEASURED`, not `PASS` (#266).
+
 ## Reusable-workflow calls are NOT pinned
 
 > **DECISION ([#1783](https://github.com/FS-GG/.github/issues/1783), 2026-07-28). A receiver calls a

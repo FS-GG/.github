@@ -639,13 +639,26 @@ if [ "$CONTEXT_CALLEE" = "kit-bump-shape" ]; then
 else
   bad "kit-materialize.yml publishes '$CONTEXT_CALLEE', not 'kit-bump-shape' — every receiver's caller job id is 'materialize', so the context is 'materialize / <this>'"
 fi
-# 31 — and the job must be UNGATED. An `if:` on it, or a paths filter on the workflow, is #1508's
-# deadlock: GitHub creates no check run at all for a filtered-out job, and a branch that required
-# the context would hold every pull request at "Expected — waiting for status to be reported".
-if [ "$(python3 -c "$JOBREAD" "$WF" gate)" = "ungated" ]; then
-  ok "  and the job carries no 'if:' — it reports on every pull request (#1508)"
+# 31 — and the job must report on EVERY pull request. An `if:` that excludes one, or a paths filter
+# on the workflow, is #1508's deadlock: GitHub creates no check run at all for a filtered-out job,
+# and a branch that required the context would hold every pull request at "Expected — waiting for
+# status to be reported".
+#
+# THIS LEG USED TO BE STRUCTURAL — "the job carries no `if:`" — AND IT IS NOW SEMANTIC (.github#1845).
+# The job carries `if: github.event_name == 'pull_request'`, which is a TAUTOLOGY on the event it
+# reports about: the check run is still created on 100% of pull requests, and what it excludes is the
+# on-demand `workflow_dispatch` run where there is no pull request to grade and no branch protection
+# waiting on anything. The structural leg cannot tell that from a real narrowing, so the property is
+# now asserted by EVALUATING the real expression against every pull-request shape the fixture can
+# build — see the "#1845: which jobs run, on which events" section at the end of this file, where it
+# is also mutation-proven (M3 narrows the `if:` by head ref and the legs go red). That is a strict
+# superset of what this leg checked. What survives HERE is the half that is still structural and
+# still cheap: there must be no `paths:`/`paths-ignore:` filter on the route, because a filtered-out
+# job is the #1508 deadlock no expression evaluator can see.
+if grep -qE '^[[:space:]]*paths(-ignore)?:' "$WF"; then
+  bad "  kit-materialize.yml declares a paths filter — GitHub creates NO check run for a job a filter excluded, and branch protection cannot tell that from 'has not reported yet' (#1508)"
 else
-  bad "  the bump-shape job is gated by an 'if:' — a filtered-out job creates NO check run (#1508)"
+  ok "  and no paths filter exists anywhere on the route (#1508); which pull requests the job reports on is asserted semantically below"
 fi
 
 echo "== the rule the reporter runs is fetched at the ref the RECEIVER's pin names (#1772, #1584) =="
@@ -894,9 +907,16 @@ fi
 MECH_IF="$(python3 -c "$JOBREAD" "$WF" gate bump-mechanical)"
 MECH_RAW="$(python3 -c "$JOBREAD" "$WF" raw bump-mechanical)"
 mech_needs="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    needs: *bump-shape *$')" || mech_needs=0
-mech_always="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    if: *\$\{\{ *!cancelled\(\) *\}\} *$')" || mech_always=0
+# `!cancelled()` IS MATCHED AS A TERM, NOT AS THE WHOLE `if:` (.github#1845). The job now also
+# carries `&& github.event_name == 'pull_request'`, so the old whole-line match would fail on a file
+# that still has the property. What is load-bearing is that SOME status-check function appears at
+# all: with none, GitHub applies the implicit `success()` and the job is skipped the moment
+# `bump-shape` fails — which is this leg's entire subject. The `pull_request` term cannot restore
+# that fail-open, because it is TRUE on every event where `bump-shape` can fail at all; that half is
+# driven, not argued, in the "#1845: which jobs run, on which events" section below.
+mech_always="$(printf '%s\n' "$MECH_RAW" | grep -cE '^    if: *\$\{\{ .*!cancelled\(\).*\}\} *$')" || mech_always=0
 if [ "${mech_needs:-0}" -ge 1 ] && [ "${mech_always:-0}" -ge 1 ]; then
-  ok "  and it is 'needs: bump-shape' + 'if: \${{ !cancelled() }}' — it still runs when bump-shape FAILS"
+  ok "  and it is 'needs: bump-shape' + an 'if:' carrying '!cancelled()' — it still runs when bump-shape FAILS"
 else
   bad "  the bump-mechanical job is needs=$mech_needs always=$mech_always (gate: $MECH_IF) — with 'needs:' and no always-run 'if:', GitHub SKIPS it when bump-shape fails, and branch protection counts a skipped job as SATISFIED: verdicts 1 and 3 would report GREEN"
 fi
@@ -1164,6 +1184,487 @@ else
     bad "#1797: the guard matches on a COMMAND SUBSTITUTION — \$(printf '\\n') strips the trailing newline and is the empty string, making the arm '*' and the check unable to pass" "$guard"
   else
     ok "#1797: the guard does not build its pattern with a command substitution — the construct that made it '*'"
+  fi
+fi
+
+# =================================================================================================
+# .github#1845 — WHICH JOBS RUN, ON WHICH EVENTS. THE ON-DEMAND MATERIALIZE, AND THE SKIP THAT
+# WOULD HAVE MADE ITS BUTTON A LIE.
+#
+# THE DEFECT THESE LEGS EXIST FOR. Measured under #1834 (`4fadc88`): across 842 runs in all seven
+# receivers, ZERO materialize ran on `main`. The callers trigger on `pull_request` alone and the
+# `materialize` job was gated to `renovate/*` same-repo heads — so `kit / coordination-kit`'s DRIFT
+# summary told readers to "re-run the materialize" and there was no button anywhere that could.
+#
+# ADDING `workflow_dispatch` TO A CALLER IS NOT ENOUGH, AND THE WAY IT FAILS IS THE POINT (#1815).
+# On a dispatched run there is no `github.event.pull_request`, so the OLD expression evaluated FALSE
+# and the job was SKIPPED — and GitHub reports a skipped job as `conclusion: skipped`, which branch
+# protection counts as satisfied and a human reads as a tick. An operator would have pressed the
+# button, watched a green run, and believed the repair had happened. That is strictly worse than no
+# button, it is invisible to every happy-path assertion, and it is what leg M1 below reproduces.
+#
+# THESE LEGS EVALUATE THE REAL EXPRESSIONS, EXTRACTED FROM THE REAL WORKFLOW (ADR-0058). A copy of
+# the `if:` restated here would pass forever while the workflow said something else — the #1059 class,
+# in the fixture written to catch it.
+#
+# #1808's FOUR POINTS, EACH NAMED WHERE IT IS DISCHARGED:
+#   1. an UNMUTATED CONTROL that must pass  -> the `pr-renovate-same-repo` row, which is the behaviour
+#      that existed before #1845 and must be untouched by it;
+#   2. NOT MEASURED distinct from FAIL and PASS -> the evaluator REFUSES any token it does not
+#      understand and every leg reports `NOT MEASURED` rather than a verdict (#266);
+#   3. ANCHORS INDEPENDENT OF THE GUARD UNDER TEST -> the verdicts are computed by an evaluator that
+#      knows nothing about kit-materialize.yml, from event contexts written here, and are checked
+#      against a table written here — never against the workflow's own comments or logs;
+#   4. A LEG THAT MUTATES THE FIXTURE SO THE HELPER IS PROVEN TO FIRE -> M1-M4 below, each of which
+#      applies a specific realistic regression and asserts the corresponding leg goes FAIL.
+# =================================================================================================
+echo
+echo "== .github#1845: which jobs run, on which events =="
+
+# A GitHub-expression evaluator, in the stdlib, for the sub-grammar these three `if:`s use. It is
+# DELIBERATELY TOTAL AND DELIBERATELY NARROW: `||` `&&` `!` `==` `!=` parentheses, string literals,
+# `true`/`false`, dotted context paths, and the calls `startsWith`/`endsWith`/`contains`/`cancelled`/
+# `always`/`success`/`failure`. Anything else — a new operator, an unknown function, a stray token —
+# EXITS 3 and prints NOT-MEASURED. It never guesses and never defaults to true or false, because a
+# permissive evaluator would silently green every leg below the day someone edited an expression
+# into a shape it could not read (#266).
+EVAL="$WORK/ghexpr.py"
+cat > "$EVAL" <<'PY'
+import json, re, sys
+
+TOKEN = re.compile(r"""\s*(?:
+    (?P<str>'(?:[^']|'')*')
+  | (?P<op>\|\||&&|==|!=|<=|>=|!|\(|\)|,|<|>)
+  | (?P<word>[A-Za-z_][A-Za-z0-9_.\-]*)
+)""", re.X)
+
+def lex(src):
+    out, i = [], 0
+    while i < len(src):
+        if src[i].isspace():
+            i += 1; continue
+        m = TOKEN.match(src, i)
+        if not m or m.end() == i:
+            raise ValueError("cannot tokenise at %r" % src[i:i + 24])
+        i = m.end()
+        if m.group("str") is not None:
+            out.append(("str", m.group("str")[1:-1].replace("''", "'")))
+        elif m.group("op") is not None:
+            out.append(("op", m.group("op")))
+        else:
+            out.append(("word", m.group("word")))
+    return out
+
+class P:
+    def __init__(self, toks, ctx):
+        self.t, self.i, self.ctx = toks, 0, ctx
+    def peek(self):
+        return self.t[self.i] if self.i < len(self.t) else (None, None)
+    def eat(self, val):
+        k, v = self.peek()
+        if k == "op" and v == val:
+            self.i += 1; return True
+        return False
+    def expect(self, val):
+        if not self.eat(val):
+            raise ValueError("expected %r at token %d" % (val, self.i))
+    # or := and ('||' and)*
+    #
+    # THE RIGHT-HAND SIDE IS PARSED UNCONDITIONALLY, and that is not a style choice. Written as
+    # `v = truthy(v) or truthy(self.p_and())`, Python's own short-circuit skips the CALL — so a
+    # false left operand leaves the right operand's tokens unconsumed, the parser stops mid-stream,
+    # and the totality check at the bottom reports NOT-MEASURED for an expression that is perfectly
+    # well formed. Every leg fed a false-on-the-left expression would have gone NOT MEASURED, which
+    # is at least loud; a laxer totality check would have made them silently pass. GitHub expressions
+    # have no side effects, so evaluating both sides is free and correct.
+    def p_or(self):
+        v = self.p_and()
+        while self.eat("||"):
+            rhs = self.p_and()
+            v = truthy(v) or truthy(rhs)
+        return v
+    def p_and(self):
+        v = self.p_not()
+        while self.eat("&&"):
+            rhs = self.p_not()
+            v = truthy(v) and truthy(rhs)
+        return v
+    def p_not(self):
+        if self.eat("!"):
+            return not truthy(self.p_not())
+        return self.p_cmp()
+    def p_cmp(self):
+        v = self.p_atom()
+        while True:
+            k, o = self.peek()
+            if k == "op" and o in ("==", "!="):
+                self.i += 1
+                r = self.p_atom()
+                # GitHub coerces null to '' when compared with a string.
+                a = "" if v is None else v
+                b = "" if r is None else r
+                v = (a == b) if o == "==" else (a != b)
+            else:
+                return v
+    def p_atom(self):
+        k, v = self.peek()
+        if k == "op" and v == "(":
+            self.i += 1
+            inner = self.p_or()
+            self.expect(")")
+            return inner
+        if k == "str":
+            self.i += 1; return v
+        if k == "word":
+            self.i += 1
+            if self.eat("("):
+                args = []
+                if not self.eat(")"):
+                    args.append(self.p_or())
+                    while self.eat(","):
+                        args.append(self.p_or())
+                    self.expect(")")
+                return self.call(v, args)
+            if v == "true":  return True
+            if v == "false": return False
+            if v == "null":  return None
+            return self.lookup(v)
+        raise ValueError("unexpected token %r" % (v,))
+    def call(self, name, args):
+        s = lambda x: "" if x is None else (x if isinstance(x, str) else str(x))
+        if name == "startsWith": return s(args[0]).startswith(s(args[1]))
+        if name == "endsWith":   return s(args[0]).endswith(s(args[1]))
+        if name == "contains":   return s(args[1]) in s(args[0])
+        # Status functions come from the drive context, never from a default: a leg that forgot to
+        # say whether the run was cancelled must not silently get "no".
+        if name in ("cancelled", "always", "success", "failure"):
+            if name not in self.ctx:
+                raise ValueError("the drive context does not say what %s() is" % name)
+            return bool(self.ctx[name])
+        raise ValueError("unknown function %s()" % name)
+    def lookup(self, path):
+        cur = self.ctx
+        for part in path.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                return None          # an absent context value is null, exactly as GitHub has it
+            cur = cur[part]
+        return cur
+
+def truthy(v):
+    if v is None: return False
+    if isinstance(v, bool): return v
+    if isinstance(v, str):  return v != ""
+    return bool(v)
+
+try:
+    expr = sys.argv[1]
+    ctx = json.loads(sys.argv[2])
+    expr = expr.strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2]
+    toks = lex(expr)
+    p = P(toks, ctx)
+    val = p.p_or()
+    if p.i != len(toks):
+        raise ValueError("trailing tokens from %d" % p.i)
+    print("RUN" if truthy(val) else "SKIP")
+except Exception as e:                                    # noqa: BLE001 — every failure is one thing
+    print("NOT-MEASURED")
+    sys.stderr.write("ghexpr: %s\n" % e)
+    sys.exit(3)
+PY
+
+# THE EVALUATOR IS ITSELF CHECKED BEFORE ANYTHING IS BELIEVED FROM IT (#1808 point 2/3). If it could
+# only ever answer one way, every table row below would be a tautology; if it silently accepted
+# nonsense, a mangled `if:` would read as a verdict.
+ev() { python3 "$EVAL" "$1" "$2" 2>/dev/null; }
+selfcheck_ok=1
+[ "$(ev 'true'  '{}')" = "RUN"  ] || selfcheck_ok=0
+[ "$(ev 'false' '{}')" = "SKIP" ] || selfcheck_ok=0
+[ "$(ev "startsWith(a.b, 'renovate/')" '{"a":{"b":"renovate/x"}}')" = "RUN"  ] || selfcheck_ok=0
+[ "$(ev "startsWith(a.b, 'renovate/')" '{"a":{"b":"feature/x"}}')" = "SKIP" ] || selfcheck_ok=0
+[ "$(ev "a.missing == 'x'"             '{}')"                      = "SKIP" ] || selfcheck_ok=0
+[ "$(ev "frobnicate(1)"                '{}')"                      = "NOT-MEASURED" ] || selfcheck_ok=0
+[ "$(ev "a %% b"                       '{}')"                      = "NOT-MEASURED" ] || selfcheck_ok=0
+if [ "$selfcheck_ok" = 1 ]; then
+  ok "#1845: the expression evaluator answers RUN, SKIP and NOT-MEASURED, and refuses a token it cannot read"
+else
+  bad "#1845: the expression evaluator is broken — the legs below did NOT measure anything, and that is not a verdict about any job (#266)"
+fi
+
+# THE THREE `if:`s, EXTRACTED FROM THE REAL WORKFLOW. `WF` is resolved above. Extraction failure is a
+# FINDING, never a skipped leg — that is exactly how the #1797 guard shipped unable to pass.
+IFREAD='
+import sys
+job = sys.argv[2]
+lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+# The same job-block walk `JOBREAD` uses above: a two-space key that ends in `:` opens a job.
+block, inside = [], False
+for line in lines:
+    if line.startswith("  ") and not line.startswith("   ") and line.rstrip().endswith(":"):
+        inside = line.strip() == job + ":"
+        continue
+    if inside:
+        block.append(line)
+if not block:
+    sys.stderr.write("no job %s\n" % job); sys.exit(1)
+idx = [i for i, l in enumerate(block) if l.startswith("    if:")]
+if not idx:
+    sys.stderr.write("job %s declares no if:\n" % job); sys.exit(2)
+i = idx[0]
+first = block[i].split(":", 1)[1].strip()
+if first in (">-", ">", "|-", "|"):
+    # A folded scalar: every following line indented deeper than the key belongs to it.
+    out = []
+    for l in block[i + 1:]:
+        if l.strip() == "":
+            continue
+        if not l.startswith("      "):
+            break
+        out.append(l.strip())
+    print(" ".join(out))
+else:
+    print(first)
+'
+IF_MAT="$(python3 -c "$IFREAD" "$WF" materialize 2>/dev/null)"
+IF_SHAPE="$(python3 -c "$IFREAD" "$WF" bump-shape 2>/dev/null)"
+IF_MECH="$(python3 -c "$IFREAD" "$WF" bump-mechanical 2>/dev/null)"
+
+# THE EVENT CONTEXTS. Written here, from what GitHub actually delivers, and knowing nothing about the
+# expressions they are fed to (#1808 point 3).
+C_PR_RENOVATE='{"github":{"event_name":"pull_request","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"renovate/fs.gg.kit-0.x","repo":{"full_name":"FS-GG/FS.GG.SDD"}}}}},"cancelled":false}'
+C_PR_PLAIN='{"github":{"event_name":"pull_request","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"feature/some-work","repo":{"full_name":"FS-GG/FS.GG.SDD"}}}}},"cancelled":false}'
+C_PR_FORK='{"github":{"event_name":"pull_request","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"renovate/fs.gg.kit-0.x","repo":{"full_name":"attacker/FS.GG.SDD"}}}}},"cancelled":false}'
+C_PR_DOCS='{"github":{"event_name":"pull_request","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"docs/readme","repo":{"full_name":"FS-GG/FS.GG.SDD"}}}}},"cancelled":false}'
+C_DISPATCH_MAIN='{"github":{"event_name":"workflow_dispatch","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"}}},"cancelled":false}'
+C_DISPATCH_BRANCH='{"github":{"event_name":"workflow_dispatch","repository":"FS-GG/FS.GG.SDD","ref_name":"fix/kit-drift","event":{"repository":{"default_branch":"main"}}},"cancelled":false}'
+C_PRTARGET='{"github":{"event_name":"pull_request_target","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"renovate/fs.gg.kit-0.x","repo":{"full_name":"FS-GG/FS.GG.SDD"}}}}},"cancelled":false}'
+C_PR_CANCELLED='{"github":{"event_name":"pull_request","repository":"FS-GG/FS.GG.SDD","ref_name":"main","event":{"repository":{"default_branch":"main"},"pull_request":{"head":{"ref":"renovate/fs.gg.kit-0.x","repo":{"full_name":"FS-GG/FS.GG.SDD"}}}}},"cancelled":true}'
+
+# THE TABLE. `assert_run <if-expr> <ctx> <want RUN|SKIP> <what>` — and it reports NOT MEASURED rather
+# than a verdict when the expression could not be extracted or the evaluator refused it.
+assert_run() { # $1 = expr  $2 = ctx json  $3 = RUN|SKIP  $4 = description
+  local got
+  if [ -z "$1" ]; then
+    bad "#1845: NOT MEASURED — the if: for this leg could not be extracted from kit-materialize.yml ($4)"
+    return
+  fi
+  got="$(ev "$1" "$2")"
+  case "$got" in
+    RUN|SKIP)
+      if [ "$got" = "$3" ]; then ok "#1845: $4 — $3"; else bad "#1845: $4 — got $got, want $3" "$1"; fi ;;
+    *) bad "#1845: NOT MEASURED — the evaluator refused this expression, so this is not a verdict about the job ($4)" "$1" ;;
+  esac
+}
+
+# --- `materialize` -------------------------------------------------------------------------------
+# 1. THE UNMUTATED CONTROL (#1808 point 1). The pre-#1845 behaviour, which this change must not move.
+assert_run "$IF_MAT" "$C_PR_RENOVATE"     RUN  "materialize runs on a same-repo renovate/* bump PR (the CONTROL — unchanged behaviour)"
+assert_run "$IF_MAT" "$C_PR_PLAIN"        SKIP "materialize does NOT run on a human same-repo PR"
+assert_run "$IF_MAT" "$C_PR_DOCS"         SKIP "materialize does NOT run on a docs PR"
+# 2. THE TRUST BOUNDARY, which #1845 must not have widened: the App token never pushes to a fork head.
+assert_run "$IF_MAT" "$C_PR_FORK"         SKIP "materialize does NOT run on a renovate/* head in a FORK — the App token never touches an untrusted head"
+assert_run "$IF_MAT" "$C_PRTARGET"        SKIP "materialize does NOT run from pull_request_target, which also populates github.event.pull_request"
+# 3. THE HEADLINE. This is the leg the whole item is about, and M1 below proves it can fail.
+assert_run "$IF_MAT" "$C_DISPATCH_MAIN"   RUN  "materialize RUNS on a workflow_dispatch against the default branch — the button is not a skip"
+assert_run "$IF_MAT" "$C_DISPATCH_BRANCH" RUN  "materialize RUNS on a workflow_dispatch against any other branch"
+
+# --- `bump-shape` / `bump-mechanical`: #1508, asserted SEMANTICALLY --------------------------------
+# The old leg was structural ("the job carries no `if:`"). #1845 gives it one, so the property it
+# stood for is asserted directly instead: BOTH reporter contexts must report on EVERY pull request,
+# whatever its head ref, base, author or subject — because a required context that fails to create a
+# check run holds the pull request at "Expected — waiting for status to be reported" forever. This is
+# a strict superset of the old leg: an `if:` that narrows by ANY pull-request property fails here,
+# and so does one that is absent-but-wrong.
+while IFS='|' read -r shape ctxval; do
+  [ -n "$shape" ] || continue
+  assert_run "$IF_SHAPE" "$ctxval" RUN "#1508: kit-bump-shape reports on a $shape pull request — a required context must create a check run on EVERY pull request"
+  assert_run "$IF_MECH"  "$ctxval" RUN "#1508: kit-bump-mechanical reports on a $shape pull request"
+done <<EOF
+renovate|$C_PR_RENOVATE
+human-branch|$C_PR_PLAIN
+fork|$C_PR_FORK
+docs|$C_PR_DOCS
+EOF
+# ...and they are quiet on a dispatched repair run, where there is no pull request to report about
+# and no branch protection is waiting on anything.
+assert_run "$IF_SHAPE" "$C_DISPATCH_MAIN"   SKIP "kit-bump-shape does not report on a workflow_dispatch — there is no pull request to grade"
+assert_run "$IF_MECH"  "$C_DISPATCH_MAIN"   SKIP "kit-bump-mechanical does not report on a workflow_dispatch either"
+# `!cancelled()` is still load-bearing and is driven separately from the event term.
+assert_run "$IF_MECH"  "$C_PR_CANCELLED"    SKIP "kit-bump-mechanical still stands down on a CANCELLED run (!cancelled() survives the #1845 edit)"
+
+# --- M1-M4: THE MUTATIONS (#1808 point 4) ---------------------------------------------------------
+# Each applies a specific, realistic regression to the EXTRACTED expression and asserts the leg above
+# flips. A leg that cannot fail is decoration, and four harnesses mis-reported their own results in
+# the two days before this was written.
+mutate_expect() { # $1 = mutated expr  $2 = ctx  $3 = expected (the WRONG answer)  $4 = what regressed
+  local got; got="$(ev "$1" "$2")"
+  if [ "$got" = "$3" ]; then
+    ok "#1845 mutation: $4 — the leg above FIRES (mutant answers $got)"
+  else
+    bad "#1845 mutation: $4 — the mutant answers $got, so the leg above is NOT proven to fire and its green means nothing" "$1"
+  fi
+}
+# M1 — THE DEFECT ITSELF: the pre-#1845 expression, verbatim. It is what every receiver's caller
+#      would have hit the moment someone added `workflow_dispatch` to it, and the answer it gives is
+#      SKIP, which GitHub reports as `conclusion: skipped` and a human reads as a tick.
+M1="startsWith(github.event.pull_request.head.ref, 'renovate/') && github.event.pull_request.head.repo.full_name == github.repository"
+mutate_expect "$M1" "$C_DISPATCH_MAIN"   SKIP "reverting materialize's if: to the pre-#1845 renovate/*-only form silently skips the dispatched repair"
+mutate_expect "$M1" "$C_PR_RENOVATE"     RUN  "...and the same mutant still RUNS the control, so the control leg is not what caught it"
+# M2 — the tempting narrowing the workflow's own comment warns against: `&& <anything>` on the
+#      dispatch term. Realistic, well-intentioned, and it restores the fail-open.
+M2="( github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'renovate/') ) || ( github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'renovate/') && github.event.pull_request.head.repo.full_name == github.repository )"
+mutate_expect "$M2" "$C_DISPATCH_MAIN"   SKIP "conditioning the dispatch arm on the ref makes the button a skip again"
+# M3 — the #1508 regression, in the shape someone would actually write it: narrow the reporter to
+#      the pull requests it "has something to say about". That is the deadlock, exactly.
+M3="github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'renovate/')"
+mutate_expect "$M3" "$C_PR_PLAIN"        SKIP "narrowing kit-bump-shape's if: by head ref stops it reporting on a human PR — #1508's permanent 'Expected — waiting for status' deadlock"
+mutate_expect "$M3" "$C_PR_RENOVATE"     RUN  "...and that mutant is still green on a bump PR, which is why only the non-bump rows catch it"
+# M4 — dropping `!cancelled()` from bump-mechanical, which is the #1815 inversion the job's own
+#      header calls out. Driven on the term rather than argued about.
+M4="github.event_name == 'pull_request'"
+mutate_expect "$M4" "$C_PR_CANCELLED"    RUN  "dropping !cancelled() from kit-bump-mechanical makes it report on a cancelled run"
+
+# =================================================================================================
+# .github#1845 — AND WHAT THE ON-DEMAND ARM IS ALLOWED TO WRITE.
+#
+# The `if:` above decides only that the job RUNS. What it may WRITE is decided by the `plan` step,
+# and the whole `main` answer is four lines of it: a materialize WRITES, so it is a repair and not a
+# check, and `kit / coordination-kit` is a required context precisely so the kit's bytes are graded
+# BEFORE they reach the default branch. A repair pushed straight to `main` would bypass the gate
+# whose red caused it. So the repair goes to a branch, and the default branch is never written.
+#
+# THE GUARD IS EXTRACTED AND DRIVEN, NEVER RESTATED (ADR-0058, and the #1797 legs' own lesson).
+# =================================================================================================
+echo
+plan="$(python3 - "$WF" <<'PY'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'^([ \t]*)case "\$EVENT" in\n.*?^\1esac$', src, re.S | re.M)
+if not m:
+    sys.stderr.write("could not locate the plan step's EVENT case\n"); sys.exit(1)
+ind = m.group(1)
+print("\n".join(l[len(ind):] if l.startswith(ind) else l for l in m.group(0).splitlines()))
+PY
+)" || plan=""
+
+if [ -z "$plan" ]; then
+  bad "#1845: NOT MEASURED — could not extract the plan step's EVENT case from kit-materialize.yml, so nothing below ran and that is not a verdict about what the on-demand arm writes"
+else
+  ok "#1845: the plan step's write-decision was extracted from the workflow and is what the legs below run"
+
+  # drive <event> <pr-head> <dispatch-ref> <default-branch> [plan-source]
+  #   -> "<checkout-ref>|<push-target>|<in-place>" or "REFUSED"
+  # `refuse` is stubbed so the driver sees the refusal rather than a summary file; everything else is
+  # the workflow's own text, run by the same bash Actions runs a shell-less `run:` block as.
+  drive_plan() {
+    local src="${5:-$plan}" out rc=0
+    out="$(GITHUB_OUTPUT="$WORK/plan.out" \
+      EVENT="$1" PR_HEAD="$2" DISPATCH_REF="$3" DEFAULT_BRANCH="$4" RUN_ID="4242" \
+      bash -c '
+        set -uo pipefail
+        : > "$GITHUB_OUTPUT"
+        refuse() { echo "REFUSED"; exit 9; }
+        '"$src"'
+      ' 2>/dev/null)" || rc=$?
+    if [ "$rc" = 9 ] || [ "$out" = "REFUSED" ]; then echo "REFUSED"; return; fi
+    [ "$rc" = 0 ] || { echo "BROKEN($rc)"; return; }
+    local co pt ip
+    co="$(sed -n 's/^checkout-ref=//p' "$WORK/plan.out")"
+    pt="$(sed -n 's/^push-target=//p'  "$WORK/plan.out")"
+    ip="$(sed -n 's/^in-place=//p'     "$WORK/plan.out")"
+    echo "$co|$pt|$ip"
+  }
+
+  # 1. THE CONTROL AGAIN, on the write side: a bump PR still materializes onto its own head in place.
+  got="$(drive_plan pull_request 'renovate/fs.gg.kit-0.x' '' main)"
+  if [ "$got" = "renovate/fs.gg.kit-0.x|renovate/fs.gg.kit-0.x|true" ]; then
+    ok "#1845: a bump PR still pushes to its own head in place (the CONTROL — unchanged by #1845)"
+  else
+    bad "#1845: the pull_request arm's write plan changed — got '$got', want 'renovate/fs.gg.kit-0.x|renovate/fs.gg.kit-0.x|true'"
+  fi
+
+  # 2. THE HEADLINE ON THE WRITE SIDE. Dispatched on the DEFAULT branch: the repair goes elsewhere.
+  got="$(drive_plan workflow_dispatch '' main main)"
+  case "$got" in
+    "main|kit-materialize/repair-4242|false")
+      ok "#1845: dispatched on the DEFAULT branch, the push target is a NEW repair branch and the default branch is not written" ;;
+    "main|main|"*)
+      bad "#1845: dispatched on the default branch, the plan targets \`main\` ITSELF — a materialize WRITES, so this would push an ungraded repair past the very gate that detected the drift" ;;
+    *)
+      bad "#1845: dispatched on the default branch, the write plan is '$got', want 'main|kit-materialize/repair-4242|false'" ;;
+  esac
+
+  # 3. Any OTHER branch is repaired in place — that is the useful case and it must not be routed
+  #    through a repair branch nobody wants to merge into their own feature branch.
+  got="$(drive_plan workflow_dispatch '' fix/kit-drift main)"
+  if [ "$got" = "fix/kit-drift|fix/kit-drift|true" ]; then
+    ok "#1845: dispatched on a non-default branch, the repair is pushed in place"
+  else
+    bad "#1845: dispatched on a non-default branch, the write plan is '$got', want 'fix/kit-drift|fix/kit-drift|true'"
+  fi
+
+  # 4. THE DEFAULT BRANCH IS READ, NEVER ASSUMED. `main` is hardcoded nowhere: a receiver whose
+  #    default branch is `trunk` must get the repair-branch arm on `trunk`, and the plain string
+  #    `main` must get the in-place arm there.
+  got="$(drive_plan workflow_dispatch '' trunk trunk)"
+  case "$got" in
+    "trunk|kit-materialize/repair-4242|false") ok "#1845: the default branch is read from the event payload — a receiver defaulting to \`trunk\` gets the repair-branch arm on \`trunk\`" ;;
+    *) bad "#1845: a receiver whose default branch is \`trunk\` got '$got' — \`main\` is being assumed somewhere" ;;
+  esac
+  got="$(drive_plan workflow_dispatch '' main trunk)"
+  case "$got" in
+    "main|main|true") ok "#1845: ...and \`main\` in such a repo is an ordinary branch, repaired in place" ;;
+    *) bad "#1845: \`main\` in a trunk-default repo got '$got', want in-place — the branch NAME is not what decides this" ;;
+  esac
+
+  # 5. AN UNREADABLE DEFAULT BRANCH IS A REFUSAL, NOT A GUESS. This is the #266 arm and it is the one
+  #    a "simplification" removes first: with no `default_branch` in the payload, `main != ''` is
+  #    true, the else-arm fires, and the job pushes the repair straight to the branch it must never
+  #    write — while its log says it checked. M5 below proves this leg fires.
+  got="$(drive_plan workflow_dispatch '' main '')"
+  if [ "$got" = "REFUSED" ]; then
+    ok "#1845: an empty repository.default_branch is REFUSED — the job never assumes the dispatched ref is not the default branch"
+  else
+    bad "#1845: with no default_branch in the payload the plan is '$got' — it guessed, and the guess writes the one branch this job must not (#266)"
+  fi
+
+  # 6. Any other event is refused, so loosening the job's `if:` cannot silently reach an App-token
+  #    push from an event nobody reviewed.
+  for ev_name in push schedule pull_request_target repository_dispatch; do
+    got="$(drive_plan "$ev_name" 'renovate/x' main main)"
+    if [ "$got" = "REFUSED" ]; then
+      ok "#1845: a \`$ev_name\` event is REFUSED by the plan step, whatever the job's if: says"
+    else
+      bad "#1845: a \`$ev_name\` event produced the write plan '$got' — an App-token push is reachable from an unreviewed event"
+    fi
+  done
+
+  # M5 — THE MUTATION FOR LEG 5, applied to the extracted source. Delete the default-branch guard —
+  #      the exact "this line looks redundant" edit — and the empty-payload drive must stop refusing.
+  plan_m5="$(printf '%s\n' "$plan" | grep -v 'DEFAULT_BRANCH" \] || refuse')"
+  if [ "$plan_m5" = "$plan" ]; then
+    bad "#1845 mutation M5: NOT MEASURED — the default-branch guard line was not found to remove, so leg 5 is not proven to fire"
+  else
+    got="$(drive_plan workflow_dispatch '' main '' "$plan_m5")"
+    if [ "$got" = "REFUSED" ]; then
+      bad "#1845 mutation M5: removing the default-branch guard changed nothing — leg 5 is NOT proven to fire and its green means nothing"
+    else
+      ok "#1845 mutation M5: removing the default-branch guard makes the empty-payload drive plan '$got' instead of REFUSED — leg 5 FIRES"
+    fi
+  fi
+
+  # M6 — and the mutation for leg 2, which is the item's whole subject: make the default-branch arm
+  #      push in place. The repair would land on `main` unreviewed and ungraded.
+  plan_m6="$(printf '%s\n' "$plan" | sed "s#printf 'push-target=kit-materialize/repair-%s\\\\n' \"\$RUN_ID\"#printf 'push-target=%s\\\\n' \"\$DISPATCH_REF\"#")"
+  if [ "$plan_m6" = "$plan" ]; then
+    bad "#1845 mutation M6: NOT MEASURED — the repair-branch line was not found to mutate, so leg 2 is not proven to fire"
+  else
+    got="$(drive_plan workflow_dispatch '' main main "$plan_m6")"
+    case "$got" in
+      "main|main|"*) ok "#1845 mutation M6: pointing the default-branch arm at the dispatched ref makes the plan '$got' — leg 2 FIRES" ;;
+      *)             bad "#1845 mutation M6: the mutant plans '$got', so leg 2 is NOT proven to fire" ;;
+    esac
   fi
 fi
 
