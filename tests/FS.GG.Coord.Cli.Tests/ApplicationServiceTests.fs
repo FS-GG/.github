@@ -145,11 +145,15 @@ module ApplicationServiceTests =
     /// A transport serving one board. `bodies` is issue number → issue body (its `Paths:` declaration),
     /// `holders` is issue number → the worker whose claim marker sits on it, and `sayFails` makes the
     /// courtesy-notice POST fail so the receipt's `notified:false` leg can be pinned.
-    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
-        let items =
+    let private worldWith (statusFor: int -> string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+        // THE ROWS ARE RENDERED PER REQUEST, not once at construction. `statusFor` is a function, and it is
+        // a function so that a fixture can make a column CHANGE BETWEEN TWO BOARD READS — which is the whole
+        // of .github#1740 cause 1, and is unrepresentable if the board answer is frozen when the world is
+        // built. Every existing caller passes a constant through `worldIn` and is unaffected.
+        let items () =
             bodies
             |> Map.toList
-            |> List.map (fun (n, _) -> boardItemIn status n $"item %d{n}")
+            |> List.map (fun (n, _) -> boardItemIn (statusFor n) n $"item %d{n}")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -171,7 +175,7 @@ module ApplicationServiceTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->
-                    match graphqlAnswer items document with
+                    match graphqlAnswer (items ()) document with
                     | Some answer -> ok answer
                     | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -200,6 +204,9 @@ module ApplicationServiceTests =
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+        worldWith (fun _ -> status) bodies holders sayFails
+
     let private world (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
         worldIn "In progress" bodies holders sayFails
 
@@ -221,8 +228,10 @@ module ApplicationServiceTests =
     /// cross-class parallelism, which is the same licence `FollowupsTests.withCache` runs on. A fresh
     /// directory per call also keeps the board scan and board map from leaking BETWEEN these legs, which
     /// matters: the OVERLAP legs serve a different board from the DISJOINT ones.
-    let private run (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
+    /// The same, against a cache root the CALLER owns — so two invocations can share one, which is what a
+    /// 90-second scan cache surviving between commands actually is (.github#1740). `run` below keeps the
+    /// throwaway-per-call behaviour every other leg here relies on.
+    let private runIn (dir: string) (transport: Fake.Recorder) (args: string list) : int * string =
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
@@ -279,6 +288,12 @@ module ApplicationServiceTests =
             for v, previous in previousIdentity do
                 Environment.SetEnvironmentVariable(v, previous)
 
+    let private run (transport: Fake.Recorder) (args: string list) : int * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
+
+        try
+            runIn dir transport args
+        finally
             try
                 Directory.Delete(dir, true)
             with _ ->
@@ -440,6 +455,147 @@ module ApplicationServiceTests =
 
         Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
         Assert.Equal(6, code)
+
+    // ---- .github#1740 — A LIVE CLAIM WHOSE `Status` COLUMN HAS NOT LANDED STILL RESERVES ---------------
+    //
+    // THE DEFECT THESE PIN, AND WHY IT IS WORSE THAN IT LOOKS. `activeCollisions` picked which claims to
+    // check by reading the board's `Status` COLUMN, so a claim whose MARKER was live but whose column had
+    // not landed reserved nothing at all — and the answer it produced was `DISJOINT`, which is the one
+    // verdict the touch-set protocol exists to make trustworthy. Measured live on 2026-07-28: two workers
+    // declared `src/FS.GG.Coord.Cli/Client.fs` 41 seconds apart, `widen` printed `DISJOINT` 53 seconds
+    // later, and the same check two hours on printed `OVERLAP`. Nothing about either declaration changed.
+    //
+    // WHY EVERY EXISTING OVERLAP LEG ABOVE IS BLIND TO THIS. They all run over `overlappingWorld`, whose
+    // rows are `In progress` — the column the broken filter selects on. A fixture that pre-sets the
+    // colliding row to the value under test cannot fail for the reason under test, so it never has.
+    //
+    // TWO CAUSES, TWO LEGS, AND THEY FAIL FOR DIFFERENT REASONS. The first is a STALE READ — the column had
+    // landed and the scan was served from the 90s scheduling cache. The second is a WRITE THAT HAS NOT
+    // HAPPENED — the column genuinely still reads `Ready` because the write is sitting in the deferral
+    // queue. No amount of freshness closes the second, and the queue closes none of the first.
+
+    /// #74 is ours. #75 holds a live claim on `src/Shared.fs` THROUGHOUT — only its board COLUMN moves.
+    let private laggingBodies =
+        Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ]
+
+    let private laggingHolders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
+
+    let private cacheDir () =
+        Path.Combine(Path.GetTempPath(), "fsgg-1740-" + Guid.NewGuid().ToString "n")
+
+    let private widenOnto (paths: string) =
+        [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; paths ]
+
+    [<Fact>]
+    let ``#1740 cause 1: a claim landing inside the scan-cache window still collides`` () =
+        let dir = cacheDir ()
+
+        // The column is a `ref` the TEST moves, not something the transport counts — a fixture that flipped
+        // on "the second board read" would be asserting a request count, and would keep passing if the
+        // request count changed for an unrelated reason.
+        let column = ref "Ready"
+
+        let world =
+            worldWith (fun n -> if n = 75 then column.Value else "In progress") laggingBodies laggingHolders false
+
+        try
+            // 1. A first command populates the scan cache while #75's claim has not yet reached the board.
+            let first, _ = runIn dir world (widenOnto "docs/unrelated.md")
+            Assert.Equal(0, first)
+
+            // 2. #75's `Status` write LANDS. Any read of the live board from here on sees `In progress`.
+            column.Value <- "In progress"
+
+            // 3. ...but the cached scan is only seconds old. On `Cache.Scheduling` this second command is
+            //    served that cached `Ready`, #75 never becomes a candidate, its marker is never read, and
+            //    the worker is told it may edit `src/Shared.fs`. THAT is the false DISJOINT.
+            let code, out = runIn dir world (widenOnto "src/Shared.fs")
+
+            let receipt = parsed out
+            Assert.Equal("overlap", str "verdict" receipt)
+
+            let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+            Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+            Assert.Equal("otter-9c21", str "worker" collision)
+            Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
+            Assert.Equal(6, code)
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    /// One line of the deferral queue, in `Cache.renderDeferred`'s own shape.
+    let private queuedStatusWrite (boardTitle: string) (field: string) (value: string) =
+        JsonSerializer.Serialize
+            {| ``ref`` = "FS-GG/FS.GG.SDD#75"
+               field = field
+               value = value
+               at = DateTimeOffset.UtcNow.ToString "o"
+               worker = "otter-9c21"
+               boardOwner = "FS-GG"
+               boardTitle = boardTitle |}
+        + "\n"
+
+    /// The AC3 fixture, LITERALLY: the board says `Ready` and it is not lying — the write has not happened.
+    ///
+    /// `queued` is the queue this run finds. It is a parameter because the NEGATIVE legs are what make this
+    /// an assertion about the deferral queue rather than about "some file existing in the cache dir".
+    let private runWithQueue (queued: string option) =
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+
+            match queued with
+            | Some line -> File.WriteAllText(Path.Combine(dir, "pending.jsonl"), line)
+            | None -> ()
+
+            runIn dir (worldIn "Ready" laggingBodies laggingHolders false) (widenOnto "src/Shared.fs")
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``#1740 cause 2: a live claim whose Status write is still QUEUED collides from a Ready column`` () =
+        let code, out = runWithQueue (Some(queuedStatusWrite "Coordination" "Status" "In progress"))
+
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+
+        let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+        Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+        Assert.Equal("otter-9c21", str "worker" collision)
+        Assert.Equal(6, code)
+
+    // THE NEGATIVE LEGS. Without these, "read the queue" could be satisfied by treating ANY queued entry —
+    // or any non-empty queue file — as a claim, and the positive leg above would not notice. Each of these
+    // is the SAME board, the SAME row and the SAME live marker; only the queue entry differs, and each must
+    // fall back to the column, which says `Ready`.
+    [<Theory>]
+    // No queue at all: the honest DISJOINT this verb must still be able to give.
+    [<InlineData("", "", "")>]
+    // A write to a DIFFERENT FIELD says nothing about who holds the lock.
+    [<InlineData("Coordination", "Class", "defect")>]
+    // A `Status` write moving the row somewhere that is not a claim.
+    [<InlineData("Coordination", "Status", "Done")>]
+    // #882 — queued against ANOTHER BOARD. `flush` refuses to resolve it here; so must this.
+    [<InlineData("Other Board", "Status", "In progress")>]
+    let ``#1740: the queue leg reserves nothing on an entry that is not a live claim on THIS board``
+        (boardTitle: string, field: string, value: string)
+        =
+        let queued =
+            if boardTitle = "" then
+                None
+            else
+                Some(queuedStatusWrite boardTitle field value)
+
+        let code, out = runWithQueue queued
+
+        Assert.Equal("disjoint", str "verdict" (parsed out))
+        Assert.Equal(0, code)
 
     // ---- .github#1524 — `reconcile --apply --json` is ONE document -----------------------------------
     //

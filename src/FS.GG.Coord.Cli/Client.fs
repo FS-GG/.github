@@ -3488,11 +3488,101 @@ module Client =
 
     let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
 
+    /// The refs whose `Status` → `In progress` board write is QUEUED against THIS board but not yet
+    /// replayed (.github#1740 cause 2), lower-cased as `owner/repo#number` — `Board.boardWrite`'s own key.
+    ///
+    /// **THIS COSTS NOTHING.** The deferral queue is a single local file shared by every worker on the
+    /// machine (`Board.fsi`, #862), so another worker's un-replayed claim is readable without an API call.
+    ///
+    /// AN UNREADABLE QUEUE PROPAGATES AS AN ERROR — this module's existing doctrine, not a new severity: "a
+    /// claim we could not check is never a silent DISJOINT" (#461), and #523 has `widen` REFUSE on an
+    /// unreadable scan rather than land an unverified declaration. A queue we could not read is not an
+    /// empty queue (#266); reporting DISJOINT over it would assert there are no deferred claims on the
+    /// strength of not having been able to look.
+    let private deferredInProgress (ctx: Context) : Errors.IoResult<Set<string>> =
+        match Cache.pending () with
+        | Error e -> Error e
+        | Ok entries ->
+            entries
+            |> List.filter (fun d ->
+                String.Equals(d.Field, "Status", StringComparison.OrdinalIgnoreCase)
+                && String.Equals(d.Value, "In progress", StringComparison.OrdinalIgnoreCase)
+                // #882 — an entry queued against ANOTHER board says nothing about this one. A pre-#882
+                // entry recorded no board and is honoured here, exactly as `flush` honours it.
+                && (match d.Board with
+                    | None -> true
+                    | Some queuedAgainst -> Cache.sameBoard queuedAgainst (ctx.Owner, ctx.Title)))
+            |> List.map (fun d -> d.Ref.ToLowerInvariant())
+            |> Set.ofList
+            |> Ok
+
     /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
     /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
     /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
     /// another repo names a different file, so it is never a collision and its holder is never named. A
     /// claim we could not read propagates as an Error: a claim we could not check is never a silent DISJOINT.
+    ///
+    /// ---- THE FRESHNESS WARRANT, FOR **THIS** CONSUMER (.github#1740) ----------------------------------
+    ///
+    /// `heldElsewhere` rides `Cache.Scheduling` and STATES a warrant that holds: its subject is OUR OWN
+    /// claims, a stale set can only miss our own very recent second claim, and the item's own CAS still
+    /// decides. `Cache.fsi`'s rule — *"staleness costs a retry; it cannot cost a double-claim"* — is about
+    /// that CAS.
+    ///
+    /// **NONE OF IT TRANSFERS HERE, AND FOR TWELVE MONTHS THIS SCAN BORROWED IT WITHOUT SAYING SO.** This
+    /// consumer's subject is OTHER WORKERS' claims, and its output is the answer `/pnext-item` §3 tells a
+    /// worker to believe before editing a file. A miss here is a false `DISJOINT`, and **there is no CAS on
+    /// a file**: nothing downstream re-decides it, nothing detects it, and the cost is two workers editing
+    /// one file for as long as they both work. Measured on 2026-07-28: `wren-ac8f` claimed `.github#1646`
+    /// declaring `Client.fs` at 07:35:47Z, `osprey-3069` claimed `.github#1679` declaring the same file 41
+    /// seconds later, and the `widen` 53 seconds after THAT printed `DISJOINT`. Two hours later the
+    /// identical check printed `OVERLAP`. Nothing about either declaration had changed. Staleness on this
+    /// consumer costs a double-EDIT, which the item CAS knows nothing about.
+    ///
+    /// So the scan reads `Cache.Reconciling` — FRESH, every time, exactly as `Cache.fsi` has always said
+    /// `overlap --active` does; the code simply did not. `widen`/`set-paths` join it there, because they
+    /// share this scan and a verdict is not safer for being reached through a different verb.
+    ///
+    /// **THE COST IS PAID KNOWINGLY, AND IT WAS MEASURED RATHER THAN ESTIMATED** (#1086 got this same trade
+    /// wrong by an order of magnitude by estimating; #1740 required the number before the change landed).
+    /// Measured on the live Coordination board, 2026-07-28, by reading `budget` either side of a single
+    /// `overlap --active` — `budget` itself moves the counter by 0, so the whole delta is the scan:
+    ///
+    ///   | | GraphQL points per call, of 5,000/hr |
+    ///   |---|---|
+    ///   | BEFORE — `Cache.Scheduling`, warm 90s cache | **0–4** |
+    ///   | AFTER  — `Cache.Reconciling`, always fresh  | **19–25** (four runs: 19, 23, 25, 25) |
+    ///
+    /// So this costs about **+21 points a call, ~0.5% of the fleet's hourly budget** — headroom for roughly
+    /// 200 calls an hour across every worker. `widen`/`set-paths`/`overlap --active` are run a handful of
+    /// times per ITEM, not in a poll: that is not the shape of #418 (five workers LOOPING `take`, draining
+    /// 5,000/hr in fifteen minutes) and not the shape of #1666 (a fleet-wide false `EX_RATE` stop). If that
+    /// headroom ever stops being comfortable, the fix is to make the SCAN cheaper, not to go back to
+    /// deciding who may edit a file from a cached column.
+    ///
+    /// And it is partly paid back in kind: a fresh scan WRITES the cache (`Scan.scanFresh` → `putScan`), so
+    /// each call leaves a fresh board behind it for the next ninety seconds of `take`s.
+    ///
+    /// ---- AND FRESHNESS ALONE IS NOT ENOUGH (.github#1740 cause 2) -------------------------------------
+    ///
+    /// A `Status` write can be DEFERRED independently of any cache: `claim` exits GREEN with
+    /// `converged:false` when the marker landed and the column did not, and on an exhausted budget the
+    /// write is QUEUED with nothing to replay it until somebody runs `flush`. The freshest possible board
+    /// read still shows that row in its PRE-CLAIM column, so selecting candidates by the column alone
+    /// misses a live claim no matter how fresh the read is.
+    ///
+    /// The deferral queue is a SINGLE FILE SHARED BY EVERY WORKER ON THE MACHINE (`Board.fsi`, #862), so
+    /// another worker's un-replayed claim is readable right here — for **zero API calls**, because it is a
+    /// local file. Those rows are unioned into the candidate set below.
+    ///
+    /// **WHAT REMAINS OPEN, NAMED RATHER THAN GLOSSED (#266).** A `Status` write that failed PERMANENTLY
+    /// (`statusWrite:"failed"`) is never queued — by #510's design, since replaying it forever is a promise
+    /// nobody can keep — and one that reports `"not-on-board"` has no board row to select at all. Neither
+    /// is visible to any column-derived or queue-derived candidate set, so a live claim in either state is
+    /// still missed here. Closing that needs the candidate set keyed on the MARKER rather than the column,
+    /// which costs one REST marker read per open row in the repo — measured at ~74 rows on this board, i.e.
+    /// ~74 requests per `widen` against a 5,000/hr REST budget, or fleet exhaustion after ~67 calls. That
+    /// is the #1666 shape, and it is why this scan does not do it. Tracked in `.github#1779`.
     let private activeCollisions
         (ctx: Context)
         (opts: Options)
@@ -3502,38 +3592,49 @@ module Client =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> Error e
         | Ok board ->
-            match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
+            match deferredInProgress ctx with
             | Error e -> Error e
-            | Ok rows ->
-                // SAME REPO, in flight, not this item, not a PR — the repo scope IS the #353 fix.
-                let candidates =
-                    rows
-                    |> List.filter (fun r ->
-                        not r.IsPullRequest
-                        && r.Status = InProgress
-                        && r.Ref.Number <> ref.Number
-                        && sameRepo r.Ref ref)
+            | Ok deferred ->
+                let claimPending (r: Ref) =
+                    Set.contains ($"%s{r.Owner}/%s{r.Repo}#%d{r.Number}".ToLowerInvariant()) deferred
 
-                // Only a LIVE claim reserves anything (`winner` applies the lease); read its touch-set and
-                // compare. A read that fails propagates — a claim we could not check is never a silent DISJOINT.
-                let rec scan acc rows =
-                    match rows with
-                    | [] -> Ok(List.rev acc)
-                    | (row: Scan.Row) :: rest ->
-                        match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                        | Error e -> Error e
-                        | Ok markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | None -> scan acc rest
-                            | Some m ->
-                                match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                                | Error e -> Error e
-                                | Ok body ->
-                                    match TouchSet.conflicts ts (TouchSet.parse body) with
-                                    | [] -> scan acc rest
-                                    | pairs -> scan ((row.Ref, m.Worker.Value, sharedTokens pairs) :: acc) rest
+                match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                | Error e -> Error e
+                | Ok rows ->
+                    // SAME REPO, in flight, not this item, not a PR — the repo scope IS the #353 fix.
+                    //
+                    // "In flight" is the COLUMN **or** a queued write that will make it the column. Selecting
+                    // on the column alone is #1740: it reads a PROJECTION to decide whether a LOCK is held,
+                    // and the projection is allowed to lag the lock by design.
+                    let candidates =
+                        rows
+                        |> List.filter (fun r ->
+                            not r.IsPullRequest
+                            && (r.Status = InProgress || claimPending r.Ref)
+                            && r.Ref.Number <> ref.Number
+                            && sameRepo r.Ref ref)
 
-                scan [] candidates
+                    // Only a LIVE claim reserves anything (`winner` applies the lease); read its touch-set
+                    // and compare. A read that fails propagates — a claim we could not check is never a
+                    // silent DISJOINT.
+                    let rec scan acc rows =
+                        match rows with
+                        | [] -> Ok(List.rev acc)
+                        | (row: Scan.Row) :: rest ->
+                            match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                            | Error e -> Error e
+                            | Ok markers ->
+                                match Reads.winner opts.LeaseMinutes markers with
+                                | None -> scan acc rest
+                                | Some m ->
+                                    match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                    | Error e -> Error e
+                                    | Ok body ->
+                                        match TouchSet.conflicts ts (TouchSet.parse body) with
+                                        | [] -> scan acc rest
+                                        | pairs -> scan ((row.Ref, m.Worker.Value, sharedTokens pairs) :: acc) rest
+
+                    scan [] candidates
 
 
     type private PathUpdate =
@@ -3625,6 +3726,24 @@ module Client =
                                     ExitError
                                 | Ok proposed ->
                                     let rewritten = Writes.rewrite body proposed
+
+                                    // #1740 AC5 — IS THIS UPDATE A NARROWING? A token-subset of the prior
+                                    // declaration can only ever name FEWER files, so it is provably incapable
+                                    // of introducing a collision: whatever the scan below finds was ALREADY
+                                    // there before this command ran. (The implication runs one way only — a
+                                    // narrowing need not be a token-subset, e.g. `src/**` → `src/A.fs`. So
+                                    // this is a sound test for "provably pre-existing", never a claim that
+                                    // anything else INTRODUCED one.)
+                                    //
+                                    // It exists because the sentence below used to assert causation it had
+                                    // not established, and that cost real time: the worker who filed #1740
+                                    // narrowed a touch-set back to its original declaration, was told the
+                                    // update "introduced a collision", and went looking for a mistake in the
+                                    // narrowing — when the collision belonged to a claim that predated it.
+                                    let priorTokens = declaredPathTokens (TouchSet.parse body)
+
+                                    let isNarrowing =
+                                        proposed.Tokens |> List.forall (fun t -> List.contains t priorTokens)
 
                                     // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
                                     // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
@@ -3740,7 +3859,13 @@ module Client =
                                                                   Notified = true
                                                                   NotifyError = None } ]
 
-                                                eprint "fsgg-coord-engine: the path update introduced a collision — do NOT keep editing the shared paths until it is resolved."
+                                                // #1740 AC5 — NAME WHAT WE KNOW, AND NOTHING MORE. Neither
+                                                // sentence says "introduced" unless that has been shown; on a
+                                                // narrowing we can prove the opposite, so we say THAT.
+                                                if isNarrowing then
+                                                    eprint $"fsgg-coord-engine: this %s{verb} NARROWED the touch-set, so it cannot have introduced the collision — a subset names fewer files. The overlap was ALREADY there, and belongs to a claim that predates this command. Do NOT keep editing the shared paths until it is resolved."
+                                                else
+                                                    eprint "fsgg-coord-engine: the updated touch-set COLLIDES with a live claim (this command may or may not be what introduced it) — do NOT keep editing the shared paths until it is resolved."
 
                                                 // The OVERLAP detail is IN the object, not beside it on stderr — that
                                                 // split is the half of this defect a machine consumer could not work

@@ -520,6 +520,75 @@ sleep 0.5
 
 rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
 
+# ---- .github#1740: a live claim whose `Status` write DEFERRED still reserves its touch-set -----------
+#
+# THE DEFECT, CONSTRUCTED RATHER THAN WAITED FOR. `activeCollisions` picked which claims to check by
+# reading the board's `Status` COLUMN, so a claim whose MARKER was live but whose column had not landed
+# reserved nothing — and answered `DISJOINT`, the one verdict the touch-set protocol exists to make
+# trustworthy. Measured live on 2026-07-28: two workers declared `src/FS.GG.Coord.Cli/Client.fs` 41
+# seconds apart and `widen` said DISJOINT 53 seconds later.
+#
+# WHY THIS LEG AND NOT A TIMING TEST. The failure is a race, and a race reproduced by sleeping is a test
+# that passes when the timing happens to work. The fixture's `defer-next-field-write` makes the state
+# DETERMINISTIC: `claim` posts its marker, its `Status` write meets an exhausted budget, and the column
+# is left at `Ready` — permanently, until somebody runs `flush`. That is not a simulation of the bug's
+# state, it is the bug's state, reached the way production reaches it.
+#
+# THE UNIT LEGS COVER THE CACHE HALF (this script runs with FSGG_COORD_SCAN_TTL_SEC=0, so there is no
+# stale scan here to have). This covers the half no amount of freshness can reach.
+
+# #43 leaves vole-418's hands declaring the SAME path #44 declares, and parked in a NON-claim column.
+"$ENGINE" set-paths FS.GG.SDD#43 --worker vole-418 --paths 'src/Verify/**' >/dev/null 2>&1
+"$ENGINE" release FS.GG.SDD#43 --worker vole-418 --status Ready >/dev/null 2>&1
+
+# ARM, then claim: the marker lands, the column write does not.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null
+cl="$("$ENGINE" claim FS.GG.SDD#43 --worker otter-777 --json 2>&1)"; clrc=$?
+sw="$(printf '%s' "$cl" | jq -r '.statusWrite' 2>/dev/null)"
+
+# THE PRECONDITION IS ITSELF AN ASSERTION, and it is read off the BOARD rather than off the receipt. If
+# the claim converged, the state under test was never built and everything below would be measuring the
+# ordinary `In progress` path — passing for the wrong reason. This is AC3's fixture stated literally: the
+# row still reads `Ready`, and it is not lying, because the write genuinely has not happened.
+col43="$("$ENGINE" ready --repo FS.GG.SDD --worker vole-418 2>/dev/null | jq -r '.[] | select(.number==43) | .status')"
+[ "$clrc" -eq 0 ] && [ "$sw" = "deferred" ] && [ "$col43" = "Ready" ] \
+  && ok "#1740: the fixture built the state — marker live, Status write DEFERRED, board row still reads '$col43'" \
+  || bad "#1740: build a live claim whose Status column has not landed" "rc=$clrc statusWrite=$sw column=$col43: $cl"
+
+# THE ASSERTION. #44 declares `src/Verify/**`; #43 now declares it too and is HELD by otter-777. The
+# column says `Ready` and is not lying — the write genuinely has not happened.
+ov="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovrc=$?
+[ "$ovrc" -eq 6 ] && printf '%s' "$ov" | grep -q 'OVERLAP' && printf '%s' "$ov" | grep -q 'otter-777' \
+  && ok "#1740: a live claim whose Status column has NOT landed still COLLIDES (no false DISJOINT)" \
+  || bad "#1740: the collision scan sees a claim the board column does not" "rc=$ovrc: $ov"
+
+# THE CONTROL, AND WITHOUT IT THE LEG ABOVE PROVES NOTHING. Same board, same live marker, same column —
+# only the DEFERRAL QUEUE is taken away (a fresh cache root has none). The reservation must vanish with
+# it. If this also said OVERLAP, the leg above would be passing on something other than the queue, and
+# five checks that could not fail were found in this codebase on 2026-07-28 alone.
+EMPTY_CACHE="$(mktemp -d)"
+ovc="$(FSGG_COORD_CACHE="$EMPTY_CACHE" "$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovcrc=$?
+rm -rf "$EMPTY_CACHE"
+[ "$ovcrc" -eq 0 ] && printf '%s' "$ovc" | grep -q 'DISJOINT' \
+  && ok "#1740: control — with the deferral queue removed the same state reads DISJOINT (the queue IS the evidence)" \
+  || bad "#1740: control must show the queue is what carries the reservation" "rc=$ovcrc: $ovc"
+
+# ---- .github#1740 AC5: a NARROWING is never reported as having INTRODUCED a collision ----------------
+# A token-subset names strictly fewer files, so it cannot introduce a collision — whatever the scan finds
+# predates the command. Saying "the path update introduced a collision" over one sent the worker who filed
+# #1740 looking for a mistake in their own narrowing instead of at the claim that was already there.
+"$ENGINE" claim FS.GG.SDD#44 --worker vole-418 >/dev/null 2>&1
+"$ENGINE" widen FS.GG.SDD#43 --worker otter-777 --paths 'docs/**' >/dev/null 2>&1
+nr="$("$ENGINE" set-paths FS.GG.SDD#43 --worker otter-777 --paths 'src/Verify/**' 2>&1)"; nrrc=$?
+if [ "$nrrc" -eq 6 ] \
+   && printf '%s' "$nr" | grep -qi 'NARROWED' \
+   && printf '%s' "$nr" | grep -qi 'cannot have introduced' \
+   && ! printf '%s' "$nr" | grep -q 'update introduced a collision'; then
+  ok "#1740 AC5: a narrowing that collides is reported as PRE-EXISTING, not as introduced"
+else
+  bad "#1740 AC5: a narrowing must not be blamed for a collision it cannot have caused" "rc=$nrrc: $nr"
+fi
+
 # ---- report ----------------------------------------------------------------------------------------
 echo
 echo "coord-engine writes: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
