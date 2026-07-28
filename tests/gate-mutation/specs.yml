@@ -1,0 +1,399 @@
+# The mutation corpus for .github#1810 — the ELEVEN selftests among #1582's 30 never-red gates.
+#
+# WHY THESE ELEVEN, AND WHY FIRST. `#1582` found 30 workflows across eight FS-GG repos that have run
+# ten or more times and never once been red. Eleven of them are `*-selftest.yml` — the NEGATIVE
+# CONTROLS that make the other gates' greens mean something. A negative control that has never fired
+# is the emptiest possible artefact, and two of the ten dead checks found on 2026-07-27/28 were
+# exactly that: `#1715`'s union gate (invariants that became tautologies on a half-view) and
+# `FS.GG.Audio#212`'s alarm (`[[ ! -e ]]` follows symlinks, so the dangling-symlink lane was
+# unreachable). `#1810` AC5 adjudicates them first for that reason, and all eleven live in `.github`.
+#
+# THE SHAPE OF EVERY LEG. A selftest's SUBJECT is the gate it is the control for. So each leg breaks a
+# real protection in that GATE and requires the SELFTEST to say so:
+#
+#     target:  the gate           (.github/workflows/*.yml, scripts/*, src/FS.GG.Kit/*)
+#     command: the selftest       (bash tests/*/run.sh — the uniform interface all ~17 fixtures share)
+#     anchor:  the selftest's own `<n> passed, <m> failed` tally
+#
+# THE ANCHOR IS THE FIXTURE'S, NEVER THE GATE'S, and that is specification point 3 (`#1794`): the
+# tally is printed by `tests/*/run.sh`, which no mutation here touches, so mutating the gate cannot
+# delete the evidence that the gate was exercised. `scripts/lib/mutation.py` REFUSES a spec that gets
+# this wrong at load time, and re-hashes the producer either side of the edit at run time.
+#
+# EVERY MUTATION IS SEMANTIC, NOT SYNTACTIC. A mutation that makes the fixture die at startup proves
+# nothing — it exits non-zero having measured nothing, which is `#1582`'s eleven import deaths and
+# `#1812`'s crash/finding asymmetry. Each `find` below inverts or neuters a DECISIVE PREDICATE and
+# leaves the file runnable, so the fixture reaches its tally and reports `m > 0` failed assertions.
+#
+# WAVE 2 (legs 12-17) ADJUDICATES SIX PLAIN GATES, not selftests. Their shape is one level down: the
+# gate is a `scripts/check-*.py` (or `scripts/lib/gate.py`), the fixture is the `tests/*/run.sh` that
+# the SAME workflow runs as its first job — `permission-coherence.yml` calls its fixture "Offline, and
+# first: prove the gate can still say NO before believing it when it says yes." So a mutation caught
+# by the fixture is a demonstration that the WORKFLOW can go red, which is precisely #1582's question.
+#
+# ADDING A LEG: `find` must occur EXACTLY `occurrences` times (default 1) — verify it, do not guess;
+# an unmatched `find` grades NOT_MEASURED, which is honest but is not a measurement. And check how
+# many tally lines the fixture prints: `tests/skill-union/run.sh` prints four and
+# `tests/sparse-checkout-closure/run.sh` two, so a bare `\d+ passed, \d+ failed` anchors the wrong one.
+
+mutations:
+  # ---------------------------------------------------------------------------------------------
+  # 1. touch-set-drift-selftest.yml — 300 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # NOT the `--warn` flag: the fixture's extractor `sys.exit`s on a missing `--warn` BEFORE printing a
+  # tally, so that mutation would be graded NOT_MEASURED however healthy the gate is. Mutating a
+  # verdict-classifying arm instead keeps the run alive to its tally.
+  - id: touch-set-drift/invalid-arm-misclassifies
+    gate: touch-set-drift-selftest.yml
+    command: ["bash", "tests/touch-set-drift/run.sh"]
+    target: .github/workflows/touch-set-drift.yml
+    find: |-
+      elif grep -q 'FSGG-PATHS INVALID' drift.txt; then verdict=invalid
+    replace: |-
+      elif grep -q 'FSGG-PATHS INVALID' drift.txt; then verdict=ok
+    breaks: >-
+      an unmatchable `Paths:` declaration (.github#273 — a touch-set that reserved nothing) is
+      reclassified as a clean pass and rendered with the comment step's green else-branch
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/touch-set-drift/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 2. test-selector-selftest.yml — 725 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: test-selector/negated-paths-accepted
+    gate: test-selector-selftest.yml
+    command: ["bash", "tests/test-selector/run.sh"]
+    target: scripts/test
+    find: |-
+      UNSUPPORTED = re.compile(r"[!\[\]+{}]")
+    replace: |-
+      UNSUPPORTED = re.compile(r"[\[\]+{}]")
+    breaks: >-
+      the selector stops refusing negated `paths:` patterns, so a filter that EXCLUDES a subtree is
+      silently mis-read as a literal-`!` pattern matching nothing — under-selection, fail-open (#266)
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/test-selector/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 3. sync-build-config-selftest.yml — 129 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: sync-build-config/hand-authored-guard-inverted
+    gate: sync-build-config-selftest.yml
+    command: ["bash", "tests/sync-build-config/run.sh"]
+    target: scripts/sync-build-config.sh
+    find: |-
+      && ! grep -q "$MARKER" "$dst"; then
+    replace: |-
+      && grep -q "$MARKER" "$dst"; then
+    breaks: >-
+      the #387 hand-authored-file guard inverts, so `apply` silently overwrites a receiver's
+      hand-authored Directory.Build.props instead of refusing it
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/sync-build-config/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 4. repos-audit-selftest.yml — 98 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # The slowest fixture in the corpus (~135 s per run, so ~4.5 min for the pair). The timeout is
+  # generous on purpose: a TIMEOUT grades NOT_MEASURED, and an unmeasured gate is the one outcome
+  # this whole exercise exists to stop accepting.
+  - id: repos-audit/uses-matcher-quoting-blind-spot
+    gate: repos-audit-selftest.yml
+    command: ["bash", "tests/repos-audit/run.sh"]
+    target: scripts/repos-audit.sh
+    find: |-
+      uses:[[:space:]]*[\"']?${AUTHORITY
+    replace: |-
+      uses:[[:space:]]*${AUTHORITY
+    breaks: >-
+      the `uses:` detector loses its optional-quote class, so a receiver writing a QUOTED reusable
+      workflow reference becomes a fabricated GAP and an undeclared adopter escapes the drift sweep
+    timeout: 1200
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/repos-audit/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 5. skill-union-selftest.yml — 83 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # This gate's own lane is the one #1715 found tautological on a half-view, so its control deserves
+  # the sharpest mutation available: re-create the #1506 fail-open for the commonest real shape.
+  - id: skill-union/two-root-skills-never-compared
+    gate: skill-union-selftest.yml
+    command: ["bash", "tests/skill-union/run.sh"]
+    target: scripts/skill-union-assert.sh
+    find: |-
+      if [ "${#present_roots[@]}" -ge 2 ]; then
+    replace: |-
+      if [ "${#present_roots[@]}" -ge 3 ]; then
+    breaks: >-
+      a skill present in exactly two of three roots is never byte-compared (#1506), so divergent
+      bytes the gate is holding go undiffed — and it evades the script's own non-vacuity guard
+    # THIS FIXTURE PRINTS FOUR TALLIES — `materializes-when conformance`, `SkillMirror conformance`,
+    # `skill current-truth`, and the authoritative `skill-union fixture`. The anchor must name the
+    # last one: a bare `\d+ passed, \d+ failed` matched the FIRST and graded a caught mutant
+    # NOT_MEASURED. That is the harness refusing to guess, and it is also why the tally a leg grades
+    # is now read out of the anchor's own match.
+    anchor:
+      pattern: 'skill-union fixture: \d+ passed, \d+ failed'
+      produced_by: tests/skill-union/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 6. new-sdd-workspace-selftest.yml — 60 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # The only compiled subject in the corpus: the fixture itself runs `dotnet build … -c Release` and
+  # drives the produced binary, so a textual mutation of Program.fs IS picked up — no extra build
+  # step here. Two Release builds plus ~45 short `dotnet` invocations, hence the long timeout.
+  - id: new-sdd-workspace/unknown-profile-accepted
+    gate: new-sdd-workspace-selftest.yml
+    command: ["bash", "tests/new-sdd-workspace/run.sh"]
+    target: scripts/NewSddWorkspace/Program.fs
+    find: |-
+      List.contains value knownProfiles
+    replace: |-
+      true
+    breaks: >-
+      the #388 closed-set validation of `--profile` is removed, so an unknown profile is accepted at
+      the CLI and only blows up late inside the `fsgg-sdd scaffold` child
+    timeout: 1200
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/new-sdd-workspace/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 7. lockfile-cold-selftest.yml — 53 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: lockfile-cold/regeneration-goes-warm
+    gate: lockfile-cold-selftest.yml
+    command: ["bash", "tests/lockfile-cold/run.sh"]
+    target: .github/workflows/lockfile-sync.yml
+    find: |-
+      NUGET_PACKAGES="$(mktemp -d)"
+    replace: |-
+      NUGET_PACKAGES="$HOME/.nuget/packages"
+    breaks: >-
+      regeneration no longer runs into a fresh global-packages folder, so --force-evaluate copies
+      contentHash out of a warm .nupkg.metadata and the workflow commits a lock file no fresh clone
+      can restore (ADR-0032 §5, #429)
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/lockfile-cold/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 8. dispatch-preflight-selftest.yml — 34 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # Same FILE as leg 7, a different REGION: this fixture extracts the `preflight` job, leg 7 the
+  # cold-regeneration step. The two mutations do not overlap, and each is applied and reverted
+  # independently — the harness restores in a `finally` and verifies the restore by hash.
+  - id: dispatch-preflight/app-key-emptiness-always-true
+    gate: dispatch-preflight-selftest.yml
+    command: ["bash", "tests/dispatch-preflight/run.sh"]
+    target: .github/workflows/lockfile-sync.yml
+    find: |-
+      [ "$HAS_APP_KEY" = 'true' ] || missing="$missing FSGG_DISPATCH_APP_PRIVATE_KEY"
+    replace: |-
+      [ "$HAS_APP_KEY" != '' ] || missing="$missing FSGG_DISPATCH_APP_PRIVATE_KEY"
+    breaks: >-
+      the private-key check becomes always-true (HAS_APP_KEY is the string "true" or "false", never
+      empty), so a repo that cannot see FSGG_DISPATCH_APP_PRIVATE_KEY reports as fully provisioned —
+      the #482 "required: true means PROVIDED, not NON-EMPTY" fail-open, restored
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/dispatch-preflight/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 9. required-context-coherence-selftest.yml — 29 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: required-contexts/negated-entry-ignored
+    gate: required-context-coherence-selftest.yml
+    command: ["bash", "tests/required-contexts/run.sh"]
+    target: scripts/check-required-contexts.py
+    find: |-
+      and not any(e.startswith("!") for e in entries)
+    replace: |-
+      and True
+    breaks: >-
+      a `paths:` list containing a negated entry is blessed as universal, so `["**", "!docs/**"]`
+      scores green in exactly the shape a receiver reaches for when told to widen its filter — the
+      #1508 deadlock, undetected
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/required-contexts/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 10. kit-package-selftest.yml — 23 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: kit-package/registry-read-fails-open
+    gate: kit-package-selftest.yml
+    command: ["bash", "tests/kit-package/run.sh"]
+    target: src/FS.GG.Kit/stage-kit.sh
+    find: |-
+      [ "$rc" -eq 0 ] || die "could not read the kit $4 from $REG (repos.sh exited $rc)"
+    replace: |-
+      [ "$rc" -eq 0 ] || echo "stage-kit: registry read returned $rc" >&2
+    breaks: >-
+      the fail-closed check on every `scripts/repos.sh kit` read is removed, so a dead registry
+      reader yields an EMPTY kit list instead of a refusal — the #1614 fail-open, reinstated at the
+      exact line that closed it
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/kit-package/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 11. lock-range-coherence-selftest.yml — 26 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: lock-range-coherence/version-comparison-neutered
+    gate: lock-range-coherence-selftest.yml
+    command: ["bash", "tests/lock-range-coherence/run.sh"]
+    target: scripts/check-lock-ranges.py
+    find: |-
+      if want != got:
+    replace: |-
+      if False:
+    breaks: >-
+      the gate's core comparison is neutered, so a lock range that disagrees with the referenced
+      project's declared <Version> is never recorded as stale — the un-regenerated release bump
+      (Game#128 / Audio 2c208f3) passes green again
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/lock-range-coherence/run.sh
+
+  # =============================================================================================
+  # WAVE 2 — six PLAIN gates (not selftests), highest retained run counts first
+  # =============================================================================================
+
+  # ---------------------------------------------------------------------------------------------
+  # 12. engine-flag-narrative.yml — 1092 runs, never red (the second-largest number in the repo)
+  # ---------------------------------------------------------------------------------------------
+  - id: engine-flag-narrative/allowlist-widened-to-all-docs
+    gate: engine-flag-narrative.yml
+    command: ["bash", "tests/engine-flag-narrative/run.sh"]
+    target: scripts/check-engine-flag-narrative.py
+    # The bare token `docs/adr/` occurs three times; the indented ALLOWED_PREFIXES entry occurs once.
+    find: |-
+          "docs/adr/",
+    replace: |-
+          "docs/",
+    # The `breaks:` sentence below deliberately does NOT spell the retired engine-selection flag:
+    # writing it in the present tense is the very defect this gate reds on, and it red on THIS FILE
+    # while the leg was being written (see the report — a live catch, not a mutation).
+    breaks: >-
+      the history allowlist widens from the immutable ADR directory to all of docs/, re-opening
+      #866/#910 tier two so a present-tense mention of the retired engine-selection flag in
+      docs/architecture.md is silently exempted
+    anchor:
+      pattern: 'engine-flag-narrative fixture: \d+ passed, \d+ failed'
+      produced_by: tests/engine-flag-narrative/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 13. permission-coherence.yml — 532 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # This workflow runs its fixture FIRST, and says why: "Offline, and first: prove the gate can still
+  # say NO before believing it when it says yes." This leg is that claim, measured.
+  - id: permission-coherence/write-no-longer-outranks-read
+    gate: permission-coherence.yml
+    command: ["bash", "tests/workflow-permissions/run.sh"]
+    target: scripts/check-workflow-permissions.py
+    find: |-
+      LEVELS = {"none": 0, "read": 1, "write": 2}
+    replace: |-
+      LEVELS = {"none": 0, "read": 1, "write": 1}
+    breaks: >-
+      the permission lattice collapses so `write` no longer outranks `read`, and a caller granting
+      only read to a callee that declares write is judged sufficient — a provable startup_failure
+      (#478) reported green
+    anchor:
+      pattern: '\d+ passed, \d+ failed'
+      produced_by: tests/workflow-permissions/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 14. recipe-pagination.yml — 345 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: recipe-pagination/sub-issues-endpoint-backstop-removed
+    gate: recipe-pagination.yml
+    command: ["bash", "tests/recipe-pagination/run.sh"]
+    target: scripts/check-recipe-pagination.py
+    # The bare token `sub_issues` occurs five times; this slice of the COLLECTIONS literal occurs once.
+    find: |-
+      "statuses", "sub_issues", "tags"
+    replace: |-
+      "statuses", "tags"
+    breaks: >-
+      `sub_issues` leaves the known-collection set, neutering the endpoint backstop so the flagship
+      #547 read (`gh api …/sub_issues` with no --jq at all) truncates at 30 unflagged
+    anchor:
+      pattern: 'recipe-pagination: \d+ passed, \d+ failed'
+      produced_by: tests/recipe-pagination/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 15. sparse-checkout-closure.yml — 94 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  - id: sparse-checkout-closure/anchoring-rule-unreachable
+    gate: sparse-checkout-closure.yml
+    command: ["bash", "tests/sparse-checkout-closure/run.sh"]
+    target: scripts/check-sparse-checkout-closure.py
+    find: |-
+              if not pattern.startswith("/"):
+    replace: |-
+              if cone and not pattern.startswith("/"):
+    breaks: >-
+      the anchoring rule is made unreachable — it sits inside `if not cone:`, so guarding it on `cone`
+      makes it dead code, and an unanchored `scripts/` matching a directory at ANY depth stops being
+      reported (#1510's shape)
+    # TWO tally lines: an embedded `sparse lib selftest: 63 passed, 0 failed` and the real one. The
+    # prefix disambiguates; a bare pattern would grade the wrong numbers.
+    anchor:
+      pattern: 'sparse-checkout-closure fixture: \d+ passed, \d+ failed'
+      produced_by: tests/sparse-checkout-closure/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 16. ignored-author-coherence.yml — 84 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # NO TALLY: this fixture ends `ignored-author-coherence fixture: OK` or `… : <n> FAILURE(S)` and
+  # counts nothing. Hence `terminal` — the anchor proves it reached the end, and only then is the
+  # exit code its verdict rather than a death.
+  - id: ignored-author-coherence/placeholder-goes-case-insensitive
+    gate: ignored-author-coherence.yml
+    command: ["bash", "tests/ignored-author-coherence/run.sh"]
+    target: scripts/check-ignored-author-coherence.py
+    find: |-
+      SLUG = r"[a-z0-9._-]+"
+    replace: |-
+      SLUG = r"[A-Za-z0-9._-]+"
+    breaks: >-
+      the app-slug placeholder stops being case-sensitive, so a RE-CASED gitIgnoredAuthors entry is
+      accepted as a match — and `Set.delete` is exact, so that entry parks every Renovate branch
+    discriminator: terminal
+    anchor:
+      pattern: 'ignored-author-coherence fixture: (OK|\d+ FAILURE\(S\))'
+      produced_by: tests/ignored-author-coherence/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 17. gate-harness.yml — 10 runs, never red (the shared harness every check-*.py will import)
+  # ---------------------------------------------------------------------------------------------
+  # Also tally-free. The mutation attacks the ONE invariant scripts/lib/gate.py exists for: a crash
+  # inside a gate must never surface as the FINDING code, because 1 means "the subject is broken".
+  - id: gate-harness/crash-reported-as-a-finding
+    gate: gate-harness.yml
+    command: ["bash", "tests/gate-harness/run.sh"]
+    target: scripts/lib/gate.py
+    # `return int(ExitCode.NO_VERDICT_PERMANENT)` occurs twice, so it is NOT the find; this is unique.
+    #
+    # DOUBLE-QUOTED, NOT A BLOCK SCALAR, AND THAT IS THE POINT. A `|-` block strips the common
+    # indentation, so the added line landed at column 0 and the mutant died of an IndentationError at
+    # import — exactly #1582's eleven import deaths. The harness graded it NOT_MEASURED rather than
+    # believing the non-zero exit, which is the anchor doing its job; the spec is what was wrong.
+    # Python replacements that ADD a line must carry their own indentation explicitly.
+    find: "traceback.print_exc()"
+    replace: "traceback.print_exc()\n        return int(ExitCode.FINDING)"
+    breaks: >-
+      a CRASH inside a gate is no longer converted into a no-verdict and surfaces as exit 1 — a bug in
+      the gate reported to CI as a confident finding about its subject, which is the single thing
+      scripts/lib/gate.py exists to make impossible (#266, #320)
+    discriminator: terminal
+    anchor:
+      pattern: 'gate-harness selftest (OK|FAILED)'
+      produced_by: tests/gate-harness/run.sh

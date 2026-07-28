@@ -1,0 +1,66 @@
+# Selftest for the anchor-checked mutation harness — scripts/lib/mutation.py (.github#1810, spec #1808).
+#
+# WHAT RUNS IN CI IS THE SELFTEST, NOT THE SWEEP, AND THAT IS DELIBERATE — the same split
+# gate-finding-history-selftest.yml makes, for the same reason. The sweep MUTATES the working tree:
+# it edits `scripts/check-*.py`, `.github/workflows/*.yml` and `src/FS.GG.Kit/stage-kit.sh` in place,
+# runs a fixture, and restores. That is correct on a disposable worker and wrong as a required
+# context — a cancelled job could in principle leave a mutated tree, and the sweep's honest runtime is
+# minutes (tests/repos-audit/run.sh alone is ~135 s per run, twice per leg). So the sweep is run on
+# demand (`scripts/gate-mutate.py`, or the workflow_dispatch below) and what is GATED is the only
+# thing that can be gated cheaply and honestly: the proof that the harness itself can fail.
+#
+# AND THAT PROOF IS THE POINT. This harness exists because 30 gates in this fleet have run ten or more
+# times without once going red (#1582), and because FOUR previous anchor checks — #1784, #1582, #1790,
+# #1794 — each shipped with a defect in the anchor. An audit of the audit fabric that cannot fail
+# would be the eleventh entry on the list it exists to prevent. tests/gate-mutation/selftest.py
+# demands every verdict the harness can return, including DECORATIVE, which is the only leg that
+# proves it can say NO at all; removing any one of the harness's five safeguards was MEASURED to red
+# it (see the report).
+#
+# THE FIXTURE IS OFFLINE AND CREDENTIAL-FREE: it builds synthetic gates in a tmpdir and never touches
+# the real tree. The corpus-validation step only LOADS tests/gate-mutation/specs.yml — it runs no
+# mutation — so a spec that could not yield a measurement (an anchor produced by the file the mutation
+# edits, #1794) is refused in seconds here rather than discovered mid-sweep.
+#
+# THE `paths:` FILTERS ARE PART OF THE GATE. The two lists are IDENTICAL on purpose — a push copy that
+# omits a pattern the pull_request copy has is exactly the drift check-paths-coherence.py exists to
+# catch, and #1519/#1520 are what it costs.
+name: gate-mutation-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/lib/mutation.py"
+      - "scripts/gate-mutate.py"
+      - "scripts/lib/gate.py"
+      - "tests/gate-mutation/**"
+      - ".github/workflows/gate-mutation-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/lib/mutation.py"
+      - "scripts/gate-mutate.py"
+      - "scripts/lib/gate.py"
+      - "tests/gate-mutation/**"
+      - ".github/workflows/gate-mutation-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-mutation-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    # Each leg spawns two short subprocess runs against a tmpdir; the whole file is seconds of Python.
+    # 10 minutes is headroom for a cold runner, not an expectation.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # load_specs parses YAML, so the shared bootstrap is the right dependency.
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the gate-mutation selftest
+        run: bash tests/gate-mutation/run.sh
