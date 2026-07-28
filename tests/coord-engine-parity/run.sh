@@ -34,6 +34,60 @@ PORT=""; for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -
 export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT" GITHUB_TOKEN=t
 export FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$CACHE" FSGG_COORD_SCAN_TTL_SEC=0
 
+# ---- 0. THE FIXTURE DECIDES WHICH WORKER IT IS (.github#1751) ------------------------------------
+# Every ambient input this corpus depends on is decided two lines up — API base, token, owner, project,
+# cache, scan TTL. The IDENTITY was the one it left to chance. `Identity.resolve` consults four variables
+# in order — `FSGG_WORKER`, then `CLAUDE_CODE_SESSION_ID` / `OPENCODE_SESSION_ID` / `FSGG_AGENT_SESSION_ID`
+# (+`FSGG_AGENT_HARNESS`) — and every one of them was inherited from whichever shell ran this script.
+#
+# That is not a small untidiness in the corpus whose entire job is to CERTIFY an engine. 121 assertions
+# below name a worker with `--worker <id>`, and since .github#1646 the lock verbs measure the named id
+# against the id THIS PROCESS derives for itself and refuse the disagreement over the named worker's live
+# marker. So the suite's verdict depended on a variable nobody in this file had an opinion about.
+# Measured on 79cc1ff, same checkout, same engine, the only difference being the caller's shell:
+#
+#     ladder exported (an agent shell)  →  593 assertion(s), 535 passed, 58 failed
+#     ladder unset (CI's condition)     →  593 assertion(s), 593 passed,  0 failed
+#
+# Two verdicts, neither of them wrong — the worst property a certifying harness can have. CI was green
+# only because GitHub Actions exports none of these, which is an accident nobody chose and nothing stated.
+# (The failure COUNT is not the fact to hold on to: it tracks how many legs happen to use a `--worker`
+# lock verb, so it moves whenever a case is added — .github#1740 recorded 58, .github#1779 recorded 63.
+# The stable property is the one asserted below, and the same-verdict-both-ways run in the PR.)
+#
+# So STATE it. This fixture is a caller that derives NOTHING and names itself with `--worker` on every
+# invocation — the human-operator case the flag exists for. Unset the WHOLE ladder, not just its second
+# rung: `FSGG_WORKER=""` on its own falls straight through to the session rungs, which is precisely the
+# false comfort #1646 found sitting under a comment claiming the opposite in `coord-engine-e2e/writes.sh`.
+# That file (and `ApplicationServiceTests.runIn`'s `identityVars`, in-process) is the worked precedent.
+#
+# The legs that deliberately BUILD an identity — the #419/#1031 twin block, case24(j) — set both halves
+# per invocation with `env … CLAUDE_CODE_SESSION_ID=<s> FSGG_WORKER=<w>`, so this scrub cannot reach
+# inside them. They are the ones that MEAN it, and they still mean it.
+unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGENT_HARNESS
+export FSGG_WORKER=""
+
+# ...AND THE STATEMENT IS ASSERTED, because a scrub nobody measures is a comment (#266). Under a shell
+# that exports no session id — CI's condition, and the condition under which this defect survived for
+# months — a scrub that had been DELETED looks exactly like one that worked. So the property is a leg,
+# and the leg is TWO-SIDED:
+#
+#   (a) the probe can SEE a derived identity when one exists. Without (a), (b) is a check that cannot
+#       fail — the shape that let a mutation harness report "1 leg fired" while its anchor had silently
+#       stopped matching (.github#1784). (a) sets the session itself, so it fires in CI too.
+#   (b) under THIS fixture's own environment, the engine derives no identity of its own.
+#
+# Together they cannot both pass vacuously, and (b) reds the instant the ladder leaks back in.
+idprobe="$(env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID -u FSGG_AGENT_HARNESS -u FSGG_WORKER \
+             CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064 "$ENGINE" whoami 2>&1)"; idprobe_rc=$?
+{ [ "$idprobe_rc" -eq 0 ] && printf '%s' "$idprobe" | grep -q '^worker: '; } \
+  && ok "#1751: the identity probe DETECTS a derived id when the ladder IS set — it is not a check that cannot fail" \
+  || bad "#1751: the identity probe must see a leaked session identity" "rc=$idprobe_rc: $idprobe"
+idself="$("$ENGINE" whoami 2>&1)"; idself_rc=$?
+{ [ "$idself_rc" -ne 0 ] && printf '%s' "$idself" | grep -q 'could not derive a worker id'; } \
+  && ok "#1751: ...and under THIS fixture's environment the engine derives NOTHING — the harness DECIDED, it did not inherit" \
+  || bad "#1751: the parity fixture must derive no identity of its own — the session ladder has leaked back in" "rc=$idself_rc: $idself"
+
 # ---- batch --json: the machine contract `take` consumes -------------------------------------------
 out="$("$ENGINE" batch --repo FS.GG.SDD --json 2>/dev/null)"; rc=$?
 golden='["FS.GG.SDD#70","FS.GG.SDD#74"]'
