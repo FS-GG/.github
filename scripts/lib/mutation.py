@@ -40,6 +40,31 @@ a failed assertion in the fixture's own tally, or the typed ``FINDING`` code fro
 WHAT THIS MODULE WILL NOT DO. It does not delete, disable or weaken anything. It returns a verdict;
 removal is a separate, human decision with its own justification (`#1810` AC3). "Mutating it was
 hard" is reported as :attr:`Verdict.NOT_MEASURED` with a reason — never as a licence to remove.
+
+TWO MUTATION KINDS, AND WHY THE SECOND ONE HAD TO EXIST (`.github#1830`, spec on `#1842`). Every leg
+`#1810` and `#1829` wrote is a counted textual substitution in a source file, because every gate they
+adjudicated is a ``scripts/check-*.py`` with a ``tests/*/run.sh`` beside it. The never-red gates
+OUTSIDE ``.github`` are not that shape. `FS.GG.Rendering/skill-view-check.yml` and the skill-root steps
+of `FS.GG.Net/gate.yml` assert something about the SHAPE OF THE TREE — that a generated view root
+resolves, and that every declared skill is visible THROUGH it — and the defects they exist to catch
+(`#1715`) are not edits to any file. They are an absent directory, a dangling symlink, a symlink
+checked out as a regular file, and a view that resolves but is INCOMPLETE. None of those is expressible
+as ``find``/``replace``, so a text-only harness returns ``NOT MEASURED`` for every leg against those
+gates, for a reason that is about the harness rather than about the gate — and `#266` forbids reading
+that as anything else.
+
+So :class:`MutationKind` has a second member and :class:`PathOp` is its CLOSED vocabulary. Closed, and
+deliberately not a "run this shell command to break it" escape hatch: an arbitrary command keeps the
+ergonomics and loses two of the safeguards this module was measured to need, because "the mutation
+applied" (S5) and "the tree was restored" (S9) both stop being checkable. Both stay checkable here —
+:func:`_path_signature` is computed either side of the edit, a leg whose signature did not move is
+``NOT MEASURED``, and the restore is verified against the original signature exactly as the text kind
+verifies bytes.
+
+WHAT THE SECOND KIND DOES NOT CHANGE. Every clause of the four-point specification above applies to it
+unaltered, and one of them does MORE work: a path mutation's target is the SUBJECT (a view root), while
+its anchor is produced by the GATE (``scripts/skill-view``). Those are genuinely different files, so
+the producer-integrity hash in :func:`adjudicate` is a real check rather than a formality.
 """
 
 from __future__ import annotations
@@ -47,7 +72,9 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -57,6 +84,8 @@ from typing import Iterable, Sequence
 __all__ = [
     "Verdict",
     "Discriminator",
+    "MutationKind",
+    "PathOp",
     "Anchor",
     "Mutation",
     "LegResult",
@@ -65,6 +94,7 @@ __all__ = [
     "load_specs",
     "exit_code",
     "tally_counters",
+    "path_signature",
 ]
 
 
@@ -138,6 +168,144 @@ class Discriminator(str, Enum):
     last line the fixture prints."""
 
 
+class MutationKind(str, Enum):
+    """WHAT a mutation edits: the bytes of a file, or the shape of the tree (`#1830`)."""
+
+    TEXT = "text"
+    """A counted textual substitution in one file. `#1810`'s only kind, and the right one whenever the
+    gate's subject is source: ``find`` must occur exactly ``occurrences`` times, the bytes must move,
+    and the original bytes are written back in ``finally``."""
+
+    PATH = "path"
+    """A change to what EXISTS at a path — see :class:`PathOp`. The right one when the gate's subject
+    is the tree itself, which is every skill-root gate in every kit receiver. Applied-ness and restore
+    are verified by :func:`path_signature` rather than by byte comparison, because the thing being
+    mutated may be a directory or a symlink and have no bytes of its own."""
+
+
+class PathOp(str, Enum):
+    """The closed vocabulary of tree mutations. Four members, each one MEASURED failure class.
+
+    Each op models a defect that ADR-0067 §8 records as **exit 0 with no diagnostic in both runtimes** —
+    an agent that quietly has no skills. They are the reason `skill-view check` exists, and until this
+    enum existed no harness in this repo could challenge it.
+    """
+
+    DELETE = "delete"
+    """Remove the path. Models THE VIEW WAS NEVER GENERATED — the state a clean clone, a fresh worktree
+    and a cold runner all start in, since a view root is git-ignored and never committed."""
+
+    RETARGET = "retarget"
+    """The target must be a symlink; re-point it at ``replace``. Models a DANGLING view: the path is
+    there, ``ls`` shows a link, and it resolves to nothing."""
+
+    REPLACE_WITH_FILE = "replace-with-file"
+    """Remove the path and write a regular file whose body is ``replace``. Models ADR-0067 §6's
+    ``core.symlinks=false`` shape — a committed symlink checked out by git-for-Windows without
+    Developer Mode arrives as a one-line text file naming its target."""
+
+    PARTIAL_VIEW = "partial-view"
+    """The target must be a symlink to a directory; replace it with a REAL directory holding one
+    relative symlink per entry of the resolved directory, OMITTING the entry named by ``find``.
+
+    THIS IS THE `#1715` PROBE AND IT IS WHY THE VOCABULARY IS NOT THREE MEMBERS. `#1715` found a gate
+    whose two headline invariants had become tautologies on a half-view: ``union_ids()`` enumerated
+    with ``find`` and no ``-L``, so the view root contributed ZERO ids, and root presence was then
+    tested with ``[ -d ]`` THROUGH the symlink, which cannot fail. Every other op here breaks the root
+    outright, and a gate can pass all three while still being unable to see a view that resolves,
+    enumerates, and is merely INCOMPLETE. A whole-directory symlink makes that state unrepresentable,
+    so it has to be CONSTRUCTED — which is exactly what this op does."""
+
+
+def path_signature(p: Path) -> str:
+    """What is at ``p``, as one comparable string. The path kind's answer to "did the bytes move?".
+
+    Never follows a symlink: a link is summarised by its TARGET TEXT, so re-pointing one is a change
+    even when both targets happen to exist, and a directory of links does not recurse into whatever
+    they resolve to. A directory is summarised by the sorted signatures of its entries, so removing one
+    entry — :attr:`PathOp.PARTIAL_VIEW`'s whole point — moves the signature.
+    """
+    if p.is_symlink():
+        return "link:" + os.readlink(p)
+    if not p.exists():
+        return "absent"
+    if p.is_file():
+        return "file:" + hashlib.sha256(p.read_bytes()).hexdigest()
+    if p.is_dir():
+        entries = "\n".join(f"{name}={path_signature(p / name)}" for name in sorted(os.listdir(p)))
+        return "dir:" + hashlib.sha256(entries.encode("utf-8")).hexdigest()
+    return "other"  # pragma: no cover - a socket or device in a repo is not a subject
+
+
+def _rm(p: Path) -> None:
+    """Remove whatever is at ``p`` without following a link out of the tree."""
+    if p.is_symlink() or p.is_file():
+        p.unlink()
+    elif p.is_dir():
+        shutil.rmtree(p)
+
+
+def _path_op_precheck(m: "Mutation", target: Path) -> tuple[str | None, dict]:
+    """Read everything an op needs from the ORIGINAL, and refuse here if it cannot be performed.
+
+    THIS RUNS BEFORE THE ORIGINAL IS STASHED, AND THAT ORDER IS A BUG FIX RATHER THAN A STYLE. The
+    first cut of this module stashed first and inspected afterwards, so every op that needs to read
+    the original — ``retarget`` needs it to BE a symlink, ``partial-view`` needs its link body and the
+    entries it resolves to — inspected an already-empty path and refused with
+    ``needs view to be a symlink, and it is not (absent)``. The selftest's P1/P2 legs caught it. Worth
+    recording because the failure was in the SAFE direction (``NOT MEASURED``, never a false
+    ``JUSTIFIED``) and was therefore completely invisible in a green sweep: `partial-view`, the one op
+    `#1715` makes necessary, would have silently measured nothing forever.
+
+    A returned reason is always a :attr:`Verdict.NOT_MEASURED`, never a finding: an op that could not
+    be performed did not challenge the gate, so the gate did not hold.
+    """
+    pre: dict = {}
+    if m.op in (PathOp.RETARGET, PathOp.PARTIAL_VIEW):
+        if not target.is_symlink():
+            return (
+                f"`{m.op.value}` needs {m.target} to be a symlink, and it is not "
+                f"({path_signature(target)})"
+            ), pre
+        pre["body"] = os.readlink(target)
+    if m.op is PathOp.PARTIAL_VIEW:
+        resolved = target.resolve()
+        if not resolved.is_dir():
+            return f"`partial-view` needs {m.target} to resolve to a directory; it resolves to {resolved}", pre
+        entries = sorted(os.listdir(resolved))
+        if m.find not in entries:
+            return (
+                f"`partial-view` omits {m.find!r}, which is not an entry of {m.target} "
+                f"({len(entries)} entry/entries) — omitting nothing is not a partial view"
+            ), pre
+        pre["entries"] = entries
+    return None, pre
+
+
+def _path_op_build(m: "Mutation", target: Path, pre: dict) -> None:
+    """Construct the mutant at ``target``, which the caller has already emptied by stashing.
+
+    ``delete`` therefore has nothing to do: the stash IS the deletion, and building nothing back is
+    what makes the path absent.
+    """
+    if m.op is PathOp.DELETE:
+        return
+    if m.op is PathOp.RETARGET:
+        target.symlink_to(m.replace)
+        return
+    if m.op is PathOp.REPLACE_WITH_FILE:
+        target.write_text(m.replace, encoding="utf-8")
+        return
+    # PARTIAL_VIEW
+    target.mkdir()
+    for name in pre["entries"]:
+        if name == m.find:
+            continue
+        # One directory deeper than the root link was, so a RELATIVE body gains one `..`.
+        # os.path.join discards the `..` for an absolute body, which is also correct.
+        (target / name).symlink_to(os.path.join("..", pre["body"], name))
+
+
 @dataclass(frozen=True)
 class Anchor:
     """A witness that the run REACHED and COMPLETED the guard, emitted by something the mutation cannot edit.
@@ -180,6 +348,11 @@ class Mutation:
     occurrences: int = 1
     timeout: int = 600
     note: str = ""
+    kind: MutationKind = MutationKind.TEXT
+    op: PathOp | None = None
+    """``kind``/``op`` select the tree mutations (`#1830`). ``op`` is required for — and only
+    meaningful for — :attr:`MutationKind.PATH`; ``find``/``replace`` keep their names there but change
+    meaning per :class:`PathOp`, which is why every op's docstring states what it reads."""
 
 
 @dataclass
@@ -204,6 +377,8 @@ class LegResult:
             "target": self.mutation.target,
             "breaks": self.mutation.breaks,
             "command": list(self.mutation.command),
+            "kind": self.mutation.kind.value,
+            "op": self.mutation.op.value if self.mutation.op else None,
             "discriminator": self.mutation.discriminator.value,
             "control_rc": self.control_rc,
             "mutant_rc": self.mutant_rc,
@@ -310,20 +485,36 @@ def adjudicate(m: Mutation, root: Path) -> LegResult:
        :func:`_fired` positively identifies it as a finding (`#1812`).
     7. **RESTORE** — always, via ``finally``, and the restore is verified by hash before the result is
        returned. A harness that can leave a mutated tree behind is a hazard, not a measurement.
+
+    BOTH KINDS RUN THIS ORDER UNCHANGED (`#1830`). Only steps 3 and 7 differ, and only in what
+    "changed" and "restored" mean: bytes for :attr:`MutationKind.TEXT`, :func:`path_signature` for
+    :attr:`MutationKind.PATH`. A path leg stashes the original by ``os.rename`` into a sibling
+    temporary directory — same filesystem, so a symlink is moved AS a symlink rather than copied
+    through — and renames it back in ``finally``.
     """
     target = root / m.target
     producer = root / m.anchor.produced_by
     started = time.monotonic()
+    is_path = m.kind is MutationKind.PATH
 
     def done(v: Verdict, reason: str, **kw) -> LegResult:
         return LegResult(mutation=m, verdict=v, reason=reason, seconds=time.monotonic() - started, **kw)
 
-    if not target.is_file():
+    if is_path:
+        if m.op is None:
+            return done(Verdict.NOT_MEASURED, f"a `path` mutation needs an `op`; {m.id} declares none")
+        # `exists()` follows links, so a DANGLING target would read as absent. The subject of a path
+        # mutation is the path, not what it resolves to.
+        if not (target.exists() or target.is_symlink()):
+            return done(Verdict.NOT_MEASURED, f"mutation target {m.target} does not exist")
+    elif not target.is_file():
         return done(Verdict.NOT_MEASURED, f"mutation target {m.target} does not exist")
     if not producer.is_file():
         return done(Verdict.NOT_MEASURED, f"anchor producer {m.anchor.produced_by} does not exist")
 
-    original = target.read_bytes()
+    original = None if is_path else target.read_bytes()
+    sig_before = path_signature(target) if is_path else ""
+    stash = Path(tempfile.mkdtemp(prefix=".gate-mutate-stash-", dir=target.parent)) if is_path else None
     producer_before = _sha(producer)
 
     try:
@@ -348,26 +539,52 @@ def adjudicate(m: Mutation, root: Path) -> LegResult:
             )
         c_anchor = c_hit.group(0).strip()
 
-        # 3. APPLY — an exact, counted substitution or nothing at all.
-        text = original.decode("utf-8")
-        seen = text.count(m.find)
-        if seen != m.occurrences:
-            return done(
-                Verdict.NOT_MEASURED,
-                f"the mutation did not apply: expected {m.occurrences} occurrence(s) of the `find` "
-                f"text in {m.target}, found {seen} — the gate was never actually challenged",
-                control_rc=c_rc,
-                control_anchor=c_anchor,
-            )
-        mutated = text.replace(m.find, m.replace)
-        if mutated == text:
-            return done(
-                Verdict.NOT_MEASURED,
-                f"the mutation was a NO-OP — {m.target} is byte-identical after the substitution",
-                control_rc=c_rc,
-                control_anchor=c_anchor,
-            )
-        target.write_text(mutated, encoding="utf-8")
+        # 3. APPLY — an exact, counted substitution (text) or one closed-vocabulary op (path), and in
+        #    both cases the thing must actually have MOVED. A mutation that did not apply is not a
+        #    gate that held; it is a leg that never asked the question.
+        if is_path:
+            assert stash is not None  # narrowed by `is_path`; keeps the type checker honest
+            # PRECHECK while the original is still in place — see _path_op_precheck for the bug that
+            # ordering these the other way round produced, and why it was invisible.
+            why, pre = _path_op_precheck(m, target)
+            if why is not None:
+                return done(
+                    Verdict.NOT_MEASURED,
+                    f"the mutation did not apply: {why} — the gate was never actually challenged",
+                    control_rc=c_rc,
+                    control_anchor=c_anchor,
+                )
+            # Stash by rename on the same filesystem, so a symlink is moved AS a symlink. Copying
+            # would follow it and the restore would put back a different kind of object than it found.
+            os.rename(target, stash / "original")
+            _path_op_build(m, target, pre)
+            if path_signature(target) == sig_before:
+                return done(
+                    Verdict.NOT_MEASURED,
+                    f"the mutation was a NO-OP — {m.target} has the same signature after `{m.op.value}`",
+                    control_rc=c_rc,
+                    control_anchor=c_anchor,
+                )
+        else:
+            text = original.decode("utf-8")
+            seen = text.count(m.find)
+            if seen != m.occurrences:
+                return done(
+                    Verdict.NOT_MEASURED,
+                    f"the mutation did not apply: expected {m.occurrences} occurrence(s) of the `find` "
+                    f"text in {m.target}, found {seen} — the gate was never actually challenged",
+                    control_rc=c_rc,
+                    control_anchor=c_anchor,
+                )
+            mutated = text.replace(m.find, m.replace)
+            if mutated == text:
+                return done(
+                    Verdict.NOT_MEASURED,
+                    f"the mutation was a NO-OP — {m.target} is byte-identical after the substitution",
+                    control_rc=c_rc,
+                    control_anchor=c_anchor,
+                )
+            target.write_text(mutated, encoding="utf-8")
 
         # 4. PRODUCER INTEGRITY — specification point 3, checked rather than promised (#1794).
         if _sha(producer) != producer_before:
@@ -423,9 +640,19 @@ def adjudicate(m: Mutation, root: Path) -> LegResult:
         )
     finally:
         # 7. RESTORE, unconditionally, and prove it took.
-        target.write_bytes(original)
-        if target.read_bytes() != original:  # pragma: no cover - filesystem failure
-            raise SpecError(f"FAILED TO RESTORE {m.target} — the working tree is left mutated")
+        if is_path:
+            assert stash is not None
+            stashed = stash / "original"
+            if stashed.exists() or stashed.is_symlink():
+                _rm(target)
+                os.rename(stashed, target)
+            shutil.rmtree(stash, ignore_errors=True)
+            if path_signature(target) != sig_before:  # pragma: no cover - filesystem failure
+                raise SpecError(f"FAILED TO RESTORE {m.target} — the working tree is left mutated")
+        else:
+            target.write_bytes(original)
+            if target.read_bytes() != original:  # pragma: no cover - filesystem failure
+                raise SpecError(f"FAILED TO RESTORE {m.target} — the working tree is left mutated")
 
 
 def load_specs(path: Path, root: Path) -> list[Mutation]:
@@ -453,7 +680,16 @@ def load_specs(path: Path, root: Path) -> list[Mutation]:
         where = f"{path}: mutations[{i}]"
         if not isinstance(raw, dict):
             raise SpecError(f"{where}: not a mapping")
-        missing = [k for k in ("id", "gate", "command", "target", "find", "replace", "breaks", "anchor") if k not in raw]
+        try:
+            kind = MutationKind(str(raw.get("kind", "text")))
+        except ValueError as e:
+            raise SpecError(
+                f"{where}: unknown kind {raw.get('kind')!r}; expected one of {[k.value for k in MutationKind]}"
+            ) from e
+
+        required = ["id", "gate", "command", "target", "breaks", "anchor"]
+        required += ["op"] if kind is MutationKind.PATH else ["find", "replace"]
+        missing = [k for k in required if k not in raw]
         if missing:
             raise SpecError(f"{where}: missing required key(s): {', '.join(missing)}")
         mid = str(raw["id"])
@@ -462,10 +698,35 @@ def load_specs(path: Path, root: Path) -> list[Mutation]:
         seen_ids.add(mid)
         if not str(raw["breaks"]).strip():
             raise SpecError(f"{where} ({mid}): `breaks:` is empty — name what protection this removes")
-        if not str(raw["find"]):
-            raise SpecError(f"{where} ({mid}): `find:` is empty")
-        if str(raw["find"]) == str(raw["replace"]):
-            raise SpecError(f"{where} ({mid}): `find:` equals `replace:` — that is a no-op, not a mutation")
+
+        op: PathOp | None = None
+        if kind is MutationKind.PATH:
+            # The vocabulary is closed. An unknown op is refused at LOAD time rather than graded
+            # cautiously, for the same reason a self-anchored spec is: it would not produce a hedged
+            # answer, it would produce no mutation at all while looking like a leg that ran.
+            try:
+                op = PathOp(str(raw["op"]))
+            except ValueError as e:
+                raise SpecError(
+                    f"{where} ({mid}): unknown path op {raw['op']!r}; the vocabulary is CLOSED and "
+                    f"has exactly {[o.value for o in PathOp]}. There is deliberately no "
+                    f"'run this command' member — see MutationKind.PATH."
+                ) from e
+            # Each op reads exactly one of find/replace; a spec that omits it cannot mutate anything.
+            if op in (PathOp.RETARGET, PathOp.REPLACE_WITH_FILE) and not str(raw.get("replace", "")):
+                raise SpecError(
+                    f"{where} ({mid}): `{op.value}` writes `replace:` into the tree, and it is empty"
+                )
+            if op is PathOp.PARTIAL_VIEW and not str(raw.get("find", "")):
+                raise SpecError(
+                    f"{where} ({mid}): `partial-view` omits the entry named by `find:`, and it is "
+                    f"empty — omitting nothing is not a partial view"
+                )
+        else:
+            if not str(raw["find"]):
+                raise SpecError(f"{where} ({mid}): `find:` is empty")
+            if str(raw["find"]) == str(raw["replace"]):
+                raise SpecError(f"{where} ({mid}): `find:` equals `replace:` — that is a no-op, not a mutation")
 
         anc = raw["anchor"]
         if not isinstance(anc, dict) or "pattern" not in anc or "produced_by" not in anc:
@@ -496,9 +757,11 @@ def load_specs(path: Path, root: Path) -> list[Mutation]:
                 gate=str(raw["gate"]),
                 command=[str(x) for x in raw["command"]],
                 target=str(raw["target"]),
-                find=str(raw["find"]),
-                replace=str(raw["replace"]),
+                find=str(raw.get("find", "")),
+                replace=str(raw.get("replace", "")),
                 breaks=str(raw["breaks"]).strip(),
+                kind=kind,
+                op=op,
                 anchor=Anchor(pattern=str(anc["pattern"]), produced_by=str(anc["produced_by"])),
                 discriminator=disc,
                 occurrences=int(raw.get("occurrences", 1)),

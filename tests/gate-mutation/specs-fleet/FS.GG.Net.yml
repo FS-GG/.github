@@ -1,0 +1,106 @@
+# Mutation legs for FS-GG/FS.GG.Net `.github/workflows/gate.yml` (.github#1830).
+#
+# THIS IS THAT REPOSITORY'S ENTIRE GATE JOB, and `#1830` AC3 requires it to be adjudicated as the
+# whole job it is rather than as one step inside it. The job `Build + test (locked restore)` is a
+# REQUIRED status check on `main` (branch protection, read from the API 2026-07-28), so everything in
+# it blocks a merge. It asserts four things:
+#
+#   1. the committed packages.lock.json set reproduces the resolved graph (`--locked-mode`);
+#   2. the solution builds Debug with warnings-as-errors;
+#   3. the Expecto suite passes;
+#   4. ADR-0067 §8's runtime skill-root contract — generate the view, prove the alarm can fire
+#      (`skill-view selftest`), then assert DECLARATION + VIEW + TRACKING.
+#
+# ONLY ASSERTION 4 HAS LEGS HERE, AND THE OTHER THREE ARE NOT UNMEASURED. Assertion 1 was caught LIVE
+# in production while `#1830` was being adjudicated — run id 30379948771, 2026-07-28T16:48:07Z, on
+# `renovate/protobuf-net.grpc.aspnetcore-1.x`: NU1004, and the job's own `::error::locked restore
+# failed — resolved graph != committed packages.lock.json` sentence naming the defect and its
+# remediation. `#1812` says a run concluding `failure` may be a crash, so that log was read rather
+# than the conclusion; it is a gate reporting about its subject. That single run moved this workflow
+# off the never-red list (NEVER-FOUND -> EXERCISED) and is stronger evidence than any mutation below.
+# Assertions 2 and 3 need a restore against the org feed and are recorded as NOT MEASURED — named, not
+# collapsed into the verdict assertion 1 already earned.
+#
+# THE STEP WITH NO LEG, SAID OUT LOUD. `bash scripts/skill-view selftest` is this job's in-gate
+# negative control, and `scripts/skill-view` is BOTH the tool and its own selftest — one kit-delivered
+# file printing its own tally. A leg mutating it and anchoring on that tally has
+# `anchor.produced_by == target`, and `load_specs()` refuses it. The refusal is CORRECT (`#1794`) and
+# is not worked around here. Measured by hand instead, and labelled as by-hand: neutering `do_check`'s
+# per-skill presence test took the selftest from `16 passed, 0 failed` to `14 passed, 2 failed`. So
+# the negative control is live. `#1842` AC5 is where that gets a real anchor or a recorded decision.
+#
+# RUN IT IN A THROWAWAY CLONE, and generate the view ONCE before the sweep — never inside a
+# `command:`. See README.md in this directory.
+
+mutations:
+  - id: net-gate-skill-view-absent-root
+    gate: FS-GG/FS.GG.Net .github/workflows/gate.yml (Build + test (locked restore))
+    kind: path
+    op: delete
+    command:
+      - bash
+      - scripts/skill-view
+      - check
+      - --source
+      - .claude/skills
+      - --receiver-proj
+      - .config/kit/FS.GG.Kit.receiver.proj
+    target: .agents/skills
+    breaks: >-
+      the generated view root. This job deliberately does NOT pass `--absent-ok` — it generates the
+      view in an earlier step and therefore earns the stronger of the two postures the fleet uses, so
+      absence must be red here rather than excused.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+
+  - id: net-gate-skill-view-partial-view
+    gate: FS-GG/FS.GG.Net .github/workflows/gate.yml (Build + test (locked restore))
+    kind: path
+    op: partial-view
+    find: pnext-item
+    command:
+      - bash
+      - scripts/skill-view
+      - check
+      - --source
+      - .claude/skills
+      - --receiver-proj
+      - .config/kit/FS.GG.Kit.receiver.proj
+    target: .agents/skills
+    breaks: >-
+      the view's COMPLETENESS without breaking its resolution — one skill omitted from a root that
+      still resolves and enumerates. `#1715`'s class, on the gate that inherited its subject.
+    anchor:
+      pattern: "skill-view check: tree=.* expecting [0-9]+ skill\\(s\\)"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+
+  - id: net-gate-roots-declaration
+    gate: FS-GG/FS.GG.Net .github/workflows/gate.yml (Build + test (locked restore))
+    kind: text
+    command:
+      - bash
+      - scripts/skill-view
+      - check
+      - --source
+      - .claude/skills
+      - --receiver-proj
+      - .config/kit/FS.GG.Kit.receiver.proj
+    target: .config/kit/FS.GG.Kit.receiver.proj
+    find: "<FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>"
+    replace: "<FsggKitViewSkillRoots></FsggKitViewSkillRoots>"
+    breaks: >-
+      the roots DECLARATION rather than the tree: the view root leaves the contract while the tree
+      still holds it, so every OTHER kit gate stays green over it. That is the regression lane 1
+      exists for, and `do_check` treats a bad declaration as fatal BEFORE the roots loop — reporting
+      "0 violations" over a root set the tool invented would be the vacuous pass (`#266`) wearing the
+      membership lane's clothes.
+    anchor:
+      pattern: "skill-view check: grading the roots declaration in '.*' against '.*'"
+      produced_by: scripts/skill-view
+    discriminator: exit-contract
+    note: >-
+      A TEXT leg among path legs, and deliberately so: this defect IS an edit to a file, so the kind
+      that fits it is the original one. The two kinds are not a migration.

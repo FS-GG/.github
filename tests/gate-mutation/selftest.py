@@ -49,10 +49,13 @@ from lib.mutation import (  # noqa: E402
     Anchor,
     Discriminator,
     Mutation,
+    MutationKind,
+    PathOp,
     SpecError,
     Verdict,
     adjudicate,
     exit_code,
+    path_signature,
     load_specs,
     tally_counters,
 )
@@ -462,7 +465,236 @@ def m10() -> None:
         expect("M10 a mutation of the FIXTURE's own expectation is caught as JUSTIFIED",
                r.verdict, Verdict.JUSTIFIED)
 
-LEGS = [m1, m2, m3, m4, m4b, m4c, m4d, m5, m6, m7, m8, m9, m10]
+# ==================================================================================================
+# P-LEGS — the PATH mutation kind (.github#1830, spec on #1842)
+#
+# Everything above holds the TEXT kind to the four-point specification. These legs do the same for the
+# kind that mutates the TREE, and they exist because #1830 found that not one of the never-red gates
+# outside `.github` has a subject a text substitution can reach: their subjects are an absent
+# directory, a dangling symlink, a symlink checked out as a regular file, and — the one that matters —
+# a view that RESOLVES but is INCOMPLETE.
+#
+# The synthetic gate below is a miniature `skill-view check`, and `DEAD_VIEW_GUARD` is deliberately
+# built in #1715's shape: it tests the root's presence THROUGH the symlink and never looks at what is
+# inside. P2 requires that guard to grade DECORATIVE. **That is the leg that proves this kind can
+# return a negative verdict at all**, exactly as M2 does for the text kind, and without it every
+# JUSTIFIED below would be unfalsified.
+# ==================================================================================================
+
+VIEW_GUARD = """\
+#!/usr/bin/env bash
+# A miniature skill-view: every id the SOURCE declares must be visible THROUGH the view root.
+# It prints its count BEFORE looking, so the anchor witnesses that the guard was reached — and it
+# lives in a file no path mutation touches, which is specification point 3 with real content.
+ids=(); for d in source/*/; do [ -f "$d/SKILL.md" ] && ids+=("$(basename "$d")"); done
+echo "synthetic view-guard: ${#ids[@]} declared id(s)"
+[ -d view ] || { echo "[unresolvable-root]"; exit 1; }
+bad=0
+for id in "${ids[@]}"; do
+  [ -e "view/$id/SKILL.md" ] || { echo "[missing-skill] $id"; bad=$((bad+1)); }
+done
+[ "$bad" -eq 0 ] || exit 1
+exit 0
+"""
+
+DEAD_VIEW_GUARD = """\
+#!/usr/bin/env bash
+# #1715's shape, on purpose: it enumerates the SOURCE, tests the root with `[ -d ]` THROUGH the
+# symlink, and never opens it. A partial view is invisible to this, and P2 requires the harness to
+# SAY SO rather than to report a clean sweep.
+ids=(); for d in source/*/; do [ -f "$d/SKILL.md" ] && ids+=("$(basename "$d")"); done
+echo "synthetic view-guard: ${#ids[@]} declared id(s)"
+[ -d view ] || exit 1
+exit 0
+"""
+
+VIEW_ANCHOR = Anchor(pattern=r"synthetic view-guard: \d+ declared id\(s\)", produced_by="guard.sh")
+
+
+def build_view_repo(tmp: Path, guard: str = VIEW_GUARD) -> Path:
+    """`source/` holds two skills; `view` is a whole-directory symlink to it — the receivers' layout."""
+    root = tmp
+    for skill in ("alpha", "beta"):
+        (root / "source" / skill).mkdir(parents=True)
+        (root / "source" / skill / "SKILL.md").write_text(f"# {skill}\n", encoding="utf-8")
+    (root / "view").symlink_to("source")
+    (root / "guard.sh").write_text(guard, encoding="utf-8")
+    return root
+
+
+def path_mutation(**kw) -> Mutation:
+    base = dict(
+        id="synthetic-path",
+        gate="synthetic-view-gate.yml",
+        command=["bash", "guard.sh"],
+        target="view",
+        find="",
+        replace="",
+        breaks="the generated view root stops resolving to the declared skills",
+        anchor=VIEW_ANCHOR,
+        discriminator=Discriminator.EXIT_CONTRACT,
+        kind=MutationKind.PATH,
+        timeout=60,
+    )
+    base.update(kw)
+    return Mutation(**base)
+
+
+def p1() -> None:
+    # ---- P1: all four ops APPLY, the gate fires, and the tree comes back byte-for-byte ------------
+    cases = [
+        (PathOp.DELETE, {}, "the view was never generated"),
+        (PathOp.RETARGET, {"replace": "nowhere-at-all"}, "the view dangles"),
+        (PathOp.REPLACE_WITH_FILE, {"replace": "source"}, "core.symlinks=false left a text file"),
+        (PathOp.PARTIAL_VIEW, {"find": "alpha"}, "the view resolves but is INCOMPLETE (#1715)"),
+    ]
+    for op, extra, what in cases:
+        with tempfile.TemporaryDirectory() as td:
+            root = build_view_repo(Path(td))
+            before = path_signature(root / "view")
+            r = adjudicate(path_mutation(op=op, **extra), root)
+            expect(f"P1  `{op.value}` — {what} — grades JUSTIFIED", r.verdict, Verdict.JUSTIFIED)
+            expect(f"P1  `{op.value}` control ran green", r.control_rc, 0)
+            expect(f"P1  `{op.value}` the mutant exited 1 (lib.gate FINDING)", r.mutant_rc, 1)
+            # RESTORE, verified by SIGNATURE — the path kind's answer to M1's byte comparison. A
+            # symlink must come back AS a symlink, with the same target text, or a later leg in a
+            # sweep measures a tree this one quietly rewrote.
+            expect(f"P1  `{op.value}` the tree signature is restored exactly",
+                   path_signature(root / "view"), before)
+            expect(f"P1  `{op.value}` ...and it is still a symlink, not a copy",
+                   (root / "view").is_symlink(), True)
+            expect(f"P1  `{op.value}` no stash directory is left behind",
+                   [p.name for p in root.iterdir() if p.name.startswith(".gate-mutate-stash-")], [])
+
+
+def p2() -> None:
+    # ---- P2: THE NEGATIVE VERDICT FOR THE PATH KIND, and #1715 is the model ----------------------
+    # A guard that tests the root through the symlink and never opens it CANNOT see a partial view.
+    # If this leg ever grades JUSTIFIED, every P1 result above is worthless.
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td), guard=DEAD_VIEW_GUARD)
+        r = adjudicate(path_mutation(op=PathOp.PARTIAL_VIEW, find="alpha"), root)
+        expect("P2  a guard blind to a PARTIAL view grades DECORATIVE (#1715's shape)",
+               r.verdict, Verdict.DECORATIVE)
+        expect_contains("P2  ...and the reason names what was broken", r.reason, "stayed GREEN")
+        expect("P2  DECORATIVE is exit code 1 (lib.gate FINDING)", exit_code([r]), 1)
+        expect("P2  ...and the tree is restored even after a negative verdict",
+               (root / "view").is_symlink(), True)
+
+
+def p3() -> None:
+    # ---- P3: an op that CANNOT apply is NOT_MEASURED, and never a finding ------------------------
+    # "The mutation did not apply" and "the gate held" are opposite facts. #1810's S5 measured that
+    # dropping this check reds the selftest for the text kind; this is the same check one kind over.
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td))
+        r = adjudicate(path_mutation(op=PathOp.PARTIAL_VIEW, find="gamma-does-not-exist"), root)
+        expect("P3  `partial-view` naming a non-entry is NOT_MEASURED", r.verdict, Verdict.NOT_MEASURED)
+        expect_contains("P3  ...and says the mutation did not apply", r.reason, "did not apply")
+        expect("P3  ...and the tree is restored", (root / "view").is_symlink(), True)
+
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td))
+        r = adjudicate(path_mutation(op=PathOp.RETARGET, target="source", replace="nowhere"), root)
+        expect("P3  `retarget` on a path that is not a symlink is NOT_MEASURED",
+               r.verdict, Verdict.NOT_MEASURED)
+        expect("P3  ...and the real directory it refused to retarget is intact",
+               (root / "source" / "alpha" / "SKILL.md").is_file(), True)
+
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td))
+        r = adjudicate(path_mutation(op=PathOp.DELETE, target="view-that-is-not-there"), root)
+        expect("P3  an absent target is NOT_MEASURED, not a dead gate", r.verdict, Verdict.NOT_MEASURED)
+
+
+def p3b() -> None:
+    # ---- P3b: an op that APPLIES CLEANLY and changes NOTHING is NOT_MEASURED -----------------------
+    # THIS LEG EXISTS BECAUSE IT WAS MISSING, and its absence was found the way everything else here
+    # is found: by removing the safeguard and watching. The probe that neuters the path kind's no-op
+    # check (`if path_signature(target) == sig_before`) left the selftest at 86/0 — a safeguard with
+    # no negative control, which is the exact shape #1810's S1 exposed in leg M4b and the eleventh
+    # entry on the list this module exists to prevent.
+    #
+    # `retarget` at a symlink's EXISTING target is the reachable case: the loader cannot catch it,
+    # because catching it means reading the tree, and `load_specs` is pure. So the run-time check is
+    # the only thing standing between "the gate held" and "nothing was ever broken" — and those are
+    # opposite facts.
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td))
+        r = adjudicate(path_mutation(op=PathOp.RETARGET, replace="source"), root)
+        expect("P3b `retarget` at the link's EXISTING target is NOT_MEASURED, never a held gate",
+               r.verdict, Verdict.NOT_MEASURED)
+        expect_contains("P3b ...and says it was a NO-OP", r.reason, "NO-OP")
+        expect("P3b ...and the tree is unchanged", path_signature(root / "view"), "link:source")
+
+
+def p4() -> None:
+    # ---- P4: the LOADER refuses a path spec that could not yield a measurement -------------------
+    # Refused at load time rather than graded cautiously, for the same reason M6's self-anchored spec
+    # is: these defects do not produce a hedged answer, they produce a leg that looks like it ran.
+    def spec(body: str) -> str:
+        return "mutations:\n" + textwrap.indent(textwrap.dedent(body), "  ")
+
+    common = """\
+        - id: p
+          gate: g.yml
+          kind: path
+          command: [bash, guard.sh]
+          target: view
+          breaks: the view root
+          anchor: {pattern: 'x', produced_by: guard.sh}
+        """
+    cases = [
+        ("op: shell-out\n", "unknown path op", "an op outside the CLOSED vocabulary"),
+        ("op: retarget\n", "writes `replace:`", "`retarget` with nothing to point at"),
+        ("op: partial-view\n", "omitting nothing", "`partial-view` with no entry to omit"),
+        ("", "missing required key(s): op", "a path spec with no `op:` at all"),
+    ]
+    for extra, needle, what in cases:
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "s.yml"
+            p.write_text(spec(common + textwrap.indent(extra, "  ")) if extra else spec(common),
+                         encoding="utf-8")
+            try:
+                load_specs(p, Path(td))
+                expect(f"P4  {what} is REFUSED", "loaded", "SpecError")
+            except SpecError as e:
+                expect_contains(f"P4  {what} is REFUSED", str(e), needle)
+
+    # And the closed vocabulary is stated in the refusal, so a spec author does not go looking for a
+    # member that deliberately does not exist.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "s.yml"
+        p.write_text(spec(common + "  op: shell-out\n"), encoding="utf-8")
+        try:
+            load_specs(p, Path(td))
+            expect("P4  the refusal names the whole vocabulary", "loaded", "SpecError")
+        except SpecError as e:
+            expect_contains("P4  the refusal names the whole vocabulary", str(e), "partial-view")
+            expect_contains("P4  ...and says there is no command escape hatch", str(e), "run this command")
+
+
+def p5() -> None:
+    # ---- P5: path_signature is the check the restore leans on, so hold IT to a standard ----------
+    # S9 on #1810's table removed the restore and every leg refused. That check is only as good as the
+    # comparison behind it: a signature that cannot tell a symlink from the directory it resolves to
+    # would report a successful restore over a tree that had been flattened.
+    with tempfile.TemporaryDirectory() as td:
+        root = build_view_repo(Path(td))
+        link = path_signature(root / "view")
+        real = path_signature(root / "source")
+        expect("P5  a symlink signs as its TARGET TEXT, never as what it resolves to", link, "link:source")
+        expect("P5  ...so a link and the directory it points at do not compare equal", link == real, False)
+        (root / "source" / "alpha" / "SKILL.md").write_text("# changed\n", encoding="utf-8")
+        expect("P5  a directory's signature moves when an entry's CONTENT moves",
+               path_signature(root / "source") != real, True)
+        after_content = path_signature(root / "source")
+        (root / "source" / "alpha" / "SKILL.md").unlink()
+        expect("P5  ...and when an entry is REMOVED, which is what partial-view does",
+               path_signature(root / "source") != after_content, True)
+
+
+LEGS = [m1, m2, m3, m4, m4b, m4c, m4d, m5, m6, m7, m8, m9, m10, p1, p2, p3, p3b, p4, p5]
 
 
 def main() -> int:
