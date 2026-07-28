@@ -186,6 +186,98 @@ expect "a MISSPELLED required context is the same deadlock, and is caught" \
   1 "REQUIRES the status check 'lock-ranges / lock-range'" "$WT" "$R" FS-GG/FS.GG.Audio
 
 # =============================================================================================
+# 1b. THE REF THE PRODUCER CROSSES (.github#1783). The same real files, mutated one token.
+#
+# A deadlocked context is loud: nothing merges. THIS defect is silent — the context reports, the PR
+# merges, and the verdict is a statement about when it ran. `FS.GG.SDD#724` passed on merged SHA
+# 0376309 at 08:15Z and failed on byte-identical content at 08:21Z (.github#1584), which is what
+# ADR-0067 §2 forbids and what nothing here detected until now.
+#
+# #1783 DECIDED that `@main` is accepted for these calls and is not pinned; the reasoning and its
+# measurements are in docs/coordination/reusable-workflow-contract.md. What is NOT accepted is any
+# other moving ref — the debugging branch left in a `uses:` line, which reads exactly like `@main` to
+# every reviewer and to every other gate in this repo.
+#
+# The subject is FS.GG.Audio's REAL gate.yml and this repo's REAL lock-range-coherence.yml, against
+# Audio's REAL required context — the same three files as leg 1, so a green here is a green over the
+# fleet's actual shape and not over a hand-drawn one.
+# =============================================================================================
+usesref() {  # usesref <dest> <ref>  — Audio's real gate.yml with its hub call moved to <ref>
+  python3 - "$FIX/audio-gate.yml" "$1" "$2" <<'PY'
+import sys
+src, dest, ref = sys.argv[1], sys.argv[2], sys.argv[3]
+text = open(src, encoding="utf-8").read()
+old = "lock-range-coherence.yml@main"
+assert old in text, "the Audio fixture no longer calls lock-range-coherence.yml@main — fix the fixture"
+open(dest, "w", encoding="utf-8").write(text.replace(old, f"lock-range-coherence.yml@{ref}"))
+PY
+}
+
+# (a) CONTROL — `@main`, untouched. This is the fleet as it stands today, and it must be GREEN, or
+#     the check would be reporting the decision itself as a defect in all seven receivers.
+#     (Leg 1(b) renamed the callee's job in $W; put the real one back, or this leg would measure that
+#     mutation instead of this one.)
+cp "$REPO_ROOT/.github/workflows/lock-range-coherence.yml" "$W/refs/main/lock-range-coherence.yml"
+expect "the DECIDED ref: Audio's real \`@main\` call carries a required verdict, and is accepted" \
+  0 "ok: every required context is producible" "$W" "$R" FS-GG/FS.GG.Audio
+
+# (b) THE MUTATION — one token, `main` -> `wip`. Nothing else in either repo changes. The context
+#     still reports (so leg 1's assertion still passes over this tree), and the verdict is now a
+#     function of a branch nobody gates.
+RB="$WORK/r-audio-branch"; WB="$WORK/w-audio-branch"
+mkdir -p "$RB/.github/workflows" "$WB/refs/wip"
+usesref "$RB/.github/workflows/gate.yml" wip
+cp "$REPO_ROOT/.github/workflows/lock-range-coherence.yml" "$WB/refs/wip/lock-range-coherence.yml"
+protect "$WB" FS-GG/FS.GG.Audio main "Build + test (locked restore, net10.0, headless)" "lock-ranges / lock-ranges"
+expect "MUTATION #1783: \`@main\` -> \`@wip\` in a receiver's caller is caught" \
+  1 "REQUIRES the status check 'lock-ranges / lock-ranges'" "$WB" "$RB" FS-GG/FS.GG.Audio
+expect "MUTATION: and it names the ref, not merely 'something is wrong'" \
+  1 "tracks the ref 'wip'" "$WB" "$RB" FS-GG/FS.GG.Audio
+expect "MUTATION: and it says WHY that is a defect — the verdict stops being about the tree" \
+  1 "byte-identical content" "$WB" "$RB" FS-GG/FS.GG.Audio
+expect "MUTATION: and it summarises it as its own defect, not as the deadlock" \
+  1 "report a verdict that is not a function of the tree under test" "$WB" "$RB" FS-GG/FS.GG.Audio
+
+# ...and it must NOT say the repo is deadlocked. It is not: every context reports. Sending the reader
+# to branch protection for a defect that lives in one `uses:` line is how the wrong thing gets
+# "fixed" — the reason this summary is built from the two counts rather than written once for both.
+if grep -qF "this repo is deadlocked" <<<"$(run "$WB" "$RB" FS-GG/FS.GG.Audio || true)"; then
+  bad "MUTATION: the summary wrongly calls a reporting repo deadlocked"
+else
+  ok "MUTATION: and it does NOT call the repo deadlocked — every context here reports"
+fi
+
+# (c) A TAG is a moving ref too — mutable, and unchecked after publication (.github#1784). It looks
+#     pinned, which is the whole reason it may not pass for one.
+RT="$WORK/r-audio-tag"; WTG="$WORK/w-audio-tag"
+mkdir -p "$RT/.github/workflows" "$WTG/refs/v1"
+usesref "$RT/.github/workflows/gate.yml" v1
+cp "$REPO_ROOT/.github/workflows/lock-range-coherence.yml" "$WTG/refs/v1/lock-range-coherence.yml"
+protect "$WTG" FS-GG/FS.GG.Audio main "Build + test (locked restore, net10.0, headless)" "lock-ranges / lock-ranges"
+expect "a TAG is not a pin — mutable, unchecked after publish, and refused for a required verdict" \
+  1 "tracks the ref 'v1'" "$WTG" "$RT" FS-GG/FS.GG.Audio
+
+# (d) A 40-hex COMMIT is what ADR-0067 §2 asks for, and stays legal. #1783 declined to REQUIRE
+#     pinning; it did not forbid it, and a receiver that pins must not be red for doing so.
+SHA=0123456789abcdef0123456789abcdef01234567
+RS="$WORK/r-audio-sha"; WS="$WORK/w-audio-sha"
+mkdir -p "$RS/.github/workflows" "$WS/refs/$SHA"
+usesref "$RS/.github/workflows/gate.yml" "$SHA"
+cp "$REPO_ROOT/.github/workflows/lock-range-coherence.yml" "$WS/refs/$SHA/lock-range-coherence.yml"
+protect "$WS" FS-GG/FS.GG.Audio main "Build + test (locked restore, net10.0, headless)" "lock-ranges / lock-ranges"
+expect "a 40-hex COMMIT pin is accepted — #1783 declined to require pinning, it did not forbid it" \
+  0 "ok: every required context is producible" "$WS" "$RS" FS-GG/FS.GG.Audio
+
+# (e) The subject is what is REQUIRED. A context on a strange ref that nothing requires deadlocks
+#     nobody and moves no merge verdict, so it is not this gate's business — asserting over it would
+#     be the gate crying wolf about a report.
+WNR="$WORK/w-audio-notreq"; mkdir -p "$WNR/refs/wip"
+cp "$REPO_ROOT/.github/workflows/lock-range-coherence.yml" "$WNR/refs/wip/lock-range-coherence.yml"
+protect "$WNR" FS-GG/FS.GG.Audio main "Build + test (locked restore, net10.0, headless)"
+expect "a NON-required context on the same odd ref is not a finding — only required verdicts move merges" \
+  0 "ok: every required context is producible" "$WNR" "$RB" FS-GG/FS.GG.Audio
+
+# =============================================================================================
 # 2. How a context is NAMED. Get this wrong and the gate lies in both directions.
 # =============================================================================================
 mkwf() { mkdir -p "$(dirname "$1")"; cat > "$1"; }
@@ -828,8 +920,11 @@ expect "a context required by BOTH stores is audited ONCE, not twice" \
 WDUP2="$WORK/w-dup-bad"
 protect "$WDUP2" FS-GG/R main "vanished"
 ruleset "$WDUP2" FS-GG/R main "vanished"
+# The summary counts the two findings separately since #1783, so this asserts the whole sentence:
+# ONE deadlock finding, ONE audited context, and no ref finding invented alongside it.
 expect "...and an unproducible context required by both is ONE finding, not two" \
-  1 "1 required context(s) can never report, of 1 audited" "$WDUP2" "$RRS" FS-GG/R
+  1 "1 required context(s) can never report — this repo is deadlocked, or will be on its next pull request. Of 1 audited." \
+  "$WDUP2" "$RRS" FS-GG/R
 
 # A ruleset check with no readable `context` is NO VERDICT — never a confident `REQUIRES ''`.
 WNC="$WORK/w-nameless"; mkdir -p "$WNC/protection" "$WNC/rules"

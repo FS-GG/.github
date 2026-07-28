@@ -316,11 +316,19 @@ So the sequence is fixed, and each step's evidence is named:
    in that job takes a literal ref. The **workflow around it is not**: receivers call it as
    `kit-materialize.yml@main`, so its probe, its version grammar, its tag scheme and its exit-code
    mapping still move with the hub. That is a far smaller surface than a 678-line rule, and every
-   line of it is now a #266 decision rather than a verdict — but it is not zero, and anyone arming
-   this must decide whether it is small enough. Closing it means receivers pinning the reusable
-   workflow at a sha, which is a fleet-wide change.
+   line of it is now a #266 decision rather than a verdict — but it is not zero.
+   **This step no longer asks the next person to decide that.** It was decided in
+   [#1783](https://github.com/FS-GG/.github/issues/1783), and the answer is below under
+   [Reusable-workflow calls are NOT pinned](#reusable-workflow-calls-are-not-pinned): **a
+   `@main` call to a workflow in `FS-GG/.github` SATISFIES this precondition**, on the stated and
+   narrow grounds that the hub tip a receiver reads is one the hub's own required checks have passed,
+   and that its published contexts cannot be renamed without a loud, opt-out-able breaking change.
+   Read that section before arming anything: it says exactly what the acceptance does *not* buy, and
+   the residual is real rather than argued away.
    **Do not arm a context whose producer has no equivalent assertion at all.** "It looks pinned" is
    the state `kit-bump-shape` was in for the whole of #1713.
+   And **`@main` is the only moving ref that satisfies it.** Any other — a branch, a tag, another
+   repository — is a finding from `check-required-contexts.py`, on every receiver, every day.
 5. **Only then** consider `--apply` — and run the dry run first, which needs only
    `administration: read` and is what proves step 1 actually happened.
 
@@ -329,3 +337,152 @@ The reporter shipped under #1713 stops at step 2 on purpose. #1587's automerge w
 has run over real fan-outs, so nothing is armed and `materialize / kit-bump-shape` is required in no
 repository. A `failure` conclusion from it therefore blocks no merge — it is how a reviewer sees, in a
 check list, which of seven fanned-out bump PRs need reading.
+
+## Reusable-workflow calls are NOT pinned
+
+> **DECISION ([#1783](https://github.com/FS-GG/.github/issues/1783), 2026-07-28). A receiver calls a
+> reusable workflow in `FS-GG/.github` at `@main`, and does not pin it at a commit. That is the
+> accepted state, not an omission; pinning was considered and DECLINED. `@main` is the only moving
+> ref accepted — any other is a finding.**
+
+The alternative was live and unowned for as long as this page has existed, and #1772 filed #1783 to
+end that. What follows is what was measured, and what the acceptance does and does not buy.
+
+### The surface it is a decision about
+
+Measured 2026-07-28 from each receiver's branch protection (both stores) joined to its committed
+workflows — not from any in-repo prose about what is required:
+
+| required context | receivers requiring it | the hub workflow that names it | ref |
+|---|---|---|---|
+| `kit / coordination-kit` | SDD, Rendering, Governance, Templates, Game, Audio, Net (**all 7**) | `coordination-coherence.yml` | `@main` |
+| `contract-coherence / coherence` | Governance, Net | `contract-coherence.yml` | `@main` |
+| `lock-ranges / lock-ranges` | Audio | `lock-range-coherence.yml` | `@main` |
+| `Lock-range coherence (project refs track declared versions) / lock-ranges` | Game | `lock-range-coherence.yml` | `@main` |
+
+**Eleven required contexts, across every one of the seven receivers, three hub workflows, none
+pinned.** #1783's own body said "two of those are already required"; all three are, and
+`lock-range-coherence.yml` is required in two repos under two different caller job names. Half of
+each of those eleven strings is a job id in this repository, and the whole of each verdict is a
+function of this repository's tip.
+
+### Why pinning was declined
+
+Four measurements, in the order that decided it.
+
+**1. Pinning `uses:` would not have discharged ADR-0067 §2 at all.** All three callees fetch the rule
+they run out of this repo *at check time*, with `actions/checkout` and
+`ref: ${{ inputs.github-ref }}` — whose default is the string `"main"`, in every one of the three.
+No receiver passes that input; verified across all seven. So a receiver that pinned its `uses:` at a
+commit would freeze the *stanza* and leave the *rule* on the hub's tip, and the pin would be exactly
+the "it looks pinned" state step 4 above warns about. Closing §2 by pinning needs **both** halves —
+the `uses:` ref and the `github-ref` input — which is two edits in seven repositories that must stay
+in step with each other forever, not one. The split is a defect on its own terms, whatever anyone
+later decides about pinning, and is filed as
+[#1786](https://github.com/FS-GG/.github/issues/1786).
+
+**2. Nothing would advance the pins, and this is not a prediction.** Renovate's `github-actions`
+manager is live in these repos and does open PRs there (`actions/upload-artifact` v7,
+`actions/setup-dotnet` v6 in FS.GG.Rendering). Its Dependency Dashboard for FS.GG.Rendering
+(`FS-GG/FS.GG.Rendering#14`) lists every `@main` hub call as a detected dependency — `FS-GG/.github
+main`, six of them across `coordination-coherence.yml`, `gate.yml`, `kit-materialize.yml`,
+`lockfile-sync.yml` and `template-base-skill-union.yml`. And under `template-dispatch.yml`, which
+holds the org's **only** hand-authored SHA pin of a hub reusable workflow, it lists exactly one
+dependency: `actions/checkout v7`. **The two `dispatch-sender.yml@5fed2838…` calls in that file are
+not detected as dependencies at all.** Pinning does not put a call under Renovate's management; it
+removes it from Renovate's view. What happens next is written on the pin itself — its comment reads
+`# main as of 2026-06-28`, and `main` is now **988 commits** ahead of it.
+
+That is the answer to "Renovate can update `uses:` pins natively". The mechanism that *would* exist
+is `pinDigests`, which the org preset does not enable (`default.json` extends `config:recommended`,
+which does not include it) and which this decision does not enable either. Turning it on is how the
+decision gets revisited — see below.
+
+**3. Even a bot-opened pin PR would not land.** Measured in `registry/repos.yml` under #1565: 16
+`renovate/fs.gg.kit-*` PRs exist org-wide all-time; **four** have ever merged, all by a human
+account, all within 28 minutes of each other. Automated dependency PRs into these seven repos are not
+a reliable landing mechanism today, and a pin that does not advance is a receiver frozen on an old
+gate — with the freeze invisible, because a stale pin is green.
+
+**4. It re-imposes the seven-way fan-out the org is currently removing.** Every hub change to a
+reusable workflow would need seven receiver PRs. [#1615](https://github.com/FS-GG/.github/issues/1615)
+and [#1769](https://github.com/FS-GG/.github/issues/1769) are open work to *reduce* exactly that cost.
+
+### What `@main` buys, stated exactly
+
+Not §2's property. §2 asks for a verdict that is a pure function of (tree under test, **pinned ref**),
+and `@main` is not a pinned ref. What is true instead, and it is weaker:
+
+> A receiver's required verdict is a function of (its own tree, **a hub tip that has itself passed
+> the hub's required checks**).
+
+Two things hold that up, and both are mechanical rather than cultural:
+
+* **`FS-GG/.github@main` is protected**, and requires `contract-coherence / coherence`, `projection`,
+  `roster-closure`, `drift` and `reconcile`. The hub data these three callees read at `main` is what
+  the hub's own required gate validates: `contract-coherence.yml` grades `registry/dependencies.yml`
+  and `dist/dotnet/*.props` out of the hub checkout, and both are subjects of the hub's own
+  `contract-coherence / coherence`.
+* **The context names cannot move silently.** `reusable-job-id-coherence.yml` makes renaming or
+  deleting a published context a loud, opt-out-able breaking change on the PR that would cause the
+  outage — the deadlock half of this page.
+
+### The residual, which is real
+
+A hub commit that passes the hub's own gates can still change a receiver's verdict on byte-identical
+content. That is #1584's shape and it is not closed by this decision; it is *bounded* by it. Per
+callee:
+
+* `coordination-coherence.yml` — the **comparand** is no longer the hub: #1584 moved it to the
+  receiver's own pinned `FS.GG.Kit` package. What still moves is the *verifier program* and the
+  roster. Smallest residual of the three, and the one that already paid for its lesson.
+* `contract-coherence.yml` — the largest. It reads hub **data** at `main` and grades it, so a hub
+  commit to `registry/dependencies.yml` or `dist/dotnet/*.props` moves the required
+  `contract-coherence / coherence` verdict in FS.GG.Governance and FS.GG.Net directly. This is
+  #1584's shape, unmigrated, on a required context, in two repos —
+  [#1787](https://github.com/FS-GG/.github/issues/1787).
+* `lock-range-coherence.yml` — program only (`sparse-checkout: /scripts/`); the comparand is the
+  caller's own tree.
+
+**This decision does not depend on `kit/v*` tags, and therefore does not depend on
+[#1784](https://github.com/FS-GG/.github/issues/1784).** The refs it accepts are `main` and a 40-hex
+commit; a tag is refused precisely *because* it is mutable and unchecked after publication, which is
+what #1784 is about. #1772's rule resolution does depend on those tags — that dependency is real and
+is #1784's, not this page's.
+
+### What is checked, and how it can fail
+
+Prose is not a control. `scripts/check-required-contexts.py` now audits, for every context a repo's
+protection **requires**, every cross-repo `uses:` its producer had to cross to be named — and fails
+(exit 1) unless each one targets `FS-GG/.github` at either a 40-hex commit or a ref in the accepted
+set. The accepted set is a constant in that file with this decision written above it, so widening it
+is a code change under review, not a comment somebody stopped believing.
+
+It runs where it can already read protection: `required-context-coherence.yml`, daily, over all seven
+receivers, with a per-receiver App installation token. **Measured on all seven live trees against live
+protection on 2026-07-28: exit 0, 43 required contexts audited.** The decision and the fleet agree
+today, which is the only condition under which recording it is honest.
+
+`tests/required-contexts/run.sh` proves it can fail, on the real files rather than a drawing:
+FS.GG.Audio's real `gate.yml` and this repo's real `lock-range-coherence.yml`, with the one token
+`@main` mutated to `@wip` — the debugging branch left behind in a `uses:` line, which reads exactly
+like `@main` to a reviewer and to every other gate here. That leg asserts the finding, the ref by
+name, the reason, and that the summary does **not** call the repo deadlocked (it is not — the context
+reports; only its meaning moved). A tag is refused on the same leg; a 40-hex commit and a
+non-required context on an odd ref are both green, because #1783 declined to *require* pinning and
+never forbade it.
+
+### What would reverse this
+
+Any one of these, and the decision is re-opened rather than eroded:
+
+* `pinDigests` scoped to `FS-GG/.github` is enabled in `default.json` **and** demonstrated to open and
+  land digest bumps in a receiver — which repairs measurement 2 and part of 3.
+* The `github-ref` half is closed, so that pinning a `uses:` pins the rule with it. GitHub documents
+  `github.job_workflow_sha` as the commit SHA of the reusable workflow file for the job running it,
+  which would let a callee source its own scripts from its own commit with **no receiver-side edit at
+  all** — and would make a later pin mean what a reader assumes it means.
+  [#1786](https://github.com/FS-GG/.github/issues/1786), and it is **unmeasured**: that item may not
+  change three required gates on the strength of a documentation sentence either.
+* A required verdict is measurably moved by a hub commit again, as in #1584. One instance is a
+  measurement; a second is this decision being wrong.
