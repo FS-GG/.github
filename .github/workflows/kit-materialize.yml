@@ -273,8 +273,19 @@ jobs:
           # which a fork's `nuget.config` chooses and XML lets carry a literal newline (`&#xA;`). A
           # multi-line value written with a plain `echo` forges extra `key=value` lines into this
           # step's outputs. Reject anything that is not a single plain line before writing either.
+          # THE PATTERN IS `$'\n'`, NOT `"$(printf '\n')"`, AND THAT IS THE WHOLE OF .github#1797.
+          # Command substitution STRIPS TRAILING NEWLINES, so `$(printf '\n')` is the EMPTY STRING and
+          # the arm `*""*` is `*` — it matched every possible input, and this guard refused every bump
+          # PR in every receiver from 12:30Z to 15:0xZ on 2026-07-28. A check that cannot PASS, shipped
+          # inside the PR that was hardening this very block (#1772/#1780). Note `$(printf '\r')` does
+          # survive (length 1) — only the newline arm was degenerate, and `|` made that enough.
+          #
+          # `$'…'` is ANSI-C quoting: bash-only, and safe here because GitHub runs a `run:` block with
+          # no `shell:` as `bash --noprofile --norc -eo pipefail {0}` on ubuntu-latest. Do not "port"
+          # it back to a command substitution — that is the bug — and do not reach for `wc -l`, which
+          # counts NEWLINES and would not see a lone `\r`.
           case "$version$folder" in
-            *"$(printf '\n')"*|*"$(printf '\r')"*)
+            *$'\n'*|*$'\r'*)
               echo "::error::kit-bump-shape: the restored package version or folder spans more than one line; refusing to write it as a step output." >&2; exit 1 ;;
           esac
           echo "kit-dir=${folder%/}/fs.gg.kit/${version}" >> "$GITHUB_OUTPUT"
