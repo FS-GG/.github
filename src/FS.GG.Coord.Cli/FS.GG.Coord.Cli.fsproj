@@ -48,17 +48,27 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
-    <!-- 0.11.0 to 0.12.0 is a MINOR, and under 0.x SemVer that is the BREAKING signal (.github#1596).
-         It is not a patch: #1523 scoped the render flags, so a spelling that exited 0 on 20 of the 40
-         verbs now exits 1. PackageReleaseNotes below states that where a consumer meets it, the
-         nuget.org listing, because a consumer who first learns of it from a failing exit code in their
-         own pipeline has been failed by this release rather than informed by it.
+    <!-- 0.13.0 to 0.14.0 is a MINOR, and under 0.x SemVer that is also the BREAKING signal — the rule
+         registry/dependencies.yml's coord-engine row states twice: "on the 0.x line an observable-to-
+         callers behaviour change is spelled a minor, because 0.x has no major to take" (at 0.13.0), and
+         "a 0.x minor is the only spelling available for it" (at 0.12.0). Patch is not defensible here;
+         THREE of the six shipped commits force the minor independently (.github#1761):
+
+           * #1646 (b047b1a) — `claim` and `take` now REFUSE a `worker` flag naming somebody else over
+             another worker's live lock. A call 0.13.0 PERMITS now fails. The 0.12.0 case verbatim.
+           * #1628 (0beb561) — the blocking count ranks over the WHOLE board rather than the
+             repo-scoped candidate set, so `batch` and `next` can select a DIFFERENT item for the same
+             board. Scheduling order is what every caller of those verbs consumes.
+           * #1541 (cb5e291) — `reconcile` with the `apply` and `json` flags together is now ACCEPTED
+             by the parser and emits a machine projection; 0.13.0 rejects the combination.
+
+         #1636 (debbce6) additionally changes a computed KitDigest for the same input tree.
 
          This property is the RELEASE ACT (see scripts/check-engine-freshness.py): the engine's version
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.13.0</Version>
+    <Version>0.14.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -76,52 +86,57 @@
          the #266 shape in its purest form: the org knowing a thing, and the consumer discovering it
          from a broken script. Criterion 5 of .github#1596 asks for exactly this.
 
-         The counts below were MEASURED against this project's own parser rather than copied from the
-         issue: `fsgg-coord-engine command-contract` emits one row per verb with the flags it accepts,
-         and the two lists were derived from it over all 40 rows. -->
-    <PackageReleaseNotes>0.12.0 — BREAKING on the 0.x line (minor bump is the 0.x breaking signal).
+         KEEP THIS PROPERTY IN STEP WITH <Version> ABOVE. The 0.13.0 cut moved <Version> and left these
+         notes reading "0.12.0 — BREAKING...", so the nuget.org listing for 0.13.0 announced the PREVIOUS
+         release's break and none of its own seven commits. Nothing gates the two against each other
+         (.github#1762). A consumer who reads the listing and finds the wrong release described has been
+         failed by it exactly as much as one who finds nothing. -->
+    <PackageReleaseNotes>0.14.0 — MINOR on the 0.x line, which is also the 0.x BREAKING signal.
 
-BREAKING: `--json` and `--text` are now scoped to the commands that HAVE those projections
-(.github#1523). They used to be global, and on the verbs with no machine projection they were
-accepted and IGNORED — same prose, exit 0. They now REFUSE with exit 1 and a message naming the
-verb. Measured against this build's own `command-contract`, over all 40 verbs:
+Six engine commits since 0.13.0. None touches the wire surface (src/FS.GG.Coord.Core/Protocol.fs), so
+the exit codes and verb contract this repo's skills document are the ones this build enforces.
 
-  * `--json` is refused on 20 of 40: add, bootstrap, child, done, field-id, flush, followup,
-    heartbeat, item-id, landable, next, option-id, overlap, reap, release, room open, say,
-    set-field, verify-paths, whoami.
-  * `--text` is refused on 4 of 40: board, command-contract, issues, scan — the verbs that emit a
-    machine document and have no prose form to ask for.
+THE REASON TO TAKE THIS RELEASE: three of the six are fixes to the CLAIM PROTOCOL, found in production
+on 2026-07-27 when seven workers ran concurrently against it. Every worker vendors `scripts/fsgg-coord`,
+which resolves and execs this package, so a receiver on 0.13.0 is running the protocol without them.
 
-WHO THIS BREAKS: any script that appended `--json` for uniformity to a verb that never emitted JSON.
-On 0.11.0 the PARSER accepted it on all twenty and handed control to the verb; on 0.12.0 the parser
-refuses it before the verb runs. Observed side by side, 0.11.0 from nuget.org against this build:
+BREAKING: a session is not a credential (.github#1646). `verifyHeld` granted `Held` when the claim
+marker's id matched the id `--worker` NAMED and the two sessions were not known-different. Subagents
+share a session id, so an impersonator satisfied both legs and could act on a lock they did not hold.
+The refusal is enforced in the ENGINE at both of `Held`'s doors — `verifyHeld` and `claim` — so every
+verb that takes the capability is covered by construction: `release`, `heartbeat`, `widen`, `done`'s
+lock-drop, and the ADR-0041 chore lock. A call 0.13.0 accepted now exits non-zero.
 
-  $ fsgg-coord-engine whoami --json     # 0.11.0: prints the human text, exit 0
-                                        # 0.12.0: "--json is not a flag of `whoami`", exit 1
+  $ fsgg-coord-engine claim .github#123 --worker someone-else   # 0.13.0: may succeed
+                                                                # 0.14.0: refused
 
-`flush --json` and `reap --json` behave the same way. The other seventeen also reached their verb on
-0.11.0 and are stopped at the parser here; their exit code on 0.11.0 then depended on the verb's own
-arguments and board access, so treat the parse-level acceptance as the thing that changed.
+WHO THIS BREAKS: anything that passed a `--worker` it does not own — which was never a supported act,
+but was reachable. The remedy is to pass your OWN minted id (`whoami --mint`), or `--force` if you
+really mean to steal, which is loud and posts the theft.
 
-THE REMEDY IS TO DROP THE FLAG. Every BARE form is unchanged: all forty verbs were run bare against
-0.11.0 and against this build, and the only outputs that differ are `command-contract` (below) and
-the `--help` text, which #1535 rewrote to say that `next` takes the chore lock.
+ALSO in the same fix: `claim --force --worker THEM` used to destroy a third party's lock and sign the
+theft notice with the INNOCENT worker's id, falsifying the accounting rather than merely bypassing it.
+The notice now names the actor.
 
-ALSO CHANGED, for tooling that parses it: `command-contract` keeps schema id
-`fsgg.coord.commands/1` (the addition is additive) but its content moves twice — every row gains a
-`writes` key (.github#1534), and the twenty rows above no longer list `--json` among their flags.
-It is the machine-readable answer to "which verbs really take the flag", and it is now correct.
+BREAKING for consumers of scheduling ORDER: the blocking count ranks over the WHOLE board, not the
+--repo-scoped candidate set (.github#1628). `batch` and `next` can therefore choose a different item
+for the same board than 0.13.0 would. The ranking is more correct — a row blocking ten items across
+three repos outranks one blocking two in this repo — but it is an observable change for any caller that
+depended on the previous pick.
 
-NOT BREAKING, and the reason to take this release: 0.11.0 corrupts touch-set declarations.
-`widen REF --paths TOKENS --json` swallowed `--json` INTO the declaration and exited 0 under a
-DISJOINT receipt (.github#1507), writing a junk token into the one line the scheduler reserves files
-by. Fixed here, along with `widen`/`set-paths` honouring `--json` (#1517), `reconcile --apply --json`
-emitting ONE document (#1524), `take --json`'s empty arm emitting a receipt instead of prose (#1525),
-`command-contract` carrying per-verb write-ness (#1534), and `next` being declared a board WRITE
-because it takes the chore lock (#1535).
+NEW PROJECTION: `reconcile --apply --json` now PARSES (.github#1541). 0.13.0 rejected the combination,
+so the org's one mutating reconcile verb had no machine projection at all and callers scraped prose.
 
-The wire surface (src/FS.GG.Coord.Core/Protocol.fs) is UNCHANGED across all seven commits: the exit
-codes and verb contract this repo's skills document are the ones this build enforces.</PackageReleaseNotes>
+FIXES:
+
+  * The chore offer's board read is FRESH (.github#1679). It read the board through the 90-second
+    scheduling cache, so a CLASS-PROJECTION-LAG chore survived the very write that discharged it and
+    was offered again to the next worker. A signal that lies, in a fabric where workers are told to
+    trust signals. Fixed with a third ReadIntent rather than by borrowing Reconciling's warrant.
+  * BLOCKER-CLEARED respects the human-park sentinel it would overwrite (.github#1644). A row carrying
+    `Blocked on: human/...` was promoted to Ready by the very chore that is supposed to honour it.
+  * KitDigest hashes TWO runtime skill roots, not three (.github#1636) — .codex/skills is retired
+    (ADR-0065 as amended). This changes the computed digest for the same input tree.</PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
