@@ -113,7 +113,19 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
-DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 (as amended by ADR-0067 §5): one per lane.
+# ONE MATERIALIZED ROOT — ADR-0067 §9 stage 2 (.github#1676). This constant used to read
+# ".claude/skills .agents/skills": both roots, both written into. `.agents/skills` is now a generated
+# VIEW (FsggKitViewSkillRoots) — produced at checkout by `scripts/skill-view generate`, never
+# transported — so syncing bytes into it is the same defect FS.GG.SDD#770 and FS.GG.Governance#338
+# each closed in their own tool. The RUNTIME contract is unchanged: it is the union of the
+# materialized and view roots, and that union is still ADR-0065's two.
+#
+# This is a FALLBACK and rarely the operative value: below, the roots are taken from the PINNED
+# PACKAGE, not from this checkout, unless an operator names $AGENT_SKILL_ROOTS (see the roots
+# precedence note further down — "that constant is hub state, and a pin must not read hub state").
+# It is corrected anyway, because a fallback that encodes the pre-stage-2 world is a wrong answer
+# waiting for the one run that reaches it.
+DEFAULT_ROOTS=".claude/skills"   # ADR-0065 (as amended by ADR-0067 §5 and §9 stage 2).
 # `resolve_roots` (lib/roots.sh) also sets ROOTS_SRC and ROOTS_FROM_DEFAULT. This lane reads neither —
 # it materializes the kit rather than reporting on which rule chose the roots — so they are not
 # pre-declared here. skill-union-assert.sh, which does read both, declares both. (#648)

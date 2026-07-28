@@ -12,11 +12,27 @@
          this to that root (e.g. in a repo-root Directory.Build.props: $(MSBuildThisFileDirectory)). -->
     <FsggKitReceiverRoot Condition="'$(FsggKitReceiverRoot)' == ''">$(MSBuildProjectDirectory)</FsggKitReceiverRoot>
 
-    <!-- The skill roots a receiver holds, ';'-separated. ADR-0065 makes this the same universal
-         root contract used by fsgg-sdd and coordination-sync — TWO roots since ADR-0067 §5
+    <!-- The skill roots this package MATERIALIZES INTO, ';'-separated. ADR-0065 makes this the same
+         universal root contract used by fsgg-sdd and coordination-sync — TWO roots since ADR-0067 §5
          (.github#1636) retired `.codex/skills`, which is Codex's other native root and produced only
-         a duplicate catalog entry. Receivers drop it by RE-MATERIALIZING, never by hand. -->
-    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.agents/skills</FsggKitSkillRoots>
+         a duplicate catalog entry. Receivers drop it by RE-MATERIALIZING, never by hand.
+
+         NARROWED TO ONE — ADR-0067 §9 STAGE 2 (.github#1676), 2026-07-29. This default used to read
+         `.claude/skills;.agents/skills`: the package materialized real bytes into BOTH. It no longer
+         does, because `.agents/skills` is now a generated VIEW root (see FsggKitViewSkillRoots below)
+         whose content is produced at checkout and never transported.
+
+         THE RUNTIME CONTRACT IS UNCHANGED, and that is what makes this stage 2 rather than a
+         retirement: the runtime surface is the UNION of this property and FsggKitViewSkillRoots, and
+         that union is still ADR-0065's two. A root moving from the first property to the second keeps
+         the union constant.
+
+         IT CHANGES NO RECEIVER'S ANSWER TODAY — measured across all seven on 2026-07-28: every one
+         already OVERRIDES both properties inline with exactly these values, which is stage 1 (7 of 7,
+         complete). What it fixes is the receiver that does NOT override: before, it materialized real
+         bytes into a root that should be generated — the defect FS.GG.SDD#770 and
+         FS.GG.Governance#338 each closed one tool at a time. -->
+    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills</FsggKitSkillRoots>
 
     <!-- Roots the contract has RETIRED, ';'-separated. The materializer removes the kit's own skill
          directories from each on the receiver's next restore, so a retirement completes itself
@@ -60,8 +76,16 @@
               materialize, as `-t:FsggKitCheckSkillView`.
 
          A root may not appear in more than one of the three properties; the materializer refuses,
-         rather than silently picking a disposition. -->
-    <FsggKitViewSkillRoots Condition="'$(FsggKitViewSkillRoots)' == ''"></FsggKitViewSkillRoots>
+         rather than silently picking a disposition.
+
+         DEFAULTED TO `.agents/skills` — ADR-0067 §9 STAGE 2 (.github#1676), 2026-07-29. The paragraph
+         above still describes the EMPTY default as "the whole safety of this property". That was
+         exactly right while receivers were opting in ONE AT A TIME, and §9's precondition for stage 2
+         is that they all have. THEY HAVE: stage 1 is 7 of 7, and every receiver declares this property
+         inline with this value, so flipping the default changes no receiver's evaluated answer. It
+         changes what a receiver gets when it does not say — which is now the end state rather than the
+         state §9 was retiring. -->
+    <FsggKitViewSkillRoots Condition="'$(FsggKitViewSkillRoots)' == ''">.agents/skills</FsggKitViewSkillRoots>
 
     <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
          materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->
