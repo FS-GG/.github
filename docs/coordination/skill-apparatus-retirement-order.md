@@ -299,7 +299,34 @@ materialized `.agents/skills` and one skill of its own:
 5. Re-run the materialize: green, with `all N kit skill file(s) visible` at the view root. Wire
    `-t:FsggKitCheckSkillView` into R's `gate.yml` so the assertion runs on every PR and not only on
    kit-bump PRs.
-6. Re-run §7's rollback transcript against R before the next receiver is touched (`#1676` AC 3).
+6. **In the SAME commit as step 3, give R's `skill-view-check.yml` its generate step.** This is a
+   required context and it is the step that is easiest to leave until "after", which is a RED window on
+   every pull request rather than a tidy-up:
+
+   ```yaml
+   - name: Resolve the view roots this tree no longer commits
+     run: bash scripts/skill-view generate --source .claude/skills --roots ".agents/skills"
+   ```
+
+   Why it cannot go earlier and cannot go later. **Earlier**: `scripts/skill-view` refuses to generate
+   over a root git TRACKS, with no override (`skill-view:331`, ADR-0067 §9), so on a pre-retirement tree
+   the step dies exit 2 — the gate would be red before the retirement instead of after it. **Later**: a
+   view root does not exist in a fresh checkout, so the check reports `[absent-root]` and the required
+   context is red on every PR until the follow-up lands. Measured on a bare checkout of a dry-run
+   retirement of `FS.GG.SDD`: without the step, exit 1
+   ([30339144429](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30339144429)); with it,
+   `success` ([30339084890](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30339084890)). The window
+   between the two commits is the whole cost, so there must not be two commits.
+
+   `--roots` names the VIEW roots **explicitly**, exactly as `FsggKitViewSkillRoots` does for the
+   materializer, and for the same reason: the default pair would also try to resolve R's tracked live
+   root and be a refusal rather than a no-op.
+
+   **Do not make the step conditional on the root being missing.** "Generate whatever is absent, then
+   assert it is present" makes `[absent-root]` unreachable and hands back a gate that cannot fail —
+   which is the exact defect (§5.1) that retired the gate this one replaced. The generate is authorised
+   by R **declaring** a root to be a view, never by observing that one is missing.
+7. Re-run §7's rollback transcript against R before the next receiver is touched (`#1676` AC 3).
 
 ---
 
@@ -311,7 +338,7 @@ materialized `.agents/skills` and one skill of its own:
 | **B2** | The materializer has exactly two states for a root: `FsggKitSkillRoots` (materialize into it) and `FsggKitRetiredSkillRoots` (delete the kit's directories from it) — `src/FS.GG.Kit/build/FS.GG.Kit.props:19,25`. There is **no third state** for *"still a declared runtime root, but generated locally rather than materialized"*, which is exactly what a view root is. Without it a receiver's second root stays committed, and `scripts/skill-view:331` then refuses to generate the view there. ADR-0065 §Retiring a root forbids the receiver hand-deleting it — *"A receiver never hand-deletes a mirror; the materializer that created it is the thing that removes it."* | **CLEARED in `FS.GG.Kit` 0.15.0** ([#1696](https://github.com/FS-GG/.github/issues/1696)). `FsggKitViewSkillRoots` is the third state — a root that stays in the runtime contract, is not materialized into, has its previously-materialized kit directories swept by the materializer, and is then **asserted visible** (`FsggKitCheckSkillView`, ADR-0067 §8). ADR-0065 §A root's three dispositions records the contract. **Empty by default**, so it retires nothing until a receiver's own stage-1 change sets it. |
 | **B3** | [`#1693`](https://github.com/FS-GG/.github/issues/1693) — `#1587`'s diff-shape guard refuses the 0.14.0 bump on all seven receivers, so no kit change reaches any receiver today regardless. 0 of 7 are current (SDD 0.10.0; five at 0.8.0; Audio 0.6.0). | open |
 | **B4** | `scripts/repos-audit.sh:1841` requires a receiver's gate to be armed on a change to a **committed** skill root. A generated root cannot be armed that way. Repairing this is **sanctioned** — ADR-0067 says the apparatus *"keeps running unchanged, and keeps being repaired"* until §9's order reaches it — but it must precede the first receiver retirement, and it **must not be confused with retiring the sweep**, which is last. | **NOT a blocker for a receiver that never wired the caller — measured 2026-07-28 on the first retirement.** The arming check at `repos-audit.sh:1909` is reached only when a repo BOTH declares `skill-union` and calls the workflow (`declared=1 && calls_it=1`). Zero receivers call it (`registry/repos.yml`'s `skill-union` row; Templates#313 recorded the decision not to), so every receiver lands on the **GAP** branch instead — before the retirement and after it, identically. `FS.GG.Templates` was a `skill-union` gap on 2026-07-27 and is a `skill-union` gap now, for the same reason and with no new red. **Still open, and still precedes the first receiver that DOES wire a caller** — which is a different, later event than "the first receiver retirement", and this row conflated the two. |
-| **B5** | **A receiver that DOES wire a `skill-union` caller cannot be retired at all**, and the caller-arming question B4 asks is the smaller half of it. `skill-union-assert.yml` is a reusable workflow: it checks the caller out and asserts over that checkout, so a root that only exists after a `generate` is **absent** in its subject. Measured on `FS.GG.SDD@387adc6`'s dry-run retirement: `configured root is absent: ./.agents/skills`, **exit 2**, on a context that is **required** under `enforce_admins`. The workflow's own header refuses the obvious lift — *"Adding an artifact input to lift that limit is a decision, not a tidy-up — do not infer it from this note."* | **OPEN, and it is what stopped stage 2.** Closing it is a decision with two candidate shapes and neither is a tidy-up: (a) give the reusable workflow an opt-in, defaulted-off way to produce the caller's own view before asserting — a widening of a shared contract, and one that makes a gate produce its own subject; or (b) **retire the caller**, which is what ADR-0067 §9 actually directs for `skill-union-assert`, and which on SDD means dropping a **required** context under `enforce_admins` plus the `receives: skill-union` roster row, and standing up `skill-view check` on a required context in its place. Whichever is chosen, it must land and be proven **before** any receiver with a caller is retired. Filed as [#1715](https://github.com/FS-GG/.github/issues/1715). |
+| **B5** | **A receiver that DOES wire a `skill-union` caller cannot be retired at all**, and the caller-arming question B4 asks is the smaller half of it. `skill-union-assert.yml` is a reusable workflow: it checks the caller out and asserts over that checkout, so a root that only exists after a `generate` is **absent** in its subject. Measured on `FS.GG.SDD@387adc6`'s dry-run retirement: `configured root is absent: ./.agents/skills`, **exit 2**, on a context that is **required** under `enforce_admins`. The workflow's own header refuses the obvious lift — *"Adding an artifact input to lift that limit is a decision, not a tidy-up — do not infer it from this note."* | **CLEARED 2026-07-28 by [#1715](https://github.com/FS-GG/.github/issues/1715), shape (b) — the caller is retired in all THREE receivers that wired one.** Shape (a) (an opt-in input teaching the reusable workflow to generate the caller's view) was **declined**: it widens a contract five other repos read in order to preserve a gate whose subject the rewrite is deliberately removing, and it makes a gate produce its own subject. See §5.1 below for the decision, the measurement that forced it, the replacement, and the run ids that prove the replacement can fail. |
 
 B1 and B2 are both kit-content changes, so they land together, in one republish, and then ride B3.
 
@@ -330,6 +357,115 @@ B1 and B2 are both kit-content changes, so they land together, in one republish,
 > later**: it landed at 2026-07-27 01:07 (`#1505`) and SDD's caller landed at 2026-07-27 02:34
 > (`a066e0b`). It is filed as [#1716](https://github.com/FS-GG/.github/issues/1716) rather than
 > corrected here, because this document is not the roster.
+
+---
+
+## 5.1 B5's decision, and the gate that replaces the caller
+
+**Decided 2026-07-28 on [#1715](https://github.com/FS-GG/.github/issues/1715), with the repository
+owner's authorization: shape (b). The `skill-union` receiver caller is RETIRED, and each receiver's
+required skill context is now its own `skill-view check --source <live root>`.** This section is where
+the next receiver's worker reads it, so it does not have to be relitigated per repo.
+
+### The measurement that decided it
+
+A gate that cannot fail is worse than no gate, and on the half-view layout §2 retires INTO, this one
+cannot. Measured on **each of the three receivers' own trees**, at a dry-run retirement:
+
+| repo | `skill-union-assert --roots ".agents/skills"` (the view alone) | `--roots ".claude/skills .agents/skills"` |
+|---|---|---|
+| `FS.GG.SDD` | exit 2, *"no skills found under any root"* | exit 0, `in-every-root=32/32 byte-identical=32/32` |
+| `FS.GG.Rendering` | exit 2, same | exit 0, `in-every-root=50/50 byte-identical=50/50` |
+| `FS.GG.Governance` | exit 2, same | exit 0, `in-every-root=15/15 byte-identical=15/15` |
+
+**Read the two columns together.** `union_ids()` enumerates with `find` and no `-L`, so a view root
+contributes **zero** ids — that is the left column, on its own, and it is a fact about the tool rather
+than an inference. Every id in the right column therefore came from the **tracked** root alone, and the
+view root satisfied the presence test only because presence is `[ -d ]` **through** the symlink, which
+cannot fail. Both of the gate's headline invariants are tautologies on this layout, and
+`byte-identical=N/N` is N comparisons of a file with itself. It would have kept reporting `success` on
+a **required** context under `enforce_admins` while asserting nothing — epic `#266` in its most
+expensive form, because that green is indistinguishable from a green that means something.
+
+Note which way the failure runs: the gate is **fatal about the checkout** (`configured root is absent`,
+exit 2, on a bare checkout) and **vacuous about the content** (exit 0, asserting nothing, once the view
+exists). Neither half is a gate. Shape (a) would have repaired only the first.
+
+### Why (a) was declined
+
+1. It widens a `workflow_call` contract five other repos read, permanently, to preserve a gate whose
+   subject this rewrite is deliberately removing. That is a permanent cost for a transitional shape.
+2. A gate that produces its own subject must make the generate a separately visible step whose failure
+   is distinguishable from a green assert (`#1710` criterion 2). Achievable — but it is new machinery
+   guarding new machinery, and `skill-view check` already asserts §8's absence classes and **can
+   genuinely fail**.
+
+Shape (b) is also what §9 directs on a plain reading. It was not chosen to make the retirement
+convenient; the retirement is what exposed that the gate had stopped meaning anything.
+
+### The replacement, and the proof it can fail
+
+Each receiver runs its own `.github/workflows/skill-view-check.yml` — no `uses:`, its **own** pinned
+`scripts/skill-view` (a receiver's verdict must be a function of the receiver, `#1584`), an unfiltered
+`pull_request` trigger, and the required context `skill-view-check`:
+
+```yaml
+- run: bash scripts/skill-view check --source .claude/skills --tree .
+```
+
+**Mutation-checked in CI on `FS.GG.SDD`'s own tree, by run id, before the requirement moved** — this is
+`#1715`'s AC2/AC3 and the whole justification for the decision:
+
+| what | run | verdict |
+|---|---|---|
+| `success` on a **bare checkout of a RETIRED tree** (`.agents/skills` untracked + git-ignored, view generated at checkout) | [30339084890](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30339084890) | `success` — *"OK — 32 declared skill(s) visible in every one of 2 root(s) (64 path(s) examined)"* |
+| the **generated view removed** | [30339144429](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30339144429) | **failure** — `[absent-root] .agents/skills does not exist` |
+| the **source root emptied** | [30339430795](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30339430795) | **failure**, exit 2 — *"the expected skill set is EMPTY — refusing to report 'everything is visible' over nothing"* |
+
+Both proof pull requests were **closed unmerged** and their branches deleted: nothing was retired to
+obtain this evidence (`#1715` AC5).
+
+### What the swap does NOT keep, said out loud
+
+`skill-view check --source X` asserts that everything X declares is **visible** at every root, with §8's
+absence classes named separately. It does **not** compare the two roots' bytes against each other. So
+for as long as a receiver still commits **two independent copies**, the swap is weaker than the union
+gate in exactly one direction: a skill present in `.agents/skills` and absent from `.claude/skills` is
+outside the new gate's subject. That direction stops existing the moment the second root becomes a view
+— a view cannot diverge from what it is a view of — so the gap is bounded by that receiver's own stage-1
+retirement, and it is a reason to sequence stage 1 promptly rather than a reason to keep a tautology.
+`kit / coordination-kit` keeps grading the kit-owned skills' bytes throughout, which is evidence about
+those skills and never about the tree (`#1504`).
+
+### The order the swap was performed in, and why it is not negotiable
+
+`#1715` AC4. A required context that never posts wedges **every** pull request at *"Expected — waiting
+for status to be reported"*, and the org has paid for that twice, both times in `FS.GG.SDD` (`#370`,
+`#525`). Per repo:
+
+1. land `skill-view-check.yml` on `main`, and **observe it report `success` on a real pull request** —
+   `FS.GG.SDD` [30338722448](https://github.com/FS-GG/FS.GG.SDD/actions/runs/30338722448),
+   `FS.GG.Rendering` [30338748566](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/30338748566),
+   `FS.GG.Governance` [30338750948](https://github.com/FS-GG/FS.GG.Governance/actions/runs/30338750948);
+2. `scripts/repos.sh require-context --context skill-view-check … --apply` (add-only: it POSTs to the
+   contexts collection, which has no delete semantics);
+3. `scripts/repos.sh unrequire-context --context "skill-union / skill-union" … --confirm-remove "skill-union / skill-union" --apply`;
+4. **only then** delete `.github/workflows/skill-union.yml`.
+
+At no instant did any of the three branches require a context no workflow could report. Steps 3 and 4
+are the ones that must never swap: with the caller deleted first, the still-required context has no
+producer and the repository stops merging — including the pull request that would repair it. Reading
+the branch's required contexts back **immediately before** the delete commit is the cheap check that
+catches the mistake, and the retirement change makes it a hard precondition.
+
+> **The credential exists now, and that is not a reason to risk needing it.** The org dispatch App was
+> granted `administration: write` on 2026-07-28 (`#1712`), so a wedged branch is repairable where it
+> previously was not. `repos.sh`'s own header says the same thing the other way round: needing the
+> repair is a symptom, not a plan. Nothing in this order relies on it.
+
+**Nothing about `enforce_admins`, `strict`, reviews or force-push was touched on any repo.** `repos.sh`
+cannot reach those fields: it names only `…/protection/required_status_checks` and its `contexts`
+sub-resource, never the bare protection endpoint, whose whole-object `PUT` disables by omission.
 
 ---
 

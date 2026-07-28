@@ -5,17 +5,37 @@
 # the CONSUMER-side arm of ADR-0014: producers (SDD `mirror` / the fs-gg-ui template's single
 # materialize) write the roots; this proves they did so correctly, in EVERY lane.
 #
-# THE LIVE CALLERS, MEASURED 2026-07-28 (.github#1643) — NOT A PLAN. These three lines used to read
-# "The first caller is the FS.GG.Templates composition gate (FS.GG.Templates#49 / roadmap T3.2), which
-# will call it for both the orchestrated and standalone lanes." That was a prediction written in the
-# present tense before the subject existed, and it is wrong in three directions at once: Templates is
-# not the first caller, is not a caller of THIS workflow at all, and is not becoming one. What is true:
+# THE LIVE CALLERS, MEASURED 2026-07-28 (.github#1643, re-measured #1715) — NOT A PLAN. These lines
+# used to read "The first caller is the FS.GG.Templates composition gate (FS.GG.Templates#49 / roadmap
+# T3.2), which will call it for both the orchestrated and standalone lanes." That was a prediction
+# written in the present tense before the subject existed, and it is wrong in three directions at once:
+# Templates is not the first caller, is not a caller of THIS workflow at all, and is not becoming one.
+# What is true:
 #
 #   * FS.GG.Rendering's template-base-skill-union.yml (product-path: template/base, manifest: supplied)
-#     is the live generated-product-shaped caller of this workflow. Its subject is a COMMITTED
-#     subdirectory, which is why a `uses:` can reach it.
-#   * The receiver callers (product-path at its default, over each repo's own committed roots) are the
-#     other kind; see the roster and docs/coordination/skill-union-assertion.md.
+#     is the ONLY live caller of this workflow, org-wide, and it is the generated-product-shaped kind.
+#     Its subject is a COMMITTED subdirectory, which is why a `uses:` can reach it — and why the B5
+#     measurement below does not touch it.
+#   * THERE ARE NO RECEIVER CALLERS ANY MORE. The receiver kind (product-path at its default, over a
+#     repo's own committed roots) is RETIRED: .github#1715 decided it on 2026-07-28 (ADR-0067 §9 phase
+#     4, blocker B5, shape (b)) and deleted the three that existed — FS.GG.SDD, FS.GG.Rendering and
+#     FS.GG.Governance. THE REASON IS THAT THE ASSERTION STOPS BEING ONE under the layout phase 4
+#     retires into. Measured on all three of those trees at a dry-run retirement:
+#
+#         --roots ".agents/skills"                 -> exit 2, "no skills found under any root"
+#         --roots ".claude/skills .agents/skills"  -> exit 0, in-every-root=N/N, byte-identical=N/N
+#
+#     `union_ids()` enumerates with `find` and no `-L` (see the note at its definition), so a root that
+#     IS a generated view contributes ZERO ids — the first line, on its own. Every id in the second came
+#     from the tracked root alone, and the view root passed presence only because presence is `[ -d ]`
+#     THROUGH the symlink and cannot fail. Both headline invariants become tautologies, on a context
+#     that was REQUIRED under enforce_admins. The replacement is each receiver's own
+#     `scripts/skill-view check --source <live root>`, which asserts ADR-0067 §8's absence classes and
+#     is mutation-proven to fail; the decision, the run ids and the per-repo swap order are in
+#     docs/coordination/skill-apparatus-retirement-order.md §5.1.
+#
+#     DO NOT WIRE A NEW RECEIVER CALLER, and do not "restore" one for a repo that looks unguarded. The
+#     roster's skill-union capability row says the same thing from the other side.
 #   * FS.GG.Templates#49 WAS delivered — 2026-07-02, PR Templates#51, commit 574e90c, both the
 #     orchestrated and standalone lanes — but via the pinned, content-addressed dist/skill-union-assert.sh
 #     bundle from inside its composition job, NOT via a `uses:` of this file. That is deliberate and

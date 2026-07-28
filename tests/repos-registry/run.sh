@@ -717,26 +717,46 @@ A repo that ENFORCES but does not RECEIVE can only go red and stay red.
 A repo that RECEIVES but never ADOPTED gets build files written into it by a bot."
 fi
 
-# ---- skill-union: the reviewed receiver set, and the authority's deliberate absence (#1504) -------
-# The full three-root union is claimed by EVERY framework repo and by no authority row. Both halves are
-# decisions, and both are the kind that rot silently, so they are pinned here rather than left to prose:
+# ---- skill-union: the RESIDUAL receiver set after the caller was retired (#1504, then #1715) ------
+# THIS EXPECTATION CHANGED ON 2026-07-28 AND THE OLD ONE IS RECORDED HERE ON PURPOSE. It was
+# `audio,game,governance,net,rendering,sdd,templates` — every framework repo, none of the authority —
+# on the reasoning that "a framework repo that does not gate its committed roots is a repo whose
+# non-Claude runtimes can be silently partitioned". That reasoning still holds. What stopped holding is
+# that THIS capability is the thing that gates them: under ADR-0067 phase 4 one runtime root becomes a
+# generated VIEW, `union_ids()` enumerates with `find` and no `-L` so a view root contributes ZERO ids,
+# and presence is then tested with `[ -d ]` through the symlink and cannot fail. Both of the
+# capability's invariants become tautologies. Measured on all three wired receivers' own trees; the
+# decision is #1715 (ADR-0067 §9 phase 4, blocker B5, shape (b)) and the record is
+# docs/coordination/skill-apparatus-retirement-order.md §5.1.
 #
-#   every framework repo receives it — ADR-0065 gives framework repos and scaffolded products the same
-#     three runtime roots, so a framework repo that does not gate its committed roots is a repo whose
-#     codex/agent runtimes can be handed a smaller instruction set than Claude with nothing to say so.
-#     That is not hypothetical: it was true of Governance, Rendering and SDD when this row landed.
+# So the three repos that actually WIRED a caller — governance, rendering, sdd — had it retired and
+# their rows removed in the same change, and each gained a required `skill-view-check` context instead.
+# That gate is NOT a capability of this fabric and must not be given a row: it is the receiver's own
+# workflow running the receiver's own pinned `scripts/skill-view`, with no `uses:` of the authority, so
+# there is nothing for a `workflow:`/`caller:` detector to see and inventing one that matched a
+# FILENAME would certify the shape instead of the subject.
+#
+# What is pinned now, and both halves are still decisions that rot silently:
+#
+#   the four that remain — audio, game, net, templates — NEVER wired a caller. Their rows are gaps the
+#     scheduled audit reports, exactly as before, and they are kept so the sweep still has a non-empty
+#     target set while whether to delete them is decided with the per-repo retirement sequence (#1676,
+#     #1587). A worker must NOT read one of those rows as an instruction to wire a caller.
 #   `.github` does NOT — it is the SOURCE of the assertion and asserts its own roots with
 #     skill-roots-selfcheck.yml. Rostering the authority would demand a `uses:` of its own reusable
 #     workflow, which is the phantom-adopter failure repos-audit refuses by name. Its coherence is
 #     proven, it is simply proven here rather than by this capability.
 su_receivers="$(bash "$REPOS_SH" list --receives skill-union --field id | sort | tr '\n' ',')"
-if [ "$su_receivers" = "audio,game,governance,net,rendering,sdd,templates," ]; then
-  ok "skill-union: every framework repo receives it, and the authority (which asserts itself) does not"
+if [ "$su_receivers" = "audio,game,net,templates," ]; then
+  ok "skill-union: only the four that never wired a caller remain, and the authority is still out (#1715)"
 else
-  bad "skill-union: the receiver set is not the seven framework repos (#1504)" \
+  bad "skill-union: the receiver set is not the four residual repos (#1504, #1715)" \
       "declared: $su_receivers
-expected: audio,game,governance,net,rendering,sdd,templates,
-A framework repo left out is a tree whose non-Claude runtimes can be silently partitioned.
+expected: audio,game,net,templates,
+governance/rendering/sdd were REMOVED by #1715: the caller is retired because on a generated view its
+two invariants are tautologies, and their replacement is a required skill-view-check context.
+Re-adding one of them means re-creating the blocker #1715 cleared — read
+docs/coordination/skill-apparatus-retirement-order.md §5.1 before changing this line.
 The AUTHORITY must stay out: it is the assertion's source and dogfoods it via skill-roots-selfcheck.yml."
 fi
 

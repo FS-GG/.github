@@ -29,7 +29,12 @@
 #   build-config       — the org-shared .NET build config from FS.GG.Kit [materializer: build-config]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
-#   skill-union        — the FULL three-root skill union over the repo's OWN committed roots [caller: skill-union]
+#   skill-union        — RETIRED SHAPE (#1715). The FULL union over the repo's OWN committed roots,
+#                        over ADR-0065's two as amended by ADR-0067 §5 — NOT "three": #1636 narrowed the
+#                        contract, the reusable workflow's `roots` default and repos-audit's detector
+#                        both already probe exactly two, and this line was the last place saying three
+#                        (#1716). Four rows still declare it and none may wire a new caller; the
+#                        replacement is the receiver's own `skill-view check`. [caller: skill-union]
 #
 # A `receives` row is a CLAIM ABOUT REALITY, and it goes stale silently. `lockfile-sync` is the
 # proof: six repos really wired the reusable workflow, nobody added the rows, and `repos-audit`
@@ -96,14 +101,19 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 8
-updated: 2026-07-27
+updated: 2026-07-28
 authority: FS-GG/.github
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.
-  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
-  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
-  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
+  # NOT skill-union, for these three ALONE and for a decided reason (#1715, 2026-07-28): they are the
+  # only rostered repos that ever wired the receiver caller, and the caller is retired. Their skill
+  # gate is now their own `skill-view-check` required context, which this fabric does not detect
+  # BECAUSE IT IS NOT A `uses:` OF ANYTHING HERE. See the skill-union capability row for the
+  # measurement that retired the shape, and do not re-add these words expecting a green.
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
   - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }  # NOT build-config — see below.
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
   - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
@@ -265,26 +275,68 @@ capabilities:
   # somebody else's fabric, so the detector deliberately does not match it and this roster does not
   # claim it. `.github`'s own coherence is proven, it is simply proven HERE.
   #
-  # THIS ROW GOES RED BEFORE IT GOES GREEN, AND THAT IS THE POINT. No framework repo has wired the
-  # receiver caller yet (measured 2026-07-27: zero `uses:` of skill-union-assert.yml in any of the
-  # seven), so the scheduled `repos-audit` reports seven gaps until they do — and three of them cannot
-  # even go green on a caller alone, because Governance, Rendering and SDD must first rematerialize
-  # their partitioned roots from their authoritative producers. Those three repairs are filed and
-  # sequenced as cross-repo requests; #1504's own completion bar says the rollout is not complete until
-  # `scripts/skill-union-assert.sh --product <fresh tree>` passes for every audited tree AND every
-  # receiver check is green. Rostering the receivers is what makes that bar VISIBLE instead of a
-  # sentence in a closed issue. The alternative — `receivers: none` until somebody wires it — would have
-  # recorded that nobody receives the full union, which is exactly the claim the org has now rejected.
+  # THE RECEIVER CALLER SHAPE IS RETIRED. DO NOT WIRE A NEW ONE (#1715, 2026-07-28).
+  #
+  # This paragraph used to read: *"THIS ROW GOES RED BEFORE IT GOES GREEN, AND THAT IS THE POINT. No
+  # framework repo has wired the receiver caller yet (measured 2026-07-27: zero `uses:` of
+  # skill-union-assert.yml in any of the seven), so the scheduled `repos-audit` reports seven gaps
+  # until they do…"*. **That sentence was true for 87 minutes.** It landed 2026-07-27 01:07 (#1505);
+  # `FS.GG.SDD`'s caller landed 02:34 the same day (`a066e0b`, FS.GG.SDD#718), and Governance
+  # (`c577961`) and Rendering followed. Re-measured 2026-07-28 by reading each rostered receiver's
+  # `.github/workflows/` directly rather than trusting this file: **THREE** wired one — SDD, Rendering
+  # and Governance — each a required `skill-union / skill-union` context on `main`. Filed as #1716,
+  # and it is the second time this row has been repaired for asserting a caller population it did not
+  # measure (#1559, #1643 are the same class one file over). **Count callers by reading workflows.**
+  #
+  # ALL THREE ARE NOW GONE, and this row's receiver set with them — not as drift, but as the decided
+  # end state of ADR-0067 §9 phase 4, blocker B5, shape (b), taken on #1715 with the repository owner's
+  # authorization. The reason is that the assertion STOPS BEING ONE under the layout the rewrite is
+  # moving to. Measured on all three receivers' own trees, at a dry-run retirement, 2026-07-28:
+  #
+  #   skill-union-assert --roots ".agents/skills"                -> exit 2, "no skills found under
+  #                                                                 any root"     (SDD/Rendering/Gov)
+  #   skill-union-assert --roots ".claude/skills .agents/skills"  -> exit 0, in-every-root=32/32,
+  #                                                                 50/50, 15/15, byte-identical
+  #
+  # `union_ids()` enumerates with `find` and no `-L`, so a VIEW root contributes ZERO ids — the first
+  # line, on its own. Every id in the second line came from the tracked root alone, and the view root
+  # satisfied presence only because presence is `[ -d ]` THROUGH the symlink and cannot fail. Both of
+  # this capability's headline invariants become tautologies, and it would have gone on reporting
+  # `success` on a REQUIRED context under `enforce_admins` while asserting nothing — #266's most
+  # expensive shape, because that green is indistinguishable from a green that means something.
+  #
+  # THE REPLACEMENT IS NOT A CAPABILITY OF THIS FABRIC, AND THAT IS DELIBERATE. Each receiver now runs
+  # `scripts/skill-view check --source <its live root>` from its OWN pinned copy of the tool, in its own
+  # `.github/workflows/skill-view-check.yml`, on its own required context `skill-view-check`. There is no
+  # `uses:` of anything here, so there is nothing for a `workflow:`/`caller:` detector to see — a
+  # receiver's verdict is a function of the receiver (#1584), which is the property the retired shape
+  # lacked (its script came from this repo's `@main` on every run). Do NOT invent a `receives:` word for
+  # it to make the sweep feel complete: a capability row must have a real detector, and inventing one
+  # that greps for a workflow FILENAME would certify the shape rather than the subject — exactly the
+  # bare-`uses:` failure the `caller:` detector below exists to avoid.
+  #
+  # THE FOUR ROWS THAT REMAIN — templates, game, audio, net — NEVER WIRED A CALLER, and after #1715
+  # they must not. Each is a GAP the scheduled audit reports, exactly as it did before this change, and
+  # the honest reading of each is now "declares a capability whose shape the org has retired", not
+  # "owes an adoption". Whether those four rows are deleted (and this capability recorded
+  # `receivers: none`) is a decision that belongs with the per-repo retirement sequence — #1676 and
+  # #1587 — not to the change that cleared B5, so it is FILED rather than taken here. Until then, a
+  # worker who reads a `receives: skill-union` row as an instruction to wire a caller would be
+  # re-creating the blocker #1715 just cleared: DO NOT. The remedy for one of those four repos is the
+  # `skill-view-check` gate above, and its sequencing lives in
+  # docs/coordination/skill-apparatus-retirement-order.md §5 B5 and §6.
   - id: skill-union
     caller: skill-union
     reason: >-
-      The FULL three-root union over a repo's OWN committed skill roots, asserted by a
-      skill-union-assert.yml caller aimed at the repository root with all three ADR-0011 roots, on a
-      trigger that fires when any of them changes. Compound because the assertion is
-      subject-parameterised: a call aimed at a generated product, or narrowed with roots:, proves
-      nothing about the committed roots, so a bare uses: detector would be a green nobody earned
-      (#628). Distinct from coordination-kit, which proves only the kit-owned four-skill subset — the
-      subset was green on three partitioned trees for as long as they existed (#1504).
+      RETIRED SHAPE, kept only to sweep the four rows that still declare it (#1715). The FULL union
+      over a repo's OWN committed skill roots, asserted by a skill-union-assert.yml caller aimed at the
+      repository root with the default roots, on a trigger that fires when any of them changes.
+      Compound because the assertion is subject-parameterised: a call aimed at a generated product, or
+      narrowed with roots:, proves nothing about the committed roots, so a bare uses: detector would be
+      a green nobody earned (#628). Distinct from coordination-kit, which proves only the kit-owned
+      four-skill subset — the subset was green on three partitioned trees for as long as they existed
+      (#1504). It asserts nothing at all once a root is a generated view, which is why the three repos
+      that wired it no longer do; see the block above.
 
   # ADOPTED (#519). Was `receivers: none` + a reason, on the grounds that "whether the six
   # framework repos SHOULD adopt it is a live org question". That question was decided YES, and
