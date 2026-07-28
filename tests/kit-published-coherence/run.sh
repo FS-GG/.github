@@ -412,5 +412,297 @@ else
 fi
 
 echo
+echo "== tag-arm (.github#1784) =="
+
+# `#1772` made `kit/v<version>` the ref a receiver's bump-shape rule is resolved from. A tag is a
+# MUTABLE ref and a published package is not, so the question these legs are about is never "does the
+# tag exist" — it is "does the tag still resolve to the commit that produced the published package".
+# The comparand is each version's published .nuspec `<repository commit=...>`, canned here.
+#
+# Both canned inputs mirror the REAL wire shapes: the tag list is literal `git ls-remote` output, so
+# these legs exercise the shipped parser rather than a hand-written mirror of it (the #1780 review
+# lesson — a fixture that mirrors its subject proves only the mirror).
+TAGPUB="$WORK/tag-published.tsv"
+TAGREFS="$WORK/tag-refs.txt"
+
+C1=$(printf '1%.0s' {1..40})
+C2=$(printf '2%.0s' {1..40})
+C3=$(printf '3%.0s' {1..40})
+
+tagarm() { # extra args appended
+  set +e
+  out="$(python3 "$GATE" --tag-arm --tag-arm-published "$TAGPUB" --tag-arm-tags "$TAGREFS" "$@" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# The healthy fleet: every published version tagged, every tag on its artifact's commit.
+{
+  printf '0.16.0\t%s\n' "$C1"
+  printf '0.17.0\t%s\n' "$C2"
+} > "$TAGPUB"
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.17.0\n' "$C2"
+} > "$TAGREFS"
+tagarm
+must_pass "every published version's tag resolves to its artifact's commit" "has not moved since publication"
+
+# PEELING IS LOAD-BEARING, not a detail. An ANNOTATED tag's own object id is not the commit the #1772
+# resolver checks the rule out at; comparing the wrong one would red every annotated release — 8 of
+# the 23 live tags are annotated. `refs/tags/X^{}` must beat `refs/tags/X`.
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.17.0\n' "$C3"
+  printf '%s\trefs/tags/kit/v0.17.0^{}\n' "$C2"
+} > "$TAGREFS"
+tagarm
+must_pass "an annotated tag is compared by its PEELED commit, not its tag object" "has not moved since publication"
+
+# HOLE 2 — measured on the live fleet as 0.1.0 and 0.4.0: published, no tag. A receiver pinned there
+# cannot have its rule resolved at all, so this is the leg that decides whether old pins are gradable.
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+} > "$TAGREFS"
+tagarm
+must_fail "a published version with NO tag is red" "MISSING  kit/v0.17.0"
+grep -q "git tag kit/v0.17.0 $C2" <<<"$out" \
+  && ok "the missing-tag remedy names the commit the ARTIFACT was packed from" \
+  || bad "the missing-tag remedy names the artifact's commit" "$out"
+
+# HOLE 1 — the tag is mutable and nothing re-checked it. This is the leg that could not exist before
+# the nuspec was found to bind a commit: without an immutable comparand there is nothing to move
+# AGAINST, and the check would degrade to "is it in a list someone maintains".
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.17.0\n' "$C3"
+} > "$TAGREFS"
+tagarm
+must_fail "a tag MOVED after publication is red" "MOVED    kit/v0.17.0 resolves to $C3"
+grep -q "was packed from $C2" <<<"$out" \
+  && ok "the moved-tag report names both the tag's commit and the artifact's" \
+  || bad "the moved-tag report names both commits" "$out"
+
+# Missing and moved are different defects with different remedies and must not collapse into one.
+{
+  printf '%s\trefs/tags/kit/v0.17.0\n' "$C3"
+} > "$TAGREFS"
+tagarm
+must_fail "missing and moved are reported separately" "(1 missing, 1 moved)"
+
+# A tag naming a version the feed does not serve is the NORMAL state of a release in flight:
+# release-kit.yml pushes the tag, then nuget.org indexes the package. Redding it would make every
+# release red main on its way through, so it is reported and never an error.
+{
+  printf '0.16.0\t%s\n' "$C1"
+} > "$TAGPUB"
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/v0.18.0\n' "$C2"
+} > "$TAGREFS"
+tagarm
+must_pass "a tag whose version is not published yet is reported, never red" "name no published version"
+
+# A `kit/v*` ref outside the resolver's bare-x.y.z grammar can never be selected by a pin. It is
+# skipped, not parsed into a version this arm would then demand a package for.
+{
+  printf '%s\trefs/tags/kit/v0.16.0\n' "$C1"
+  printf '%s\trefs/tags/kit/vnext\n' "$C2"
+  printf '%s\trefs/tags/kit/v0.16\n' "$C3"
+} > "$TAGREFS"
+tagarm
+must_pass "a kit/v* ref outside the bare x.y.z grammar is ignored, not invented into a version" \
+  "carry a kit/v<version> tag"
+grep -q "name no published version" <<<"$out" \
+  && bad "an unparsable kit/v ref must not be reported as an untagged version" "$out" \
+  || ok "an unparsable kit/v ref is not reported as an untagged version"
+
+# UNRESOLVED IS NOT VALID (#266). Every way this arm can fail to READ its subject is red.
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+printf 'refs/tags/kit/v0.16.0\n' > "$TAGREFS"   # one field, not `<sha>\t<ref>`
+tagarm
+must_fail "a malformed ls-remote row is unresolved, not empty" "is not \`<sha>\\\\t<ref>\`"
+
+printf '0.16.0\n' > "$TAGPUB"                   # one field, not `<version>\t<commit>`
+printf '%s\trefs/tags/kit/v0.16.0\n' "$C1" > "$TAGREFS"
+tagarm
+must_fail "a malformed published row is unresolved, not empty" "is not \`<version>\\\\t<commit>\`"
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+
+printf 'NOTASHA\trefs/tags/kit/v0.16.0\n' > "$TAGREFS"
+tagarm
+must_fail "a non-sha object id is unresolved" "non-sha object id"
+
+printf '%s\trefs/tags/kit/v0.16.0\n' "$C1" > "$TAGREFS"
+printf '0.16.0\tnothex\n' > "$TAGPUB"
+tagarm
+must_fail "a published row whose commit is not 40-hex is unresolved" "names no 40-hex commit"
+
+# An artifact that binds NO commit has no fixed point for its mutable tag to be measured against.
+# That is an unanswerable question, and an unanswerable question is red, never a pass.
+printf '0.16.0\t-\n' > "$TAGPUB"
+tagarm
+must_fail "a published version whose nuspec binds no commit is unresolved" "cannot anchor its own tag"
+
+printf '0.16.0\t%s\n' "$C1" > "$TAGPUB"
+tagarm --tag-arm-tags "$WORK/no-such-refs.txt"
+must_fail "an unreadable tag list is unresolved" "cannot read the canned ls-remote tag list"
+
+tagarm --tag-arm-published "$WORK/no-such-pub.tsv"
+must_fail "an unreadable published list is unresolved" "cannot read the canned published-version list"
+
+# THE NUSPEC READER ITSELF. The canned rows above hand this arm the RESULT of the nuspec read, so
+# without these legs the one genuinely new parser in the change would have no coverage at all — the
+# shape of the eight could-not-fail checks found in this repository today. These drive the SHIPPED
+# function against real nuspec bytes.
+if python3 - "$GATE" <<'PY'
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("gate", sys.argv[1])
+gate = importlib.util.module_from_spec(spec)
+# Register before executing: the module defines a @dataclass, and dataclasses resolves annotations
+# through sys.modules[cls.__module__] — which is None for a module that is not registered yet.
+sys.modules["gate"] = gate
+spec.loader.exec_module(gate)
+COMMIT = "8b2e6cd9593203e6b7a0abcea5c9324b00f621ec"
+REPO = "FS-GG/.github"
+
+
+def nuspec(body: str) -> bytes:
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">'
+        f"<metadata><id>FS.GG.Kit</id>{body}</metadata></package>"
+    ).encode()
+
+
+# The real shape, namespaced exactly as nuget.org serves it.
+good = nuspec(f'<repository type="git" url="https://github.com/FS-GG/.github" commit="{COMMIT}" />')
+assert gate.nuspec_repository_commit("0.17.0", good, repository=REPO) == COMMIT, "real nuspec shape"
+
+# Same, with a .git suffix and a trailing slash — both are the same repository.
+for url in ("https://github.com/FS-GG/.github.git", "https://github.com/FS-GG/.github/"):
+    variant = nuspec(f'<repository type="git" url="{url}" commit="{COMMIT}" />')
+    assert gate.nuspec_repository_commit("0.17.0", variant, repository=REPO) == COMMIT, url
+
+
+def refuses(body: str, wanted: str, what: str) -> None:
+    try:
+        gate.nuspec_repository_commit("0.17.0", nuspec(body), repository=REPO)
+    except gate.GateError as e:
+        assert wanted in str(e), f"{what}: wrong reason: {e}"
+        return
+    raise AssertionError(f"{what}: accepted what it must refuse")
+
+
+# THE REASON THIS IS PARSED AS XML AND NOT GREPPED. A commented-out element is not an element; a
+# regex over markup matches it and binds the artifact to a commit nobody published.
+refuses(
+    f"<!-- <repository type=\"git\" url=\"https://github.com/FS-GG/.github\" commit=\"{COMMIT}\" /> -->",
+    "carries 0 <repository> element(s)",
+    "a commented-out repository element",
+)
+refuses("", "carries 0 <repository> element(s)", "no repository element")
+refuses(
+    f'<repository url="https://github.com/FS-GG/.github" commit="{COMMIT}" />'
+    f'<repository url="https://github.com/FS-GG/.github" commit="{"a" * 40}" />',
+    "carries 2 <repository> element(s)",
+    "two repository elements",
+)
+refuses(
+    '<repository type="git" url="https://github.com/FS-GG/.github" />',
+    "names no 40-hex commit",
+    "a repository element with no commit",
+)
+refuses(
+    '<repository type="git" url="https://github.com/FS-GG/.github" commit="v1.2.3" />',
+    "names no 40-hex commit",
+    "a non-sha commit",
+)
+# A package packed from a FORK names a history whose tags are not the ones the fleet resolves
+# against, so its commit cannot anchor a FS-GG/.github tag.
+refuses(
+    f'<repository type="git" url="https://github.com/someone/.github" commit="{COMMIT}" />',
+    "not FS-GG/.github",
+    "a package packed from another repository",
+)
+# The prefix trap, the same one touched_kit_sources() spells out: a suffix match without the
+# separator would accept `.../evil-FS-GG/.github`.
+refuses(
+    f'<repository type="git" url="https://github.com/x/evil-FS-GG/.github" commit="{COMMIT}" />',
+    "not FS-GG/.github",
+    "a repository whose slug merely ends with the real one",
+)
+try:
+    gate.nuspec_repository_commit("0.17.0", b"<package", repository=REPO)
+except gate.GateError as e:
+    assert "not parsable XML" in str(e), e
+else:
+    raise AssertionError("unparsable XML accepted")
+PY
+then
+  ok "the shipped nuspec reader binds a commit, and refuses every shape that cannot bind one"
+else
+  bad "the shipped nuspec reader binds a commit, and refuses every shape that cannot bind one"
+fi
+
+# The canned inputs are LOCKED behind the same switch as every other arm's, and for the same reason:
+# each replaces a read of this arm's subject with an answer supplied on the command line.
+for flag_pair in "--tag-arm-published=$TAGPUB" "--tag-arm-tags=$TAGREFS"; do
+  flag="${flag_pair%%=*}"
+  value="${flag_pair#*=}"
+  set +e
+  out="$(env -u FSGG_KIT_COHERENCE_FIXTURE_OK python3 "$GATE" --tag-arm "$flag" "$value" 2>&1)"
+  rc=$?
+  set -e
+  must_fail "$flag is refused without the fixture opt-in" "Refusing to run"
+done
+
+set +e
+out="$(python3 "$GATE" --tag-arm-tags "$TAGREFS" --lock "$LOCK" --fixture-manifest "$CANON" \
+  --canonical-manifest "$CANON" 2>&1)"; rc=$?
+set -e
+must_fail "a tag-arm input on the published arm is refused, not ignored" \
+  "are --tag-arm inputs and mean nothing to the published-package arm"
+
+set +e
+out="$(python3 "$GATE" --pr-arm --tag-arm 2>&1)"; rc=$?
+set -e
+must_fail "the pr and tag arms refuse to run at once" "different arms with different subjects"
+
+set +e
+out="$(python3 "$GATE" --tag-arm --fixture-manifest "$CANON" --canonical-manifest "$CANON" 2>&1)"; rc=$?
+set -e
+must_fail "the tag arm and the manifest fixture refuse to run at once" \
+  "different arms with different subjects"
+
+# THE ARM MUST BE WIRED. A checker nothing runs is the .github#1606 shape, and this one's whole
+# purpose is to notice a change made OUTSIDE any pull request — so it belongs on the job whose
+# subject is already main-plus-the-feed, not on the PR jobs.
+if python3 - "$HERE/../../.github/workflows/kit-published-coherence.yml" <<'PY'
+import re
+import sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r"(?ms)^  published:\n(.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+assert match, "published job missing"
+job = match.group(1)
+directives = [ln for ln in job.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+assert any("--tag-arm" in ln for ln in directives), (
+    "the published job does not run the tag arm — the kit/v* tags .github#1772 resolves rules from "
+    "would be load-bearing and unchecked again:\n" + "\n".join(directives)
+)
+assert not any("continue-on-error" in ln for ln in directives), (
+    "the published job gained continue-on-error; a tag defect would report green"
+)
+PY
+then
+  ok "the tag arm is wired on the main/schedule job"
+else
+  bad "the tag arm is wired on the main/schedule job"
+fi
+
+echo
 echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1

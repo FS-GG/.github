@@ -144,3 +144,20 @@ jobs:
       - uses: ./.github/actions/setup-policy-python
       - name: Is the newest published FS.GG.Kit coherent with canonical?
         run: python scripts/check-kit-published-coherence.py
+
+      # .github#1784. `#1772` made `kit/v<version>` the ref the receiver-side `materialize /
+      # kit-bump-shape` reporter resolves its RULE from — so a release marker became a trust anchor.
+      # A tag is a MUTABLE ref and `release-kit.yml`'s gate is publish-time only, so a tag deleted or
+      # force-moved AFTERWARDS silently recreates the defect #1772 closed and nothing would notice.
+      #
+      # It belongs on THIS job for the same reason everything else here does: the subject is the feed
+      # plus a hub ref, and both move without any pull request touching a file. A `paths:` filter or a
+      # PR-only arm could never see a tag someone moved by hand.
+      #
+      # The comparand is the published .nuspec's `<repository commit=...>`, not a list — see the
+      # checker's docstring. A repository TAG RULESET ("kit-release-tags-are-immutable", covering
+      # refs/tags/kit/v*, rules: deletion + non_fast_forward + update, no bypass actors) shuts the
+      # hole at the source; this is the detection that proves the ruleset is still there and still
+      # doing its job, because a ruleset is itself a mutable setting.
+      - name: Do the kit/v* tags still resolve to the commits their packages were packed from?
+        run: python scripts/check-kit-published-coherence.py --tag-arm
