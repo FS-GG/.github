@@ -29,6 +29,25 @@
 # skipped into green — "nothing to check" and "checked, and it's fine" must not share an exit code.
 name: pin-coherence
 
+
+# THE RENOVATE CONFIG NAMES THAT DO NOT EXIST HERE, EXCUSED WITH THEIR REASON (#1802).
+#
+# `check-pin-coherence.py`'s PATHS_SUBJECT names every one of `RENOVATE_CONFIG_NAMES`, because a
+# token-bearing config under ANY of them decides this gate's verdict — that is the #266 shape its own
+# header describes. Only `renovate.json` exists in this repo, and `check-paths-coherence.py` probes a
+# PATHS_SUBJECT entry that is not an existing FILE as a DIRECTORY (`entry/x`), so it cannot express
+# "a file that does not exist yet, but whose appearance must re-run me".
+#
+# The `paths:` lists above DO name each one, so the trigger is correct and a `.renovaterc` appearing
+# tomorrow re-runs this gate. What is excused is only rule (b)'s coverage assertion over paths that
+# are absent today. Filed as the modelling gap it is; these come off when it can express them.
+# paths-coherence: allow-uncovered renovate.json5 — a RENOVATE_CONFIG_NAME absent from this repo; the paths: lists name it, so its appearance re-runs the gate (#1802)
+# paths-coherence: allow-uncovered .github/renovate.json — as above
+# paths-coherence: allow-uncovered .github/renovate.json5 — as above
+# paths-coherence: allow-uncovered .renovaterc — as above
+# paths-coherence: allow-uncovered .renovaterc.json — as above
+# paths-coherence: allow-uncovered .renovaterc.json5 — as above
+
 on:
   pull_request:
     paths:
@@ -39,6 +58,21 @@ on:
       - "tests/pin-coherence/**"
       - ".github/workflows/pin-coherence.yml"
       - ".github/workflows/contract-coherence.yml"   # carries the pin under test
+      # THE READ-SET, DECLARED (#1802). check-pin-coherence.py's PATHS_SUBJECT names every one of
+      # these; `check-paths-coherence.py` rule (c) reds this workflow if the two disagree, so this
+      # list is no longer hand-kept beside a hand-kept read-set that agreed only while someone
+      # remembered. Four were missing when #1802 was filed, not the one it named.
+      - "registry/repos.yml"              # kit `kind: config` rows
+      - "scripts/sync-build-config.sh"    # the build-config FILES set
+      - "dist/dotnet/**"                  # BASELINE_DIR — (B) derives from this tree
+      # EVERY name Renovate would honour, not just `renovate.json`: a token-bearing config under any
+      # of these decides the verdict, so a change to any of them must be able to re-run this gate.
+      - "renovate.json5"
+      - ".github/renovate.json"
+      - ".github/renovate.json5"
+      - ".renovaterc"
+      - ".renovaterc.json"
+      - ".renovaterc.json5"
   push:
     branches: [main]
     paths:
@@ -49,6 +83,21 @@ on:
       - "tests/pin-coherence/**"
       - ".github/workflows/pin-coherence.yml"
       - ".github/workflows/contract-coherence.yml"
+      # THE READ-SET, DECLARED (#1802). check-pin-coherence.py's PATHS_SUBJECT names every one of
+      # these; `check-paths-coherence.py` rule (c) reds this workflow if the two disagree, so this
+      # list is no longer hand-kept beside a hand-kept read-set that agreed only while someone
+      # remembered. Four were missing when #1802 was filed, not the one it named.
+      - "registry/repos.yml"              # kit `kind: config` rows
+      - "scripts/sync-build-config.sh"    # the build-config FILES set
+      - "dist/dotnet/**"                  # BASELINE_DIR — (B) derives from this tree
+      # EVERY name Renovate would honour, not just `renovate.json`: a token-bearing config under any
+      # of these decides the verdict, so a change to any of them must be able to re-run this gate.
+      - "renovate.json5"
+      - ".github/renovate.json"
+      - ".github/renovate.json5"
+      - ".renovaterc"
+      - ".renovaterc.json"
+      - ".renovaterc.json5"
   schedule:
     # Daily, offset from feed-coherence.yml's 06:17 so a feed outage does not red both at once.
     # A CLI release that leaves this pin behind touches no file here, so no path-filtered trigger can

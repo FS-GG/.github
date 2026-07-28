@@ -585,6 +585,42 @@ SYNCED_RECEIVER_FILES = (
 # package file actually present under dist/dotnet/ — rather than from (A).
 BASELINE_DIR = "dist/dotnet"
 
+# ---------------------------------------------------------------------------------------------------
+# THE SURFACE THIS GATE READS (#1802). `check-paths-coherence.py` rule (c) folds this by AST and reds
+# `pin-coherence.yml` if its `paths:` filter does not select every entry — so widening what we read
+# widens the filter that decides whether we run at all.
+#
+# WHY IT EXISTS. #1615's roster edit touched `registry/repos.yml`, which this gate READS and the
+# workflow filter did not list, so the gate went red on a tree whose change could not re-run it. A
+# hand-kept filter beside a hand-kept read-set is two lists that agree only while someone remembers,
+# and they had stopped: FOUR reads were missing from the filter, not the one #1802 was filed about —
+# `registry/repos.yml`, `scripts/sync-build-config.sh`, `dist/dotnet/**`, and every `renovate.*` name
+# other than `renovate.json`.
+#
+# TWO ENTRIES ARE SPELLED LITERALLY RATHER THAN COMPOSED, and that is forced: the folder adds
+# SEQUENCES and cannot evaluate `BASELINE_DIR + "/**"` — a string concatenation folds to two
+# non-sequences and the gate REFUSES (exit 3, measured while writing this). Where the folder makes
+# composition unwritable, the retype is made safe by the assertions below rather than by hoping.
+PATHS_SUBJECT = (
+    (
+        "registry/repos.yml",
+        "scripts/sync-build-config.sh",
+        "default.json",
+        "dist/dotnet/**",
+        ".github/workflows/contract-coherence.yml",
+    )
+    + RENOVATE_CONFIG_NAMES
+)
+
+assert f"{BASELINE_DIR}/**" in PATHS_SUBJECT, (
+    "PATHS_SUBJECT restates BASELINE_DIR as a glob and they have drifted: "
+    f"BASELINE_DIR={BASELINE_DIR!r}"
+)
+assert {f for f, _pkg in REQUIRED_PINS} <= set(PATHS_SUBJECT), (
+    "PATHS_SUBJECT must name every file REQUIRED_PINS asserts a pin in; missing: "
+    f"{sorted({f for f, _pkg in REQUIRED_PINS} - set(PATHS_SUBJECT))}"
+)
+
 # Renovate's nuget manager's four SHIPPED managerFilePatterns, read out of 43.281.1's own
 # dist/modules/manager/nuget/index.js `defaultConfig` rather than the docs. They decide which files
 # under dist/dotnet/ Renovate can propose a bump against at all — the only ones (B) can be about, and

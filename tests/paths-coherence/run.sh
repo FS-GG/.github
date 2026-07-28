@@ -803,11 +803,16 @@ fi
 # its job for the sixth time; `registry/repos.yml` was then deleted from the workflow's filter to
 # watch rule (c) name the missing pattern, so the coverage is measured in both directions rather
 # than inferred from a green.
+# 11 -> 12 on 2026-07-29 (#1802): `scripts/check-pin-coherence.py` declared a PATHS_SUBJECT, so rule
+# (c) attaches to `pin-coherence.yml` and the census counts it. THE TRIPWIRE FIRED AS DESIGNED — this
+# leg went red on that PR's first CI run, which is the seventh time it has caught a surface changing.
+# The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
+# that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "11" ]; then
+if [ "${s:-0}" = "12" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 11 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 12 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
