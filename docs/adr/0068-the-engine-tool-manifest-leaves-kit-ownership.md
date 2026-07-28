@@ -94,6 +94,39 @@ ones. The kit-pin freshness sweep beside it narrows to package receivers because
 legitimately has no `PackageReference` to grade; there is no equivalent excuse here, and narrowing
 would carve `#1077`'s two original victims out of the check written to replace it.
 
+### ⚠ THE DELIVERY PATH IS NOT LIVE YET — correction recorded 2026-07-28, same day (`#1798`)
+
+**Read this before the next section, which overstates the case.** The paragraph below is true about
+Renovate's *manager*, and false about this org's *configuration*, and the difference was found hours
+after this record landed.
+
+`default.json`'s `packageRules[5]` sets `enabled: false` for `matchFileNames: [".config/dotnet-tools.json"]`
+across all seven `coordination-kit` receivers. **So no receiver is currently offered an
+`fs.gg.coord.cli` bump at all.** The rule was correct when written — the file was kit-materialized, so
+a bump in a receiver was a guaranteed-red PR (the `#794` churn class) — and its premise is exactly what
+this ADR removed. It is now suppressing a bump against a file each receiver owns outright, which is the
+same defect `#1552` fixed one rule over in the same file.
+
+Nothing in the org would have reported this: a non-proposal is not an error and appears nowhere
+(`#1533`). It was found because a fan-out worker read FS.GG.Net's pin-file comment and asked why
+Renovate was quiet there; FS.GG.Net's own `.github/renovate.json` had documented it in passing.
+
+**What this does and does not invalidate:**
+
+- **`#1077`'s invariant is unaffected.** The `repos-audit` engine-manifest sweep grades whether each
+  receiver *declares* `fs.gg.coord.cli`, not which version — live run
+  [30369075698](https://github.com/FS-GG/.github/actions/runs/30369075698): *"graded 7 of 7 … 7 declare
+  fs.gg.coord.cli, 0 do NOT"*. Nothing is broken today.
+- **The churn result stands.** An engine bump no longer edits kit content, no longer stales
+  `registry/repos.lock`, and no longer obliges a republish. That is the decision's main claim and it
+  does not depend on Renovate.
+- **What is wrong is the last mile**: until `#1798` lands, each receiver's engine *version* moves only
+  by hand, and nothing alarms when it goes stale.
+
+This correction is recorded here rather than only on the issue, because a reader who opens this record
+directly is the one who would otherwise inherit the error — the corpus's most common defect, and the
+one `check-adr-coherence.py` exists to hunt.
+
 ### Why the delivery mechanism is not in doubt
 
 Renovate's nuget manager already reads tool manifests: `/(^|/)dotnet-tools\.json$/` is one of its four
@@ -133,7 +166,9 @@ an org-wide daily check, and this decision does not treat it as one.
   says so rather than an assumption.
 - **A receiver's `.config/dotnet-tools.json` becomes receiver-owned.** It is no longer verified
   byte-identical by `coordination-coherence`, which is the point: the receivers' engine versions may
-  now diverge, and Renovate converges them per repo.
+  now diverge, and Renovate is intended to converge them per repo — **but see the correction above:
+  `default.json` currently disables that file in all seven, so until `#1798` lands the versions
+  diverge with nothing converging them.**
 - **`tests/coord-engine-parity/shim.sh` §3f leg (c) is inverted**, and a leg (d) is added asserting the
   replacement sweep exists — so deleting the sweep cannot silently leave the invariant unasserted.
 
