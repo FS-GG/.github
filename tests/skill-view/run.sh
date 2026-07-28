@@ -387,9 +387,57 @@ expect "12c a root the declaration names but the tree lacks is still LOUD under 
   -- bash "$SV" check --source "$T1/canonical/skills" --tree "$T1" --roots ".claude/skills .codex/skills"
 
 # =============================================================================================
+# 13 — the two lanes `check` took over from seven hand-written receiver alarms (.github#1710).
+#
+#      THE BEHAVIOUR OF THE LANES IS DEMONSTRATED BY `skill-view selftest`, WHICH IS ITSELF A LEG
+#      HERE (13a) — the fixture trees, the can-fire cases and the per-class assertions all live in
+#      the tool, so a receiver runs the same demonstration this suite does rather than a copy of it.
+#      That is the whole point of the collapse: the previous arrangement had seven demos of one
+#      invariant, two of which were missing the lane they were supposed to demonstrate.
+#
+#      What is asserted HERE and not there is the CLI CONTRACT — the refusals that keep the new
+#      flags from being used in a way that quietly grades nothing. A carve-out reachable by accident
+#      is a carve-out that will be reached by accident.
+# =============================================================================================
+expect "13a every lane of check demonstrates it can fire (skill-view selftest)" 0 "0 failed" \
+  -- bash "$SV" selftest
+
+T13="$WORK/t13"; make_tree "$T13" 2
+printf '<Project>\n  <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>\n  <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>\n</Project>\n' > "$T13/good.proj"
+printf '<Project>\n  <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>\n</Project>\n' > "$T13/nodecl.proj"
+
+# The membership lane end-to-end from this harness, so the suite does not depend solely on the
+# tool's own account of itself.
+expect "13b a receiver project that drops the view root is LOUD, and names the declaration" 1 "[roots-declaration]" \
+  -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/nodecl.proj"
+
+# The declaration is graded BEFORE the roots are resolved, and a wrong one stops the run: reporting
+# "0 violations" over a root set the tree does not declare is the vacuous pass wearing this lane's
+# clothes.
+expect "13c ...and it does NOT go on to report on a root set the tree never declared" 1 "refusing to go on" \
+  -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/nodecl.proj"
+
+# --absent-ok is a MEASURED carve-out or it is nothing. need_val rejects the empty value, so the
+# flag cannot be spelled in a way that excuses an absent root without saying what covers it.
+expect "13d --absent-ok with no reason is REFUSED, not silently accepted" 2 "needs a value" \
+  -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj" --absent-ok ""
+
+# The carve-out is scoped to VIEW roots, and only the receiver project says which those are.
+expect "13e --absent-ok without --receiver-proj is REFUSED — nothing says which roots are views" 2 "which roots those are" \
+  -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --absent-ok "no declaration to scope this to"
+
+# Grading one root set and resolving another is the two-sources-of-truth bug lib/roots.sh exists to
+# have ended (#525), arriving through a new flag.
+expect "13f --roots alongside --receiver-proj is REFUSED" 2 "would grade one set and resolve another" \
+  -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj" --roots ".claude/skills"
+
+expect "13g --receiver-proj is a check flag; generate REFUSES it" 2 "is a 'check' flag" \
+  -- bash "$SV" generate --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj"
+
+# =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=36
+EXPECTED_LEGS=43
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 

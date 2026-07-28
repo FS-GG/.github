@@ -582,6 +582,68 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > defects. A single kit-shipped assertion would have propagated Audio's `-e` bug to seven receivers
 > unexamined. That is an argument about *how* `#1710` lands, not about whether it should.
 >
+> ### §8.1 — the collapse, and the answer to the uncomfortable half (`#1710` piece 2, FS.GG.Kit 0.17.0)
+>
+> The two lanes are now **one implementation** in `scripts/skill-view check`, delivered by the kit that
+> already delivered the tool. No new mechanism was built: `scripts/skill-view` was already a `kit:` row,
+> and `FsggKitCheckSkillView` was already `AfterTargets="FsggKitMaterialize"` in all seven receivers.
+> The seven had bolted two lanes onto that seam because `check` did not cover them.
+>
+> | lane | where it lives now | what it catches |
+> |---|---|---|
+> | roots declaration | `check --receiver-proj` | the union of `<FsggKitSkillRoots>` and `<FsggKitViewSkillRoots>` ceasing to be the runtime root set — the regression every other gate is green on |
+> | view resolution | `check`'s existing `classify_root` + per-skill loop | absent, dangling, text-file, not-a-directory, partial |
+> | view root tracked | `check --receiver-proj` | a re-committed view root: the committed symlink §6 rejects, which resolves perfectly on Linux |
+>
+> **The collapse raised the bar in three places rather than levelling it**, which is the direct answer to
+> the argument above. A shared implementation propagates its *strengths* by exactly the same mechanism
+> that would propagate a bug:
+>
+> - **Partial views are graded per-skill by identity.** All seven hand-copies compared directory
+>   *counts*, which passes a view whose skills are named nothing like the live root's. Every one of the
+>   seven had that hole; none of them could see it, because they all had it.
+> - **The dangling/absent split is `classify_root`'s and has always been correct.** Rendering's and
+>   Governance's copies still carry the bare `[[ ! -e ]]` Audio paid for — misattributing a dangling
+>   link and leaving their own dangling branch dead code. Adopting the shared implementation fixes both
+>   **by construction**; repairing code that is about to be deleted is waste.
+> - **The tracked-view-root lane was adopted *from* a receiver, not imposed on one.** `FS.GG.Net`'s copy
+>   was the only one of the seven that asserted it. It now runs for all seven. An alarm is not weakened
+>   to make a collapse tidy.
+>
+> **What is genuinely per-receiver is one parameter, and it costs a measurement to use.** `--absent-ok
+> "<why>"`: an absent view root stays RED by default, and a receiver whose alarm runs on a bare checkout
+> must excuse it or fire on every green build. The reason is **required and printed**, because what else
+> catches an absent root differs — on Game the kit's own check reds a required job, on Audio it does not,
+> because `kit / coordination-kit` grades `<FsggKitSkillRoots>` bytes only and the materialize job is not
+> required. A receiver that cannot state what covers absence has not earned the carve-out. The
+> **required-context name** the alarm rides is per-receiver by construction and is not a parameter of the
+> tool — it is the workflow line that invokes it, and one line in a `gate.yml` is not a hand-copy of an
+> invariant.
+>
+> **How the propagation risk is actually paid for: `skill-view selftest`, and the demo is itself
+> mutation-tested.** Every lane's can-fire demonstration ships *in the tool*, so a receiver runs the same
+> demonstration rather than a copy of it, and every negative case asserts the **specific diagnostic
+> class** its branch emits rather than merely that something failed — a demo that only counts failures
+> survives a mutation collapsing two branches into one, which is exactly how Audio's `-e` bug lived.
+> Eight mutations were run against it before it landed and each was caught by a **named** case: removing
+> the `dangling-link` class, making `absent` unconditionally green, unscoping `--absent-ok` from view
+> roots, short-circuiting the membership lane, removing the tracking lane, collapsing the text-file
+> class, and weakening the per-skill check. **One mutation initially SURVIVED** — treating an undeclared
+> `<FsggKitViewSkillRoots>` as an empty *contribution* rather than a *fault*, which the existing fixtures
+> caught only incidentally through set equality — and the demo grew the discriminating case (the view
+> property deleted while the live property alone still spans the union) that fails it. That is the
+> discipline the uncomfortable half asks for, applied to the thing doing the propagating.
+>
+> **This retires nothing on its own (§9).** A receiver's local alarm is deleted only after the kit's
+> version has reported in that repo. `repos-audit.sh`'s view-root generate sweep (`#1759`, §6.1) is the
+> *reporting* half and does **not** retire here.
+>
+> **Not done, and blocked rather than declined:** `#1710`'s piece 1 — moving `Fsgg<Repo>GenerateSkillView`
+> into the kit. `repos-audit.sh`'s §6.1 sweep reds a receiver that declares a view root with no **local**
+> target ordered `BeforeTargets="FsggKitCheckSkillView"`, so a kit-owned target would make all seven
+> legitimately stop declaring one and red the daily sweep. Teaching that sweep is the first task of the
+> separate item, not a side effect of this one.
+>
 > ### What is NOT settled by 7 of 7
 >
 > [`#1759`](https://github.com/FS-GG/.github/issues/1759) — whether `kit-materialize.yml` is B5's shape
