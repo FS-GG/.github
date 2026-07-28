@@ -1,0 +1,56 @@
+# Selftest for scripts/check-gate-finding-history.py — the gate-finding ledger (.github#1582).
+#
+# WHAT RUNS IN CI IS THE SELFTEST, NOT THE LEDGER, AND THAT IS DELIBERATE. The ledger's honest answer
+# about this repo today is 25 gates that have never once produced a finding and one gate red for 30
+# hours. Wiring that as a required context would turn a REPORT into a merge block, and the decision
+# about what to do with those 25 gates belongs to a human — #1582's own first constraint says deleting
+# checks is not this item. So the ledger is run on demand (`--fetch`, then `--corpus`), and what is
+# gated is the only thing that can be gated honestly: the proof that the ledger itself can fail.
+#
+# THE FIXTURE IS OFFLINE AND CREDENTIAL-FREE. It exercises only the `--corpus` half, over planted
+# corpora, so it needs no token and cannot be flaky on an API. The `--fetch` half is NOT covered here
+# and is named as unmeasured in docs/reports/2026-07-28-gate-finding-history.md rather than papered
+# over with a mock that would only ever assert the mock (#1772).
+#
+# THE `paths:` FILTERS ARE PART OF THE GATE. The two lists are IDENTICAL on purpose — a push copy that
+# omits a pattern the pull_request copy has is exactly the drift check-paths-coherence.py exists to
+# catch, and #1519/#1520 are what it costs.
+name: gate-finding-history-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-gate-finding-history.py"
+      - "scripts/lib/gate.py"
+      - "tests/gate-finding-history/**"
+      - ".github/workflows/gate-finding-history-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-gate-finding-history.py"
+      - "scripts/lib/gate.py"
+      - "tests/gate-finding-history/**"
+      - ".github/workflows/gate-finding-history-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-finding-history-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    # Part B re-invokes part A once per mutant (15 inner runs at the time of writing), so this is
+    # slower than a single-pass fixture by construction. It is still seconds of Python; 10 minutes is
+    # headroom for a cold runner, not an expectation.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # `scripts/lib/gate.py` imports PyYAML lazily and this gate's --fetch half parses workflow YAML,
+      # so the shared bootstrap is the right dependency even though the offline legs never reach it.
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the gate-finding-history selftest
+        run: bash tests/gate-finding-history/run.sh
