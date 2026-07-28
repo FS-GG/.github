@@ -904,6 +904,45 @@ module ApplicationServiceTests =
         Assert.Equal("disjoint", gateVerdict (contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty))
 
     [<Fact>]
+    let ``#1792: agreeing with the scheduler costs the gate NOTHING`` () =
+        // .github#1779 made this scan CHEAPER — 24/27/31 GraphQL points to ZERO, REST at one issue-list read
+        // plus one marker read per COLLIDING row — and #1792 must not spend that back. It does not, and this
+        // is the measurement rather than the assertion that it does not: `Reads.reserver` is a pure function
+        // over the marker list `Reads.markers` already fetched on the line above it, so the reservation rule
+        // changed and the REQUEST COUNT did not.
+        //
+        // COUNTED, NOT ESTIMATED (.github#1086 got this same trade wrong by an order of magnitude by
+        // estimating). `Fake.Recorder` records every request the engine issues, so these are exact and
+        // reproducible — which the live rate-limit counters, at a 2-4 call delta against seven concurrent
+        // workers, are not.
+        //
+        // The world is the LAPSED one — the case whose answer #1792 changed — so this counts the path that
+        // now reports OVERLAP where it used to report DISJOINT. Doing MORE work for the new answer is
+        // exactly the regression this leg exists to catch.
+        let world = contendedWorld "Blocked" laggingHolders (Map.ofList [ 75, 240 ])
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            let _, out = runIn dir world (widenOnto "src/Shared.fs")
+            Assert.Equal("overlap", str "verdict" (parsed out))
+
+            // THE BOARD IS NOT READ. #1779's zero, still zero — and the only way to reach the one case
+            // #1792 declined (`RUnowned`, which is column-derived) is to break this.
+            Assert.Equal(0, world.GraphQlCalls)
+
+            // REST: the issue-list read, one marker read for the ONE colliding row, and the writes `widen`
+            // makes on top (the body PATCH and the courtesy notice). The number is pinned rather than
+            // bounded so that a re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779
+            // measured and refused — cannot land quietly.
+            Assert.Equal(7, world.RestCalls)
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
     let ``#1792: a MARKERLESS In-progress row diverges, and that divergence is deliberate`` () =
         // THE REMAINDER #1792 DECLINED TO COLLAPSE, PINNED SO IT STAYS A DECISION.
         //
