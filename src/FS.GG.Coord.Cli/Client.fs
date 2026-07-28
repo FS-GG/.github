@@ -3625,9 +3625,63 @@ module Client =
 
             // ...THEN THE LOCK, for the survivors only. Colliding TOKENS are not a reservation: an
             // unclaimed issue that declares the same files is work nobody is doing, and reporting it would
-            // stop a worker who has nothing to stop for. Only a LIVE claim reserves (`winner` applies the
-            // lease), and a marker read that FAILS propagates — a claim we could not check is never a
-            // silent DISJOINT (#461).
+            // stop a worker who has nothing to stop for. A marker read that FAILS propagates — a claim we
+            // could not check is never a silent DISJOINT (#461).
+            //
+            // IT IS `reserver`, NOT `winner` (.github#1792). This asks "who has RESERVED these files", and
+            // `Reads.fsi` already assigns that question its function: `winner` decides IDENTITY (only a live
+            // marker answers a heartbeat or loses a CAS), `reserver` decides RESERVATION. This call site read
+            // the IDENTITY function to answer the RESERVATION question, and that is the whole of the defect —
+            // one marker, two answers. Every OTHER `Reads.winner` in this file is an identity question and
+            // stays: `who` classifying Held vs Stale, `reap` refusing to touch a live claim, `adopt` refusing
+            // to call a live worker an orphan, `heartbeat` and `done` asking whether the lock is still ours.
+            // `adopt` is where "a lapsed lease is adoptable" is DELIBERATE, and it is deliberate about
+            // IDENTITY — which is why this change does not disturb it, and why both functions keep their
+            // callers rather than one being collapsed into the other.
+            //
+            // WHAT A MISS COSTS ON THIS CONSUMER (the #1740 AC4 warrant standard). This verdict is the ONLY
+            // thing standing between two workers and one file — there is no CAS on a file, so a wrong
+            // `DISJOINT` here is not retried, not detected, and not recoverable; it is discovered as two
+            // divergent edits to one tree. `winner` failed OPEN into exactly that: a lapsed lease is a MISSED
+            // HEARTBEAT far more often than a dead worker (a long build, a slow review, an item that simply
+            // outran its lease), and this scan told the next worker those files were free. Measured on
+            // 2026-07-28: `.github#1779`'s own worker had its lease lapse at 120m mid-verification and this
+            // scan returned `DISJOINT` for its own still-live work — the fail-open, observed on the engine
+            // that shipped it.
+            //
+            // `reserver` fails CLOSED instead, and the failure it can cause is BOUNDED AND ESCAPABLE: a
+            // genuinely dead claim reports `OVERLAP … held by W` until somebody collects it, and `reap` is
+            // that somebody — the protocol exit exists, it is one command, and the report NAMES the worker
+            // and the item to run it against. A lease is a clock; a lock is broken only by `reap`
+            // (#461/#581), and #581 has `reap` REFUSE a claim with an open `item/<n>-*` PR precisely because
+            // a lapsed lease is not proof the work is dead. If that reasoning is right — and it is the
+            // reasoning the SCHEDULER already runs on — it is right at both call sites, which is all this
+            // change says.
+            //
+            // ONE DIVERGENCE SURVIVES ON PURPOSE, AND IT IS NAMED HERE RATHER THAN LEFT IMPLIED
+            // (.github#1792, the `RUnowned` case). `Scan.snapshot` reserves one thing this scan does not: a
+            // board row sitting in `In progress` with NO marker at all. That reservation is COLUMN-derived,
+            // and #1779 removed the column from this path entirely — the candidate set here is
+            // `Reads.openIssues`, which carries numbers and bodies and no board state — so it is not merely
+            // unimplemented here, it is unreachable by construction. It is declined for two reasons, both
+            // about THIS consumer:
+            //
+            //   • COST. Reaching it means reading the board, which is the GraphQL half #1779 drove to ZERO
+            //     points. `overlap --active`/`widen` run in a worker's loop (#418), so paying board points
+            //     per call is the trade `.github#1666` and `.github#1086` are both about.
+            //   • NO EXIT. The two verbs need different things from a stop. `batch` passing over a candidate
+            //     costs a wait and nothing else. `widen` refusing costs a worker who cannot proceed — and a
+            //     markerless row offers them NOTHING to act on: no worker to `say` to, no marker to `reap`,
+            //     no lease to wait out. `Scan.snapshot` says this itself where it mints `RUnowned` ("no
+            //     worker to name and no lease to wait out"). A scheduler can absorb an unactionable stop by
+            //     waiting; a gate a worker is told to believe cannot, because the only remedy left is to
+            //     ignore it.
+            //
+            // So the rule, stated so it can be CHECKED rather than rediscovered: THE TWO SURFACES AGREE ON
+            // EVERY MARKER, LIVE OR LAPSED, AND DIVERGE ONLY WHERE THERE IS NO MARKER. `Scan.snapshot`'s
+            // `RUnowned` arm carries the same sentence, and the `#1792` legs in `ApplicationServiceTests`
+            // pin both halves — the divergence one so that closing it is a decision somebody makes with
+            // these two costs in front of them, rather than a patch that silently reopens the question.
             let rec scan acc rows =
                 match rows with
                 | [] -> Ok(List.rev acc)
@@ -3635,7 +3689,12 @@ module Client =
                     match Reads.markers ctx.Transport other.Owner other.Repo other.Number with
                     | Error e -> Error e
                     | Ok markers ->
-                        match Reads.winner opts.LeaseMinutes markers with
+                        // NO EXTRA READ. `reserver` is a pure function over the marker list already fetched
+                        // on the line above, so agreeing with the scheduler costs ZERO additional API calls —
+                        // #1779's measured cost (0 GraphQL points; REST at 1 issue-list plus 1 marker read
+                        // per colliding row) is unchanged, and that was verified either side of one
+                        // `overlap --active` call rather than estimated (#1086).
+                        match Reads.reserver opts.LeaseMinutes markers with
                         | None -> scan acc rest
                         | Some m -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
 

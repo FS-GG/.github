@@ -912,6 +912,27 @@ module Scan =
                 //     `Unowned`. Dressing it up as a holder would send a worker to wait for a marker that is
                 //     never coming (#428). Only the `In progress` COLUMN licenses this: a Ready/Backlog row
                 //     with no marker reserves nothing, because nobody is working it.
+                //
+                // WHERE THIS AGREES WITH THE #353 COLLISION SCAN, AND THE ONE PLACE IT DOES NOT (.github#1792).
+                // `Client.activeCollisions` — behind `overlap --active`, `widen`, `set-paths` — answers the
+                // same question ("who has reserved these files") for the OTHER half of the protocol, and the
+                // two used to disagree about a LAPSED lease: this arm read `Reads.reserver`, that one read
+                // `Reads.winner`, so the scheduler could hold an item reserved while the collision gate called
+                // its files free. #1792 settled that in `reserver`'s favour AT BOTH SITES — a lease is a clock,
+                // a lock is broken only by `reap` (#461/#581) — so MARKER-BACKED reservations now agree
+                // exactly, live or lapsed.
+                //
+                // THE SECOND BULLET ABOVE IS THE DELIBERATE REMAINDER. `RUnowned` is derived from the COLUMN,
+                // and #1779 keyed `activeCollisions` on the marker instead — its candidate set is
+                // `Reads.openIssues`, which has no board state in it — so this reservation is unreachable
+                // there by construction, not by omission. Closing that would cost the collision gate a board
+                // read per call (the GraphQL half #1779 drove to zero, on a verb workers loop, #418/#1666),
+                // and would buy a stop with no protocol exit: a markerless row has nobody to `say` to and no
+                // marker to `reap`, which the scheduler can absorb and a gate a worker is told to believe
+                // cannot. So the rule is: THE TWO SURFACES AGREE ON EVERY MARKER, LIVE OR LAPSED, AND DIVERGE
+                // ONLY WHERE THERE IS NO MARKER. `activeCollisions` carries the same sentence, and
+                // `ApplicationServiceTests` pins both halves so the divergence stays a decision rather than
+                // an accident.
                 // #712: carry the #581 proof of life onto the reservation. `Some pr` ONLY for a lapsed
                 // lease held open by a PR — every other liveness (within lease, no PR, unread) is `None`,
                 // "no proof of life", so the reservation never claims a liveness it does not have.
