@@ -33,6 +33,7 @@ module Chores =
         (transport: Transport.IGitHubTransport)
         (boundary: Chore.Boundary)
         (worker: WorkerId)
+        (self: Writes.SelfIdentity)
         (session: SessionId option)
         (extra: Ref list)
         (owner: string)
@@ -112,17 +113,22 @@ module Chores =
                     //    chore lock holds no work, so there is nothing to recover and a live holder simply
                     //    means somebody else is already draining this repo. Forcing it would put two
                     //    reconcilers on one board — the one thing this lock exists to prevent.
+                    //    `self` rides through unchanged (#1646). The chore lock is a `Writes.claim` like any
+                    //    other, so it asks the same identity question — and a caller acting as another worker
+                    //    must not take THIS lock in their name either: the drain it serialises would then be
+                    //    attributed to a worker who never asked to drain anything.
                     match
-                        Writes.claim transport LeaseMinutes Writes.RefuseLiveHolder ignore worker session lockRef (fun () ->
-                            None)
+                        Writes.claim transport LeaseMinutes Writes.RefuseLiveHolder ignore worker self session lockRef
+                            (fun () -> None)
                     with
                     | Ok(Writes.Won _)
                     | Ok(Writes.Renewed _) -> Some(chore, lockRef)
 
                     // EVERY OTHER OUTCOME IS "NOT OURS", and they are one branch on purpose. `Lost` is
                     // the lock WORKING — somebody else is draining this repo. `Twin` is #419, and a
-                    // lock that cannot tell two workers apart is not one. `Undecided` and an
-                    // unparseable marker are "I could not tell", which is never a yes (#266). None of
-                    // them is an error the caller asked about: it asked for `next`.
+                    // lock that cannot tell two workers apart is not one. `Impersonates` is #1646 — a
+                    // caller naming a worker it is not, which is a broken identity and not a free lock.
+                    // `Undecided` and an unparseable marker are "I could not tell", which is never a yes
+                    // (#266). None of them is an error the caller asked about: it asked for `next`.
                     | Ok _
                     | Error _ -> None

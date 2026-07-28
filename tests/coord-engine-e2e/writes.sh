@@ -32,6 +32,18 @@ export GITHUB_TOKEN="fixture-token"
 export FSGG_COORD_OWNER="FS-GG" FSGG_COORD_PROJECT="Coordination"
 export FSGG_COORD_CACHE="$CACHE_DIR" FSGG_COORD_SCAN_TTL_SEC=0
 # A clean identity, so the derivation never depends on the CI runner's env.
+#
+# `FSGG_WORKER=""` ALONE WAS NOT THAT, and .github#1646 is what made it visible. `Identity.resolve` reads
+# `--worker` first, then `$FSGG_WORKER`, then the HARNESS SESSION — so an empty `FSGG_WORKER` falls through
+# to `CLAUDE_CODE_SESSION_ID`/`OPENCODE_SESSION_ID`/`FSGG_AGENT_SESSION_ID` and this process derives an
+# identity from whatever agent ran the script. That was invisible while nothing consulted it. It is
+# consulted now: every `--worker vole-418` below is measured against the id this process derives for
+# itself, and the lock verbs refuse the disagreement over vole-418's live marker (#1646). Measured: 13 of
+# the 47 assertions here fail under an exported `CLAUDE_CODE_SESSION_ID` and pass without one.
+#
+# So unset the whole ladder, not just its second rung. What remains is a caller that derives NOTHING and
+# names itself with `--worker` — the human-operator case the flag exists for, and what this fixture is.
+unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGENT_HARNESS
 export FSGG_WORKER=""
 
 run() { "$ENGINE" "$@" --worker vole-418; }

@@ -245,6 +245,18 @@ module Client =
     /// `verifyHeld` keeps the pre-#1031 behaviour for it (Writes.twinSession).
     let private sessionOf (w: Identity.Worker) : SessionId option = w.Session |> Option.map SessionId
 
+    /// WHO THIS PROCESS IS, as opposed to who `--worker` said it was (#1646) — the third fact the lock
+    /// boundary asks, after the id and the session, and the only one the flag cannot restate.
+    ///
+    /// `DerivesNothing` is a caller that resolves no identity of its own (a human, a harness exporting no
+    /// session and setting no `$FSGG_WORKER`). It must NOT fail closed, for `sessionOf`'s reason exactly:
+    /// `--worker` is the only way such a caller can say who it is, so refusing it would lock out the operator
+    /// the flag exists for. What it costs is stated in `Writes.SelfIdentity` rather than hidden here.
+    let private selfOf (w: Identity.Worker) : Writes.SelfIdentity =
+        match w.Derived with
+        | Some d -> Writes.Derives(WorkerId d)
+        | None -> Writes.DerivesNothing
+
     /// THE REMEDY FOR A SHARED ID, and it is a MINT — never `--force` (#1031).
     ///
     /// A twin is a broken IDENTITY, not a contested item: forcing would delete a lock our twin is working
@@ -274,6 +286,82 @@ module Client =
 
         mintRemedy ()
         ExitRed
+
+    /// THE IMPERSONATION REFUSAL (#1646), shared by the verbs that REFUSE over a worker we are not — `claim`,
+    /// `release`, `heartbeat`, `widen` — for `twinRefusal`'s reason: one situation, one message.
+    ///
+    /// `done`'s lock-drop is the fifth site and deliberately does NOT use this, exactly as it declines
+    /// `twinRefusal`: the stamp is earned by the MERGE, which owes nothing to whose lock sits on the item, so
+    /// `done` reports the foreign claim, leaves it alone, and still exits green. Same hazard, different
+    /// verdict, different sentence.
+    ///
+    /// IT SAYS A DIFFERENT THING FROM THE TWIN REFUSAL, AND MUST. A twin is a broken IDENTITY — two workers
+    /// arrived at one id by accident — and its remedy is a new id. This is not an accident and a new id is not
+    /// the remedy: the caller HAS an id, and typed somebody else's. Sending them to `whoami --mint` would be
+    /// advice for a collision they do not have, so `mintRemedy` is deliberately not called here.
+    ///
+    /// THE REMEDY IS THE SANCTIONED STEAL, and naming it is the whole point of the change. #1620 built
+    /// `claim --force` precisely so a worker recovering a dead holder had a route that RECORDS the theft on
+    /// the item and makes the displaced worker's next `heartbeat` fail loudly — and then the impersonation
+    /// route stayed open, one flag shorter and silent. A refusal that did not point at `--force` would leave
+    /// the recovering worker exactly where #1596's did: at a documented dead end, inventing a way round.
+    ///
+    /// **AND THE REMEDY IS SPELLED WITHOUT `--worker`, WHICH IS NOT A DETAIL.** Review caught this: a caller
+    /// who copies the line back with the flag they already had — `claim <ref> --force --worker <them>` — is
+    /// refused by this very function, because a steal under a foreign id is the sharper half of what is being
+    /// closed (it evicts a live holder AND signs the #1620 notice with a third party's name). A remedy that
+    /// loops back to its own refusal is worse than none: it reads as the tool malfunctioning.
+    ///
+    /// It does NOT offer "export $FSGG_WORKER=<them>", which would work. That is the residue #1646 records
+    /// (this is not a proof of identity, and cannot be), not a workaround to publish: a tool that prints its
+    /// own bypass has closed nothing.
+    ///
+    /// ExitRed, matching the twin refusal: acting as another worker is a stop, not a retry.
+    let private impersonationRefusal
+        (verb: string)
+        (ref: Ref)
+        (derived: WorkerId)
+        (named: WorkerId)
+        : int =
+        eprint
+            $"fsgg-coord-engine: refusing to %s{verb} %s{ref.Short} as '%s{named.Value}' — this process's OWN worker id is '%s{derived.Value}'. `--worker` ASSERTS an identity; it does not prove one, so acting on %s{ref.Short} under another worker's id would take, renew or destroy their lock with nothing recorded and nobody told (#1646)."
+
+        // WITHOUT `--worker`, and the omission is load-bearing — see the doc above. The line a caller pastes
+        // back has to be one that RUNS.
+        eprint
+            $"  If you are RECOVERING a holder that is really gone, use the sanctioned route AS YOURSELF — it posts the theft on the item and makes their next heartbeat fail loudly:  FSGG_WORKER=%s{derived.Value} scripts/fsgg-coord claim %s{ref.Short} --force"
+
+        eprint
+            $"  If you meant to act as YOURSELF, drop `--worker %s{named.Value}` — this process is '%s{derived.Value}'."
+
+        // THE ID WE JUST TOLD THEM TO USE MAY ITSELF BE SHARED, AND NOTHING ELSE WOULD SAY SO (#419).
+        //
+        // `worker opts` prints the shared-session warning off the PROVENANCE, and with `--worker` present the
+        // provenance is `FromFlag` — so a caller in exactly this state has never been warned that the id this
+        // refusal is sending them back to is one every sibling of the fan-out also derives. Pointing a worker
+        // at a shared id without saying so would be this refusal re-creating #419 while closing #1646.
+        match Identity.derivedProvenance () with
+        | Some(Identity.FromSharedSession(_, _, why)) ->
+            eprint
+                $"  NOTE — '%s{derived.Value}' was derived from a session where %s{why}, so it is not unique to this worker either. Mint one first (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+        | _ -> ()
+
+        ExitRed
+
+    /// THE TYPO NOTE (#1646 AC 3), and it is NOT the impersonation refusal.
+    ///
+    /// By far the commonest way to name an id that is not yours is to mistype it, and the remedy for that is
+    /// "check the flag", not an accusation. So the accusation is reserved for the one case where the named id
+    /// holds the LIVE lock (`Writes.ImpersonatesHolder`), and every other disagreement lands here: appended to
+    /// whatever "you do not hold this" the verb already prints, saying which id this process actually is.
+    ///
+    /// Silent when the ids agree — which is every ordinary invocation — so the common path gains no noise.
+    let private noteWorkerDisagreement (w: Identity.Worker) =
+        match w.Derived with
+        | Some d when d <> w.Id ->
+            eprint
+                $"  (note: '%s{w.Id}' is not this process's own worker id — that is '%s{d}'. If you did not mean to act as another worker, check `--worker`.)"
+        | _ -> ()
 
     // ---- the read / schedule commands ------------------------------------------------------------------
 
@@ -907,7 +995,7 @@ module Client =
             // out-of-scope repos — which is what makes the rules reachable at all. `BLOCKER-CLEARED` needs a
             // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
             // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
-            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.ChoreLocks ctx.Owner repo observed
+            Chores.offer ctx.Transport boundary (WorkerId w.Id) (selfOf w) session ctx.ChoreLocks ctx.Owner repo observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
@@ -2290,10 +2378,20 @@ module Client =
                     // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
                     let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
                         let markerObserved, markerId =
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref with
+                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
                             | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
                             | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
                             | Ok Writes.DoesNotHold
+                            // #1646. This is a READBACK, so it REPORTS rather than decides: `markerObserved
+                            // = false` is the honest receipt for a marker this process may not verify, and
+                            // `converged` then says so.
+                            //
+                            // It is not reachable from a successful claim any more, and the history is worth
+                            // keeping: while the refusal sat on `claim`'s re-claim arm alone, `claim --worker
+                            // <them>` on a FREE item won the CAS and then failed its own readback here — a
+                            // green claim whose receipt said the marker was not ours, because it was not.
+                            // `claim` refuses that argv outright now, so the two agree.
+                            | Ok(Writes.ImpersonatesHolder _)
                             | Ok(Writes.TwinHolds _) -> false, None
                             | Error e ->
                                 eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
@@ -2434,7 +2532,18 @@ module Client =
                                 $"worker '%s{w.Id}' has TAKEN %s{ref.Short} from you with `claim --force` — your claim was live and its marker has been deleted. STOP working this item: you no longer hold it, `heartbeat` will refuse, and anything you push against it now races a second worker. If this was wrong, say so here."
                             |> ignore
 
-                    match Writes.claim ctx.Transport opts.LeaseMinutes force announceTheft (WorkerId w.Id) session ref readPreviousStatus with
+                    match
+                        Writes.claim
+                            ctx.Transport
+                            opts.LeaseMinutes
+                            force
+                            announceTheft
+                            (WorkerId w.Id)
+                            (selfOf w)
+                            session
+                            ref
+                            readPreviousStatus
+                    with
                     | Error e -> fail e
                     | Ok(Writes.Won(held, collected)) ->
                         announceCollected collected
@@ -2500,6 +2609,12 @@ module Client =
 
                         eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                         ExitRed
+                    | Ok(Writes.Impersonates(derived, named)) ->
+                        // #1646: `claim` is `Held`'s OTHER door, and the re-claim arm walks through it on the
+                        // id alone. Under one harness session the `Twin` arm above cannot catch this — the
+                        // impersonator's session IS the holder's — so `claim --worker <them>` renewed a live
+                        // holder's lease and reported the item held. Same refusal as the other four verbs.
+                        impersonationRefusal "claim" ref derived named
                     | Ok(Writes.Undecided reason) ->
                         eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
                         ExitRed
@@ -2849,14 +2964,19 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
+                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                 | Error e -> fail e
                 | Ok Writes.DoesNotHold ->
                     eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
+                    noteWorkerDisagreement w
                     ExitError
                 // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
                 // a lock they are working behind — the one outcome this verb must never produce.
                 | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
+                // #1646: the marker really is the NAMED worker's, and we are not them. `release` is the most
+                // destructive of the four — it DELETES the lock — and it is the verb #1620's decision named as
+                // the impersonation route that had to be closed.
+                | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
                 | Ok(Writes.Holds held) ->
                     match Writes.release ctx.Transport held with
                     | Error e -> fail e
@@ -2991,8 +3111,13 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
+                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                 | Error e -> fail e
+                // #1646: `heartbeat` is the quiet one — it RENEWS another worker's lease, so an impersonation
+                // here keeps their item alive under our control while they are told nothing. It is refused
+                // ahead of the twin arm for the same reason that arm exists: the diagnosis below keys on the
+                // worker id, and the named id IS the live winner, so a fall-through would report success.
+                | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "heartbeat" ref derived named
                 // #1031: our id, another session. This arm is why `verifyHeld` returns a TWIN rather than a
                 // bare non-hold. The diagnosis below keys on the WORKER ID — which a twin shares — so a twin
                 // reaching it finds our own id on the live winner, falls to the `_` arm, and is told its lease
@@ -3022,6 +3147,11 @@ module Client =
                             // advertising it here taught workers to reach for the steal by default.
                             eprint $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
 
+                        // #1646: BOTH arms above key on the id the caller NAMED, so both are wrong in the same
+                        // way when that id is not this process's own — "your lease expired" about somebody
+                        // else's lease reads as a fact about us. The named id holds no live lock here (that is
+                        // `ImpersonatesHolder`, refused above), so this is the far commoner mistake: a typo.
+                        noteWorkerDisagreement w
                         ExitError
                     | Error e -> fail e
                 | Ok(Writes.Holds held) ->
@@ -3451,15 +3581,20 @@ module Client =
                 | Ok ref ->
                     // #706 — widen takes the HELD claim. verifyHeld is the only door to it that this command
                     // has, and it fails closed: no capability from a failed read.
-                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
+                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                     | Error e -> fail e
                     | Ok Writes.DoesNotHold ->
                         eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
+                        noteWorkerDisagreement w
                         ExitError
                     // #1031: our id, another session. A path update PATCHes the issue BODY, so a twin's touch-set
                     // would be rewritten under them — re-reserving files they are editing, or handing away
                     // files they are.
                     | Ok(Writes.TwinHolds theirs) -> twinRefusal verb w.Id ref theirs
+                    // #1646: the same write, aimed at a marker we NAMED rather than hold. It rewrites the
+                    // reservation protecting the files the real holder is standing in — #706's defect, reached
+                    // deliberately instead of by accident.
+                    | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal verb ref derived named
                     | Ok(Writes.Holds held) ->
                         // #523 — validate BEFORE the read of the body, and rewrite BEFORE the PATCH. A bad
                         // token cannot reach the write, because it cannot produce the value the write takes.
@@ -4127,7 +4262,7 @@ module Client =
                             // "only your own" rule is the capability type, not a forgettable `if`. And unlike
                             // the `release` command, we do NOT restore the column: the item is Done, and Done
                             // is what stands.
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
+                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                             | Ok(Writes.Holds held) ->
                                 match Writes.release ctx.Transport held with
                                 | Ok _ -> ()
@@ -4145,6 +4280,13 @@ module Client =
                                     $"fsgg-coord-engine: %s{ref.Short} is stamped Done, but its claim carries YOUR worker id '%s{w.Id}' in a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Left alone: dropping it would delete a lock your twin is working behind."
 
                                 mintRemedy ()
+                            // #1646: the claim is the NAMED worker's, and we are not them. The stamp stands for
+                            // the twin arm's reason — the merge is a fact about the PR — but the lock is not
+                            // ours to drop, and `done` is exactly where a `--worker <them>` would look most
+                            // innocent: a tidy-up at the end of somebody else's item. Left alone, and named.
+                            | Ok(Writes.ImpersonatesHolder(derived, named)) ->
+                                eprint
+                                    $"fsgg-coord-engine: %s{ref.Short} is stamped Done, but its claim is '%s{named.Value}'s and this process is '%s{derived.Value}' — `done` drops only your OWN lock (#1646). Left alone: `%s{named.Value}` was never asked, and `--worker` does not make you them."
                             | Ok Writes.DoesNotHold ->
                                 // We do not hold it. If ANOTHER worker's lock is live, this engine leaves it
                                 // alone and says so — it never silently deletes a claim that is not ours.

@@ -98,7 +98,9 @@ module Chores =
     /// **Only `Won` and `Renewed` are a lock.** `Lost` is another worker draining this repo — exactly what
     /// the lock is for, and the caller is told nothing, because there is nothing for it to do. `Twin`
     /// (#419) is two workers sharing an id, and a lock that cannot separate them is not a lock:
-    /// `Writes.claim`'s refusal is inherited here rather than re-decided. `Undecided`,
+    /// `Writes.claim`'s refusal is inherited here rather than re-decided. `Impersonates` (#1646) is a caller
+    /// acting as a worker it is not, and the chore lock is not exempt: the drain this serialises would
+    /// otherwise be taken out in the name of a worker who never asked to drain anything. `Undecided`,
     /// `BlockedByUnparseableMarker`, and every transport error are "I could not take it" — never "I took
     /// it", which is the fail-open this whole codebase exists to make unwritable (#266).
     ///
@@ -115,6 +117,7 @@ module Chores =
         transport: Transport.IGitHubTransport ->
         boundary: Chore.Boundary ->
         worker: Types.WorkerId ->
+        self: Writes.SelfIdentity ->
         session: Types.SessionId option ->
         extra: Types.Ref list ->
         owner: string ->

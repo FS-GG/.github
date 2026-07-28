@@ -110,6 +110,43 @@ module Writes =
         /// behind, and the remedy for a broken identity is a new identity, not a bigger hammer.
         | StealLiveHolder
 
+    /// **WHO THE CALLING PROCESS IS, AS OPPOSED TO WHO IT SAYS IT IS** (#1646).
+    ///
+    /// `--worker <id>` is an ASSERTION of identity, never a proof of one. `session=` was added by #419/#1031
+    /// to be the second factor that turns "your id is not proof" into something checkable — but every
+    /// subagent of one Claude Code session shares one session id, so under a fan-out the second factor is one
+    /// every sibling also holds. `twinSession` concludes twin only when both sessions are KNOWN and DIFFER,
+    /// so a caller passing another worker's id while sharing their session matched on both legs and was
+    /// handed the capability that authorises PATCHing and DELETING their marker — quieter, and one flag
+    /// shorter, than the sanctioned `claim --force` steal (#1620) it was meant to be displaced by.
+    ///
+    /// So the marker check gets a THIRD fact, and it is the one `--worker` cannot restate: **the identity
+    /// this process resolves for ITSELF, with the flag taken away.** A caller that derives `kite-461` and
+    /// asks to act as `vole-418` is not failing a session comparison; it is naming somebody else, which is
+    /// the only thing that shape is ever needed for.
+    ///
+    /// A TYPE RATHER THAN A `WorkerId option`, for `ClaimForce`'s reason: `None` is the fail-OPEN answer
+    /// here, and an `option` lets a call site reach it by omission. Each caller has to say which of the two
+    /// it means.
+    ///
+    /// **IT IS NOT A PROOF, AND MUST NOT BE DESCRIBED AS ONE.** `$FSGG_WORKER` is an assertion too, so a
+    /// caller determined to impersonate can still export the victim's id and be believed. What this removes
+    /// is the property that made the hole worth closing: that impersonating was the QUIETEST route, reachable
+    /// by adding one flag to a command the worker was already running. Direction (a) in #1646 — a per-claim
+    /// secret the marker is bound to — is the only one of the three that would be a proof, and this is not it.
+    type SelfIdentity =
+        /// This process resolves an identity of its own without being told: `$FSGG_WORKER`, or a harness
+        /// session id. Naming a DIFFERENT worker on a marker that worker holds is then an impersonation, by
+        /// the caller's own account of itself.
+        | Derives of WorkerId
+
+        /// This process resolves nothing: a human operator, a harness that exports no session and sets no
+        /// `$FSGG_WORKER`. `--worker` is the ONLY way such a caller can say who it is, so there is nothing to
+        /// measure it against and the impersonation question is UNASKABLE — never answered "no" by default.
+        /// #1646 states this residue rather than pretending it away: a caller that unsets its own identity
+        /// first lands here, and the tool cannot tell it from the operator this case exists for.
+        | DerivesNothing
+
     /// What happened when we went for the lock.
     ///
     /// NOT A BOOL, AND NOT AN OPTION. Each case is a different instruction to the worker, and collapsing
@@ -170,6 +207,23 @@ module Writes =
         /// and keeps the old behaviour, and our OWN session re-claiming is a heartbeat, not a twin.
         | Twin of theirs: SessionId
 
+        /// **WE ASKED TO CLAIM AS A WORKER WE ARE NOT** (#1646). `claim` is `Held`'s OTHER door, and it is
+        /// refused for the WHOLE function rather than on the arm where the hole was first found:
+        ///
+        ///   * the RE-CLAIM arm renewed a live marker on the strength of its id alone and handed back
+        ///     `Renewed` — the same impersonation `verifyHeld` grants, through the door #1031 did not have to
+        ///     consider, and invisible to `twinSession` because the impersonator's session IS the holder's;
+        ///   * the `--force` STEAL arm evicted a live holder and posted under the named id, so the notice
+        ///     #1620 requires was written over a THIRD party's name. That does not bypass the accounting;
+        ///     it falsifies it, in the only surviving record of a lock that no longer exists;
+        ///   * the FRESH-CAS arm planted a marker under a name whose own creator then cannot heartbeat or
+        ///     release it, because every verb that would operate it goes through `verifyHeld`.
+        ///
+        /// Refusing three of the four would leave `claim` and `verifyHeld` disagreeing about one question,
+        /// which is exactly what `impersonated` is factored to make impossible. So it is asked ONCE, before
+        /// the marker read: the refusal spends nothing and touches nothing.
+        | Impersonates of derived: WorkerId * named: WorkerId
+
         /// **WE CANNOT TELL, AND THAT IS A LOSS.** The re-read failed, or our own marker was not in it.
         ///
         /// This is the CAS's sharpest rule. Our marker is already posted by the time we re-read, so every
@@ -225,6 +279,7 @@ module Writes =
         force: ClaimForce ->
         onEvict: (WorkerId list -> unit) ->
         worker: WorkerId ->
+        self: SelfIdentity ->
         session: SessionId option ->
         ref: Ref ->
         readPreviousStatus: (unit -> BoardStatus option) ->
@@ -253,6 +308,27 @@ module Writes =
         /// working behind. Carries the OTHER session so the caller can name it, as `Twin` does.
         | TwinHolds of theirs: SessionId
 
+        /// **THE LIVE MARKER BELONGS TO THE WORKER WE NAMED, AND WE ARE NOT THAT WORKER** (#1646).
+        ///
+        /// The caller resolved `derived` for itself and asked to act as `named`; `named` holds the live lock.
+        /// Under a shared harness session this passed both existing legs — the id matched because it was
+        /// COPIED off the board, and `twinSession` could not call it a twin because the sessions were equal —
+        /// and the capability that authorises deleting that marker was handed over.
+        ///
+        /// **IT IS NOT `DoesNotHold`, AND THAT DISTINCTION IS THE POINT** (#1646 AC 3). By far the commonest
+        /// way to name an id that is not yours is a TYPO, and the remedy for a typo is "check the flag" — so
+        /// the two must not share a message. This case fires only when the named id holds the LIVE lock,
+        /// which is exactly when the mistake is not a typo and the cost is another worker's lock. A named id
+        /// that holds nothing stays `DoesNotHold`, where the caller can say "and that is not your id either"
+        /// without accusing anybody of impersonation.
+        ///
+        /// It carries both ids because a refusal that names neither cannot be acted on: the caller has to see
+        /// who it actually is beside who it asked to be.
+        ///
+        /// Spelled apart from `ClaimOutcome.Impersonates` for `TwinHolds`'s reason: two cases of the same
+        /// name in one module shadow each other at every unqualified construction.
+        | ImpersonatesHolder of derived: WorkerId * named: WorkerId
+
     /// Re-read the markers and confirm the live winner is US.
     ///
     /// The other door to a `Held`, for a worker that took its lock in an earlier process — every command
@@ -275,10 +351,27 @@ module Writes =
     /// a sessionless marker (a human, a harness exporting none, any pre-#419 marker) is genuinely
     /// indistinguishable from ours, and failing closed on it would lock workers out of items they really
     /// hold; and our own session is a match, never a twin, or no worker could verify its own lock.
+    ///
+    /// **AND THE SESSION IS NOT A CREDENTIAL EITHER (#1646).** #419 said an id two workers share cannot be a
+    /// lock; #1031 answered it with a session predicate. But every subagent of one harness session shares
+    /// that session, so for the fan-out this board actually runs, the second factor is one the impersonator
+    /// holds too — and `twinSession` returns `None` for equal sessions, which `verifyHeld` read as "ours".
+    /// The two previous repairs made the protocol better at telling IDS apart, and neither can help when the
+    /// second factor is shared as well. `self` is the third fact, and it is the one `--worker` cannot restate:
+    /// under `Derives d`, a live marker for a `worker` that is not `d` is refused as `ImpersonatesHolder`, no
+    /// matter what the sessions say. Under `DerivesNothing` the question is unaskable and the older rules decide
+    /// alone — the human operator and the session-less harness keep working, which is the #1031 boundary
+    /// restated for a fact one step further out.
+    ///
+    /// **ORDER: IMPERSONATION IS DECIDED BEFORE THE TWIN.** A caller whose own id disagrees with the marker's
+    /// is definitively not that marker's worker, so "you named somebody else" is the true diagnosis and
+    /// "somebody shares your id" is not: `TwinHolds` would send them to `whoami --mint` for an identity
+    /// collision they do not have.
     val verifyHeld:
         transport: IGitHubTransport ->
         leaseMinutes: int ->
         worker: WorkerId ->
+        self: SelfIdentity ->
         session: SessionId option ->
         ref: Ref ->
             IoResult<HeldOutcome>

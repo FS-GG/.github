@@ -46,7 +46,12 @@ module FollowupsTests =
     let private workerWithRawId (id: string) : Identity.Worker =
         { Id = id
           Session = None
-          Provenance = Identity.FromFlag }
+          Provenance = Identity.FromFlag
+          // #1646 — `Derived` is the LOCK boundary's question (does this process's own id agree with the one
+          // it named?) and the follow-up queue is not a lock: it is a per-worker FILE, keyed on the id in
+          // use. `None` says this hand-built worker derives nothing, which is what a `Worker` assembled
+          // outside `Identity.resolve` honestly is.
+          Derived = None }
 
     /// Run `f` against a THROWAWAY cache root.
     ///

@@ -153,7 +153,20 @@ module ForceStealTests =
     /// sessions are known, so an unpinned session would turn that refusal into a renewal and the test
     /// would pass locally and fail in CI — or, worse, the reverse. Pin the whole ladder, both rungs above
     /// the escape hatch included.
-    let private sessionVars = [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+    ///
+    /// **AND `$FSGG_WORKER` IS PART OF THAT LADDER, WHICH #1646 IS WHAT MADE VISIBLE.** Pinning the session
+    /// alone left this fixture saying "our session is `ed60050b`" while argv said "we are `vole-418`" — and
+    /// nothing joined the two, so who this PROCESS was remained whatever the runner's environment said. Once
+    /// `claim` measures the named worker against the derived one (#1646), an unpinned `$FSGG_WORKER` makes
+    /// every leg here an impersonation: `--worker vole-418` from a process that derives its id from
+    /// `ed60050b` is a caller naming somebody it is not.
+    ///
+    /// So the fixture states BOTH halves of the identity it means — `vole-418`, in session `ed60050b` — and
+    /// the legs below are unchanged by it: the twin leg still turns on the MARKER's session differing from
+    /// ours, and the steal legs still turn on the marker's WORKER differing from ours. Neither ever depended
+    /// on this process being anonymous.
+    let private sessionVars =
+        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
 
     let private runClaim (transport: Fake.Recorder) (args: string list) : int * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1620-" + Guid.NewGuid().ToString "n")
@@ -170,6 +183,9 @@ module ForceStealTests =
             Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
             Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
             Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
+            // The other half of the identity (#1646) — and it MUST match `claimArgs`' `--worker`, or this
+            // process is naming a worker it is not and `claim` refuses before it reads anything.
+            Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
             Console.SetOut captured
 
             let opts =

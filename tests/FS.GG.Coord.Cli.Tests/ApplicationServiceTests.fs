@@ -225,11 +225,35 @@ module ApplicationServiceTests =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+
+        // THE IDENTITY IS PART OF THE FIXTURE, AND IT WAS THE ONE PART LEFT AMBIENT (#1646).
+        //
+        // These legs name their worker with `--worker kite-469`, and `Identity.resolve` reads `--worker`
+        // FIRST — so who this process is besides that was, until #1646, a fact nothing consulted. It is
+        // consulted now: the lock verbs refuse `--worker <somebody else>` over that worker's live marker.
+        // Run under an agent harness (`CLAUDE_CODE_SESSION_ID` is exported by Claude Code, and these tests
+        // are written and run there), the test process derives a session id of its own, disagrees with
+        // `kite-469`, and every leg below is refused — while the same suite passes in CI, where no such
+        // variable exists.
+        //
+        // A test that passes only because a variable happens to be ABSENT is the shape #1646 is about, so
+        // scrub them for the duration exactly as `FSGG_COORD_CACHE` is scrubbed. What remains is a caller
+        // that derives NOTHING and names itself with `--worker` — which is precisely what an in-process
+        // argv fixture is, and the human-operator case the flag exists for.
+        let identityVars =
+            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+
+        let previousIdentity =
+            identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         use captured = new StringWriter()
 
         try
             Directory.CreateDirectory dir |> ignore
+            for v, _ in previousIdentity do
+                Environment.SetEnvironmentVariable(v, null)
+
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             // The kit-digest warning is an observation off the TREE, and it is stderr-only, so it cannot
             // corrupt stdout in either projection. Pointed at an empty directory it stays silent, which
@@ -251,6 +275,9 @@ module ApplicationServiceTests =
             Console.SetOut stdout
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for v, previous in previousIdentity do
+                Environment.SetEnvironmentVariable(v, previous)
 
             try
                 Directory.Delete(dir, true)
