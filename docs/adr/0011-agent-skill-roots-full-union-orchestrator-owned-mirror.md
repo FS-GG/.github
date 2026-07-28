@@ -3,7 +3,8 @@
 - **Status:** Accepted — **implementation superseded by [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md)** (2026-07-01): this ADR's five *invariants* stand, but where the two disagree on *mechanism* ADR-0014 wins — it replaces the four hand-maintained mirror mechanisms described here with one shared, content-addressed materialize-and-verify.
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD, FS.GG.Rendering (the `fs-gg-ui` template), FS.GG.Templates (provider pin), `.github` (registry)
-- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) (2026-07-27) — **direction only; this record stays IN FORCE and its three-root union is still the rule today.** Two things here are now known to be wrong about the *end state*: §Context's *"the generic agent convention"* is not a third runtime (`.agents/skills` is Codex's own second native root, measured on Codex CLI 0.145.0), and Decision 1's three roots become **two**. Nothing is retired until the phase that lands the replacement amends this record in the same change. §Context's symlink rejection is **re-affirmed**, on a new measurement.
+- **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). Decision 1's root set is now TWO: `.claude/skills`, `.agents/skills`.** `.codex/skills` is **retired**; §Context's *"the generic agent convention"* was never a third runtime — `.agents/skills` is Codex's own second native root, re-measured on Codex CLI 0.145.0 for that change. The authoritative record of the flip is [ADR-0065](0065-one-agent-skill-root-contract.md) §Decision + §Retiring a root, which names the ordered set and how a root leaves it; this note does not restate the mechanism. **This record otherwise stays IN FORCE** — its five invariants (byte-identical union in every root; `fsgg-sdd` as sole mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, never symlinks) are untouched by the retirement and still govern, over a two-root set. §Context's symlink rejection is **re-affirmed**, on a new measurement (ADR-0067 §6).
+- **Amendment history — this note was 20 hours late, and that is recorded rather than tidied away ([#1703](https://github.com/FS-GG/.github/issues/1703)):** until 2026-07-28 the field above read *"direction only … its three-root union is still the rule today … nothing is retired until the phase that lands the replacement amends this record in the same change."* [#1690](https://github.com/FS-GG/.github/pull/1690) landed the retirement and amended [ADR-0065](0065-one-agent-skill-root-contract.md) and index rows 88/114/130 — but not this record — so that precondition went **unmet**, and this record went on telling every reader who opened it that three roots were the rule for a day after they were not. `adr-coherence` stayed green throughout: it gates amendment-link *symmetry*, and the link here was never one-sided. The leg that would have seen it (EXECUTION-STATE AGREEMENT, `scripts/check-adr-coherence.py`) lands with this amendment.
 
 ## Context
 
@@ -50,14 +51,31 @@ canonical body per skill in its producer and **materializing** the union.
    > `.agents/skills` across `.github` and all seven receivers is an FS-GG verifier, not an agent
    > runtime, and Codex resolves `.agents/skills` natively with no configuration (measured, Codex
    > CLI 0.145.0). `.codex/skills` carries no runtime the other two roots do not.
-   > **This clause still governs today** — the end state is two roots, and nothing is retired
-   > before its replacement is proven (ADR-0067 §9).
+   >
+   > **AMENDED 2026-07-28 ([ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5,
+   > executed by [#1636](https://github.com/FS-GG/.github/issues/1636); this note corrected by
+   > [#1703](https://github.com/FS-GG/.github/issues/1703)).** The clause above is **history**: the
+   > enumerated root set is now the **two** of [ADR-0065](0065-one-agent-skill-root-contract.md)
+   > §Decision — `.claude/skills`, `.agents/skills` — and `.codex/skills` is retired. The clause's
+   > *rule* is untouched and still governs: whatever roots are declared, each MUST hold the
+   > byte-identical union, and the runtimes are interchangeable. Only the enumeration changed. The
+   > sentence deleted here read *"this clause still governs today … nothing is retired before its
+   > replacement is proven"*; it was written on 2026-07-27 and falsified on 2026-07-28, and its
+   > precondition — amend this record in the same change — was **not** met by
+   > [#1690](https://github.com/FS-GG/.github/pull/1690).
 
 2. **`fsgg-sdd` is the sole mirror authority.** As the orchestrator (ADR-0008), the CLI —
    after invoking the provider — computes the union and **materializes real files** into
    all three roots. There is one canonical body per skill (embedded in its producer);
    the roots are copies, not symlinks. The mirrored files are recorded in
    `scaffold-provenance.json` and the shape/drift guard asserts the three roots are equal.
+
+   > **AMENDED 2026-07-28 (same amendment as Decision 1 — [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5,
+   > executed by [#1636](https://github.com/FS-GG/.github/issues/1636)).** Read *"all three roots"*
+   > here, and in §Consequences' FS.GG.SDD bullet, as *"every declared root"* — the declared set is
+   > now two. The clause's rule — one mirror authority, computed destinations, equal roots — is
+   > untouched. The *mechanism* was already superseded by
+   > [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) (see §Status).
 
 3. **Providers are confined to `.agents/skills/`.** A provider's product output for skills
    is `.agents/skills/` only; it MUST NOT write `.claude/skills/` or `.codex/skills/`. The
