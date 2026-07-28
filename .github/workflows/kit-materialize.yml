@@ -54,6 +54,45 @@
 # here therefore reaches all seven with ZERO receiver-side edits — the same route `kit / coordination-kit`
 # and `lock-ranges / lock-ranges` already take.
 #
+# THE RULE IS FETCHED AT THE COMMIT THE RECEIVER'S OWN PIN NAMES, NEVER AT `main` (.github#1772, #1584).
+#
+# ADR-0067 §2: a gate's verdict MUST be a pure function of (tree under test, pinned ref). #1713 shipped
+# this job with `actions/checkout … ref: main` for the rule, and said so out loud — fine for a report,
+# a #1584 violation the moment the context is required. #1584 is not hypothetical: `FS.GG.SDD#724`
+# passed on merged SHA `0376309` at 08:15Z and FAILED ON BYTE-IDENTICAL CONTENT at 08:21Z, because the
+# hub had moved underneath a verdict that read it at check time. A required context with that property
+# is not a gate; it is a clock.
+#
+# So the ref is DERIVED, exactly as #1584's own remedy derives it — read the receiver's pin, restore
+# THAT package version, judge against what that version ships:
+#
+#     restore the receiver's project  ->  project.assets.json names the resolved FS.GG.Kit version
+#     that version                    ->  the immutable hub tag `kit/v<version>` (release-kit.yml)
+#     that tag                        ->  peeled to a 40-hex COMMIT, and the rule is checked out THERE
+#
+# `release-kit.yml` refuses to publish a version that has no matching tag on the published commit, so
+# "the pin names a real, immutable hub commit" is an invariant that gate keeps rather than a hope this
+# one holds — forward. The tag is still MUTABLE and two already-published versions (0.1.0, 0.4.0)
+# have none; #1784 is the coherence check and the tag protection that close that.
+#
+# WHAT IS STILL NOT PINNED, SAID PLAINLY (#1783). THE RULE is pinned; THIS FILE is not. Receivers
+# call it as `kit-materialize.yml@main`, so the probe below, the `x.y.z` grammar, the tag scheme and
+# the exit-code -> conclusion mapping all still move with the hub. Editing THOSE can still flip a
+# receiver's report with no change to the receiver — a smaller surface than a 678-line rule, and one
+# whose every line is now a #266 decision rather than a verdict, but not zero. Do not read this
+# header as "the reporter is a pure function of the receiver": it says the RULE is. Closing the rest
+# means receivers pinning this workflow at a sha, which is a fleet-wide change and is #1783.
+#
+# One consequence is load-bearing enough to state here, because it is the trap that shape sets: the
+# pinned rule may be OLDER than this file. An argument this file passes that the pinned rule does not
+# accept makes `argparse` exit 2 — the same code as an abstention. The verdict step therefore demands
+# the word ABSTAINS before it believes one; see there.
+#
+# AND IT NEVER GUESSES. A version that is not a bare `x.y.z`, a tag that does not exist, or a tagged
+# release that predates the rule are all REFUSALS that name the remedy (#266) — never an abstention,
+# never a pass. `tests/kit-bump-shape/run.sh` asserts this job resolves the rule from a step output and
+# not from a literal ref, and mutating that `ref:` back to `main` fires the leg.
+#
 # THE CONTEXT NAME IS A CONTRACT, AND THIS IS THE ONE PLACE IT IS DEFINED:
 #
 #     materialize / kit-bump-shape
@@ -134,48 +173,81 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # The rule beside it, from the repo this workflow already lives in. FS-GG/.github is PUBLIC, so
-      # this needs no token and no secret. It tracks `main` — the same moving ref the callers already
-      # pin this workflow at, so the coupling is not a new one; and because this context is required
-      # nowhere, a hub change moves a REPORT rather than a receiver's merge verdict (#1584's concern
-      # is about required contexts, and this is deliberately not one).
-      - name: Check out the shape rule
-        uses: actions/checkout@v7
-        with:
-          repository: FS-GG/.github
-          ref: main
-          path: .kit-bump-shape
-          persist-credentials: false
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-
-      # PASS ONE — free. Whether the diff moves the FS.GG.Kit pin is decided from the diff ALONE, so
-      # the overwhelming majority of pull requests (every human one) finish here, in seconds, with no
-      # SDK and no restore. That is what makes an ungated job on seven repositories affordable.
-      - name: Does this pull request move the FS.GG.Kit pin?
+      # PASS ONE — A GIT DIFF, AND NOTHING ELSE. Cheaper than #1713's first pass, which paid for a
+      # second checkout and a Python install on EVERY pull request in seven repositories before it
+      # could ask this. The rule cannot answer it here any more, because WHICH rule to run is itself
+      # decided by the restore below — so this pass asks the one question that needs no rule:
+      #
+      #   could the rule possibly reach a verdict on this diff?
+      #
+      # SOUND BY CONSTRUCTION, and that is the whole argument — this must be a strict SUPERSET of
+      # "the rule does not abstain", or a bump would silently report an abstention (#266). The rule
+      # declines to abstain for exactly two reasons, and both are asked here:
+      #
+      #   1. IT FOUND A PIN FILE — a changed line matching `Include\s*=\s*"FS.GG.Kit"`
+      #      (check-kit-bump-shape.py `PIN_INCLUDE`). The ERE below is that same pattern, and the
+      #      fixture DERIVES the expected spelling from the Python source and fails if they diverge,
+      #      so this is a translation of the rule's own predicate rather than a second opinion.
+      #   2. IT REFUSED ON THE DIFF'S SHAPE — `changed_paths()` refuses any status outside A/M/D
+      #      (a typechange, a copy, an unmerged path), and that needs no kit content at all. Asked
+      #      separately below, because a `T`-status pull request that mentions nothing kit-related
+      #      would otherwise abstain here where the rule refuses — turning a red into a green.
+      #
+      # Over-triggering is free and safe: a diff that satisfies either test but that the rule then
+      # abstains on gets the rule's own abstention, which reds nothing. Under-triggering is the
+      # fail-open, and it is what the two questions above exist to make impossible.
+      - name: Could the rule reach a verdict on this diff?
         id: probe
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -uo pipefail
-          rc=0
-          out="$(python3 .kit-bump-shape/scripts/check-kit-bump-shape.py \
-                   --repo . --base "$BASE" --head "$HEAD" 2>&1)" || rc=$?
-          printf '%s\n' "$out"
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          # Only 2 (abstain) and 3 (a pin moved, but there is nothing to judge it against yet) are
-          # reachable without a package. Anything else means the rule changed under this workflow.
-          case "$rc" in
-            2) { echo "### kit-bump-shape: abstains"; echo; echo '```'; printf '%s\n' "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" ;;
-            3) : ;;
-            *) echo "::error::kit-bump-shape: pass one returned $rc, which it cannot. Refusing to report a verdict." >&2; exit 1 ;;
-          esac
+          # check-kit-bump-shape.py PIN_INCLUDE, as an ERE (`\s` -> `[[:space:]]`). Kept honest by
+          # tests/kit-bump-shape/run.sh, which builds this string FROM the Python and compares.
+          PIN_INCLUDE='Include[[:space:]]*=[[:space:]]*"FS\.GG\.Kit"'
+          if [ -z "$BASE" ] || [ -z "$HEAD" ]; then
+            { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
+              echo "This job had no pull-request base/head to diff. It reports on pull requests and"
+              echo "cannot say anything about any other event. This is not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-bump-shape: no pull-request base/head; refusing rather than abstaining." >&2
+            exit 1
+          fi
+          if ! diff_out="$(git diff -U0 --no-renames "$BASE...$HEAD" 2>&1)"; then
+            { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
+              echo "The diff \`$BASE...$HEAD\` could not be read, so this job cannot tell a kit bump"
+              echo "from anything else. This is not a pass and not a failure of the pull request."
+              echo; echo '```'; printf '%s\n' "$diff_out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-bump-shape: could not read the diff $BASE...$HEAD." >&2
+            exit 1
+          fi
+          # COUNTED, NOT `grep -q`. `-q` exits on the first match and closes the pipe, which SIGPIPEs
+          # the greps upstream of it — and under `pipefail` that 141 becomes the pipeline's status, so
+          # a diff that DID match would read as "no match" and abstain. A fail-open that fires only on
+          # large diffs is the worst kind (#266). `-c` consumes its whole input.
+          hits="$(printf '%s\n' "$diff_out" \
+                    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -cE "$PIN_INCLUDE")" || hits=0
+          # The rule's other non-abstention: a diff status it refuses on. -z so a newline in a path
+          # cannot forge a status field; --no-renames so R/C never appear for that reason alone.
+          exotic="$(git diff --name-status -z --no-renames "$BASE...$HEAD" \
+                      | tr '\0' '\n' | awk 'NR%2==1' | grep -cvE '^[AMD]$')" || exotic=0
+          if [ "${hits:-0}" -gt 0 ] || [ "${exotic:-0}" -gt 0 ]; then
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            echo "pin-declaration lines changed: $hits; diff entries outside A/M/D: $exotic."
+            echo "Resolving the pinned rule and letting it decide."
+          else
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            { echo "### kit-bump-shape: abstains — no FS.GG.Kit pin declaration changed (this is not a pass)"; echo
+              echo "No line added or removed by this pull request declares an \`FS.GG.Kit\` package"
+              echo "version, and every entry in the diff is a plain add/modify/delete — so no pin moved"
+              echo "and there is nothing here the shape rule could reach a verdict on. Abstention is not"
+              echo "a pass: nothing here says this pull request is mergeable, only that this reporter has"
+              echo "nothing to say about it."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Set up .NET
-        if: steps.probe.outputs.rc != '2'
+        if: steps.probe.outputs.moved == 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
@@ -186,7 +258,7 @@ jobs:
       # and the package location + version come from the restore's own assets file rather than from
       # a guess about which version happens to be in the runner's package cache.
       - name: Restore the target package and evaluate the receiver's root declarations
-        if: steps.probe.outputs.rc != '2'
+        if: steps.probe.outputs.moved == 'true'
         id: inputs
         env:
           RECEIVER_PROJECT: ${{ inputs.receiver-project }}
@@ -197,14 +269,83 @@ jobs:
           version="$(jq -r '.libraries | keys[] | select(startswith("FS.GG.Kit/"))' "$assets" | cut -d/ -f2)"
           folder="$(jq -r '.packageFolders | keys[0]' "$assets")"
           [ -n "$version" ] && [ -n "$folder" ] || { echo "::error::kit-bump-shape: $assets names no restored FS.GG.Kit." >&2; exit 1; }
+          # BOTH ARE PULL-REQUEST-CONTROLLED — `folder` is the receiver's own `globalPackagesFolder`,
+          # which a fork's `nuget.config` chooses and XML lets carry a literal newline (`&#xA;`). A
+          # multi-line value written with a plain `echo` forges extra `key=value` lines into this
+          # step's outputs. Reject anything that is not a single plain line before writing either.
+          case "$version$folder" in
+            *"$(printf '\n')"*|*"$(printf '\r')"*)
+              echo "::error::kit-bump-shape: the restored package version or folder spans more than one line; refusing to write it as a step output." >&2; exit 1 ;;
+          esac
           echo "kit-dir=${folder%/}/fs.gg.kit/${version}" >> "$GITHUB_OUTPUT"
+          # THE PIN, as the receiver itself resolved it — this is what selects the rule below.
+          echo "kit-version=${version}" >> "$GITHUB_OUTPUT"
           dotnet msbuild "$RECEIVER_PROJECT" \
             -getProperty:FsggKitSkillRoots,FsggKitRetiredSkillRoots,FsggKitViewSkillRoots,FsggKitMaterializeBuildConfig \
             > "$RUNNER_TEMP/kit-props.json"
 
-      # PASS TWO — the verdict. The exit code is the contract (0 mechanical, 1 not mechanical,
-      # 2 abstain, 3 refused, 4 mechanical + receiver-side repair) and this step's only job is to
-      # render it where a reviewer will see it, then choose a conclusion:
+      # THE PINNED REF (.github#1772). `kit/v<version>` is the tag release-kit.yml releases from and
+      # refuses to publish without, so a restored version names exactly one immutable hub commit. It
+      # is PEELED here — an annotated tag's own object id is not a commit and `actions/checkout` would
+      # be resolving a name rather than a commit — and the resolved 40-hex sha is what the checkout
+      # below is given. Nothing about this reads `main`.
+      #
+      # The version is attacker-adjacent (a fork's pull request chooses what it pins), so it is
+      # validated to a bare `x.y.z` BEFORE it is ever composed into a ref. Everything that can go
+      # wrong here is a REFUSAL that names its remedy — never a pass, never an abstention (#266).
+      - name: Resolve the hub commit the receiver's pin names
+        if: steps.probe.outputs.moved == 'true'
+        id: rule-ref
+        env:
+          KIT_VERSION: ${{ steps.inputs.outputs.kit-version }}
+        run: |
+          set -uo pipefail
+          refuse() {
+            { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
+              printf '%s\n' "$1"
+              echo
+              echo "This is not a pass and not a failure of the bump. The rule must come from the kit"
+              echo "release this receiver pins, never from the hub's moving \`main\` (.github#1772, #1584)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-bump-shape: $1" >&2
+            exit 1
+          }
+          case "$KIT_VERSION" in
+            '') refuse "the restore named no FS.GG.Kit version, so there is no pinned rule to fetch." ;;
+            *[!0-9.]*|.*|*.|*..*) refuse "the restored FS.GG.Kit version '$KIT_VERSION' is not a bare x.y.z, so it cannot name a release ref. Refusing rather than resolving a ref a pull request chose." ;;
+          esac
+          tag="kit/v$KIT_VERSION"
+          url="https://github.com/FS-GG/.github.git"
+          refs="$(git ls-remote "$url" "refs/tags/$tag" "refs/tags/$tag^{}")" \
+            || refuse "could not list \`$tag\` on $url."
+          peeled="$(printf '%s\n' "$refs" | awk -v t="refs/tags/$tag^{}" '$2==t {print $1; exit}')"
+          plain="$(printf  '%s\n' "$refs" | awk -v t="refs/tags/$tag"     '$2==t {print $1; exit}')"
+          sha="${peeled:-$plain}"
+          case "$sha" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) : ;;
+            *) refuse "FS-GG/.github has no tag \`$tag\`, so FS.GG.Kit $KIT_VERSION names no immutable hub commit. Remedy: tag the commit that released it — \`git tag $tag <sha> && git push origin $tag\` — then re-run. (release-kit.yml refuses to publish untagged, so only versions released before that gate can be missing one.)" ;;
+          esac
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Rule pinned to FS-GG/.github@$sha ($tag), chosen by this receiver's own pin."
+
+      - name: Check out the shape rule at that commit
+        if: steps.probe.outputs.moved == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ steps.rule-ref.outputs.sha }}
+          path: .kit-bump-shape
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        if: steps.probe.outputs.moved == 'true'
+        with:
+          python-version: "3.x"
+
+      # PASS TWO — the verdict, from the rule the receiver's own pin selected. The exit code is the
+      # contract (0 mechanical, 1 not mechanical, 2 abstain, 3 refused, 4 mechanical + receiver-side
+      # repair) and this step's only job is to render it where a reviewer will see it, then choose a
+      # conclusion:
       #
       #   0 / 4  success — 0 needs no reading at all; 4 needs exactly the files it names.
       #   1 / 3  failure — read this one. It BLOCKS NOTHING: the context is required nowhere.
@@ -213,15 +354,31 @@ jobs:
       # was right; redding that class is exactly the "the guard parks the bumps a human most wants
       # automated" failure that re-scoped #1587.
       - name: Report the shape
-        if: steps.probe.outputs.rc != '2'
+        if: steps.probe.outputs.moved == 'true'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           KIT_DIR: ${{ steps.inputs.outputs.kit-dir }}
+          RULE_SHA: ${{ steps.rule-ref.outputs.sha }}
         run: |
           set -uo pipefail
+          rule=.kit-bump-shape/scripts/check-kit-bump-shape.py
+          # A kit release that predates the rule. The checkout succeeded and the commit is the right
+          # one — the release simply does not carry a rule, so there is nothing to judge this bump
+          # WITH. Refuse and say which commit was looked in; never fall back to `main`, which is the
+          # entire defect #1772 closes.
+          if [ ! -f "$rule" ]; then
+            { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
+              echo "FS-GG/.github@\`$RULE_SHA\` — the commit this receiver's FS.GG.Kit pin names —"
+              echo "carries no \`scripts/check-kit-bump-shape.py\`, so that release predates the rule."
+              echo "Bump to a kit released after it, or judge this pull request by hand. This is not a"
+              echo "pass; and it deliberately does NOT fall back to the hub's \`main\` (.github#1772)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-bump-shape: FS-GG/.github@$RULE_SHA carries no shape rule." >&2
+            exit 1
+          fi
           rc=0
-          out="$(python3 .kit-bump-shape/scripts/check-kit-bump-shape.py \
+          out="$(python3 "$rule" \
                    --repo . --base "$BASE" --head "$HEAD" \
                    --kit-dir "$KIT_DIR" --properties "$RUNNER_TEMP/kit-props.json" 2>&1)" || rc=$?
           printf '%s\n' "$out"
@@ -229,14 +386,27 @@ jobs:
             0) headline="mechanical — pin plus materializer output only; no human need read this bump" ;;
             4) headline="mechanical + receiver-side repair — read ONLY the receiver-authored files named below" ;;
             1) headline="NOT mechanical — this bump changes kit territory in a way the materializer would not; read it in full" ;;
-            2) headline="abstains — no FS.GG.Kit pin change (this is not a pass)" ;;
+            # REACHABLE HERE since #1772, and it must not red — pass one is a strict superset, so a
+            # pull request it sent on may still be nothing the rule has an opinion about, and that is
+            # the same non-verdict pass one reports for free.
+            #
+            # BUT EXIT 2 IS ALSO WHAT `argparse` EXITS ON A BAD COMMAND LINE, and the rule is pinned
+            # while THIS FILE tracks the hub's `main` — so the day someone adds a flag here, every
+            # receiver on an older `kit/v*` runs a rule that rejects the argv and exits 2. Mapping
+            # that to "abstains" would report a green non-verdict for a rule that never ran: #266
+            # exactly. An abstention says so in words; a usage error does not. Demand the word.
+            2) case "$out" in
+                 *ABSTAINS*) headline="abstains — no FS.GG.Kit pin change (this is not a pass)" ;;
+                 *) headline="REFUSED — the pinned rule exited 2 without abstaining, which is what argparse does when it rejects a command line. The rule at this receiver's pin does not accept the arguments this workflow passes. This is not a pass"
+                    rc=3 ;;
+               esac ;;
             3) headline="REFUSED — no verdict could be reached. This is not a pass and not a failure of the bump" ;;
             *) headline="unknown verdict code $rc" ;;
           esac
           { echo "### kit-bump-shape: $headline"; echo; echo '```'; printf '%s\n' "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           case "$rc" in
-            0|4) exit 0 ;;
-            *)   exit 1 ;;
+            0|2|4) exit 0 ;;
+            *)     exit 1 ;;
           esac
 
   materialize:

@@ -256,6 +256,36 @@ makes renaming the callee half a loud, opt-out-able breaking change, exactly as 
 asserts the string *and* the absence of an `if:` on the job, so neither the documented context nor the
 producibility of it can drift away from the workflow in silence.
 
+### Where its rule comes from, and why that is not `main`
+
+The `bump-shape` job runs `scripts/check-kit-bump-shape.py`, which lives in this repository. It does
+**not** check that rule out of `FS-GG/.github@main`. It resolves the ref from the receiver's own pin:
+
+```
+dotnet restore <the receiver project>   ->  project.assets.json names the resolved FS.GG.Kit version
+that version                            ->  the tag `kit/v<version>`
+that tag                                ->  peeled to a 40-hex commit, and the rule is checked out THERE
+```
+
+[#1713](https://github.com/FS-GG/.github/issues/1713) shipped it reading `main`, deliberately and with
+the defect written on its face; [#1772](https://github.com/FS-GG/.github/issues/1772) closed it. The
+property at stake is ADR-0067 §2 — *a gate's verdict MUST be a pure function of (tree under test,
+pinned ref)* — and the cost of not having it is measured, not theoretical: `FS.GG.SDD#724` passed on
+merged SHA `0376309` at 08:15Z and failed on byte-identical content at 08:21Z, because the hub moved
+underneath a verdict that read it at check time ([#1584](https://github.com/FS-GG/.github/issues/1584)).
+
+Two consequences worth knowing before you touch either end:
+
+* **`release-kit.yml` will not publish a version that has no `kit/v<version>` tag on the commit being
+  packed.** The tag used to be a way of *triggering* a release; it is now a *precondition* of one,
+  because it is what the fleet resolves a rule from. That holds going forward only: the tag is still
+  a mutable ref, and two historical versions (0.1.0 and 0.4.0) were published without one, so a bump
+  PR targeting either can only be refused. [#1784](https://github.com/FS-GG/.github/issues/1784) is
+  the coherence check and the tag protection that close it.
+* **Every failure on this path is a refusal, never a pass** — an unparseable version, a missing tag,
+  or a kit release older than the rule itself. It never falls back to `main`, which is the entire
+  point.
+
 ### The ordering constraint: never arm a context before its producer reports
 
 **`repos.sh require-context --apply` for a context nothing produces holds every pull request in every
@@ -276,7 +306,22 @@ So the sequence is fixed, and each step's evidence is named:
    `python3 scripts/check-required-contexts.py --repo FS-GG/<r> --root <checkout> --protection <a
    payload naming the context>`. This is the same derivation the daily sweep runs, and it answers
    "could this context ever report?" without arming anything.
-4. **Only then** consider `--apply` — and run the dry run first, which needs only
+4. **Prove the producer's verdict is a function of the receiver, not of the clock.** A context whose
+   producer reads another repository's moving tip at check time has no durable verdict, so requiring
+   it converts every hub commit into a potential receiver outage (ADR-0067 §2,
+   [#1584](https://github.com/FS-GG/.github/issues/1584)). This is a *second* precondition on the same
+   step, and it is separate from step 1: a producer can report perfectly and still be unarmable.
+   For `materialize / kit-bump-shape` the **rule** is discharged — it is fetched at the commit the
+   receiver's own pin names (above), and `tests/kit-bump-shape/run.sh` fails if any foreign checkout
+   in that job takes a literal ref. The **workflow around it is not**: receivers call it as
+   `kit-materialize.yml@main`, so its probe, its version grammar, its tag scheme and its exit-code
+   mapping still move with the hub. That is a far smaller surface than a 678-line rule, and every
+   line of it is now a #266 decision rather than a verdict — but it is not zero, and anyone arming
+   this must decide whether it is small enough. Closing it means receivers pinning the reusable
+   workflow at a sha, which is a fleet-wide change.
+   **Do not arm a context whose producer has no equivalent assertion at all.** "It looks pinned" is
+   the state `kit-bump-shape` was in for the whole of #1713.
+5. **Only then** consider `--apply` — and run the dry run first, which needs only
    `administration: read` and is what proves step 1 actually happened.
 
 The reporter shipped under #1713 stops at step 2 on purpose. #1587's automerge was re-scoped on

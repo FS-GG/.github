@@ -153,6 +153,18 @@ HOW A CALLER PRODUCES THE INPUTS — all three are derivations, none is a restat
   the pin. That is what makes the receiver-side reporter cheap enough to run UNGATED on every pull
   request, which #1508 requires of anything a branch might one day require. Omitting them on a diff
   that DOES move the pin is a REFUSAL (exit 3), never a pass and never an abstention.
+
+WHICH COPY OF THIS FILE A RECEIVER RUNS (.github#1772, #1584, ADR-0067 §2)
+  This file is canonical HERE and is copied nowhere. The receiver-side reporter — the `bump-shape` job
+  in `.github/workflows/kit-materialize.yml` — fetches it at the commit tagged `kit/v<the FS.GG.Kit
+  version the receiver's own restore resolved>`, so a receiver's verdict is a pure function of the
+  receiver's tree and an immutable ref. Editing this file therefore does NOT change any receiver's
+  report until a kit release carries the edit and that receiver's bump PR targets it.
+
+  That is the point, and it is the difference between a report and a gate. #1713 shipped the reporter
+  reading `FS-GG/.github@main`, which made a receiver's answer a function of WHEN it ran — the measured
+  #1584 defect (`FS.GG.SDD#724`: green on `0376309` at 08:15Z, red on byte-identical content at 08:21Z).
+  A required context with that property is not a gate; it is a clock.
 """
 
 from __future__ import annotations
