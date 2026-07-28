@@ -111,6 +111,48 @@ unpin() { local slug="${1//\//__}"
           rm -f "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj.pinned" \
                 "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
 
+# --- the bump-offer sweep's world (#1768) --------------------------------------------------------
+#
+# What a receiver's PROPOSAL step looks like from outside: its open pull requests, its branches, and
+# the kit pin as it stands at each of their heads. The audit reads the pin at a ref with exactly the
+# same parser it reads `main` with, so these helpers write a REAL pin file at a REAL ref rather than
+# a canned answer — an error in the ref-qualified read, the XML parse or the version ordering is
+# caught here rather than in production, which is the same standard the local NuGet feed above is
+# held to.
+#
+# offer_pr <repo> <number> <head-ref> <version>  — an open PR whose head pins the kit at <version>.
+offer_pr() { local slug="${1//\//__}"; mkdir -p "$FIX/$slug/ref"
+             local prs="$FIX/$slug/prs.json"
+             [ -f "$prs" ] || echo '[]' > "$prs"
+             python3 - "$prs" "$2" "$3" <<'PY'
+import json, sys
+path, num, ref = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+data = json.load(open(path))
+data = [p for p in data if p["number"] != num]
+data.append({"number": num, "headRefName": ref})
+json.dump(data, open(path, "w"))
+PY
+             mkpin "$4" "$FIX/$slug/ref/${3//\//__}"; }
+# offer_branch <repo> <name> <version> — a branch that exists with NO pull request proposing it.
+# This is the rate-limited shape, and — when <version> equals what `main` pins — the LEFTOVER shape
+# that must NOT be reported as rate-limited.
+offer_branch() { local slug="${1//\//__}"; mkdir -p "$FIX/$slug/ref"
+                 local br="$FIX/$slug/branches.json"
+                 [ -f "$br" ] || echo '[]' > "$br"
+                 python3 - "$br" "$2" <<'PY'
+import json, sys
+path, name = sys.argv[1], sys.argv[2]
+data = json.load(open(path))
+if not any(b["name"] == name for b in data):
+    data.append({"name": name})
+json.dump(data, open(path, "w"))
+PY
+                 mkpin "$3" "$FIX/$slug/ref/${2//\//__}"; }
+# offer_clear <repo> — nobody has proposed this receiver anything, and no branch exists.
+offer_clear() { local slug="${1//\//__}"
+                rm -rf "$FIX/$slug/prs.json" "$FIX/$slug/branches.json" "$FIX/$slug/ref" \
+                       "$FIX/$slug.failoffer" "$FIX/$slug.failbranches" "$FIX/$slug.failref"; }
+
 # --- the view-root generate sweep's world (#1759) -------------------------------------------------
 #
 # view_root <repo> <shape> — write a receiver project in one of the four shapes the sweep grades.
@@ -238,6 +280,15 @@ case "$path" in
   # audit makes and is therefore matched here rather than stripped: a call that forgot `recursive=1`
   # would fetch only the root directory, and every nested pattern would read as selecting nothing.
   */git/trees/*recursive=1)       kind=tree; repo="${path#repos/}"; repo="${repo%%/git/trees/*}" ;;
+  # The bump-offer sweep's three reads (#1768). A CONTENT read at a named ref is matched before
+  # nothing else — the plain `*/contents/<file>` arms above end at the filename and cannot match a
+  # path carrying `?ref=`, so a request that forgot the ref would fall through to the branch-less
+  # arms and be answered with `main`'s pin. That would make a superseded offer read as a current one,
+  # which is the single most important thing this sweep gets right, so the ref is matched explicitly.
+  */contents/*\?ref=*)            kind=reffile; repo="${path#repos/}"; repo="${repo%%/contents/*}"
+                                  ref="${path##*\?ref=}" ;;
+  */pulls\?*)                     kind=pulls;    repo="${path#repos/}"; repo="${repo%%/pulls*}" ;;
+  */branches\?*)                  kind=branches; repo="${path#repos/}"; repo="${repo%%/branches*}" ;;
   *)                              kind=repo; repo="${path#repos/}" ;;
 esac
 slug="${repo//\//__}"
@@ -294,6 +345,28 @@ case "$kind" in
   # suppresses it — that is how a leg models a repository whose tree the API says is not there.
   tree)     [ -f "$FIX/$slug.gonetree" ] && notfound
             if [ -f "$FIX/$slug.tree" ]; then cat "$FIX/$slug.tree"; else cat "$FIX/_default.tree"; fi ;;
+  # --- the bump-offer sweep (#1768) ---
+  #
+  # The DEFAULT is an EMPTY list for both, and that is the honest default rather than a convenient
+  # one: a fixture repo that has declared no bump really has no open PR and no branch, so the ~130
+  # legs that predate this sweep model a receiver nobody has proposed anything for. A stale one among
+  # them therefore lands on `offer-none`, which is exactly what it is.
+  #
+  # These stand in for the audit's `--jq` projection, as the `repo` arm already stands in for
+  # `--jq '.full_name'`: the stub does not implement jq, so the fixture stores the SHAPE the audit
+  # asks for. `offer_pr`/`offer_branch` write it.
+  pulls)    [ -f "$FIX/$slug.failoffer" ] && apifail 403
+            if [ -f "$FIX/$slug/prs.json" ]; then cat "$FIX/$slug/prs.json"; else echo '[]'; fi ;;
+  branches) [ -f "$FIX/$slug.failoffer" ] && apifail 403
+            [ -f "$FIX/$slug.failbranches" ] && apifail 403
+            if [ -f "$FIX/$slug/branches.json" ]; then cat "$FIX/$slug/branches.json"; else echo '[]'; fi ;;
+  # The pin AT a ref. A ref with no fixture 404s — which is the ANSWER "that branch does not carry
+  # this file", the same contract the plain content reads use, and the reason an unmatched ref can
+  # never manufacture an offer.
+  reffile)  [ -f "$FIX/$slug.failref" ] && apifail 403
+            refslug="${ref//\//__}"
+            [ -f "$FIX/$slug/ref/$refslug" ] || notfound
+            cat "$FIX/$slug/ref/$refslug" ;;
 esac
 STUB
 chmod +x "$STUB/gh"
@@ -2665,6 +2738,169 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 
 view_root FS-GG/FS.GG.SDD noview; view_root FS-GG/FS.GG.Rendering noview
 unpin FS-GG/FS.GG.Rendering
+
+# --- THE BUMP-OFFER SWEEP (#1768) ----------------------------------------------------------------
+#
+# The sweep distinguishes, for a receiver the kit-pin sweep found BEHIND, whether a bump was ever
+# OFFERED — and the legs below drive every one of its terminal states plus the two ways it must
+# refuse. The load-bearing one is (2): "behind, and nobody has proposed anything" is the state that
+# NOTHING in this org reported before this sweep, and it is the state whose alarm must be proven able
+# to fire. Legs (1) and (7) are its mutation — the same receiver, equally behind, with the offer
+# moved in and out — so a sweep that simply printed the finding unconditionally would fail (1), and a
+# sweep whose alarm could not fire would fail (2).
+
+# (1) BEHIND, WITH A CURRENT BUMP OPEN. The proposal step worked; what is left is a review. This must
+#     NOT produce the no-bump alarm, and must NOT be an ::error:: of its own — the kit-pin sweep has
+#     already red-lit the staleness, and a second red saying "go tick a checkbox" would send someone
+#     to a dashboard for a PR that is sitting there waiting to be merged.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+offer_pr FS-GG/FS.GG.Rendering 1123 renovate/fs.gg.kit-0.x "$KIT_PUBLISHED"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q "PR #1123 offers FS.GG.Kit $KIT_PUBLISHED, which is the published version" \
+    && printf '%s' "$out" | grep -q 'REMEDY: review and merge FS-GG/FS.GG.Rendering#1123' \
+    && printf '%s' "$out" | grep -q '1 have a CURRENT bump open' \
+    && ! printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && ! printf '%s' "$out" | grep -q '::error::repos-audit: bump-offer'; } \
+  && ok "bump-offer: behind WITH a current bump is reported as offered, and is not a proposal-step alarm" \
+  || bad "a current open bump must read as offered" "rc=$rc: $out"
+
+# (2) BEHIND, WITH NO BUMP AT ALL — #1768's whole subject, and the state the kit-pin sweep alone
+#     cannot distinguish from (1). Same receiver, same pin, same distance behind as (1): the ONLY
+#     thing that changed is that the offer was taken away. It must red, name the checkbox AND the
+#     issue it is on, and say so in its own annotation rather than borrowing the freshness sweep's.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && printf '%s' "$out" | grep -q '::error::repos-audit: bump-offer — FS-GG/FS.GG.Rendering' \
+    && printf '%s' "$out" | grep -q "tick .- \[ \] <!-- manual job -->" \
+    && printf '%s' "$out" | grep -q "Renovate's Dependency Dashboard issue in FS-GG/FS.GG.Rendering" \
+    && printf '%s' "$out" | grep -q '1 have NO bump at all' \
+    && printf '%s' "$out" | grep -q 'need a human to act at the PROPOSAL step'; } \
+  && ok "bump-offer: behind with NO bump REDS, and names the checkbox and the issue (#1768 AC1/AC3/AC5)" \
+  || bad "the no-bump alarm must fire and name its remedy" "rc=$rc: $out"
+
+# (3) BEHIND, WITH A SUPERSEDED BUMP. Measured live 2026-07-28: four receivers had an open PR naming
+#     FS.GG.Kit 0.15.1 while 0.16.0 was published, because the release that produced 0.16.0 notified
+#     nobody (#1761 — neither release workflow calls dispatch-sender.yml). A sweep that graded
+#     "is there a PR?" would call all four fine; merging all four leaves every one of them behind.
+#     So the OFFERED version is compared to the published one, and the remedy names the re-extraction
+#     tick rather than the merge.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+offer_pr FS-GG/FS.GG.Rendering 1123 renovate/fs.gg.kit-0.x 0.7.0
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'PR #1123 offers FS.GG.Kit 0.7.0' \
+    && printf '%s' "$out" | grep -q 'SUPERSEDED and merging it leaves this receiver behind' \
+    && printf '%s' "$out" | grep -q "tick .- \[ \] <!-- manual job -->" \
+    && printf '%s' "$out" | grep -q '1 have a SUPERSEDED one' \
+    && ! printf '%s' "$out" | grep -q 'which is the published version'; } \
+  && ok "bump-offer: a SUPERSEDED offer is not 'has a bump' — it is its own state with its own remedy" \
+  || bad "an offer below the published version must not read as current" "rc=$rc: $out"
+
+# (4) BEHIND, WITH A BRANCH AND NO PR — the FS.GG.Net failure of 2026-07-28, repaired by one tick of
+#     `unlimit-branch`. The remedy must name THE BRANCH, because that is the string the reader will
+#     be searching the dashboard for, and there may be several such boxes.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+offer_branch FS-GG/FS.GG.Rendering renovate/fs.gg.kit-0.x "$KIT_PUBLISHED"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q "branch .renovate/fs.gg.kit-0.x. already carries FS.GG.Kit $KIT_PUBLISHED" \
+    && printf '%s' "$out" | grep -q 'NO open pull request proposes it' \
+    && printf '%s' "$out" | grep -q '<!-- unlimit-branch=renovate/fs.gg.kit-0.x -->' \
+    && printf '%s' "$out" | grep -q '1 have a branch held by a rate limit' \
+    && ! printf '%s' "$out" | grep -q 'NO bump has been offered at all'; } \
+  && ok "bump-offer: a branch with no PR is the RATE-LIMITED state, and names that branch's box (#1768 AC4b)" \
+  || bad "a held branch must be told apart from no bump at all" "rc=$rc: $out"
+
+# (5) A LEFTOVER BRANCH IS NOT AN OFFER. Measured live 2026-07-28: FS.GG.Game carried
+#     `renovate/fs.gg.kit-0.x` with no open PR, and that branch pinned exactly what Game's own `main`
+#     pinned — its PR had merged and Renovate had not deleted the branch. Reporting that as
+#     rate-limited would send someone to tick a box that is not there. Only a branch STRICTLY AHEAD
+#     of `main` counts, so this receiver — equally behind, with a branch present — must land on
+#     no-bump instead. This is leg (4)'s mutation: the branch stays, only its version moves.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+offer_branch FS-GG/FS.GG.Rendering renovate/fs.gg.kit-0.x 0.6.0
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && printf '%s' "$out" | grep -q 'no branch ahead of .main.' \
+    && printf '%s' "$out" | grep -q '0 have a branch held by a rate limit' \
+    `# The no-bump remedy legitimately mentions unlimit-branch as the NEXT step to try, with a` \
+    `# placeholder box. What must be absent is the rate-limited verdict, which names THIS branch —` \
+    `# so the negative is on the concrete form, not on the word.` \
+    && ! printf '%s' "$out" | grep -q 'unlimit-branch=renovate/fs.gg.kit-0.x' \
+    && ! printf '%s' "$out" | grep -q 'already carries FS.GG.Kit'; } \
+  && ok "bump-offer: a MERGED leftover branch is not an offer, and never a fabricated rate limit" \
+  || bad "a branch at main's own pin must not read as a held bump" "rc=$rc: $out"
+
+# (6) AN UNREADABLE PR LIST IS A RETRYABLE NO-VERDICT, never `offer-none`. This is the #266 failure
+#     wearing this sweep's clothes: turning a lost API call into "nobody offered them one" would
+#     dispatch a human to tick a box over evidence we never read. It must be exit 2 — outranking the
+#     staleness finding, which is still printed — and must name the OFFER as the unknown, not the pin.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+pin FS-GG/FS.GG.Rendering 0.6.0
+offer_clear FS-GG/FS.GG.Rendering
+: > "$FIX/FS-GG__FS.GG.Rendering.failoffer"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] \
+    && printf '%s' "$out" | grep -q 'could not determine whether 1 behind receiver(s) have been OFFERED' \
+    && printf '%s' "$out" | grep -q "'nobody offered them one' is not the safe guess" \
+    && ! printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && printf '%s' "$out" | grep -q 'but 0.8.0 is published on nuget.org'; } \
+  && ok "bump-offer: an unread PR list is a NO-VERDICT about the offer, never a fabricated no-bump (#266)" \
+  || bad "unread offer evidence must not become a verdict" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failoffer"
+
+# (7) THE MUTATION THAT PROVES LEG (2) IS KEYED ON THE OFFER AND NOT ON STALENESS. A receiver that is
+#     CURRENT is never a subject: the sweep must claim nothing about it, and must not carry leg (2)'s
+#     alarm over from the previous run. Together with (1) and (2) this pins all three degrees of
+#     freedom — behind+offered, behind+unoffered, and current — so no constant-output sweep passes.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+unpin FS-GG/FS.GG.Rendering
+offer_clear FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && ! printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && ! printf '%s' "$out" | grep -q '::error::repos-audit: bump-offer' \
+    && printf '%s' "$out" | grep -q 'no receiver was behind, so none needed a bump proposed' \
+    && printf '%s' "$out" | grep -q 'Nothing is claimed about Renovate.s scheduling'; } \
+  && ok "bump-offer: a CURRENT org claims nothing about the proposal step, and states what it cannot see (#1768 AC-limits)" \
+  || bad "a current org must not inherit the no-bump alarm" "rc=$rc: $out"
+
+# (8) THE SWEEP COSTS NOTHING WHEN NOBODY IS BEHIND. It rides the freshness sweep precisely so an
+#     org-wide poll is never added (#1768's 'prefer riding an existing sweep'), and a claim about API
+#     traffic cannot be checked by reading output — so the stub's call log is counted instead, the
+#     same way #1556 criterion 5 is checked.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+unpin FS-GG/FS.GG.Rendering
+offer_clear FS-GG/FS.GG.Rendering
+GH_CALL_LOG="$WORK/calls-current.log"; : > "$GH_CALL_LOG"
+out="$(GH_CALL_LOG="$GH_CALL_LOG" run 2>&1)" && rc=0 || rc=$?
+current_offer_calls="$(grep -cE '^(pulls|branches|reffile)'$'\t' "$GH_CALL_LOG" || true)"
+pin FS-GG/FS.GG.Rendering 0.6.0
+GH_CALL_LOG="$WORK/calls-behind.log"; : > "$GH_CALL_LOG"
+out="$(GH_CALL_LOG="$GH_CALL_LOG" run 2>&1)" && rc=0 || rc=$?
+behind_offer_calls="$(grep -cE '^(pulls|branches)'$'\t' "$GH_CALL_LOG" || true)"
+{ [ "$current_offer_calls" -eq 0 ] && [ "$behind_offer_calls" -gt 0 ]; } \
+  && ok "bump-offer: a fully current org pays ZERO extra API calls; only a BEHIND receiver is fetched" \
+  || bad "the sweep must be lazy in the roster's freshness" \
+         "current=$current_offer_calls behind=$behind_offer_calls"
+unset GH_CALL_LOG
+
+unpin FS-GG/FS.GG.Rendering
+offer_clear FS-GG/FS.GG.Rendering
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
