@@ -1486,6 +1486,85 @@ grep -qF "owner: -github" "$DREG" && { echo "FAIL: owner_of(.github) produced th
 grep -qF "source: .github/.claude/skills/work-roadmap-two/SKILL.md" "$DREG" || { echo "FAIL: driver source not derived from supplied-by"; cat "$DREG"; exit 1; }
 echo "   ok"
 
+echo "== 61. a producer publishing at its TRACKED SOURCE root is FOUND (.github#1757) =="
+# ADR-0067 §6 makes `.agents/skills` a GENERATED VIEW — untracked, git-ignored, and absent in the bare
+# `git clone --depth 1 --filter=blob:none` skill-registry-coherence.yml makes of every named producer.
+# FS.GG.SDD moved its process manifest to `.claude/skills/skill-manifest.json` for exactly that reason
+# (FS-GG/FS.GG.SDD#771). Before this candidate existed, such a producer had NO manifest here at all and
+# the fail-closed `manifest-found` finding fired, taking every row it declares out of digest coverage.
+#
+# ISOLATED --repos-root, and its own registry, so the shared fixture above is untouched.
+SROOT="$WORK/source-root-repos"
+mkdir -p "$SROOT/Producer.Src/.claude/skills/srcskill" "$SROOT/Producer.Src/skills/srcskill"
+printf 'source-root body\n' > "$SROOT/Producer.Src/skills/srcskill/SKILL.md"
+SRCSKILL="$(sha "$SROOT/Producer.Src/skills/srcskill/SKILL.md")"
+SREG="$WORK/source-root-skills.yml"
+cat > "$SREG" <<YAML
+schemaVersion: 1
+updated: "2026-07-28"
+skills:
+  - { id: srcskill, scope: process, owner: producer-src, source: Producer.Src/skills/srcskill/SKILL.md, sha256: $SRCSKILL, materializes-when: always }
+YAML
+
+write_src_manifest_at() {
+  rm -f "$SROOT/Producer.Src/.claude/skills/skill-manifest.json" \
+        "$SROOT/Producer.Src/.agents/skills/skill-manifest.json"
+  mkdir -p "$(dirname "$SROOT/Producer.Src/$1")"
+  cat > "$SROOT/Producer.Src/$1" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "srcskill", "scope": "process", "sha256": "$SRCSKILL" }
+] }
+JSON
+}
+
+# (a) THE SHIPPED SHAPE: the manifest lives ONLY at the tracked source root. This is the leg that is
+# RED without the new candidate — `find_manifest` returns None and `manifest-found` fires.
+write_src_manifest_at ".claude/skills/skill-manifest.json"
+out="$(run --registry "$SREG" --repos-root "$SROOT" || true)"
+grep -q "\[manifest-found\] Producer.Src" <<<"$out" && { echo "FAIL: a manifest at the tracked source root was not found"; echo "$out"; exit 1; }
+run --registry "$SREG" --repos-root "$SROOT" >/dev/null \
+  || { echo "FAIL: a coherent producer publishing at .claude/skills was not accepted"; run --registry "$SREG" --repos-root "$SROOT" || true; exit 1; }
+
+# (b) AND IT IS REALLY BEING READ, not merely tolerated: break the digest in the registry and the
+# tool must catch it. Without this, (a) would also pass for a tool that found the manifest and then
+# ignored every entry in it.
+sed -i "s|sha256: $SRCSKILL|sha256: $WRONG|" "$SREG"
+out="$(run --registry "$SREG" --repos-root "$SROOT" || true)"
+grep -q "\[digest-matches\] srcskill" <<<"$out" || { echo "FAIL: the source-root manifest was found but its entries were not graded"; echo "$out"; exit 1; }
+sed -i "s|sha256: $WRONG|sha256: $SRCSKILL|" "$SREG"
+
+# (c) THE LEGACY SHAPE STILL WORKS: a producer that has not moved yet publishes at the view root and
+# is still found. Adding a candidate must not remove one.
+write_src_manifest_at ".agents/skills/skill-manifest.json"
+run --registry "$SREG" --repos-root "$SROOT" >/dev/null \
+  || { echo "FAIL: a producer still publishing at .agents/skills was broken by the new candidate"; run --registry "$SREG" --repos-root "$SROOT" || true; exit 1; }
+
+# (d) THE MUTATION, AND THE FAIL-CLOSED FLOOR: with NEITHER location present the finding must still
+# fire. If it did not, (a) would be indistinguishable from a tool that reports success over nothing.
+rm -f "$SROOT/Producer.Src/.claude/skills/skill-manifest.json" \
+      "$SROOT/Producer.Src/.agents/skills/skill-manifest.json"
+out="$(run --registry "$SREG" --repos-root "$SROOT" || true)"
+grep -q "\[manifest-found\] Producer.Src" <<<"$out" || { echo "FAIL: a producer with NO manifest anywhere was not reported"; echo "$out"; exit 1; }
+grep -q ".claude/skills/skill-manifest.json" <<<"$out" || { echo "FAIL: the finding does not name the new candidate it looked for"; echo "$out"; exit 1; }
+
+# (e) WHICH ONE WINS when a transitional tree carries BOTH — the tracked source, never the view. A
+# link-mode `skill-view generate` makes the view root resolve, so "both present" is a real state, and
+# grading a repo against whichever file a checkout step happened to produce is the ADR-0067 §8 shape.
+# The two manifests are made DISTINGUISHABLE (the view one declares a different id) so the answer is
+# observable rather than assumed.
+write_src_manifest_at ".claude/skills/skill-manifest.json"
+mkdir -p "$SROOT/Producer.Src/.agents/skills"
+cat > "$SROOT/Producer.Src/.agents/skills/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "stale-view-only", "scope": "process", "sha256": "$SRCSKILL" }
+] }
+JSON
+out="$(run --registry "$SREG" --repos-root "$SROOT" || true)"
+grep -q "stale-view-only" <<<"$out" && { echo "FAIL: the VIEW root's manifest won over the tracked source"; echo "$out"; exit 1; }
+run --registry "$SREG" --repos-root "$SROOT" >/dev/null \
+  || { echo "FAIL: the tracked-source manifest did not win a both-present tree"; run --registry "$SREG" --repos-root "$SROOT" || true; exit 1; }
+echo "   ok"
+
 # =================================================================================================
 # THE TRIGGER SET (.github#1606) — this workflow's OTHER gate must be reachable from its own filter.
 #
