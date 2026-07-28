@@ -36,6 +36,23 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 [ -x "$SHIM" ]   || { echo "FAIL  the shim is missing or not executable: $SHIM" >&2; exit 1; }
 [ -f "$GUARDS" ] || { echo "FAIL  the guard module is missing: $GUARDS" >&2; exit 1; }
 
+# ---- 0. THIS FIXTURE DECIDES WHICH WORKER IT IS TOO (.github#1751) --------------------------------
+# CHECKED, and the honest answer is "affected, but only through leg 1". None of legs 2+ can resolve an
+# identity at all: they drive a FAKE engine (`fixture()`'s `echo "ENGINE RAN: $*"`), so `Identity.resolve`
+# is never reached, and no leg in this file passes `--worker`. The one identity-sensitive thing here is
+# leg 1, which re-runs the whole D.1 corpus — and that corpus's identity is now decided by run.sh itself.
+#
+# That is why this file reported the same defect as ONE failed assertion while run.sh reported 58: leg 1
+# folds 593 results into a single line, so the leak was 58x louder in one suite and 1x in the other while
+# being the same fault. A reader who saw only this file's single red had almost no signal about why.
+#
+# The scrub below is therefore INSURANCE, not the repair — the repair is in run.sh. It is here because
+# this file is a certifying harness whose legs are added to over time, and the next leg that reaches a
+# real engine with a `--worker` would silently re-acquire the defect. Costs nothing: nothing here wants
+# an ambient identity. The ASSERTION of the property lives in run.sh (its #1751 pair), which leg 1 runs.
+unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGENT_HARNESS
+export FSGG_WORKER=""
+
 # ---- 1. THE WHOLE D.1 CORPUS, THROUGH THE SHIM ---------------------------------------------------
 # run.sh drives its engine from FSGG_COORD_ENGINE_BIN. Point it at a wrapper that hands the shim the
 # real engine (tier 1) and execs it — so run.sh's 445 assertions are decided by the shim, transparently.
