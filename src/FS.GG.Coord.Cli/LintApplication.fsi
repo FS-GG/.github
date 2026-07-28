@@ -48,8 +48,14 @@ module LintApplication =
     val classVerdict: status: string -> title: string -> body: string -> (string * string) option
 
     /// `lint`'s STATUS verdict for one row — `STATUS-UNSET`, `CLASS-UNSET`'s exact sibling
-    /// (.github#1823 AC5). `Some detail` when an OPEN row sits on the board with no `Status` at all;
-    /// `None` otherwise.
+    /// (.github#1823 AC5). `Some detail` when an OPEN row sits on the board with no `Status` **this
+    /// engine can read**; `None` otherwise.
+    ///
+    /// That wording is not hedging. `Scan.boardStatusOf` coerces an UNTAUGHT column name to `NoStatus`,
+    /// so this rule cannot distinguish "empty" from "a column added to the board since the engine was
+    /// written" — and asserting the first at `error` severity would state a falsehood about a row that
+    /// has a column. The finding names both readings and carries both remedies; the consequence it is
+    /// actually about (`Schedulability` refuses the row) is identical either way.
     ///
     /// **NOT `isSchedulableCandidate`'s population.** That predicate is `Ready || Backlog`, and the whole
     /// subject here is a row that is NEITHER: an unset column cannot be inside a set of columns.

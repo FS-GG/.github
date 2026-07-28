@@ -61,12 +61,18 @@ scripts/fsgg-coord add FS-GG/<repo>#<number>
 scripts/fsgg-coord set-field FS-GG/<repo>#<number> Status <status>
 ```
 
-`add` is idempotent. Set only fields supported by evidence:
+`add` is idempotent, and since `#1823` it **defaults `Status` to `Backlog`** when the row has no column
+yet — a row with no `Status` is invisible to every scheduler, so the default is what stops a filed item
+being unschedulable. It never overwrites a column somebody set. Run the `set-field` above anyway when
+the evidence supports a different column; it is the explicit decision, and it wins.
+
+Set only fields supported by evidence:
 
 - `Ready` for open, actionable work with valid paths, no unresolved dependency, no active claim, and no
   open implementation PR;
 - `Blocked` only when `Blocked by:` names a live implementation dependency;
-- `Backlog` only for an explicit parking decision;
+- `Backlog` for a parked decision **and** for anything not yet evidenced as `Ready` — it is the default
+  `add` writes, and it means "visible to triage, not startable", not "deliberately shelved";
 - `In review` only when an existing matching implementation PR is already open.
 
 Never set `In progress` or `Done` by hand. Claims and verified done stamps own those transitions.

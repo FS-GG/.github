@@ -5197,18 +5197,30 @@ else
   # ---- AC5: STATUS-UNSET, `CLASS-UNSET`'s sibling — RUN FIRST, while the rows are still unset -----
   # It reports rather than prevents, so it is a complement to the default and never a substitute: all
   # fourteen instances went unreported precisely because nothing asked this question.
+  AS_LINTCACHE="$(mktemp -d)"
   as_lint="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$AS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$AS_LINTCACHE" \
                "$ENGINE" lint --repo .github --json 2>/dev/null)"
+  rm -rf "$AS_LINTCACHE"
   as_unset="$(printf '%s' "$as_lint" | jq -c '[.[] | select(.code=="STATUS-UNSET") | .id] | sort' 2>/dev/null)"
   [ "$as_unset" = '["FS-GG/.github#902","FS-GG/.github#904","FS-GG/.github#906"]' ] \
     && ok "#1823 AC5: lint reports STATUS-UNSET on exactly the columnless rows (#902, #904, #906)" \
     || bad "#1823 AC5: STATUS-UNSET must name the columnless rows and only those" "got: $as_unset"
-  # THE NEGATIVE. A rule that fires on every row reports nothing: #903 (In progress) and #905 (Ready)
-  # have columns and must be silent, which is also what keeps this from duplicating CLASS-UNSET.
-  printf '%s' "$as_unset" | grep -qE '#(903|905)' \
-    && bad "#1823 AC5: STATUS-UNSET must NOT fire on a row that HAS a column" "got: $as_unset" \
-    || ok "#1823 AC5: ...and stays silent on a row that has one — the signal means something"
+
+  # THE NEGATIVE, AND IT READS THE WHOLE FINDING LIST RATHER THAN THE FILTERED ONE.
+  #
+  # Deriving it from `$as_unset` — a list already filtered to `STATUS-UNSET` — is a leg that CANNOT FAIL:
+  # delete the rule and that list is `[]`, the grep finds nothing, and "stays silent on a row that has a
+  # column" reports PASS over a rule that is silent on EVERY row. Measured, on a scratch build with
+  # `statusUnsetFindings` dropped from the accumulation: 637 assertions, 636 passed, 1 failed — and the
+  # one that survived was this one, the leg whose whole job is "the signal means something".
+  #
+  # So it asks the lint output what it reported ABOUT #903 and #905, and requires the answer to contain
+  # no STATUS finding while the run as a whole is still producing them (the positive above).
+  as_columned="$(printf '%s' "$as_lint" | jq -c '[.[] | select(.id|test("#(903|905)$")) | .code] | sort | unique' 2>/dev/null)"
+  [ "$as_columned" = "[]" ] \
+    && ok "#1823 AC5: ...and lint reports NOTHING AT ALL about the two rows that have a column" \
+    || bad "#1823 AC5: a row with a column must draw no finding here" "got: $as_columned"
 
   # ---- AC1: the default fires on a row that was never on the board -------------------------------
   as1="$(as_add "$AS_PORT" "$AS_CACHE" .github#901)"; as1rc=$?
@@ -5256,6 +5268,33 @@ else
   [ "$(as_col "$as_after4" 904)" = "Ready" ] \
     && ok "#1823 AC2: --status names the column and the default stands aside" \
     || bad "#1823 AC2: an explicit --status must win over the default" "state: $as_after4 / $as4"
+  # ...and it wins over a column somebody SET, which is the half that distinguishes an instruction from
+  # the default. #903 is held at 'In progress' and the AC4 legs above proved the DEFAULT defers to it.
+  as4b="$(as_add "$AS_PORT" "$AS_CACHE" .github#903 --status Blocked)"
+  as_after4b="$(as_state "$AS_PORT")"
+  [ "$(as_col "$as_after4b" 903)" = "Blocked" ] \
+    && ok "#1823 AC2: ...and over a column somebody SET — the default defers, an instruction does not" \
+    || bad "#1823 AC2: an explicit --status must win over an existing column too" "state: $as_after4b / $as4b"
+
+  # ---- A BAD `--status` IS REFUSED BEFORE THE ADD, NEVER GREEN OVER A COLUMNLESS ROW ---------------
+  # The Status write is non-fatal on purpose — the row is boarded, so a red would send a filer back to
+  # re-run `add` rather than to the field write actually owed. That is right for a DEFAULT nobody asked
+  # for and wrong for an INSTRUCTION: an unvalidated `--status Redy` boards the row, notes the 422, and
+  # exits 0, leaving a row with NO column — this change's own flag producing the row it exists to
+  # prevent. `set-field` exits non-zero for the same value; `add --status` must not be the weaker verb.
+  as6="$(as_add "$AS_PORT" "$AS_CACHE" .github#902 --status Redy)"; as6rc=$?
+  as_after6="$(as_state "$AS_PORT")"
+  [ "$as6rc" -ne 0 ] \
+    && ok "#1823: 'add --status <not a column>' is REFUSED (non-zero), not reported green" \
+    || bad "#1823: a bad --status must not exit 0" "rc=$as6rc: $as6"
+  printf '%s' "$as6" | grep -q 'Known columns' \
+    && ok "#1823: ...and names the columns this board actually has, so the value can be fixed" \
+    || bad "#1823: the refusal must list the legal columns" "$as6"
+  # AND IT SPENT NO WRITE. The check runs before `addItem`, off the options `bootstrap` already
+  # resolved — so a rejected value costs zero GraphQL and leaves the board exactly as it was.
+  [ "$(as_col "$as_after6" 902)" = "Backlog" ] \
+    && ok "#1823: ...and wrote NOTHING — #902 still holds the column the earlier leg gave it" \
+    || bad "#1823: a refused --status must not touch the board" "state: $as_after6"
 
   # ---- THE DEFAULT MAY NEVER TURN A WORKING `add` INTO A REFUSAL ----------------------------------
   # A board write is queued against a worker id, so the default needs one — and #1823 explicitly ruled
@@ -5278,8 +5317,11 @@ else
     && ok "#1823: ...and the column really is untouched — the note is not decoration over a write" \
     || bad "#1823: a reported skip must actually skip" "state: $as_after5"
 
-  kill "$AS_SRV" 2>/dev/null
 fi
+# OUTSIDE the `if`, deliberately: a fixture that STARTED but never printed a port is exactly the case
+# the NOT MEASURED branch above reports, and killing it only on the success path leaves that process
+# running for the rest of the suite.
+kill "$AS_SRV" 2>/dev/null
 rm -rf "$AS_CACHE"
 
 # ---- THE FIXTURE MUTATION (#1808, point four): the probe itself must be able to fire --------------
@@ -5308,8 +5350,8 @@ else
       && ok "#1823: MUTATION PROOF — empty #903's column in the fixture and the same probe flips to 'wrote Backlog', so AC4's absence is an observation" \
       || bad "#1823: the fixture mutation must flip the verdict, or the AC4 legs measure nothing" "state: $am_after / writes: $am_w / $am"
   fi
-  kill "$AM_SRV" 2>/dev/null
 fi
+kill "$AM_SRV" 2>/dev/null
 rm -rf "$AM_CACHE"
 
 # ---- #266: A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY CALL EMPTY ---------------------------
@@ -5338,8 +5380,8 @@ else
   [ "$aurc" -eq 0 ] \
     && ok "#1823/#266: ...and add still exits 0 — the row IS boarded, which is what add promised" \
     || bad "#1823/#266: add must stay green when only the column is in doubt" "rc=$aurc: $au"
-  kill "$AU_SRV" 2>/dev/null
 fi
+kill "$AU_SRV" 2>/dev/null
 rm -rf "$AU_CACHE"
 
 echo

@@ -121,14 +121,24 @@ module LintApplication =
     // reads the one condition it is about: OPEN, on the board, with `NoStatus`. `Done`, `Blocked`,
     // `In progress` and `In review` rows are all deliberately silent — they have a column.
 
-    /// `lint`'s STATUS verdict for one row: `Some detail` when an OPEN row is on the board with no
-    /// `Status` at all, `None` otherwise.
+    /// `lint`'s STATUS verdict for one row: `Some detail` when an OPEN row on the board carries no
+    /// `Status` this engine can read, `None` otherwise.
     ///
     /// Severity is the caller's to supply, on `badTouchSetDetail`'s terms.
+    ///
+    /// **THE SENTENCE SAYS "NONE THIS ENGINE CAN READ", NOT "NONE", AND THE DIFFERENCE IS LOAD-BEARING.**
+    /// `Scan.boardStatusOf` ends `| _ -> NoStatus`, so a column outside the six names it was taught
+    /// collapses into the same case as an empty one — `Snapshot.boardStatus` refuses exactly that
+    /// coercion, loudly, and this rule reads the surface that performs it. A rule that reported
+    /// "no `Status` at all" would then be stating something FALSE about a row that has one, at `error`
+    /// severity, the day somebody adds a column to the board. So the finding names both readings and
+    /// carries both remedies. It stays one finding at one severity because the CONSEQUENCE is identical
+    /// and is what the rule is actually about: `Schedulability` refuses the row either way, so no lane,
+    /// no `batch`, no `take`, and no driver report will ever mention it again.
     let statusVerdict (state: IssueState) (status: BoardStatus) : string option =
         if state = IssueState.Open && status = BoardStatus.NoStatus then
             Some
-                "OPEN and on the board with NO `Status` at all — invisible to EVERY scheduler, so `batch`, `take` and every driver report will pass over it silently and it can sit here forever (.github#1823: fourteen rows were filed this way in one day and every one was found by accident). Give it a column — `Backlog` if it is untriaged, which is what `add` now defaults to:  scripts/fsgg-coord set-field <issue> Status Backlog"
+                "OPEN and on the board with no `Status` THIS ENGINE CAN READ — invisible to EVERY scheduler, so `batch`, `take` and every driver report will pass over it silently and it can sit here forever (.github#1823: fourteen rows were filed this way in one day and every one was found by accident). Two readings, both this: the column is genuinely EMPTY — give it one, `Backlog` if it is untriaged, which is what `add` now defaults to (`scripts/fsgg-coord set-field <issue> Status Backlog`) — or the board grew a column this engine was never taught, which `Scan` folds into the same case (`scripts/fsgg-coord bootstrap --refresh`, then teach `Scan.boardStatusOf` the name). Read the row on the board to tell which."
         else
             None
 

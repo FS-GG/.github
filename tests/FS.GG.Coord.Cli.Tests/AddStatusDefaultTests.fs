@@ -45,6 +45,14 @@ module AddStatusDefaultTests =
         | OnBoardUnset
         /// On the board with a column somebody set. The one `add` may never overwrite.
         | OnBoardSet of string
+        /// On the board with a column somebody set, and `Board.itemId` DOES NOT SEE IT.
+        ///
+        /// Not exotic: that lookup is `projectItems(first: 20)` with no pagination and no `pageInfo`
+        /// check, so a wholly successful read returns "not on board" for an issue whose item sits past
+        /// the twentieth project. `addProjectV2ItemById` is idempotent server-side and hands back the
+        /// EXISTING item, so `AddedToBoard` means "the lookup did not find it" — never "the item is new".
+        /// The design that skipped the column read on that arm would have overwritten a live column here.
+        | OnBoardHiddenFromLookup of string
         /// On the board, and the column read FAILS. NOT the same as empty (#266).
         | OnBoardUnreadable
 
@@ -62,18 +70,39 @@ module AddStatusDefaultTests =
     /// the issue IS on the board and every later read must say so. A canned sequence would answer the
     /// post-add item lookup with "not on board" and the Status write would silently become a no-op, which
     /// is precisely the outcome these legs exist to catch; the board has to be a thing that changes.
+    ///
+    /// `Added()` MODELS THE SERVER, NOT THE HAPPY PATH. `addProjectV2ItemById` is idempotent server-side
+    /// (`Board.addItem`'s own docstring, measured against the live board in #861): for an issue already
+    /// on the board it returns THAT item's id and adds nothing. So this only creates a fresh, field-less
+    /// item when the board really has none — and `OnBoardHiddenFromLookup` below drives the case where it
+    /// does, which the `AddedToBoard`-skips-the-read design could not survive and no longer attempts.
     type private Board(start: Column) =
         let mutable column = start
-        let mutable itemId = match start with | NotOnBoard -> None | _ -> Some ItemId
+
+        let mutable itemId =
+            match start with
+            | NotOnBoard
+            | OnBoardHiddenFromLookup _ -> None
+            | _ -> Some ItemId
 
         member _.Column = column
         member _.ItemId = itemId
 
-        /// What `add`'s mutation does to the board: the item exists from now on, with NO field values.
+        /// What `add`'s mutation does. Server-side idempotent: an issue already on the board keeps its
+        /// item and its column, and only a genuinely absent one becomes a new, field-less item.
         member _.Added() =
-            itemId <- Some NewItemId
-            column <- OnBoardUnset
-            NewItemId
+            match column with
+            | OnBoardHiddenFromLookup existing ->
+                // The lookup missed it (`projectItems(first: 20)`, unpaginated) but the server has it.
+                itemId <- Some ItemId
+                column <- OnBoardSet existing
+            | _ ->
+                itemId <- Some NewItemId
+                column <- OnBoardUnset
+
+            match itemId with
+            | Some id -> id
+            | None -> failwith "the fixture's own add produced no item id"
 
     /// The two `projectItems` reads are told apart by `fieldValueByName`, which only `Board.itemStatus`
     /// selects. `Board.itemId` asks for `nodes { id project { number } }` on the same connection, so a
@@ -87,7 +116,9 @@ module AddStatusDefaultTests =
             // `Board.itemStatus` — the read that decides whether the default may fire.
             match board.Column with
             | OnBoardUnreadable -> Error(Errors.Http(502, "the Status column could not be read"))
-            | NotOnBoard -> ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+            | NotOnBoard
+            | OnBoardHiddenFromLookup _ ->
+                ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             | OnBoardUnset ->
                 ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
             | OnBoardSet name ->
@@ -276,6 +307,41 @@ module AddStatusDefaultTests =
         // And the default did NOT also fire. A flag that merely added a second write would leave the
         // board in whichever order the mutations happened to land.
         Assert.False(transport.Logged(statusWrite NewItemId "opt_backlog"))
+
+    [<Fact>]
+    let ``#1823 an item the LOOKUP missed keeps its column - AddedToBoard is not 'the item is new'`` () =
+        // THE ARM THAT USED TO SKIP THE READ, AND WHY IT MAY NOT. `addProjectV2ItemById` is idempotent
+        // server-side and returns the EXISTING item for an issue already on the board, and `Board.itemId`
+        // is `projectItems(first: 20)` with no pagination — so a wholly successful read can answer "not on
+        // board" for a row that is on it, carrying a column somebody set. The old fresh-add arm reasoned
+        // "a new item has no field values, so no read is owed" and would have defaulted straight over it.
+        //
+        // This is the leg that reds if that shortcut ever comes back.
+        let transport = world (OnBoardHiddenFromLookup "In progress")
+
+        let code, _ = runAdd transport [ "add"; "FS.GG.SDD#42" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(0, transport.Count "item-edit")
+
+    // ---- A BAD --status IS REFUSED BEFORE THE ADD -------------------------------------------------
+
+    [<Fact>]
+    let ``#1823 add --status naming no column is REFUSED, and spends no write`` () =
+        // The Status write is non-fatal by design — the row is boarded, so a red would send a filer back
+        // to re-run `add` rather than to the field write actually owed. Right for a default nobody asked
+        // for; WRONG for an instruction. Unvalidated, `--status Redy` boards the row, notes a 422, and
+        // exits 0 — leaving a row with NO column at all, which is the exact thing #1823 exists to stop,
+        // produced by #1823's own flag. `set-field` exits non-zero for the same value.
+        let transport = world OnBoardUnset
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Redy" ]
+
+        Assert.NotEqual(0, code)
+        // Refused BEFORE the add: nothing on stdout, no mutation of any kind, not even the board item add.
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-edit")
+        Assert.Equal(0, transport.Count "item-add")
 
     [<Fact>]
     let ``#1823 AC2 --status is an instruction, so it wins over a column already set`` () =
