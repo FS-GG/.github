@@ -3,14 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-27
 - **Affects:** FS-GG/.github, every coordination-kit receiver, FS.GG.SDD, FS.GG.Rendering, FS.GG.Templates, and scaffolded product workspaces
-<!-- One `**Amends:**` line PER TARGET, deliberately. `adr-coherence`'s declaration pattern stops at
-     the first `.`, and every ADR link carries a `.md` — so a single field naming three records
-     registers only the FIRST, and the other two links become invisible to the gate from this end
-     (measured on this record; filed as .github#1637). One target per line keeps all three links
-     visible from BOTH ends, which is the whole point of house rule 3. -->
-- **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1 — **in DIRECTION only;** it stays in force and this record retires nothing it mandates. See §9.
-- **Amends:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5 — **in DIRECTION only;** the declared root set is unchanged today. Decision 6 is untouched and re-affirmed. See §6, §9.
-- **Amends:** [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set — **§5 is EXECUTED as of 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)): the ordered set is now TWO, `.claude/skills` + `.agents/skills`, and ADR-0065 was amended in that same change.** Its transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. §6's generated view is NOT landed. See §5, §9.
+- **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1, [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5, and [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set. ADR-0011 and ADR-0014 are amended **in DIRECTION only** — both stay in force, this record retires nothing they mandate, the root set they declare is unchanged today, and ADR-0014's Decision 6 is untouched and re-affirmed. See §6, §9. ADR-0065's **§5 is EXECUTED as of 2026-07-28** ([#1636](https://github.com/FS-GG/.github/issues/1636)): the ordered set is now TWO, `.claude/skills` + `.agents/skills`, and ADR-0065 was amended in that same change. Its transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. §6's generated view is NOT landed. See §5, §9.
 - **Applies:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — *derive, don't restate* — to files rather than to facts.
 
 ## Context

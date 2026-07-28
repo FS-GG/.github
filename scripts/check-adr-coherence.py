@@ -42,7 +42,8 @@ WHAT IT ASSERTS
   2. BIDIRECTIONAL AMENDMENT — if ANY record declares that A amends/supersedes B, then A's file
      must mention B *and* B's file must mention A. A one-sided link is the corpus's most common
      defect and the most damaging, because it misleads precisely the reader who did the right
-     thing and opened the record instead of the summary.
+     thing and opened the record instead of the summary. A field naming N records declares N
+     links: the scan runs to the end of the CLAUSE, not to the first `.` (.github#1637).
   3. NO ORPHANS, NO GHOSTS — every file has an index row, every row has a file (or is an explicit
      `~~NNNN~~` tombstone: withdrawn numbers are retired, not reused).
   4. SHAPE — every record carries Status, Date, Affects, Context, Decision, Consequences.
@@ -80,12 +81,59 @@ ROW_RE = re.compile(r"^\|\s*(?:\[(\d{4})\]\([^)]+\)|~~(\d{4})~~)\s*\|(.*)\|([^|]
 # A declared amendment, from either end. Header fields (`- **Amends:** [ADR-0022] §Decision 1`)
 # and status lines (`superseded by [ADR-0032]`, `amended by [ADR-0036]`) both count: the whole
 # point is that the two ends must agree, so we accept the claim from whichever end made it.
+#
+# A DECLARATION IS A KEYWORD PLUS EVERY TARGET IN ITS CLAUSE — NOT JUST THE FIRST.
+#
+# This used to be one regex, `<keyword>[^.\n]*?(?:ADR-)?(\d{4})`: a single capture group, whose
+# span stopped at the first `.`. Every ADR cross-reference in this corpus is a markdown link
+# whose target ends in `.md`, so in a field naming three records the FIRST link's `.md` closed
+# the scan and the other two were never declared at all (.github#1637, measured on ADR-0067:
+# a three-target `**Amends:**` field yielded `['0011']`). That is a silent FAIL-OPEN of assertion
+# 2 — the corpus's most damaging defect class going unreported over a region the gate never
+# examined, which is #266's shape inside the gate written to close it.
+#
+# So the scan is split in three, and each part earns its own boundary.
+#
+# (a) THE KEYWORD that opens a declaration. Unchanged vocabulary; it no longer swallows a number.
 DECLARES_RE = re.compile(
-    r"(?:\*\*(?:Amends|Supersedes|Amended by|Superseded by|Extends|Extended by):\*\*|"
-    r"(?:amends|supersedes|superseded by|amended by|extends|extended by))"
-    r"[^.\n]*?(?:ADR-)?(\d{4})",
+    r"\*\*(?:Amends|Supersedes|Amended by|Superseded by|Extends|Extended by):\*\*|"
+    r"(?:amends|supersedes|superseded by|amended by|extends|extended by)",
     re.I,
 )
+
+# (b) WHERE THE CLAUSE ENDS. A sentence-ending `.` or a `;` closes it; the end of the line always
+#     does. `,` / `and` / `&` do NOT — that is precisely how a multi-target field separates its
+#     targets. "Sentence-ending" means a `.` or `;` followed by whitespace or end-of-line, with
+#     markdown/quote closers allowed in between (`only;**`, `nothing.**`). A `.` inside `.md)`,
+#     `.NET`, `§4.4` or `FS.GG.SDD` is followed by a letter or digit and is NOT a boundary — which
+#     is the whole bug. The boundary matters: ADR-0065's header reads
+#     `**Amends:** [ADR-0014](…) Decision 5; interacts with [ADR-0019](…) and [ADR-0062](…)`, and
+#     *interacts with* is not an amendment. Widening that trades a fail-open for a fail-loud on a
+#     clean corpus, so the `;` stops it.
+CLAUSE_END_RE = re.compile(r"[.;](?=[*_`\"')\]]*(?:\s|$))")
+
+# (c) WHAT COUNTS AS A TARGET inside the clause. `ADR-0022`, a bare `0018` (ADR-0026's title says
+#     "extends 0018"), a `[0019]` link label, or a `(0019-….md)` link target. Explicitly NOT: an
+#     issue number (`#1636`), a URL path segment (`/issues/1636`), a section reference (`§0001`),
+#     a date (`2026-07-28` — the `-0` after it), or four digits inside a longer word such as a
+#     digest. Numbers that survive this are still filtered against the corpus by the caller, but
+#     a scan widened from one target to all of them must not start reading dates as records.
+REF_RE = re.compile(r"\((\d{4})-[^)\s]*\.md\)|(?<![\w#/§-])(?:ADR-)?(\d{4})(?![\w-])")
+
+
+def declared_targets(text: str):
+    """Yield every ADR number declared as an amendment target anywhere in `text`.
+
+    A field naming N records yields N numbers, whatever separates them.
+    """
+    for kw in DECLARES_RE.finditer(text):
+        eol = text.find("\n", kw.end())
+        clause = text[kw.end(): eol if eol != -1 else len(text)]
+        stop = CLAUSE_END_RE.search(clause)
+        if stop:
+            clause = clause[: stop.start()]
+        for ref in REF_RE.finditer(clause):
+            yield ref.group(1) or ref.group(2)
 
 # The four statuses the corpus uses. Anything else is a typo, and a typo'd status is a status
 # nobody can gate on.
@@ -206,8 +254,7 @@ def main() -> int:
     # (2) BIDIRECTIONAL AMENDMENT
     declared: set[tuple[str, str]] = set()
     for num, text in bodies.items():
-        for m in DECLARES_RE.finditer(text):
-            other = m.group(1)
+        for other in declared_targets(text):
             if other != num and (other in bodies or other in rows):
                 declared.add(tuple(sorted((num, other))))
 
