@@ -18,9 +18,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
 
-pass=0; failcount=0
+pass=0; failcount=0; notmeasured=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
+# THE THIRD OUTCOME, AND IT IS NOT A LUXURY (.github#266, #1784, #1825). "I could not evaluate this" is
+# NEVER "I evaluated it and it passed" — and it is not "I evaluated it and it FAILED" either. A leg that
+# never obtained a measurement must be readable as such by whoever reads the log, or the next reader
+# debugs a regression that never happened, or worse, reads a vacuous leg's silence as coverage.
+#
+# It still REDS THE SUITE (see the exit at the foot of this file). Distinct from `FAIL` is not softer
+# than `FAIL`: #1815's whole finding is that a non-answer counted as satisfied is how a gate goes green
+# over the failure class it exists for.
+unmeasured() { echo "NOT-MEASURED  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; notmeasured=$((notmeasured+1)); }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
@@ -3263,14 +3272,39 @@ oip() {  # oip <env-assignments...> -- <engine args...>
 # So a refutation must first EARN the right to conclude. `refute <label> <must-not-contain>
 # <must-contain>` fails unless the fixture ran AND the output carries a positive anchor proving the
 # command reached a recognisable verdict. Only then is the absence of the forbidden string meaningful.
-refute() {  # refute <label> <must-not-contain> <must-contain>
+#
+# ---- AND THE ANCHOR MUST PROVE THE COMMAND *RAN*, NOT THAT THE GUARD *FIRED* (.github#1825) ---------
+#
+# That rule was found by `#1794`'s mutation matrix IN ITS OWN HARNESS, and it is the non-obvious half.
+# The first version of these legs anchored on `"could not be read"` — the text THE GUARD ITSELF EMITS.
+# So reverting the guard removed the anchor along with it, and the leg reported NOT MEASURED at exactly
+# the moment it should have reported FAIL: the engine had just answered DISJOINT over a held row whose
+# touch-set nobody read, and the harness said "no measurement". A guard cannot be its own alibi.
+#
+# THE ANCHOR THIS FILE NOW USES is the subject's own ref, `FS.GG.SDD#501`. It is in the DISJOINT verdict
+# ("FS.GG.SDD#501 overlaps no live claim"), in the OVERLAP verdict ("FS.GG.SDD#501 collides with …") and
+# in the unreadable-body refusal ("FS.GG.SDD#501's collision scan: …") alike. Whatever the engine decides
+# it names the thing it was asked about, so the anchor is absent only if the command did not reach a
+# verdict at all.
+#
+# THE STATABLE FORM, because "independent of the guard" is not by itself checkable: THE ANCHOR MUST MATCH
+# EVERY VERDICT THIS COMMAND CAN PRODUCE, AND NOTHING IT PRODUCES WHEN IT DID NOT RUN. That is why the
+# anchor is an ERE and not a fixed string. The unidentifiable-element legs need the alternation and it is
+# worth saying why, because `#1825` prescribed the bare ref for all six legs and for those two it is
+# WRONG: that refusal is raised inside `Reads.openIssues`, one layer BELOW the collision scan, so it names
+# the repo ("FS-GG/FS.GG.SDD open issues") and never the ref. Anchoring those on `FS.GG.SDD#501` alone
+# would fail on a HEALTHY engine. Anchoring them on `element N of M` alone is the original defect. The
+# alternation of the two is correct and is correct for a reason that generalises: the guard-produced
+# alternative can only match when the guard is present, and the ref-produced one covers precisely the
+# mutant case where it is gone — so between them one always matches a real verdict, and neither matches a
+# transport failure or an empty output.
+refute() {  # refute <label> <must-not-contain> <must-contain-ERE>
   if [ "${OIP_RC:-99}" = 99 ]; then
-    bad "$1 — FIXTURE DID NOT RUN, SO NOTHING WAS MEASURED (#1815)" "$OIP_OUT"; return
+    unmeasured "$1 — FIXTURE DID NOT RUN, SO NOTHING WAS MEASURED (#1815)" "$OIP_OUT"; return
   fi
-  case "$OIP_OUT" in
-    *"$3"*) ;;
-    *) bad "$1 — the command produced no '$3', so the refutation is VACUOUS and was NOT MEASURED (#1815)" "$OIP_OUT"; return ;;
-  esac
+  if ! printf '%s' "$OIP_OUT" | grep -Eq "$3"; then
+    unmeasured "$1 — the command matched no /$3/, so it reached no verdict and the refutation is VACUOUS (#1815/#1825)" "$OIP_OUT"; return
+  fi
   case "$OIP_OUT" in
     *"$2"*) bad "$1" "$OIP_OUT" ;;
     *) ok "$1" ;;
@@ -3296,8 +3330,11 @@ printf '%s' "$OIP_OUT" | grep -q 'page2-holder' \
   || bad "#1794: page-2 collision must exit non-zero" "rc=$OIP_RC"
 # 502 holds a LIVE claim on page ONE that does NOT collide. Without this, "OVERLAP" above could be
 # produced by a scan that reports every live claim it finds, and the page-2 assertion would be vacuous.
+# Anchored on the SUBJECT's ref, not on `FS.GG.SDD#503` as it first was: #503 is named only by the
+# COLLISION verdict, so any mutation that loses the collision (M1/M5/M9) also loses the anchor and this
+# leg would go quiet exactly where it should speak (#1825).
 refute "#1794: a live page-1 claim on unrelated paths is NOT reported — the token filter still runs" \
-       "page-bystander" "FS.GG.SDD#503"
+       "page-bystander" "FS\.GG\.SDD#501"
 
 # THE NEGATIVE CONTROL, and it is the one that makes the leg above mean something. Same data, same split,
 # same command — the ONLY difference is that page one is served without its `Link` header. A test that
@@ -3313,7 +3350,7 @@ printf '%s' "$OIP_OUT" | grep -q 'DISJOINT' \
 # not crept back in. Asserted explicitly so a regression reads as a cost finding, not a mystery failure.
 oip -- overlap 'FS.GG.SDD#501' --active
 refute "#1794/#1779: the collision scan costs 0 GraphQL — the fixture serves no /graphql and the scan never asks" \
-       "unhandled POST" "collides with"
+       "unhandled POST" "FS\.GG\.SDD#501"
 
 # ---- THE UNREADABLE ELEMENT: fail CLOSED, and only where it matters --------------------------------
 # `TouchSet.parse ""` answers `Undeclared`; `TouchSet.conflicts` reads `Undeclared` as colliding with
@@ -3327,8 +3364,12 @@ refute "#1794/#1779: the collision scan costs 0 GraphQL — the fixture serves n
 # fail). The DISJOINT VERDICT is the sentence "<ref> overlaps no live claim"; that is what must be absent.
 for mode in absent illtyped; do
   oip "OIP_BODY=503:$mode" -- overlap 'FS.GG.SDD#501' --active
+  # THE LEG THAT FOUND THE RULE. Its anchor was `could not be read` — the refusal's own words — so
+  # reverting the guard (M2/M3) deleted the anchor and this reported NOT MEASURED over an engine that had
+  # just answered DISJOINT about a row nobody read. `FS.GG.SDD#501` is in the refusal AND in the DISJOINT
+  # it must never produce, so the absence of the verdict sentence is now meaningful (#1825).
   refute "#1794: a HELD row with an unreadable body ($mode) never reads as DISJOINT — it fails closed" \
-         "overlaps no live claim" "could not be read"
+         "overlaps no live claim" "FS\.GG\.SDD#501"
   printf '%s' "$OIP_OUT" | grep -q 'could not be read' \
     && ok "#1794: ...and SAYS SO ($mode) — the refusal names the unread touch-set, not a generic error" \
     || bad "#1794: the refusal must name the unread touch-set ($mode)" "$OIP_OUT"
@@ -3345,10 +3386,16 @@ done
 oip 'OIP_BODY=503:nonumber' -- overlap 'FS.GG.SDD#501' --active
 # Verdict SENTENCES, not bare words — see the note above the `absent`/`illtyped` loop. Two forbidden
 # strings, so two refutations against the same positive anchor.
+# THE ALTERNATION, AND WHY THESE TWO LEGS CANNOT USE THE BARE REF (#1825). This refusal comes from
+# `Reads.openIssues`, BELOW the collision scan, so it names `FS-GG/FS.GG.SDD open issues` and never
+# `FS.GG.SDD#501` — measured, not assumed. Anchoring on the ref alone would go unmeasured on a healthy
+# engine; anchoring on `element N of M` alone is the guard vouching for itself. Together they match every
+# verdict the command can reach (refusal, DISJOINT, OVERLAP) and nothing it prints when it never ran.
+OIP_ANCHOR='FS\.GG\.SDD#501|element [0-9]+ of [0-9]+'
 refute "#1794: an unidentifiable element REFUSES the read — it is never reported as DISJOINT" \
-       "overlaps no live claim" "element 2 of 4"
+       "overlaps no live claim" "$OIP_ANCHOR"
 refute "#1794: ...and is never silently dropped so the scan reaches a COLLISION verdict without it" \
-       "collides with" "element 2 of 4"
+       "collides with" "$OIP_ANCHOR"
 # The count is a fact the caller is entitled to (AC2), and "2 of 4" is also the proof the MERGE happened:
 # page one alone is 2 elements, so a denominator of 4 can only come from a followed `Link`.
 printf '%s' "$OIP_OUT" | grep -q 'element 2 of 4' \
@@ -3380,7 +3427,7 @@ printf '%s' "$OIP_OUT" | grep -q 'FS.GG.SDD#503' \
 # surface unknown" is precisely the state that may not answer DISJOINT.
 oip OIP_LAPSED=1 'OIP_BODY=503:absent' -- overlap 'FS.GG.SDD#501' --active
 refute "#1794×#1792: a LAPSED claim whose touch-set could not be read still refuses — a lapsed lease over an UNKNOWN surface reserves an unknown surface" \
-       "overlaps no live claim" "could not be read"
+       "overlaps no live claim" "FS\.GG\.SDD#501"
 printf '%s' "$OIP_OUT" | grep -q 'could not be read' \
   && ok "#1794×#1792: ...and refuses for the RIGHT reason (the unread touch-set), not merely by erroring" \
   || bad "#1794×#1792: the lapsed+unreadable refusal must name the unread touch-set" "$OIP_OUT"
@@ -5386,5 +5433,10 @@ rm -rf "$AU_CACHE"
 
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
+# THE THIRD COUNTER IS ALWAYS PRINTED, INCLUDING AT ZERO (.github#1825). Emitting it only when non-zero is
+# how "NOT MEASURED" disappears from a summary and a reader infers coverage from a line that never
+# mentioned it. It reds the suite on its own: a leg that obtained no measurement has not passed (#266).
+echo "coord-engine parity: $notmeasured not measured"
+[ "$notmeasured" -eq 0 ] || { echo "::error::coord-engine parity: $notmeasured leg(s) obtained NO MEASUREMENT — that is not a pass (#266)"; exit 1; }
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
 echo "green — the engine matches the corpus's certified answer, with no bash in the pipeline."

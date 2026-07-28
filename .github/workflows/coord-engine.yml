@@ -29,6 +29,7 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
+      - "tests/coord-engine-mutation/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -44,6 +45,7 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
+      - "tests/coord-engine-mutation/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -106,6 +108,17 @@ jobs:
       # corpus's own contract, so the two cannot drift.
       - name: Parity — the engine matches the corpus's certified batch answer
         run: bash tests/coord-engine-parity/run.sh
+
+      # CAN THE #1794 MUTATION MATRIX STILL BE RUN? (.github#1825) — seconds, not the ~50 minutes the
+      # matrix itself costs. `tests/coord-engine-mutation/specs.yml` mutates guards by EXACT SOURCE TEXT,
+      # so any edit to `Reads.fs`/`Client.fs`/`Scan.fs`/`Transport.fs` can leave a leg matching nothing —
+      # and a leg that matches nothing grades NOT MEASURED, silently, to whoever eventually runs the sweep.
+      # This says so on the PR that moved the source, while the author is still holding it. It runs NO
+      # mutation: green here means the matrix is RUNNABLE, never that any guard was measured (#266).
+      # The name is QUOTED because it contains `#`, which starts a YAML comment. Unquoted, this step was
+      # literally named "The" — caught by parsing the file rather than by reading it.
+      - name: "The #1794 mutation matrix is still runnable — every leg's anchor still matches"
+        run: bash tests/coord-engine-mutation/run.sh
 
       # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord` —
       # which the swap cut down to the ~40-line ADR-0034 §4.4 resolver that REPLACED the ~7,000-line bash
