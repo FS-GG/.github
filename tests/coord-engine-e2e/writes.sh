@@ -583,10 +583,22 @@ nr="$("$ENGINE" set-paths FS.GG.SDD#43 --worker otter-777 --paths 'src/Verify/**
 if [ "$nrrc" -eq 6 ] \
    && printf '%s' "$nr" | grep -qi 'NARROWED' \
    && printf '%s' "$nr" | grep -qi 'cannot have introduced' \
-   && ! printf '%s' "$nr" | grep -q 'update introduced a collision'; then
+   && ! printf '%s' "$nr" | grep -qi 'may or may not'; then
   ok "#1740 AC5: a narrowing that collides is reported as PRE-EXISTING, not as introduced"
 else
   bad "#1740 AC5: a narrowing must not be blamed for a collision it cannot have caused" "rc=$nrrc: $nr"
+fi
+
+# THE COUNTER-EXAMPLE, and without it the leg above is satisfied by a constant. Same board, same live
+# claim, same colliding token — but the declaration GROWS, so the tool must NOT say the overlap predates
+# it. The negated grep above only means something because this leg proves the other sentence exists.
+wn="$("$ENGINE" widen FS.GG.SDD#43 --worker otter-777 --paths 'src/Thing/**' 2>&1)"; wnrc=$?
+if [ "$wnrc" -eq 6 ] \
+   && printf '%s' "$wn" | grep -qi 'may or may not' \
+   && ! printf '%s' "$wn" | grep -qi 'cannot have introduced'; then
+  ok "#1740 AC5: a WIDENING that collides is NOT reported as pre-existing (the sentences differ)"
+else
+  bad "#1740 AC5: a widening must not borrow the narrowing's exoneration" "rc=$wnrc: $wn"
 fi
 
 # ---- report ----------------------------------------------------------------------------------------

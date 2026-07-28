@@ -299,6 +299,25 @@ module ApplicationServiceTests =
             with _ ->
                 ()
 
+    /// `run`, plus the STDERR the command wrote (.github#1740 AC5).
+    ///
+    /// The OVERLAP diagnostics are `eprint`, and deliberately so — stdout is the machine contract and the
+    /// collision detail belongs in the JSON object (#1517). But that put the AC5 sentence, whose whole
+    /// defect was that it asserted causation, on the one stream no leg here could read. This captures it
+    /// WITHOUT moving a byte of either projection: `run` touches `Console.Out` only, so wrapping
+    /// `Console.Error` around it composes.
+    let private runCapturingStderr (transport: Fake.Recorder) (args: string list) : int * string * string =
+        let stderr = Console.Error
+        use capturedErr = new StringWriter()
+
+        try
+            Console.SetError capturedErr
+            let code, out = run transport args
+            Console.Error.Flush()
+            code, out, capturedErr.ToString()
+        finally
+            Console.SetError stderr
+
     let private disjointWorld () =
         world (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) (Map.ofList [ 74, "kite-469" ]) false
 
@@ -526,16 +545,28 @@ module ApplicationServiceTests =
                 ()
 
     /// One line of the deferral queue, in `Cache.renderDeferred`'s own shape.
+    ///
+    /// `boardTitle = ""` OMITS the board keys entirely rather than writing them empty — that is a pre-#882
+    /// legacy entry, and `renderDeferred` omits rather than nulls for exactly this reason, so a fixture that
+    /// wrote `""` would be testing a shape the queue never produces.
+    let private queuedWrite (issueRef: string) (boardTitle: string) (field: string) (value: string) =
+        let common =
+            [ "ref", box issueRef
+              "field", box field
+              "value", box value
+              "at", box (DateTimeOffset.UtcNow.ToString "o")
+              "worker", box "otter-9c21" ]
+
+        let board =
+            if boardTitle = "" then
+                []
+            else
+                [ "boardOwner", box "FS-GG"; "boardTitle", box boardTitle ]
+
+        JsonSerializer.Serialize(dict (common @ board)) + "\n"
+
     let private queuedStatusWrite (boardTitle: string) (field: string) (value: string) =
-        JsonSerializer.Serialize
-            {| ``ref`` = "FS-GG/FS.GG.SDD#75"
-               field = field
-               value = value
-               at = DateTimeOffset.UtcNow.ToString "o"
-               worker = "otter-9c21"
-               boardOwner = "FS-GG"
-               boardTitle = boardTitle |}
-        + "\n"
+        queuedWrite "FS-GG/FS.GG.SDD#75" boardTitle field value
 
     /// The AC3 fixture, LITERALLY: the board says `Ready` and it is not lying — the write has not happened.
     ///
@@ -574,28 +605,147 @@ module ApplicationServiceTests =
     // or any non-empty queue file — as a claim, and the positive leg above would not notice. Each of these
     // is the SAME board, the SAME row and the SAME live marker; only the queue entry differs, and each must
     // fall back to the column, which says `Ready`.
+    //
+    // EACH ROW NAMES THE GUARD IT KILLS, and each varies ONE thing. A row that fails two guards at once
+    // pins neither: `("Class", "defect")` alone would keep passing with the FIELD test deleted, because the
+    // VALUE test catches it — so the field row below carries the live-claim value on purpose.
     [<Theory>]
     // No queue at all: the honest DISJOINT this verb must still be able to give.
-    [<InlineData("", "", "")>]
-    // A write to a DIFFERENT FIELD says nothing about who holds the lock.
-    [<InlineData("Coordination", "Class", "defect")>]
-    // A `Status` write moving the row somewhere that is not a claim.
-    [<InlineData("Coordination", "Status", "Done")>]
+    [<InlineData("", "", "", "")>]
+    // THE FIELD TEST, ALONE. Same value a real claim writes, different field — so only `d.Field` can refuse
+    // it. With `("Class","defect")` the value test would mask a deleted field test.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Coordination", "Class", "In progress")>]
+    // THE VALUE TEST, ALONE. A `Status` write moving the row somewhere that is not a claim.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Coordination", "Status", "Done")>]
     // #882 — queued against ANOTHER BOARD. `flush` refuses to resolve it here; so must this.
-    [<InlineData("Other Board", "Status", "In progress")>]
-    let ``#1740: the queue leg reserves nothing on an entry that is not a live claim on THIS board``
-        (boardTitle: string, field: string, value: string)
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Other Board", "Status", "In progress")>]
+    // THE REF IS READ AT ALL. A perfectly valid live-claim entry naming a DIFFERENT row must not reserve
+    // THIS one — without this, `claimPending _ = not (Set.isEmpty deferred)` passes every other leg here.
+    [<InlineData("FS-GG/FS.GG.SDD#74", "Coordination", "Status", "In progress")>]
+    // ...and a different REPO is a different row too, even at the same number (#353's whole subject).
+    [<InlineData("FS-GG/FS.GG.Other#75", "Coordination", "Status", "In progress")>]
+    let ``#1740: the queue leg reserves nothing on an entry that is not a live claim on THIS row``
+        (issueRef: string, boardTitle: string, field: string, value: string)
         =
         let queued =
-            if boardTitle = "" then
+            if issueRef = "" then
                 None
             else
-                Some(queuedStatusWrite boardTitle field value)
+                Some(queuedWrite issueRef boardTitle field value)
 
         let code, out = runWithQueue queued
 
         Assert.Equal("disjoint", str "verdict" (parsed out))
         Assert.Equal(0, code)
+
+    // THE POSITIVE LEGS THAT ARE NOT THE HAPPY PATH. Both of these RESERVE, and each dies to a different
+    // deletion that every leg above survives.
+    [<Theory>]
+    // A pre-#882 entry recorded NO board. `flush` replays it against the current board, so this must too —
+    // deleting the `| None -> true` arm turns a legacy queue into a silent false DISJOINT, which is the
+    // exact defect under repair.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "")>]
+    // CASING. The queue's owner/repo come from argv and `$FSGG_COORD_OWNER`; the row's come from GitHub's
+    // `nameWithOwner`. Nothing makes those agree in case, so dropping either `ToLowerInvariant` is a false
+    // DISJOINT that no same-case fixture can see.
+    [<InlineData("fs-gg/fs.gg.sdd#75", "Coordination")>]
+    let ``#1740: a queued live claim still reserves across board-absence and ref casing``
+        (issueRef: string, boardTitle: string)
+        =
+        let code, out = runWithQueue (Some(queuedWrite issueRef boardTitle "Status" "In progress"))
+
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+
+        let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+        Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740: an UNREADABLE deferral queue REFUSES rather than reporting DISJOINT`` () =
+        // FAIL CLOSED, and pinned because the warrant claims it. `Cache.pending` refuses a queue with a
+        // line it cannot parse (it will not drop a board write it cannot read), and that refusal reaches
+        // here. The tempting alternative — treat an unreadable queue as an empty one — is a SILENT FALSE
+        // DISJOINT built out of not having been able to look, which is #266 exactly, in the fix for it.
+        //
+        // The board here says `In progress` for BOTH rows, so the column alone would answer OVERLAP: this
+        // leg therefore cannot pass by accident of the fixture being disjoint, and it distinguishes
+        // "refused" from every ordinary verdict rather than merely asserting non-zero.
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            File.WriteAllText(Path.Combine(dir, "pending.jsonl"), "{not a queue entry\n")
+
+            let code, out = runIn dir (overlappingWorld false) (widenOnto "src/Shared.fs")
+
+            Assert.NotEqual(0, code)
+            Assert.DoesNotContain("disjoint", out)
+            Assert.Equal("", out.Trim())
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    // ---- .github#1740 AC5: the NARROWING sentence, and the one it must NOT be -------------------------
+    //
+    // WHY THIS IS HERE AND NOT ONLY IN `writes.sh`. The e2e leg exercises the narrowing branch alone, and a
+    // branch with no counter-example is not pinned: `let isNarrowing = true` satisfies it. These two legs
+    // are the counter-example — same board, same collision, same worker, and the ONLY difference is whether
+    // the update is a proper subset of what was declared before.
+    //
+    // The sentence is on STDERR, so these read STDERR — see `runCapturingStderr`. Asserting the ABSENCE of
+    // the narrowing claim as well as its presence is the point: a leg that only greps for the good sentence
+    // passes when both branches print it.
+    let private narrowingClaim = "cannot have introduced the collision"
+
+    [<Fact>]
+    let ``#1740 AC5: a proper narrowing that collides is reported as PRE-EXISTING`` () =
+        // #74 declares two tokens; `set-paths` drops one. A subset names strictly fewer files, so this
+        // command provably did not cause the collision it is about to be told about.
+        let bodies = Map.ofList [ 74, "Paths: scripts/fsgg-coord src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
+
+        let code, out, err =
+            runCapturingStderr
+                (world bodies laggingHolders false)
+                [ "set-paths"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal("overlap", str "verdict" (parsed out))
+        Assert.Contains(narrowingClaim, err)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740 AC5: a WIDENING that collides is NOT called a narrowing`` () =
+        // THE COUNTER-EXAMPLE, and the reason the leg above proves anything. Same board, same collision,
+        // same worker — the declaration GREW, so nothing may claim the overlap pre-dates the command.
+        // Without this, `let isNarrowing = true` passes the entire suite.
+        let code, out, err =
+            runCapturingStderr
+                (overlappingWorld false)
+                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal("overlap", str "verdict" (parsed out))
+        Assert.DoesNotContain(narrowingClaim, err)
+        // ...and it must not have regressed to the sentence #1740 removed, either.
+        Assert.DoesNotContain("introduced a collision — do NOT", err)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740 AC5: an update that changes NOTHING is not a narrowing either`` () =
+        // THE ARM THE LENGTH TEST EXISTS FOR. `widen` is a union, so an idempotent re-run arrives with
+        // proposed = prior — a subset by `forall`, and not a narrowing by any honest reading. Both rows
+        // declare the colliding token, so the update is an identity AND collides, which is the only way to
+        // reach the sentence at all.
+        let bodies = Map.ofList [ 74, "Paths: src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
+
+        let code, _, err =
+            runCapturingStderr
+                (world bodies laggingHolders false)
+                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.DoesNotContain(narrowingClaim, err)
+        Assert.Equal(6, code)
 
     // ---- .github#1524 — `reconcile --apply --json` is ONE document -----------------------------------
     //

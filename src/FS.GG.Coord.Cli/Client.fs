@@ -3501,7 +3501,18 @@ module Client =
     /// strength of not having been able to look.
     let private deferredInProgress (ctx: Context) : Errors.IoResult<Set<string>> =
         match Cache.pending () with
-        | Error e -> Error e
+        | Error e ->
+            // NAME THE REMEDY, because the message underneath is `flush`'s. `Cache.pending`'s refusal is
+            // written for the drainer — "a line we cannot read is a board write we would silently drop" —
+            // and an operator who meets it HERE is not draining anything; they are being told that the
+            // collision gate will not answer. The queue is one file shared by every worker on the box
+            // (#862), so this refuses for all of them at once, and the honest instruction is to repair the
+            // queue rather than to delete it: deleting it discards board writes that are still owed, which
+            // is the promise #510 exists to keep.
+            eprint
+                $"fsgg-coord-engine: the collision check cannot read the deferral queue (%s{Cache.root ()}/pending.jsonl), so it REFUSES rather than reporting DISJOINT over claims it could not see (#1740). Repair or drain that file — `scripts/fsgg-coord flush` — and re-run. Do NOT simply delete it: it holds board writes that are still owed (#510)."
+
+            Error e
         | Ok entries ->
             entries
             |> List.filter (fun d ->
@@ -3577,12 +3588,30 @@ module Client =
     ///
     /// **WHAT REMAINS OPEN, NAMED RATHER THAN GLOSSED (#266).** A `Status` write that failed PERMANENTLY
     /// (`statusWrite:"failed"`) is never queued — by #510's design, since replaying it forever is a promise
-    /// nobody can keep — and one that reports `"not-on-board"` has no board row to select at all. Neither
-    /// is visible to any column-derived or queue-derived candidate set, so a live claim in either state is
-    /// still missed here. Closing that needs the candidate set keyed on the MARKER rather than the column,
-    /// which costs one REST marker read per open row in the repo — measured at ~74 rows on this board, i.e.
-    /// ~74 requests per `widen` against a 5,000/hr REST budget, or fleet exhaustion after ~67 calls. That
-    /// is the #1666 shape, and it is why this scan does not do it. Tracked in `.github#1779`.
+    /// nobody can keep — and one that reports `"not-on-board"` has no board row to select at all. The
+    /// second is worth stating plainly: the candidate set below is filtered out of the board's `rows`, so
+    /// an off-board live claim is invisible here NO MATTER WHAT the queue says. The queue leg closes the
+    /// deferred case and nothing wider.
+    ///
+    /// **AND THE OBVIOUS COST ARGUMENT FOR LEAVING IT THERE DOES NOT HOLD — SAID HERE BECAUSE THE FIRST
+    /// DRAFT OF THIS COMMENT MADE IT.** "Keying candidates on the marker means a REST marker read per open
+    /// row, ~74 on this board, so it is unaffordable" is wrong twice over:
+    ///
+    /// - **The fleet already pays exactly that sweep, on a more frequent verb.** `Scan.snapshot` takes
+    ///   `candidates = scoped.Rows` — every row, with NO column filter — and reads body AND markers for
+    ///   each open one, uncached. That is `take`/`next`/`batch`, and `Cache.fsi` prices it at ~85 requests.
+    ///   The scheduler therefore already resolves the case this scan declines.
+    /// - **A far cheaper shape exists.** `Reads.openIssues` returns `(number, body)` for every open issue
+    ///   in ONE paginated call, and says in its own contract that "the bodies ride along because they are
+    ///   free here". Filtering on TOKENS first and reading a marker only for rows that actually collide
+    ///   costs ~1–2 REST calls plus one marker read per colliding row — in the incident that produced
+    ///   #1740, exactly one. It also reaches items that are not on the board at all, which nothing
+    ///   column-derived or queue-derived can.
+    ///
+    /// So the residual is left open here for SCOPE, not for cost: that design changes the scan's shape and
+    /// its failure modes (`openIssues` is per-repo, unconditional and paginated) and deserves its own
+    /// measurement and review rather than being smuggled in beside a cache-tier change. `.github#1779`
+    /// carries it, with this correction rather than the estimate.
     let private activeCollisions
         (ctx: Context)
         (opts: Options)
@@ -3740,10 +3769,18 @@ module Client =
                                     // narrowed a touch-set back to its original declaration, was told the
                                     // update "introduced a collision", and went looking for a mistake in the
                                     // narrowing — when the collision belonged to a claim that predated it.
+                                    // A PROPER subset — strictly fewer tokens, all of them already there. The
+                                    // length test is not decoration: without it an update that changes NOTHING
+                                    // satisfies `forall`, and `widen` (a UNION) reaches that arm on every
+                                    // idempotent re-run. It would then announce that it "NARROWED the
+                                    // touch-set" over an identity, which is a different false sentence in
+                                    // place of the one this is removing. Both lists are deduped (`validate` /
+                                    // `List.distinct`), so subset + shorter IS proper.
                                     let priorTokens = declaredPathTokens (TouchSet.parse body)
 
                                     let isNarrowing =
-                                        proposed.Tokens |> List.forall (fun t -> List.contains t priorTokens)
+                                        List.length proposed.Tokens < List.length priorTokens
+                                        && proposed.Tokens |> List.forall (fun t -> List.contains t priorTokens)
 
                                     // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
                                     // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
@@ -3837,7 +3874,18 @@ module Client =
                                                         // decide, so the message names it instead of defaulting to the
                                                         // edge that closes rings.
                                                         let msg =
-                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toksText}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            // #1740 AC5, ON THE MESSAGE THE OTHER WORKER READS. Taking
+                                                            // "introduced" off stderr and leaving "which NOW overlaps"
+                                                            // here would move the false causal claim rather than remove
+                                                            // it — and this is the copy the innocent party reads, so it
+                                                            // is the one that misdirects someone who did nothing.
+                                                            let origin =
+                                                                if isNarrowing then
+                                                                    "That is a NARROWING, so it cannot have caused this — the overlap already existed and predates my command"
+                                                                else
+                                                                    "I do not know which of us declared these paths first, so this may or may not be new"
+
+                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
                                                         match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
                                                         | Error e ->
