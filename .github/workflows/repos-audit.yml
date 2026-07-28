@@ -17,13 +17,16 @@
 #   1  a real finding — the roster and the real wiring disagree. Either a declared receiver is not
 #      wired (a gap), or a repo wires a fabric it never declared (an unrostered adopter, #503) — or a
 #      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529) — or a
-#      coordination-kit receiver's FS.GG.Kit pin is behind the newest published one (#1540)
+#      coordination-kit receiver's FS.GG.Kit pin is behind the newest published one (#1540) — or a
+#      receiver declares a generated view skill root that NOTHING generates before the kit asserts
+#      it (#1759)
 #   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage), or
 #      nuget.org would not say which FS.GG.Kit version is published (#1540)
 #   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, a
-#      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, or a
-#      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself
-#      (#316, #320, #503, #1529, #1540)
+#      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, a
+#      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself, or a
+#      receiver's view-root generate cannot be ORDERED against the kit's assertion (#1759)
+#      (#316, #320, #503, #1529, #1540, #1759)
 #
 # The audit also carries #1522's sparse-checkout closure rule across the whole roster (#1529), which
 # is why 1 and 3 each gained a cause. The rule is IMPORTED from scripts/check-sparse-checkout-
@@ -125,7 +128,12 @@ jobs:
             echo "it (**an unrostered adopter** — invisible to every fabric that iterates the"
             echo "roster), or a \`coordination-kit\` receiver's **FS.GG.Kit pin is behind** the"
             echo "newest version published on nuget.org (#1540) — its materialized kit is stale"
-            echo "now, and its own \`coordination-coherence\` will only say so on its next push."
+            echo "now, and its own \`coordination-coherence\` will only say so on its next push —"
+            echo "or a receiver **declares a generated view skill root that nothing generates**"
+            echo "before \`FsggKitCheckSkillView\` (#1759). That last one is absent in every fresh"
+            echo "checkout by construction (ADR-0067 §6), so that receiver's next Renovate kit bump"
+            echo "reds on a tree nobody touched — under \`kit-materialize.yml\`, a \`uses:\` it"
+            echo "cannot add a step to (#1715 blocker B5)."
             echo "The audit step's annotations name the repo, capability, missing evidence,"
             echo "and which side is wrong."
           } >> "$GITHUB_STEP_SUMMARY"

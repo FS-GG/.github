@@ -75,20 +75,33 @@
 # nothing in the org could say so until that repo happened to PUSH — at which point its own `main`
 # went red, in a place that blocks nothing and pages no one. See THE KIT-PIN FRESHNESS SWEEP below.
 #
+# AND IT SWEEPS EVERY RECEIVER THAT DECLARES A GENERATED VIEW SKILL ROOT FOR THE TARGET THAT
+# GENERATES IT (#1759). A fourth mandate, here for the same reason and one more: the subject is a
+# file in somebody else's repository, and the gate that would otherwise catch it CANNOT BE REACHED
+# FROM THAT REPOSITORY. `kit-materialize.yml` is a `uses:` of this repo's reusable workflow — it
+# checks the caller out and runs the materialize there, and a caller cannot add a step to a callee
+# (#1715 blocker B5). So a receiver that declares a view root and forgets the generate is not subtly
+# wrong: its next Renovate kit bump reds on a tree nobody touched, with no file it owns in which to
+# fix it. Seven receivers each hand-copied that target and nothing compared them until this sweep.
+# See THE VIEW-ROOT GENERATE SWEEP below.
+#
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
 # Exit:
 #   0 = every declared receiver is wired, and every coordination-kit receiver pins the published kit
 #   1 = at least one gap — a declared receiver is unwired, a repo adopted a capability it never
-#       rostered, a cross-repo sparse-checkout enumerates a file, or a coordination-kit receiver's
-#       FS.GG.Kit pin is behind the newest published one
+#       rostered, a cross-repo sparse-checkout enumerates a file, a coordination-kit receiver's
+#       FS.GG.Kit pin is behind the newest published one, or a receiver declares a view skill root
+#       that nothing generates before FsggKitCheckSkillView (#1759)
 #   2 = no verdict, RETRYABLE — receiver evidence could not be read (rate limit, auth, outage), the
-#       NuGet feed the kit pins are graded against could not be read, or the git TREE a cross-repo
-#       sparse-checkout fetches could not be read, so rule (4) did not run for it (#1556)
+#       NuGet feed the kit pins are graded against could not be read, the git TREE a cross-repo
+#       sparse-checkout fetches could not be read, so rule (4) did not run for it (#1556), or a
+#       receiver project would not read
 #   3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
 #       receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo
 #       sparse-checkout whose SHAPE the closure rule refuses to grade, a coordination-kit receiver
-#       whose FS.GG.Kit pin cannot be located or contradicts itself, or a bad invocation
+#       whose FS.GG.Kit pin cannot be located or contradicts itself, a view-root generate whose
+#       ORDERING against FsggKitCheckSkillView cannot be read (#1759), or a bad invocation
 #
 # "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
 # "I checked, and it's broken" (#320). The same argument applies one level in, which is why 2 and 3
@@ -228,7 +241,12 @@ KITPIN_FILE="$(mktemp)"
 # Where that sweep stages the pin-bearing files it fetched, so the verdict program can parse XML
 # instead of bash grepping it. One subdirectory per repo; see THE KIT-PIN FRESHNESS SWEEP.
 KITPIN_DIR="$(mktemp -d)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR"' EXIT
+# The view-root generate sweep's ledger (#1759), same line-oriented shape: `finding`, `refusal`,
+# `undetermined`, `ok`, `none`. It RIDES the kit-pin sweep's staging rather than fetching anything of
+# its own — the file it grades is `.config/kit/FS.GG.Kit.receiver.proj`, which that sweep already
+# stages for every package receiver. See THE VIEW-ROOT GENERATE SWEEP.
+VIEWGEN_FILE="$(mktemp)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -1444,6 +1462,178 @@ print("\n".join(out))
 PY
 )
 
+# --- THE VIEW-ROOT GENERATE SWEEP (#1759) --------------------------------------------------------
+#
+# WHAT IT ASSERTS. A receiver whose `.config/kit/FS.GG.Kit.receiver.proj` declares a non-empty
+# `<FsggKitViewSkillRoots>` also declares a target that GENERATES that view, ordered to run BEFORE
+# `FsggKitCheckSkillView`. A receiver that declares the root and not the generate reds HERE.
+#
+# WHY IT EXISTS, AND WHY IT IS THIS SCRIPT'S JOB. A view root is untracked and git-ignored by
+# construction (ADR-0067 §6), so it is ABSENT in every fresh checkout. `FsggKitCheckSkillView` runs
+# on every `FsggKitMaterialize`, and the kit does not establish its own precondition (#1710) — so
+# the generate is receiver-side wiring, hand-copied into seven repositories, with nothing comparing
+# them. Drop it from one receiver and NOTHING says so until that repo's next Renovate kit bump reds
+# on a tree nobody touched.
+#
+# THE GATE THAT WOULD OTHERWISE FIND IT CANNOT BE REACHED FROM THE RECEIVER. `kit-materialize.yml`
+# is a `uses:` of this repo's reusable workflow: it checks the CALLER out and runs the materialize
+# there, and a caller cannot add a step to a callee. That is blocker B5's shape (#1715) on a second
+# gate — the question #1759 was filed to answer. Measured 2026-07-28 on a bare clone of all seven
+# receivers' `main`: every one is GREEN, and green *because* each carries its own
+# `Fsgg<Repo>GenerateSkillView`. Delete that one target from a copy of the tree and the same command
+# reds with `view skill root '.agents/skills' is ABSENT or a DANGLING link`. So the affected set is
+# empty TODAY and is held empty by seven independent hand-copies — which is a fact about seven
+# commits, not an invariant, until something sweeps it. This is that something.
+#
+# NOT A SECOND OPINION ON THE MATERIALIZE. `FsggKitCheckSkillView` grades the view's CONTENT, in the
+# receiver's own CI, once that receiver pushes. This grades whether the receiver can ever reach that
+# assertion green from a cold checkout, from here, with no push from anybody — the same f(roster)
+# argument the kit-pin sweep is built on, one subject across.
+#
+# THE ACCEPTED SHAPE IS `BeforeTargets` NAMING THE ASSERTION, and a generate ordered some other way
+# is REFUSED rather than passed. All seven receivers spell it `BeforeTargets="FsggKitCheckSkillView"`
+# today. A target that runs `skill-view generate` under a different ordering may well be correct —
+# but `FsggKitCheckSkillView` is itself `AfterTargets="FsggKitMaterialize"`, so two sibling
+# `AfterTargets` run in declaration/import order and this sweep cannot say from the file alone which
+# wins. "I cannot grade this ordering" is not "this ordering is fine" (#266) and it is not "this
+# receiver forgot" (#320), so it gets the refusal code, exactly as an ungradeable pin does.
+#
+# A RECEIVER THAT DECLARES NO VIEW ROOT IS `none`, NEVER `ok`. It is outside this sweep's subject —
+# there is no view to generate — and counting it as a pass is how a sweep over an empty set comes to
+# print a clean bill. The terminal line below is conditional on somebody actually being graded.
+#
+# Argv: the staging dir and the kit-pin manifest (this sweep re-reads it; see the driver for why).
+# Stdout: tab-separated ledger records, one per line.
+VIEWGEN_PY=$(cat <<'PY'
+import os
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+RECEIVER_PROJ = ".config/kit/FS.GG.Kit.receiver.proj"
+ASSERT_TARGET = "FsggKitCheckSkillView"
+VIEW_PROP = "FsggKitViewSkillRoots"
+
+out = []
+
+
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
+
+
+def localname(tag):
+    # MSBuild files may or may not carry the 2003 namespace; both spellings are live in this org.
+    return tag.rsplit("}", 1)[-1]
+
+
+def names_in(attr):
+    """The target names in a Before/AfterTargets attribute — semicolon-separated, space-tolerant."""
+    return [n.strip() for n in (attr or "").split(";") if n.strip()]
+
+
+staging, manifest = sys.argv[1], sys.argv[2]
+
+# One row per package receiver, in roster order. The manifest carries every pin candidate; only the
+# receiver project can declare a view root, so the rest are skipped — but a repo that appears with
+# NO receiver-project row still needs a verdict, or a receiver that stopped shipping the file would
+# vanish from this sweep instead of being answered.
+seen, order, proj_of = set(), [], {}
+with open(manifest, encoding="utf-8") as fh:
+    for line in fh:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        repo, repopath, local = line.split("\t", 2)
+        if repo not in seen:
+            seen.add(repo)
+            order.append(repo)
+        if repopath == RECEIVER_PROJ and local != "-":
+            proj_of[repo] = os.path.join(staging, local)
+
+for repo in order:
+    local = proj_of.get(repo)
+    if local is None:
+        emit("none", repo,
+             f"ships no {RECEIVER_PROJ}, so it declares no view skill root and there is nothing to "
+             f"assert here. (Whether a coordination-kit package receiver SHOULD ship one is the "
+             f"kit-pin sweep's question, not this one.)")
+        continue
+    try:
+        with open(local, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        # A staged file we cannot decode is a file we did not really read. Retryable in the same
+        # sense as any other unread evidence, and emphatically not a verdict.
+        emit("undetermined", repo,
+             f"staged {RECEIVER_PROJ} unreadable: {type(e).__name__}: {e}")
+        continue
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as e:
+        emit("refusal", repo,
+             f"{RECEIVER_PROJ} is not parsable XML ({e}), so neither its view-root declaration nor "
+             f"its generate target could be read. Unparsable is not 'declares no view root'.")
+        continue
+
+    # The declaration. An EMPTY element is how a receiver says "no view root" — the kit's own
+    # `Condition` guards on the property being non-empty, so an empty one is not a declaration and
+    # must not be graded as one.
+    declared = []
+    for el in root.iter():
+        if localname(el.tag) != VIEW_PROP:
+            continue
+        declared.extend(r.strip() for r in (el.text or "").split(";") if r.strip())
+    if not declared:
+        emit("none", repo,
+             f"declares no non-empty <{VIEW_PROP}>, so it has no generated view root and this sweep "
+             f"asserts nothing about it. That is not a clean bill — see #1710 piece 2 for who owns "
+             f"a root LEAVING the contract.")
+        continue
+    roots = " ".join(declared)
+
+    ordered, unordered = [], []
+    for el in root.iter():
+        if localname(el.tag) != "Target":
+            continue
+        name = (el.get("Name") or "?").strip()
+        if ASSERT_TARGET in names_in(el.get("BeforeTargets")):
+            ordered.append(name)
+            continue
+        # Does it even claim to generate? Read the target's own text, so a target that merely
+        # mentions the tool in an attribute elsewhere is not counted as one that runs it.
+        body = " ".join(
+            " ".join(filter(None, [c.get("Command") or "", c.text or ""])) for c in el.iter()
+        )
+        if re.search(r"skill-view\b[^\n]*\bgenerate\b", body):
+            unordered.append(name)
+
+    if ordered:
+        emit("ok", repo,
+             f"declares <{VIEW_PROP}>{roots}</{VIEW_PROP}> and generates it in "
+             f"{', '.join(ordered)} (BeforeTargets={ASSERT_TARGET})")
+    elif unordered:
+        emit("refusal", repo,
+             f"declares <{VIEW_PROP}>{roots}</{VIEW_PROP}> and has a target that runs "
+             f"`skill-view generate` ({', '.join(unordered)}), but it is NOT ordered "
+             f"BeforeTargets={ASSERT_TARGET}. {ASSERT_TARGET} is itself AfterTargets=FsggKitMaterialize, "
+             f"so two sibling AfterTargets run in declaration order and this sweep cannot say from "
+             f"the file which wins. The ordering may be correct; nothing is asserted about it.")
+    else:
+        emit("finding", repo,
+             f"declares <{VIEW_PROP}>{roots}</{VIEW_PROP}> but NO target generates it before "
+             f"{ASSERT_TARGET}. A view root is untracked and git-ignored (ADR-0067 §6), so it is "
+             f"absent in every fresh checkout: `dotnet build {RECEIVER_PROJ} -t:FsggKitMaterialize` "
+             f"reds with \"view skill root is ABSENT or a DANGLING link\". That command is what this "
+             f"repo's next Renovate kit bump runs under kit-materialize.yml — a `uses:` of a "
+             f"reusable workflow, which checks this repo out and to which this repo CANNOT add a "
+             f"generate step (#1715 blocker B5, #1759). The fix is a target in {RECEIVER_PROJ}: "
+             f"<Target Name=\"Fsgg…GenerateSkillView\" BeforeTargets=\"{ASSERT_TARGET}\" "
+             f"Condition=\"'$({VIEW_PROP})' != ''\"> running `scripts/skill-view generate`.")
+
+print("\n".join(out))
+PY
+)
+
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
@@ -2077,6 +2267,54 @@ else
   fi
 fi
 
+# --- the view-root generate sweep (#1759) --------------------------------------------------------
+#
+# IT RIDES THE KIT-PIN STAGING AND FETCHES NOTHING. The file it grades —
+# `.config/kit/FS.GG.Kit.receiver.proj` — is already staged for every package receiver by the loop
+# above, so a second fetch loop would double this sweep's API cost against the rate limit this
+# script treats as its main adversary, to read bytes it already holds. It reads the same manifest
+# and skips the rows that are not the receiver project.
+#
+# THAT COUPLING IS DELIBERATE AND IT IS ALSO A CONSTRAINT: this sweep can only grade receivers the
+# kit-pin loop reached. A repo whose read failed there emitted its own `undetermined` and has no
+# manifest row here, so it is absent from BOTH counts rather than silently passing this one — which
+# is why the terminal line below reports its denominator instead of claiming the roster.
+viewgen_findings=0; viewgen_refusals=0; viewgen_undet=0; viewgen_ok=0; viewgen_none=0; viewgen_graded=0
+if [ "$kitpin_receivers" -eq 0 ]; then
+  echo "repos-audit: view-root generate (#1759) — no $KIT_CAP package receiver was staged, so this sweep graded nothing. NOTHING was asserted about whether a declared view root can be generated."
+else
+  python3 -c "$VIEWGEN_PY" "$KITPIN_DIR" "$KITPIN_DIR/manifest.tsv" >> "$VIEWGEN_FILE" \
+    || die "the view-root generate verdict program failed to run. That is not a clean sweep — no receiver's view-root wiring was graded."
+
+  viewgen_count() { grep -cE "^$1"$'\t' "$VIEWGEN_FILE" 2>/dev/null || true; }
+  viewgen_findings="$(viewgen_count finding)"
+  viewgen_refusals="$(viewgen_count refusal)"
+  viewgen_undet="$(viewgen_count undetermined)"
+  viewgen_ok="$(viewgen_count ok)"
+  viewgen_none="$(viewgen_count none)"
+
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      finding)      echo "::error::repos-audit: view-root generate — $a $b" ;;
+      refusal)      echo "::error::repos-audit: view-root generate REFUSED a shape it cannot grade — $a: $b" ;;
+      undetermined) echo "::error::repos-audit: view-root generate — $a: $b" ;;
+      ok)           echo "  ok: $a $b" ;;
+      none)         echo "  n/a: $a $b" ;;
+    esac
+  done < "$VIEWGEN_FILE"
+
+  # GRADED counts only the receivers that HAVE the subject. `none` is not a pass and must not pad
+  # this number: a roster where every receiver stopped declaring a view root would otherwise report
+  # "N of N" while asserting nothing at all, which is the sentence every sweep in this file exists
+  # to stop anyone writing.
+  viewgen_graded=$(( viewgen_ok + viewgen_findings + viewgen_refusals ))
+  if [ "$viewgen_graded" -eq 0 ]; then
+    echo "repos-audit: view-root generate (#1759) — none of the $kitpin_receivers staged $KIT_CAP package receiver(s) declares a non-empty <FsggKitViewSkillRoots>, so there is no view root to generate anywhere. NOTHING was asserted; that is not a clean bill."
+  else
+    echo "repos-audit: view-root generate (#1759) — graded $viewgen_graded of $kitpin_receivers staged $KIT_CAP package receiver(s) ($viewgen_none declare no view root, not graded): $viewgen_ok generate it before FsggKitCheckSkillView, $viewgen_findings do NOT, $viewgen_refusals refusal(s), $viewgen_undet undetermined. This is f(roster) — a receiver that drops its generate target is reported HERE, not discovered on its next Renovate kit bump."
+  fi
+fi
+
 # DELIBERATELY NOT folded into `$undetermined`. That counter's diagnostic says "could not determine
 # WIRING for N repo(s)", and an unreadable Directory.Packages.props is not a wiring question — the
 # per-capability lines a few rows up would be saying "0 undetermined" while the exit-2 message
@@ -2136,9 +2374,14 @@ fi
 # This is the RETRYABLE no-verdict, and the only exit 2 in this script: the subject exists and we
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
-if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ]; then
+if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
+   || [ "$viewgen_undet" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
+  # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
+  # receiver project is not a wiring question, and folding it into `$undetermined` would print
+  # "could not determine WIRING" about a file that answers a different question (#327/#335).
+  [ "$viewgen_undet" -eq 0 ] || echo "::error::repos-audit: could not read the receiver project of $viewgen_undet repo(s), so nothing was proven about whether their declared view skill root can be generated. This is a failure to READ, not a missing generate target." >&2
   # A rostered repository whose git TREE would not read (#1556). It joins the retryable no-verdicts on
   # the same argument the two above are made on: the subject exists, we failed to read it, and a later
   # run may well reach a verdict. It gets its own counter and sentence rather than being folded into
@@ -2178,6 +2421,16 @@ if [ "$kitpin_refusals" -ne 0 ]; then
   exit 3
 fi
 
+# A receiver whose view-root generate this sweep cannot ORDER joins the permanent no-verdicts on the
+# same argument again: the read succeeded, the file parsed, and the answer is still unknown — so it
+# is neither "generates it" (#266) nor "forgot it" (#320), and a re-run reproduces it exactly. The
+# remedy is a commit: either the receiver spells the ordering the way the other adopters do, or this
+# sweep learns to grade the ordering it uses.
+if [ "$viewgen_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $viewgen_refusals receiver(s) declare a view skill root and generate it in a way this sweep REFUSES to order against FsggKitCheckSkillView. Nothing was asserted about whether their next materialize can reach a generated view. Not transient: a re-run reproduces it. The annotations above name each one." >&2
+  exit 3
+fi
+
 # A gap and an unrostered adopter are one exit code because they are one CLASS: the audit ran to
 # completion and found the roster and the real wiring disagreeing. Both are deterministic, neither is
 # transient, and both are fixed by a commit — they differ only in WHICH side is wrong, and the
@@ -2194,11 +2447,20 @@ fi
 # commit in that receiver. It is a FINDING and not a no-verdict precisely because the sweep DID
 # reach an answer — which is the whole point of it existing here rather than waiting for the
 # receiver to push and discover it in its own `main`.
-if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ]; then
+#
+# A receiver that declares a view skill root and does not generate it joins them on the same
+# argument, a fourth subject across, and it is the reason #1759 exists: the audit ran to completion
+# and found a receiver whose next `FsggKitMaterialize` cannot see its own declared root. It is a
+# FINDING and not a no-verdict because the sweep DID reach an answer — from here, with no push from
+# that receiver — which is the whole point of grading it centrally rather than waiting for a
+# Renovate kit bump to red on a tree nobody touched.
+if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
+   || [ "$viewgen_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
+  [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
   exit 1
 fi
 # The terminal claim is CONDITIONAL on the sweep having graded somebody. A run that graded nobody
@@ -2208,4 +2470,12 @@ if [ "$kitpin_graded" -gt 0 ]; then
   echo "repos-audit: OK — every declared receiver is wired, and all $kitpin_graded graded $KIT_CAP receiver(s) pin the published FS.GG.Kit."
 else
   echo "repos-audit: OK — every declared receiver is wired. NO kit pin was graded, so nothing is claimed about kit freshness."
+fi
+# Its own line, on the same argument: a sweep that graded nobody has not earned a clean bill, and
+# folding this into the sentence above would let "every receiver pins the published kit" carry a
+# claim about view roots that no receiver was examined for.
+if [ "$viewgen_graded" -gt 0 ]; then
+  echo "repos-audit: OK — all $viewgen_graded receiver(s) that declare a view skill root generate it before FsggKitCheckSkillView."
+else
+  echo "repos-audit: OK — NO receiver's view-root generate was graded, so nothing is claimed about it."
 fi
