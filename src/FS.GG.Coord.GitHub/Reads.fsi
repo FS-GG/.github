@@ -322,14 +322,52 @@ module Reads =
     /// its branch name instead). It is distinct from a failed read, which is an `Error`.
     val prClosingRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<Ref option>
 
-    /// Every OPEN issue in a repo, with its body — the claim-scan candidate set.
+    /// One list element's body — READ, or NOT READ. The `TouchSet.Unreadable` distinction (#1150), carried
+    /// at the ELEMENT level because that is the granularity the anomaly has (.github#1794).
+    ///
+    /// `TouchSet.parse ""` answers `Undeclared`, and `TouchSet.conflicts` reads `Undeclared` as colliding
+    /// with nothing. So `""` is not a neutral placeholder here: it is the ASSERTION *"this issue declares
+    /// nothing"*. Asserting it about an element whose body was absent or ill-typed is the fail-open #1150
+    /// closed one function away — the row collides with nobody, and there is no CAS on a file.
+    type IssueBodyRead =
+        /// The body as GitHub served it. `"body": null` on an issue nobody described IS this: a real,
+        /// successfully-observed empty body, which `TouchSet.parse` correctly calls `Undeclared`. That
+        /// reading is CORRECT and deliberately preserved — the defect was never `null`, it was that a null
+        /// body and an unreadable one were the same value.
+        | BodyRead of body: string
+        /// No body we could read: the field was ABSENT, or present with a kind that is neither string nor
+        /// null. Emphatically not an empty body. Callers that gate on it must fail closed.
+        | BodyUnread of reason: string
+
+    /// One element of the open-issue list: an issue we could IDENTIFY, and what we could read of its body.
+    ///
+    /// There is no `OpenIssue` for an element with no numeric `number` — an element nobody can name has no
+    /// marker route (`Reads.markers` needs the number) and no ref to report, so it cannot be carried as an
+    /// unreadable entry. `openIssues` refuses the whole read instead. See its remarks.
+    type OpenIssue = { Number: int; Body: IssueBodyRead }
+
+    /// Every OPEN issue in a repo, with its body — the claim-scan candidate set, and (since .github#1779)
+    /// the #353 collision gate's.
     ///
     /// PAGINATED, AND UNCONDITIONAL. A lock has no hundred-issue limit: a first page read as the whole set
     /// is a claim scan that cannot see the markers past it, and would report those items free.
     ///
     /// The bodies ride along because they are free here — one list read serves both the marker scan and the
     /// touch-set extraction, where two reads per item would double the REST cost of the scheduling loop.
-    val openIssues: transport: IGitHubTransport -> owner: string -> repo: string -> IoResult<(int * string) list>
+    ///
+    /// **IT MANUFACTURES NO ANSWER OUT OF WHAT IT COULD NOT READ (.github#1794).** Two silent fabrications
+    /// used to live here, and both failed OPEN — the direction that costs a double-claim rather than a
+    /// retry:
+    ///
+    /// | the element | before | now |
+    /// |---|---|---|
+    /// | no numeric `number` | **dropped silently** — the issue vanished from the claim scan and its lock reserved nothing | `Error(Malformed …)`, naming the element's index and the array's length |
+    /// | `body` absent, or neither string nor null | `""` → `Undeclared` → *"declares nothing"* | `BodyUnread`, for the caller to fail closed on |
+    /// | `"body": null` | `""` → `Undeclared` | **unchanged** — a real, empty body, and it must stay that way |
+    ///
+    /// A pull request is still dropped, and that is not a silent drop: `pull_request` is a POSITIVE
+    /// identification of a thing that is not an item of work (#641), not a failure to identify anything.
+    val openIssues: transport: IGitHubTransport -> owner: string -> repo: string -> IoResult<OpenIssue list>
 
     /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
     /// serves the cached body for zero cost.
