@@ -4,6 +4,7 @@
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD, FS.GG.Rendering (the `fs-gg-ui` template), FS.GG.Templates (provider pin), `.github` (registry)
 - **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). Decision 1's root set is now TWO: `.claude/skills`, `.agents/skills`.** `.codex/skills` is **retired**; §Context's *"the generic agent convention"* was never a third runtime — `.agents/skills` is Codex's own second native root, re-measured on Codex CLI 0.145.0 for that change. The authoritative record of the flip is [ADR-0065](0065-one-agent-skill-root-contract.md) §Decision + §Retiring a root, which names the ordered set and how a root leaves it; this note does not restate the mechanism. **This record otherwise stays IN FORCE** — its five invariants (byte-identical union in every root; `fsgg-sdd` as sole mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, never symlinks) are untouched by the retirement and still govern, over a two-root set. §Context's symlink rejection is **re-affirmed**, on a new measurement (ADR-0067 §6).
+- **Amended by:** [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1 and §5 — **2026-07-28, and NOT executed: that record decides a contract and retires nothing** ([#1837](https://github.com/FS-GG/.github/issues/1837)). In a `coordination-kit` **receiver**, Decision 1's roots and Decision 2's materialized copies stop being **committed** paths: both are generated from the restored `FS.GG.Kit` package at each runtime's expected path. Decision 1's *union rule* is untouched and becomes structural rather than asserted — every root derives from one restored package, so there is no second copy for a first to diverge from. *"Copies, not symlinks"* is untouched and re-affirmed: generated content is real content, and §Context's symlink rejection was about a **committed** symlink degrading under `core.symlinks=false`. **This record otherwise stays IN FORCE**, and ADR-0070 reaches only the receiver lane — the scaffolded-product-workspace half of Decisions 1–4, including `fsgg-sdd` as sole mirror authority for scaffolded trees, is untouched.
 - **Amendment history — this note was 20 hours late, and that is recorded rather than tidied away ([#1703](https://github.com/FS-GG/.github/issues/1703)):** until 2026-07-28 the field above read *"direction only … its three-root union is still the rule today … nothing is retired until the phase that lands the replacement amends this record in the same change."* [#1690](https://github.com/FS-GG/.github/pull/1690) landed the retirement and amended [ADR-0065](0065-one-agent-skill-root-contract.md) and index rows 88/114/130 — but not this record — so that precondition went **unmet**, and this record went on telling every reader who opened it that three roots were the rule for a day after they were not. `adr-coherence` stayed green throughout: it gates amendment-link *symmetry*, and the link here was never one-sided. The leg that would have seen it (EXECUTION-STATE AGREEMENT, `scripts/check-adr-coherence.py`) lands with this amendment.
 
 ## Context
@@ -64,6 +65,16 @@ canonical body per skill in its producer and **materializing** the union.
    > precondition — amend this record in the same change — was **not** met by
    > [#1690](https://github.com/FS-GG/.github/pull/1690).
 
+   > **AMENDED 2026-07-28, IN A `coordination-kit` RECEIVER ONLY — [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1
+   > ([#1837](https://github.com/FS-GG/.github/issues/1837)), and it has NOT executed: that record
+   > decides a contract and retires nothing.** In a receiver, the declared roots stop being
+   > **committed** paths — both are generated from the restored `FS.GG.Kit` package, at the path each
+   > runtime already reads. **The union rule above is untouched and becomes structural rather than
+   > asserted:** every root derives from one restored package, so there is no second copy for
+   > a first to diverge from, and *"each root holds the byte-identical union"* stops being a fact a
+   > gate compares copies to establish. The enumeration is unchanged; a **scaffolded product
+   > workspace** is out of that record's scope entirely and this clause governs there as written.
+
 2. **`fsgg-sdd` is the sole mirror authority.** As the orchestrator (ADR-0008), the CLI —
    after invoking the provider — computes the union and **materializes real files** into
    all three roots. There is one canonical body per skill (embedded in its producer);
@@ -76,6 +87,15 @@ canonical body per skill in its producer and **materializing** the union.
    > now two. The clause's rule — one mirror authority, computed destinations, equal roots — is
    > untouched. The *mechanism* was already superseded by
    > [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) (see §Status).
+
+   > **AMENDED 2026-07-28, IN A `coordination-kit` RECEIVER ONLY — [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1
+   > and §5 ([#1837](https://github.com/FS-GG/.github/issues/1837)); NOT executed.** *"Materializes
+   > real files"* is untouched — and so is the rejection of symlinks, which §Context argues from a
+   > **committed** link checking out as a text file under `core.symlinks=false`. What changes in a
+   > receiver is only that the real files are no longer **tracked**: the authority writing them is the
+   > restored kit rather than a copy in the tree, and *"the shape/drift guard asserts the roots are
+   > equal"* is replaced by there being nothing to compare. A **scaffolded product workspace** keeps
+   > this clause as written, `fsgg-sdd` included.
 
 3. **Providers are confined to `.agents/skills/`.** A provider's product output for skills
    is `.agents/skills/` only; it MUST NOT write `.claude/skills/` or `.codex/skills/`. The

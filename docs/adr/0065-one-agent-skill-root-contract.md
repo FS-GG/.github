@@ -7,6 +7,7 @@
 - **Clarifies:** [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 1 and [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md): a skill is a directory transport unit, while runtime catalog exposure is a host policy over those materialized directories.
 - **Amended by:** [ADR-0067](0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5 — **EXECUTED 2026-07-28 ([#1636](https://github.com/FS-GG/.github/issues/1636)). The ordered root set is now TWO: `.claude/skills`, `.agents/skills`.** ADR-0067 decided the direction and explicitly said it decided *"the direction, not the flip"*; the flip was authorised on `#1636` by the maintainer on 2026-07-27 and lands with this amendment, in the same change, as ADR-0067's Consequences require. `.codex/skills` is retired. This record otherwise stays IN FORCE, and its transport contract — including the prohibition on deleting a mirror to hide a duplicate — is **unchanged and still governs**: see §Decision and §Retiring a root, which is what makes this an amendment rather than a violation of it. ADR-0067 §6's *generated view* is a separate, later mechanism and is **not** landed here; both roots remain committed copies today.
 - **Amended by:** [#1696](https://github.com/FS-GG/.github/issues/1696) — **2026-07-28, `FS.GG.Kit` 0.15.0.** A declared path now has **three** dispositions, not two: materialized, **view** (still a runtime root, content generated locally by `scripts/skill-view`), and retired. See §A root's three dispositions. The runtime root set is the union of the first two, so it is **unchanged** — nothing is retired by that amendment, `FsggKitViewSkillRoots` defaults empty, and §Retiring a root is untouched and still governs. **FIRST EXERCISED 2026-07-28 by [#1676](https://github.com/FS-GG/.github/issues/1676) on `FS.GG.Templates` ([#323](https://github.com/FS-GG/FS.GG.Templates/pull/323)) — one receiver, not the fleet.** §A root's three dispositions records what that first exercise measured, including the one thing the disposition does **not** carry on its own.
+- **Amended by:** [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1 and §5 — **2026-07-28, and NOT executed: that record decides a contract and retires nothing** ([#1837](https://github.com/FS-GG/.github/issues/1837)). In a `coordination-kit` **receiver**, the *materialized* disposition below stops implying a **tracked** path: the kit still writes real, content-addressed files, into a git-ignored root. The ordered root set, the transport contract, §Retiring a root, and the *view* and *retired* dispositions are all **unchanged and still govern**. Product materialization for scaffolded workspaces is outside that record's scope, and so is the rejection of a runtime package dependency for Rendering's standalone/offline scaffolds. See §A root's three dispositions.
 
 ## Context
 
@@ -103,6 +104,20 @@ materializer that created it is the thing that removes it.
 > decision that ADR-0067 §9 and
 > [the retirement order](../coordination/skill-apparatus-retirement-order.md) authorize, one receiver
 > at a time.
+
+> **AMENDED 2026-07-28, IN A `coordination-kit` RECEIVER ONLY — [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1
+> and §5 ([#1837](https://github.com/FS-GG/.github/issues/1837)), and it has NOT executed: that record
+> decides a contract and retires nothing.** The table below distinguishes the three dispositions by
+> **who puts content there**, and that column is unchanged. What ADR-0070 changes is a property the
+> table never named because until now it was the same for every row that had content: whether the path
+> is **tracked**. In a receiver, a *materialized* root becomes untracked and git-ignored — the kit
+> still writes real, content-addressed files into it, and every consumer of the root set still counts
+> it. **The runtime root set is unchanged, so this is not a retirement**, by the same reasoning that
+> made a view root not one. §Retiring a root, the transport contract and its prohibition on deleting a
+> mirror are untouched; product materialization for scaffolded workspaces is outside that record's
+> scope. What follows from it is that the kit's own content-addressed verification no longer has a
+> committed subject in a receiver, so **the whole of the guarantee moves onto ADR-0067 §8's assertion**
+> — the same promotion the paragraph on a view root's content already describes, applied to every root.
 
 §Retiring a root above draws the line between *hiding* a duplicate and *deciding* a root is
 unnecessary. A generated view is on neither side of it, and that is exactly why the transport contract
