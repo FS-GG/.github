@@ -26,9 +26,9 @@ WHAT CHANGED, AND WHY A LITERAL READING OF #1587 WOULD REFUSE EVERY BUMP
   MEASURED, not argued (#1693) — three receiver COPIES materialized against the published 0.15.0, one
   for each of the three places #1587 AC 4 says a receiver pins, with the real checkouts untouched:
 
-    FS.GG.Net        0.8.0  -> 0.15.0   35 paths: 1 pin (Directory.Packages.props),        9 M, 3 A, 23 D
-    FS.GG.SDD        0.10.0 -> 0.15.0   34 paths: 1 pin (Directory.Packages.local.props),  8 M, 3 A, 23 D
-    FS.GG.Templates  0.8.0  -> 0.15.0   35 paths: 1 pin (.config/kit/…receiver.proj),      9 M, 3 A, 23 D
+    FS.GG.Net        0.8.0  -> 0.15.0   35 paths = 1 pin (Directory.Packages.props)       + 8 M + 3 A + 23 D
+    FS.GG.SDD        0.10.0 -> 0.15.0   34 paths = 1 pin (Directory.Packages.local.props) + 7 M + 3 A + 23 D
+    FS.GG.Templates  0.8.0  -> 0.15.0   35 paths = 1 pin (.config/kit/…receiver.proj)     + 8 M + 3 A + 23 D
 
   Every one of those 23 deletions is under `.codex/skills`. Not one of them is inside
   `FsggKitSkillRoots`.
@@ -451,9 +451,13 @@ def main(argv: list[str]) -> int:
 
             verdicts = classify(shape, entries, pin_path)
             findings = [(s, p, why) for s, p, why in verdicts if why]
+            # The pin is counted as the pin and NOT as a materialized output. Folding it into the
+            # modified count makes the summary say "9 materialized outputs" for a diff carrying 8,
+            # and a summary a human is meant to check by hand must not be off by one.
             counts = {"A": 0, "M": 0, "D": 0}
-            for status, _path in entries:
-                counts[status] += 1
+            for status, path in entries:
+                if path != pin_path:
+                    counts[status] += 1
             verdict = {
                 "verdict": "mechanical" if not findings else "contaminated",
                 "target": shape.version,

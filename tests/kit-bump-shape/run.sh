@@ -164,6 +164,13 @@ case "$LEG_OUT" in
   *"mechanical FS.GG.Kit bump to 0.15.0"*) ok "  and says so by naming the target version" ;;
   *) bad "  the pass did not name the target version" "$LEG_OUT" ;;
 esac
+# The bump touches 9 paths: the pin, 4 modified and 4 added materialized outputs, 2 deletions. The
+# summary must count the pin AS the pin — a human checking it by hand against `git diff --stat` has
+# to be able to add the numbers up, and folding the pin into the modified count makes them not.
+case "$LEG_OUT" in
+  *"4 added / 4 modified"*) ok "  and counts the pin as the pin, not as a materialized output" ;;
+  *) bad "  the summary miscounts the pin among the materialized outputs" "$LEG_OUT" ;;
+esac
 
 # 2 — THE PREMISE CORRECTION ITSELF, as a negative control. The same diff, judged the way #1587 was
 # written (materialize targets = FsggKitSkillRoots, nothing else), is refused. If this leg ever goes
