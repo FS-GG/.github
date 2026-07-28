@@ -156,6 +156,48 @@ $OUT"
   && ok "#648: the real subject includes scripts/fsgg-coord — the kit is linted in the repo that owns it" \
   || bad "#648: the kit must be in the subject" "$(cd "$REPO_ROOT" && bash "$GATE" --list)"
 
+# ---- 8. THE KIT'S SOURCES MUST BE FOLLOWABLE FROM ANY CWD (.github#1718). -------------------------
+#      `scripts/skill-view` is a kit-materialized file: registry/repos.yml ships it, and its two
+#      `lib/` rows, to all seven `coordination-kit` receivers. It `source`s both at startup through
+#      RELATIVE `# shellcheck source=...` pragmas, which resolve against the LINTER's working
+#      directory unless the file also carries a file-scoped `# shellcheck source-path=SCRIPTDIR`.
+#      Without that line, `shellcheck -x scripts/skill-view` from the repo root lints it with BOTH
+#      libraries unread and emits SC1091 — which is what reddened FS.GG.Game's 0.15.0 kit bump
+#      (Game#514, run 30321396512), in a file no receiver is allowed to repair in its own tree.
+#
+#      A RECEIVER FOUND THIS, NOT US, and the reason is structural: `lint-shell.sh` runs at
+#      `-S warning`, and SC1091 is an `info`, so the gate that owns this repo's shell is blind to it
+#      by construction. Raising that floor is .github#1719 and is deliberately NOT done here — this
+#      leg buys the ONE property #1718 paid for, at `-S info`, without moving any gate's severity.
+#
+#      TWO CWDs, because "resolves from any working directory" is the whole property. A pragma placed
+#      next to the `source` lines instead of at file scope binds to the next command only and clears
+#      exactly one of the two findings, so a single-cwd smoke test would not notice the difference.
+KIT_SHELL="scripts/skill-view"
+sc1091() { (cd "$1" && "$SHELLCHECK" -x -S info -f gcc "$2" 2>&1 | grep -c 'SC1091' || true); }
+
+for cwd_label in "$REPO_ROOT:$KIT_SHELL" "/:$REPO_ROOT/$KIT_SHELL"; do
+  cwd="${cwd_label%%:*}"; target="${cwd_label#*:}"
+  n="$(sc1091 "$cwd" "$target")"
+  [ "$n" = 0 ] \
+    && ok "#1718: $KIT_SHELL has no SC1091 with cwd='$cwd' (its sources are followable)" \
+    || bad "#1718: $KIT_SHELL emitted $n SC1091 finding(s) from cwd='$cwd' — the file-scoped '# shellcheck source-path=SCRIPTDIR' is missing or has been moved below the first command. A receiver's shell gate reds on this and CANNOT fix it locally: the file is kit-materialized." \
+       "$(cd "$cwd" && "$SHELLCHECK" -x -S info -f gcc "$target" 2>&1)"
+done
+
+# ...and THE LEG CAN SAY NO. Strip the directive from a copy and the findings must come back — both
+# of them. Without this, leg 8 above is a green that would also be green if shellcheck had stopped
+# reporting SC1091 altogether, which is epic #266 one level up.
+d="$WORK/sc1091-control"
+mkdir -p "$d/scripts/lib"
+grep -v '^# shellcheck source-path=SCRIPTDIR$' "$REPO_ROOT/$KIT_SHELL" > "$d/$KIT_SHELL"
+cp "$REPO_ROOT"/scripts/lib/args.sh "$REPO_ROOT"/scripts/lib/roots.sh "$d/scripts/lib/"
+n="$(sc1091 "$d" "$KIT_SHELL")"
+[ "$n" = 2 ] \
+  && ok "#1718: ...and REMOVING the directive brings both SC1091 findings back (control: $n)" \
+  || bad "#1718: the control must reproduce exactly 2 SC1091 findings without the directive, got $n — this leg is no longer measuring what it claims" \
+     "$(cd "$d" && "$SHELLCHECK" -x -S info -f gcc "$KIT_SHELL" 2>&1)"
+
 echo
 echo "shell-lint fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
