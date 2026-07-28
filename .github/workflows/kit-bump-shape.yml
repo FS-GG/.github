@@ -1,0 +1,61 @@
+# kit-bump-shape — is an FS.GG.Kit bump PR the mechanical, automergeable shape?
+#
+# .github#1693, a premise correction for #1587. #1587 makes automerge safe by proving the class of
+# change per-PR instead of trusting the author: a bump may touch only the pin and what the
+# materializer produces. It measured that class against a world that ended when 0.14.0 retired
+# `.codex/skills` (#1636) and 0.15.0 added a view-root disposition (#1696) — after which every
+# receiver's bump carries DELETIONS under roots that are not in `FsggKitSkillRoots`, and a guard
+# reading only that property refuses the one bump that carries the retirement, on all seven.
+#
+# THIS WORKFLOW IS THE GATE'S OWN FIXTURE, NOT THE RECEIVER-SIDE CHECK. The verdict belongs on a
+# receiver's bump PR, where the diff and the restored target package both exist; arming it there is
+# #1587's remaining work (its ungated job, and #1613's branch-protection writer to make it REQUIRED
+# in the seven receivers). What this repo can prove — and what #1587 AC 2 and #1693 AC 2/3 ask for
+# in as many words — is that the rule admits the measured shape and REFUSES a contaminated one.
+# That is decidable here, offline, and is what runs below.
+#
+# No `schedule:`: the subject is entirely in this tree, so nothing can stale it between pushes.
+name: kit-bump-shape
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-kit-bump-shape.py"
+      - "tests/kit-bump-shape/**"
+      - ".github/workflows/kit-bump-shape.yml"
+      - "src/FS.GG.Kit/build/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-kit-bump-shape.py"
+      - "tests/kit-bump-shape/**"
+      - ".github/workflows/kit-bump-shape.yml"
+      - "src/FS.GG.Kit/build/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kit-bump-shape-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # `src/FS.GG.Kit/build/**` is in the filter because the admissible class is a DERIVATION of what
+  # `FS.GG.Kit.targets` does — the managed-skill-directory sweep, the retired-root sweep, and the
+  # view-root sweep. A change to the materializer that adds a fourth thing it can write or remove
+  # makes this gate's answer wrong without touching either file it lives in, so it re-runs here.
+  fixture:
+    name: Prove the shape rule admits the measured bump and refuses a contaminated one
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      # No pip install and no dotnet: the gate is stdlib-only and its three inputs are files. A
+      # guard that needed a restore to decide a diff's shape would be a guard that fails open on a
+      # runner with no network.
+      - name: Run the kit-bump-shape fixture (no network, no dotnet)
+        run: bash tests/kit-bump-shape/run.sh
