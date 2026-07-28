@@ -278,8 +278,10 @@ Two consequences worth knowing before you touch either end:
 
 * **`release-kit.yml` will not publish a version that has no `kit/v<version>` tag on the commit being
   packed.** The tag used to be a way of *triggering* a release; it is now a *precondition* of one,
-  because it is what the fleet resolves a rule from. Two historical versions (0.1.0 and 0.4.0) were
-  published without one; a bump PR targeting either can only be refused.
+  because it is what the fleet resolves a rule from. That holds going forward only: the tag is still
+  a mutable ref, and two historical versions (0.1.0 and 0.4.0) were published without one, so a bump
+  PR targeting either can only be refused. [#1784](https://github.com/FS-GG/.github/issues/1784) is
+  the coherence check and the tag protection that close it.
 * **Every failure on this path is a refusal, never a pass** — an unparseable version, a missing tag,
   or a kit release older than the rule itself. It never falls back to `main`, which is the entire
   point.
@@ -309,10 +311,16 @@ So the sequence is fixed, and each step's evidence is named:
    it converts every hub commit into a potential receiver outage (ADR-0067 §2,
    [#1584](https://github.com/FS-GG/.github/issues/1584)). This is a *second* precondition on the same
    step, and it is separate from step 1: a producer can report perfectly and still be unarmable.
-   For `materialize / kit-bump-shape` it is discharged — the rule is fetched at the commit the
+   For `materialize / kit-bump-shape` the **rule** is discharged — it is fetched at the commit the
    receiver's own pin names (above), and `tests/kit-bump-shape/run.sh` fails if any foreign checkout
-   in that job takes a literal ref. **Do not arm a context whose producer has no equivalent
-   assertion.** "It looks pinned" is the state `kit-bump-shape` was in for the whole of #1713.
+   in that job takes a literal ref. The **workflow around it is not**: receivers call it as
+   `kit-materialize.yml@main`, so its probe, its version grammar, its tag scheme and its exit-code
+   mapping still move with the hub. That is a far smaller surface than a 678-line rule, and every
+   line of it is now a #266 decision rather than a verdict — but it is not zero, and anyone arming
+   this must decide whether it is small enough. Closing it means receivers pinning the reusable
+   workflow at a sha, which is a fleet-wide change.
+   **Do not arm a context whose producer has no equivalent assertion at all.** "It looks pinned" is
+   the state `kit-bump-shape` was in for the whole of #1713.
 5. **Only then** consider `--apply` — and run the dry run first, which needs only
    `administration: read` and is what proves step 1 actually happened.
 

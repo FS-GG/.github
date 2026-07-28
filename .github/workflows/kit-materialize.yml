@@ -70,10 +70,23 @@
 #     that version                    ->  the immutable hub tag `kit/v<version>` (release-kit.yml)
 #     that tag                        ->  peeled to a 40-hex COMMIT, and the rule is checked out THERE
 #
-# The verdict therefore moves only when the receiver's own tree moves. Re-running a week later, after
-# any number of hub commits, reproduces it byte for byte. `release-kit.yml` refuses to publish a
-# version that has no matching tag on the published commit, so "the pin names a real, immutable hub
-# commit" is an invariant that gate keeps rather than a hope this one holds.
+# `release-kit.yml` refuses to publish a version that has no matching tag on the published commit, so
+# "the pin names a real, immutable hub commit" is an invariant that gate keeps rather than a hope this
+# one holds — forward. The tag is still MUTABLE and two already-published versions (0.1.0, 0.4.0)
+# have none; #1784 is the coherence check and the tag protection that close that.
+#
+# WHAT IS STILL NOT PINNED, SAID PLAINLY (#1783). THE RULE is pinned; THIS FILE is not. Receivers
+# call it as `kit-materialize.yml@main`, so the probe below, the `x.y.z` grammar, the tag scheme and
+# the exit-code -> conclusion mapping all still move with the hub. Editing THOSE can still flip a
+# receiver's report with no change to the receiver — a smaller surface than a 678-line rule, and one
+# whose every line is now a #266 decision rather than a verdict, but not zero. Do not read this
+# header as "the reporter is a pure function of the receiver": it says the RULE is. Closing the rest
+# means receivers pinning this workflow at a sha, which is a fleet-wide change and is #1783.
+#
+# One consequence is load-bearing enough to state here, because it is the trap that shape sets: the
+# pinned rule may be OLDER than this file. An argument this file passes that the pinned rule does not
+# accept makes `argparse` exit 2 — the same code as an abstention. The verdict step therefore demands
+# the word ABSTAINS before it believes one; see there.
 #
 # AND IT NEVER GUESSES. A version that is not a bare `x.y.z`, a tag that does not exist, or a tagged
 # release that predates the rule are all REFUSALS that name the remedy (#266) — never an abstention,
@@ -165,28 +178,41 @@ jobs:
       # could ask this. The rule cannot answer it here any more, because WHICH rule to run is itself
       # decided by the restore below — so this pass asks the one question that needs no rule:
       #
-      #   does any changed line in this diff so much as MENTION the package?
+      #   could the rule possibly reach a verdict on this diff?
       #
-      # SOUND BY CONSTRUCTION, and that is the whole argument. The rule finds the pin by its content:
-      # a pin file is one with a changed line matching `Include\s*=\s*"FS.GG.Kit"` (check-kit-bump-shape.py
-      # `PIN_INCLUDE`). Every such line contains the literal below, so a diff with NO changed line
-      # containing it has no pin file, and the rule's own answer would be exit 2 — abstain. This test is
-      # therefore a strict SUPERSET of "the pin moved": it can send a pull request on to pay for a
-      # restore that then abstains, and it can NEVER suppress a verdict the rule would have reached.
-      # That direction is the #266-safe one, and `tests/kit-bump-shape/run.sh` proves it over the
-      # fixture corpus rather than asserting it here.
+      # SOUND BY CONSTRUCTION, and that is the whole argument — this must be a strict SUPERSET of
+      # "the rule does not abstain", or a bump would silently report an abstention (#266). The rule
+      # declines to abstain for exactly two reasons, and both are asked here:
       #
-      # ONE LITERAL is restated from the rule — the package id, `PACKAGE` in check-kit-bump-shape.py,
-      # a NAME and not a piece of logic. The fixture asserts the two are the same string, so they
-      # cannot drift.
-      - name: Does this pull request touch the FS.GG.Kit pin at all?
+      #   1. IT FOUND A PIN FILE — a changed line matching `Include\s*=\s*"FS.GG.Kit"`
+      #      (check-kit-bump-shape.py `PIN_INCLUDE`). The ERE below is that same pattern, and the
+      #      fixture DERIVES the expected spelling from the Python source and fails if they diverge,
+      #      so this is a translation of the rule's own predicate rather than a second opinion.
+      #   2. IT REFUSED ON THE DIFF'S SHAPE — `changed_paths()` refuses any status outside A/M/D
+      #      (a typechange, a copy, an unmerged path), and that needs no kit content at all. Asked
+      #      separately below, because a `T`-status pull request that mentions nothing kit-related
+      #      would otherwise abstain here where the rule refuses — turning a red into a green.
+      #
+      # Over-triggering is free and safe: a diff that satisfies either test but that the rule then
+      # abstains on gets the rule's own abstention, which reds nothing. Under-triggering is the
+      # fail-open, and it is what the two questions above exist to make impossible.
+      - name: Could the rule reach a verdict on this diff?
         id: probe
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -uo pipefail
-          PACKAGE='FS.GG.Kit'
+          # check-kit-bump-shape.py PIN_INCLUDE, as an ERE (`\s` -> `[[:space:]]`). Kept honest by
+          # tests/kit-bump-shape/run.sh, which builds this string FROM the Python and compares.
+          PIN_INCLUDE='Include[[:space:]]*=[[:space:]]*"FS\.GG\.Kit"'
+          if [ -z "$BASE" ] || [ -z "$HEAD" ]; then
+            { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
+              echo "This job had no pull-request base/head to diff. It reports on pull requests and"
+              echo "cannot say anything about any other event. This is not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::kit-bump-shape: no pull-request base/head; refusing rather than abstaining." >&2
+            exit 1
+          fi
           if ! diff_out="$(git diff -U0 --no-renames "$BASE...$HEAD" 2>&1)"; then
             { echo "### kit-bump-shape: REFUSED — no verdict could be reached"; echo
               echo "The diff \`$BASE...$HEAD\` could not be read, so this job cannot tell a kit bump"
@@ -197,19 +223,26 @@ jobs:
           fi
           # COUNTED, NOT `grep -q`. `-q` exits on the first match and closes the pipe, which SIGPIPEs
           # the greps upstream of it — and under `pipefail` that 141 becomes the pipeline's status, so
-          # a diff that DID mention the package would read as "no match" and abstain. A fail-open that
-          # fires only on large diffs is the worst kind (#266). `-c` consumes its whole input.
+          # a diff that DID match would read as "no match" and abstain. A fail-open that fires only on
+          # large diffs is the worst kind (#266). `-c` consumes its whole input.
           hits="$(printf '%s\n' "$diff_out" \
-                    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -cF "$PACKAGE")" || hits=0
-          if [ "${hits:-0}" -gt 0 ]; then
+                    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -cE "$PIN_INCLUDE")" || hits=0
+          # The rule's other non-abstention: a diff status it refuses on. -z so a newline in a path
+          # cannot forge a status field; --no-renames so R/C never appear for that reason alone.
+          exotic="$(git diff --name-status -z --no-renames "$BASE...$HEAD" \
+                      | tr '\0' '\n' | awk 'NR%2==1' | grep -cvE '^[AMD]$')" || exotic=0
+          if [ "${hits:-0}" -gt 0 ] || [ "${exotic:-0}" -gt 0 ]; then
             echo "moved=true" >> "$GITHUB_OUTPUT"
-            echo "A changed line mentions $PACKAGE — resolving the pinned rule and judging the shape."
+            echo "pin-declaration lines changed: $hits; diff entries outside A/M/D: $exotic."
+            echo "Resolving the pinned rule and letting it decide."
           else
             echo "moved=false" >> "$GITHUB_OUTPUT"
-            { echo "### kit-bump-shape: abstains — no changed line mentions $PACKAGE (this is not a pass)"; echo
-              echo "No line added or removed by this pull request declares an \`$PACKAGE\` version, so no"
-              echo "pin moved and there is no bump to judge. Abstention is not a pass: nothing here says"
-              echo "this pull request is mergeable, only that this reporter has nothing to say about it."
+            { echo "### kit-bump-shape: abstains — no FS.GG.Kit pin declaration changed (this is not a pass)"; echo
+              echo "No line added or removed by this pull request declares an \`FS.GG.Kit\` package"
+              echo "version, and every entry in the diff is a plain add/modify/delete — so no pin moved"
+              echo "and there is nothing here the shape rule could reach a verdict on. Abstention is not"
+              echo "a pass: nothing here says this pull request is mergeable, only that this reporter has"
+              echo "nothing to say about it."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -236,6 +269,14 @@ jobs:
           version="$(jq -r '.libraries | keys[] | select(startswith("FS.GG.Kit/"))' "$assets" | cut -d/ -f2)"
           folder="$(jq -r '.packageFolders | keys[0]' "$assets")"
           [ -n "$version" ] && [ -n "$folder" ] || { echo "::error::kit-bump-shape: $assets names no restored FS.GG.Kit." >&2; exit 1; }
+          # BOTH ARE PULL-REQUEST-CONTROLLED — `folder` is the receiver's own `globalPackagesFolder`,
+          # which a fork's `nuget.config` chooses and XML lets carry a literal newline (`&#xA;`). A
+          # multi-line value written with a plain `echo` forges extra `key=value` lines into this
+          # step's outputs. Reject anything that is not a single plain line before writing either.
+          case "$version$folder" in
+            *"$(printf '\n')"*|*"$(printf '\r')"*)
+              echo "::error::kit-bump-shape: the restored package version or folder spans more than one line; refusing to write it as a step output." >&2; exit 1 ;;
+          esac
           echo "kit-dir=${folder%/}/fs.gg.kit/${version}" >> "$GITHUB_OUTPUT"
           # THE PIN, as the receiver itself resolved it — this is what selects the rule below.
           echo "kit-version=${version}" >> "$GITHUB_OUTPUT"
@@ -345,12 +386,20 @@ jobs:
             0) headline="mechanical — pin plus materializer output only; no human need read this bump" ;;
             4) headline="mechanical + receiver-side repair — read ONLY the receiver-authored files named below" ;;
             1) headline="NOT mechanical — this bump changes kit territory in a way the materializer would not; read it in full" ;;
-            # REACHABLE HERE since #1772, and it must not red. Pass one is a strict superset of "the
-            # pin moved" — it sends on any diff that MENTIONS the package — so a pull request that
-            # merely edits a comment naming FS.GG.Kit pays for a restore and then gets the rule's own
-            # abstention. That is the same non-verdict pass one reports for free, and it reds nothing
-            # there either; a reporter that failed a pull request for not being a bump would be noise.
-            2) headline="abstains — no FS.GG.Kit pin change (this is not a pass)" ;;
+            # REACHABLE HERE since #1772, and it must not red — pass one is a strict superset, so a
+            # pull request it sent on may still be nothing the rule has an opinion about, and that is
+            # the same non-verdict pass one reports for free.
+            #
+            # BUT EXIT 2 IS ALSO WHAT `argparse` EXITS ON A BAD COMMAND LINE, and the rule is pinned
+            # while THIS FILE tracks the hub's `main` — so the day someone adds a flag here, every
+            # receiver on an older `kit/v*` runs a rule that rejects the argv and exits 2. Mapping
+            # that to "abstains" would report a green non-verdict for a rule that never ran: #266
+            # exactly. An abstention says so in words; a usage error does not. Demand the word.
+            2) case "$out" in
+                 *ABSTAINS*) headline="abstains — no FS.GG.Kit pin change (this is not a pass)" ;;
+                 *) headline="REFUSED — the pinned rule exited 2 without abstaining, which is what argparse does when it rejects a command line. The rule at this receiver's pin does not accept the arguments this workflow passes. This is not a pass"
+                    rc=3 ;;
+               esac ;;
             3) headline="REFUSED — no verdict could be reached. This is not a pass and not a failure of the bump" ;;
             *) headline="unknown verdict code $rc" ;;
           esac

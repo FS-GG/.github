@@ -126,7 +126,7 @@ jobs:
             tagged="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" \
                         "refs/tags/$tag" "refs/tags/$tag^{}" \
                       | awk -v p="refs/tags/$tag^{}" -v b="refs/tags/$tag" \
-                          '$2==p {peeled=$1} $2==b {plain=$1} END {print (peeled ? peeled : plain)}')"
+                          '$2==p {peeled=$1} $2==b {plain=$1} END {print (length(peeled) ? peeled : plain)}')"
             if [ -z "$tagged" ]; then
               echo "::error::refusing to publish FS.GG.Kit $version: no tag $tag exists. Every published version must name an immutable hub commit (.github#1772) — the kit-bump-shape reporter resolves its rule from kit/v<pin>. Push the tag instead: \`git tag $tag $GITHUB_SHA && git push origin $tag\` (which also releases)."
               exit 1

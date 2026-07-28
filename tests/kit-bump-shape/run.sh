@@ -544,11 +544,42 @@ if want == "name":
     print(got[0] if got else "bump-shape")
 elif want == "gate":
     print("gated" if any(l.startswith("    if:") for l in block) else "ungated")
-elif want == "package":
-    # The ONE literal pass one restates from the rule: the package id. Leg 33 asserts it matches.
-    got = [l.split("=", 1)[1].strip().strip("\x27\x22") for l in block
-           if l.strip().startswith("PACKAGE=")]
+elif want == "pin-include":
+    # The ERE pass one greps with. Leg 33 builds the expected value from PIN_INCLUDE in the rule
+    # itself and compares, so this is a translation of the rule, not a second opinion about pins.
+    # Only the shell quotes come off — the ERE itself ENDS in a double quote, and stripping that
+    # would compare a truncated pattern and pass on one that is not the rule.
+    got = [l.split("=", 1)[1].strip().strip("\x27") for l in block
+           if l.strip().startswith("PIN_INCLUDE=")]
     print(got[0] if got else "")
+elif want == "probe-script":
+    # The `run:` body of the step whose id is `probe`, dedented into a runnable script. The legs
+    # below EXECUTE this rather than re-implementing it: a fixture that mirrors the shell it is
+    # testing proves the mirror, and every drift between the two is invisible by construction.
+    out, inside, taking = [], False, False
+    for l in block:
+        if l.startswith("      - "):
+            inside, taking = False, False
+        if l.strip() == "id: probe":
+            inside = True
+        if inside and l.startswith("        run: |"):
+            taking = True
+            continue
+        if taking:
+            if l.strip() and not l.startswith("          "):
+                taking = False
+                continue
+            out.append(l[10:] if l.startswith("          ") else l)
+    sys.stdout.write("".join(out))
+elif want == "raw":
+    # Code only. A `#` line is a comment in both YAML and the shell bodies, and this file discusses
+    # the very constructs leg 38 forbids — matching prose would make the leg unpassable.
+    sys.stdout.write("".join(l for l in block if not l.lstrip().startswith("#")))
+elif want == "abstain-arm":
+    # The `2)` arm of the exit-code mapping in the verdict step, flattened. Leg 37 asserts it does
+    # not believe a bare exit 2 — which is also what argparse exits when it rejects a command line.
+    print(" ".join(l.strip() for l in block).split("2) case")[-1].split(";;")[0]
+          if "2) case" in " ".join(l.strip() for l in block) else "")
 elif want == "foreign-checkouts":
     # Every step that checks out ANOTHER repository, as `<repository>|<ref>`. `with:` sits at 8
     # spaces inside a step, so its keys sit at 10; a step begins at 6. One line per such step, so
@@ -650,21 +681,44 @@ EOF
   fi
 fi
 
-# 33 — pass one restates exactly ONE thing from the rule: the package id. Not a regex, not a pin
-# location, not a verdict — a NAME. This asserts the two spellings are the same string, so the cheap
-# probe cannot drift away from the rule it is a superset of.
-WF_PACKAGE="$(python3 -c "$JOBREAD" "$WF" package)"
-RULE_PACKAGE="$(python3 - "$GATE" <<'PY'
+# 33 — pass one's pin test is the RULE's pin test, mechanically. The expected ERE is DERIVED here
+# from `PIN_INCLUDE` in check-kit-bump-shape.py by the one documented translation (`\s` ->
+# `[[:space:]]`), so the workflow cannot quietly narrow the predicate it is supposed to be a superset
+# of. Editing either side without the other fails this leg.
+WF_PIN="$(python3 -c "$JOBREAD" "$WF" pin-include)"
+RULE_PIN="$(python3 - "$GATE" <<'PY'
 import io, re, sys
-m = re.search(r'^PACKAGE\s*=\s*"([^"]+)"', io.open(sys.argv[1], encoding="utf-8").read(), re.M)
-print(m.group(1) if m else "")
+m = re.search(r"^PIN_INCLUDE\s*=\s*re\.compile\(r'(.*)'\)", io.open(sys.argv[1], encoding="utf-8").read(), re.M)
+print(m.group(1).replace(r"\s", "[[:space:]]") if m else "")
 PY
 )"
-if [ -n "$WF_PACKAGE" ] && [ "$WF_PACKAGE" = "$RULE_PACKAGE" ]; then
-  ok "pass one's package literal ('$WF_PACKAGE') is the rule's own PACKAGE constant"
+if [ -n "$WF_PIN" ] && [ "$WF_PIN" = "$RULE_PIN" ]; then
+  ok "pass one greps the rule's own PIN_INCLUDE, translated to an ERE ('$WF_PIN')"
 else
-  bad "pass one greps for '$WF_PACKAGE' but the rule's PACKAGE is '$RULE_PACKAGE' — the cheap probe and the rule disagree about what a kit bump even mentions"
+  bad "pass one greps '$WF_PIN' but the rule's PIN_INCLUDE translates to '$RULE_PIN' — the cheap probe and the rule disagree about what a pin declaration IS"
 fi
+
+# 37 — and the verdict step must not believe a bare exit 2. The rule is PINNED and this workflow is
+# not, so the pinned rule can be older than the argv this file passes it — and `argparse` exits 2 on
+# a command line it rejects, the same code as an abstention. Mapping that to "abstains" would report
+# a green non-verdict for a rule that never ran. The arm must demand the word.
+# 38 — and no leg of this job may use `grep -q`. Every grep here sits at the end of a pipeline under
+# `set -o pipefail`: `-q` exits on the first match and closes the pipe, SIGPIPEing the greps upstream,
+# and that 141 becomes the pipeline status — so a diff that DID match reads as no-match and the job
+# abstains. It is a fail-open that only fires on inputs large enough to fill a pipe buffer, which is
+# to say on real bump PRs and never in a fixture. `-c` consumes its whole input; use it.
+qgreps="$(python3 -c "$JOBREAD" "$WF" raw | grep -cE 'grep +-[a-zA-Z]*q')" || qgreps=0
+if [ "${qgreps:-0}" -eq 0 ]; then
+  ok "  and no step in the job uses 'grep -q' — under pipefail that SIGPIPEs its own pipeline (#266)"
+else
+  bad "  $qgreps step(s) use 'grep -q' — under pipefail the SIGPIPE it causes upstream becomes the pipeline's status, so a matching diff reads as no-match and the job abstains"
+fi
+
+ABSTAIN_ARM="$(python3 -c "$JOBREAD" "$WF" abstain-arm)"
+case "$ABSTAIN_ARM" in
+  *ABSTAINS*) ok "  and a bare exit 2 is not believed to be an abstention unless the rule says ABSTAINS (argparse exits 2 too)" ;;
+  *) bad "  the verdict step maps exit 2 straight to 'abstains' — but argparse exits 2 when it REJECTS the command line, so a pinned rule that does not accept this workflow's arguments would report a green non-verdict (#266)" ;;
+esac
 
 # 34/35 — THE SOUNDNESS OF THE CHEAP PATH, measured rather than argued. Pass one decides from a git
 # diff alone whether to pay for an SDK, a restore and a pinned checkout, and it must never suppress a
@@ -677,19 +731,37 @@ fi
 # code, so it is checked here against real diffs — including the two measured bump shapes this file
 # already builds. The converse is deliberately NOT asserted: pass one is a strict superset, and a
 # diff that merely mentions the package may be sent on to abstain at the rule's own hands.
-prefilter() { # $1 = repo dir; exit 0 iff the workflow's pass one would send this diff on
-  # `grep -cF`, mirroring the workflow: `-q` would close the pipe on the first match and SIGPIPE the
-  # greps feeding it, which `pipefail` (set at the top of this file, and in the workflow step) turns
-  # into a non-match. Same fail-open, same fix, both sides.
-  local hits
-  hits="$(git -C "$1" diff -U0 --no-renames base...HEAD \
-            | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -cF "$WF_PACKAGE")" || hits=0
-  [ "${hits:-0}" -gt 0 ]
+# THE WORKFLOW'S OWN PROBE, EXECUTED — not a re-implementation of it. Extracted from the `run:` body
+# of the `probe` step and driven with the two environment variables the workflow env-passes it, so
+# every leg below tests the shell that actually runs in seven repositories. A mirror would only ever
+# prove the mirror: the first draft of this file had one, and deleting a whole question from the real
+# probe left all of its legs green.
+PROBE_SH="$WORK/probe.sh"
+python3 -c "$JOBREAD" "$WF" probe-script > "$PROBE_SH"
+if [ -s "$PROBE_SH" ] && grep -q 'GITHUB_OUTPUT' "$PROBE_SH"; then
+  ok "the bump-shape probe step's shell was extracted and is what the legs below run"
+else
+  bad "could not extract the bump-shape probe step's shell from $WF — the legs below would prove nothing"
+fi
+prefilter() { # $1 = repo dir; exit 0 iff the workflow's own pass one would send this diff on
+  local d="$1" out="$WORK/probe-out"
+  : > "$out"
+  ( cd "$d" && BASE=base HEAD=HEAD GITHUB_OUTPUT="$out" GITHUB_STEP_SUMMARY=/dev/null \
+      bash "$PROBE_SH" ) >/dev/null 2>&1
+  grep -q '^moved=true$' "$out"
 }
-check_prefilter() { # $1 = repo dir, $2 = description
-  local d="$1" what="$2" rc=0
+# The rule's verdict on the SAME diff, with the package and properties a receiver-side pass two
+# would have — so the corpus below exercises real verdicts (0/1/4), not just the exit 3 that a
+# package-less call always returns. Without that this whole section would assert the superset
+# property only against refusals, which is the weakest case it has.
+check_prefilter() { # $1 = repo dir, $2 = description, $3 = package dir, $4 = properties
+  local d="$1" what="$2" pkg="${3:-}" props="${4:-}" rc=0
   GIT "$d" add -A; GIT "$d" commit -q -m "bump" --allow-empty
-  python3 "$GATE" --repo "$d" --base base --head HEAD >/dev/null 2>&1 || rc=$?
+  if [ -n "$pkg" ]; then
+    python3 "$GATE" --repo "$d" --base base --head HEAD --kit-dir "$pkg" --properties "$props" >/dev/null 2>&1 || rc=$?
+  else
+    python3 "$GATE" --repo "$d" --base base --head HEAD >/dev/null 2>&1 || rc=$?
+  fi
   if [ "$rc" = 2 ]; then
     if prefilter "$d"; then
       ok "  $what: the rule abstains and pass one sent it on anyway (a superset, which is allowed)"
@@ -700,23 +772,41 @@ check_prefilter() { # $1 = repo dir, $2 = description
     if prefilter "$d"; then
       ok "  $what: the rule reaches a verdict (exit $rc) and pass one sends it on"
     else
-      bad "  $what: the rule reaches a verdict (exit $rc) but pass one would STOP — a bump would silently report 'abstains' (#266 fail-open)"
+      bad "  $what: the rule reaches a verdict (exit $rc) but pass one would STOP — that verdict would be silently reported as 'abstains' (#266 fail-open)"
     fi
   fi
 }
 d=$(fresh pf-nopin); echo "new client" > "$d/scripts/fsgg-coord"
-check_prefilter "$d" "a pull request that moves no pin"
+check_prefilter "$d" "a pull request that moves no pin" "$PKG" "$WORK/props.json"
 d=$(fresh pf-pin); apply_bump "$d"
-check_prefilter "$d" "the measured 0.8.0 -> 0.15.0 bump"
+check_prefilter "$d" "the measured 0.8.0 -> 0.15.0 bump, MECHANICAL" "$PKG" "$WORK/props.json"
 d=$(fresh_1088 pf-1088); apply_1088_mechanical "$d"; apply_1088_repair "$d"
-check_prefilter "$d" "FS.GG.Rendering#1088's 0.14.0 -> 0.15.0 bump plus its repair"
-# 35 — and the cheap path is still cheap: the ONE case that stops for free must actually stop.
+check_prefilter "$d" "FS.GG.Rendering#1088, MECHANICAL+REPAIR" "$WORK/pkg-1088" "$WORK/props-1088.json"
+d=$(fresh_1088 pf-1088-bad); apply_1088_mechanical "$d"
+mkdir -p "$d/.codex/skills/pnext-item"; echo "written back" > "$d/.codex/skills/pnext-item/SKILL.md"
+check_prefilter "$d" "a bump contaminated inside kit territory, NOT MECHANICAL" "$WORK/pkg-1088" "$WORK/props-1088.json"
+# The rule refuses on any diff status outside A/M/D, and that needs no kit content at all — so a
+# `T`-status pull request is a verdict pass one must not suppress. This is the case a package-id
+# probe got wrong: it mentions nothing kit-related, so it would have abstained GREEN where the rule
+# refuses RED.
+d=$(fresh pf-typechange); rm -f "$d/src/app.txt"; ln -s /dev/null "$d/src/app.txt"
+check_prefilter "$d" "a file replaced by a symlink (diff status T), nothing kit-related" "$PKG" "$WORK/props.json"
+# 35 — and the cheap path is still cheap: the cases that stop for free must actually stop.
 d=$(fresh pf-cheap); echo "new client" > "$d/scripts/fsgg-coord"
 GIT "$d" add -A; GIT "$d" commit -q -m "bump" --allow-empty
 if prefilter "$d"; then
   bad "a pull request touching no FS.GG.Kit declaration would pay for an SDK and a restore — the ungated cost #1508 requires is gone"
 else
   ok "a pull request touching no FS.GG.Kit declaration costs a git diff and nothing else (#1508)"
+fi
+# ...including one that MENTIONS FS.GG.Kit without declaring a version. A probe that grepped the
+# package NAME would restore for this; the rule's own pin predicate does not.
+d=$(fresh pf-mention); printf '# see FS.GG.Kit for the kit\n' >> "$d/src/app.txt"
+GIT "$d" add -A; GIT "$d" commit -q -m "bump" --allow-empty
+if prefilter "$d"; then
+  bad "a pull request that merely names FS.GG.Kit in prose pays for an SDK and a restore"
+else
+  ok "  and so does one that merely names FS.GG.Kit in prose — the predicate is the pin, not the word"
 fi
 
 # 36 — AND THAT CHEAP PATH IS STRUCTURAL, not a claim about the shell inside one step. This job runs
