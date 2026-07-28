@@ -87,6 +87,42 @@ Product/
 └── .github/workflows/
 ```
 
+> **Correction added 2026-07-28 — the skill-root layout above was overtaken one day after this was
+> written, and a `web` profile must not scaffold it.**
+>
+> The tree shows `.codex/` and no `.claude/`. Both halves are now wrong:
+>
+> - **ADR-0067 §5 was executed on 2026-07-28** by [`#1636`](https://github.com/FS-GG/.github/issues/1636),
+>   retiring `.codex/skills`. It is not a third runtime's root — it is Codex's *second* native root,
+>   and carrying both made Codex emit every skill **twice** in `codex debug prompt-input`. Measured
+>   benefit of the narrowing on `.github`'s own driver skills: catalog cost **6335 → 3174** characters.
+> - The end state is **`.agents/skills`** (canonical, discovered with no configuration) plus
+>   **`.claude/skills`** (Claude's only project root) — and this tree omits the second entirely.
+>
+> On the same day, ADR-0067 phase 4 completed across all seven framework receivers: `.agents/skills`
+> is now a **generated view** of the tracked `.claude/skills`, produced at checkout by
+> `scripts/skill-view generate`, never a second committed copy. So the corrected shape for a generated
+> product is one tracked source root, one view root, and no `.codex/`.
+>
+> **This is not hypothetical for products.**
+> [`FS.GG.Rendering#1121`](https://github.com/FS-GG/FS.GG.Rendering/issues/1121) was filed the same day
+> against the *existing* template, which still manufactures `.codex/skills` into every scaffolded
+> product: `#1081`'s three-root decision was overtaken by ADR-0067 §5 one day later and nothing had
+> re-read it. A `web` profile built from the tree above would replicate that defect into a second
+> profile, and every product generated from it would be born owing the retirement the seven framework
+> repos have just finished.
+>
+> Two things this note does **not** claim. The tree may be illustrative rather than normative — nobody
+> has confirmed it was intended as the scaffolder's output. And ADR-0067 §8's loud-absence problem
+> applies to any product that adopts a view root: an ungenerated view is a silently empty directory
+> and **exit 0 with no diagnostic in both runtimes**, so a product profile owes a generate target and
+> an alarm, not just a directory list. The kit now ships that alarm
+> ([`#1710`](https://github.com/FS-GG/.github/issues/1710)); a non-.NET product would need another
+> route to it.
+>
+> Nothing else in D1 is affected — the monorepo argument, the F#/TypeScript split and the package
+> boundaries all stand.
+
 The server and client should not be split merely because they use different languages. A split
 would make every product feature a cross-repository change, duplicate planning state, and make
 atomic contract changes unnecessarily difficult. A monorepo allows one issue, one specification,
