@@ -150,6 +150,16 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
             return self._send(200, comments(int(m.group(1))))
+        # THE REPO'S OPEN ISSUES (.github#1779) — the #353 collision scan's candidate set. FILTERED BY
+        # REPO, which is what makes this case's cross-repo leg structural: asked for FS.GG.SDD's issues,
+        # #402 (Rendering) is simply not in the answer, so its holder cannot be named or notified even by
+        # a scan that dropped every later filter. Serving all three from one route would move the phantom
+        # #353 removed into the fixture, where no assertion here could see it.
+        m = re.match(r"^/repos/([^/]+)/([^/]+)/issues/?$", p)
+        if m:
+            nwo = f"{m.group(1)}/{m.group(2)}"
+            return self._send(200, [{"number": n, "state": "open", "body": BODIES[n]}
+                                    for n in sorted(BODIES) if REPO[n] == nwo])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))

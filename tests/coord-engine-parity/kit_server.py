@@ -114,6 +114,12 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
             return self._send(200, comments(int(m.group(1))))
+        # The repo's open issues — the #353 collision scan's candidate set since .github#1779. #74 is the
+        # only item in this world and it is the widen's own subject, which the scan excludes, so the
+        # re-check is DISJOINT for the reason this fixture has always intended: there is no neighbour.
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p)
+        if m:
+            return self._send(200, [{"number": 74, "state": "open", "body": BODY}])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))

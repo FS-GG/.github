@@ -520,7 +520,7 @@ sleep 0.5
 
 rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
 
-# ---- .github#1740: a live claim whose `Status` write DEFERRED still reserves its touch-set -----------
+# ---- .github#1740 / .github#1779: a live claim reserves whatever its board COLUMN says ---------------
 #
 # THE DEFECT, CONSTRUCTED RATHER THAN WAITED FOR. `activeCollisions` picked which claims to check by
 # reading the board's `Status` COLUMN, so a claim whose MARKER was live but whose column had not landed
@@ -528,14 +528,20 @@ rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
 # trustworthy. Measured live on 2026-07-28: two workers declared `src/FS.GG.Coord.Cli/Client.fs` 41
 # seconds apart and `widen` said DISJOINT 53 seconds later.
 #
-# WHY THIS LEG AND NOT A TIMING TEST. The failure is a race, and a race reproduced by sleeping is a test
-# that passes when the timing happens to work. The fixture's `defer-next-field-write` makes the state
-# DETERMINISTIC: `claim` posts its marker, its `Status` write meets an exhausted budget, and the column
-# is left at `Ready` — permanently, until somebody runs `flush`. That is not a simulation of the bug's
-# state, it is the bug's state, reached the way production reaches it.
+# WHY THESE LEGS AND NOT A TIMING TEST. The failure is a race, and a race reproduced by sleeping is a test
+# that passes when the timing happens to work. The fixture's `defer-next-field-write` /
+# `fail-next-field-write` / `off_board` make each state DETERMINISTIC: `claim` posts its marker, its
+# `Status` write meets the injected condition, and the column is left where it was. That is not a
+# simulation of the bug's state, it is the bug's state, reached the way production reaches it.
+#
+# THREE STATES, AND THEY ARE NOT VARIATIONS OF ONE. `claim` distinguishes `statusWrite: deferred | failed
+# | not-on-board`, exits GREEN on all three, and #510 queues only the FIRST. #1740 closed it by reading
+# the deferral queue, which by construction says nothing about the other two. Each leg below asserts its
+# own precondition off the RECEIPT and off the BOARD before asserting the verdict — a leg whose state was
+# never built would otherwise measure the ordinary `In progress` path and pass for the wrong reason.
 #
 # THE UNIT LEGS COVER THE CACHE HALF (this script runs with FSGG_COORD_SCAN_TTL_SEC=0, so there is no
-# stale scan here to have). This covers the half no amount of freshness can reach.
+# stale scan here to have). These cover the halves no amount of freshness can reach.
 
 # #43 leaves vole-418's hands declaring the SAME path #44 declares, and parked in a NON-claim column.
 "$ENGINE" set-paths FS.GG.SDD#43 --worker vole-418 --paths 'src/Verify/**' >/dev/null 2>&1
@@ -562,16 +568,111 @@ ov="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovrc=$?
   && ok "#1740: a live claim whose Status column has NOT landed still COLLIDES (no false DISJOINT)" \
   || bad "#1740: the collision scan sees a claim the board column does not" "rc=$ovrc: $ov"
 
-# THE CONTROL, AND WITHOUT IT THE LEG ABOVE PROVES NOTHING. Same board, same live marker, same column —
-# only the DEFERRAL QUEUE is taken away (a fresh cache root has none). The reservation must vanish with
-# it. If this also said OVERLAP, the leg above would be passing on something other than the queue, and
-# five checks that could not fail were found in this codebase on 2026-07-28 alone.
+# .github#1779 — THE QUEUE IS NO LONGER WHAT CARRIES THE RESERVATION, AND THIS IS WHERE THAT IS PROVED.
+#
+# This leg was #1740's control, and it asserted the opposite: take the DEFERRAL QUEUE away (a fresh cache
+# root has none) and the reservation was supposed to vanish with it. It did, and that was the bug one
+# level up — #43's marker was live and its declaration collided in both runs, so `DISJOINT` was never the
+# right answer here; the queue's presence was the only thing standing between a worker and a file another
+# worker held. The candidate set is the repo's OPEN ISSUES now, so the empty queue changes nothing.
 EMPTY_CACHE="$(mktemp -d)"
 ovc="$(FSGG_COORD_CACHE="$EMPTY_CACHE" "$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovcrc=$?
 rm -rf "$EMPTY_CACHE"
-[ "$ovcrc" -eq 0 ] && printf '%s' "$ovc" | grep -q 'DISJOINT' \
-  && ok "#1740: control — with the deferral queue removed the same state reads DISJOINT (the queue IS the evidence)" \
-  || bad "#1740: control must show the queue is what carries the reservation" "rc=$ovcrc: $ovc"
+[ "$ovcrc" -eq 6 ] && printf '%s' "$ovc" | grep -q 'OVERLAP' && printf '%s' "$ovc" | grep -q 'otter-777' \
+  && ok "#1779: the SAME state with an EMPTY deferral queue still collides — the marker carries it, not the queue" \
+  || bad "#1779: an empty queue must not resurrect the false DISJOINT" "rc=$ovcrc: $ovc"
+
+# THE CONTROL THAT MATTERS NOW, and without it every leg here is satisfied by "report every open issue".
+# Same board, same column, same declaration — the MARKER is released. A declaration nobody holds is work
+# nobody is doing, and reporting it would stop a worker who has nothing to stop for.
+"$ENGINE" release FS.GG.SDD#43 --worker otter-777 --status Ready >/dev/null 2>&1
+ovn="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovnrc=$?
+[ "$ovnrc" -eq 0 ] && printf '%s' "$ovn" | grep -q 'DISJOINT' \
+  && ok "#1779: control — the same colliding declaration with NO live claim reads DISJOINT (the marker is the lock)" \
+  || bad "#1779: colliding tokens alone must not reserve" "rc=$ovnrc: $ovn"
+
+# ---- .github#1779 leg 1: a `Status` write that FAILED PERMANENTLY still reserves ---------------------
+#
+# #510 QUEUES A DEFERRAL AND REFUSES TO QUEUE A FAILURE, and that is correct — a write replayed forever is
+# a promise nobody can keep. The consequence is that nothing will EVER write this column, so no freshness
+# tier and no queue read can conjure it. #1740 named this as its declined remainder.
+# THE QUEUE DEPTH IS READ BEFORE AND AFTER, NOT COMPARED TO ZERO. `pendingBoardWrites` is the depth of
+# the whole shared queue, and the DEFERRED leg above legitimately left an entry in it — an assertion of
+# `== 0` would be testing "no other test deferred anything", which is a fact about test ordering and not
+# about #510. The load-bearing fact is that this failure ADDED NOTHING: a permanent failure is not queued,
+# so nothing will ever replay it, so nothing will ever write that column.
+q_before="$("$ENGINE" budget --json --worker vole-418 2>/dev/null | jq -r '.pendingBoardWrites')"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/fail-next-field-write" >/dev/null
+clf="$("$ENGINE" claim FS.GG.SDD#43 --worker stoat-311 --json 2>&1)"; clfrc=$?
+swf="$(printf '%s' "$clf" | jq -r '.statusWrite' 2>/dev/null)"
+q_after="$(printf '%s' "$clf" | jq -r '.pendingBoardWrites' 2>/dev/null)"
+colf="$("$ENGINE" ready --repo FS.GG.SDD --worker vole-418 2>/dev/null | jq -r '.[] | select(.number==43) | .status')"
+
+# THE UNCHANGED QUEUE DEPTH IS WHAT SEPARATES THIS LEG FROM THE ONE ABOVE. Without it "failed" and
+# "deferred" are indistinguishable from outside the receipt, and this would be the deferral-queue leg
+# again wearing a different name — passing on the very mechanism it claims not to depend on.
+[ "$clfrc" -eq 0 ] && [ "$swf" = "failed" ] && [ "$q_after" = "$q_before" ] && [ "$colf" = "Ready" ] \
+  && ok "#1779: the fixture built the state — marker live, Status write FAILED, queue depth UNCHANGED at $q_after, column still '$colf'" \
+  || bad "#1779: build a live claim whose Status write failed permanently" "rc=$clfrc statusWrite=$swf queue $q_before -> $q_after column=$colf: $clf"
+
+ovf="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovfrc=$?
+[ "$ovfrc" -eq 6 ] && printf '%s' "$ovf" | grep -q 'OVERLAP' && printf '%s' "$ovf" | grep -q 'stoat-311' \
+  && ok "#1779: a live claim whose Status write FAILED PERMANENTLY still COLLIDES" \
+  || bad "#1779: a permanently-failed column write must not cost a false DISJOINT" "rc=$ovfrc: $ovf"
+
+"$ENGINE" release FS.GG.SDD#43 --worker stoat-311 --status Ready >/dev/null 2>&1
+
+# ---- .github#1779 leg 2: a live claim on an item that is NOT ON THE BOARD AT ALL ---------------------
+#
+# There is no row, so a row-derived candidate set cannot select it by construction — not by being fresher,
+# and not by reading the queue. #46 is open in the repo, declares `src/Verify/**`, and the fixture's
+# `projectItems` lookup answers with no node for it, so `boardWrite` returns `NotOnBoard`.
+cln="$("$ENGINE" claim FS.GG.SDD#46 --worker heron-822 --json 2>&1)"; clnrc=$?
+swn="$(printf '%s' "$cln" | jq -r '.statusWrite' 2>/dev/null)"
+cvn="$(printf '%s' "$cln" | jq -r '.converged' 2>/dev/null)"
+# READ OFF THE BOARD TOO, not only off the receipt: #46 must be absent from `ready`'s rows entirely.
+row46="$("$ENGINE" ready --repo FS.GG.SDD --status any --worker vole-418 2>/dev/null | jq -r '[.[] | select(.number==46)] | length')"
+[ "$clnrc" -eq 0 ] && [ "$swn" = "not-on-board" ] && [ "$cvn" = "false" ] && [ "$row46" = "0" ] \
+  && ok "#1779: the fixture built the state — marker live on #46, statusWrite=not-on-board, NO board row" \
+  || bad "#1779: build a live claim on an item that is not on the board" "rc=$clnrc statusWrite=$swn converged=$cvn rows=$row46: $cln"
+
+ovn2="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovn2rc=$?
+[ "$ovn2rc" -eq 6 ] && printf '%s' "$ovn2" | grep -q 'OVERLAP' && printf '%s' "$ovn2" | grep -q 'heron-822' \
+  && ok "#1779: a live claim on an item the board has NEVER LISTED still COLLIDES" \
+  || bad "#1779: an off-board claim must not cost a false DISJOINT" "rc=$ovn2rc: $ovn2"
+
+# ---- .github#1779 AC2: the API cost, MEASURED across the process boundary ---------------------------
+#
+# `.github#1086` got this same trade wrong by an order of magnitude by ESTIMATING it, and the first draft
+# of #1779 declined the whole design over an estimate of "~74 REST marker reads per widen". So the fixture
+# counts. `/_fixture/rest-reads` reports and resets; `/_fixture/board-reads` is the GraphQL board query,
+# which this path must no longer make at all.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads" >/dev/null   # reset the meter
+br_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
+"$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 >/dev/null 2>&1
+meter="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
+br_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
+rest_n="$(printf '%s' "$meter" | jq -r '.count')"
+lists="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("^GET /repos/[^/]+/[^/]+/issues$"))] | length')"
+markers="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("/comments$"))] | length')"
+# THE NEGATIVE HALF, AND IT IS THE HALF THAT PINS THE CLAIM. A count alone would keep passing if the scan
+# read some OTHER two issues' markers. #42 declares `src/Thing/**` and #99 declares `none`; both are open,
+# both are candidates for a scan that reads first and filters second, and NEITHER can ever collide with
+# `src/Verify/**`. Their markers must not be read at all.
+noise="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("/(42|99)/comments$"))] | length')"
+
+# The repo has FIVE open issues. Two of them declare `src/Verify/**` — #43 (whose marker was released
+# above, so it reserves nothing) and #46 (held by heron-822) — and #44 is the subject. So: ONE issue list,
+# TWO marker reads, one per COLLIDING row rather than one per open row or one per `In progress` row, and
+# ZERO GraphQL board reads. The old scan read a marker AND a body for every `In progress` row whether or
+# not its tokens could ever collide, and paid a board query on top.
+[ "$lists" = "1" ] && [ "$markers" = "2" ] && [ "$noise" = "0" ] && [ "$br_before" = "$br_after" ] \
+  && ok "#1779 AC2: overlap --active spent $rest_n REST calls (1 issue list + 1 marker per COLLIDING row, 2 of 5 open) and 0 GraphQL board reads" \
+  || bad "#1779 AC2: the measured cost is not the claimed cost" "rest=$rest_n lists=$lists markers=$markers noise=$noise boardReads $br_before -> $br_after: $meter"
+
+"$ENGINE" release FS.GG.SDD#46 --worker heron-822 >/dev/null 2>&1
+# #43 back into vole-418's hands, declaring `src/Verify/**`, for the AC5 legs below.
+"$ENGINE" claim FS.GG.SDD#43 --worker otter-777 >/dev/null 2>&1
 
 # ---- .github#1740 AC5: a NARROWING is never reported as having INTRODUCED a collision ----------------
 # A token-subset names strictly fewer files, so it cannot introduce a collision — whatever the scan finds

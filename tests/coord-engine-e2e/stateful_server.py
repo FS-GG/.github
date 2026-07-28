@@ -52,14 +52,24 @@ ISSUES = {
     # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
     60: {"body": "A finished item in a repo with no chore lock.\n\nPaths: src/Q/**",
          "state": "CLOSED", "status": "In review", "repo": "FS.GG.Legacy"},
+    # .github#1779 — AN OPEN ISSUE IN THE REPO THAT IS NOT AN ITEM ON THE BOARD. `off_board` keeps it out
+    # of `board_items()` AND makes the `projectItems` lookup answer with no node, which is what makes
+    # `claim` report `statusWrite:"not-on-board"` — the state whose reservation no row-derived candidate
+    # set can select, because there is no row. It declares `src/Verify/**`, the same touch-set #44 does.
+    46: {"body": "A claim that never reached the board.\n\nPaths: src/Verify/**",
+         "state": "OPEN", "status": "Ready", "off_board": True},
 }
+
+
+def off_board(n):
+    return ISSUES.get(n, {}).get("off_board", False)
 
 def repo_of(n):
     return ISSUES.get(n, {}).get("repo", "FS.GG.SDD")
 
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
-COMMENTS = {42: [], 43: [], 99: [], 44: [], 50: [], 51: [], 1033: []}
+COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 1033: []}
 NEXT_COMMENT_ID = [900]
 def now_iso():
     # REAL current time, so a just-posted marker is fresh — a fixed timestamp would land it at the
@@ -82,6 +92,21 @@ BOARD_READS = [0]
 # specific stamp and then let `flush` replay it against a healthy server. The message matches
 # `Budget.isRateLimited`'s pattern, which is how the real transport recognises the exhaustion.
 DEFER_FIELD_WRITES = [0]
+
+# .github#1779 — the PERMANENT-failure injection, and it is a DIFFERENT fixture from the one above rather
+# than a parameter of it, because the engine's two outcomes are decided by the message. A rate-limit error
+# becomes `Deferred` (queued; `flush` replays it). Anything else becomes an `Error`, which `claim` reports
+# as `statusWrite:"failed"` and #510 refuses to queue — a write replayed forever is a promise nobody can
+# keep. So this arms a NON-rate-limit error, and the leg that uses it asserts `pendingBoardWrites` is 0:
+# without that assertion "failed" and "deferred" are indistinguishable from the outside, and the leg would
+# be re-testing the deferral queue while claiming to test the case the queue cannot reach.
+FAIL_FIELD_WRITES = [0]
+
+# .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
+# per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
+# is, one transport down: `_fixture/` routes are excluded (they are the meter, not the spend) and so is
+# `/graphql`, which `BOARD_READS` already counts.
+REST_READS = []
 
 
 def project_fields():
@@ -117,6 +142,8 @@ def project_fields():
 def board_items():
     nodes = []
     for n, issue in sorted(ISSUES.items()):
+        if off_board(n):
+            continue
         nodes.append(
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
@@ -182,10 +209,15 @@ def graphql(query: str, variables: dict):
             }
         }
     if "projectItems" in query:
-        # item-id lookup: whatever issue was asked for is on our board.
+        # item-id lookup. Every issue is on our board EXCEPT an `off_board` one, which answers with no
+        # node — `Board.itemId`'s `Ok None`, which `boardWrite` turns into `NotOnBoard` (.github#1779).
+        # int(): the wire carries the number as a JSON number, so Python hands us 46.0, and 46.0 misses an
+        # int-keyed lookup without erroring — which would silently put the off-board issue back on it.
+        n = int(variables.get("number", 0))
+        nodes = [] if off_board(n) else [{"id": "PVTI_item", "project": {"number": 12}}]
         return {
             "data": {
-                "repository": {"issue": {"projectItems": {"nodes": [{"id": "PVTI_item", "project": {"number": 12}}]}}},
+                "repository": {"issue": {"projectItems": {"nodes": nodes}}},
                 "rateLimit": RATE_LIMIT,
             }
         }
@@ -209,6 +241,12 @@ def graphql(query: str, variables: dict):
             if DEFER_FIELD_WRITES[0] > 0:
                 DEFER_FIELD_WRITES[0] -= 1
                 return {"errors": [{"message": "API rate limit exceeded for this fixture"}]}
+            # .github#1779: a PERMANENT failure. The message deliberately matches no rate-limit pattern,
+            # so `Budget.isRateLimited` says no, `boardWrite` returns `Error` rather than `Deferred`,
+            # and #510 does not queue it. `claim` reports `statusWrite:"failed"` and exits GREEN.
+            if FAIL_FIELD_WRITES[0] > 0:
+                FAIL_FIELD_WRITES[0] -= 1
+                return {"errors": [{"message": "fixture: the field write failed permanently"}]}
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
     return None
 
@@ -232,6 +270,14 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _meter(self):
+        """Bill one REST request (.github#1779 AC2). `_fixture/` is the meter, `/graphql` is GraphQL."""
+        p = self.path.split("?", 1)[0]
+        if p.startswith("/_fixture/") or p.rstrip("/") == "/graphql" or p.rstrip("/") == "/rate_limit":
+            return
+        with LOCK:
+            REST_READS.append(f"{self.command} {p}")
+
     def _send(self, status, payload):
         # A 204/304 carries no body; under HTTP/1.1 keep-alive a stray body would desync the NEXT
         # request on the connection — reintroducing, on the DELETE path, the very race this fix closes.
@@ -248,6 +294,7 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(n).decode() if n else ""
 
     def do_POST(self):
+        self._meter()
         path = self.path.split("?", 1)[0]
         raw = self._body()
 
@@ -285,6 +332,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(500, {"message": f"fixture: unhandled POST {path}"})
 
     def do_PATCH(self):
+        self._meter()
         path = self.path.split("?", 1)[0]
         raw = self._body()
 
@@ -319,6 +367,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(500, {"message": f"fixture: unhandled PATCH {path}"})
 
     def do_DELETE(self):
+        self._meter()
         path = self.path.split("?", 1)[0]
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", path)
         if m:
@@ -330,6 +379,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(500, {"message": f"fixture: unhandled DELETE {path}"})
 
     def do_GET(self):
+        self._meter()
         path = self.path.split("?", 1)[0]
 
         # THE FIXTURE'S OWN INSTRUMENTATION, not a GitHub route — hence the `_fixture/` prefix, which no
@@ -347,6 +397,21 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 DEFER_FIELD_WRITES[0] += 1
                 return self._send(200, {"deferArmed": DEFER_FIELD_WRITES[0]})
+
+        # .github#1779 — arm ONE PERMANENTLY-FAILING field write. Sibling of the line above, and the
+        # difference between them is the whole of what #510 decides: this one is never queued.
+        if path.rstrip("/") == "/_fixture/fail-next-field-write":
+            with LOCK:
+                FAIL_FIELD_WRITES[0] += 1
+                return self._send(200, {"failArmed": FAIL_FIELD_WRITES[0]})
+
+        # .github#1779 AC2 — read and RESET the REST request log, so a leg can measure exactly what one
+        # command spent. Reset-on-read, because the alternative is every caller remembering a baseline.
+        if path.rstrip("/") == "/_fixture/rest-reads":
+            with LOCK:
+                spent = list(REST_READS)
+                REST_READS.clear()
+                return self._send(200, {"count": len(spent), "paths": spent})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:

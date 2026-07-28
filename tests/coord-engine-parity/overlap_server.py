@@ -118,6 +118,16 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
             return self._send(200, comments(int(m.group(1))))
+        # THE REPO'S OPEN ISSUES (.github#1779). The #353 collision scan keys its candidate set on this
+        # read now, not on the board's rows — so the SCOPING this whole case certifies is structural here
+        # rather than a filter: `openIssues` is asked for ONE repo, and 402 (Rendering) is simply not in
+        # the answer when the subject is an SDD item. Serving every repo's issues from this route would
+        # re-open the cross-repo phantom at the fixture instead of in the engine, so it filters on REPO.
+        m = re.match(r"^/repos/([^/]+)/([^/]+)/issues/?$", p)
+        if m:
+            nwo = f"{m.group(1)}/{m.group(2)}"
+            return self._send(200, [{"number": n, "state": "open", "body": BODIES[n]}
+                                    for n in sorted(BODIES) if REPO[n] == nwo])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
