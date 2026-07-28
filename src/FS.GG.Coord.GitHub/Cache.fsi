@@ -60,10 +60,34 @@ module Cache =
     /// **And it is paid back in kind**: a fresh scan WRITES the cache (`Scan.scanFresh` → `putScan`), so an
     /// offering read leaves a fresh board behind it for the next ninety seconds of `take`s. The offer path
     /// stops being a consumer of the shared scan and becomes a producer of it.
+    /// **AND SO IS THE #353 COLLISION SCAN** (.github#1740). `Client.activeCollisions` — behind
+    /// `overlap --active`, `widen` and `set-paths` — rode `Scheduling` while `Reconciling` below had listed
+    /// `overlap --active` all along; the doc and the code had simply never been read against each other.
+    /// The warrant at the top of this file is about CLAIMING AN ITEM and is right about it. It does not
+    /// transfer, for the same reason the chore offer did not:
+    ///
+    /// - **There is no CAS behind a touch-set.** The item CAS decides who holds an ITEM. Nothing whatsoever
+    ///   re-decides who may edit a FILE — the touch-set is the only mechanism, and a false `DISJOINT` is
+    ///   final. Staleness on that consumer costs a double-EDIT, not a retry.
+    /// - **It was observed, not theorised.** 2026-07-28: two workers claimed items declaring
+    ///   `src/FS.GG.Coord.Cli/Client.fs` 41 seconds apart; the `widen` 53 seconds later printed `DISJOINT`
+    ///   off this cache. The same check two hours later printed `OVERLAP`. Both edited the file.
+    ///
+    /// **AND ITS COST WAS MEASURED BEFORE IT LANDED**, on the live board, 2026-07-28: `overlap --active`
+    /// went from **0–4** GraphQL points a call on the warm cache to **19–25** always-fresh — about +21, or
+    /// ~0.5% of the fleet's 5,000/hr per call. These verbs run a handful of times per ITEM, not in a poll,
+    /// which is what separates this from #418 and #1666. See `Client.activeCollisions` for the full table.
+    ///
+    /// **AND FRESHNESS IS ONLY HALF OF IT.** A `Status` write may be DEFERRED (below) while its claim
+    /// marker is live, so the freshest board still shows the pre-claim column. That leg is closed off the
+    /// deferral queue, not off this cache — see `Client.deferredInProgress`. A cache tier cannot fix a
+    /// write that has not been attempted yet, and reading this one as if it could would be the same
+    /// un-rechecked reuse twice over.
     type ReadIntent =
         /// `next` / `take` / `batch` — the DECISION half. May serve a cached scan.
         | Scheduling
-        /// `ready` / `lint` / `who` / `overlap --active`. Always scans fresh.
+        /// `ready` / `lint` / `who`, and the #353 collision scan behind `overlap --active` / `widen` /
+        /// `set-paths` (.github#1740). Always scans fresh.
         | Reconciling
         /// The deferred chore queue's board (`Client.wholeBoard`, at `next` and at `done --flip`). Always
         /// scans fresh, for the reasons above — kept DISTINCT from `Reconciling` because the two are fresh

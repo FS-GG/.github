@@ -145,11 +145,15 @@ module ApplicationServiceTests =
     /// A transport serving one board. `bodies` is issue number → issue body (its `Paths:` declaration),
     /// `holders` is issue number → the worker whose claim marker sits on it, and `sayFails` makes the
     /// courtesy-notice POST fail so the receipt's `notified:false` leg can be pinned.
-    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
-        let items =
+    let private worldWith (statusFor: int -> string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+        // THE ROWS ARE RENDERED PER REQUEST, not once at construction. `statusFor` is a function, and it is
+        // a function so that a fixture can make a column CHANGE BETWEEN TWO BOARD READS — which is the whole
+        // of .github#1740 cause 1, and is unrepresentable if the board answer is frozen when the world is
+        // built. Every existing caller passes a constant through `worldIn` and is unaffected.
+        let items () =
             bodies
             |> Map.toList
-            |> List.map (fun (n, _) -> boardItemIn status n $"item %d{n}")
+            |> List.map (fun (n, _) -> boardItemIn (statusFor n) n $"item %d{n}")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -171,7 +175,7 @@ module ApplicationServiceTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->
-                    match graphqlAnswer items document with
+                    match graphqlAnswer (items ()) document with
                     | Some answer -> ok answer
                     | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -200,6 +204,9 @@ module ApplicationServiceTests =
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
+        worldWith (fun _ -> status) bodies holders sayFails
+
     let private world (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
         worldIn "In progress" bodies holders sayFails
 
@@ -221,8 +228,10 @@ module ApplicationServiceTests =
     /// cross-class parallelism, which is the same licence `FollowupsTests.withCache` runs on. A fresh
     /// directory per call also keeps the board scan and board map from leaking BETWEEN these legs, which
     /// matters: the OVERLAP legs serve a different board from the DISJOINT ones.
-    let private run (transport: Fake.Recorder) (args: string list) : int * string =
-        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
+    /// The same, against a cache root the CALLER owns — so two invocations can share one, which is what a
+    /// 90-second scan cache surviving between commands actually is (.github#1740). `run` below keeps the
+    /// throwaway-per-call behaviour every other leg here relies on.
+    let private runIn (dir: string) (transport: Fake.Recorder) (args: string list) : int * string =
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
 
@@ -279,10 +288,35 @@ module ApplicationServiceTests =
             for v, previous in previousIdentity do
                 Environment.SetEnvironmentVariable(v, previous)
 
+    let private run (transport: Fake.Recorder) (args: string list) : int * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
+
+        try
+            runIn dir transport args
+        finally
             try
                 Directory.Delete(dir, true)
             with _ ->
                 ()
+
+    /// `run`, plus the STDERR the command wrote (.github#1740 AC5).
+    ///
+    /// The OVERLAP diagnostics are `eprint`, and deliberately so — stdout is the machine contract and the
+    /// collision detail belongs in the JSON object (#1517). But that put the AC5 sentence, whose whole
+    /// defect was that it asserted causation, on the one stream no leg here could read. This captures it
+    /// WITHOUT moving a byte of either projection: `run` touches `Console.Out` only, so wrapping
+    /// `Console.Error` around it composes.
+    let private runCapturingStderr (transport: Fake.Recorder) (args: string list) : int * string * string =
+        let stderr = Console.Error
+        use capturedErr = new StringWriter()
+
+        try
+            Console.SetError capturedErr
+            let code, out = run transport args
+            Console.Error.Flush()
+            code, out, capturedErr.ToString()
+        finally
+            Console.SetError stderr
 
     let private disjointWorld () =
         world (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) (Map.ofList [ 74, "kite-469" ]) false
@@ -439,6 +473,278 @@ module ApplicationServiceTests =
                 "src/Shared.fs"
 
         Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
+        Assert.Equal(6, code)
+
+    // ---- .github#1740 — A LIVE CLAIM WHOSE `Status` COLUMN HAS NOT LANDED STILL RESERVES ---------------
+    //
+    // THE DEFECT THESE PIN, AND WHY IT IS WORSE THAN IT LOOKS. `activeCollisions` picked which claims to
+    // check by reading the board's `Status` COLUMN, so a claim whose MARKER was live but whose column had
+    // not landed reserved nothing at all — and the answer it produced was `DISJOINT`, which is the one
+    // verdict the touch-set protocol exists to make trustworthy. Measured live on 2026-07-28: two workers
+    // declared `src/FS.GG.Coord.Cli/Client.fs` 41 seconds apart, `widen` printed `DISJOINT` 53 seconds
+    // later, and the same check two hours on printed `OVERLAP`. Nothing about either declaration changed.
+    //
+    // WHY EVERY EXISTING OVERLAP LEG ABOVE IS BLIND TO THIS. They all run over `overlappingWorld`, whose
+    // rows are `In progress` — the column the broken filter selects on. A fixture that pre-sets the
+    // colliding row to the value under test cannot fail for the reason under test, so it never has.
+    //
+    // TWO CAUSES, TWO LEGS, AND THEY FAIL FOR DIFFERENT REASONS. The first is a STALE READ — the column had
+    // landed and the scan was served from the 90s scheduling cache. The second is a WRITE THAT HAS NOT
+    // HAPPENED — the column genuinely still reads `Ready` because the write is sitting in the deferral
+    // queue. No amount of freshness closes the second, and the queue closes none of the first.
+
+    /// #74 is ours. #75 holds a live claim on `src/Shared.fs` THROUGHOUT — only its board COLUMN moves.
+    let private laggingBodies =
+        Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ]
+
+    let private laggingHolders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
+
+    let private cacheDir () =
+        Path.Combine(Path.GetTempPath(), "fsgg-1740-" + Guid.NewGuid().ToString "n")
+
+    let private widenOnto (paths: string) =
+        [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; paths ]
+
+    [<Fact>]
+    let ``#1740 cause 1: a claim landing inside the scan-cache window still collides`` () =
+        let dir = cacheDir ()
+
+        // The column is a `ref` the TEST moves, not something the transport counts — a fixture that flipped
+        // on "the second board read" would be asserting a request count, and would keep passing if the
+        // request count changed for an unrelated reason.
+        let column = ref "Ready"
+
+        let world =
+            worldWith (fun n -> if n = 75 then column.Value else "In progress") laggingBodies laggingHolders false
+
+        try
+            // 1. A first command populates the scan cache while #75's claim has not yet reached the board.
+            let first, _ = runIn dir world (widenOnto "docs/unrelated.md")
+            Assert.Equal(0, first)
+
+            // 2. #75's `Status` write LANDS. Any read of the live board from here on sees `In progress`.
+            column.Value <- "In progress"
+
+            // 3. ...but the cached scan is only seconds old. On `Cache.Scheduling` this second command is
+            //    served that cached `Ready`, #75 never becomes a candidate, its marker is never read, and
+            //    the worker is told it may edit `src/Shared.fs`. THAT is the false DISJOINT.
+            let code, out = runIn dir world (widenOnto "src/Shared.fs")
+
+            let receipt = parsed out
+            Assert.Equal("overlap", str "verdict" receipt)
+
+            let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+            Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+            Assert.Equal("otter-9c21", str "worker" collision)
+            Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
+            Assert.Equal(6, code)
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    /// One line of the deferral queue, in `Cache.renderDeferred`'s own shape.
+    ///
+    /// `boardTitle = ""` OMITS the board keys entirely rather than writing them empty — that is a pre-#882
+    /// legacy entry, and `renderDeferred` omits rather than nulls for exactly this reason, so a fixture that
+    /// wrote `""` would be testing a shape the queue never produces.
+    let private queuedWrite (issueRef: string) (boardTitle: string) (field: string) (value: string) =
+        let common =
+            [ "ref", box issueRef
+              "field", box field
+              "value", box value
+              "at", box (DateTimeOffset.UtcNow.ToString "o")
+              "worker", box "otter-9c21" ]
+
+        let board =
+            if boardTitle = "" then
+                []
+            else
+                [ "boardOwner", box "FS-GG"; "boardTitle", box boardTitle ]
+
+        JsonSerializer.Serialize(dict (common @ board)) + "\n"
+
+    let private queuedStatusWrite (boardTitle: string) (field: string) (value: string) =
+        queuedWrite "FS-GG/FS.GG.SDD#75" boardTitle field value
+
+    /// The AC3 fixture, LITERALLY: the board says `Ready` and it is not lying — the write has not happened.
+    ///
+    /// `queued` is the queue this run finds. It is a parameter because the NEGATIVE legs are what make this
+    /// an assertion about the deferral queue rather than about "some file existing in the cache dir".
+    let private runWithQueue (queued: string option) =
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+
+            match queued with
+            | Some line -> File.WriteAllText(Path.Combine(dir, "pending.jsonl"), line)
+            | None -> ()
+
+            runIn dir (worldIn "Ready" laggingBodies laggingHolders false) (widenOnto "src/Shared.fs")
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``#1740 cause 2: a live claim whose Status write is still QUEUED collides from a Ready column`` () =
+        let code, out = runWithQueue (Some(queuedStatusWrite "Coordination" "Status" "In progress"))
+
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+
+        let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+        Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+        Assert.Equal("otter-9c21", str "worker" collision)
+        Assert.Equal(6, code)
+
+    // THE NEGATIVE LEGS. Without these, "read the queue" could be satisfied by treating ANY queued entry —
+    // or any non-empty queue file — as a claim, and the positive leg above would not notice. Each of these
+    // is the SAME board, the SAME row and the SAME live marker; only the queue entry differs, and each must
+    // fall back to the column, which says `Ready`.
+    //
+    // EACH ROW NAMES THE GUARD IT KILLS, and each varies ONE thing. A row that fails two guards at once
+    // pins neither: `("Class", "defect")` alone would keep passing with the FIELD test deleted, because the
+    // VALUE test catches it — so the field row below carries the live-claim value on purpose.
+    [<Theory>]
+    // No queue at all: the honest DISJOINT this verb must still be able to give.
+    [<InlineData("", "", "", "")>]
+    // THE FIELD TEST, ALONE. Same value a real claim writes, different field — so only `d.Field` can refuse
+    // it. With `("Class","defect")` the value test would mask a deleted field test.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Coordination", "Class", "In progress")>]
+    // THE VALUE TEST, ALONE. A `Status` write moving the row somewhere that is not a claim.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Coordination", "Status", "Done")>]
+    // #882 — queued against ANOTHER BOARD. `flush` refuses to resolve it here; so must this.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "Other Board", "Status", "In progress")>]
+    // THE REF IS READ AT ALL. A perfectly valid live-claim entry naming a DIFFERENT row must not reserve
+    // THIS one — without this, `claimPending _ = not (Set.isEmpty deferred)` passes every other leg here.
+    [<InlineData("FS-GG/FS.GG.SDD#74", "Coordination", "Status", "In progress")>]
+    // ...and a different REPO is a different row too, even at the same number (#353's whole subject).
+    [<InlineData("FS-GG/FS.GG.Other#75", "Coordination", "Status", "In progress")>]
+    let ``#1740: the queue leg reserves nothing on an entry that is not a live claim on THIS row``
+        (issueRef: string, boardTitle: string, field: string, value: string)
+        =
+        let queued =
+            if issueRef = "" then
+                None
+            else
+                Some(queuedWrite issueRef boardTitle field value)
+
+        let code, out = runWithQueue queued
+
+        Assert.Equal("disjoint", str "verdict" (parsed out))
+        Assert.Equal(0, code)
+
+    // THE POSITIVE LEGS THAT ARE NOT THE HAPPY PATH. Both of these RESERVE, and each dies to a different
+    // deletion that every leg above survives.
+    [<Theory>]
+    // A pre-#882 entry recorded NO board. `flush` replays it against the current board, so this must too —
+    // deleting the `| None -> true` arm turns a legacy queue into a silent false DISJOINT, which is the
+    // exact defect under repair.
+    [<InlineData("FS-GG/FS.GG.SDD#75", "")>]
+    // CASING. The queue's owner/repo come from argv and `$FSGG_COORD_OWNER`; the row's come from GitHub's
+    // `nameWithOwner`. Nothing makes those agree in case, so dropping either `ToLowerInvariant` is a false
+    // DISJOINT that no same-case fixture can see.
+    [<InlineData("fs-gg/fs.gg.sdd#75", "Coordination")>]
+    let ``#1740: a queued live claim still reserves across board-absence and ref casing``
+        (issueRef: string, boardTitle: string)
+        =
+        let code, out = runWithQueue (Some(queuedWrite issueRef boardTitle "Status" "In progress"))
+
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+
+        let collision = Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
+        Assert.Equal("FS.GG.SDD#75", str "ref" collision)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740: an UNREADABLE deferral queue REFUSES rather than reporting DISJOINT`` () =
+        // FAIL CLOSED, and pinned because the warrant claims it. `Cache.pending` refuses a queue with a
+        // line it cannot parse (it will not drop a board write it cannot read), and that refusal reaches
+        // here. The tempting alternative — treat an unreadable queue as an empty one — is a SILENT FALSE
+        // DISJOINT built out of not having been able to look, which is #266 exactly, in the fix for it.
+        //
+        // The board here says `In progress` for BOTH rows, so the column alone would answer OVERLAP: this
+        // leg therefore cannot pass by accident of the fixture being disjoint, and it distinguishes
+        // "refused" from every ordinary verdict rather than merely asserting non-zero.
+        let dir = cacheDir ()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            File.WriteAllText(Path.Combine(dir, "pending.jsonl"), "{not a queue entry\n")
+
+            let code, out = runIn dir (overlappingWorld false) (widenOnto "src/Shared.fs")
+
+            Assert.NotEqual(0, code)
+            Assert.DoesNotContain("disjoint", out)
+            Assert.Equal("", out.Trim())
+        finally
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    // ---- .github#1740 AC5: the NARROWING sentence, and the one it must NOT be -------------------------
+    //
+    // WHY THIS IS HERE AND NOT ONLY IN `writes.sh`. The e2e leg exercises the narrowing branch alone, and a
+    // branch with no counter-example is not pinned: `let isNarrowing = true` satisfies it. These two legs
+    // are the counter-example — same board, same collision, same worker, and the ONLY difference is whether
+    // the update is a proper subset of what was declared before.
+    //
+    // The sentence is on STDERR, so these read STDERR — see `runCapturingStderr`. Asserting the ABSENCE of
+    // the narrowing claim as well as its presence is the point: a leg that only greps for the good sentence
+    // passes when both branches print it.
+    let private narrowingClaim = "cannot have introduced the collision"
+
+    [<Fact>]
+    let ``#1740 AC5: a proper narrowing that collides is reported as PRE-EXISTING`` () =
+        // #74 declares two tokens; `set-paths` drops one. A subset names strictly fewer files, so this
+        // command provably did not cause the collision it is about to be told about.
+        let bodies = Map.ofList [ 74, "Paths: scripts/fsgg-coord src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
+
+        let code, out, err =
+            runCapturingStderr
+                (world bodies laggingHolders false)
+                [ "set-paths"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal("overlap", str "verdict" (parsed out))
+        Assert.Contains(narrowingClaim, err)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740 AC5: a WIDENING that collides is NOT called a narrowing`` () =
+        // THE COUNTER-EXAMPLE, and the reason the leg above proves anything. Same board, same collision,
+        // same worker — the declaration GREW, so nothing may claim the overlap pre-dates the command.
+        // Without this, `let isNarrowing = true` passes the entire suite.
+        let code, out, err =
+            runCapturingStderr
+                (overlappingWorld false)
+                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal("overlap", str "verdict" (parsed out))
+        Assert.DoesNotContain(narrowingClaim, err)
+        // ...and it must not have regressed to the sentence #1740 removed, either.
+        Assert.DoesNotContain("introduced a collision — do NOT", err)
+        Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1740 AC5: an update that changes NOTHING is not a narrowing either`` () =
+        // THE ARM THE LENGTH TEST EXISTS FOR. `widen` is a union, so an idempotent re-run arrives with
+        // proposed = prior — a subset by `forall`, and not a narrowing by any honest reading. Both rows
+        // declare the colliding token, so the update is an identity AND collides, which is the only way to
+        // reach the sentence at all.
+        let bodies = Map.ofList [ 74, "Paths: src/Shared.fs"; 75, "Paths: src/Shared.fs" ]
+
+        let code, _, err =
+            runCapturingStderr
+                (world bodies laggingHolders false)
+                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.DoesNotContain(narrowingClaim, err)
         Assert.Equal(6, code)
 
     // ---- .github#1524 — `reconcile --apply --json` is ONE document -----------------------------------
