@@ -71,11 +71,36 @@ that stops the repo until a human fixes it by hand.
 
 ## Decision
 
-**§1 — A receiver commits no skill content, and both runtime roots are generated.** Neither
-`.claude/skills` nor `.agents/skills` is a tracked path in a `coordination-kit` receiver. Both are
-produced from the restored `FS.GG.Kit` package at the path each runtime already reads. ADR-0011's
-union rule is unchanged and is now *structural*: every root derives from one restored package, so
-there is no second copy for a first to diverge from.
+**§1 — A receiver commits no kit-derived skill content, and every runtime root is generated.** Neither
+`.claude/skills` nor `.agents/skills` is a tracked path in a `coordination-kit` receiver. Every root is
+produced at the path its runtime already reads, from the restored `FS.GG.Kit` package — directly, or
+from another root that was. ADR-0011's union rule is unchanged and, **for kit-derived content**, is now
+*structural*: it all descends from one restored package, so there is no second copy for a first to
+diverge from.
+
+**Which ADR-0065 disposition each root lands in is NOT decided here.** *Materialized* (the kit writes
+it) and *view* (generated from another root) both already exist, both already hold the root in the
+runtime set, and the choice is a per-receiver one that step 3 makes on that repo's tree. What this
+clause fixes is the property neither disposition names: **no root is tracked**. ADR-0067 §6.1's rule
+follows for every root under this contract regardless of disposition — a root absent in every fresh
+checkout must be generated **in a file the receiver owns**, never in a workflow step.
+
+**§1.1 — This does NOT reach content the receiver itself put in a runtime root, and that is an
+unresolved obstacle rather than an oversight.** *"Commits no skill content"* is scoped to **kit-derived**
+content, because a runtime root today also holds content no package can regenerate. Both instances are
+measured and both are in ADR-0067 §9: `FS.GG.SDD`'s producer-authoritative `.claude/skills/skill-manifest.json`
+— rehomed *into* that root by `FS.GG.SDD#771`, and without which SDD's **required** `gate` dies at
+*"producer manifest missing"* — and `FS.GG.Audio`'s **16 `fs-gg-sdd-*` skills it owns** inside both
+audited roots. ADR-0065 §Retiring a root is explicit that only the materializer that wrote a file may
+remove it and that a receiver's own content is *"left untouched"*; untracking a root that holds
+receiver-owned content would delete it by another name, and ADR-0067 §9 stage 2 has already measured
+exactly that failure — *"a view can lose a file that git reports nothing about"*.
+
+So this contract is **not adoptable on a receiver until that receiver's runtime roots hold nothing but
+kit-derived content**, either because they never did or because the rest was rehomed first. That is a
+per-repo precondition, it belongs to step 3 alongside `diff -r` and the directory/glob-reference grep
+(ADR-0067 §9, Rendering's finding), and it is stated here rather than discovered per receiver.
+[`#1855`](https://github.com/FS-GG/.github/issues/1855) owns it.
 
 **§2 — The guarantee is that a receiver checkout without a restore is not a working tree.** This is
 stated as the contract rather than mitigated by a mechanism. It was chosen over the three alternatives
@@ -93,6 +118,9 @@ reads the tree **without ever invoking the toolchain** is unreached. Concretely:
 - **"What skills did this receiver have at SHA X?" stops being answerable from the receiver alone.**
   It remains *derivable* — the pin is committed — but deriving it needs the package feed, so an
   offline question becomes a networked one.
+- **`git` stops being able to see a runtime root go missing.** With no root tracked, deleting one
+  leaves `git status --porcelain` clean. Only a check that runs the toolchain can notice — which is
+  the same unreached consumer, arriving from the other side.
 - **ADR-0067 §8's alarm becomes the entire guarantee.** It was one failure mode among several; it is
   now the only one, so a receiver whose alarm cannot fire has lost everything rather than something.
   §8's requirement therefore binds harder under this contract than it did when it was written.
@@ -155,10 +183,10 @@ to a *second* root resolved from a *committed* first one.
 
 | what the amended clause arranged for | how it arranged for it | how this contract preserves it |
 |---|---|---|
-| every runtime root holds the same skills | N materialized copies, plus a gate asserting they are equal | **by construction** — every root derives from one restored package; there is no second copy for a first to diverge from. Already reported on all seven half-view trees as *"STRUCTURALLY IMPOSSIBLE to violate … Checked, not assumed"* |
+| every runtime root holds the same skills | N materialized copies, plus a gate asserting they are equal | **by construction** for kit-derived content — it all descends from one restored package; there is no second copy for a first to diverge from. Reported in exactly those words on the four half-view trees whose stage notes record it (Templates, SDD, Audio, Governance): *"STRUCTURALLY IMPOSSIBLE to violate … Checked, not assumed"*; the other three recorded parity **AGREE / AGREE** without that phrasing. **Content the receiver owns is outside this and is §1.1's obstacle** |
 | a receiver's bytes match its pin | `coordination-sync --check --against-pin` over committed files | **by construction** — the bytes *are* the package's; the tree holds nothing to compare |
-| a receiver cannot hide a duplicate by deleting a mirror | ADR-0065 §Retiring a root, and `FsggKitRetiredSkillRoots` | preserved and **widened**: the membership lane of `skill-view check --receiver-proj` grades the declared root set itself, and now grades *every* root rather than the view root only |
-| real content at each runtime's expected path, never a committed symlink | ADR-0011 §Context, ADR-0014 D6, ADR-0067 §6 | **unchanged and re-affirmed.** The rejection was of a *committed* symlink degrading on checkout; with nothing committed, that failure mode has no carrier. Generated content is still real content at the expected path |
+| a receiver cannot hide a duplicate by deleting a mirror | ADR-0065 §Retiring a root, and `FsggKitRetiredSkillRoots` | **preserved, and NOT widened** — a correction, because the tempting claim is false: `skill-view check --receiver-proj`'s roots-declaration lane already grades *"the union of `<FsggKitSkillRoots>` and `<FsggKitViewSkillRoots>` ceasing to be the runtime root set"* (ADR-0067 §8.1), i.e. every root, today. What genuinely changes is worse rather than better: with **no** root tracked, deleting one leaves `git status` clean, so that lane is the only thing that can see it. That is §3's cost, restated where it bites |
+| real content at each runtime's expected path, never a committed symlink | ADR-0011 §Context, ADR-0014 D6, ADR-0067 §6 | the **committed**-symlink rejection is unchanged and re-affirmed — with nothing committed, that failure mode has no carrier. *"Copies, not symlinks"* is **not** re-affirmed beyond that, and saying so would be false: an **uncommitted** symlink is already how the view root is built (`.agents/skills` is a whole-directory symlink to `.claude/skills`), already sanctioned by ADR-0065's view disposition, and not new here |
 | a dropped kit **row** leaves no orphan | *nothing did this* — see §Context | **the class stops existing.** This is the one row where the replacement is strictly stronger than what it replaces, rather than equal to it |
 
 **What is NOT amended.** ADR-0011's union rule and its other invariants; ADR-0065's transport contract,
@@ -222,15 +250,27 @@ per-receiver step, not an assumption this record may make.
 re-taken rather than inherited.** `FS.GG.Rendering/skill-view-check.yml` was adjudicated **JUSTIFIED**
 on `#1830` on 2026-07-28, mutation-proven four ways — including the decisive leg, a partial view of
 **49** per-skill symlinks where `--source` declares 50, detected as `rc 1, [missing-skill]` naming the
-one omitted skill. Its adjudicator recorded an expiry condition with it:
+one omitted skill. Its adjudicator recorded an expiry condition with it, and the committed wording is
+[`docs/reports/2026-07-28-gate-mutation-adjudication-fleet.md`](../reports/2026-07-28-gate-mutation-adjudication-fleet.md):
 
-> *"the moment this repo's layout stops being a view (a second committed copy returns), the per-skill
-> lane at the view root becomes 50 tests of a file against itself and this verdict must be re-taken."*
+> *"`.agents/skills` is a whole-directory symlink to `.claude/skills`, so a view cannot diverge from
+> what it is a view of, and the gate deliberately does **not** byte-compare the two roots. **If this
+> repo ever returns to committing two independent copies, the per-skill lane at the view root becomes
+> 50 tests of a file against itself and this verdict must be re-taken.**"*
+
+(The `#1830` comment states the same condition in different words — *"the moment this repo's layout
+stops being a view (a second committed copy returns) …"*. The committed report is quoted here because
+it is the artifact, and because the two wordings are not interchangeable: the comment's opening clause
+is direction-neutral and the report's is not.)
 
 **That expiry names the opposite direction from this decision.** It anticipated a return to two
 committed copies; this contract moves to **zero**, and under it `--source` cannot be a committed
-`.claude/skills`, because there will not be one. The gate's *subject* therefore changes materially, and
-a verdict taken on 2026-07-28 says nothing about the tree this contract creates.
+`.claude/skills`, because there will not be one. **Neither wording covers that**, and the reason it
+matters is the same reason the expiry was written: the gate's premise is that the *source* is the
+authored thing and the roots are views of it. When the source is generated too, what the per-skill lane
+compares changes, and whether it is still detecting anything is a question that has to be re-asked. The
+gate's *subject* therefore changes materially, and a verdict taken on 2026-07-28 says nothing about the
+tree this contract creates.
 [`#1838`](https://github.com/FS-GG/.github/issues/1838) records two gates that already decayed after
 being justified; this would be a third, and unlike those two it would be decayed **deliberately, by
 us**. Re-taking it belongs to the receiver step that first makes the change, on that repo's own tree.
@@ -243,7 +283,8 @@ Stated so a later reader can tell a measurement from an inference
 | claim | source |
 |---|---|
 | 0 of 842 materialize runs on `main`; no `workflow_dispatch` in any of the seven; `renovate/*` same-repo head gating | `#1834` → `#1847`, commit `4fadc88`, recorded in `src/FS.GG.Kit/build/FS.GG.Kit.targets`; the per-receiver table is on `#1845` |
-| heal window mean 27–84 h, p90 70–265 h, max 167–312 h; Audio and Net NOT MEASURED at n=2 and n=1 | same |
+| heal window mean 27–84 h, p90 70–265 h, max 167–312 h | same (`4fadc88` records *"two receivers had too few to measure at all"* and names neither) |
+| the two unmeasured receivers are **FS.GG.Audio at n=2 and FS.GG.Net at n=1** | the per-receiver table on [`#1845`](https://github.com/FS-GG/.github/issues/1845), not `4fadc88` |
 | orphan detected by nothing; `0.17.0 → 0.18.0` dropped `.config/dotnet-tools.json`; graded set 28 → 27 | same, reproduced twice, once with no synthetic input |
 | detector runs 9–69×/day per receiver | same |
 | `kit / coordination-kit` red 534 times in ~24 days, per-receiver split, of 5139 runs | `#1834`'s report on `#1837` |

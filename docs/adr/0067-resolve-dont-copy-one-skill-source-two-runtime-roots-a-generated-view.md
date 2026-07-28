@@ -4,7 +4,7 @@
 - **Date:** 2026-07-27
 - **Affects:** FS-GG/.github, every coordination-kit receiver, FS.GG.SDD, FS.GG.Rendering, FS.GG.Templates, and scaffolded product workspaces
 - **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1, [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5, and [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set. ADR-0011 and ADR-0014 are amended **in DIRECTION only** — both stay in force, this record retires nothing they mandate, the root set they declare is unchanged today, and ADR-0014's Decision 6 is untouched and re-affirmed. See §6, §9. ADR-0065's **§5 is EXECUTED as of 2026-07-28** ([#1636](https://github.com/FS-GG/.github/issues/1636)): the ordered set is now TWO, `.claude/skills` + `.agents/skills`, and ADR-0065 was amended in that same change. Its transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. §6's generated view is NOT landed. See §5, §9.
-- **Amended by:** [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1 — **2026-07-28, and NOT executed: that record decides a contract and retires nothing** ([#1837](https://github.com/FS-GG/.github/issues/1837)). §6's *view generated at checkout* is widened from the **second** runtime root to **every** runtime root in a `coordination-kit` receiver: `.claude/skills` stops being a committed source for the view and is itself generated from the restored `FS.GG.Kit` package. §6's rejection of a committed symlink is untouched and re-affirmed — with nothing committed, `core.symlinks=false` has no committed link to degrade. §1, §2, §3, §4, §5, §8 and §9 are all unchanged, and §8 binds **harder**: it becomes the whole of the guarantee rather than one requirement among several. **ADR-0067 §7 does NOT reach that decision** — see ADR-0070 §4, which argues it from §7's own subject and conclusion rather than citing §7 either way.
+- **Amended by:** [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1 — **2026-07-28, and NOT executed: that record decides a contract and retires nothing** ([#1837](https://github.com/FS-GG/.github/issues/1837)). §6 is written about a view root resolved from a **committed** source root, and in a `coordination-kit` receiver that source root goes away: `.claude/skills` is generated too, so no runtime root is committed. §6's *mechanism* is not thereby made mandatory for every root — which ADR-0065 disposition a root takes is a per-receiver choice ADR-0070 §1 explicitly leaves open — but §6's *premise*, a committed source, no longer holds anywhere in a receiver. §6's rejection of a committed symlink is untouched and re-affirmed — with nothing committed, `core.symlinks=false` has no committed link to degrade. §1, §2, §3, §4, §5, §8 and §9 are all unchanged, and §8 binds **harder**: it becomes the whole of the guarantee rather than one requirement among several. **ADR-0067 §7 does NOT reach that decision** — see ADR-0070 §4, which argues it from §7's own subject and conclusion rather than citing §7 either way.
 - **Applies:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — *derive, don't restate* — to files rather than to facts.
 
 ## Context
@@ -86,10 +86,12 @@ because it needed no new tooling; that form is Linux-only and is **not** the end
 > ([#1837](https://github.com/FS-GG/.github/issues/1837)), and it has NOT executed: that record decides
 > a contract and retires nothing.** This clause is written about *a* view root, resolved from a
 > **committed** source root. In a `coordination-kit` receiver that source root goes away: `.claude/skills`
-> is generated from the restored `FS.GG.Kit` package too, so **every** runtime root is produced at
-> checkout and none is committed. **The clause's own rule is unchanged and its argument is strengthened,
-> not weakened** — the rejection of a committed symlink rests on a *committed* link checking out as a
-> regular text file under `core.symlinks=false`, and a tree that commits nothing has no such link to
+> is generated too, so **every** runtime root is produced at checkout and none is committed. Which
+> ADR-0065 disposition a root takes — *materialized*, or a *view* of another root — is a per-receiver
+> choice ADR-0070 §1 explicitly leaves open; what it fixes is that none of them is **tracked**.
+> **The clause's own rule is unchanged and its argument is strengthened, not weakened** — the rejection
+> of a committed symlink rests on a *committed* link checking out as a regular text file under
+> `core.symlinks=false`, and a tree that commits nothing has no such link to
 > degrade. §6.1 below is likewise unchanged and applies to *every* root under that contract rather than
 > to the second one: a root that is absent in every fresh checkout must be generated **in a file the
 > receiver owns**, never in a workflow step. The scaffolded-product-workspace lane is outside ADR-0070's
