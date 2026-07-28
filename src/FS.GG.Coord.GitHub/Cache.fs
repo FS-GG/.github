@@ -12,6 +12,7 @@ module Cache =
     type ReadIntent =
         | Scheduling
         | Reconciling
+        | Offering
 
     let root () =
         match Environment.GetEnvironmentVariable "FSGG_COORD_CACHE" with
@@ -59,7 +60,15 @@ module Cache =
         match intent with
         // THE RULE, AS CONTROL FLOW. A reconciler cannot reach the cache at all — not "should not", CANNOT.
         // For as long as this was a convention, it was a convention that got violated.
-        | Reconciling -> None
+        //
+        // AND NEITHER CAN THE CHORE OFFER (.github#1679). It is listed SEPARATELY rather than folded into
+        // the line above, because these two are fresh for different reasons and the `.fsi` states both: a
+        // reconciler's job is to say what is true right now, where an offer is an INSTRUCTION TO WRITE
+        // issued at the instant a write just landed, with nothing behind it that re-decides whether it was
+        // owed. Merging the cases would put the offer back on a warrant that was never checked against it,
+        // which is the whole of the defect.
+        | Reconciling
+        | Offering -> None
         | Scheduling ->
 
         let ttl = scanTtlSeconds ()

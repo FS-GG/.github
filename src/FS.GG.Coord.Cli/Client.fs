@@ -849,8 +849,41 @@ module Client =
         |> Result.toOption
         |> Option.map (enrichPredicates >> enrichBoardFacts rows >> wholeOf)
 
-    let private wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
-        match scanAndDecide ctx { opts with Repo = None } Cache.Scheduling with
+    /// THE OFFER PATH'S BOARD READ — the ONE door to `offerBoardOf`, and the place its FRESHNESS is decided.
+    ///
+    /// **THE DEFECT THIS FIXES** (.github#1679). This read `Cache.Scheduling`, so for up to ninety seconds
+    /// after any `Class` column write the offer derived `CLASS-PROJECTION-LAG` against the column as it was
+    /// BEFORE the write. That is not #1649: #1649 was a JOIN — the rows were discarded, so `BoardClass` was
+    /// pinned at `None` and the guard was unconditionally true — and its fix is present and working. This is
+    /// a CLOCK. The offer was not wrong about the board; it was right about a ninety-second-old board, which
+    /// is indistinguishable from wrong to the worker who acts on it.
+    ///
+    /// **AND `Chore.isRetired` CANNOT RESCUE IT**, which is what makes this more than a stale read.
+    /// Retirement works by RE-DERIVING, and a re-derivation over the same cached scan answers "still owed"
+    /// against a write that has already landed. So the offer survives the very write that discharges it,
+    /// for the whole TTL, and re-arrives at the next boundary inside the window.
+    ///
+    /// **FOUR MEASUREMENTS SEPARATE THIS CAUSE FROM #1649's**, and every one of them is a fact about the
+    /// clock rather than the join: `reconcile` proposed no `CLASS-PROJECTION-LAG` at the same instant (same
+    /// `Chore.derive`, same `enrichBoardFacts`, opposite answer); a cold `FSGG_COORD_CACHE` made the offer
+    /// vanish; the warm run stopped offering once the TTL elapsed with NO board write in between; and under
+    /// #1649's defect the offer was independent of cache age — which is exactly why that investigation
+    /// refuted the cache, correctly, for the offers it measured.
+    ///
+    /// **WHY `Cache.Offering` AND NOT MERELY DELETING THE CACHE FROM THIS PATH'S REACH.** The cache is right
+    /// and #418 is why: the fleet shares 5,000 GraphQL pt/hr and five workers looping `take` drained it in
+    /// fifteen minutes. `Scheduling` is untouched — the scheduling poll still serves N workers from one
+    /// scan. The offer is not in that loop (gated on a chore lock existing at all; once per `done --flip`;
+    /// on `next` only after `take` found nothing), the REST half of this read was never cached and is paid
+    /// either way, and a fresh scan WRITES the cache — so this path becomes a producer of the shared scan
+    /// rather than a consumer of it. `Cache.fsi` carries the full argument and names this consumer.
+    ///
+    /// NOT PRIVATE, deliberately, on `offerBoardOf`'s terms exactly: the freshness IS the correctness
+    /// argument, and a defect whose entire content was "one call site named the wrong intent" must be
+    /// assertable by a test rather than re-argued in a comment. `ChoresTests` drives THIS function over a
+    /// warm cache, so a mutation back to `Scheduling` reds a leg instead of passing one.
+    let wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
+        match scanAndDecide ctx { opts with Repo = None } Cache.Offering with
         | Error _ -> None
         // The scan ROWS, no longer discarded — see `offerBoardOf` for what discarding them cost. The shape of
         // the bug is worth keeping in view AT the call site: the `_` that used to sit here was not an
@@ -940,6 +973,13 @@ module Client =
     /// reads it UNFILTERED regardless of `--repo` (#1086). With no `--repo` that is the same board `next`
     /// just decided from, so this re-reads it — a second scan on the DIAGNOSTIC command (`/pnext-item` calls
     /// `next` only when `take` found nothing), and only once a lock is known to exist.
+    ///
+    /// AND SINCE .github#1679 THAT SECOND SCAN IS REAL, where it used to be a cache hit off the read `next`
+    /// had made milliseconds earlier. That is the cost of the fix, stated here rather than left for someone
+    /// to discover in a budget: the re-read bought a type-level guarantee (#1086) and now buys freshness
+    /// too, which is what it was always documented as being. It lands on the verb that fires only on a board
+    /// with no work — and a fresh scan REFRESHES the shared cache, so the points come back to the next
+    /// `take`.
     ///
     /// IT DOES NOT REUSE `next`'s `doc`, deliberately, and that is the #1086 fix keeping its own rule. The
     /// reuse would build a `Chore.Whole` from a board proven whole only by "`next` with no `--repo` scans

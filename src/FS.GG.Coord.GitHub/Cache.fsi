@@ -24,11 +24,52 @@ module Cache =
     /// A reconciler may NEVER serve a stale board. Its entire job is to say what is true *right now*, and a
     /// cached "truth" is how a reconciler reports drift that was already fixed — or misses drift that
     /// isn't.
+    ///
+    /// **AND THE CHORE OFFER IS ON THE RECONCILER'S SIDE, NOT THE SCHEDULER'S** (.github#1679). It rode
+    /// `Scheduling` for its whole life because it is reached from `next` — but the warrant above is about
+    /// CLAIMING AN ITEM, and it is right about claiming an item. None of it transfers to a chore:
+    ///
+    /// - **There is no CAS behind a chore's PREMISE.** The chore lock is a CAS over *who performs* the
+    ///   chore; nothing re-decides whether it was owed. `Chore.isRetired` works by RE-DERIVING, and a
+    ///   re-derivation over the same cached board answers "still owed" against a write that has already
+    ///   landed — so a stale offer survives its own discharge for the whole TTL rather than being corrected
+    ///   by the next reader.
+    /// - **The cost is not a retry.** It is a worker handed a written instruction to perform a board write
+    ///   that is already done, and a per-repo lock taken to serialise it — measured as eight needless
+    ///   offers and eight needless lock acquisitions across three repos (.github#1649, .github#1679).
+    /// - **The offer fires at the WORST instant for a stale column.** `done --flip` is precisely the moment
+    ///   a board column was most recently written, and `offerChoreAfterDone` buys a dedicated scan on the
+    ///   stated grounds that `done` "holds no snapshot ... so the offer costs a scan". Serving that
+    ///   paid-for scan out of the cache gives back the freshness it was bought for.
+    ///
+    /// **THIS DOES NOT SHRINK THE CACHE'S JOB, AND MUST NOT BE READ AS DOING SO.** #418's subject is the
+    /// SCHEDULING POLL — five workers looping `take` drained the fleet's 5,000 pt/hr in fifteen minutes —
+    /// and `Scheduling` is untouched: `next`/`take`/`batch` still serve their decision from one shared scan.
+    /// The offer is not in that loop. It is gated on a repo having a chore lock at all, it fires once per
+    /// `done --flip` and only on a `next` that already found nothing, and the REST half of its read
+    /// (`Scan.snapshot`'s per-open-row body and marker reads — the expensive half, ~85 requests unscoped)
+    /// was never cached and is paid either way. What changes hands is the GraphQL board query alone.
+    ///
+    /// **AND THAT QUERY WAS MEASURED RATHER THAN ESTIMATED**, because the estimate is how #1086 got the
+    /// same trade wrong by an order of magnitude and called it a saving. On the live Coordination board,
+    /// 2026-07-28: one `scan --fresh` moved the GraphQL budget 3516 → 3465 — **51 points of 5,000/hr**,
+    /// brackets included, so the scan itself is at most that. Roughly one percent of the fleet's hourly
+    /// budget per offer, on a path that fires once per completed item. #418's failure was five workers
+    /// looping a board read; this is not that shape, and the number says so.
+    ///
+    /// **And it is paid back in kind**: a fresh scan WRITES the cache (`Scan.scanFresh` → `putScan`), so an
+    /// offering read leaves a fresh board behind it for the next ninety seconds of `take`s. The offer path
+    /// stops being a consumer of the shared scan and becomes a producer of it.
     type ReadIntent =
-        /// `next` / `take` / `batch`. May serve a cached scan.
+        /// `next` / `take` / `batch` — the DECISION half. May serve a cached scan.
         | Scheduling
         /// `ready` / `lint` / `who` / `overlap --active`. Always scans fresh.
         | Reconciling
+        /// The deferred chore queue's board (`Client.wholeBoard`, at `next` and at `done --flip`). Always
+        /// scans fresh, for the reasons above — kept DISTINCT from `Reconciling` because the two are fresh
+        /// for different reasons, and a case that merely borrowed `Reconciling`'s warrant would be the same
+        /// un-rechecked reuse that put the offer on `Scheduling` in the first place.
+        | Offering
 
     /// Where the cache lives. `FSGG_COORD_CACHE`, else `$XDG_CACHE_HOME/fsgg-coord`, else
     /// `$HOME/.cache/fsgg-coord`.

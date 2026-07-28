@@ -361,3 +361,246 @@ let ``#1649: the board the offer path builds CARRIES the scanned column — the 
     // And an ABSENT column still travels as absent, so a genuinely unset one reads as a real disagreement
     // rather than a suppressed projection — the fail-closed direction `Chore.fs` argues for by name.
     Assert.Equal((None, Some Hardening), observed None)
+
+// ---- #1679: THE OFFER'S BOARD READ IS FRESH — a chore may not survive the write that discharges it ----
+//
+// THE REMAINING HALF OF THE SAME SYMPTOM, AND THE SUBTLER ONE. #1649 above was a JOIN: the rows were
+// discarded, `BoardClass` was pinned at `None`, and the guard was unconditionally true — so the offer named
+// a disagreement it had never read either side of. Its fix is present and working, and the offers came
+// BACK. This cause is a CLOCK. `Client.wholeBoard` read the board through `Cache.Scheduling`, so for up to
+// ninety seconds after any `Class` write the offer derived against the column as it was BEFORE the write.
+// The offer was not wrong about the board. It was right about a ninety-second-old board, which is
+// indistinguishable from wrong to the worker handed the instruction.
+//
+// AND `Chore.isRetired` CANNOT RESCUE IT, which is what lifts this above an ordinary stale read: retirement
+// works by RE-DERIVING, and a re-derivation over the same cached scan answers "still owed" against a write
+// that has already landed. The offer survives its own discharge for the whole window.
+//
+// WHAT THESE LEGS DO NOT DO IS WAIT. The distinguishing fact is the READ INTENT, not the elapsed time: the
+// cache these warm is well inside its TTL and `Cache.Scheduling` WOULD serve it, which is precisely why a
+// mutation of `wholeBoard`'s intent back to `Scheduling` reds every leg below. A guard that needed ninety
+// seconds to pass would be a guard that also passes on a slow machine for no reason at all.
+
+/// A board row for `.github#1524` in the GraphQL shape the SCAN parses, with the `Class` COLUMN under the
+/// fixture's control. `None` is an unset column — the state a `CLASS-PROJECTION-LAG` chore exists to repair.
+let private boardRowJson (classColumn: string option) =
+    let classField =
+        match classColumn with
+        | None -> "null"
+        | Some c -> $"""{{"name":"%s{c}"}}"""
+
+    $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":1524,"title":"an item whose body declares a class","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+
+/// The `.github` board, served live: the `Class` column is read from `column` at the moment of each request,
+/// so a test can WRITE the column between two reads and see which read the engine actually made.
+let private boardWorld (column: unit -> string option) =
+    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
+
+    Fake.Recorder(fun (req: Request) ->
+        let path = req.Path.Trim '/'
+
+        match req.Method, path with
+        | "POST", "graphql" ->
+            match req.Body with
+            | Query(document, _) ->
+                if document.Contains "projectsV2" then
+                    ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                elif document.Contains "fields(first" then
+                    ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                elif document.Contains "items(first" then
+                    ok
+                        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardRowJson (column ())}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                else
+                    Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+            | _ -> Error(Errors.NotFound "a graphql call with no document")
+        // The off-board sweep (`Reads.openIssues`): every scheduling read makes it, and the whole board is
+        // on the board, so there is nothing off it.
+        | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+        | "GET", "repos/FS-GG/.github/issues/1524" -> ok $"""{{"number":1524,"body":"%s{body}"}}"""
+        | "GET", "repos/FS-GG/.github/issues/1524/comments" -> ok "[]"
+        | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+/// Run `f` against a THROWAWAY cache root, so the shared 90s scan cache is this test's alone.
+///
+/// `FSGG_COORD_CACHE` is process-global and this is safe only because `AssemblyInfo.fs` disables xUnit's
+/// cross-class parallelism — the same licence `ApplicationServiceTests.run` and `FollowupsTests.withCache`
+/// take, and it is stated here rather than assumed because the whole subject of these legs IS that cache.
+let private withCache (f: unit -> 'a) : 'a =
+    let dir =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-1679-" + System.Guid.NewGuid().ToString "n")
+
+    let previous = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+    try
+        System.IO.Directory.CreateDirectory dir |> ignore
+        System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+        f ()
+    finally
+        System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+
+        try
+            System.IO.Directory.Delete(dir, true)
+        with _ ->
+            ()
+
+let private context (transport: Fake.Recorder) : Client.Context =
+    { Transport = transport
+      Owner = "FS-GG"
+      Title = "Coordination"
+      DefaultRepo = Some ".github"
+      ChoreLocks = [] }
+
+let private optionsOf (args: string list) : Options.Options =
+    match Options.parse args with
+    | Ok o -> o
+    | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+/// A SCHEDULING read memoises the board — a `take`/`next` anywhere in the fleet, the shared cache doing
+/// exactly the job #418 gave it. Then it ASSERTS the cache is warm.
+///
+/// THAT ASSERTION IS THE LEG'S PREMISE, AND IT IS WHY IT IS AN ASSERTION. Without it, a fixture change that
+/// stopped the warm from landing would leave every test below passing over an EMPTY cache — green, for the
+/// reason that there was nothing to serve staleness from, which is the one way these could pass while the
+/// defect was live. "I could not warm it" is not "the cache did not lie to me" (#266).
+let private warmSchedulingCache (transport: Fake.Recorder) =
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Error e -> failwith $"the fixture's own warming scan failed — got %A{e}"
+    | Ok _ -> ()
+
+    Assert.True(
+        (Cache.getScan Cache.Scheduling "FS-GG" "Coordination").IsSome,
+        "the cache is NOT warm, so nothing below could be served a stale board — the leg would pass vacuously"
+    )
+
+/// The offer path's board, read the way `next` and `done --flip` read it — through `Client.wholeBoard`, the
+/// real function, so the intent it names is the thing under test.
+let private offerPathBoard (transport: Fake.Recorder) =
+    match Client.wholeBoard (context transport) (optionsOf [ "next" ]) with
+    | None -> failwith "the offer path must build a board — the fixture serves one"
+    | Some(Chore.Whole items) -> items
+    | Some other -> failwith $"the offer path must hand `Chores.offer` a WHOLE board — got %A{other}"
+
+[<Fact>]
+let ``#1679: a Class column written AFTER the cached scan is SEEN — the offer does not survive its discharge`` () =
+    withCache (fun () ->
+        // The board BEFORE the write: the body declares `hardening`, the column is unset. The chore is
+        // genuinely owed at this instant — the control leg below drives exactly this state and offers.
+        let mutable column = None
+        let transport = boardWorld (fun () -> column)
+
+        warmSchedulingCache transport
+
+        // THE WRITE THAT DISCHARGES IT. Worker A sets `Class = hardening`; body and column now agree, and
+        // nothing is owed. The cached scan from a moment ago still says otherwise and is still well inside
+        // its TTL.
+        column <- Some "hardening"
+
+        match offerPathBoard transport with
+        | [ item ] ->
+            // The fresh column, not the cached absence. This is the fact the offer is derived from, asserted
+            // directly so a regression names itself rather than surfacing as a mystery offer.
+            Assert.Equal(Some Hardening, item.BoardClass)
+
+            // And the consequence: nothing is offered. `unreachable` is the second half of the claim —
+            // #1679's measured cost is a worker handed a written instruction to perform a board write that
+            // is already done, and a PER-REPO CHORE LOCK taken to serialise it against every other worker in
+            // that repo. A green here says the decline never reached the network, so no lock was taken.
+            Assert.Equal(None, Chores.offer unreachable Chore.AfterDone me None [] "FS-GG" ".github" (Chore.Whole [ item ]))
+        | other -> failwith $"expected the one board row — got %A{other}")
+
+[<Fact>]
+let ``#1679: a column that genuinely lags is STILL offered through the fresh read — the fix is freshness, not removal`` () =
+    // THE CONTROL, and the leg above is worth nothing without it: that assertion would pass just as well
+    // against an offer mechanism deleted outright, or against a `wholeBoard` that had stopped returning a
+    // board at all. Same fixture, same warm cache, ONE difference — no write lands — and the chore arrives.
+    // The issue says it in as many words: whether the 90s scheduling cache should exist is NOT in scope.
+    withCache (fun () ->
+        let mutable column = None
+        let transport = boardWorld (fun () -> column)
+
+        warmSchedulingCache transport
+
+        // No write. The column still disagrees with the body, and it disagrees on the FRESH read too.
+        match offerPathBoard transport with
+        | [ item ] ->
+            Assert.Equal(None, item.BoardClass)
+
+            let transport' =
+                scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
+
+            match Chores.offer transport' Chore.AfterDone me None [] "FS-GG" ".github" (Chore.Whole [ item ]) with
+            | None -> failwith "a genuinely lagging Class column must still be offered — the fix is freshness, not removal"
+            | Some(chore, got) ->
+                Assert.Equal(ref' 1524, chore.Subject)
+                Assert.Equal(lockRef, got)
+                Assert.Equal("CLASS-PROJECTION-LAG:FS-GG/.github#1524", chore.Id)
+        | other -> failwith $"expected the one board row — got %A{other}")
+
+/// `reconcile --json`'s findings, as the rule ids it proposes. The REAL verb over the REAL fixture: a test
+/// that re-derived reconcile's answer in the fixture would be comparing the offer path against a hand-copy
+/// of the thing it is supposed to agree with.
+let private reconcileIds (transport: Fake.Recorder) : string list =
+    let stdout = System.Console.Out
+    use captured = new System.IO.StringWriter()
+
+    let out =
+        try
+            System.Console.SetOut captured
+            Client.reconcile (context transport) (optionsOf [ "reconcile"; "--json" ]) |> ignore
+            System.Console.Out.Flush()
+            captured.ToString()
+        finally
+            System.Console.SetOut stdout
+
+    System.Text.Json.JsonDocument.Parse(out.Trim()).RootElement.EnumerateArray()
+    |> Seq.map (fun e -> e.GetProperty("id").GetString())
+    |> List.ofSeq
+
+// AC4 — THE TWO PATHS AGREE AT ONE INSTANT, and this is the assertion that stops a THIRD cause reproducing
+// the symptom. `reconcile` proposing nothing while the offer path proposed `CLASS-PROJECTION-LAG` for the
+// same item at the same moment was #1649's headline symptom, and it was STILL observable after #1649 landed
+// — because the two are the same `Chore.derive` over the same `enrichBoardFacts`, differing in exactly one
+// thing: which clock's board they read. Pinning the verdicts together is what makes that difference
+// unable to hide, whatever produces it next.
+//
+// BOTH ROWS MATTER, AND THEY FAIL IN OPPOSITE DIRECTIONS — which is what keeps the equality from being
+// satisfiable by two paths that are broken alike. The first is #1679 as measured: the chore is DISCHARGED
+// after the cached scan, so a cached read says "still owed" and a fresh one says nothing. The second is its
+// mirror: the column is CLEARED after the cached scan, so a cached read says nothing and a fresh one says
+// it is owed. A `wholeBoard` back on `Cache.Scheduling` reds one row by over-reporting and the other by
+// under-reporting; a comparison that could only catch one of those would be half a test.
+[<Theory>]
+[<InlineData(null, "hardening", "")>]
+[<InlineData("hardening", null, "CLASS-PROJECTION-LAG:FS-GG/.github#1524")>]
+let ``#1679: reconcile and the offer path reach the SAME verdict for the same item at the same instant``
+    (cached: string)
+    (live: string)
+    (expected: string)
+    =
+    withCache (fun () ->
+        let nullable (s: string) = if isNull s then None else Some s
+
+        let mutable column = nullable cached
+        let transport = boardWorld (fun () -> column)
+
+        warmSchedulingCache transport
+
+        // The board moves. Whatever the cache holds is now a description of a board that no longer exists.
+        column <- nullable live
+
+        // THE OFFER PATH FIRST, AND THE ORDER IS LOAD-BEARING. A fresh read REWRITES the shared cache
+        // (`Scan.scanFresh` → `putScan`), so running `reconcile` first would hand the offer path a cache
+        // holding the CURRENT board — and the comparison would pass under the defect it exists to catch.
+        let offered =
+            offerPathBoard transport |> Chore.derive |> List.map (fun c -> c.Id)
+
+        let reconciled = reconcileIds transport
+
+        let expectedIds =
+            if expected = "" then [] else [ expected ]
+
+        // The verdicts agree...
+        Assert.Equal<string list>(reconciled, offered)
+        // ...and they agree on the RIGHT answer. Without this, two paths broken in the same direction would
+        // satisfy the line above, which is the failure mode an equality assertion has by construction.
+        Assert.Equal<string list>(expectedIds, offered))
