@@ -397,3 +397,212 @@ mutations:
     anchor:
       pattern: 'gate-harness selftest (OK|FAILED)'
       produced_by: tests/gate-harness/run.sh
+
+  # =============================================================================================
+  # WAVE 3 (legs 18-24) — .github#1829: seven of the eight gates #1810 reached no verdict on.
+  #
+  # #1810 measured 17 of .github's 25 never-red gates and landed all 17 JUSTIFIED. It left EIGHT
+  # explicitly UNMEASURED rather than inheriting a green — `#266`: "I could not evaluate this" is
+  # NEVER "I evaluated it and it passed." These legs are seven of those eight. The eighth,
+  # `cross-repo-request-predicate.yml`, is still NOT MEASURED; the report says why, and it is a
+  # different why than #1810 recorded.
+  #
+  # THE SHAPE IS WAVE 2'S, WITH ONE ADDITION. Wave 2 mutated a `scripts/check-*.py` and ran the
+  # `tests/*/run.sh` the SAME workflow runs, so a caught mutation demonstrates the WORKFLOW can go
+  # red. Four of these legs are exactly that. Three are a shape wave 2 had no instance of: the gate's
+  # subject is DATA rather than a checker, so the mutation edits the SUBJECT (a parity fixture server,
+  # the driver package's pack hook, an advisory workflow's own classifier) and the gate's own terminal
+  # report is the anchor. Specification point 3 is unweakened — the loader still refuses an anchor
+  # produced by the mutation target, and `adjudicate` still re-hashes the producer either side of the
+  # edit; what changes is only which of the two files is the subject.
+  # =============================================================================================
+
+  # ---------------------------------------------------------------------------------------------
+  # 18. publish-flags.yml — 53 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # The #750 hazard is the repo VARIABLE being unset, which renders as the EMPTY STRING. This leg
+  # makes exactly that value acceptable and nothing else — `false` and every other non-`true` value
+  # stay red — so a fixture that only ever tested `false` would survive it.
+  - id: publish-flags/unset-flag-accepted
+    gate: publish-flags.yml
+    command: ["bash", "tests/publish-flags/run.sh"]
+    target: scripts/check-publish-flags.py
+    find: |-
+      if flag != "true":
+    replace: |-
+      if flag not in ("true", ""):
+    breaks: >-
+      an UNSET `NUGET_ORG_PUBLISH` (the empty string — #750's actual hazard) is accepted as if it were
+      `true`, so every nuget.org publisher gated on it silently stops publishing and `dotnet tool
+      restore` fails in five receivers as an empty version list rather than an error (ADR-0039)
+    anchor:
+      pattern: 'publish-flags fixture: \d+ assertion\(s\), \d+ passed, \d+ failed'
+      produced_by: tests/publish-flags/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 19. preset-repo-scope-coherence.yml — 28 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # Rule 4 is the one #1615 cost six hours: the kit stopped delivering a file and the preset rule that
+  # disabled it stood in all seven receivers, so ADR-0068's only delivery path was switched off with
+  # every gate green. Emptying `delivered` retires rule 4 while leaving rules 1-3 and the repo-list
+  # comparison intact — the mutant is a WORKING gate that has lost exactly one protection.
+  - id: preset-repo-scope-coherence/kit-delivered-rule-retired
+    gate: preset-repo-scope-coherence.yml
+    command: ["bash", "tests/preset-repo-scope-coherence/run.sh"]
+    target: scripts/check-preset-repo-scope-coherence.py
+    find: |-
+      delivered = sorted(f for f in files if isinstance(f, str) and f in kit_files)
+    replace: |-
+      delivered = []
+    breaks: >-
+      rule 4 stops firing, so a KIT-DELIVERED file scoped to some other fabric (the plausible wrong
+      fix #1552 invites) is graded against that fabric's receivers and passes — re-enabling Renovate
+      on a materialized file in every receiver that takes the kit but not that fabric, where a bump is
+      a PR that structurally cannot merge (#794)
+    discriminator: terminal
+    anchor:
+      pattern: 'preset-repo-scope-coherence fixture: (OK|\d+ FAILURE\(S\))'
+      produced_by: tests/preset-repo-scope-coherence/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 20. skill-view.yml — 11 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # FS.GG.Audio#212's defect, re-planted in the tool written to replace that whole class. It is not
+  # merely a misnamed diagnostic: `absent` is EXCUSABLE (`--absent-ok "<why>"`) and `dangling-link`
+  # is not, so under a receiver's `--absent-ok` the collapse turns a runtime resolving ZERO skills
+  # into a green.
+  - id: skill-view/dangling-root-collapsed-into-absent
+    gate: skill-view.yml
+    command: ["bash", "tests/skill-view/run.sh"]
+    target: scripts/skill-view
+    find: |-
+      if [ -L "$p" ]; then echo "dangling-link"; return; fi
+    replace: |-
+      if [ -L "$p" ]; then echo "absent"; return; fi
+    breaks: >-
+      `classify_root` stops telling a DANGLING view root from an absent one, so `[dangling-root]` is
+      never emitted and `--absent-ok` — which exists to excuse absence only — silently excuses a link
+      that resolves nowhere. That is FS.GG.Audio#212 exactly: its `[[ ! -e ]]` guard followed the
+      symlink, the dangling lane was unreachable, and the alarm shipped green for a day
+    anchor:
+      pattern: 'skill-view fixture: \d+ passed, \d+ failed'
+      produced_by: tests/skill-view/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 21. project-field-options.yml — 55 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # #1829 recorded this one as "reads live board field options; needs a board fixture". It DOES read
+  # the live board — but the workflow's FIRST step is `bash tests/project-field-options/run.sh`, which
+  # is offline and drives the same tool. The board fixture was never the obstacle; the workflow's step
+  # list had not been read.
+  - id: project-field-options/unknown-field-falls-through
+    gate: project-field-options.yml
+    command: ["bash", "tests/project-field-options/run.sh"]
+    target: scripts/project-field-options
+    find: |-
+      raise Refused(
+                  f"no check is defined for field {args.field!r}; known fields: "
+                  + ", ".join(repr(name) for name in sorted(SCHEMA_MARKERS))
+              )
+    replace: |-
+      check_repo_scope(args)
+    breaks: >-
+      the #1588 `--field` fence is removed and an unrecognised field falls through to the Repo Scope
+      leg, so `check --field Severity --schema …` reads the REPO SCOPE table, passes it against the
+      roster, and prints a green verdict about a field nothing examined — which the tool's own
+      docstring calls "the worst outcome this tool can produce"
+    discriminator: terminal
+    anchor:
+      pattern: '\d+ passed; \d+ failed'
+      produced_by: tests/project-field-options/run.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 22. parity-fixtures.yml — 60 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # THE FIRST LEG WHOSE TARGET IS DATA. This gate has no `tests/*/run.sh`: the workflow runs
+  # `python3 scripts/check-parity-fixtures.py` directly, and its subject is the 46 parity fixture
+  # servers under tests/coord-engine-parity. So the mutation breaks a FIXTURE — the thing the gate
+  # protects — and the gate itself is the command.
+  - id: parity-fixtures/http-10-server-reintroduced
+    gate: parity-fixtures.yml
+    command: ["python3", "scripts/check-parity-fixtures.py"]
+    target: tests/coord-engine-parity/adopt_server.py
+    find: |-
+      protocol_version = "HTTP/1.1"
+    replace: |-
+      protocol_version = "HTTP/1.0"
+    breaks: >-
+      one parity fixture drops back to HTTP/1.0, so it closes the connection after each response and
+      the engine's next request on that connection fails — the #939 framing property whose absence
+      reds the corpus AT RANDOM, on main as readily as on a PR (#761)
+    discriminator: terminal
+    anchor:
+      pattern: 'check-parity-fixtures: (OK — \d+|\d+ finding\(s\) across \d+) fixture\(s\)'
+      produced_by: scripts/check-parity-fixtures.py
+
+  # ---------------------------------------------------------------------------------------------
+  # 23. drivers-package.yml — 89 runs, never red
+  # ---------------------------------------------------------------------------------------------
+  # ALSO DATA, and the mutation had to be CHOSEN, not guessed. Tampering a driver BYTE is caught
+  # inside `stage-drivers.py`, which `set -e` aborts on before `verify-package.sh` prints any verdict
+  # of its own — a real red, but one no anchor can read as a finding rather than a crash (#1812), so
+  # it grades NOT_MEASURED. This mutation breaks the PACK HOOK instead, which is caught downstream by
+  # `verify-package.sh`'s own `fail()`, so the run's verdict is in the run's own words.
+  #
+  # `timeout` covers `dotnet pack` twice over a cold obj/.
+  - id: drivers-package/pack-hook-loses-the-recursive-glob
+    gate: drivers-package.yml
+    command: ["bash", "src/FS.GG.Drivers/verify-package.sh"]
+    target: src/FS.GG.Drivers/FS.GG.Drivers.csproj
+    find: |-
+      <_DriversStaged Include="$(DriversStagingDir)/**/*" />
+    replace: |-
+      <_DriversStaged Include="$(DriversStagingDir)/*" />
+    breaks: >-
+      the computed package content stops recursing, so the nupkg carries
+      `drivers/driver-skill-manifest.json` and NOT ONE driver skill file — a package that restores,
+      resolves, and exposes `$(FsggDriversContentDir)` while delivering zero driver bytes to the SDD
+      CLI's scaffold-time materialize (ADR-0054/ADR-0063)
+    timeout: 900
+    discriminator: terminal
+    anchor:
+      pattern: 'verify-package: (OK|FAIL — .+)'
+      produced_by: src/FS.GG.Drivers/verify-package.sh
+
+  # ---------------------------------------------------------------------------------------------
+  # 24. touch-set-drift.yml — 1265 runs, never red — AND ITS "NEVER RED" IS PART OF ITS SPEC
+  # ---------------------------------------------------------------------------------------------
+  # ADVISORY BY DECISION (ADR-0021, ADR-0027 §8): `verify-paths --warn` exits 0 on EVERY verdict and
+  # the drift finding is a sticky COMMENT, never a job conclusion. So "has it ever been red?" is the
+  # wrong question about the finding. #1829 AC4 asks for a stated, defended notion of "fires" for an
+  # advisory gate; this is it, and it has two halves, both measurable — which is why this gate is
+  # adjudicated rather than reported out of the method's reach:
+  #
+  #   (a) does the advisory VERDICT still discriminate? — ALREADY ANSWERED. Corpus leg 1
+  #       (`touch-set-drift/invalid-arm-misclassifies`) mutates THIS SAME FILE's INVALID arm and
+  #       `tests/touch-set-drift/run.sh` reds on it. The classifier is mutation-covered, and it was
+  #       covered before anybody asked this question.
+  #   (b) can the JOB go red at all? — yes, and #318's fail-closed lane is the only thing that does
+  #       it: "the touch-set was checked and is fine" and "the touch-set was never checked" must not
+  #       share a green. That lane is this workflow's ENTIRE red surface, and this leg measures it.
+  #
+  # The mutation restores the pre-#318 behaviour exactly: an rc-0 run that printed no `FSGG-PATHS`
+  # marker falls into the `skip` bucket, which DELETES the sticky comment and passes green. A
+  # transient 502 across a busy merge window then leaves the scheduler's disjointness guarantee
+  # unenforced on every concurrent PR, with nothing red and nothing commented to say so.
+  - id: touch-set-drift/no-verdict-falls-into-skip
+    gate: touch-set-drift.yml
+    command: ["bash", "tests/touch-set-drift/run.sh"]
+    target: .github/workflows/touch-set-drift.yml
+    find: |-
+      elif grep -q 'FSGG-PATHS SKIP'    drift.txt; then verdict=skip
+    replace: |-
+      elif true; then verdict=skip
+    breaks: >-
+      the #318 fail-closed else-branch becomes UNREACHABLE, so a run that reached no verdict at all —
+      an rc-0 `verify-paths` that printed no `FSGG-PATHS` marker — is classified `skip`, which deletes
+      the sticky comment and passes the job green. This is the one and only lane by which this
+      advisory gate's job can be red, and the mutation removes it
+    anchor:
+      pattern: 'touch-set-drift fixture — \d+ assertion\(s\): \d+ passed, \d+ failed'
+      produced_by: tests/touch-set-drift/run.sh
