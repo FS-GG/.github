@@ -29,9 +29,18 @@ import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# The scan's GraphQL is metered EXHAUSTED: every board query answers with the rate-limit signal the engine
-# reads as RateLimited (Budget.isRateLimited), so activeCollisions fails before it can return a verdict.
+# EXHAUSTED, ON BOTH METERS, BECAUSE THE SCAN MOVED BETWEEN THEM (.github#1779). What #523 certifies is
+# that an UNREADABLE collision scan REFUSES with the body untouched — never which transport was unreadable.
+# Before #1779 the scan was a GraphQL board query, so exhausting GraphQL was enough; the candidate set is
+# `Reads.openIssues` now, which is REST, and a fixture that only exhausted GraphQL would have let the scan
+# SUCCEED and quietly stopped testing #523 at all. Both are metered here, so this case cannot be hollowed
+# out again by the scan moving transports: whichever one it reads, it meets an exhausted budget.
+#
+# `Budget.classify` runs its rate-limit test FIRST on every non-2xx and matches on the MESSAGE, so the REST
+# arm must carry the same words and a 403 — which is exactly what GitHub sends when core is drained.
 RATE_LIMIT_ERROR = {"errors": [{"message": "API rate limit exceeded for installation"}]}
+REST_RATE_LIMIT = {"message": "API rate limit exceeded for installation",
+                   "documentation_url": "https://docs.github.com/rest/overview/rate-limits-for-the-rest-api"}
 
 REPO = "FS-GG/FS.GG.SDD"
 BODY_401 = "Paths: scripts/fsgg-coord"
@@ -105,6 +114,12 @@ class H(BaseHTTPRequestHandler):
         if m:
             n = int(m.group(1))
             return self._send(200, comments_401() if n == 401 else [])
+        # THE CANDIDATE-SET READ, EXHAUSTED (.github#1779) — this is what `activeCollisions` reads now, and
+        # it is the request #523's refusal must fire on. `verifyHeld` (the comments read above) and the
+        # subject's own body (below) still answer, so the refusal is the SCAN's and not a broken fixture.
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p)
+        if m:
+            return self._send(403, REST_RATE_LIMIT)
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))

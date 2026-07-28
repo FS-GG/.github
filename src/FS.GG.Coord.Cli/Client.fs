@@ -3488,182 +3488,158 @@ module Client =
 
     let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
 
-    /// The refs whose `Status` → `In progress` board write is QUEUED against THIS board but not yet
-    /// replayed (.github#1740 cause 2), lower-cased as `owner/repo#number` — `Board.boardWrite`'s own key.
-    ///
-    /// **THIS COSTS NOTHING.** The deferral queue is a single local file shared by every worker on the
-    /// machine (`Board.fsi`, #862), so another worker's un-replayed claim is readable without an API call.
-    ///
-    /// AN UNREADABLE QUEUE PROPAGATES AS AN ERROR — this module's existing doctrine, not a new severity: "a
-    /// claim we could not check is never a silent DISJOINT" (#461), and #523 has `widen` REFUSE on an
-    /// unreadable scan rather than land an unverified declaration. A queue we could not read is not an
-    /// empty queue (#266); reporting DISJOINT over it would assert there are no deferred claims on the
-    /// strength of not having been able to look.
-    let private deferredInProgress (ctx: Context) : Errors.IoResult<Set<string>> =
-        match Cache.pending () with
-        | Error e ->
-            // NAME THE REMEDY, because the message underneath is `flush`'s. `Cache.pending`'s refusal is
-            // written for the drainer — "a line we cannot read is a board write we would silently drop" —
-            // and an operator who meets it HERE is not draining anything; they are being told that the
-            // collision gate will not answer. The queue is one file shared by every worker on the box
-            // (#862), so this refuses for all of them at once, and the honest instruction is to repair the
-            // queue rather than to delete it: deleting it discards board writes that are still owed, which
-            // is the promise #510 exists to keep.
-            eprint
-                $"fsgg-coord-engine: the collision check cannot read the deferral queue (%s{Cache.root ()}/pending.jsonl), so it REFUSES rather than reporting DISJOINT over claims it could not see (#1740). Repair or drain that file — `scripts/fsgg-coord flush` — and re-run. Do NOT simply delete it: it holds board writes that are still owed (#510)."
-
-            Error e
-        | Ok entries ->
-            entries
-            |> List.filter (fun d ->
-                String.Equals(d.Field, "Status", StringComparison.OrdinalIgnoreCase)
-                && String.Equals(d.Value, "In progress", StringComparison.OrdinalIgnoreCase)
-                // #882 — an entry queued against ANOTHER board says nothing about this one. A pre-#882
-                // entry recorded no board and is honoured here, exactly as `flush` honours it.
-                && (match d.Board with
-                    | None -> true
-                    | Some queuedAgainst -> Cache.sameBoard queuedAgainst (ctx.Owner, ctx.Title)))
-            |> List.map (fun d -> d.Ref.ToLowerInvariant())
-            |> Set.ofList
-            |> Ok
-
     /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
     /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
     /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
     /// another repo names a different file, so it is never a collision and its holder is never named. A
     /// claim we could not read propagates as an Error: a claim we could not check is never a silent DISJOINT.
     ///
-    /// ---- THE FRESHNESS WARRANT, FOR **THIS** CONSUMER (.github#1740) ----------------------------------
+    /// ---- THE CANDIDATE SET IS KEYED ON THE **LOCK**, NEVER ON A PROJECTION OF IT (.github#1779) --------
     ///
-    /// `heldElsewhere` rides `Cache.Scheduling` and STATES a warrant that holds: its subject is OUR OWN
-    /// claims, a stale set can only miss our own very recent second claim, and the item's own CAS still
-    /// decides. `Cache.fsi`'s rule — *"staleness costs a retry; it cannot cost a double-claim"* — is about
-    /// that CAS.
+    /// A touch-set reservation is carried by a CLAIM MARKER — a comment, posted by `claim`'s CAS. The
+    /// board's `Status` column is a PROJECTION of that marker, written afterwards, over a different
+    /// transport, on a different budget. Every way those two can disagree is a way this scan can print
+    /// `DISJOINT` over a live reservation, and **there is no CAS on a file**: nothing downstream re-decides
+    /// a false `DISJOINT`, nothing detects it, and the cost is two workers editing one file for as long as
+    /// they both work. `heldElsewhere`'s warrant — *"staleness costs a retry, not a double-claim"* — is
+    /// about the ITEM CAS and does not reach this consumer; #1740 is what borrowing it cost.
     ///
-    /// **NONE OF IT TRANSFERS HERE, AND FOR TWELVE MONTHS THIS SCAN BORROWED IT WITHOUT SAYING SO.** This
-    /// consumer's subject is OTHER WORKERS' claims, and its output is the answer `/pnext-item` §3 tells a
-    /// worker to believe before editing a file. A miss here is a false `DISJOINT`, and **there is no CAS on
-    /// a file**: nothing downstream re-decides it, nothing detects it, and the cost is two workers editing
-    /// one file for as long as they both work. Measured on 2026-07-28: `wren-ac8f` claimed `.github#1646`
-    /// declaring `Client.fs` at 07:35:47Z, `osprey-3069` claimed `.github#1679` declaring the same file 41
-    /// seconds later, and the `widen` 53 seconds after THAT printed `DISJOINT`. Two hours later the
-    /// identical check printed `OVERLAP`. Nothing about either declaration had changed. Staleness on this
-    /// consumer costs a double-EDIT, which the item CAS knows nothing about.
+    /// `claim`'s own receipt enumerates the disagreements, and it exits GREEN on all four —
+    /// `converged:false` is a report, not a refusal. A column-derived candidate set misses the last three:
     ///
-    /// So the scan reads `Cache.Reconciling` — FRESH, every time, exactly as `Cache.fsi` has always said
-    /// `overlap --active` does; the code simply did not. `widen`/`set-paths` join it there, because they
-    /// share this scan and a verdict is not safer for being reached through a different verb.
+    /// | `statusWrite` | the column says | closed by a column-derived scan? |
+    /// |---|---|---|
+    /// | `written`, read fresh   | `In progress`     | yes |
+    /// | `written`, read stale   | the pre-claim column | only by a freshness tier (#1740 cause 1) |
+    /// | `deferred`              | the pre-claim column, until somebody runs `flush` | only by reading the deferral queue (#1740 cause 2) |
+    /// | `failed`                | the pre-claim column, **forever** — #510 never queues a permanent failure, because a write replayed forever is a promise nobody can keep | **no** |
+    /// | `not-on-board`          | nothing: there is no row | **no, by construction** |
     ///
-    /// **THE COST IS PAID KNOWINGLY, AND IT WAS MEASURED RATHER THAN ESTIMATED** (#1086 got this same trade
-    /// wrong by an order of magnitude by estimating; #1740 required the number before the change landed).
-    /// Measured on the live Coordination board, 2026-07-28, by reading `budget` either side of a single
-    /// `overlap --active` — `budget` itself moves the counter by 0, so the whole delta is the scan:
+    /// So the candidate set is not derived from the board at all. `Reads.openIssues` lists the repo's open
+    /// issues WITH their bodies in one paginated, unconditional call; the `Paths:` tokens are compared
+    /// PURELY; and a marker is read only for a row whose tokens actually collide. The column is never
+    /// consulted, so none of the four rows above can hide behind it, and the two `#1740` closed are closed
+    /// again here by a mechanism that does not depend on a cache tier or on a local queue file.
     ///
-    ///   | | GraphQL points per call, of 5,000/hr |
-    ///   |---|---|
-    ///   | BEFORE — `Cache.Scheduling`, warm 90s cache | **0–4** |
-    ///   | AFTER  — `Cache.Reconciling`, always fresh  | **19–25** (four runs: 19, 23, 25, 25) |
+    /// **THE SWEEP IS THE SCHEDULER'S OWN, NOT A NEW ONE.** `Scan.snapshot` takes
+    /// `candidates = scoped.Rows` — every row, with NO column filter — reads body and markers for each OPEN
+    /// one, and then sweeps `Reads.openIssues` for *"a claim on an issue whose column flip failed (the board
+    /// says Ready, the lock says held), or on one that never reached the board at all"*. That is
+    /// `take`/`next`/`batch`, on every scheduling poll. So this reads what the scheduler already reads, on
+    /// a verb run far less often, which is what #353 was reaching for when it repo-scoped this call: a
+    /// `widen` that disagrees with `take` about who holds what is incoherent whichever way it errs.
     ///
-    /// So this costs about **+21 points a call, ~0.5% of the fleet's hourly budget** — headroom for roughly
-    /// 200 calls an hour across every worker. `widen`/`set-paths`/`overlap --active` are run a handful of
-    /// times per ITEM, not in a poll: that is not the shape of #418 (five workers LOOPING `take`, draining
-    /// 5,000/hr in fifteen minutes) and not the shape of #1666 (a fleet-wide false `EX_RATE` stop). If that
-    /// headroom ever stops being comfortable, the fix is to make the SCAN cheaper, not to go back to
-    /// deciding who may edit a file from a cached column.
+    /// **THAT IS NOT THE SAME AS "THE SAME UNIVERSE", AND AN EARLIER DRAFT OF THIS COMMENT SAID IT WAS.**
+    /// Two differences survive, both listed under #266 below: `Scan.snapshot` reserves a stale-but-unreaped
+    /// marker (`reserver`, not `winner`) and it reserves a MARKERLESS `In progress` row as `RUnowned`. The
+    /// second is column-derived by construction, so a scan that never reads the column cannot reproduce it,
+    /// and no amount of care here would. Both predate this change; neither is fixed by it.
     ///
-    /// And it is partly paid back in kind: a fresh scan WRITES the cache (`Scan.scanFresh` → `putScan`), so
-    /// each call leaves a fresh board behind it for the next ninety seconds of `take`s.
+    /// **AND IT IS CHEAPER THAN THE COLUMN-DERIVED SCAN IT REPLACES — MEASURED, NOT ESTIMATED** (#1086 got
+    /// this same trade wrong by an order of magnitude by estimating; the first draft of `.github#1779` got
+    /// it wrong the other way, filing "~74 REST marker reads per `widen`" and declining the work over it).
+    /// Measured on the live Coordination board, 2026-07-28 — 74 open issues in `FS-GG/.github`, five rows
+    /// `In progress` — by reading the GraphQL budget either side of one `overlap .github#1688 --active`
+    /// (`budget` itself moves the counter by 0, so the whole delta is the scan):
     ///
-    /// ---- AND FRESHNESS ALONE IS NOT ENOUGH (.github#1740 cause 2) -------------------------------------
+    ///   | | GraphQL points, of 5,000/hr | REST calls |
+    ///   |---|---|---|
+    ///   | BEFORE — board scan + column filter | **24, 27, 31** | 1 issue body + 1 marker per `In progress` row |
+    ///   | AFTER  — `openIssues` + token filter | **0** | **2**: one issue body, one open-issue list |
     ///
-    /// A `Status` write can be DEFERRED independently of any cache: `claim` exits GREEN with
-    /// `converged:false` when the marker landed and the column did not, and on an exhausted budget the
-    /// write is QUEUED with nothing to replay it until somebody runs `flush`. The freshest possible board
-    /// read still shows that row in its PRE-CLAIM column, so selecting candidates by the column alone
-    /// misses a live claim no matter how fresh the read is.
+    /// The GraphQL cost goes to **zero**: the board query, and `Board.bootstrapCached` behind it, are gone
+    /// from this path entirely. What replaces them is one REST list read whose bodies `Reads.openIssues`
+    /// states are *"free here"*, plus one marker read PER COLLIDING ROW — in the incident that produced
+    /// #1740, exactly one; on the measurement above, zero, because nothing collided. The old scan's marker
+    /// reads were per `In progress` row **whether or not its tokens could ever collide**, so on a busy
+    /// board this strictly shrinks the REST cost too.
     ///
-    /// The deferral queue is a SINGLE FILE SHARED BY EVERY WORKER ON THE MACHINE (`Board.fsi`, #862), so
-    /// another worker's un-replayed claim is readable right here — for **zero API calls**, because it is a
-    /// local file. Those rows are unioned into the candidate set below.
+    /// The upper bound is the repo's open-issue count, reached when a declaration collides with every other
+    /// one — the same number `Scan.snapshot` already pays on every poll. **It is NOT reached by a
+    /// `Paths: any` chore lock, though an earlier draft of this comment said so.** `TouchSet.parse` maps
+    /// `any` to `DeclaredChore` and `TouchSet.conflicts` answers `[]` for it in either direction (#1103 leg
+    /// 8: *"a chore reserves nothing, so it conflicts with nothing"*), so a chore lock is the CHEAPEST row
+    /// here, not the most expensive. Worth stating, because the wrong version of that sentence also implies
+    /// `widen` would report a collision against an `any` chore, and it never does.
     ///
-    /// **WHAT REMAINS OPEN, NAMED RATHER THAN GLOSSED (#266).** A `Status` write that failed PERMANENTLY
-    /// (`statusWrite:"failed"`) is never queued — by #510's design, since replaying it forever is a promise
-    /// nobody can keep — and one that reports `"not-on-board"` has no board row to select at all. The
-    /// second is worth stating plainly: the candidate set below is filtered out of the board's `rows`, so
-    /// an off-board live claim is invisible here NO MATTER WHAT the queue says. The queue leg closes the
-    /// deferred case and nothing wider.
+    /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
     ///
-    /// **AND THE OBVIOUS COST ARGUMENT FOR LEAVING IT THERE DOES NOT HOLD — SAID HERE BECAUSE THE FIRST
-    /// DRAFT OF THIS COMMENT MADE IT.** "Keying candidates on the marker means a REST marker read per open
-    /// row, ~74 on this board, so it is unaffordable" is wrong twice over:
-    ///
-    /// - **The fleet already pays exactly that sweep, on a more frequent verb.** `Scan.snapshot` takes
-    ///   `candidates = scoped.Rows` — every row, with NO column filter — and reads body AND markers for
-    ///   each open one, uncached. That is `take`/`next`/`batch`, and `Cache.fsi` prices it at ~85 requests.
-    ///   The scheduler therefore already resolves the case this scan declines.
-    /// - **A far cheaper shape exists.** `Reads.openIssues` returns `(number, body)` for every open issue
-    ///   in ONE paginated call, and says in its own contract that "the bodies ride along because they are
-    ///   free here". Filtering on TOKENS first and reading a marker only for rows that actually collide
-    ///   costs ~1–2 REST calls plus one marker read per colliding row — in the incident that produced
-    ///   #1740, exactly one. It also reaches items that are not on the board at all, which nothing
-    ///   column-derived or queue-derived can.
-    ///
-    /// So the residual is left open here for SCOPE, not for cost: that design changes the scan's shape and
-    /// its failure modes (`openIssues` is per-repo, unconditional and paginated) and deserves its own
-    /// measurement and review rather than being smuggled in beside a cache-tier change. `.github#1779`
-    /// carries it, with this correction rather than the estimate.
+    /// - A claim on a **CLOSED** issue. `openIssues` is open-only — and so is the scheduler: `Scan.snapshot`
+    ///   SWEEPS a closed candidate with no marker read at all (#520). The two agree, deliberately.
+    /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
+    ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
+    /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
+    ///   here, while `Scan.snapshot` reserves it via `reserver` (*"a lease is a clock; a lock is broken
+    ///   only by `reap`"*). So the scheduler and this gate can give opposite answers about one marker.
+    ///   That divergence predates this change and is neither introduced nor fixed by it — it is about
+    ///   which MARKERS count, where this is about which ROWS are looked at. Filed as `.github#1792`.
+    /// - A **MARKERLESS row the board calls `In progress`**. `Scan.snapshot` reserves it as `RUnowned` —
+    ///   *"something is evidently editing those files"* — and that reservation is read off the COLUMN, so
+    ///   a scan that never reads the column cannot reproduce it by construction. `take` will therefore
+    ///   refuse to schedule against a surface this gate calls DISJOINT. The old scan here did not reserve
+    ///   it either (it required a `winner`), so this is not a regression; it is the same "which markers
+    ///   count" question as the row above, and it is on `.github#1792`.
+    /// - An issue whose list entry is **malformed**. `Reads.openIssues` drops an element with no numeric
+    ///   `number` and reads an absent/non-string `body` as `""`, which parses to `Undeclared` — a confident
+    ///   "declares nothing" about a row nobody could read, where the old per-candidate `Reads.issueBody`
+    ///   would have propagated an `Error`. That is `openIssues`' behaviour, shared with `Scan.snapshot`,
+    ///   and this change puts it on the gate that has nothing downstream. Filed as `.github#1794`.
     let private activeCollisions
         (ctx: Context)
         (opts: Options)
         (ref: Ref)
         (ts: TouchSet)
         : Errors.IoResult<(Ref * string * string list) list> =
-        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        // THE REPO SCOPE IS STRUCTURAL NOW, NOT A FILTER (#353). `openIssues` is keyed on this item's own
+        // owner/repo, so a token in another repo is never even read — where the old scan pulled the whole
+        // board and filtered with `sameRepo`, one edit away from the phantom collisions #353 removed.
+        // PRs are dropped inside `openIssues` (#641), so `IsPullRequest` needs no analogue here.
+        match Reads.openIssues ctx.Transport ref.Owner ref.Repo with
         | Error e -> Error e
-        | Ok board ->
-            match deferredInProgress ctx with
-            | Error e -> Error e
-            | Ok deferred ->
-                let claimPending (r: Ref) =
-                    Set.contains ($"%s{r.Owner}/%s{r.Repo}#%d{r.Number}".ToLowerInvariant()) deferred
+        | Ok issues ->
+            // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
+            // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
+            // a row whose declaration cannot collide is discarded before anything is spent on it.
+            //
+            // Sorted by number so the collision list is deterministic. The old order was the board's row
+            // order, which is the project's, which no caller can predict — and `widen --json`'s
+            // `collisions` array is a machine contract.
+            let colliding =
+                issues
+                |> List.sortBy fst
+                |> List.choose (fun (number, body) ->
+                    if number = ref.Number then
+                        // AN ITEM NEVER COLLIDES WITH ITSELF. `widen` re-checks the touch-set it is about
+                        // to write, so without this every widen would report itself.
+                        None
+                    else
+                        match TouchSet.conflicts ts (TouchSet.parse body) with
+                        | [] -> None
+                        | pairs ->
+                            Some(
+                                { Owner = ref.Owner
+                                  Repo = ref.Repo
+                                  Number = number },
+                                pairs
+                            ))
 
-                match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
-                | Error e -> Error e
-                | Ok rows ->
-                    // SAME REPO, in flight, not this item, not a PR — the repo scope IS the #353 fix.
-                    //
-                    // "In flight" is the COLUMN **or** a queued write that will make it the column. Selecting
-                    // on the column alone is #1740: it reads a PROJECTION to decide whether a LOCK is held,
-                    // and the projection is allowed to lag the lock by design.
-                    let candidates =
-                        rows
-                        |> List.filter (fun r ->
-                            not r.IsPullRequest
-                            && (r.Status = InProgress || claimPending r.Ref)
-                            && r.Ref.Number <> ref.Number
-                            && sameRepo r.Ref ref)
+            // ...THEN THE LOCK, for the survivors only. Colliding TOKENS are not a reservation: an
+            // unclaimed issue that declares the same files is work nobody is doing, and reporting it would
+            // stop a worker who has nothing to stop for. Only a LIVE claim reserves (`winner` applies the
+            // lease), and a marker read that FAILS propagates — a claim we could not check is never a
+            // silent DISJOINT (#461).
+            let rec scan acc rows =
+                match rows with
+                | [] -> Ok(List.rev acc)
+                | ((other: Ref), pairs) :: rest ->
+                    match Reads.markers ctx.Transport other.Owner other.Repo other.Number with
+                    | Error e -> Error e
+                    | Ok markers ->
+                        match Reads.winner opts.LeaseMinutes markers with
+                        | None -> scan acc rest
+                        | Some m -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
 
-                    // Only a LIVE claim reserves anything (`winner` applies the lease); read its touch-set
-                    // and compare. A read that fails propagates — a claim we could not check is never a
-                    // silent DISJOINT.
-                    let rec scan acc rows =
-                        match rows with
-                        | [] -> Ok(List.rev acc)
-                        | (row: Scan.Row) :: rest ->
-                            match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                            | Error e -> Error e
-                            | Ok markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | None -> scan acc rest
-                                | Some m ->
-                                    match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                                    | Error e -> Error e
-                                    | Ok body ->
-                                        match TouchSet.conflicts ts (TouchSet.parse body) with
-                                        | [] -> scan acc rest
-                                        | pairs -> scan ((row.Ref, m.Worker.Value, sharedTokens pairs) :: acc) rest
-
-                    scan [] candidates
+            scan [] colliding
 
 
     type private PathUpdate =

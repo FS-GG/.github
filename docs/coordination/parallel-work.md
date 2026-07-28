@@ -262,17 +262,33 @@ board `Status: In progress` flip is **best-effort** for the same reason: an item
 still claims. **The marker is the lock.** Anything asking "is this taken?" reads the marker, never
 the column.
 
-That rule binds the **readers** too, and for a while it did not. `who`, `reap`, `inbox`, `batch` and
-`overlap --active` all take their view of in-flight work from one place, and that place used to *ask
-the column* which items to look at — so a claim whose `Status` flip failed, or a claim on an item
-that is not on the board at all, was invisible to every one of them (FS-GG/.github#257). `reap` could
-not collect a dead worker off such an item, so its lease stopped self-healing; and because `batch`
-reserves the touch-set of everything in flight, an off-board claim's `Paths:` were never reserved —
-the scheduler would hand a second worker an item overlapping the subtree the first was editing.
+That rule binds the **readers** too, and for a while it did not. `who`, `reap`, `inbox` and `batch`
+all take their view of in-flight work from one place, and that place used to *ask the column* which
+items to look at — so a claim whose `Status` flip failed, or a claim on an item that is not on the
+board at all, was invisible to every one of them (FS-GG/.github#257). `reap` could not collect a dead
+worker off such an item, so its lease stopped self-healing; and because `batch` reserves the touch-set
+of everything in flight, an off-board claim's `Paths:` were never reserved — the scheduler would hand a
+second worker an item overlapping the subtree the first was editing.
 
-So the in-flight set is now the **union** of two things: the board's `In progress` column, and every
-open issue that **carries a live marker**, wherever the board thinks it sits. Only the column can
+So the scheduler's in-flight set is the **union** of two things: the board's `In progress` column, and
+every open issue that **carries a live marker**, wherever the board thinks it sits. Only the column can
 report `UNCLAIMED` (a markerless item is otherwise just an issue); only the marker can report a lock.
+
+**`overlap --active` / `widen` / `set-paths` do not read the column at all**, and that is a stronger
+rule rather than an exception to this one (FS-GG/.github#1779). Those three answer *"may I edit this
+file?"*, and a wrong `DISJOINT` there is **final** — nothing downstream re-decides it, because **there
+is no CAS on a file**. The column can disagree with a live marker in four ways, and `claim` exits green
+on all of them: the write **landed** (and a cached read shows the old value), was **deferred** on an
+exhausted budget, **failed permanently** (never queued, by #510 — so nothing will *ever* write it), or
+reported **not-on-board** (there is no row to write). A candidate set derived from rows misses the last
+two by construction. So the scan lists the repo's **open issues**, compares `Paths:` tokens first, and
+reads a marker only for a row that actually collides — no board query, no cache tier, no deferral
+queue. It is also **cheaper**: measured live 2026-07-28, 24–31 GraphQL points a call → **0**.
+
+Two consequences worth knowing, both deliberate. A claim on a **closed** issue reserves nothing here
+(the scheduler agrees — it sweeps a closed candidate without reading its marker). And the scheduler
+still reserves a *markerless* `In progress` row, which this scan cannot see because it never reads the
+column — so `take` can refuse a surface `widen` calls disjoint (FS-GG/.github#1792).
 
 **Leases.** A marker's `updated_at` is its heartbeat. Past `FSGG_CLAIM_LEASE_MIN` (default 120m) the
 claim is *stale*: ignored by the lock, collected by the next claimant (who tells you), and reapable.
