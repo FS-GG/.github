@@ -857,7 +857,17 @@ install is what keeps the composition honest. See the
   `build-config-propagate` push and the reusable `sync-build-config.sh --check` step are
   **retired**. [`sync-build-config.sh`](../scripts/sync-build-config.sh) survives only as the
   kit's `FILES`/marker **derive source** (ADR-0058). See [`docs/build/README.md`](build/README.md).
-  The pinned `.config/dotnet-tools.json` is distributed by the **coordination-kit** (#1077).
+  `.config/dotnet-tools.json` is **no longer distributed by any fabric** (#1615,
+  [ADR-0068](adr/0068-the-engine-tool-manifest-leaves-kit-ownership.md), 2026-07-28). It was a
+  `coordination-kit` row from #1077 until then, so that *"receives the tool ⇒ can run the tool"* held
+  by construction — but the kit is content-addressed, so bumping `fs.gg.coord.cli` by one integer
+  edited kit content and obliged a republish plus a seven-receiver fan-out (four of the nine
+  republishes measured on 2026-07-27/28, none of which carried a skill change). **Each receiver now
+  owns its own manifest** and Renovate bumps it directly; `dist/dotnet/.config/dotnet-tools.json`
+  remains this repo's canonical copy and `engine-pin-coherence`'s subject. #1077's invariant is
+  preserved by **assertion rather than arrangement**: `repos-audit`'s engine-manifest sweep reads
+  every `coordination-kit` receiver's actual manifest daily — `f(roster, receiver tree)`, strictly
+  stronger than the roster rule it replaces, which never read a receiver at all.
 - **`dist/dotnet/` also holds `global.json`, and it is deliberately NOT managed**
   (ADR-0006's 2026-07-17 amendment,
   [#903](https://github.com/FS-GG/.github/issues/903)). It is a fourth canonical

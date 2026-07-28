@@ -7,9 +7,12 @@
 #   1. DERIVED, NOT RESTATED — coordination-kit digests match registry/repos.lock exactly (ADR-0058),
 #      and the build-config member count matches sync-build-config.sh's FILES (its derive source).
 #   2. PACKS — `dotnet pack` produces a nupkg carrying every manifest member + the build logic.
-#   3. MATERIALIZES — a receiver gets the skills on disk in every root, the client executable, and the
-#      engine manifest at .config/ (ADR-0062's load-bearing half); build-config is withheld unless the
-#      consumer opts in, and (3b) lands at the receiver root when it does — global.json never carried.
+#   3. MATERIALIZES — a receiver gets the skills on disk in every root, both clients executable, and
+#      the two libraries `skill-view` sources (ADR-0062's load-bearing half). It does NOT get the
+#      engine manifest: that left kit ownership in .github#1615 (ADR-0068), and the leg asserting it
+#      was delivered is INVERTED rather than deleted, so re-adding the row reds beside its reason.
+#      build-config is withheld unless the consumer opts in, and (3b) lands at the receiver root when
+#      it does — global.json never carried.
 #      (3e) ADR-0067 §9's replacement is not merely PRESENT but RUNS from the receiver's own tree, and
 #      (3f/3g/3h) a VIEW root is swept, never copied into, certified or LOUDLY refused, refused outright
 #      when a root is named in two dispositions, and wholly inert when none is declared (.github#1696).
@@ -102,7 +105,18 @@ for root in .claude/skills .agents/skills; do
   done
 done
 [ -x "$recv/scripts/fsgg-coord" ]        || fail "client not materialized executable at scripts/fsgg-coord"
-[ -f "$recv/.config/dotnet-tools.json" ] || fail "engine manifest not materialized at .config/dotnet-tools.json"
+[ -x "$recv/scripts/skill-view" ]        || fail "client not materialized executable at scripts/skill-view"
+[ -f "$recv/scripts/lib/args.sh" ]       || fail "skill-view library not materialized at scripts/lib/args.sh (#1696)"
+[ -f "$recv/scripts/lib/roots.sh" ]      || fail "skill-view library not materialized at scripts/lib/roots.sh (#1696)"
+# THE ENGINE MANIFEST IS NO LONGER MATERIALIZED, AND THAT IS ASSERTED RATHER THAN MERELY UNCHECKED
+# (#1615, ADR-0068). This line used to read:
+#     [ -f "$recv/.config/dotnet-tools.json" ] || fail "engine manifest not materialized at .config/…"
+# Dropping it to nothing would leave the strongest statement about the kit's delivered set silent on
+# a member that was deliberately removed — so the assertion is INVERTED instead. A kit that starts
+# shipping `.config/dotnet-tools.json` again reds HERE, next to the reason, rather than being noticed
+# when a receiver's manifest is silently overwritten by a fabric that no longer owns it.
+[ ! -e "$recv/.config/dotnet-tools.json" ] \
+  || fail "the kit materialized .config/dotnet-tools.json — the engine manifest left kit ownership in #1615 (ADR-0068) and each receiver now owns its own. Overwriting it would undo the per-repo Renovate bump this decision relies on. If the row is genuinely being restored, read ADR-0068 first and update this leg with it."
 # The retired root is swept BY THE MATERIALIZER (ADR-0067 §5). Both halves are load-bearing: the kit's
 # own copy goes, and the receiver's own skill under that root SURVIVES — a sweep that took the whole
 # directory would be the hand-deletion ADR-0065's transport contract forbids, wearing a build task.
@@ -116,11 +130,11 @@ done
   || fail "retired-root sweep RECURSED THROUGH A SYMLINK and destroyed the canonical tree"
 echo "   retired root .codex/skills swept: kit copies removed, a view unlinked not followed, the receiver's own skill kept"
 unexpected_exec="$(find "$recv/.claude/skills" "$recv/.agents/skills" \
-  "$recv/.config/dotnet-tools.json" -type f -perm /111 -print)"
+  "$recv/scripts/lib" -type f -perm /111 -print)"
 [ -z "$unexpected_exec" ] || fail "non-client receiver output is executable after fresh materialize: $unexpected_exec"
 # build-config is OPT-IN: the default materialize must NOT write it.
 [ ! -f "$recv/Directory.Build.props" ]    || fail "build-config materialized without opt-in (Directory.Build.props at receiver root)"
-echo "   4 skills × 2 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
+echo "   4 skills × 2 roots + 2 executable clients + 2 libraries; engine manifest correctly NOT delivered (#1615); build-config correctly withheld (opt-in off)"
 
 echo "== 3a. overwrite + byte-identical materialization normalize metadata =="
 probe="$recv/.agents/skills/check-board/SKILL.md"
