@@ -111,6 +111,48 @@ unpin() { local slug="${1//\//__}"
           rm -f "$FIX/$slug.nopin" "$FIX/$slug/receiver.proj.pinned" \
                 "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props"; }
 
+# --- the view-root generate sweep's world (#1759) -------------------------------------------------
+#
+# view_root <repo> <shape> — write a receiver project in one of the four shapes the sweep grades.
+#
+# The PackageReference is deliberately VERSION-LESS (the CPM shape), so these projects add no second
+# FS.GG.Kit version literal: the kit-pin sweep reads the same staged file, and a repo pinned both
+# here and in its props file is a REFUSAL there. A helper that quietly broke a neighbouring sweep
+# would make every leg below prove the wrong thing.
+#
+#   generated  — declares a view root and generates it, BeforeTargets the assertion. All seven real
+#                receivers are this shape, measured 2026-07-28.
+#   orphan     — declares a view root and NOTHING generates it. THE FINDING.
+#   unordered  — declares a view root and runs `skill-view generate`, but ordered some other way.
+#                REFUSED: FsggKitCheckSkillView is itself AfterTargets=FsggKitMaterialize, so two
+#                sibling AfterTargets run in declaration order and the file cannot say which wins.
+#   noview     — an EMPTY <FsggKitViewSkillRoots>. Not a declaration: the kit's own Condition guards
+#                on the property being non-empty, so this receiver has no view root at all.
+view_root() { local slug="${1//\//__}" shape="$2" prop='.agents/skills' target=''
+  case "$shape" in
+    generated) target='<Target Name="FsggFixtureGenerateSkillView" BeforeTargets="FsggKitCheckSkillView" Condition="'"'"'$(FsggKitViewSkillRoots)'"'"' != '"'"''"'"'"><Exec Command="bash scripts/skill-view generate --source $(FsggKitSkillRoots) --roots &quot;$(FsggKitViewSkillRoots)&quot;" /></Target>' ;;
+    unordered) target='<Target Name="FsggFixtureGenerateSkillView" AfterTargets="FsggKitMaterialize"><Exec Command="bash scripts/skill-view generate --source .claude/skills --roots &quot;.agents/skills&quot;" /></Target>' ;;
+    orphan)    target='' ;;
+    noview)    prop=''; target='' ;;
+    *) echo "view_root: unknown shape '$shape'" >&2; return 1 ;;
+  esac
+  mkdir -p "$FIX/$slug"
+  cat > "$FIX/$slug/receiver.proj" <<XML
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>
+    <FsggKitViewSkillRoots>$prop</FsggKitViewSkillRoots>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Kit" />
+  </ItemGroup>
+  $target
+</Project>
+XML
+}
+# no_receiver_proj <repo> — the repo ships no receiver project at all.
+no_receiver_proj() { local slug="${1//\//__}"; rm -f "$FIX/$slug/receiver.proj"; }
+
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
@@ -2526,6 +2568,102 @@ out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
   && ok "kit-pin: a MISSING feed reader is a permanent no-verdict, not a clean org" \
   || bad "the borrowed feed reader's absence must fail closed" "rc=$rc: $out"
 
+unpin FS-GG/FS.GG.Rendering
+
+# --- the view-root generate sweep (#1759) --------------------------------------------------------
+#
+# WHAT THESE LEGS ARE FOR. #1759 asked whether `kit-materialize.yml` is blocker B5's shape on a
+# second gate: a `uses:` callee checks the CALLER out, a view skill root is untracked and git-ignored
+# by construction (ADR-0067 §6), so the root is absent there and the caller cannot add a generate
+# step. Measured 2026-07-28 on a bare clone of all seven receivers' `main`: every one is GREEN,
+# because every one carries its own `Fsgg<Repo>GenerateSkillView` in its receiver project. The claim
+# is refuted — and it is refuted by seven independent hand-copies with nothing comparing them
+# (#1710). These legs are what makes the refutation stay true: leg (2) is the one that can fail.
+#
+# The default receiver.proj shape used by every OTHER leg in this file declares no view root, so the
+# sweep says so and claims nothing — leg (0) pins that, because a sweep that reported a clean bill
+# over an empty subject would make legs (1)-(6) prove nothing.
+
+# (0) NOTHING TO ASSERT IS NOT A CLEAN BILL. Neither receiver declares a view root.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD noview; view_root FS-GG/FS.GG.Rendering noview
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no view root to generate anywhere' \
+    && printf '%s' "$out" | grep -q 'NOTHING was asserted; that is not a clean bill' \
+    && ! printf '%s' "$out" | grep -q 'receiver(s) that declare a view skill root generate it'; } \
+  && ok "view-root: an EMPTY <FsggKitViewSkillRoots> is 'no subject', never a pass" \
+  || bad "a sweep over no view root must claim nothing" "rc=$rc: $out"
+
+# (1) THE GREEN, and it is the real fleet's shape. Both receivers declare a view root and generate
+#     it BeforeTargets the assertion — what all seven repos measured green on 2026-07-28.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD generated; view_root FS-GG/FS.GG.Rendering generated
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q '2 generate it before FsggKitCheckSkillView' \
+    && printf '%s' "$out" | grep -q 'all 2 receiver(s) that declare a view skill root generate it'; } \
+  && ok "view-root: a receiver that generates its view before the assertion is GREEN" \
+  || bad "the accepted shape must pass, or leg (2) proves nothing" "rc=$rc: $out"
+
+# (2) THE LEG THAT CAN FAIL — #1759 AC3, and the whole reason this sweep exists. A receiver that
+#     declares the root and drops the generate is REPORTED HERE, from the authority, with no push
+#     from that receiver — not discovered when its next Renovate kit bump reds under a `uses:` it
+#     cannot add a step to.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD generated; view_root FS-GG/FS.GG.Rendering orphan
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'view-root generate — FS-GG/FS.GG.Rendering declares' \
+    && printf '%s' "$out" | grep -q 'NO target generates it before FsggKitCheckSkillView' \
+    && printf '%s' "$out" | grep -q '1 receiver(s) declare a view skill root that NOTHING generates'; } \
+  && ok "view-root: a declared view root with NO generate target is a FINDING (#1759 AC3)" \
+  || bad "a missing generate target must red here, not on the next materialize" "rc=$rc: $out"
+
+# (3) …and it is NOT a wiring gap. Same separation the kit-pin sweep draws: the receiver wires its
+#     capability perfectly and still owes a target. A red that named wiring would send an operator
+#     to a workflow that is correct (#327/#335).
+{ printf '%s' "$out" | grep -q '2 wired, 0 gap(s)' \
+    && ! printf '%s' "$out" | grep -q 'declared receiver(s) have not wired'; } \
+  && ok "view-root: a missing generate target is not reported as a wiring gap" \
+  || bad "the finding must name its own subject" "$out"
+
+# (4) AN ORDERING THIS SWEEP CANNOT READ IS REFUSED, NOT PASSED — and not blamed on the receiver.
+#     `FsggKitCheckSkillView` is AfterTargets=FsggKitMaterialize, so a sibling AfterTargets generate
+#     may well run first; the file cannot say. "I could not grade this" shares a code with neither
+#     "it is fine" (#266) nor "it is broken" (#320).
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD generated; view_root FS-GG/FS.GG.Rendering unordered
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] \
+    && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade' \
+    && printf '%s' "$out" | grep -q 'NOT ordered BeforeTargets=FsggKitCheckSkillView' \
+    && ! printf '%s' "$out" | grep -q 'NOTHING generates'; } \
+  && ok "view-root: an ungradeable ORDERING is a PERMANENT no-verdict, never a pass or a finding" \
+  || bad "an unreadable ordering must refuse, not guess" "rc=$rc: $out"
+
+# (5) AN UNREADABLE RECEIVER PROJECT IS RETRYABLE, and names its own subject rather than wiring.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD generated; view_root FS-GG/FS.GG.Rendering generated
+: > "$FIX/FS-GG__FS.GG.Rendering.failreceiver"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && ! printf '%s' "$out" | grep -q 'NOTHING generates'; } \
+  && ok "view-root: an unread receiver project is a no-verdict, never a fabricated green" \
+  || bad "an unread project must not be graded" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__FS.GG.Rendering.failreceiver"
+
+# (6) A RECEIVER THAT SHIPS NO RECEIVER PROJECT is answered, not skipped. It declares no view root,
+#     so this sweep says so — and must NOT vanish from the count, which is how a repo that stopped
+#     shipping the file would slip past both this sweep and its own denominator.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+view_root FS-GG/FS.GG.SDD generated; no_receiver_proj FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+    && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering ships no .config/kit/FS.GG.Kit.receiver.proj' \
+    && printf '%s' "$out" | grep -q '1 declare no view root, not graded'; } \
+  && ok "view-root: a receiver with no receiver project is ANSWERED, not silently dropped" \
+  || bad "every staged receiver needs a verdict" "rc=$rc: $out"
+
+view_root FS-GG/FS.GG.SDD noview; view_root FS-GG/FS.GG.Rendering noview
 unpin FS-GG/FS.GG.Rendering
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
