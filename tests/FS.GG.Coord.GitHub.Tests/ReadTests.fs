@@ -356,7 +356,7 @@ let ``#641 the open-issue scan EXCLUDES pull requests`` () =
     match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
     | Ok issues ->
         Assert.Equal(1, List.length issues)
-        Assert.Equal(42, fst issues.[0])
+        Assert.Equal(42, issues.[0].Number)
     | other -> failwith $"a PR is not an issue — got %A{other}"
 
 [<Fact>]
@@ -366,6 +366,93 @@ let ``#461 a malformed issue list is an error, not an empty candidate set`` () =
     match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
     | Error(Malformed _) -> ()
     | other -> failwith $"an unreadable issue list must refuse — got %A{other}"
+
+// ---- .github#1794: the open-issue scan manufactures NO answer out of what it could not read ---------
+//
+// This read is the #353 collision gate's candidate set (.github#1779) and the scheduler's off-board sweep.
+// Both fail OPEN on a wrong answer here — a row that "declares nothing" collides with nobody, and there is
+// no CAS on a file — so every leg below is about the DIRECTION of the failure, not merely that one occurs.
+
+[<Fact>]
+let ``#1794 an element with NO number REFUSES the read - it is never silently dropped`` () =
+    // THE FIRST FABRICATION. An element with no numeric `number` used to vanish from the candidate set
+    // entirely: a lock on it reserved nothing, and nothing anywhere reported an element had been discarded.
+    // It cannot be carried as an unreadable ENTRY either — `Reads.markers` is keyed on the number, so there
+    // is no lock to look up and no ref to report — so the whole read refuses. #266: never "I looked and it
+    // was fine".
+    let recorder =
+        serving """[{"number":42,"body":"Paths: src/**"},{"title":"no number at all","body":"Paths: src/**"}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Error(Malformed(_, detail)) ->
+        // AC2 — the count is a fact the caller is entitled to. The refusal locates the element in a payload
+        // an operator can go and look at: "element 1 of 2".
+        Assert.Contains("element 1 of 2", detail)
+    | other -> failwith $"an unidentifiable element must refuse the read, not disappear from it — got %A{other}"
+
+[<Fact>]
+let ``#1794 an element whose number is the STRING 42 refuses - a JSON kind change is not an identity`` () =
+    // The realistic trigger is not "GitHub returned garbage" — `Transport.Send` refuses a non-JSON body
+    // outright. It is a per-ELEMENT anomaly in an otherwise valid array: a schema change, a proxy that
+    // rewrites elements. `"42"` is exactly that shape, and it used to be dropped.
+    let recorder = serving """[{"number":"42","body":"Paths: src/**"}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Error(Malformed(_, detail)) -> Assert.Contains("element 0 of 1", detail)
+    | other -> failwith $"a non-numeric `number` must refuse the read — got %A{other}"
+
+[<Fact>]
+let ``#1794 a NULL body is BodyRead empty - a real, observed, empty declaration`` () =
+    // THE LINE THAT MUST NOT MOVE. GitHub serves `"body": null` for an issue nobody wrote a description
+    // for. The issue exists and declares nothing, `TouchSet.parse ""` calls that `Undeclared`, and that is
+    // the CORRECT verdict. The defect was never `null` — it was that a null body and an unreadable one were
+    // the same value. Fixing this by making `null` unreadable would red the scheduler for every
+    // description-less issue on the board.
+    let recorder = serving """[{"number":42,"body":null}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Ok [ { Number = 42; Body = Reads.BodyRead "" } ] -> ()
+    | other -> failwith $"a null body is a successfully-observed EMPTY body — got %A{other}"
+
+[<Fact>]
+let ``#1794 an ABSENT body field is BodyUnread - NOT an issue that declares nothing`` () =
+    // THE SECOND FABRICATION, and the one #1150 already closed one function away: `TouchSet.parse ""`
+    // answers `Undeclared`, and `TouchSet.conflicts` reads `Undeclared` as colliding with nothing. Reading
+    // an absent field as `""` therefore ASSERTS "this issue declares nothing" about a row nobody read —
+    // and on the #353 gate that assertion is a false DISJOINT with nothing downstream of it.
+    let recorder = serving """[{"number":42,"title":"no body field"}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Ok [ { Number = 42; Body = Reads.BodyUnread _ } ] -> ()
+    | Ok [ { Body = Reads.BodyRead b } ] ->
+        failwith $"an absent `body` must NOT read as a body — got BodyRead %A{b}, which parses to Undeclared"
+    | other -> failwith $"an absent `body` must be BodyUnread — got %A{other}"
+
+[<Fact>]
+let ``#1794 an ILL-TYPED body is BodyUnread - and it still names the issue, so its lock is still read`` () =
+    // A body that is an object/number/array is not a body. It is `BodyUnread` rather than a refusal of the
+    // whole read, and that distinction is deliberate: the NUMBER was readable, so this row still has a
+    // marker route. Callers can therefore ask the one question that settles it — is anything actually
+    // holding this? — instead of the read reddening a scan over a row nobody holds.
+    let recorder = serving """[{"number":42,"body":{"rewritten":"by a proxy"}}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Ok [ { Number = 42; Body = Reads.BodyUnread _ } ] -> ()
+    | other -> failwith $"an ill-typed `body` must be BodyUnread, keyed by its still-readable number — got %A{other}"
+
+[<Fact>]
+let ``#1794 a PR is still dropped - a POSITIVE identification is not a failure to identify`` () =
+    // The one silent drop this read still makes, and it must survive the fix. #641's exclusion is a
+    // positive identification of a thing that is not an item of work — not an element we could not read —
+    // so it is neither a refusal nor an unreadable entry. A PR with no `number` at all is STILL a PR.
+    let recorder =
+        serving
+            """[{"number":42,"body":"Paths: src/**"},
+                {"pull_request":{"url":"u"},"body":"a PR with no number"}]"""
+
+    match Reads.openIssues recorder "FS-GG" "FS.GG.SDD" with
+    | Ok [ { Number = 42 } ] -> ()
+    | other -> failwith $"a PR is excluded before identity is ever asked — got %A{other}"
 
 // ---- the issue body --------------------------------------------------------------------------------
 

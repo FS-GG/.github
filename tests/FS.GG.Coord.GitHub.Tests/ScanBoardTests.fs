@@ -520,6 +520,112 @@ let ``#979 snapshot says NOTHING for a --repo that matches — no noise on the h
     | Error _ -> ()
     | Ok(_, receipt) -> Assert.True(receipt.RepoAdvisory.IsNone, "a matched --repo must say nothing")
 
+// ---- .github#1794: the OFF-BOARD sweep carries the unreadable body to the wire ------------------------
+//
+// `Scan.snapshot`'s candidate loop has said this since #1150 — *"an unreadable one is `bodyUnreadable`,
+// NOT an empty body"* — and then the OFF-BOARD sweep, reading the same kind of body off the issue-LIST
+// route instead of the per-issue route, let an unreadable one fall through a `| _ -> ()` and reserve
+// nothing. `TouchSet.parse ""` answers `Undeclared`, which conflicts with nothing, so a live off-board
+// claim whose body could not be read reserved NO FILES and a candidate overlapping its real tree was
+// scheduled straight over it. That is #1150's own fail-open on the arm #1150 did not reach.
+
+/// A transport that answers the three routes the off-board sweep uses, keyed on path. `list` is the
+/// issue-LIST body (where the anomaly lives), `comments` the marker read, `body` the per-issue read.
+let private offBoardRoutes (list: string) (comments: int -> string) (body: string) =
+    Fake.Recorder(fun (req: Request) ->
+        let path = req.Path
+
+        if path.EndsWith "/comments" then
+            let n =
+                path.Split('/') |> Array.filter (fun s -> s <> "") |> Array.item 4 |> int
+
+            ok (comments n)
+        elif path.EndsWith "/issues" then
+            ok list
+        elif path.Contains "/pulls" || path.Contains "matching-refs" then
+            ok "[]"
+        else
+            ok body)
+
+/// A live claim marker on `n`, held by `worker`. `updated_at` is NOW, so the lease has not lapsed and
+/// `reserver` and `winner` agree about it — this test must not depend on the `.github#1792` question.
+let private liveMarker (worker: string) (n: int) =
+    let now = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"updated_at":"%s{now}"}}]"""
+
+[<Fact>]
+let ``#1794 an OFF-BOARD live claim whose body could not be read reserves an UNKNOWN surface, not nothing`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    // #99 is the board row. #500 is OFF the board — a claim whose column flip failed, or one that never
+    // reached the board — and its LIST element carries no `body` field at all. It holds a live claim.
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Board/**"},
+            {"number":500,"state":"open"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun n -> if n = 500 then liveMarker "offboard-holder" 500 else "[]")
+            """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the sweep must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        // The wire convention (#1150): EITHER a `paths` array OR a `pathsUnreadable` reason, never both.
+        // The reader keys on which is present and reconstructs `TouchSet.Unreadable`, which
+        // `Batch.schedule` reds the batch on (`unusableReservation`).
+        Assert.Contains("pathsUnreadable", document)
+
+        // AND THE FAIL-OPEN IS NAMED, not merely absent. Before .github#1794 this claim was DROPPED from
+        // `inFlight` entirely — so the assertion that would have passed on the broken engine is "the
+        // snapshot does not mention 500", and this is its negation.
+        Assert.Contains("offboard-holder", document)
+
+[<Fact>]
+let ``#1794 an off-board claim with a READABLE body still reserves its NAMED paths - the control`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    // The same arrangement with #500's body PRESENT. Without this leg, the test above could pass on an
+    // engine that called every off-board body unreadable — which would red every batch on the board.
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Board/**"},
+            {"number":500,"state":"open","body":"Paths: src/OffBoard/**"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun n -> if n = 500 then liveMarker "offboard-holder" 500 else "[]")
+            """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the sweep must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        Assert.Contains("src/OffBoard/**", document)
+        Assert.DoesNotContain("pathsUnreadable", document)
+
+[<Fact>]
+let ``#1794 an off-board issue with an unreadable body and NO claim reserves nothing - a comment is not a lock`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    // THE PRECISION LEG. An unreadable body only matters where something is RESERVED, and only a claim
+    // reserves. A chatty issue nobody holds must not become an unreadable reservation that reds every
+    // batch on the board — that would trade a rare fail-open for a frequent outage, which is the trade
+    // `.github#1779` was careful not to make.
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Board/**"},
+            {"number":500,"state":"open"}]"""
+
+    let transport = offBoardRoutes list (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"the sweep must produce a snapshot — got %A{e}"
+    | Ok(document, _) -> Assert.DoesNotContain("pathsUnreadable", document)
+
 // ---- the Phase column and the issue's age (.github#1598) ----------------------------------------------
 //
 // Two facts the board has always held and the scheduler never read. `Phase` is a single-select column; the

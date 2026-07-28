@@ -1675,7 +1675,7 @@ module Client =
                 // arm B — the off-board scan. Each open issue's BODY rides along for free (one list read
                 // serves both the marker scan and the touch-set extraction), keyed by ref.
                 let offBoard =
-                    System.Collections.Generic.Dictionary<string * string * int, string>()
+                    System.Collections.Generic.Dictionary<string * string * int, Reads.IssueBodyRead>()
 
                 for (o, r) in repos do
                     if failure.IsNone then
@@ -1684,8 +1684,11 @@ module Client =
                         match Reads.openIssues ctx.Transport o r with
                         | Error e -> failure <- Some e
                         | Ok issues ->
-                            for (n, body) in issues do
-                                offBoard.[(o, r, n)] <- body
+                            for issue in issues do
+                                // .github#1794: an unreadable BODY is stored as unreadable, not as `""`. The
+                                // ROW is still a candidate either way — its number was read, so its marker
+                                // will be — which is the fact `who` actually reports.
+                                offBoard.[(o, r, issue.Number)] <- issue.Body
 
                 // arm A ∪ arm B, deduped by ref and ordered (repo, number) so the output is deterministic.
                 // A board `In progress` row is a candidate even with no marker (it may be `unclaimed`); an
@@ -1744,12 +1747,20 @@ module Client =
                                     | Json ->
                                         let body =
                                             match offBoard.TryGetValue((o, r, n)) with
-                                            | true, b -> Ok b
-                                            | _ -> Reads.issueBody ctx.Transport o r n
+                                            // .github#1794: an unreadable arm-B body is `[]` for the same
+                                            // reason a failed `issueBody` is — informational, and a body is
+                                            // not a lock. It is NOT re-read as `""`, which would have
+                                            // printed an empty `paths` array as though we had looked.
+                                            | true, Reads.BodyUnread _ -> Error()
+                                            | true, Reads.BodyRead b -> Ok b
+                                            | _ ->
+                                                match Reads.issueBody ctx.Transport o r n with
+                                                | Ok text -> Ok text
+                                                | Error _ -> Error()
 
                                         match body with
                                         | Ok text -> pathNames (TouchSet.parse text)
-                                        | Error _ -> []
+                                        | Error() -> []
 
                                 // #581 — a bare `STALE` and `STALE (#NNN OPEN)` are not the same fact, and
                                 // `who` is what a human reads immediately before deciding to reap. Probe ONLY
@@ -2010,7 +2021,9 @@ module Client =
         | Ok issues ->
             let mutable failure: Errors.IoError option = None
 
-            for (number, _body) in issues do
+            // `reap` needs the NUMBER only: its subject is the lock, and the lock is a comment. The body
+            // rides along free and is not consulted, so its readability cannot change a reap decision.
+            for { Reads.OpenIssue.Number = number } in issues do
                 if failure.IsNone then
                     let ref =
                         { Owner = ctx.Owner
@@ -3579,11 +3592,12 @@ module Client =
     ///   refuse to schedule against a surface this gate calls DISJOINT. The old scan here did not reserve
     ///   it either (it required a `winner`), so this is not a regression; it is the same "which markers
     ///   count" question as the row above, and it is on `.github#1792`.
-    /// - An issue whose list entry is **malformed**. `Reads.openIssues` drops an element with no numeric
-    ///   `number` and reads an absent/non-string `body` as `""`, which parses to `Undeclared` — a confident
-    ///   "declares nothing" about a row nobody could read, where the old per-candidate `Reads.issueBody`
-    ///   would have propagated an `Error`. That is `openIssues`' behaviour, shared with `Scan.snapshot`,
-    ///   and this change puts it on the gate that has nothing downstream. Filed as `.github#1794`.
+    /// - ~~An issue whose list entry is **malformed**.~~ **CLOSED by `.github#1794`**, and it is the one
+    ///   residual on this list that was a fail-OPEN rather than a divergence. `Reads.openIssues` used to
+    ///   drop an element with no numeric `number` and read an absent/ill-typed `body` as `""` — which
+    ///   parses to `Undeclared`, a confident *"declares nothing"* about a row nobody could read. It now
+    ///   refuses the whole read for the first and returns `BodyUnread` for the second, and this scan gates
+    ///   on it below.
     let private activeCollisions
         (ctx: Context)
         (opts: Options)
@@ -3606,22 +3620,29 @@ module Client =
             // `collisions` array is a machine contract.
             let colliding =
                 issues
-                |> List.sortBy fst
-                |> List.choose (fun (number, body) ->
-                    if number = ref.Number then
+                |> List.sortBy (fun i -> i.Number)
+                |> List.choose (fun issue ->
+                    if issue.Number = ref.Number then
                         // AN ITEM NEVER COLLIDES WITH ITSELF. `widen` re-checks the touch-set it is about
                         // to write, so without this every widen would report itself.
                         None
                     else
-                        match TouchSet.conflicts ts (TouchSet.parse body) with
-                        | [] -> None
-                        | pairs ->
-                            Some(
-                                { Owner = ref.Owner
-                                  Repo = ref.Repo
-                                  Number = number },
-                                pairs
-                            ))
+                        let other =
+                            { Owner = ref.Owner
+                              Repo = ref.Repo
+                              Number = issue.Number }
+
+                        match issue.Body with
+                        // .github#1794 — A ROW WE COULD NOT READ SURVIVES THE FILTER. It cannot be
+                        // compared, so it cannot be CLEARED: discarding it here is the fail-open, because
+                        // the only thing downstream of this function is a `DISJOINT` nothing re-decides.
+                        // It is carried as UNDETERMINED, not as a collision — see the lock phase below for
+                        // why that distinction is what keeps the cost where #1779 measured it.
+                        | Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)
+                        | Reads.BodyRead body ->
+                            match TouchSet.conflicts ts (TouchSet.parse body) with
+                            | [] -> None
+                            | pairs -> Some(other, Choice1Of2 pairs))
 
             // ...THEN THE LOCK, for the survivors only. Colliding TOKENS are not a reservation: an
             // unclaimed issue that declares the same files is work nobody is doing, and reporting it would
@@ -3682,10 +3703,32 @@ module Client =
             // `RUnowned` arm carries the same sentence, and the `#1792` legs in `ApplicationServiceTests`
             // pin both halves — the divergence one so that closing it is a decision somebody makes with
             // these two costs in front of them, rather than a patch that silently reopens the question.
+            //
+            // AND THE SAME MARKER READ SETTLES THE UNREADABLE ROWS, WHICH IS WHY THEY ARE CHEAP
+            // (.github#1794). An unreadable body is only dangerous if that row RESERVES something, and the
+            // paragraphs above are precisely the argument about what reserves. So an unreadable row asks the
+            // one question a colliding row already asks — its marker — and the answer settles it:
+            //
+            //   - no reserver → it reserves nothing whatever its body said. Skipped, provably safely, and
+            //     `widen` is NOT reddened for an anomaly on an issue nobody is holding.
+            //   - a reserver  → we cannot say whether it collides, and we may not answer DISJOINT over a
+            //     live reservation. Refuse: #266's *"I could not look"*, never *"I looked and it was
+            //     fine"*. The caller gets a `Malformed` naming the row, and `overlap --active`/`widen`/
+            //     `set-paths` exit non-zero on it.
+            //
+            // NOTE THE INTERACTION WITH `.github#1792`, WHICH IS NOT NEUTRAL AND IS ASSERTED RATHER THAN
+            // INHERITED: because this is `reserver` and not `winner`, a LAPSED claim on a row whose body
+            // could not be read now refuses too. That is the same bounded, escapable failure `reserver`
+            // takes everywhere else — `OVERLAP`/refusal until somebody `reap`s — and it is the consistent
+            // reading: if a lapsed lease still reserves, then a lapsed lease over an UNKNOWN surface
+            // reserves an unknown surface, which is exactly what may not be cleared.
+            //
+            // The cost is therefore 1 marker read per unreadable row — the same unit as a colliding row,
+            // and zero when the list reads cleanly, which is `.github#1779`'s measured steady state.
             let rec scan acc rows =
                 match rows with
                 | [] -> Ok(List.rev acc)
-                | ((other: Ref), pairs) :: rest ->
+                | ((other: Ref), verdict) :: rest ->
                     match Reads.markers ctx.Transport other.Owner other.Repo other.Number with
                     | Error e -> Error e
                     | Ok markers ->
@@ -3696,7 +3739,16 @@ module Client =
                         // `overlap --active` call rather than estimated (#1086).
                         match Reads.reserver opts.LeaseMinutes markers with
                         | None -> scan acc rest
-                        | Some m -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
+                        | Some m ->
+                            match verdict with
+                            | Choice1Of2 pairs -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
+                            | Choice2Of2 reason ->
+                                Error(
+                                    Errors.Malformed(
+                                        $"%s{ref.Short}'s collision scan",
+                                        $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                    )
+                                )
 
             scan [] colliding
 
@@ -4149,7 +4201,7 @@ module Client =
                     // the candidate scan and the `Rooms:` extraction below, so widening the subject set to
                     // coordination rooms (ADR-0051) costs no extra body read — only the message read per room.
                     let offBoard =
-                        System.Collections.Generic.Dictionary<string * string * int, string>()
+                        System.Collections.Generic.Dictionary<string * string * int, Reads.IssueBodyRead>()
 
                     for (o, r) in repos do
                         if failure.IsNone then
@@ -4159,8 +4211,8 @@ module Client =
                             match Reads.openIssues ctx.Transport o r with
                             | Error e -> failure <- Some e
                             | Ok issues ->
-                                for (n, body) in issues do
-                                    offBoard.[(o, r, n)] <- body
+                                for issue in issues do
+                                    offBoard.[(o, r, issue.Number)] <- issue.Body
 
                     let inProgressRefs =
                         boardRows
@@ -4181,7 +4233,16 @@ module Client =
                         offBoard
                         |> Seq.collect (fun kv ->
                             let (o, r, _) = kv.Key
-                            Rooms.parse o r kv.Value)
+
+                            match kv.Value with
+                            // .github#1794: a body we could not read names no rooms we know of — which is
+                            // not the claim that it names none. It costs a subject, never a delivery: the
+                            // ITEM itself stays in `candidates` (its key is in `offBoard.Keys` regardless),
+                            // so no message on the item is lost; only a room it might have referenced is
+                            // unreachable through this row, and any OTHER item referencing that room still
+                            // folds it in.
+                            | Reads.BodyUnread _ -> []
+                            | Reads.BodyRead body -> Rooms.parse o r body)
                         |> Seq.map (fun rf -> rf.Owner, rf.Repo, rf.Number)
                         |> Set.ofSeq
 
@@ -4441,10 +4502,20 @@ module Client =
                                             match Reads.openIssues ctx.Transport room.Owner room.Repo with
                                             | Error _ -> ()
                                             | Ok issues ->
+                                                // .github#1794 — AN UNREADABLE BODY COUNTS AS A REFERENCE.
+                                                // This predicate gates a WRITE that closes the room, so its
+                                                // fail-open direction is "nobody references it any more"
+                                                // over a row nobody read: the room shuts under the workers
+                                                // still talking in it. `true` here costs a room that stays
+                                                // open one `done` longer; `false` costs a channel that
+                                                // vanishes mid-conversation.
                                                 let stillReferenced =
                                                     issues
-                                                    |> List.exists (fun (_, b) ->
-                                                        Rooms.parse room.Owner room.Repo b |> List.contains room)
+                                                    |> List.exists (fun issue ->
+                                                        match issue.Body with
+                                                        | Reads.BodyUnread _ -> true
+                                                        | Reads.BodyRead b ->
+                                                            Rooms.parse room.Owner room.Repo b |> List.contains room)
 
                                                 if not stillReferenced then
                                                     match Writes.closeRoom ctx.Transport room with

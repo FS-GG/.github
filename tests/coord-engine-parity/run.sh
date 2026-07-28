@@ -3222,6 +3222,180 @@ if [ -z "$OVK_PORT" ]; then bad "overlap fail-closed fixture bound a port"; else
   kill "$OVK_SRV" 2>/dev/null
 fi
 
+# .github#1794 — `Reads.openIssues` PAGINATES, and it manufactures NO answer out of what it could not read.
+#
+# Since .github#1779 this read IS the #353 collision gate's candidate set, and there is nothing downstream
+# of that gate: a false DISJOINT is final, because there is no CAS on a file. Both defects below failed in
+# that direction, and neither was reachable from a unit test — `Fake.Recorder` implements
+# `IGitHubTransport` DIRECTLY, and `Transport.Send` (the thing that follows `Link: rel="next"`) sits behind
+# that interface. Only real HTTP crosses a page boundary. See `openissuespage_server.py`'s header for the
+# board and for why the malformed element lives on page TWO rather than being asserted by hand.
+#
+#   page 1  501 src/Scene/** (the probe, no claim) · 502 docs/** (live claim, does not collide)
+#   page 2  503 src/Scene/** (live claim page2-holder — THE COLLISION) · 504 tests/** (no claim)
+oip() {  # oip <env-assignments...> -- <engine args...>
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local OUT PORT SRV rc
+  OUT="$(mktemp)"
+  env "${envs[@]}" python3 "$HERE/openissuespage_server.py" >"$OUT" 2>&1 & SRV=$!
+  PORT=""; for _ in $(seq 1 50); do PORT="$(head -n1 "$OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
+  if [ -z "$PORT" ]; then OIP_OUT="fixture bound no port: $(cat "$OUT")"; OIP_RC=99
+  else
+    OIP_OUT="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+                 FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                 "$ENGINE" "$@" 2>&1)"; OIP_RC=$?
+  fi
+  kill "$SRV" 2>/dev/null; rm -f "$OUT"
+}
+
+# EVERY NEGATIVE ASSERTION BELOW GOES THROUGH THIS, AND THAT IS NOT STYLE — IT IS `.github#1815`'s SHAPE.
+#
+# #1815's worker found that `needs:` alone SKIPS a dependent job when its dependency fails, and GitHub
+# reports a skipped job as `conclusion: skipped`, which branch protection counts as SATISFIED. The
+# absence of a bad signal was read as a good one, on exactly the failure classes the gate existed for.
+#
+# The first draft of this block had the identical defect, five times over. Every "must NOT read as
+# DISJOINT" leg was written `case "$OIP_OUT" in *"overlaps no live claim"*) bad ;; *) ok ;; esac` — so if
+# the fixture never bound a port, or the engine never ran, or the output was empty, the forbidden string
+# was absent and the leg reported PASS. A refutation over an output that does not exist refutes nothing.
+# No assertion about the HAPPY path can see this: the happy path is exactly where the fixture does run.
+#
+# So a refutation must first EARN the right to conclude. `refute <label> <must-not-contain>
+# <must-contain>` fails unless the fixture ran AND the output carries a positive anchor proving the
+# command reached a recognisable verdict. Only then is the absence of the forbidden string meaningful.
+refute() {  # refute <label> <must-not-contain> <must-contain>
+  if [ "${OIP_RC:-99}" = 99 ]; then
+    bad "$1 — FIXTURE DID NOT RUN, SO NOTHING WAS MEASURED (#1815)" "$OIP_OUT"; return
+  fi
+  case "$OIP_OUT" in
+    *"$3"*) ;;
+    *) bad "$1 — the command produced no '$3', so the refutation is VACUOUS and was NOT MEASURED (#1815)" "$OIP_OUT"; return ;;
+  esac
+  case "$OIP_OUT" in
+    *"$2"*) bad "$1" "$OIP_OUT" ;;
+    *) ok "$1" ;;
+  esac
+}
+
+# ---- PAGINATION: the answer LIVES ON PAGE TWO ------------------------------------------------------
+# `Reads.fsi` has promised "PAGINATED, AND UNCONDITIONAL" all along, and `Transport.Send` kept it — but no
+# fixture ever served this route a `Link` header, so the merge that keeps the promise was never run for
+# `openIssues`. A scan truncating at page one reports every lock past it as FREE.
+oip -- overlap 'FS.GG.SDD#501' --active
+printf '%s' "$OIP_OUT" | grep -q 'OVERLAP' \
+  && ok "#1794: openIssues CROSSES THE PAGE BOUNDARY — a live claim on page 2 is seen" \
+  || bad "#1794: the page-2 collision must be found" "rc=$OIP_RC: $OIP_OUT"
+printf '%s' "$OIP_OUT" | grep -q 'FS.GG.SDD#503' \
+  && ok "#1794: ...and names the page-2 item (#503), not merely 'something'" \
+  || bad "#1794: names the page-2 item" "$OIP_OUT"
+printf '%s' "$OIP_OUT" | grep -q 'page2-holder' \
+  && ok "#1794: ...and names the holder whose tree it would otherwise have been handed" \
+  || bad "#1794: names the page-2 holder" "$OIP_OUT"
+[ "$OIP_RC" -ne 0 ] \
+  && ok "#1794: ...and exits NON-ZERO (ExitContended=6), so a caller in a loop stops" \
+  || bad "#1794: page-2 collision must exit non-zero" "rc=$OIP_RC"
+# 502 holds a LIVE claim on page ONE that does NOT collide. Without this, "OVERLAP" above could be
+# produced by a scan that reports every live claim it finds, and the page-2 assertion would be vacuous.
+refute "#1794: a live page-1 claim on unrelated paths is NOT reported — the token filter still runs" \
+       "page-bystander" "FS.GG.SDD#503"
+
+# THE NEGATIVE CONTROL, and it is the one that makes the leg above mean something. Same data, same split,
+# same command — the ONLY difference is that page one is served without its `Link` header. A test that
+# cannot produce the wrong answer on demand has not shown it tests the right one.
+oip OIP_NO_LINK=1 -- overlap 'FS.GG.SDD#501' --active
+printf '%s' "$OIP_OUT" | grep -q 'DISJOINT' \
+  && ok "#1794 CONTROL: withhold the Link header and the SAME command answers DISJOINT — the boundary is real, and crossing it is what the leg above proves" \
+  || bad "#1794 CONTROL: without pagination this must go DISJOINT, or the test is not testing pagination" "rc=$OIP_RC: $OIP_OUT"
+
+# ---- COST: this route still reads ZERO GraphQL ------------------------------------------------------
+# .github#1779 measured this scan from 24/27/31 GraphQL points to 0. The fixture serves NO `/graphql`
+# handler at all — a POST there 500s — so the clean run above is itself the proof that the board query has
+# not crept back in. Asserted explicitly so a regression reads as a cost finding, not a mystery failure.
+oip -- overlap 'FS.GG.SDD#501' --active
+refute "#1794/#1779: the collision scan costs 0 GraphQL — the fixture serves no /graphql and the scan never asks" \
+       "unhandled POST" "collides with"
+
+# ---- THE UNREADABLE ELEMENT: fail CLOSED, and only where it matters --------------------------------
+# `TouchSet.parse ""` answers `Undeclared`; `TouchSet.conflicts` reads `Undeclared` as colliding with
+# nothing. So reading an absent/ill-typed `body` as `""` ASSERTS "declares nothing" about a row nobody
+# read. #266: `unknown` means "I could not look", never "I looked and it was fine".
+#
+# MATCH THE VERDICT SENTENCE, NOT THE WORD. The first draft of this leg grepped for `*DISJOINT*` and
+# FAILED on a correct engine, because the refusal itself says "refusing to report DISJOINT over a live
+# reservation". A bare-word matcher here can never pass, which is the same class of dead check
+# `.github#1797` found (a guard that could never pass) and `.github#1784` found (a leg that could never
+# fail). The DISJOINT VERDICT is the sentence "<ref> overlaps no live claim"; that is what must be absent.
+for mode in absent illtyped; do
+  oip "OIP_BODY=503:$mode" -- overlap 'FS.GG.SDD#501' --active
+  refute "#1794: a HELD row with an unreadable body ($mode) never reads as DISJOINT — it fails closed" \
+         "overlaps no live claim" "could not be read"
+  printf '%s' "$OIP_OUT" | grep -q 'could not be read' \
+    && ok "#1794: ...and SAYS SO ($mode) — the refusal names the unread touch-set, not a generic error" \
+    || bad "#1794: the refusal must name the unread touch-set ($mode)" "$OIP_OUT"
+  printf '%s' "$OIP_OUT" | grep -q 'FS.GG.SDD#503' \
+    && ok "#1794: ...and names WHICH row it could not read ($mode), so an operator can go and look" \
+    || bad "#1794: the refusal must name the row ($mode)" "$OIP_OUT"
+  [ "$OIP_RC" -ne 0 ] \
+    && ok "#1794: ...and exits non-zero ($mode)" || bad "#1794: unreadable-body refusal must exit non-zero ($mode)" "rc=$OIP_RC"
+done
+
+# AN ELEMENT NOBODY CAN IDENTIFY REFUSES THE WHOLE READ. It cannot be carried as an unreadable ENTRY —
+# `Reads.markers` is keyed on the number, so there is no lock to look up and no ref to report. Dropping it
+# was the fail-open: the issue vanished from the scan and every claim on it read as free.
+oip 'OIP_BODY=503:nonumber' -- overlap 'FS.GG.SDD#501' --active
+# Verdict SENTENCES, not bare words — see the note above the `absent`/`illtyped` loop. Two forbidden
+# strings, so two refutations against the same positive anchor.
+refute "#1794: an unidentifiable element REFUSES the read — it is never reported as DISJOINT" \
+       "overlaps no live claim" "element 2 of 4"
+refute "#1794: ...and is never silently dropped so the scan reaches a COLLISION verdict without it" \
+       "collides with" "element 2 of 4"
+# The count is a fact the caller is entitled to (AC2), and "2 of 4" is also the proof the MERGE happened:
+# page one alone is 2 elements, so a denominator of 4 can only come from a followed `Link`.
+printf '%s' "$OIP_OUT" | grep -q 'element 2 of 4' \
+  && ok "#1794: ...and locates it as 'element 2 of 4' — which is also the merged length, so the refusal is over the PAGINATED array" \
+  || bad "#1794: the refusal must locate the element within the merged array" "$OIP_OUT"
+
+# PRECISION, AND IT IS WHAT KEEPS THE COST WHERE #1779 MEASURED IT. An unreadable body is only dangerous
+# if that row RESERVES something, and only a live claim reserves. #504 declares a touch-set and nobody
+# holds it, so its unreadable body settles on the marker read every colliding row already pays — and
+# `widen` is NOT reddened for the whole repo over an anomaly on an issue nobody is standing in.
+oip 'OIP_BODY=504:absent' -- overlap 'FS.GG.SDD#501' --active
+printf '%s' "$OIP_OUT" | grep -q 'FS.GG.SDD#503' \
+  && ok "#1794: an unreadable body on an UNHELD row does not red the scan — the real page-2 collision is still reported" \
+  || bad "#1794: an unheld row's unreadable body must not red the scan" "rc=$OIP_RC: $OIP_OUT"
+[ "$OIP_RC" -eq 6 ] \
+  && ok "#1794: ...and the verdict is still the COLLISION (6), not a refusal — fail-closed did not become fail-loud-everywhere" \
+  || bad "#1794: unheld unreadable row should leave the verdict at ExitContended=6" "rc=$OIP_RC"
+
+# ---- THE .github#1792 INTERACTION, ASSERTED RATHER THAN INHERITED ------------------------------------
+# #1792 landed hours before this and moved the gate from `Reads.winner` to `Reads.reserver`: a LAPSED
+# lease still reserves. Composed with the fail-closed rule above, a LAPSED claim on a row whose body could
+# not be read now refuses as well — a widening of the refusal surface produced by the COMBINATION of two
+# changes and asserted by neither alone. #1792's worker asked for this leg in writing rather than let it
+# be inherited silently, and it can only live here: the `BodyUnread` state does not exist in `main`
+# without this diff, so no test in #1792's PR could have constructed it.
+#
+# It is also the RIGHT answer, not merely the composed one. #1150/#461's rule is that a candidate cannot
+# be proven disjoint from a surface nobody saw; #1792's is that a lapsed lease is still a lock. "Held,
+# surface unknown" is precisely the state that may not answer DISJOINT.
+oip OIP_LAPSED=1 'OIP_BODY=503:absent' -- overlap 'FS.GG.SDD#501' --active
+refute "#1794×#1792: a LAPSED claim whose touch-set could not be read still refuses — a lapsed lease over an UNKNOWN surface reserves an unknown surface" \
+       "overlaps no live claim" "could not be read"
+printf '%s' "$OIP_OUT" | grep -q 'could not be read' \
+  && ok "#1794×#1792: ...and refuses for the RIGHT reason (the unread touch-set), not merely by erroring" \
+  || bad "#1794×#1792: the lapsed+unreadable refusal must name the unread touch-set" "$OIP_OUT"
+
+# THE CONTROL FOR THAT CELL. A lapsed claim with a READABLE colliding body is #1792's own verdict —
+# OVERLAP, not a refusal. Without it, the leg above could be passing because `OIP_LAPSED=1` broke the
+# fixture rather than because the composition holds.
+oip OIP_LAPSED=1 -- overlap 'FS.GG.SDD#501' --active
+printf '%s' "$OIP_OUT" | grep -q 'FS.GG.SDD#503' \
+  && ok "#1794×#1792 CONTROL: a LAPSED claim with a READABLE body is a plain OVERLAP — the refusal above is caused by the unread body, not by the lapse" \
+  || bad "#1794×#1792 CONTROL: a lapsed readable claim must still report the collision" "rc=$OIP_RC: $OIP_OUT"
+[ "$OIP_RC" -eq 6 ] \
+  && ok "#1794×#1792 CONTROL: ...and exits ExitContended=6, not a read failure" \
+  || bad "#1794×#1792 CONTROL: expected 6" "rc=$OIP_RC"
+
 # case 34-remainder (xrepo-touchset-353) — `widen`'s collision-DETECT-and-NOTIFY half (#353). The
 # read-only `overlap` command (#809) ported the repo-scoped collision COMPUTATION; this is the write half
 # ADR-0021 named ("re-declare AND re-check overlap before continuing") and the part a worker cannot do

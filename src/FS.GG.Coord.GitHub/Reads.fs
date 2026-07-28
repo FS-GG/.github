@@ -1898,11 +1898,18 @@ module Reads =
 
     // ---- the claim-scan candidate set --------------------------------------------------------------
 
+    /// See Reads.fsi. `BodyRead ""` is a real empty body; `BodyUnread` is one nobody read.
+    type IssueBodyRead =
+        | BodyRead of body: string
+        | BodyUnread of reason: string
+
+    type OpenIssue = { Number: int; Body: IssueBodyRead }
+
     let openIssues
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
-        : IoResult<(int * string) list> =
+        : IoResult<OpenIssue list> =
 
         let subject = $"%s{owner}/%s{repo} open issues"
 
@@ -1929,28 +1936,71 @@ module Reads =
                 if doc.RootElement.ValueKind <> JsonValueKind.Array then
                     Error(Malformed(subject, "the issue-list response is not a JSON array"))
                 else
-                    let issues =
-                        doc.RootElement.EnumerateArray()
+                    // THE ARRAY'S OWN LENGTH, BEFORE ANY FILTERING. It is the denominator the refusal
+                    // below quotes: "element 7 of 74" locates the anomaly in a payload an operator can go
+                    // and look at, where "an element" alone does not (.github#1794 AC2).
+                    let total = doc.RootElement.GetArrayLength()
+
+                    // ONE ELEMENT, READ OR REFUSED. Returns `Ok None` for a pull request — a POSITIVE
+                    // identification of a thing that is not an item of work (#641), which is why it is the
+                    // one drop this read still makes silently.
+                    let readOne (index: int) (i: JsonElement) : IoResult<OpenIssue option> =
                         // A PULL REQUEST IS AN ISSUE IN REST, and it is not an item of work. #641 is
                         // exactly this: `fsgg-coord issues` listed PRs as issues, so the duplicate-check
                         // read a PR as "already filed" and silently suppressed a real finding.
-                        |> Seq.filter (fun i ->
-                            match i.TryGetProperty "pull_request" with
-                            | true, _ -> false
-                            | _ -> true)
-                        |> Seq.choose (fun i ->
-                            match i.TryGetProperty "number" with
-                            | true, n when n.ValueKind = JsonValueKind.Number ->
-                                let body =
-                                    match i.TryGetProperty "body" with
-                                    | true, b when b.ValueKind = JsonValueKind.String -> b.GetString()
-                                    | _ -> ""
+                        match i.TryGetProperty "pull_request" with
+                        | true, _ -> Ok None
+                        | _ ->
 
-                                Some(n.GetInt32(), body)
-                            | _ -> None)
-                        |> List.ofSeq
+                        match i.TryGetProperty "number" with
+                        // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
+                        // carried as an unreadable ENTRY the way a bad body can: `Reads.markers` is keyed
+                        // on the number, so there is no lock to look up, no ref to report, and nothing a
+                        // caller could fail closed *about*. Dropping it was the fail-open — the issue
+                        // vanished from the claim scan, its lock reserved nothing, and nothing anywhere
+                        // said an element had been discarded. #266: never "I looked and it was fine".
+                        | true, n when n.ValueKind <> JsonValueKind.Number ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                )
+                            )
+                        | false, _ ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                )
+                            )
+                        | true, n ->
+                            let body =
+                                match i.TryGetProperty "body" with
+                                | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
+                                // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
+                                // for an issue nobody wrote a description for; the issue exists and declares
+                                // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
+                                // .github#1794 names is not this line — it is that the two lines below used
+                                // to be this line.
+                                | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
+                                | true, b ->
+                                    BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
+                                | false, _ -> BodyUnread "the element carries no `body` field"
 
-                    Ok issues
+                            Ok(Some { Number = n.GetInt32(); Body = body })
+
+                    // Short-circuit on the first refusal. `List.fold` would read the rest of the array to
+                    // no purpose, and an `Error` is an answer about the WHOLE read, not about one element.
+                    let rec walk index (acc: OpenIssue list) (rest: JsonElement list) =
+                        match rest with
+                        | [] -> Ok(List.rev acc)
+                        | i :: tail ->
+                            match readOne index i with
+                            | Error e -> Error e
+                            | Ok None -> walk (index + 1) acc tail
+                            | Ok(Some issue) -> walk (index + 1) (issue :: acc) tail
+
+                    walk 0 [] (doc.RootElement.EnumerateArray() |> List.ofSeq)
 
     /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
     /// serves the cached body for zero cost, which is the whole reason the command exists — a worker reads

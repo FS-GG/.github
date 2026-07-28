@@ -1000,7 +1000,9 @@ module Scan =
                 match Reads.openIssues transport o r with
                 | Error e -> failure <- Some e
                 | Ok issues ->
-                    for (n, body) in issues do
+                    for issue in issues do
+                        let n = issue.Number
+
                         // A BOARD ITEM IS NOT OFF THE BOARD: its marker was already read (and reserved, if
                         // held) by the candidate loop, so re-reading it here would pay the same budget twice
                         // and risk double-reserving. Only issues the board never listed reach the marker read.
@@ -1019,15 +1021,35 @@ module Scan =
                                     // The touch-set rides in on the SAME list read (one read, two uses),
                                     // exactly as the board loop reuses the candidate body. A claim declaring
                                     // no touch-set reserves no files — the board loop's own rule (line above).
-                                    match TouchSet.parse body with
-                                    | Declared tokens ->
-                                        let names =
-                                            tokens
-                                            |> List.map (fun t ->
-                                                match t with
-                                                | Matchable s -> s
-                                                | Unmatchable s -> s)
+                                    //
+                                    // AND A BODY WE COULD NOT READ IS `RvUnreadable`, NOT NOTHING
+                                    // (.github#1794). The board loop one screen up has said this since #1150
+                                    // — *"an unreadable one is `bodyUnreadable`, NOT an empty body"* — and
+                                    // then this sweep, reading the SAME kind of body off a different route,
+                                    // let an unreadable one fall through the `| _ -> ()` below and reserve
+                                    // nothing. That is #1150's own fail-open, on the arm it did not reach:
+                                    // the claim reserved nothing and a candidate overlapping its real files
+                                    // was handed the tree its holder is standing in. `RvUnreadable` writes
+                                    // `pathsUnreadable` to the wire, `decide` reconstructs
+                                    // `TouchSet.Unreadable`, and `Batch.schedule` reds the batch on it.
+                                    let reservation =
+                                        match issue.Body with
+                                        | Reads.BodyUnread reason -> Some(RvUnreadable reason)
+                                        | Reads.BodyRead body ->
+                                            match TouchSet.parse body with
+                                            | Declared tokens ->
+                                                tokens
+                                                |> List.map (fun t ->
+                                                    match t with
+                                                    | Matchable s -> s
+                                                    | Unmatchable s -> s)
+                                                |> RvNames
+                                                |> Some
+                                            | _ -> None
 
+                                    match reservation with
+                                    | None -> ()
+                                    | Some rv ->
                                         // #712/#581: an off-board claim reserves too, and the tools must not
                                         // call it "reapable" if a PR is keeping it alive. Probed HERE — after
                                         // the touch-set is known to reserve something — so a stale claim that
@@ -1047,10 +1069,9 @@ module Scan =
                                         inFlight.Add(
                                             o,
                                             r,
-                                            RvNames names,
+                                            rv,
                                             RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds, livePr)
                                         )
-                                    | _ -> ()
 
         w.WriteStartArray("inFlight")
 
