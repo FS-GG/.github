@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Replay the recorded Actions API transcript for check-gate-finding-history's fetch tests."""
-import json, sys
+import json, os, sys, base64
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -10,11 +10,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, _, query = self.path.partition('?')
         if path == '/repos/FS-GG/fixture': reply = doc['repo']
-        elif path == '/repos/FS-GG/fixture/actions/workflows': reply = doc['workflows']
+        elif path == '/repos/FS-GG/fixture/actions/workflows':
+            reply = dict(doc['workflows'])
+            if os.environ.get('GFH_TRUNCATED'): reply['total_count'] = 101
+        elif path == '/repos/FS-GG/fixture/contents/.github/workflows/fixture.yml':
+            reply = {'content': base64.b64encode(b'on: workflow_call\n').decode()}
         elif path.endswith('/runs'):
             # The status-filter shape is an API contract: an unfiltered reply here would make every
             # gate look exercised. The harness records every query so its caller can assert it.
-            print(query, flush=True); reply = doc['runs']
+            print(query, flush=True); reply = dict(doc['runs'])
+            if os.environ.get('GFH_ZERO_RUNS') and 'per_page=1' in query: reply['total_count'] = 0
         else: self.send_error(404); return
         data = json.dumps(reply).encode(); self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(data))); self.end_headers(); self.wfile.write(data)
 HTTPServer(('127.0.0.1', int(sys.argv[2])), Handler).serve_forever()
