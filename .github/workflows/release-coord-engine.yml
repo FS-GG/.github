@@ -122,6 +122,11 @@ jobs:
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # #1762 — 0.13.0 moved Version and shipped 0.12.0's notes. Evaluate both properties through
+      # MSBuild and refuse before restore/pack/push if the listing would announce another release.
+      - name: Require PackageReleaseNotes to announce this version
+        run: python3 scripts/check-engine-release-notes.py
+
       - name: Restore (locked)
         run: dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
 

@@ -848,13 +848,15 @@ fi
 # filters were widened to cover the declaration; skill-registry-coherence was the already-complete
 # control. This is the first census move caused by fixing the linkage itself rather than adding a
 # declaration.
+# 18 -> 19 on 2026-07-29 (#1762): engine-release-notes.yml names the new release-notes checker,
+# which declares the engine project as its structural subject.
 # The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
 # that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "18" ]; then
+if [ "${s:-0}" = "19" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 18 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 19 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"
