@@ -108,6 +108,22 @@ FAIL_FIELD_WRITES = [0]
 # `/graphql`, which `BOARD_READS` already counts.
 REST_READS = []
 
+# The command-contract executable proof needs a wire ledger, not an inference from endpoint names:
+# GraphQL reads are POSTs too.  Each fixture leg resets and reads this list, whose rows say whether the
+# request was a REST mutation or a GraphQL mutation.
+MUTATIONS = []
+
+
+def record_mutation(method, path, graphql_document=None):
+    """Record only shared-server mutations; fixture probes themselves are never evidence."""
+    if path.startswith("/_fixture/"):
+        return
+    if path.rstrip("/") == "/graphql":
+        if re.search(r"\bmutation\b", graphql_document or "", re.IGNORECASE):
+            MUTATIONS.append({"method": method, "path": path, "kind": "graphql-mutation"})
+    elif method in ("POST", "PATCH", "DELETE", "PUT"):
+        MUTATIONS.append({"method": method, "path": path, "kind": "rest-mutation"})
+
 
 def project_fields():
     return {
@@ -303,11 +319,15 @@ class Handler(BaseHTTPRequestHandler):
                 doc = json.loads(raw)
             except json.JSONDecodeError:
                 return self._send(500, {"errors": [{"message": "fixture: bad graphql body"}]})
+            with LOCK:
+                record_mutation("POST", path, doc.get("query", ""))
             answer = graphql(doc.get("query", ""), doc.get("variables", {}))
             if answer is None:
                 return self._send(500, {"errors": [{"message": f"fixture: unhandled query {doc.get('query','')[:60]}"}]})
             return self._send(200, answer)
 
+        with LOCK:
+            record_mutation("POST", path)
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             n = int(m.group(1))
@@ -335,6 +355,8 @@ class Handler(BaseHTTPRequestHandler):
         self._meter()
         path = self.path.split("?", 1)[0]
         raw = self._body()
+        with LOCK:
+            record_mutation("PATCH", path)
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", path)
         if m:
@@ -369,6 +391,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self._meter()
         path = self.path.split("?", 1)[0]
+        with LOCK:
+            record_mutation("DELETE", path)
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", path)
         if m:
             cid = int(m.group(1))
@@ -412,6 +436,12 @@ class Handler(BaseHTTPRequestHandler):
                 spent = list(REST_READS)
                 REST_READS.clear()
                 return self._send(200, {"count": len(spent), "paths": spent})
+
+        if path.rstrip("/") == "/_fixture/mutations":
+            with LOCK:
+                spent = list(MUTATIONS)
+                MUTATIONS.clear()
+                return self._send(200, {"count": len(spent), "requests": spent})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:

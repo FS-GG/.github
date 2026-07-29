@@ -708,6 +708,31 @@ else
   bad "#1740 AC5: a widening must not borrow the narrowing's exoneration" "rc=$wnrc: $wn"
 fi
 
+# ---- #1569: read-contract ledger, first executable group -------------------------------------------
+no_mutation() {
+  local name="$1"; shift
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  "$@" >/dev/null 2>&1; local rc=$?
+  local ledger
+  ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  if [ "$rc" -eq 0 ] && [ "$(printf '%s' "$ledger" | jq -r .count)" = 0 ]; then
+    ok "#1569: $name is a valid never-write invocation (wire ledger empty)"
+  else
+    bad "#1569: $name must not mutate" "rc=$rc ledger=$ledger"
+  fi
+}
+
+no_mutation "batch" run batch --repo FS.GG.SDD --text
+no_mutation "board" run board
+no_mutation "bootstrap" run bootstrap
+no_mutation "budget" run budget
+no_mutation "command-contract" run command-contract --json
+no_mutation "facts" run facts
+no_mutation "field-id" run field-id Status
+no_mutation "inbox" run inbox --repo FS.GG.SDD
+no_mutation "issues" run issues
+no_mutation "option-id" run option-id Status Ready
+
 # ---- report ----------------------------------------------------------------------------------------
 echo
 echo "coord-engine writes: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
