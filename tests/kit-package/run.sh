@@ -43,6 +43,20 @@ REAL_OUT="$WORK/real"
 real_out="$(bash "$KIT_SRC" "$REAL_OUT" 2>&1)"; real_rc=$?
 if [ "$real_rc" -eq 0 ]; then ok "real tree: stages green (rc=0)"; else bad "real tree: stages green" "rc=$real_rc: $real_out"; fi
 REAL_MANIFEST="$REAL_OUT/kit-manifest.tsv"
+
+# #1886: this packed file is now read by receiver CI. Its shape is a versioned receiver contract,
+# not merely an implementation detail of the materializer.
+python3 - "$REAL_MANIFEST" <<'PY'
+import re, sys
+rows = [x.rstrip('\n').split('\t') for x in open(sys.argv[1], encoding='utf-8') if x.strip()]
+assert rows, 'manifest is empty'
+for row in rows:
+    assert len(row) == 5, f'expected 5 columns: {row!r}'
+    assert row[0] in {'skill', 'client', 'config', 'build-config'}, f'unknown kind: {row[0]!r}'
+    assert re.fullmatch(r'[0-9a-f]{64}', row[3]), f'bad digest: {row[3]!r}'
+    assert row[4] in {'true', 'false'}, f'bad executable: {row[4]!r}'
+print('kit-manifest receiver contract v1: OK')
+PY
 for kind in skill client config build-config; do
   n=$(grep -c "^$kind$(printf '\t')" "$REAL_MANIFEST" 2>/dev/null || true)
   [ "${n:-0}" -gt 0 ] && ok "real tree: manifest carries $kind row(s) ($n)" \
