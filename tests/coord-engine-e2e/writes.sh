@@ -376,9 +376,9 @@ lkb="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments
 #
 # THE WORDS ARE WHAT THIS LEG GRADES, NOT THE STREAM. .github#1562 took `next`'s empty arm off the shared
 # `printChosen` so its headline could go to STDERR (`next`'s stdout is a bare-ref machine contract); `batch
-# --text` still prints it to STDOUT. Both capture merged above (`2>&1`), so this leg is deliberately blind
-# to that split and asserts only the thing #1535's advice rests on — that the substitute ANSWERS, in the
-# one `nothingSchedulable` spelling both verbs still share.
+# --text` still prints it to STDOUT. Both `bn` here and `nx` below capture MERGED (`2>&1`), so this leg is
+# deliberately blind to that split and asserts only the thing #1535's advice rests on — that the substitute
+# ANSWERS, in the one `nothingSchedulable` spelling both verbs still share.
 printf '%s' "$bn" | grep -q 'nothing schedulable right now.' \
   && ok ".github#1535: ...and it is the same ANSWER — one shared \`nothingSchedulable\` spelling, so the words cannot drift" \
   || bad ".github#1535: batch --text prints next's answer" "rc=$bnrc: $bn"

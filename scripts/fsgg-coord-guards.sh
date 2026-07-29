@@ -208,9 +208,10 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 #                 `[]` and puts the reasons on stderr). NOT the same STREAM, and .github#1562 is why: it took
 #                 `next`'s empty arm off the shared `printChosen` so the headline could go to STDERR, keeping
 #                 `next`'s stdout the bare-ref machine contract, while `batch --text` still prints it to
-#                 STDOUT through `printChosen`. Same words, same exit 0, different stream for that one line —
-#                 which costs a caller nothing that the diagnostic was for, and costs a caller who CAPTURES
-#                 stdout everything. Point a worker on a stale engine at that; `tests/coord-engine-e2e/writes.sh` pins
+#                 STDOUT through `printChosen`. Same words, same exit 0, different stream for that one
+#                 line — which costs nothing to a caller READING the diagnostic, and everything to a
+#                 caller CAPTURING stdout. Point a worker on a stale engine at that; and
+#                 `tests/coord-engine-e2e/writes.sh` pins
 #                 both halves against one board (`batch` leaves #1033's thread empty, `next` posts a marker
 #                 to it), so this comment cannot quietly stop matching the engine.
 #

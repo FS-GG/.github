@@ -255,15 +255,17 @@
          (#1869). -->
     <!-- 0.19.0 -> 0.19.1, a PATCH: one kit-delivered REFERENCE file has its prose corrected
          (.github#1655). `pnext-item/references/command-contracts.md` still told a worker that
-         `next` and `batch --text` render their empty-queue answer "through one shared helper, so
-         they cannot drift apart". .github#1562 took `next`'s empty arm off that shared `printChosen`
-         so its headline could go to STDERR and keep `next`'s stdout the bare-ref machine contract;
-         `batch --text` still prints it to STDOUT. The paragraph now states the stream split.
+         `next` and `batch` in its text projection render their empty-queue answer "through one
+         shared helper, so they cannot drift apart". .github#1562 took `next`'s empty arm off that
+         shared `printChosen` so its headline could go to STDERR and keep `next`'s stdout the
+         bare-ref machine contract; `batch` still prints it to STDOUT. The paragraph now states
+         the stream split.
          PATCH, and each clause is checkable. The MEMBER SET IS UNCHANGED, every destination and mode
          is unchanged, no materialize property is added or altered, and NO RUNTIME BEHAVIOUR MOVES —
          the only bytes that change are prose in one `kind: skill` member's reference file. The
-         ADVICE that paragraph exists to give (substitute `batch --text -n 1` for `next` on a stale
-         engine) is unchanged and was always correct; what was wrong was the stated MECHANISM, which
+         ADVICE that paragraph exists to give (substitute the capped `batch` text projection for
+         `next` on a stale engine) is unchanged and was always correct; what was wrong was the
+         stated MECHANISM, which
          a worker capturing stdout could act on. Same class as 0.8.1 (edc8404) and 0.15.1.
          `registry/repos.lock` IS NOT TOUCHED BY THIS, and that is correct rather than an omission:
          `repos.sh digest` digests a skill DIRECTORY as its `SKILL.md` alone, and no `SKILL.md`
