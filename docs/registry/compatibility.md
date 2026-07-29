@@ -110,7 +110,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | Contract | Owner | version | package-version |
 |---|---|---|---|
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
-| `fsgg-contracts` | FS.GG.SDD | `7.4.0` | `7.4.0` |
+| `fsgg-contracts` | FS.GG.SDD | `7.5.0` | `7.5.0` |
 | `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
 | `governance-handoff` | FS.GG.SDD | `2.0.0` | — |
 | `governance-policy` | FS.GG.Governance | `1` | — |
@@ -127,7 +127,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
-| `coord-engine` | FS-GG/.github | `0.15.0` | `0.15.0` |
+| `coord-engine` | FS-GG/.github | `0.16.0` | `0.16.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.7.0` | `0.7.0` |
 
 <!-- END GENERATED: fsgg-contract-versions -->
