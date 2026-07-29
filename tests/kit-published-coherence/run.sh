@@ -294,11 +294,12 @@ MUT_REPO="$WORK/pr-base-mutation"
 git init -q -b main "$MUT_REPO"
 git -C "$MUT_REPO" config user.name fixture
 git -C "$MUT_REPO" config user.email fixture@example.invalid
-mkdir -p "$MUT_REPO/scripts" "$MUT_REPO/docs"
+mkdir -p "$MUT_REPO/scripts" "$MUT_REPO/docs" "$MUT_REPO/.claude/skills/check-board"
 cp "$GATE" "$MUT_REPO/scripts/check-kit-published-coherence.py"
 cp "$HERE/../../scripts/fsgg_feed.py" "$MUT_REPO/scripts/fsgg_feed.py"
 printf 'initial\n' > "$MUT_REPO/scripts/fsgg-coord"
 printf 'initial\n' > "$MUT_REPO/docs/note.md"
+printf 'initial\n' > "$MUT_REPO/.claude/skills/check-board/SKILL.md"
 git -C "$MUT_REPO" add .
 git -C "$MUT_REPO" commit -q -m initial
 STALE_BASE="$(git -C "$MUT_REPO" rev-parse HEAD)"
@@ -329,15 +330,19 @@ set -e
 must_pass "a docs-only PR stays green after the base advances with a kit commit" \
   "none of them a \`kit:\` source"
 
-printf 'PR-owned kit change\n' >> "$MUT_REPO/scripts/fsgg-coord"
+git -C "$MUT_REPO" switch -q pr-head
+printf 'PR-owned kit change\n' >> "$MUT_REPO/.claude/skills/check-board/SKILL.md"
 git -C "$MUT_REPO" commit -qam "PR changes kit"
+git -C "$MUT_REPO" switch -q main
+git -C "$MUT_REPO" switch -q -c merge-ref-with-kit
+git -C "$MUT_REPO" merge -q --no-edit --no-ff pr-head
 set +e
 out="$(python3 "$MUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
   --base refs/remotes/origin/main --csproj "$CSPROJ" --kit-sources "$SRC" \
   --published-version 0.8.1 2>&1)"; rc=$?
 set -e
 must_fail "the resolved-base arm stays red when the PR itself touches a kit source" \
-  "scripts/fsgg-coord"
+  ".claude/skills/check-board/SKILL.md"
 
 # THE ROSTER READER (AC2): the kit-source list is READ from registry/repos.yml, never restated.
 ROSTER="$WORK/repos.yml"
