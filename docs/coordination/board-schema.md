@@ -59,6 +59,34 @@ The coordination-kit protocol carries the same mapping. In particular, `net`
 is `P8 Net`; it must not be filed under `P1 Rendering` merely because a caller
 may eventually render network state.
 
+The board's complete `Phase` vocabulary is a separate table. The mapping above
+cannot serve as this list: `P5 Versioning` is a board-wide phase and therefore
+has no Repo Scope row. The gate compares this list against the engine's closed
+`Phase` union in both directions; it does not infer options from the mapping.
+
+<!-- phase-options:start -->
+| option | meaning |
+|---|---|
+| `P0 Decisions` | board-wide decisions |
+| `P1 Rendering` | rendering work |
+| `P2 SDD` | SDD work |
+| `P3 Governance` | governance work |
+| `P4 Templates` | template work |
+| `P5 Versioning` | board-wide versioning work |
+| `P6 Game` | game work |
+| `P7 Audio` | audio work |
+| `P8 Net` | network work |
+<!-- phase-options:end -->
+
+Operators may verify the live field with:
+
+```sh
+scripts/project-field-options check --field Phase
+```
+
+The pull-request gate uses the same check with `--schema` because CI has no
+Projects credential.
+
 ## Class
 
 How BAD an item is ([.github#1588](https://github.com/FS-GG/.github/issues/1588)) — the axis

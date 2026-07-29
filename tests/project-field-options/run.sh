@@ -163,6 +163,31 @@ else
   fail "Severity schema check" "$(run_tool check --field Severity --schema "$SCHEMA" 2>&1 || true)"
 fi
 
+# --- Phase: the engine owns the closed union and wire spellings (.github#1629) -----------------
+# The repo-to-phase map above is intentionally NOT the source for this list: P5 Versioning has no
+# repo row.  These mutations prove the dedicated bounded table is compared against every engine
+# spelling in both directions.
+if run_tool check --field Phase --schema "$SCHEMA" >/dev/null; then
+  pass "documented Phase options match the engine Phase vocabulary"
+else
+  fail "Phase schema check" "$(run_tool check --field Phase --schema "$SCHEMA" 2>&1 || true)"
+fi
+
+grep -v '^| `P5 Versioning`' "$SCHEMA" >"$WORK/phase-short.md"
+if run_tool check --field Phase --schema "$WORK/phase-short.md" >/dev/null 2>&1; then
+  fail "Phase drift (missing)" "a documented table missing P5 Versioning was accepted"
+else
+  pass "Phase check refuses a documented table missing an engine vocabulary value"
+fi
+
+awk '{ print } /^| `P8 Net` \| network work \|/ { print "| `P9 Future` | not an engine Phase case |" }' \
+  "$SCHEMA" >"$WORK/phase-extra.md"
+if run_tool check --field Phase --schema "$WORK/phase-extra.md" >/dev/null 2>&1; then
+  fail "Phase drift (unexpected)" "a documented table with a phase outside the engine vocabulary was accepted"
+else
+  pass "Phase check refuses a documented table with an option outside the engine vocabulary"
+fi
+
 # Order is semantic for Severity, unlike Class. Swapping two documented rows must red the gate.
 sed '/^| `High` /{h;d}; /^| `Medium` /{G}' "$SCHEMA" >"$WORK/severity-reordered.md"
 if run_tool check --field Severity --schema "$WORK/severity-reordered.md" >/dev/null 2>&1; then
