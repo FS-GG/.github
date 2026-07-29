@@ -282,11 +282,12 @@ if [ "$partition_ok" -eq 1 ]; then
   # structurally cannot observe, blaming the engine for the toolchain. That is the #266 shape this whole
   # file exists to refuse, and `run.sh` (which §1 already ran) needs `jq` 151 times, so a missing one is a
   # fact worth naming rather than a condition worth tolerating.
-  CONTRACT=""
+  CONTRACT=""; CONTRACT_JSON=""
   if ! command -v jq >/dev/null 2>&1; then
     bad "partition: jq is not installed — this leg cannot read the engine's command contract, and that is NOT a verdict about the shim"
   else
-    CONTRACT="$("$ENGINE" command-contract --json 2>/dev/null | jq -r '.commands[].name' | awk '{print $1}' | sort -u)"
+    CONTRACT_JSON="$("$ENGINE" command-contract --json 2>/dev/null)"
+    CONTRACT="$(printf '%s' "$CONTRACT_JSON" | jq -r '.commands[].name' | awk '{print $1}' | sort -u)"
   fi
   CLASSIFIED="$(printf '%s %s %s' "$BOARD_WRITES" "$BOARD_WRITES_CONDITIONAL" "$BOARD_READS" \
                  | tr ' ' '\n' | grep -v '^$' | sort)"
@@ -315,6 +316,19 @@ if [ "$partition_ok" -eq 1 ]; then
       ok "partition: the three sets are DISJOINT — no verb is classified twice, so there is one answer per verb"
     else
       bad "partition: verb(s) appear in more than one set" "$dupes"
+    fi
+
+    # The engine's `writes` answers whether an invocation can mutate; the shim's two write lists
+    # separately document flag dependence, so their UNION is the comparable set (#1570).
+    missing_writes="$(printf '%s' "$CONTRACT_JSON" | jq -r '.commands[] | select(.writes == null) | .name' | awk '{print $1}')"
+    engine_writes="$(printf '%s' "$CONTRACT_JSON" | jq -r '.commands[] | select(.writes == "always" or .writes == "conditional") | .name' | awk '{print $1}' | sort -u)"
+    engine_reads="$(printf '%s' "$CONTRACT_JSON" | jq -r '.commands[] | select(.writes == "never") | .name' | awk '{print $1}' | sort -u)"
+    shim_writes="$(printf '%s %s' "$BOARD_WRITES" "$BOARD_WRITES_CONDITIONAL" | tr ' ' '\n' | grep -v '^$' | sort -u)"
+    shim_reads="$(printf '%s' "$BOARD_READS" | tr ' ' '\n' | grep -v '^$' | sort -u)"
+    if [ -z "$missing_writes" ] && [ "$shim_writes" = "$engine_writes" ] && [ "$shim_reads" = "$engine_reads" ]; then
+      ok "partition: shim membership matches every engine writes contract"
+    else
+      bad "partition: writes keys must be complete and shim membership must match the engine" "missing=$missing_writes"
     fi
   fi
 fi
