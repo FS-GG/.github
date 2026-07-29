@@ -71,6 +71,7 @@ def repo_of(n):
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
 COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 1033: []}
 NEXT_COMMENT_ID = [900]
+NEXT_ROOM_NUMBER = [700]
 def now_iso():
     # REAL current time, so a just-posted marker is fresh — a fixed timestamp would land it at the
     # lease boundary and flip stale under the wall clock, which is a fixture bug, not a lock bug.
@@ -264,6 +265,8 @@ def graphql(query: str, variables: dict):
                 FAIL_FIELD_WRITES[0] -= 1
                 return {"errors": [{"message": "fixture: the field write failed permanently"}]}
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
+    if "addProjectV2ItemById" in query:
+        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_added"}}}}
     return None
 
 
@@ -328,6 +331,18 @@ class Handler(BaseHTTPRequestHandler):
 
         with LOCK:
             record_mutation("POST", path)
+        m = re.match(r"^/repos/[^/]+/([^/]+)/issues$", path)
+        if m:
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                payload = {}
+            with LOCK:
+                number = NEXT_ROOM_NUMBER[0]
+                NEXT_ROOM_NUMBER[0] += 1
+                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": True}
+                COMMENTS[number] = []
+            return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             n = int(m.group(1))

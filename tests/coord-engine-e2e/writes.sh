@@ -831,6 +831,31 @@ else
   bad "#1569: flush without --dry-run must mutate pending work" "rc=$flush_rc output=$flush_out ledger=$flush_ledger"
 fi
 
+# The older write suite proves the lock, marker, Status, path, child, say, and done verbs in
+# their dedicated state transitions.  These are the three remaining `always` rows without an
+# explicit valid driver in the command-contract ledger.  Each starts from an empty wire ledger:
+# success alone is insufficient because an idempotent/no-op implementation could still return 0.
+must_mutate() {
+  local name="$1"; shift
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  mutation_out="$("$@" 2>&1)"; mutation_rc=$?
+  mutation_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  if [ "$mutation_rc" -eq 0 ] && [ "$(printf '%s' "$mutation_ledger" | jq -r .count)" -gt 0 ]; then
+    ok "#1569: $name is a valid always-write invocation (wire ledger observed a mutation)"
+  else
+    bad "#1569: $name must execute and mutate" "rc=$mutation_rc output=$mutation_out ledger=$mutation_ledger"
+  fi
+}
+
+# #46 is deliberately off-board, so `add` cannot be satisfied by its idempotent existing-item arm.
+must_mutate "add" run add FS.GG.SDD#46
+# Use a new worker: the fixture's normal driver holds an item, and the one-item-per-worker guard
+# would be a parser-shaped false driver rather than the scheduling-and-claim path being tested.
+must_mutate "take" "$ENGINE" take --repo FS.GG.SDD --worker ledger-take
+# A room is a net-new REST issue POST followed by body PATCHes on every member.  The fixture returns
+# the created issue number, letting the real command finish rather than treating the POST as enough.
+must_mutate "room open" "$ENGINE" room open --over FS.GG.SDD#42,FS.GG.SDD#43 --worker ledger-room
+
 # ---- report ----------------------------------------------------------------------------------------
 echo
 echo "coord-engine writes: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
