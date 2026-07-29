@@ -181,6 +181,7 @@ verdict.
 <!-- fsgg:retirement-verdict
 retired: templates, audio, net, game, governance, rendering, sdd
 in-flight:
+stage: stage-1-complete;stage-2-landed;stage-3-declined
 -->
 
 > **THE BLOCK ABOVE IS THE ANCHOR, AND IT IS THE ONLY MACHINE-READABLE COPY OF THIS VERDICT** (`#1750`).
@@ -1004,6 +1005,11 @@ sub-resource, never the bare protection endpoint, whose whole-object `PUT` disab
 > **This heading carries the stage, and nothing anywhere else does** — the same rule §4 carries for the
 > receiver count, and for the same reason. The stage blocks below are dated, append-only records; when
 > the stage changes, change *this* line and append.
+>
+> `stage:` in §4's adjacent machine-readable verdict is the authoritative record of the landed-order
+> state. Unlike the receiver count, stage has no tree-derived oracle: it records completed decisions and
+> history, so the coherence gate rejects a second live §6 claim across `docs/**` rather than pretending
+> historical stage reports are a measurable current fact.
 >
 > | stage | subject | state |
 > |---|---|---|

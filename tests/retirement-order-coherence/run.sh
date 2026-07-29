@@ -145,6 +145,8 @@ mkrepo() {
 # Writes a synthetic repo root: roster (two receivers), skill-view root set, retirement order.
 mktree() {
   local dir="$1" block="$2" headline="$3" extra="${4:-}"
+  [[ "$block" == *"stage:"* ]] || block="${block/-->/stage: stage-1-complete;stage-2-landed;stage-3-declined
+-->}"
   mkdir -p "$dir/registry" "$dir/scripts" "$dir/docs/coordination"
   cat >"$dir/registry/repos.yml" <<'YAML'
 schemaVersion: 1
@@ -529,6 +531,23 @@ in-flight:
 refused: sdd
 -->' "2 of 2"
 expect 3 "$WORK/t35" "an unknown key in the verdict block is refused" "does not read"
+
+# #1935: stage is not tree-derivable, but the one recorded verdict must not acquire a second live
+# copy elsewhere in docs. This reconstructs the stale ADR/README sentence repaired by #1903.
+WORLD="$WORK/w1"; export FIXTURE_WORLD="$WORLD"
+mktree "$WORK/t36" "$BLOCK_BOTH" "2 of 2"
+mkdir -p "$WORK/t36/docs/adr"
+printf "%s\n" "How far §6's generated view has shipped is **NOT restated here**." \
+  "§6's generated view is NOT landed." >"$WORK/t36/docs/adr/README.md"
+expect 1 "$WORK/t36" "a second live stage verdict anywhere in docs is rejected" \
+  "docs/adr/README.md:2" "standing stage verdict"
+
+# An unreadable stage anchor is no verdict: it is the authoritative recorded history, so silently
+# accepting a new spelling would claim a comparison the gate cannot make.
+mktree "$WORK/t37" "$BLOCK_BOTH" "2 of 2"
+sed -i 's/stage-1-complete;stage-2-landed;stage-3-declined/terminated/' \
+  "$WORK/t37/docs/coordination/skill-apparatus-retirement-order.md"
+expect 3 "$WORK/t37" "an invalid stage anchor is refused" "documented stage verdict shape"
 
 # An explicitly EMPTY transport knob is a misconfiguration, not the default — two ways of getting a
 # knob wrong must not have opposite consequences.

@@ -141,7 +141,7 @@ ROOTS = "scripts/skill-view"
 # WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266).
 # `check-paths-coherence.py` rule (c) reads this BY AST and reds this gate's workflow if its `paths:`
 # does not select every entry. Composed from the constants above, never retyped beside them.
-PATHS_SUBJECT = (ORDER, ROSTER, ROOTS)
+PATHS_SUBJECT = (ORDER, ROSTER, ROOTS, "docs")
 
 # The capability that identifies a receiver in the roster. A repo that does not receive the coordination
 # kit was never in the retirement order's subject.
@@ -154,6 +154,16 @@ ANCHOR_OPEN = "<!-- fsgg:retirement-verdict"
 ANCHOR_CLOSE = "-->"
 RETIRED_KEY = "retired"
 INFLIGHT_KEY = "in-flight"
+STAGE_KEY = "stage"
+
+# Stage completion is a landing/history fact, not a receiver-tree measurement: no tree API can answer
+# which decision the order reached. The anchor is therefore the authoritative recorded verdict, and this
+# gate's stage leg is deliberately duplicate detection rather than a fabricated comparison (#1935).
+STAGE_VALUE = re.compile(r"\A(?:stage-[0-9]+-(?:complete|landed|declined);?)+\Z")
+STAGE_RESTATEMENT = re.compile(
+    r"§6['’]s generated view[^\n]*\b(?:is|was)\s+(?:not\s+landed|landed|complete|declined)\b",
+    re.IGNORECASE,
+)
 
 # An `in-flight:` entry: a roster id and the ref that put it there. The ref is REQUIRED — see the header.
 INFLIGHT_ENTRY = re.compile(r"\A(?P<id>[A-Za-z0-9._-]+)\s*\((?P<ref>[^()\s][^()]*)\)\Z")
@@ -454,7 +464,7 @@ def anchor(text: str) -> tuple[list[str], list[str], dict[str, str], int]:
             raise GateError(f"{ORDER}: the verdict block declares `{key}:` twice.")
         fields[key] = value.strip()
 
-    unexpected = sorted(set(fields) - {RETIRED_KEY, INFLIGHT_KEY})
+    unexpected = sorted(set(fields) - {RETIRED_KEY, INFLIGHT_KEY, STAGE_KEY})
     if unexpected:
         raise GateError(
             f"{ORDER}: the verdict block declares {', '.join(unexpected)}, which this gate does not "
@@ -462,13 +472,20 @@ def anchor(text: str) -> tuple[list[str], list[str], dict[str, str], int]:
             f"than passing over it."
         )
 
-    for key in (RETIRED_KEY, INFLIGHT_KEY):
+    for key in (RETIRED_KEY, INFLIGHT_KEY, STAGE_KEY):
         if key not in fields:
             raise GateError(
                 f"{ORDER}: the verdict block has no `{key}:` line. Both keys are read at grade time; a "
                 f"missing one is a subject this gate cannot establish, so it refuses rather than "
                 f"defaulting it to empty and grading against a list nobody wrote."
             )
+
+    if not STAGE_VALUE.fullmatch(fields[STAGE_KEY]):
+        raise GateError(
+            f"{ORDER}: `{STAGE_KEY}: {fields[STAGE_KEY]}` is not the documented stage verdict shape "
+            "(`stage-N-complete|landed|declined`, semicolon-separated). Stage has no mechanical tree "
+            "oracle, so an unreadable anchor is a no-verdict rather than a value this gate guesses (#1935)."
+        )
 
     retired = [entry.strip() for entry in fields[RETIRED_KEY].split(",") if entry.strip()]
     if len(set(retired)) != len(retired):
@@ -691,6 +708,34 @@ def second_count_findings(lines: list[str], anchor_line: int, total: int) -> lis
     return findings
 
 
+def stage_restatement_findings(root: str) -> list[str]:
+    """Reject a live §6 stage claim outside the one standing verdict.
+
+    Stage is a landed-order record, not a receiver-tree measurement. Historical reports remain evidence;
+    this deliberately narrow scan catches the live duplicate shape measured in #1903: another document
+    cites §6 while also asserting what its stage is. It does not pretend semantic completeness.
+    """
+    findings: list[str] = []
+    docs = os.path.join(root, "docs")
+    for current, _, names in os.walk(docs):
+        for name in sorted(names):
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(current, name)
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            if rel == ORDER:
+                continue
+            text = read_text(path, f"the documentation surface ({rel})")
+            for index, line in enumerate(text.splitlines(), start=1):
+                if STAGE_RESTATEMENT.search(line):
+                    findings.append(
+                        f"{rel}:{index}: states a §6 retirement stage outside {ORDER}'s standing "
+                        "stage verdict. Point at that verdict instead; a second current-stage claim "
+                        "can stale independently (#1935)."
+                    )
+    return findings
+
+
 # ---------------------------------------------------------------------------------------------------
 # The receivers' trees.
 # ---------------------------------------------------------------------------------------------------
@@ -806,6 +851,7 @@ def main(argv: list[str]) -> int:
     if headline:
         findings.append(headline)
     findings.extend(second_count_findings(lines, anchor_line, total))
+    findings.extend(stage_restatement_findings(root))
 
     if args.offline:
         if findings:
