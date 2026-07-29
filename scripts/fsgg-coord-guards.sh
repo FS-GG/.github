@@ -202,9 +202,16 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 #                 unwedge #1047's deadlock. The refusal below is therefore correct rather than a cost being
 #                 tolerated, and the "it costs the fleet its diagnostic verb" worry #1528 recorded is not
 #                 real: `batch --text -n 1` is this same decision minus the offer, it is in BOARD_READS, and
-#                 it prints the identical answer from the engine's own shared `printChosen` (`--text` is part
-#                 of the spelling — `batch` defaults to JSON, which prints `[]` and puts the reasons on
-#                 stderr). Point a worker on a stale engine at that; `tests/coord-engine-e2e/writes.sh` pins
+#                 it prints the identical ANSWER out of the engine's own single spellings — the headline from
+#                 the one `nothingSchedulable` literal, the reasons and #428's banner from the one
+#                 `sayPassedOver` (`--text` is part of the spelling — `batch` defaults to JSON, which prints
+#                 `[]` and puts the reasons on stderr). NOT the same STREAM, and .github#1562 is why: it took
+#                 `next`'s empty arm off the shared `printChosen` so the headline could go to STDERR, keeping
+#                 `next`'s stdout the bare-ref machine contract, while `batch --text` still prints it to
+#                 STDOUT through `printChosen`. Same words, same exit 0, different stream for that one
+#                 line — which costs nothing to a caller READING the diagnostic, and everything to a
+#                 caller CAPTURING stdout. Point a worker on a stale engine at that; and
+#                 `tests/coord-engine-e2e/writes.sh` pins
 #                 both halves against one board (`batch` leaves #1033's thread empty, `next` posts a marker
 #                 to it), so this comment cannot quietly stop matching the engine.
 #
