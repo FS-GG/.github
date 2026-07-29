@@ -1,0 +1,48 @@
+# Resolve the shared Renovate preset with Renovate itself. Schema validation does not fetch an
+# `extends:` target, so it can be green while every repo consuming this preset is broken.
+name: preset-resolution
+
+on:
+  pull_request:
+    paths:
+      - "default.json"
+      - "scripts/check-preset-resolution.py"
+      - "tests/preset-resolution/**"
+      - ".github/workflows/preset-resolution.yml"
+  push:
+    branches: [main]
+    paths:
+      - "default.json"
+      - "scripts/check-preset-resolution.py"
+      - "tests/preset-resolution/**"
+      - ".github/workflows/preset-resolution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preset-resolution-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The resolver's output is an API contract. Keep this equal to the other Renovate gates rather
+  # than grading today's preset against whichever Renovate version happens to be released today.
+  RENOVATE_VERSION: 43.281.1
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # `--no-save` keeps the checkout's manifests and lockfiles untouched.
+      - name: Install pinned Renovate resolver
+        run: npm install --no-save --no-audit --no-fund "renovate@${RENOVATE_VERSION}"
+
+      - name: Resolve the org-shared preset
+        run: python3 scripts/check-preset-resolution.py
+
+      - name: Run preset-resolution fixture
+        run: bash tests/preset-resolution/run.sh
