@@ -482,31 +482,29 @@ chmod +x "$STUB/gh"
 # a leg that gave a receiver no engine declaration must not leave it that way for the next leg, which
 # would turn one deliberate finding into a run-wide exit 1 and mask whatever that leg was about.
 clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.failpin" "$FIX/$slug.failpinprops" "$FIX/$slug.gone" "$FIX/$slug.nopin" "$FIX/$slug.failtree" "$FIX/$slug.gonetree" "$FIX/$slug.tree" "$FIX/$slug/receiver.proj" "$FIX/$slug/receiver.proj.pinned" "$FIX/$slug/Directory.Packages.local.props" "$FIX/$slug/Directory.Packages.props" "$FIX/$slug.notools" "$FIX/$slug.failtools" "$FIX/$slug/dotnet-tools.json" "$FIX/$slug.failprot" "$FIX/$slug.failrules" "$FIX/$slug/protection.json" "$FIX/$slug/rules.json"
-               # …and RE-ESTABLISHES the default absence cover (#1785). Every shaping helper in this
+               # …and RE-ESTABLISHES the default required assertion path (#1785/#1869). Every shaping helper in this
                # file calls clearfail first, so this is the one place that can guarantee a repo the
                # legs below have not deliberately shaped still derives `required` and matches the
                # roster word. It is a RESET, exactly like the pin and tree shaping above: without it
-               # a leg that mutated one repo's cover would leave the NEXT leg red, and with it every
+               # a leg that mutated one repo's path would leave the NEXT leg red, and with it every
                # leg that predates this sweep is untouched by it.
-               absence_shape "$1" covered; protect "$1" "Absence cover"; }
+               absence_shape "$1" covered; protect "$1" "View-root assertion"; }
 # --- the absence-cover sweep's world (#1785) ------------------------------------------------------
 #
 # absence_shape <repo> <shape> — write the repo's `absence.yml`, the workflow whose jobs decide what
-# catches an ABSENT generated view root here. Five shapes, and each one is a real receiver's:
+# unexcused view-root assertion/materialize path is visible and whether it is required:
 #
-#   covered    one job, `Absence cover`, runs `skill-view check` UN-EXCUSED. With `protect` naming
-#              that context, the sweep derives `required` — FS.GG.SDD / Rendering / Governance /
-#              Net's shape, and the fixture default.
+#   covered    one job, `View-root assertion`, runs `skill-view check` unexcused. With `protect`
+#              naming that context, the sweep derives `required`. It proves the detector accepts a
+#              direct check; it deliberately does NOT claim that generation ran in the same job.
 #   sidelined  the SAME assertion, moved to a job called `Nightly sweep` that no protection requires,
-#              and the required job now only EXCUSES it. Derives `unrequired`. THE MUTATION: this is
-#              FS.GG.Game's cover rotting — the materialize leaving the required job — and it is the
-#              one this sweep exists to catch.
-#   weak       the required job excuses absence and the un-excused assertion lives on a `uses:` of
-#              this authority's kit-materialize.yml, which nothing requires. Derives `unrequired` —
-#              FS.GG.Audio's and FS.GG.Templates' real shape, measured 2026-07-28.
-#   uncovered  EVERY invocation carries `--absent-ok`. Nothing anywhere asserts an absent view root.
-#              Derives `none`, which no roster row may declare and which is always a finding.
-#   prose      `covered`'s cover DELETED, and the surviving excused step's `--absent-ok` REASON
+#              and the required job contains only an `--absent-ok` call. Derives `unrequired`.
+#   weak       the required job contains only an `--absent-ok` call and the unexcused path is a
+#              `uses:` of this authority's kit-materialize.yml, which nothing requires. Derives
+#              `unrequired`.
+#   uncovered  EVERY invocation carries `--absent-ok`. No unexcused assertion/materialize path is
+#              visible. Derives `none`, which no roster row may declare and is always a finding.
+#   prose      `covered`'s path DELETED, and the surviving `--absent-ok` step's REASON
 #              contains the literal `-t:FsggKitMaterialize` — exactly as FS.GG.Audio's does. The
 #              honest answer is `none`; a sweep that reads the reason as an invocation answers
 #              `required`. See the leg that pins it: this bug was real, in the first cut of the
@@ -519,7 +517,7 @@ absence_shape() { local slug="${1//\//__}" shape="$2"
     covered)   cat > "$FIX/$slug/absence.yml" <<YML
 jobs:
   cover:
-    name: Absence cover
+    name: View-root assertion
     steps:
       - name: Runtime skill-root contract
         run: bash scripts/skill-view check --source .claude/skills --tree .
@@ -528,7 +526,7 @@ YML
     sidelined) cat > "$FIX/$slug/absence.yml" <<YML
 jobs:
   cover:
-    name: Absence cover
+    name: View-root assertion
     steps:
       - name: Runtime skill-root contract
         run: |
@@ -544,7 +542,7 @@ YML
     weak)      cat > "$FIX/$slug/absence.yml" <<YML
 jobs:
   cover:
-    name: Absence cover
+    name: View-root assertion
     steps:
       - name: Runtime skill-root contract
         run: |
@@ -557,7 +555,7 @@ YML
     uncovered) cat > "$FIX/$slug/absence.yml" <<YML
 jobs:
   cover:
-    name: Absence cover
+    name: View-root assertion
     steps:
       - name: Runtime skill-root contract
         run: |
@@ -568,7 +566,7 @@ YML
     prose)     cat > "$FIX/$slug/absence.yml" <<YML
 jobs:
   cover:
-    name: Absence cover
+    name: View-root assertion
     steps:
       # A comment naming -t:FsggKitMaterialize, which is also not an invocation.
       - name: Runtime skill-root contract
@@ -2967,49 +2965,39 @@ view_root FS-GG/FS.GG.SDD noview; view_root FS-GG/FS.GG.Rendering noview
 unpin FS-GG/FS.GG.Rendering
 
 
-# --- the absence-cover sweep (#1785) -------------------------------------------------------------
+# --- the view-root path requirement sweep (historical field: absence-cover; #1785/#1869) ---------
 #
-# WHAT THESE LEGS ARE FOR. ADR-0067 §8's alarm reds on an absent generated view root by default, and
-# three receivers excuse that with `--absent-ok "<why>"`. The reason is required and printed, and it
-# is a FREE-TEXT claim about that repo's BRANCH PROTECTION — "a required context materializes here",
-# "no required context does". Nothing re-checked it. These legs are what re-checks it: the roster
-# carries the claim as a word, the sweep derives the truth from the union of both protection stores
-# plus the receiver's own jobs, and disagreement is red in BOTH directions.
-#
-# Leg (1) is the one that can fail, and it is the real rot: FS.GG.Game's `--absent-ok` sits in the
-# same required job that runs the materialize, so the day that materialize moves to an unrequired job
-# the excuse keeps printing over a repo nothing guards. Leg (7) is the mutation of the SWEEP, not of
-# a receiver — the first cut of it read Audio's reason string as an invocation and derived `required`
-# for the one receiver whose whole point is that it is not.
+# WHAT THESE LEGS ARE FOR. #1869 measured that receiver generation repairs absent/dangling roots and
+# refuses a text-file root before the assertion. The historical field therefore grades whether the
+# receiver's unexcused view-root assertion/materialize path is branch-required, not whether
+# generation co-runs with every direct check and not absence-class reachability. The roster carries
+# that claim as a word; the sweep derives it from both protection stores plus the receiver's own jobs,
+# and disagreement is red in both directions.
 #
 # Every leg re-shapes BOTH receivers, because `clearfail` resets a repo to `covered` and a leg that
 # shaped only one would be proving its point against a neighbour that had silently drifted.
 
-# (0) THE GREEN, and it is the real fleet's shape: SDD / Rendering / Governance / Net all run the
-#     assertion un-excused on a context their branch requires, measured 2026-07-28.
+# (0) THE GREEN: the detected assertion path runs on a context the branch requires.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] \
-    && printf '%s' "$out" | grep -q 'absence-cover: required — required context(s) running the assertion un-excused: Absence cover' \
+    && printf '%s' "$out" | grep -q 'absence-cover: required — required context(s) running an unexcused assertion/materialize path: View-root assertion' \
     && printf '%s' "$out" | grep -q 'graded 2 of 2 coordination-kit package receiver(s): 2 match the roster'; } \
-  && ok "absence-cover: a required context running the assertion un-excused matches the roster word" \
+  && ok "absence-cover: a required unexcused assertion path matches the roster word" \
   || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
 
-# (1) THE LEG THAT CAN FAIL — #1785 AC1/AC2, and the whole reason this sweep exists. The assertion is
-#     still there, still un-excused, still runs — it has simply moved off the required context, and
-#     the required job now only EXCUSES absence. That is FS.GG.Game's carve-out rotting, and every
-#     other signal in the org stays green through it: the roster is unchanged, the receiver's printed
-#     reason is unchanged, the view-root generate sweep is unchanged, CI is unchanged.
+# (1) The gate still runs, but it moved off the required context. The roster is now stronger than
+#     live branch protection and must red.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 absence_shape FS-GG/FS.GG.Rendering sidelined
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] \
     && printf '%s' "$out" | grep -q 'absence-cover — FS-GG/FS.GG.Rendering the roster says `absence-cover: required` and live branch protection says otherwise' \
-    && printf '%s' "$out" | grep -q 'This is the UNSAFE direction' \
+    && printf '%s' "$out" | grep -q 'detected path is weaker than the roster claims' \
     && printf '%s' "$out" | grep -q 'Nightly sweep' \
     && printf '%s' "$out" | grep -q '1 receiver(s) do not match the roster'; } \
   && ok "absence-cover: an assertion that MOVED OFF a required context reds (#1785 AC1/AC2)" \
-  || bad "a rotted carve-out must red here, not on the day an ungenerated view ships" "rc=$rc: $out"
+  || bad "a requiredness mismatch must red at the authority" "rc=$rc: $out"
 
 # (2) …and it is NOT a wiring gap, and NOT a view-root generate finding. The receiver wires its
 #     capability perfectly and generates its view; a red that named either would send an operator to
@@ -3020,21 +3008,19 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "absence-cover: a rotted carve-out is not reported as a wiring gap" \
   || bad "the finding must name its own subject" "$out"
 
-# (3) NOTHING ASSERTS IT AT ALL — every invocation carries `--absent-ok`. This is the state no roster
-#     row may declare, so it is a finding whatever the word says, and the diagnostic has to say that
-#     absence is excused everywhere and caught nowhere rather than merely that a word mismatched.
+# (3) NO UNEXCUSED ASSERTION/MATERIALIZE PATH EXISTS. This is the state no roster row may declare.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 absence_shape FS-GG/FS.GG.Rendering uncovered
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] \
     && printf '%s' "$out" | grep -q "NOTHING in this receiver runs the kit's view-root assertion without" \
-    && printf '%s' "$out" | grep -q 'excused everywhere and caught nowhere'; } \
-  && ok "absence-cover: absence excused on EVERY lane is a finding, not a word mismatch" \
+    && printf '%s' "$out" | grep -q 'No unexcused view-root assertion/materialize path was found'; } \
+  && ok "absence-cover: no detected path is a finding, not a word mismatch" \
   || bad "the underivable state must red with its own diagnostic" "rc=$rc: $out"
 
 # (4) THE DIVERGENCE IS PRESERVED, NOT FLATTENED (#1785's not-in-scope, #1777's deliberate spread).
-#     FS.GG.Audio and FS.GG.Templates really are covered only by their kit-materialize lane, which no
-#     context requires. That is `unrequired`, it is legitimate, and a sweep that red it would be
+#     The detected unexcused path exists only on kit-materialize, which no context requires. That is
+#     `unrequired`, it is legitimate, and a sweep that red it would be
 #     making a per-repo protection decision that is not its to make. Declared `unrequired` -> GREEN.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 absence_shape FS-GG/FS.GG.Rendering weak
@@ -3043,28 +3029,25 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] \
     && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: unrequired — no REQUIRED context runs it' \
     && printf '%s' "$out" | grep -q 'materialize / Materialize the kit from its pin'; } \
-  && ok "absence-cover: a receiver covered only by its materialize lane is GREEN when it says so" \
-  || bad "a legitimate unrequired cover must not be flattened into a finding" "rc=$rc: $out"
+  && ok "absence-cover: a gate on only an unrequired lane is GREEN when it says so" \
+  || bad "a legitimate unrequired gate must not be flattened into a finding" "rc=$rc: $out"
 
-# (5) …and the SAME tree with the STRONGER word is the unsafe finding. One roster word apart, and it
-#     is the difference between a receiver that knows absence does not block a merge and one whose
-#     printed `--absent-ok` reason claims a required context has it covered.
+# (5) The same tree with the stronger word is a finding: required versus unrequired must match.
 mkreg "$REG"
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] \
-    && printf '%s' "$out" | grep -q 'This is the UNSAFE direction' \
-    && printf '%s' "$out" | grep -q 'excused by --absent-ok on: Absence cover'; } \
-  && ok "absence-cover: the same tree with the stronger word is the UNSAFE finding" \
+    && printf '%s' "$out" | grep -q 'detected path is weaker than the roster claims' \
+    && printf '%s' "$out" | grep -q -- '--absent-ok-only lane on: View-root assertion'; } \
+  && ok "absence-cover: the same tree with the stronger word is a finding" \
   || bad "the word is the claim; a wrong word must red" "rc=$rc: $out"
 
-# (6) THE SAFE DIRECTION IS STILL A FINDING. The repo is covered more strongly than it claims — that
-#     is not dangerous, and the word is still wrong, and the word is what the next reader trusts.
-#     Reporting it green is how a roster becomes decoration.
+# (6) THE OTHER DIRECTION IS STILL A FINDING. The path is required more strongly than claimed, and
+#     the roster is still wrong.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 REN_COVER=unrequired mkreg "$REG"
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] \
-    && printf '%s' "$out" | grep -q 'This is the SAFE direction' \
+    && printf '%s' "$out" | grep -q 'detected path is required more strongly than the roster claims' \
     && printf '%s' "$out" | grep -q 'Update the row'; } \
   && ok "absence-cover: a roster word that UNDER-claims is a finding too" \
   || bad "a stale roster word is wrong in both directions" "rc=$rc: $out"
@@ -3077,7 +3060,7 @@ mkreg "$REG"
 #     point is that it is NOT — certifying the excuse by reading the sentence that denies it. That is
 #     #1785's own defect class, one level in.
 #
-#     The shape here has NOTHING that asserts absence: one excused step whose reason names the
+#     The shape here has NO unexcused assertion/materialize path: one `--absent-ok` step whose reason names the
 #     target, and a comment that names it too. The honest answer is `none`. A sweep that reads prose
 #     as an invocation answers `required` and this leg fails.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
@@ -3096,11 +3079,11 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 #     ruleset, and the verdict must still be `required`.
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 unprotect FS-GG/FS.GG.Rendering
-protect_ruleset FS-GG/FS.GG.Rendering "Absence cover"
+protect_ruleset FS-GG/FS.GG.Rendering "View-root assertion"
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] \
     && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
-  && ok "absence-cover: a context required only by a RULESET still covers absence (#574)" \
+  && ok "absence-cover: a context required only by a RULESET still makes the gate required (#574)" \
   || bad "reading one protection store is a vacuous green" "rc=$rc: $out"
 
 # (9) AN UNPROTECTED BRANCH IS A REAL ANSWER, NOT A MISSING ONE. Both stores say "requires nothing",
@@ -3127,7 +3110,7 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q 'absence-cover REFUSED to grade FS-GG/FS.GG.Rendering' \
     && printf '%s' "$out" | grep -q 'administration: read' \
     && ! printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering absence-cover: required'; } \
-  && ok "absence-cover: protection we may not read is REFUSED, never a verified excuse (#266)" \
+  && ok "absence-cover: protection we may not read is REFUSED, never guessed requiredness (#266)" \
   || bad "an unread protection must not render as a checked one" "rc=$rc: $out"
 
 # (11) …and the OTHER store failing is refused just as hard. A half-read is not a verdict: the

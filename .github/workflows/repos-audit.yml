@@ -19,16 +19,17 @@
 #      cross-repo `sparse-checkout` in some rostered repo enumerates a file (#1529) — or a
 #      coordination-kit receiver's FS.GG.Kit pin is behind the newest published one (#1540) — or a
 #      receiver declares a generated view skill root that NOTHING generates before the kit asserts
-#      it (#1759), or a receiver whose real branch protection contradicts the roster's
-#      `absence-cover:` word for it — the free-text `--absent-ok` claim, finally re-checked (#1785)
+#      it (#1759), or a receiver whose real branch protection contradicts the roster's historical
+#      `absence-cover:` word for whether its unexcused view-root assertion/materialize path is
+#      required (#1785/#1869)
 #   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage), or
 #      nuget.org would not say which FS.GG.Kit version is published (#1540), or a receiver's branch
-#      protection would not read (#1785 — an unread protection is never a verified excuse)
+#      protection would not read (#1785 — unread protection cannot establish path requiredness)
 #   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, a
 #      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, a
 #      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself, a
 #      receiver's view-root generate cannot be ORDERED against the kit's assertion (#1759), or a
-#      receiver's absence cover cannot be graded at all — most often because this run holds no
+#      receiver's view-root path requirement cannot be graded at all — most often because this run holds no
 #      `administration: read` credential, so the required set could be read from only one of the two
 #      stores GitHub keeps it in, and a half-read is #574's vacuous green (#1785)
 #      (#316, #320, #503, #1529, #1540, #1759)
@@ -83,7 +84,8 @@ permissions:
   pull-requests: read
   # `administration: read` is DELIBERATELY ABSENT and cannot be added: it is not a valid scope for a
   # GITHUB_TOKEN, and declaring it is a startup validation error that produces no check run at all
-  # (#478/#1575). The absence-cover sweep's protection read goes through the App token minted in the
+  # (#478/#1575). The historical absence-cover sweep's protection read goes through the App token
+  # minted in the
   # job below, never through this token. Said here because this is where a reader looks for it.
 
 env:
@@ -106,8 +108,10 @@ jobs:
       # Only the authoritative pass is echoed. A discarded first pass emits per-repo `::error::`
       # annotations of its own, and replaying them over a clean retry would hang red annotations on a
       # green run — the annotation list is a surface too, and the whole point here is that it not lie.
-      # THE ONE READ THIS AUDIT MAKES THAT GITHUB_TOKEN CANNOT (#1785). The absence-cover sweep asks
-      # what a receiver's branch REQUIRES, and `branches/<b>/protection` needs `administration: read`
+      # THE ONE READ THIS AUDIT MAKES THAT GITHUB_TOKEN CANNOT (#1785/#1869). The historical
+      # absence-cover sweep asks whether an unexcused view-root assertion/materialize path is
+      # REQUIRED, and
+      # `branches/<b>/protection` needs `administration: read`
       # — which is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN. Declaring it is a
       # startup validation error that produces no check run at all (the #478 blind spot, hit for real
       # by #1575), so no amount of editing the block above can grant it. The org dispatch App holds
@@ -118,7 +122,7 @@ jobs:
       # receiver and the run exits 3 with a diagnostic naming the credential — the honest outcome —
       # so a mint failure must not kill the four sweeps that need no credential before they report.
       # The audit's own exit code stays the verdict.
-      - name: Mint the App installation token the absence-cover sweep needs
+      - name: Mint the App token the view-root path requirement sweep needs
         id: absentok-token
         continue-on-error: true
         uses: actions/create-github-app-token@v3
@@ -144,7 +148,7 @@ jobs:
         id: audit
         env:
           GH_TOKEN: ${{ github.token }}
-          # Handed to the absence-cover sweep ALONE. Every other read this script makes is a
+          # Handed to the historical absence-cover sweep ALONE. Every other read this script makes is a
           # public-repo read the run-scoped token makes correctly, and a repo-scoped installation
           # token would 404 the authority itself — so the two are not interchangeable and the script
           # does not treat them as such.

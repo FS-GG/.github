@@ -46,41 +46,52 @@
 # repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
 # hand-maintain it against intent; maintain it against what the callers actually do.
 #
-# `absence-cover` (per repo; #1785) — WHAT CATCHES AN ABSENT GENERATED VIEW ROOT IN THIS RECEIVER, and
-# the first field on a roster row whose truth lives in the GitHub API rather than in a tree.
+# `absence-cover` (per repo; #1785, corrected by #1869) — WHETHER THE RECEIVER'S SKILL-VIEW GATE IS
+# REQUIRED. The historical field name is retained for schema compatibility; it does NOT mean that a
+# receiver's per-PR check can return §8's `[absent-root]`, `[dangling-root]`, or `[text-file-root]`
+# verdict.
 #
-# ADR-0067 §6 makes `.agents/skills` a GENERATED VIEW: untracked, git-ignored, and therefore absent in
-# every fresh checkout. §8's alarm reds on that by default — because an ungenerated view is exit 0
-# with no diagnostic in both runtimes, the silent failure §8 exists to forbid — and a receiver whose
-# alarm runs on a bare checkout excuses it with `--absent-ok "<why>"`. The kit REQUIRES a reason and
-# PRINTS it, so the carve-out cannot be a shrug. Three receivers carry one today.
+# Measured per class on the real receiver path (#1869, 2026-07-29): every receiver declares an
+# `Fsgg<Repo>GenerateSkillView` target `BeforeTargets="FsggKitCheckSkillView"`. On a fresh checkout the
+# generate creates the absent view; for a dangling view it replaces it; for a text-file root it refuses
+# before the assertion runs. The first two therefore reach the assertion repaired and green, while the
+# third still makes the BUILD red through the generator's refusal. None can be the assertion's own
+# absence-class verdict. Conditional versus declaration-authorised generation decides WHO MAY REPAIR
+# the root, not whether those verdicts remain reachable after generation; the targets stay
+# unconditional and declaration-authorised.
 #
-# Every one of those reasons is a claim about that repo's BRANCH PROTECTION, in free text, and until
-# #1785 nothing re-checked any of them: adding a required context, removing one, moving a materialize
-# step between jobs or renaming a job all change the answer and none of them touches the string. This
-# word is that claim, moved to where a sweep can grade it:
+# The receiver gate has a real, narrower subject: it proves that declared generation SUCCEEDED and
+# that the source was complete enough to produce the expected view. §8's three absence-class mutation
+# demonstrations belong to FS.GG.Kit's `verify-package.sh`, whose fixtures deliberately do not
+# generate first and where #1867 proved all three verdicts fire. Do not advertise those kit-suite
+# demonstrations as receiver per-PR demonstrations, and do not remove the seven receiver generate
+# targets: a bare checkout requires generation, and the text-file class is loud because that generation
+# refuses to replace a root it does not own.
 #
-#   required    a context the default branch REQUIRES is produced by a job that runs the kit's
-#               view-root assertion WITHOUT `--absent-ok`. An absent view root cannot reach `main`.
-#   unrequired  the assertion runs un-excused somewhere, but on NO required context — true of a
-#               receiver whose only materialize lane is its Renovate kit-bump workflow.
+# The historical field records a narrower claim about BRANCH PROTECTION, and its truth lives in the
+# GitHub API rather than in a tree. The audit detects a job that reaches an unexcused view-root
+# assertion directly or through materialization; the separate generate sweep proves the receiver
+# project declares and orders its generator, but a bare direct check does not prove that generator ran
+# in the same job. Adding a required context, removing one, moving the assertion/materialize step
+# between jobs, or renaming a job changes the answer:
 #
-# THERE IS NO THIRD WORD, AND THAT IS THE POINT. "Nothing catches absence here" is a state
-# repos-audit.sh DERIVES and reds on; no row may assert it, because asserting it would be asking for
-# exactly the silent exit 0 over an ungenerated view that §8 forbids. `repos.sh validate` refuses it.
+#   required    the default branch REQUIRES a context whose job reaches an unexcused view-root
+#               assertion or materialize path.
+#   unrequired  such a path runs, but on NO required context — true when its only unexcused assertion
+#               is the Renovate kit-materialize lane.
 #
-# THE WORD IS NOT THE AUTHORITY — THE API IS. repos-audit's absence-cover sweep reads the UNION of
-# classic protection and rulesets (#574 — GitHub keeps required checks in two stores and enforces
-# both) plus the receiver's committed workflows, derives the real answer, and reds when the two
-# disagree in EITHER direction: weaker-than-declared is the unsafe rot #1785 was filed for, and
-# stronger-than-declared is a roster that has stopped describing the org. A stale word is a finding,
-# never a licence. It reads no receiver's `--absent-ok` REASON: that string is prose for a human, and
-# the sweep is what keeps it true. Legal only on a coordination-kit receiver.
+# THERE IS NO THIRD WORD. "No unexcused assertion/materialize path runs here" is a state
+# repos-audit.sh DERIVES and reds on; no row may assert it. `repos.sh validate` refuses it.
 #
-# The three words that are not `required` below are measurements, not preferences. SDD, Rendering and
-# Governance red on absence deliberately, because their host generates the view first; Audio's and
-# Templates' `--absent-ok` sits in a bare-checkout job and their only un-excused assertion is the
-# kit-materialize lane, which no context requires. That divergence is a parameter, not a fork.
+# THE WORD IS NOT THE AUTHORITY — THE API IS. repos-audit's historical `absence-cover` sweep reads the
+# UNION of classic protection and rulesets (#574 — GitHub keeps required checks in two stores and
+# enforces both) plus the receiver's committed workflows, derives required versus unrequired, and reds
+# when the row and reality disagree in EITHER direction. A stale word is a finding, never a licence.
+# Legal only on a coordination-kit receiver.
+#
+# The five `required` and two `unrequired` words below are measurements, not preferences. The divergence
+# says whether that detected assertion/materialize path is branch-required; it says nothing about
+# absence-class reachability, which is structurally the kit verify suite's subject.
 #
 # `kit-delivery` (per repo; ADR-0062 / #1287) — HOW a coordination-kit receiver takes the kit. It once
 # decoupled the byte-copy PUSH from the drift CHECK that `receives: coordination-kit` used to fuse:
@@ -140,7 +151,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 9
-updated: 2026-07-28
+updated: 2026-07-29
 authority: FS-GG/.github
 
 repos:
@@ -381,10 +392,11 @@ capabilities:
   # Measured 2026-07-28 on the live org: all seven receivers, these four included, declare
   # `<FsggKitViewSkillRoots>` and generate it in their own `Fsgg<Repo>GenerateSkillView` target ahead of
   # the kit's `FsggKitCheckSkillView` assertion, and BOTH halves are swept here in both directions —
-  # by the view-root generate sweep (#1759) and the absence-cover sweep (#1785). Those four therefore
-  # keep a live, org-graded skill-view assertion; what they lose is a row demanding a caller that must
-  # not be built. What NOBODY has, these four and the three that dropped the row alike, is cross-root
-  # BYTE identity outside the kit's four skills — that is #1743, it is already filed and owned, it is
+  # by the view-root generate sweep (#1759) and the view-root path requirement sweep whose historical
+  # registry field is `absence-cover` (#1785, corrected by #1869). Those four therefore keep a live,
+  # org-graded generate-and-source-completeness assertion; what they lose is a row demanding a caller
+  # that must not be built. What NOBODY has, these four and the three that dropped the row alike, is
+  # cross-root BYTE identity outside the kit's four skills — that is #1743, it is already filed and owned, it is
   # org-wide rather than specific to these four, and keeping a retired row here could not have closed
   # it, because the retired caller is precisely the thing that may not be wired.
   #
