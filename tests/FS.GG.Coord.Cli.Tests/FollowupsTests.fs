@@ -366,6 +366,22 @@ module FollowupsTests =
             Assert.Equal(Listed [ open' ], apply w List))
 
     [<Fact>]
+    let ``reconciliation refuses a corrupt queue before rewriting any selected ref`` () =
+        withCache (fun cache ->
+            let w = workerNamed "rook-reconcile-corrupt"
+            writeQueue cache w.Id "FS-GG/FS.GG.Game#1\nnot-a-ref\n" DateTime.UtcNow
+
+            match remove w (set [ ref' "FS-GG" "FS.GG.Game" 1 ]) with
+            | Ok removed -> failwith $"a corrupt queue must not report a rewrite (%d{removed})"
+            | Error _ -> ()
+
+            let file =
+                match path w with
+                | Ok value -> value
+                | Error why -> failwith why
+            Assert.Equal("FS-GG/FS.GG.Game#1\nnot-a-ref\n", File.ReadAllText file))
+
+    [<Fact>]
     let ``concurrent pops CONSERVE the queue — no ref handed twice, none lost`` () =
         withCache (fun _ ->
             let w = workerNamed "rook-test"

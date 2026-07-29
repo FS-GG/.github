@@ -4750,6 +4750,8 @@ module Client =
                             // looked and found nothing, whereas `Unreadable` means a promise may still exist.
                             // Never pop here: `done` reports the obligation; the worker drains its OWN queue
                             // sequentially after this stamp, one claimed item at a time.
+                            let mutable followupsDisposed = true
+
                             match Followups.apply w Followups.List with
                             | Followups.Empty -> ()
                             | Followups.Listed refs ->
@@ -4773,6 +4775,7 @@ module Client =
                                     | Ok () -> ()
                                     | Error e ->
                                         recorded <- false
+                                        followupsDisposed <- false
                                         eprint
                                             $"fsgg-coord-engine: could not durably record the follow-up disposition for %s{owed.Short}: %s{Errors.explain e}. The queue was NOT rewritten; retry `done` or record an explicit disposition before ending worker %s{w.Id}."
 
@@ -4781,9 +4784,11 @@ module Client =
                                         $"fsgg-coord-engine: %d{List.length refs} follow-up(s) remain for worker %s{w.Id}; each is now durably recorded as deferred on its issue. Drain only your OWN queue sequentially: `scripts/fsgg-coord followup pop`; claim and complete one item before considering the next."
                             | Followups.Unreadable why
                             | Followups.Refused why ->
+                                followupsDisposed <- false
                                 eprint
                                     $"fsgg-coord-engine: %s{why} The done stamp stands, but do not treat this as an empty queue. Retry `scripts/fsgg-coord followup list` before ending this worker."
                             | other ->
+                                followupsDisposed <- false
                                 eprint $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
 
                             // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
@@ -4802,9 +4807,14 @@ module Client =
                             // worker holding a live claim, so offering before the release would offer to a
                             // worker this very function is about to make idle — and be refused, silently,
                             // forever. Condition 3's guard and #533's drop are the same instant, in this order.
-                            offerChoreAfterDone ctx opts ref
-
-                            ExitGreen
+                            if followupsDisposed then
+                                offerChoreAfterDone ctx opts ref
+                                ExitGreen
+                            else
+                                // The merge/stamp is irreversible and stands, but a non-green result is
+                                // the terminal guard: this worker must not be recycled while its queue
+                                // has no readable/durable disposition.
+                                ExitRed
 
     /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
     /// A repo token → the repo NAME board rows carry. THE MAP NOW LIVES IN THE PARSER (`Options.resolveRepo`,
@@ -5414,8 +5424,24 @@ module Client =
     /// `followup audit` is intentionally a read-only reconciliation PREVIEW. A queue's mtime is a
     /// candidate selector, not evidence that its worker died: each queued issue is re-read from GitHub,
     /// then its marker scan is required to be complete before we say it has no live claim.
+    // The application fixture supplies the same typed context every other Client handler receives. The
+    // override is scoped and restored even when its assertion throws; production never installs one.
+    let mutable private followupAuditContextOverride: (Context * IDisposable) option = None
+
+    let withFollowupAuditContextForTest (ctx: Context) (f: unit -> 'a) : 'a =
+        let prior = followupAuditContextOverride
+        followupAuditContextOverride <- Some(ctx, { new IDisposable with member _.Dispose() = () })
+
+        try f ()
+        finally followupAuditContextOverride <- prior
+
     let followupAudit (opts: Options) : int =
-        match context () with
+        let supplied =
+            match followupAuditContextOverride with
+            | Some value -> Ok value
+            | None -> context ()
+
+        match supplied with
         | Error code -> code
         | Ok(ctx, disposable) ->
             use _ = disposable
@@ -5431,44 +5457,85 @@ module Client =
                 |> List.map (fun r -> r.Owner, r.Repo)
                 |> Set.ofList
 
-            let openByRepo =
-                repos
-                |> Seq.map (fun (owner, repo) ->
-                    (owner, repo), Reads.openIssues ctx.Transport owner repo)
-                |> Map.ofSeq
-
             // `openIssues` is a convenient per-repo candidate read, but absence from it is not a state:
             // it can also be an off-board row, a PR, or a visibility mismatch. The fresh board scan owns
             // the issue-state authority, and anything it cannot name remains UNKNOWN.
-            let boardState =
+            let boardRows =
                 Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
                 |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
-                |> Result.map (fun rows -> rows |> List.map (fun row -> row.Ref, row.State) |> Map.ofList)
+
+            // AC1 is about the QUEUE OWNER, not merely the owed issue. Mirror `who`'s A ∪ B sweep: board
+            // In-progress rows (A) union every open issue in every board repository (B). B is what finds
+            // an off-board claim after a failed status flip; every list and marker read must complete.
+            let liveClaims =
+                boardRows
+                |> Result.bind (fun rows ->
+                    let boardRepos =
+                        rows
+                        |> List.filter (fun row -> not row.IsPullRequest)
+                        |> List.map (fun row -> row.Ref.Owner, row.Ref.Repo)
+                        |> Set.ofList
+
+                    let allRepos = Set.union boardRepos repos
+
+                    let candidates =
+                        allRepos
+                        |> Seq.fold (fun state (owner, repo) ->
+                            state
+                            |> Result.bind (fun refs ->
+                                Reads.openIssues ctx.Transport owner repo
+                                |> Result.map (fun issues ->
+                                    issues
+                                    |> List.map (fun issue -> { Owner = owner; Repo = repo; Number = issue.Number })
+                                    |> List.append refs))) (Ok [])
+                        |> Result.map (fun openRefs ->
+                            let inProgress =
+                                rows
+                                |> List.filter (fun row -> not row.IsPullRequest && row.Status = BoardStatus.InProgress)
+                                |> List.map (fun row -> row.Ref)
+
+                            Set.union (Set.ofList openRefs) (Set.ofList inProgress) |> Set.toList)
+
+                    candidates
+                    |> Result.bind (List.fold (fun state (row: Ref) ->
+                        state
+                        |> Result.bind (fun claims ->
+                            Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
+                            |> Result.map (fun markers ->
+                                match Reads.winner opts.LeaseMinutes markers with
+                                | Some marker -> (marker.Worker, row) :: claims
+                                | None -> claims))) (Ok [])))
+
+            let mutable closedByWorker: Map<string, Ref list> = Map.empty
 
             let reportQueue (label: string) (queue: Followups.AuditedQueue) =
-                for (owed: Ref) in queue.Refs do
-                    match Map.find (owed.Owner, owed.Repo) openByRepo with
+                let ownerIsLive =
+                    match liveClaims with
                     | Error e ->
                         failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read issue state: %s{Errors.explain e}. Queue retained."
-                    | Ok openIssues ->
-                        match openIssues |> List.tryFind (fun issue -> issue.Number = owed.Number) with
-                        | None ->
-                            match boardState with
-                            | Ok states ->
-                                match Map.tryFind owed states with
-                                | Some IssueState.Closed ->
-                                    eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
-                                | Some IssueState.Open ->
-                                    failed <- true
-                                    eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short} is open on the fresh board but absent from the open-issue read. Queue retained."
-                                | None ->
-                                    failed <- true
-                                    eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short} is not on the fresh board; no closed-state inference was made. Queue retained."
-                            | Error e ->
-                                failed <- true
-                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: fresh board state could not be read: %s{Errors.explain e}. Queue retained."
-                        | Some _ ->
+                        eprint $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
+                        Error ()
+                    | Ok claims ->
+                        Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
+
+                let abandonedOwner =
+                    match label, ownerIsLive with
+                    | "ABANDONED", Ok None -> true
+                    | _ -> false
+
+                for (owed: Ref) in queue.Refs do
+                    match Reads.issueState ctx.Transport owed.Owner owed.Repo owed.Number with
+                    | Error e ->
+                        failed <- true
+                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
+                    | Ok IssueState.Closed ->
+                        if abandonedOwner then
+                            closedByWorker <-
+                                closedByWorker
+                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
+                        eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
+                    | Ok IssueState.Open ->
                             match
                                 Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
                                 |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
@@ -5479,12 +5546,52 @@ module Client =
                             | Ok markers ->
                                 match Reads.winner opts.LeaseMinutes markers with
                                 | Some marker ->
+                                    if abandonedOwner then
+                                        closedByWorker <-
+                                            closedByWorker
+                                            |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
                                     eprint $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
                                 | None ->
-                                    eprint $"%s{label}: worker %s{queue.Worker}, %s{owed.Short} is open with no live claim; queue retained pending durable disposition."
+                                    match ownerIsLive with
+                                    | Ok(Some(_, held)) ->
+                                        eprint $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
+                                    | Ok None ->
+                                        if abandonedOwner then
+                                            closedByWorker <-
+                                                closedByWorker
+                                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
+                                        eprint $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
+                                    | Error () ->
+                                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
 
             for queue in local.Stale do reportQueue "ABANDONED" queue
             for queue in local.Fresh do reportQueue "ACTIVE" queue
+
+            // The apply phase is deliberately after ALL reads: an unknown anywhere keeps every queue
+            // intact. For each abandoned ref (open is re-surfaced, closed is cleared), comment first; only a fully acknowledged batch may rewrite its
+            // worker's queue. A failed comment therefore leaves the original promise recoverable.
+            if opts.Apply && not failed then
+                for KeyValue(workerId, refs) in closedByWorker do
+                    match Identity.resolve (Some workerId) with
+                    | Error why ->
+                        failed <- true
+                        eprint $"UNKNOWN: cannot resolve queued worker %s{workerId}: %s{why}. Queue retained."
+                    | Ok worker ->
+                        let mutable durable = true
+                        for owed in refs do
+                            match Writes.followupDisposition ctx.Transport owed (WorkerId worker.Id) "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared." with
+                            | Ok () -> ()
+                            | Error e ->
+                                durable <- false
+                                failed <- true
+                                eprint $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
+
+                        if durable then
+                            match Followups.remove worker (Set.ofList refs) with
+                            | Ok removed -> eprint $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
+                            | Error why ->
+                                failed <- true
+                                eprint $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
 
             if failed then ExitRed else ExitGreen
 

@@ -684,7 +684,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FAllRepos -> Only [ Who ]
         | FAll -> Only [ Ready ]
         | FActive -> Only [ Overlap ]
-        | FApply -> Only [ Reap; Reconcile ]
+        | FApply -> Only [ Reap; Reconcile; Followup ]
         | FPeek -> Only [ Inbox ]
         | FDryRun -> Only [ Flush ]
         | FStrict -> Only [ LintCmd ]

@@ -408,6 +408,10 @@ module Reads =
     /// identification of a thing that is not an item of work (#641), not a failure to identify anything.
     val openIssues: transport: IGitHubTransport -> owner: string -> repo: string -> IoResult<OpenIssue list>
 
+    /// Read one queued ref's OPEN/CLOSED state. Missing, malformed, unreadable and pull-request refs are
+    /// errors, never inferred as CLOSED.
+    val issueState: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<IssueState>
+
     /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
     /// serves the cached body for zero cost.
     ///

@@ -266,7 +266,7 @@ module ApplicationServiceTests =
                 | Some body ->
                     // A PATCH is accepted but not persisted: the #523 re-check compares the touch-set it
                     // REWROTE in memory, never a re-read, so persisting it would test nothing extra.
-                    ok (JsonSerializer.Serialize {| number = n; body = body |})
+                    ok (JsonSerializer.Serialize {| number = n; state = "open"; body = body |})
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
@@ -294,6 +294,61 @@ module ApplicationServiceTests =
         match Options.parse args with
         | Ok o -> o
         | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+    [<Fact>]
+    let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
+        let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
+        let cache = Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-" + Guid.NewGuid().ToString "n")
+        let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let stderr = Console.Error
+        use captured = new StringWriter()
+
+        try
+            let directory = Path.Combine(cache, "followups")
+            Directory.CreateDirectory directory |> ignore
+            let queue = Path.Combine(directory, "ghost-777.txt")
+            File.WriteAllText(queue, "FS-GG/FS.GG.SDD#42\n")
+            File.SetLastWriteTimeUtc(queue, DateTime.UtcNow.AddHours -3)
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+            Console.SetError captured
+
+            let code =
+                Client.withFollowupAuditContextForTest (context transport) (fun () ->
+                    Client.followupAudit (options [ "followup"; "audit"; "--apply" ]))
+
+            Assert.Equal(0, code)
+            Assert.False(File.Exists queue, "the claimed open ref is already resurfaced; its abandoned queue must clear")
+            Assert.Contains("FS.GG.SDD#42", captured.ToString())
+            Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
+        finally
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+            try Directory.Delete(cache, true) with _ -> ()
+
+    [<Fact>]
+    let ``followup audit apply leaves the queue byte-identical when its durable disposition fails`` () =
+        let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) true
+        let cache = Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-fail-" + Guid.NewGuid().ToString "n")
+        let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+        try
+            let directory = Path.Combine(cache, "followups")
+            Directory.CreateDirectory directory |> ignore
+            let queue = Path.Combine(directory, "ghost-777.txt")
+            let bytes = "FS-GG/FS.GG.SDD#42\n"
+            File.WriteAllText(queue, bytes)
+            File.SetLastWriteTimeUtc(queue, DateTime.UtcNow.AddHours -3)
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+
+            let code =
+                Client.withFollowupAuditContextForTest (context transport) (fun () ->
+                    Client.followupAudit (options [ "followup"; "audit"; "--apply" ]))
+
+            Assert.Equal(3, code)
+            Assert.Equal(bytes, File.ReadAllText queue)
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+            try Directory.Delete(cache, true) with _ -> ()
 
     /// Run one verb against a THROWAWAY cache root and capture its stdout.
     ///
