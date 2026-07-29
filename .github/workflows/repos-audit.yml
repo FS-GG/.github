@@ -22,9 +22,10 @@
 #      it (#1759), or a receiver whose real branch protection contradicts the roster's historical
 #      `absence-cover:` word for whether its unexcused view-root assertion/materialize path is
 #      required (#1785/#1869)
-#   2  no verdict, RETRYABLE — a receiver artifact could not be read (rate limit, auth, outage), or
-#      nuget.org would not say which FS.GG.Kit version is published (#1540), or a receiver's branch
-#      protection would not read (#1785 — unread protection cannot establish path requiredness)
+#   2  no verdict, RETRYABLE — a receiver artifact or a rostered repo's cross-repo git tree could
+#      not be read (rate limit, auth, outage), nuget.org would not say which FS.GG.Kit version is
+#      published (#1540), or a receiver's branch protection would not read (#1785 — unread
+#      protection cannot establish path requiredness)
 #   3  no verdict, PERMANENT — the roster will not parse, a capability names no receiver, a
 #      cross-repo `sparse-checkout` has a shape the closure rule refuses to grade, a
 #      coordination-kit receiver's FS.GG.Kit pin cannot be located or contradicts itself, a
@@ -202,17 +203,19 @@ jobs:
           echo "::error title=repos-audit: the roster and the real wiring disagree::The audit ran to completion and found a declared receiver that is not wired, a repo that wires a capability it does not declare, or a coordination-kit receiver pinning a stale FS.GG.Kit. This is a real finding — act on it."
           exit 1
 
-      - name: 'INCONCLUSIVE: could not read a receiver (transient — re-run)'
+      - name: 'INCONCLUSIVE: a required external read failed (transient — re-run)'
         if: steps.audit.outputs.rc == '2'
         run: |
           {
             echo "### ⚠️ repos-audit: inconclusive — nothing was proven"
-            echo "The audit could not read a receiver artifact (rate limit, auth, outage), and"
-            echo "re-auditing after ${REPOS_AUDIT_RETRY_AFTER_S}s did not clear it."
+            echo "The audit could not read a receiver artifact, a rostered repo's cross-repo git"
+            echo "tree, nuget.org's published FS.GG.Kit version, or a receiver's branch protection"
+            echo "(rate limit, auth, outage), and re-auditing after"
+            echo "${REPOS_AUDIT_RETRY_AFTER_S}s did not clear it."
             echo "**No wiring gap was found, and none was ruled out.** This is transient: re-run this"
             echo "workflow before treating the roster as audited."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repos-audit: INCONCLUSIVE — could not read a receiver::The audit never reached a verdict, so its result means nothing. This is an API failure, NOT a wiring gap. It is transient — re-run the workflow."
+          echo "::error title=repos-audit: INCONCLUSIVE — a required external read failed::The audit never reached a verdict, so its result means nothing. This is an external read failure, NOT a wiring gap. It is transient — re-run the workflow."
           exit 1
 
       # Split from exit 2 (#335). Same "nothing was proven" verdict, opposite remedy: re-running this
