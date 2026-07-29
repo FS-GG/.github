@@ -71,8 +71,23 @@ WHY VIEW ROOTS ARE ADMITTED, AND WHY THEY ARE STILL READ SEPARATELY
   two differ where it matters elsewhere: a view root STAYS in the runtime contract (`agentSkillRoots`,
   `.agent-skill-roots`, `coordination-sync`, `KitDigest` keep counting it) and a retired root leaves it.
   Spelling them the same here would be a second copy waiting to disagree, which is the class #1693 was
-  filed to avoid. `FsggKitViewSkillRoots` is EMPTY by default, so no receiver has one today; this admits
-  the first one that does, with no edit here.
+  filed to avoid.
+
+  AND THIS ARM IS NO LONGER HYPOTHETICAL — IT IS WHAT EVERY RECEIVER EVALUATES (.github#1726 AC 5).
+  This paragraph used to end "`FsggKitViewSkillRoots` is EMPTY by default, so no receiver has one today;
+  this admits the first one that does, with no edit here." That was true when #1696 wrote it and is now
+  false in both halves, WITHOUT ONE LINE OF THIS FILE CHANGING — which is exactly why AC 5 asks for all
+  seven receivers rather than the one the item was filed from. ADR-0067 §9 phase 4 moved `.agents/skills`
+  from LIVE to VIEW one receiver at a time (#1676 templates, #1720 audio, #1721 net, #1734 game,
+  #1747 rendering, #1748 governance, #1760 sdd), and stage 2 (#1676 via #1868, 2026-07-29) then moved the
+  PACKAGE DEFAULTS to match: `FsggKitSkillRoots` from `.claude/skills;.agents/skills` to `.claude/skills`,
+  and `FsggKitViewSkillRoots` from empty to `.agents/skills`. Measured 2026-07-29: 7 of 7 declare both
+  properties inline with those values, and all seven git-ignore the view root, so no bump PR carries a
+  path under it — the arm's whole job is to REFUSE the committed file that would wedge the receiver.
+  `tests/kit-bump-shape/run.sh` now judges a bump under every one of the seven declarations, and asserts
+  the package default and the measured fleet still agree; if either moves without the other, it reds and
+  says which. A stale sentence here is a defect in its own right (#1059), and this is the sentence a
+  reader consults before deciding whether the view branch is worth testing.
 
 THE MIDDLE CLASS, AND WHY A TWO-VALUED ANSWER IS NOT WORTH REPORTING (.github#1726, #1713)
   #1587's premise — "the class of change is provably mechanical" — was measured on 2026-07-28 against

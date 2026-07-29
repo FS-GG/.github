@@ -500,6 +500,361 @@ case "$LEG_OUT" in
   *) bad "  the refusal did not say whose ground the finding is on" "$LEG_OUT" ;;
 esac
 
+echo "== every receiver's CURRENT tree, not just Rendering's (#1726 AC 5) =="
+
+# =================================================================================================
+# .github#1726 AC 5 — "checked against all seven receivers' current trees, not just Rendering's —
+# #1716 is the lesson about generalising from one repo."
+#
+# Legs 21-27 are ONE receiver on ONE pull request, judged under the tree it had on 2026-07-28. Two
+# more were exercised live when #1713 landed (FS.GG.Audio#214, FS.GG.Rendering#1123). That is three
+# of seven, and the remaining four were the open half of this item.
+#
+# WHY ONE RECEIVER WAS NEVER GOING TO BE ENOUGH, and it is not a matter of sample size — the ground
+# the rule stands on MOVED between #1088 and today, in the kit rather than in the rule:
+#
+#   * `.agents/skills` was a LIVE root for every receiver when #1088 merged; it is a VIEW root for
+#     all seven now. That happened one receiver at a time (ADR-0067 §9 phase 4: #1676 templates,
+#     #1720 audio, #1721 net, #1734 game, #1747 rendering, #1748 governance, #1760 sdd), and stage 2
+#     (#1676 via #1868, 2026-07-29) then moved the PACKAGE DEFAULTS to match — `FsggKitSkillRoots`
+#     from `.claude/skills;.agents/skills` to `.claude/skills`, and `FsggKitViewSkillRoots` from
+#     EMPTY to `.agents/skills`. So this rule's view-root arm went from a branch NO receiver could
+#     reach to the branch EVERY receiver evaluates, without one line of the rule changing. The rule's
+#     own docstring still said "no receiver has one today"; this section is what caught that.
+#   * The kit's ROW SET moved with it: `.config/dotnet-tools.json` stopped being a kit row (#1615,
+#     ADR-0068), and `scripts/skill-view` plus the two `scripts/lib` libraries it sources at startup
+#     became rows (#1696). A fixture package frozen at the 0.15.0 row set — which is what
+#     `make_package` above is, deliberately, for the historical legs — cannot see either.
+#
+# NEITHER HALF OF THIS SECTION IS RETYPED WHERE IT CAN BE DERIVED:
+#   - the package is built from THIS repo's `registry/repos.yml` `kit:` block and
+#     `scripts/sync-build-config.sh`'s FILES set, under the same three destination rules
+#     `src/FS.GG.Kit/stage-kit.sh` stages them by (skill -> `<name>/<rel>`, client ->
+#     `scripts/<basename>`, config and build-config -> their own declared dest). Add or remove a kit
+#     row and these legs re-derive rather than drift;
+#   - the three ROOT dispositions are read from `src/FS.GG.Kit/build/FS.GG.Kit.props`' own defaults;
+#   - each receiver's build-config disposition is read off its `receives:` row, which is the roster
+#     `FsggKitMaterializeBuildConfig` is set from — never a per-repo choice made here.
+#
+# ONE FACT CANNOT BE DERIVED FROM THIS REPO, SO IT IS RECORDED WITH ITS PROVENANCE: WHERE EACH
+# RECEIVER PINS, AND THAT IT DECLARES THE ROOTS INLINE. Both live in the receiver's tree. Measured
+# 2026-07-29 from each checkout's `.config/kit/FS.GG.Kit.receiver.proj` and
+# `grep -rl 'Include="FS.GG.Kit"'`. The recorded set is cross-checked against the derived roster in
+# both directions, so an eighth receiver — or a receiver whose pin moves — REDS here instead of
+# quietly going untested, which is the #1716 failure this AC exists to prevent.
+# =================================================================================================
+
+HUB="$(cd "$HERE/../.." && pwd)"
+
+# --- DERIVED: the roster, and which receivers receive build-config -------------------------------
+# `receives: coordination-kit` is what makes a repo a receiver; `receives: build-config` is what
+# `FsggKitMaterializeBuildConfig=true` is set FROM (registry/repos.yml: "a value READ OFF the
+# `receives:` rows above, not chosen per repo"). Rows in the `kit:` block open the same way and carry
+# no `receives:`, so requiring one is what separates the two blocks without parsing YAML.
+ROSTER="$(python3 - "$HUB/registry/repos.yml" <<'PY'
+import re, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    s = line.strip()
+    if not s.startswith("- {"):
+        continue
+    rid = re.search(r"\bid:\s*([^,}\s]+)", s)
+    rec = re.search(r"\breceives:\s*\[([^\]]*)\]", s)
+    if not rid or not rec:
+        continue
+    caps = [c.strip() for c in rec.group(1).split(",")]
+    if "coordination-kit" not in caps:
+        continue
+    print("%s %s" % (rid.group(1), "true" if "build-config" in caps else "false"))
+PY
+)" || ROSTER=""
+
+# --- DERIVED: the three root dispositions, from the package's own defaults -----------------------
+kitprop() { sed -n "s:.*<$1 Condition=[^>]*>\\([^<]*\\)</$1>.*:\\1:p" "$HUB/src/FS.GG.Kit/build/FS.GG.Kit.props" | head -1; }
+LIVE_ROOT="$(kitprop FsggKitSkillRoots)"
+RETIRED_ROOT="$(kitprop FsggKitRetiredSkillRoots)"
+VIEW_ROOT="$(kitprop FsggKitViewSkillRoots)"
+
+# --- RECORDED, measured 2026-07-29: where each receiver pins --------------------------------------
+# Every one of the seven declares BOTH `<FsggKitSkillRoots>` and `<FsggKitViewSkillRoots>` in its
+# `.config/kit/FS.GG.Kit.receiver.proj`, with exactly the values the package now defaults to, and
+# NONE overrides `FsggKitRetiredSkillRoots`. That equality is stage 2's stated precondition — "every
+# receiver already OVERRIDES both properties inline with exactly these values, which is stage 1, 7 of
+# 7" — so the assertion below is that claim, checked: if the package default moves without the fleet,
+# or the fleet without the default, these legs stop agreeing and say so.
+RECEIVER_PINS="audio Directory.Packages.props
+game Directory.Packages.local.props
+governance Directory.Packages.local.props
+net Directory.Packages.props
+rendering Directory.Packages.local.props
+sdd Directory.Packages.local.props
+templates .config/kit/FS.GG.Kit.receiver.proj"
+DECLARED_LIVE=".claude/skills"
+DECLARED_VIEW=".agents/skills"
+
+roster_n=$(printf '%s\n' "$ROSTER" | grep -c . || true)
+recorded_n=$(printf '%s\n' "$RECEIVER_PINS" | grep -c . || true)
+if [ "$roster_n" = 7 ]; then
+  ok "registry/repos.yml derives SEVEN coordination-kit receivers — the fleet this AC names"
+else
+  bad "the roster derives $roster_n coordination-kit receiver(s), not 7 — either the fleet changed or the derivation broke, and nothing below is a fleet-wide answer until this agrees"
+fi
+
+# The two sets must match BOTH ways. A rostered receiver with no recorded pin is one nothing below
+# tests; a recorded pin with no roster row is a repo that left the fabric and took its leg with it.
+missing="$(comm -23 <(printf '%s\n' "$ROSTER" | awk 'NF{print $1}' | sort) <(printf '%s\n' "$RECEIVER_PINS" | awk 'NF{print $1}' | sort) | tr '\n' ' ')"
+extra="$(comm -13 <(printf '%s\n' "$ROSTER" | awk 'NF{print $1}' | sort) <(printf '%s\n' "$RECEIVER_PINS" | awk 'NF{print $1}' | sort) | tr '\n' ' ')"
+if [ -z "${missing// }" ] && [ -z "${extra// }" ] && [ "$roster_n" = "$recorded_n" ]; then
+  ok "  and every one has a recorded pin location — the derived roster and the measured set agree in both directions"
+else
+  bad "  the roster and the recorded pin table disagree — rostered but unmeasured: '${missing:-none}'; measured but unrostered: '${extra:-none}'"
+fi
+
+if [ "$LIVE_ROOT" = "$DECLARED_LIVE" ] && [ "$VIEW_ROOT" = "$DECLARED_VIEW" ]; then
+  ok "the package defaults live='$LIVE_ROOT' view='$VIEW_ROOT' retired='$RETIRED_ROOT' — the values all seven receivers were measured declaring inline (ADR-0067 §9 stage 2)"
+else
+  bad "the package now defaults live='$LIVE_ROOT' view='$VIEW_ROOT', but the seven receivers were measured declaring live='$DECLARED_LIVE' view='$DECLARED_VIEW' (2026-07-29) — one moved without the other, so every leg below judges the fleet under a root set no receiver evaluates"
+fi
+if [ -n "$VIEW_ROOT" ]; then
+  ok "  and a view root is no longer hypothetical: the arm whose docstring once read 'no receiver has one today' is now evaluated by every receiver"
+else
+  bad "  FsggKitViewSkillRoots defaults EMPTY again — the view-root legs below are unreachable and prove nothing about that arm"
+fi
+
+# --- DERIVED: today's kit manifest, by stage-kit.sh's own three destination rules -----------------
+TODAY_ROWS="$WORK/today-rows.tsv"
+python3 - "$HUB" "$TODAY_ROWS" <<'PY'
+import os, re, sys
+hub, out = sys.argv[1], sys.argv[2]
+rows = []
+for line in open(os.path.join(hub, "registry/repos.yml"), encoding="utf-8"):
+    s = line.strip()
+    if not s.startswith("- {") or "kind:" not in s:
+        continue
+    kind = re.search(r"\bkind:\s*([^,}\s]+)", s).group(1)
+    src = re.search(r"\bsource:\s*([^,}\s]+)", s).group(1)
+    dst = re.search(r"\bdest:\s*([^,}\s]+)", s)
+    if kind == "skill":
+        # `skill` stages EVERY file under the source, at `<skill name>/<rel>` (stage-kit.sh).
+        base = os.path.join(hub, src)
+        name = os.path.basename(src)
+        for root, _, files in os.walk(base):
+            for f in files:
+                rel = os.path.relpath(os.path.join(root, f), base).replace(os.sep, "/")
+                rows.append(("skill", "%s/%s" % (name, rel)))
+    elif kind == "client":
+        # a client's dest IS `scripts/<basename>`, which is why the two `lib/` files ride as configs.
+        rows.append(("client", "scripts/%s" % os.path.basename(src)))
+    elif kind == "config" and dst:
+        rows.append(("config", dst.group(1)))
+# build-config is DERIVED from sync-build-config.sh's FILES set, exactly as stage-kit.sh derives it
+# rather than restating it (ADR-0058) — which is also why `global.json` is deliberately not among them.
+sbc = open(os.path.join(hub, "scripts/sync-build-config.sh"), encoding="utf-8").read()
+m = re.search(r"^FILES=\(\n(.*?)^\)", sbc, re.S | re.M)
+if not m:
+    sys.stderr.write("could not derive the build-config FILES set from sync-build-config.sh\n")
+    sys.exit(1)
+for rel in re.findall(r'"([^"]+)"', m.group(1)):
+    rows.append(("build-config", rel))
+with open(out, "w", encoding="utf-8") as fh:
+    for kind, dest in rows:
+        fh.write("%s\t%s\n" % (kind, dest))
+PY
+today_skill_n=$(awk -F'\t' '$1=="skill"' "$TODAY_ROWS" 2>/dev/null | wc -l | tr -d ' ')
+today_bc_n=$(awk -F'\t' '$1=="build-config"' "$TODAY_ROWS" 2>/dev/null | wc -l | tr -d ' ')
+today_all_n=$(wc -l < "$TODAY_ROWS" 2>/dev/null | tr -d ' ')
+if [ "${today_skill_n:-0}" -gt 0 ] && [ "${today_bc_n:-0}" -gt 0 ]; then
+  ok "today's kit row set DERIVES from registry/repos.yml + sync-build-config.sh: $today_all_n rows, $today_skill_n of them skill files"
+else
+  bad "the derived kit row set is missing a whole kind (skill=$today_skill_n build-config=$today_bc_n) — the legs below would judge the fleet against a package that is not the kit"
+fi
+
+# The target version is the hub's OWN canonical `<Version>` — the version the next bump carries, read
+# from the producer rather than typed here, so this section does not stale on the next kit release.
+TODAY_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$HUB/src/FS.GG.Kit/FS.GG.Kit.csproj" | head -1)"
+FROM_VERSION="0.0.0-previous"
+
+mkdir -p "$WORK/pkg-today/kit"
+printf '<?xml version="1.0"?><package><metadata><id>FS.GG.Kit</id><version>%s</version></metadata></package>\n' \
+  "$TODAY_VERSION" > "$WORK/pkg-today/fs.gg.kit.nuspec"
+while IFS=$'\t' read -r kind dest; do
+  case "$kind" in
+    skill)        printf 'skill\tskills/%s\t%s\t%s\tfalse\n' "$dest" "$dest" "$SHA" ;;
+    client)       printf 'client\tclient/%s\t%s\t%s\ttrue\n' "${dest##*/}" "$dest" "$SHA" ;;
+    config)       printf 'config\tconfig/%s\t%s\t%s\tfalse\n' "${dest##*/}" "$dest" "$SHA" ;;
+    build-config) printf 'build-config\tbuild-config/%s\t%s\t%s\tfalse\n' "$dest" "$dest" "$SHA" ;;
+  esac
+done < "$TODAY_ROWS" > "$WORK/pkg-today/kit/kit-manifest.tsv"
+PKG_TODAY="$WORK/pkg-today"
+
+# The pin declaration in the shape its own file uses. Templates runs no central package management,
+# so it pins INLINE on the PackageReference in the receiver project itself; the other six pin
+# centrally. The rule finds the pin BY ITS CONTENT (#1587 AC 4), so both shapes must reach a verdict.
+write_pin() { # $1 = file, $2 = version
+  case "$1" in
+    *.receiver.proj)
+      cat > "$1" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Kit" Version="$2" />
+  </ItemGroup>
+</Project>
+EOF
+      ;;
+    *)
+      cat > "$1" <<EOF
+<Project>
+  <ItemGroup>
+    <PackageVersion Include="FS.GG.Kit" Version="$2" />
+  </ItemGroup>
+</Project>
+EOF
+      ;;
+  esac
+}
+
+# Write every destination the materializer writes FOR THIS RECEIVER, then the pin LAST. The order is
+# load-bearing for one leg only, and deliberately not special-cased: on a receiver whose pin file is
+# ALSO a materialize destination the two collide, and the collision is exactly what the rule must
+# refuse rather than certify. Writing the pin first would hide it behind an abstention.
+write_today_tree() { # $1 = dir, $2 = pin path, $3 = build-config, $4 = version
+  local d="$1" pinpath="$2" bc="$3" version="$4" kind dest
+  while IFS=$'\t' read -r kind dest; do
+    case "$kind" in
+      skill) dest="$LIVE_ROOT/$dest" ;;
+      build-config) [ "$bc" = "true" ] || continue ;;
+    esac
+    mkdir -p "$d/$(dirname "$dest")"
+    printf '%s %s\n' "$version" "$dest" > "$d/$dest"
+  done < "$TODAY_ROWS"
+  mkdir -p "$d/$(dirname "$pinpath")"
+  write_pin "$d/$pinpath" "$version"
+}
+
+# A receiver at the PREVIOUS pin: the materialized set above, its own hand-authored script, and its
+# own skills under the retired root. `.agents/skills` is NOT committed — all seven git-ignore it
+# (measured 2026-07-29), which is what a generated view root IS.
+make_today_base() { # $1 = dir, $2 = pin path, $3 = build-config
+  local d="$1"
+  mkdir -p "$d/scripts" "$d/$RETIRED_ROOT/receiver-own"
+  write_today_tree "$d" "$2" "$3" "$FROM_VERSION"
+  echo "a script this receiver wrote itself" > "$d/scripts/receiver-own.sh"
+  echo "a skill this receiver owns" > "$d/$RETIRED_ROOT/receiver-own/SKILL.md"
+  GIT "$d" init -q -b main
+  GIT "$d" add -A
+  GIT "$d" commit -q -m "receiver at FS.GG.Kit $FROM_VERSION"
+  GIT "$d" tag base
+}
+
+fresh_today() { # $1 = name, $2 = pin path, $3 = build-config -> echoes a fresh receiver dir, bumped
+  local d="$WORK/$1"; rm -rf "$d"
+  make_today_base "$d" "$2" "$3" >/dev/null 2>&1
+  write_today_tree "$d" "$2" "$3" "$TODAY_VERSION"
+  echo "$d"
+}
+
+# --- the fleet, one receiver at a time -----------------------------------------------------------
+while read -r rid bc; do
+  [ -n "$rid" ] || continue
+  pin="$(printf '%s\n' "$RECEIVER_PINS" | awk -v r="$rid" '$1==r{print $2}')"
+  [ -n "$pin" ] || continue
+  make_props "$WORK/props-$rid.json" "$LIVE_ROOT" "$RETIRED_ROOT" "$VIEW_ROOT" "$bc"
+
+  # 1. the ordinary bump this receiver's next Renovate pull request will be. Nothing here is
+  #    Rendering's shape: the pin file, the build-config half and the written set are all its own.
+  d=$(fresh_today "today-$rid" "$pin" "$bc")
+  run_leg 0 "$rid: its CURRENT tree — pin $pin, live $LIVE_ROOT, view $VIEW_ROOT, build-config=$bc — bumps MECHANICAL" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+
+  # 2. the #1726 class itself, in this receiver's shape. `scripts/receiver-own.sh` is outside every
+  #    root and every declared destination, so it is a repair here for the same reason
+  #    `scripts/materialize-skill-roots.sh` was one in FS.GG.Rendering#1088.
+  d=$(fresh_today "today-$rid-repair" "$pin" "$bc")
+  echo "the repair that can only ride this bump" > "$d/scripts/receiver-own.sh"
+  run_leg 4 "$rid: the same bump carrying a receiver-authored repair is MECHANICAL + REPAIR" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+
+  # 3. and it still refuses what it exists to refuse. A WRITE under the retired root is the kit's own
+  #    ground being written by something that is not the materializer — the sweep only deletes there.
+  d=$(fresh_today "today-$rid-kit" "$pin" "$bc")
+  mkdir -p "$d/$RETIRED_ROOT/check-board"; echo "written back" > "$d/$RETIRED_ROOT/check-board/SKILL.md"
+  run_leg 1 "$rid: a write into the RETIRED root is NOT MECHANICAL on this receiver's own declaration" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+
+  # 4. THE ARM THAT WENT FROM UNREACHABLE TO UNIVERSAL. Before ADR-0067 §9 phase 4 this receiver had
+  #    no view root, so this refusal could not be produced on any real tree; it can now, on every one
+  #    of the seven. It must STAY a refusal: `skill-view` will not generate over a root git tracks, so
+  #    a committed file under a view root is the three-correct-rules wedge #1696 was filed for.
+  d=$(fresh_today "today-$rid-view" "$pin" "$bc")
+  mkdir -p "$d/$VIEW_ROOT/check-board"; echo "committed into a generated view" > "$d/$VIEW_ROOT/check-board/SKILL.md"
+  run_leg 1 "$rid: a write into the VIEW root is NOT MECHANICAL — the arm no receiver could reach before #1676" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+done <<< "$ROSTER"
+
+echo "== what only the FLEET shows: the pin that sits on the kit's own ground (#1726 AC 5) =="
+
+# =================================================================================================
+# FS.GG.Audio AND FS.GG.Net PIN AT `Directory.Packages.props` — A KIT BUILD-CONFIG DESTINATION — AND
+# DO NOT RECEIVE BUILD-CONFIG.
+#
+# No single receiver could have shown this. Rendering, SDD, Governance and Game all
+# `receive: build-config`, so `Directory.Packages.props` is theirs to be written and they pin one
+# file over, in `Directory.Packages.local.props`. Templates pins inline in its receiver project.
+# ONLY the two repos that hand-author their own `.props` while the kit still DECLARES that
+# destination land the pin on ground `territory()` calls "kit".
+#
+# The rule gets it right, and it is worth knowing WHY, because it is one line of ORDERING:
+# `classify()` admits the pin BEFORE it asks any territory question. Move that check after the
+# territory read and both receivers' every bump becomes `not mechanical`, blamed on the one file
+# Renovate exists to touch. The legs below hold the ordering from both sides — the pin admitted on
+# that ground, and the same ground refused when something other than the pin is written to it.
+# =================================================================================================
+for rid in audio net; do
+  bc="$(printf '%s\n' "$ROSTER" | awk -v r="$rid" '$1==r{print $2}')"
+  pin="$(printf '%s\n' "$RECEIVER_PINS" | awk -v r="$rid" '$1==r{print $2}')"
+  # "I could not read this receiver's disposition" is spelled differently from "its disposition is
+  # true" (#266). Without this arm an empty ROSTER — a broken derivation, not a fleet change — accuses
+  # this repo of an onboarding nobody did, which is a wrong answer dressed as a verdict.
+  if [ -z "$bc" ] || [ -z "$pin" ]; then
+    bad "$rid: NOT MEASURED — the derivation returned no roster row and/or no recorded pin for it, so these legs asserted nothing about this receiver; that is not the same fact as its shape having changed"
+    continue
+  fi
+  if [ "$bc" != "false" ]; then
+    bad "$rid now RECEIVES build-config while pinning in $pin — its pin is a destination the materializer writes, so its every bump is about to be REFUSED; the pin must move to Directory.Packages.local.props as the four build-config receivers already do"
+    continue
+  fi
+  if ! awk -F'\t' -v p="$pin" '$1=="build-config" && $2==p{found=1} END{exit !found}' "$TODAY_ROWS"; then
+    bad "$rid: $pin is no longer a kit build-config destination, so these legs no longer measure what they name"
+    continue
+  fi
+  ok "$rid pins at $pin, which the kit DECLARES as a build-config destination and this receiver does not receive"
+
+  # The pin is admitted BECAUSE it is the pin, not because the path is innocent.
+  d=$(fresh_today "pinground-$rid" "$pin" "$bc")
+  run_leg 0 "  and its bump is still mechanical: the pin is judged as the pin, ahead of any territory question" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+
+  # The other side of the same ordering: the kit's OTHER declared-but-unreceived destination, written
+  # by anything at all, is a KIT-territory finding here — never a receiver-authored repair. Same
+  # receiver, same evaluation, opposite verdict, and the difference is only that one path is the pin.
+  other="$(awk -F'\t' -v p="$pin" '$1=="build-config" && $2!=p{print $2; exit}' "$TODAY_ROWS")"
+  if [ -z "$other" ]; then
+    # The contrast needs a SECOND build-config destination — one that is kit ground here and is not
+    # the pin. With only one row there is no such path, and the leg would write to `$d/` and fail for
+    # a reason that has nothing to do with the rule. Say which it is.
+    bad "$rid: NOT MEASURED — the kit declares only one build-config destination, so there is no declared-but-unreceived path OTHER than this receiver's pin to contrast it against"
+    continue
+  fi
+  d=$(fresh_today "pinground-$rid-x" "$pin" "$bc")
+  mkdir -p "$d/$(dirname "$other")"; echo "<Project />" > "$d/$other"
+  run_leg 1 "  while $other — declared by the kit, not received here — is NOT MECHANICAL on the same tree" "$d" "$PKG_TODAY" "$WORK/props-$rid.json"
+  case "$LEG_OUT" in
+    *"[kit territory]"*) ok "  and it is attributed to KIT territory, so it can never be read as a repair" ;;
+    *) bad "  the refusal did not put the finding on kit ground" "$LEG_OUT" ;;
+  esac
+
+  # And the counterfactual that matters to anyone proposing to onboard these two to build-config: the
+  # moment they receive it, their pin file becomes a destination the materializer overwrites. The
+  # rule refuses rather than certifying a tree the next materialize will clobber.
+  make_props "$WORK/props-$rid-bc.json" "$LIVE_ROOT" "$RETIRED_ROOT" "$VIEW_ROOT" "true"
+  d=$(fresh_today "pinground-$rid-onboard" "$pin" "true")
+  run_leg 3 "  and onboarding $rid to build-config WITHOUT moving its pin is REFUSED, not certified — $pin would be both the pin and a materialize destination" "$d" "$PKG_TODAY" "$WORK/props-$rid-bc.json"
+done
+
 echo "== the cheap first pass a receiver-side reporter makes on every pull request (#1713) =="
 
 # 28 — no pin change, no package: the abstention costs a git diff and nothing else. This is what lets

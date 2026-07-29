@@ -19,6 +19,14 @@
 # prove, offline and with no credential, is that the rule admits the measured shape, REFUSES a
 # contaminated one, and separates the third class (#1726) from both. That is what runs below.
 #
+# AND IT PROVES IT FOR ALL SEVEN RECEIVERS, NOT THE ONE THE ITEM WAS FILED FROM (#1726 AC 5). The
+# fixture judges a bump under each receiver's OWN declaration — its pin location, its build-config
+# disposition, and the live/view/retired roots it evaluates — because the ground moved under this rule
+# without the rule changing: ADR-0067 §9 phase 4 turned `.agents/skills` from a LIVE root into a VIEW
+# root on every receiver, so an arm that no tree could reach became the arm every tree evaluates.
+# The roster and the kit's row set are DERIVED there rather than restated, which is why this filter
+# now names `registry/repos.yml` and `scripts/sync-build-config.sh` below.
+#
 # No `schedule:`: the subject is entirely in this tree, so nothing can stale it between pushes.
 name: kit-bump-shape
 
@@ -33,6 +41,18 @@ on:
       # Without this entry a rename or a gate on that job would land with this fixture never running.
       - ".github/workflows/kit-materialize.yml"
       - "src/FS.GG.Kit/build/**"
+      # #1726 AC 5's fleet legs DERIVE the receiver roster and the kit's row set rather than restating
+      # them, so these two files are inputs to the fixture's answer in the same way `build/**` is.
+      # The roster half is the one that bites: an EIGHTH `receives: coordination-kit` repo, or a
+      # receiver leaving the fabric, reds the both-ways cross-check between the derived roster and the
+      # measured pin table — correctly, because nothing has measured where the newcomer pins. Without
+      # these entries that red lands on `main` unseen and then appears on the next unrelated pull
+      # request that happens to touch this rule, which is the false accusation this org refuses
+      # (#238). The `receives:` rows are also where `FsggKitMaterializeBuildConfig` is read from, and
+      # `sync-build-config.sh`'s FILES set is where the build-config destinations come from — the two
+      # facts the audio/net pin-ground legs stand on.
+      - "registry/repos.yml"
+      - "scripts/sync-build-config.sh"
   push:
     branches: [main]
     paths:
@@ -44,6 +64,18 @@ on:
       # Without this entry a rename or a gate on that job would land with this fixture never running.
       - ".github/workflows/kit-materialize.yml"
       - "src/FS.GG.Kit/build/**"
+      # #1726 AC 5's fleet legs DERIVE the receiver roster and the kit's row set rather than restating
+      # them, so these two files are inputs to the fixture's answer in the same way `build/**` is.
+      # The roster half is the one that bites: an EIGHTH `receives: coordination-kit` repo, or a
+      # receiver leaving the fabric, reds the both-ways cross-check between the derived roster and the
+      # measured pin table — correctly, because nothing has measured where the newcomer pins. Without
+      # these entries that red lands on `main` unseen and then appears on the next unrelated pull
+      # request that happens to touch this rule, which is the false accusation this org refuses
+      # (#238). The `receives:` rows are also where `FsggKitMaterializeBuildConfig` is read from, and
+      # `sync-build-config.sh`'s FILES set is where the build-config destinations come from — the two
+      # facts the audio/net pin-ground legs stand on.
+      - "registry/repos.yml"
+      - "scripts/sync-build-config.sh"
   workflow_dispatch:
 
 permissions:
