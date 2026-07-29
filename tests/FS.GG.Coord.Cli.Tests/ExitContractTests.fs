@@ -116,6 +116,7 @@ module ExitContractTests =
         Assert.Equal(ExitCode.toInt ExitCode.NoneStartable, Client.ExitNone)
         Assert.Equal(ExitCode.toInt ExitCode.Contended, Client.ExitContended)
         Assert.Equal(ExitCode.toInt ExitCode.Pending, Client.ExitPending)
+        Assert.Equal(ExitCode.toInt ExitCode.NotOpen, Client.ExitNotOpen)
         Assert.Equal(ExitCode.toInt ExitCode.Rate, Errors.ExRate)
         Assert.Equal(ExitCode.toInt ExitCode.Offboard, Errors.ExOffboard)
         Assert.Equal(ExitCode.toInt ExitCode.Partial, Errors.ExPartial)
@@ -168,6 +169,10 @@ module ExitContractTests =
         Assert.True(landableDocuments Client.ExitRed, "3 (red/conflicted) is not documented")
         Assert.True(landableDocuments Client.ExitNoVerdict, "4 (unknown — fail-closed) is not documented")
         Assert.True(landableDocuments Client.ExitError, "1 (refused input) is not documented")
+
+        Assert.True(
+            landableDocuments Client.ExitNotOpen,
+            "10 (the PR is not open — merged, or closed unmerged) is not documented, so a merged PR has no documented outcome (#1680)")
 
     /// THE TWO CODES THE POLL LOOP READS, tied to their meanings THROUGH the constants.
     ///
@@ -257,3 +262,51 @@ module ExitContractTests =
         Assert.True(
             landableDocuments (ExitCode.toInt ExitCode.Defect),
             "2 (the engine broke — Program.main's defect handler) is reachable from `landable` and is not documented")
+
+    /// #1680 — THE PIN THAT KEEPS THE MERGED VERDICT OFF THE RETRYABLE CODE. `ProtocolTests` pins that
+    /// row 10 SAYS "MERGED"; this pins that `Client.ExitNotOpen`'s VALUE is that row. The two halves
+    /// compose into "ExitNotOpen = 10, and 10 means merged/closed", which is the claim #900 taught us a
+    /// table cannot make alone — and #1680 is the same defect reached from the other side, so it gets
+    /// the same two-sided treatment.
+    [<Fact>]
+    let ``#1680 landable's not-open code is pinned to the engine's constant, and is not the wait code`` () =
+        match landableMeaningOf Client.ExitNotOpen with
+        | None ->
+            Assert.Fail
+                "Client.ExitNotOpen names no documented landable row — a merged PR's exit code is undocumented, so a recovery path reads it as an unrecognised failure"
+        | Some m ->
+            Assert.True(
+                m.StartsWith "MERGED",
+                "Client.ExitNotOpen's value is not documented as MERGED — #1680 is that a merged PR was reported as 'pending', and a loop built on that never terminates")
+
+        // The defect in one assertion: the merged verdict must never be reachable through the code the
+        // contract defines as worth retrying.
+        Assert.NotEqual(Client.ExitNotOpen, Client.ExitPending)
+        // Nor through the failure code — `merged` is a success whose next act is to STAMP.
+        Assert.NotEqual(Client.ExitNotOpen, Client.ExitRed)
+        Assert.NotEqual(Client.ExitNotOpen, Client.ExitGreen)
+
+    /// #1680 AC6, for the ONE landable table that is NOT generated. `Protocol.landableExitCodes` is
+    /// projected into both skill roots by `scripts/generate-projections`, so those copies cannot drift.
+    /// `Options.usage` — the engine's own `--help` — is hand-authored prose beside it, and is exactly the
+    /// shape of restatement #900/#889/#1667 were each filed about. It cannot practically be GENERATED
+    /// (the rows are paragraphs; `--help` needs a line), so it is PINNED instead: every code the engine
+    /// can return for `landable` must appear in the usage block. Add a verdict without documenting it
+    /// here and this fails.
+    [<Fact>]
+    let ``#1680 AC6 the usage block documents every landable exit code the engine can return`` () =
+        let usage = Options.usage
+
+        for code in ExitCode.landableCodes do
+            let n = ExitCode.toInt code
+
+            // The generic codes (1 error, 2 defect) are documented in the shared table above the
+            // per-command line, so only the landable-specific ones are asserted against the digit.
+            if n <> ExitCode.toInt ExitCode.Error && n <> ExitCode.toInt ExitCode.Defect then
+                Assert.True(
+                    usage.Contains $"%d{n} " || usage.Contains $"· %d{n}",
+                    $"the usage block never mentions landable exit %d{n} — a caller reading --help cannot learn what the engine will return (#1680 AC6)")
+
+        // And the word, not merely the digit: AC2's distinguishability has to survive into `--help`.
+        Assert.Contains("merged", usage)
+        Assert.Contains("closed", usage)
