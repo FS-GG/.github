@@ -272,7 +272,27 @@
          changed. The kit MANIFEST is per-file and raw, so it moves and the package must be
          republished — which is exactly the axis `kit-published-coherence` reds on, and why the
          two gates disagreed here. -->
-    <Version>0.19.1</Version>
+    <!-- 0.19.1 -> 0.20.0, a MINOR: the kit-delivered `landable` exit-code contract GAINS A ROW, and
+         runtime behaviour moves under it (.github#1680). `pnext-item/references/command-contracts.md`
+         is a GENERATED projection of `Protocol.landableExitCodes`, and that table now carries **10** —
+         the PR is not open: `merged`, or `closed` without merging. Before this, `landable` answered a
+         MERGED PR with `pending`/exit 7, the one code the same table defines as worth retrying, so
+         `--wait` spent its full 600s budget on a settled fact and the recovery path was told to wait
+         forever on landed work.
+         MINOR AND NOT PATCH, against the 0.19.1 precedent directly above rather than against a doc.
+         That bump argued PATCH because "NO RUNTIME BEHAVIOUR MOVES — the only bytes that change are
+         prose". Both halves of that are false here. The bytes are a new TABLE ROW, not corrected
+         prose; and the engine really does return a code it could not return before, so a receiver's
+         poll loop meets an exit status the kit it materialized never documented — reading 10 as an
+         unrecognised failure, which is #900's own failure mode one code over. The gate states the
+         rule ("MINOR when the change is receiver-visible behaviour") and cannot tell the cases apart;
+         this one is squarely the minor.
+         `registry/repos.lock` IS NOT TOUCHED, and that is correct rather than an omission, for the
+         same reason 0.19.1 recorded: `repos.sh digest` digests a skill DIRECTORY as its `SKILL.md`
+         alone, and no `SKILL.md` changed — only a `references/` file. The kit MANIFEST is per-file
+         and raw, so it moves and the package must be republished, which is the axis
+         `kit-published-coherence` reds on. -->
+    <Version>0.20.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
