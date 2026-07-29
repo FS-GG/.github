@@ -803,14 +803,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> "--json", []
         | FText -> "--text", []
 
-    /// The one spelling a consumer matches on argv. Total, because `spellingsOf` is.
-    ///
-    /// NOT YET THE ONLY SPELLING TABLE IN THIS FILE, and saying otherwise here would be the overclaim this
-    /// change exists to stop making. `flagsGiven` below carries its own literal per flag — the spelling a
-    /// REFUSAL names — and nothing compares the two, so `--fresh` is free to be spelled one way here and
-    /// another there. That is the same emitter-versus-gate split #1523 found, one table along. Filed as
-    /// #1573 rather than folded in: rewording a refusal is a change to what every caller reads, and it
-    /// does not belong in a passing edit to `command-contract`.
+    /// The one spelling a consumer matches on argv. Total, because `spellingsOf` is. This is also the
+    /// spelling `flagsGiven` names in a refusal (#1573), so the emitted contract and the residue rule
+    /// cannot silently disagree.
     let private spellingOf (f: Flag) : string = fst (spellingsOf f)
 
     /// Every `Flag` case, by reflection — the same move `allCommands` makes for the `Command` union, and
@@ -998,42 +993,42 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// records the ACT of giving them separately from the `Render` they set — the smallest change that
     /// turns an unguardable flag into a guarded one.
     let private flagsGiven (o: Options) : (Flag * string) list =
-        [ if o.SnapshotFile.IsSome then FSnapshot, "--snapshot"
-          if o.Repo.IsSome then FRepo, "--repo"
-          if o.Worker.IsSome then FWorker, "--worker"
-          if o.Evidence.IsSome then FEvidence, "--evidence"
-          if o.Partial.IsSome then FPartial, "--partial"
-          if o.ToWorker.IsSome then FTo, "--to"
-          if o.Message.IsSome then FMessage, "--message"
-          if not (List.isEmpty o.Paths) then FPaths, "--paths"
-          if o.Pr.IsSome then FPr, "--pr"
-          if o.Warn then FWarn, "--warn"
-          if o.Issue.IsSome then FIssue, "--issue"
-          if o.Status.IsSome then FStatus, "--status"
-          if o.All then FAll, "--all"
-          if o.Batch then FBatch, "--batch"
-          if o.Strict then FStrict, "--strict"
-          if o.Active then FActive, "--active"
-          if o.Apply then FApply, "--apply"
-          if o.Peek then FPeek, "--peek"
-          if o.Local then FLocal, "--local"
-          if o.AllRepos then FAllRepos, "--all-repos"
-          if o.DryRun then FDryRun, "--dry-run"
-          if o.Wait then FWait, "--wait"
-          if o.Tries.IsSome then FTries, "--tries"
-          if o.Interval.IsSome then FInterval, "--interval"
-          if not (List.isEmpty o.Require) then FRequire, "--require"
-          if o.Sha.IsSome then FSha, "--sha"
-          if o.Label.IsSome then FLabel, "--label"
-          if o.IssueState.IsSome then FState, "--state"
-          if o.Fresh then FFresh, "--fresh"
-          if o.AllowBacklog then FIncludeBacklog, "--include-backlog"
-          if o.Force then FForce, "--force"
-          if o.Mint then FMint, "--mint"
-          if o.Flip then FFlip, "--flip"
-          if not (List.isEmpty o.Over) then FOver, "--over"
-          if o.Limit.IsSome then FLimit, "-n"
-          if o.Explain then FExplain, "--explain"
+        [ if o.SnapshotFile.IsSome then FSnapshot
+          if o.Repo.IsSome then FRepo
+          if o.Worker.IsSome then FWorker
+          if o.Evidence.IsSome then FEvidence
+          if o.Partial.IsSome then FPartial
+          if o.ToWorker.IsSome then FTo
+          if o.Message.IsSome then FMessage
+          if not (List.isEmpty o.Paths) then FPaths
+          if o.Pr.IsSome then FPr
+          if o.Warn then FWarn
+          if o.Issue.IsSome then FIssue
+          if o.Status.IsSome then FStatus
+          if o.All then FAll
+          if o.Batch then FBatch
+          if o.Strict then FStrict
+          if o.Active then FActive
+          if o.Apply then FApply
+          if o.Peek then FPeek
+          if o.Local then FLocal
+          if o.AllRepos then FAllRepos
+          if o.DryRun then FDryRun
+          if o.Wait then FWait
+          if o.Tries.IsSome then FTries
+          if o.Interval.IsSome then FInterval
+          if not (List.isEmpty o.Require) then FRequire
+          if o.Sha.IsSome then FSha
+          if o.Label.IsSome then FLabel
+          if o.IssueState.IsSome then FState
+          if o.Fresh then FFresh
+          if o.AllowBacklog then FIncludeBacklog
+          if o.Force then FForce
+          if o.Mint then FMint
+          if o.Flip then FFlip
+          if not (List.isEmpty o.Over) then FOver
+          if o.Limit.IsSome then FLimit
+          if o.Explain then FExplain
 
           // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
           // head changed the message for inputs that were already wrong for another reason:
@@ -1042,8 +1037,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           //
           // BOTH spellings are reported when both were typed — see `RenderGiven`. One command can hold a
           // legal `--text` and an illegal `--json` at the same time, and only one of them is a finding.
-          if o.RenderGiven.Contains Json then FJson, "--json"
-          if o.RenderGiven.Contains Text then FText, "--text" ]
+          if o.RenderGiven.Contains Json then FJson
+          if o.RenderGiven.Contains Text then FText ]
+        |> List.map (fun flag -> flag, spellingOf flag)
 
     /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
     /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
