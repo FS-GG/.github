@@ -185,6 +185,8 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    if "issue(number" in query and "projectItems" not in query:
+        return {"data": {"repository": {"issue": {"id": "I_contract_probe"}}, "rateLimit": RATE_LIMIT}}
     if "projectsV2" in query:
         return {
             "data": {
@@ -537,6 +539,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls$", path)
         if m:
             return self._send(200, [])   # no open PRs → prAlive says lease-expired-no-pr
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/\d+-$", path)
+        if m:
+            return self._send(200, [])   # no pushed item branch → the expired claim is reapable
 
         if path.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4999, "limit": 5000}}})

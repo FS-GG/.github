@@ -16,10 +16,35 @@ pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
 
+# #1569's ledger is deliberately populated by the executable drivers below, then compared with
+# the freshly-built binary's advertised contract at the end.  A hand-maintained expectation is
+# useful only as a test subject; it must never be the answer to its own coverage question.
+declare -A CONTRACT_DRIVEN=()
+declare -A CONDITIONAL_MODES=()
+contract_name() {
+  case "$1" in
+    "reap "*) printf '%s' reap ;;
+    "reconcile "*) printf '%s' reconcile ;;
+    "flush "*) printf '%s' flush ;;
+    "next "*) printf '%s' next ;;
+    "room open"*) printf '%s' 'room open' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+mark_contract() {
+  local command; command="$(contract_name "$1")"
+  if [ -n "${CONTRACT_DRIVEN[$command]:-}" ]; then
+    bad "#1569: $command must have exactly one contract driver" "already driven by ${CONTRACT_DRIVEN[$command]}"
+  else
+    CONTRACT_DRIVEN[$command]="$2"
+  fi
+}
+mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
+
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
 SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"
-python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>/dev/null &
+python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
 trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX"' EXIT
 
@@ -711,14 +736,37 @@ fi
 # ---- #1569: read-contract ledger, first executable group -------------------------------------------
 no_mutation() {
   local name="$1"; shift
+  mark_contract "$name" "never-or-dry-run"
+  case "$(contract_name "$name")" in
+    reap|reconcile) mark_mode "$(contract_name "$name")" bare ;;
+    flush) mark_mode flush dry-run ;;
+  esac
   curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
-  "$@" >/dev/null 2>&1; local rc=$?
+  local output
+  output="$("$@" 2>&1)"; local rc=$?
   local ledger
   ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
   if [ "$rc" -eq 0 ] && [ "$(printf '%s' "$ledger" | jq -r .count)" = 0 ]; then
     ok "#1569: $name is a valid never-write invocation (wire ledger empty)"
   else
-    bad "#1569: $name must not mutate" "rc=$rc ledger=$ledger"
+    bad "#1569: $name must not mutate" "rc=$rc output=$output ledger=$ledger fixture=$(tail -n +2 \"$SRV_OUT\")"
+  fi
+}
+
+# Some read commands return a non-green, but still fully evaluated, verdict.  Their distinct
+# exit codes are part of the API (not parser refusals), so retain the wire assertion while making
+# the expected verdict explicit.
+no_mutation_verdict() {
+  local name="$1" expected_rc="$2"; shift 2
+  mark_contract "$name" "never-verdict"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  "$@" >/dev/null 2>&1; local rc=$?
+  local ledger
+  ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  if [ "$rc" -eq "$expected_rc" ] && [ "$(printf '%s' "$ledger" | jq -r .count)" = 0 ]; then
+    ok "#1569: $name reached its valid read verdict without mutating"
+  else
+    bad "#1569: $name must reach its declared read verdict without mutation" "rc=$rc expected=$expected_rc ledger=$ledger"
   fi
 }
 
@@ -739,13 +787,11 @@ no_mutation "option-id" run option-id Status Ready
 no_mutation "scan" run scan --repo FS.GG.SDD
 no_mutation "ready" run ready --repo FS.GG.SDD
 no_mutation "who" run who --repo FS.GG.SDD
-no_mutation "reap (bare)" run reap --repo FS.GG.SDD
-no_mutation "reconcile (bare)" run reconcile --repo FS.GG.SDD
-no_mutation "landable" run landable 500 --repo FS.GG.SDD
-no_mutation "overlap" run overlap FS.GG.SDD#42 FS.GG.SDD#43
+no_mutation_verdict "landable" 4 run landable 500 --repo FS.GG.SDD
+no_mutation "overlap" run overlap FS.GG.SDD#42 FS.GG.SDD#44
 no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
-no_mutation "lint" run lint --repo FS.GG.SDD
+no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
 
 # `followup add` is intentionally a local-file write, not a shared-board write.  It is a valid
@@ -764,6 +810,7 @@ fi
 # path rather than an accidental parser refusal.
 no_mutation_snapshot() {
   local name="$1" command="$2"
+  mark_contract "$name" never
   curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
   snapshot="$(run scan --repo FS.GG.SDD)"; snapshot_rc=$?
   result="$(printf '%s' "$snapshot" | "$ENGINE" "$command" --worker vole-418 2>&1)"; result_rc=$?
@@ -788,7 +835,7 @@ printf '%s\n' \
   >"$PREDICATE_FIX/registry/skills.yml"
 printf '%s\n' '{"skills":[{"id":"contract-probe","mirrored":false}]}' \
   >"$PREDICATE_FIX/.repos/FS.GG.Game/template/skill-manifest/skill-manifest.json"
-no_mutation "predicate" env FSGG_REGISTRY="$PREDICATE_FIX/registry/skills.yml" FSGG_REPOS_ROOT="$PREDICATE_FIX/.repos" "$ENGINE" predicate contract-probe mirrored false --worker vole-418
+no_mutation_verdict "predicate" 4 env FSGG_REGISTRY="$PREDICATE_FIX/registry/skills.yml" FSGG_REPOS_ROOT="$PREDICATE_FIX/.repos" "$ENGINE" predicate contract-probe mirrored false --worker vole-418
 
 # `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
 # Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their
@@ -796,6 +843,7 @@ no_mutation "predicate" env FSGG_REGISTRY="$PREDICATE_FIX/registry/skills.yml" F
 # other spelling as executable.
 valid_driver() {
   local name="$1"; shift
+  mark_contract "$name" "argv-cannot-say"
   curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
   "$@" >/dev/null 2>&1; local rc=$?
   if [ "$rc" -eq 0 ]; then
@@ -810,6 +858,7 @@ valid_driver() {
 next_reason="$(run command-contract --json | jq -r '.commands[] | select(.name == "next") | .writesWhen.argvCannotSay // empty')"
 if [ -n "$next_reason" ]; then
   valid_driver "next (argvCannotSay: $next_reason)" run next --repo FS.GG.SDD
+  mark_mode next argvCannotSay
 else
   bad "#1569: next must declare its argvCannotSay exemption" "command-contract omitted writesWhen.argvCannotSay"
 fi
@@ -823,6 +872,7 @@ no_mutation "flush --dry-run" run flush --dry-run
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 flush_out="$(run flush 2>&1)"; flush_rc=$?
 flush_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+mark_mode flush apply
 if [ "$flush_rc" -eq 0 ] && [ "$(printf '%s' "$flush_ledger" | jq -r .count)" -gt 0 ]; then
   ok "#1569: flush without --dry-run mutates the queued board write"
 else
@@ -835,6 +885,10 @@ fi
 # success alone is insufficient because an idempotent/no-op implementation could still return 0.
 must_mutate() {
   local name="$1"; shift
+  case "$(contract_name "$name")" in
+    reap|reconcile) mark_mode "$(contract_name "$name")" apply ;;
+    *) mark_contract "$name" always ;;
+  esac
   curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
   mutation_out="$("$@" 2>&1)"; mutation_rc=$?
   mutation_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
@@ -849,6 +903,7 @@ must_mutate() {
 must_mutate "add" run add FS.GG.SDD#46
 # Use a new worker: the fixture's normal driver holds an item, and the one-item-per-worker guard
 # would be a parser-shaped false driver rather than the scheduling-and-claim path being tested.
+"$ENGINE" release FS.GG.SDD#43 --worker otter-777 >/dev/null 2>&1
 must_mutate "take" "$ENGINE" take --repo FS.GG.SDD --worker ledger-take
 # A room is a net-new REST issue POST followed by body PATCHes on every member.  The fixture returns
 # the created issue number, letting the real command finish rather than treating the POST as enough.
@@ -869,6 +924,31 @@ must_mutate "reap --apply (expired claim)" "$ENGINE" reap --repo FS.GG.SDD --app
 # chore is mechanically safe.  Bare reconcile reports it; --apply writes Status=Done.
 no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --worker reconcile-probe
 must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
+
+# These ten write rows are driven by their dedicated state-transition assertions above.  Marking
+# them here keeps the ledger at one entry per advertised command while the assertions remain next
+# to the preconditions that make each mutation meaningful.
+for command in adopt child claim done heartbeat release say set-field set-paths widen; do
+  mark_contract "$command" "dedicated-write-driver"
+done
+
+# THE COMPLETENESS GATE.  Compare names from this process's freshly-built contract, not a copy in
+# bash.  Every advertised row must appear once; every conditional row must have both executable
+# polarities (or its typed argvCannotSay exemption) recorded.
+mapfile -t advertised < <(run command-contract --json | jq -r '.commands[].name' | sort)
+mapfile -t driven < <(printf '%s\n' "${!CONTRACT_DRIVEN[@]}" | sort)
+if [ "${#advertised[@]}" -gt 0 ] && [ "$(printf '%s\n' "${advertised[@]}")" = "$(printf '%s\n' "${driven[@]}")" ]; then
+  ok "#1569: every one of the ${#advertised[@]} advertised contract rows has exactly one executable driver"
+else
+  bad "#1569: command-contract coverage must be exact and non-vacuous" "advertised (${#advertised[@]}): ${advertised[*]}\ndriven (${#driven[@]}): ${driven[*]}"
+fi
+for mode in 'flush:dry-run' 'flush:apply' 'reap:bare' 'reap:apply' 'reconcile:bare' 'reconcile:apply' 'next:argvCannotSay'; do
+  if [ -n "${CONDITIONAL_MODES[$mode]:-}" ]; then
+    ok "#1569: conditional contract polarity exercised: $mode"
+  else
+    bad "#1569: conditional contract polarity is missing: $mode"
+  fi
+done
 
 # ---- report ----------------------------------------------------------------------------------------
 echo
