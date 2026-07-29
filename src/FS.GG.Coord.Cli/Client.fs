@@ -81,6 +81,17 @@ module Client =
     [<Literal>]
     let ExitPending = 7
 
+    /// 10 — the PR is NOT OPEN: merged, or closed without merging (#1680). A VERDICT, and a terminal one.
+    ///
+    /// It exists because the four codes above have no word for "there is nothing left to gate", so a merged
+    /// PR was answered with `ExitPending` — the one code the contract defines as worth retrying — and
+    /// `--wait` spent its whole 600s budget on a fact settled before it started. Its own number rather than
+    /// a share of `ExitRed`: both mean stop, but 3's documented remedy is "a red check is a finding", and
+    /// the caller that meets a merged PR is usually a successor recovering an item whose worker died
+    /// between merge and stamp — who must be told to STAMP, not to investigate a failure.
+    [<Literal>]
+    let ExitNotOpen = 10
+
     /// Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
     /// `Command.Ready` opened below). One place, so every render agrees.
     let private eprint (s: string) = Console.Error.WriteLine(s: string)
@@ -1914,6 +1925,16 @@ module Client =
                                             | Some PrConflicted -> $"STALE (#%d{pr} OPEN — conflicted)"
                                             | Some PrPending -> $"STALE (#%d{pr} OPEN — checks running)"
                                             | Some PrRed -> $"STALE (#%d{pr} OPEN — not green)"
+                                            // `LivePr` comes from the OPEN-PR read, so these two are all
+                                            // but unreachable here — NOT structurally, though: the liveness
+                                            // read and the landable read are two separate REST calls, and a
+                                            // PR that merges between them lands right here. Sharing the
+                                            // `STALE (#N OPEN)` wording is deliberate rather than ideal —
+                                            // this is one cell of a human table, the row is stale either
+                                            // way, and `who` is advisory. `landable` is where the merged
+                                            // verdict is spoken precisely.
+                                            | Some PrMerged
+                                            | Some PrClosed
                                             | Some PrUnknown
                                             | None -> $"STALE (#%d{pr} OPEN)"
                                         // #1055: no PR, but a pushed `item/<n>-*` branch is proof of life
@@ -2162,6 +2183,16 @@ module Client =
 
                                             eprint
                                                 $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
+                                        | (PrMerged | PrClosed) as verdict ->
+                                            // Structurally unreachable: this arm is reached through
+                                            // `Writes.WorkAlivePr`, which names an OPEN PR. Handled anyway,
+                                            // and handled SAFELY — a merged PR is finished work, so the one
+                                            // thing this must never do is advise closing it.
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
+
+                                            eprint
+                                                $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, stamp the item: scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pr}"
                                         | (PrRed | PrConflicted) as verdict ->
                                             // The one genuinely-abandoned case — and the ONLY one that may
                                             // advise closing. A conflicted or red PR is not finished work.
@@ -2873,6 +2904,25 @@ module Client =
                                         $"  If it is genuinely abandoned, close the PR and reap the claim. If it is salvageable, take the item and finish it:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
 
                                     ExitRed
+                                | PrMerged ->
+                                    // `adopt` lands FINISHED work; a merged PR is finished AND landed, so
+                                    // there is nothing to land and the honest instruction is to stamp it.
+                                    // Reached only if the liveness read and this one straddle a merge.
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is ALREADY MERGED — there is nothing to adopt, and nothing to land. The work is done; what is missing is the STAMP."
+
+                                    eprint
+                                        $"  scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pnum}"
+
+                                    ExitRed
+                                | PrClosed ->
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is CLOSED WITHOUT MERGING — nothing landed, so there is nothing to adopt and the item must NOT be stamped done."
+
+                                    eprint
+                                        $"  Take the item the ordinary way and finish the job:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
+
+                                    ExitRed
                                 | PrUnknown ->
                                     eprint
                                         $"fsgg-coord-engine: could NOT determine the state of PR #%d{pnum} on %s{ref.Short} (rate limit? network? GitHub computes mergeability lazily and may not have done so yet). REFUSING to adopt on a guess — an 'adopt' that lands an unverified PR is exactly the destructive act this command exists to replace. Look at the PR, or re-run in a moment."
@@ -2880,8 +2930,9 @@ module Client =
                                     ExitRed
 
     /// `landable <pr> --repo NAME` — is this OPEN PR finished work? The #697/#720 verdict as a first-class
-    /// QUERY: the ONE word (`green`/`conflicted`/`pending`/`red`/`unknown`) on stdout, the DECISION in the
-    /// exit code so a poll loop reads "keep waiting" from "stop" without parsing prose (#724).
+    /// QUERY: the ONE word (`green`/`conflicted`/`pending`/`red`/`unknown` — or `merged`/`closed` when the
+    /// PR is not open at all, #1680) on stdout, the DECISION in the exit code so a poll loop reads "keep
+    /// waiting" from "stop" without parsing prose (#724).
     ///
     /// IT IS THE READ `who`/`reap`/`adopt` ALREADY MAKE (`Reads.prLandable` → `Landable.score`), surfaced on
     /// its own so the verdict has ONE home. §5 of the worker recipes used to re-derive it in ~40 lines of jq,
@@ -3010,6 +3061,24 @@ module Client =
                         eprint
                             "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
 
+                    // AN UNMET `--sha` ON A MERGED PR GETS ITS OWN SENTENCES (#1680), and must NOT borrow
+                    // the block above. Every clause up there is FALSE here: this PR is not "not landable"
+                    // (it landed), the verdict is not `pending`, nothing is transient, and no amount of
+                    // waiting is implied. Printing a true reason under a false banner is precisely the
+                    // fault this issue is about, and #1575 split the refusal arms for the same reason.
+                    //
+                    // The verdict is untouched — the PR IS merged and stdout says so. What this adds is the
+                    // one fact that changes the caller's next act: on the recovery path, "your work landed,
+                    // go stamp it" and "something landed here and it was not what you asked about" call for
+                    // opposite responses, and only the asserted SHA can tell them apart.
+                    if state = PrMerged && not asserted.IsEmpty then
+                        for reason in asserted do
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} MERGED, but NOT the commit you named — %s{reason}."
+
+                        eprint
+                            "fsgg-coord-engine:   The verdict stands: this PR is merged and there is nothing to gate. But you asserted a commit with --sha and it is not the one that landed, so do NOT read this as a receipt for YOUR work. Someone else's push, a force-push, or a bot commit landed here. Check what merged before you stamp anything."
+
                     if not refused.IsEmpty then
                         for state, baseRef in refused do
                             eprint
@@ -3035,11 +3104,34 @@ module Client =
                         eprint
                             "fsgg-coord-engine:   Waiting fixes this ONLY if the missing run has yet to register. If the producing workflow does not exist on this branch (it was armed on the base AFTER this head was pushed), or a `paths:`/`branches:` filter excludes this PR, then no check run will EVER be created and --wait cannot help: rebase the branch onto the current base (or push a fresh commit) so the event fires, or stop requiring the context. `behind` needs a rebase; `draft` needs the PR marked ready."
 
+                    // #1680 AC2/AC4: SAY IT, not merely code it. The verdict word is on stdout and the
+                    // decision is in the exit code, but the caller meeting this is usually a successor
+                    // recovering an item whose worker died between merge and stamp — the one reader who
+                    // most needs to be told, in words, that the correct next act is not to wait.
+                    if state = PrMerged then
+                        eprint
+                            $"fsgg-coord-engine: landable: PR #%d{pr} is ALREADY MERGED — there is nothing to gate, and --wait does not poll it."
+
+                        eprint
+                            $"fsgg-coord-engine:   This is a TERMINAL verdict, not a retry. If you are recovering an item whose worker died between merge and stamp, the work LANDED — go stamp it: scripts/fsgg-coord done <ref> --flip --pr %d{pr}"
+
+                    if state = PrClosed then
+                        eprint
+                            $"fsgg-coord-engine: landable: PR #%d{pr} is CLOSED WITHOUT MERGING — nothing landed, so there is nothing to gate."
+
+                        eprint
+                            "fsgg-coord-engine:   Terminal, and NOT the merged case: do NOT stamp the item done. The branch was abandoned or the PR rejected, so the item needs re-working or releasing."
+
                     match state with
                     | PrGreen -> ExitGreen
                     | PrPending -> ExitPending
                     | PrRed
                     | PrConflicted -> ExitRed
+                    // #1680. Terminal, and its own code: `merged` is a SUCCESS whose next act is to STAMP,
+                    // which is the opposite of what 3 tells a caller to do and the opposite of what 7 told
+                    // it before. The WORD on stdout separates the two cases; the code says only "stop".
+                    | PrMerged
+                    | PrClosed -> ExitNotOpen
                     | PrUnknown -> ExitNoVerdict
 
     /// `release --status S` — the column the caller DELIBERATELY names (#867/#331), resolved to a

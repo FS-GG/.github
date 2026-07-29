@@ -302,7 +302,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
   landable <pr> --repo NAME                  is this OPEN PR finished work? one verdict word on stdout
-    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown), the decision in the
+    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown, or merged/closed when
+                                             the PR is not open at all — .github#1680), the decision in the
                                              exit code — the #697/#720 gate as a query (#724). --wait polls
                                              until the verdict SETTLES: it never believes an early green (it
                                              waits for the run set to STOP GROWING), and keeps waiting while
@@ -426,7 +427,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   other code above is "could not look", and it empties stdout too; an empty ref at non-zero is no answer,
   never an empty queue (#266)
   `landable` (#720/#724): 0 green · 7 pending (the ONE verdict worth retrying) · 3 red or conflicted
-  (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
+  (do NOT wait) · 10 the PR is NOT OPEN — stdout says which: `merged` (it LANDED; do not merge it
+  again, and if you are recovering a half-finished item, go STAMP it) or `closed` (nothing landed, so
+  do NOT stamp it done). Terminal, and deliberately not 7: GitHub nulls `mergeable` on merge, so this
+  used to answer `pending` and `--wait` burned its whole 600s budget on a settled fact (.github#1680)
+  · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
     /// Which stdout projections each command HAS — see `RenderSupport`. Derived by tracing every

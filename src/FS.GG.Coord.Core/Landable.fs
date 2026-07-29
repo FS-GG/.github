@@ -217,6 +217,14 @@ module Landable =
         match state with
         | PrConflicted
         | PrUnknown -> true
+        // A CLOSED PR SETTLES AT ONCE, MERGED OR NOT (#1680 AC3). This is the strongest form of the rule
+        // the arm above states: no amount of waiting reopens a PR, and a merged one is the most terminal
+        // state GitHub has. It is listed separately from `PrConflicted`/`PrUnknown` rather than folded in
+        // because the REASON differs — those two settle because waiting cannot IMPROVE them, these because
+        // there is no longer a subject to gate at all — and `n` is meaningless for both (there is no live
+        // check set on a closed PR, so the count is 0 and must not be consulted).
+        | PrMerged
+        | PrClosed -> true
         | PrRed -> n > 0
         | PrGreen -> n > 0 && n = prev
         | PrPending -> false
@@ -228,3 +236,8 @@ module Landable =
         | PrPending -> "pending"
         | PrRed -> "red"
         | PrUnknown -> "unknown"
+        // The two words #1680 added. They are the WHOLE of AC2's distinguishability requirement on stdout:
+        // a caller reading one word must be able to tell "already landed, nothing to gate" from "checks
+        // still running" without a second REST read, and these are the words that do it.
+        | PrMerged -> "merged"
+        | PrClosed -> "closed"

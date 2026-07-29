@@ -277,6 +277,15 @@ module Reads =
     /// the fail-closed direction — rather than propagating. The verdict is ADVISORY: it chooses which
     /// refusal `reap` speaks, never whether it refuses.
     ///
+    /// A PR THAT IS NOT OPEN IS ANSWERED BEFORE ANY OF THAT (#1680). `merged` and `state` ride in the same
+    /// `pulls/{n}` body as `mergeable`, so the question costs no extra request, and it is asked FIRST: a
+    /// closed PR scores `PrMerged` or `PrClosed` and the runs/check-runs reads are never made. It has to be
+    /// first, because GitHub reports `mergeable: null` for a merged PR — indistinguishable, on mergeability
+    /// alone, from a PR whose background job has not finished — so the `Computing` arm used to claim it and
+    /// return `PrPending`, the one verdict the exit contract defines as worth retrying, for a state that can
+    /// never change. The bounded `mergeable` re-read is skipped for the same reason: GitHub stops computing
+    /// mergeability once a PR leaves `open`, so those tries wait on a job that will never run again.
+    ///
     /// NOTE (deferred, honest): the runs/check-runs reads are SINGLE PAGE here. GitHub paginates them with a
     /// `Link` header (bash passed `--paginate`, #547); the array-merging transport does not flatten the
     /// OBJECT bodies these endpoints return, so a multi-page runs list degrades to `PrUnknown` (fail closed),

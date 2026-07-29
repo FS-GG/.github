@@ -249,6 +249,25 @@ module Types =
         | PrRed
         /// We could not tell — an unreadable read, or `mergeable` still null. Fail closed: advise nothing.
         | PrUnknown
+        /// ALREADY LANDED — the PR is closed and `merged` is true. There is nothing to gate (#1680).
+        ///
+        /// The five states above are all answers to "is this OPEN PR finished work?", and a merged PR is
+        /// outside that question rather than a hard case within it. Before this case existed the scorer had
+        /// to answer it in a vocabulary with no word for it, and what came out was `PrPending` — because
+        /// GitHub reports `mergeable: null` for a merged PR (measured on #1675), which `Reads` reads as
+        /// `Computing` and #950 maps to "not yet". So the ONE verdict the contract defines as worth retrying
+        /// was returned for the MOST terminal state there is, and `--wait` spent its whole 600s budget on it.
+        ///
+        /// It matters because the caller is usually the RECOVERY path: `pnext-item` and `adopt` exist for a
+        /// worker that died between *merge* and *stamp*, and they instruct the successor to re-gate with
+        /// `landable` first. The correct instruction to that successor is "this is merged — go stamp it".
+        | PrMerged
+        /// CLOSED WITHOUT MERGING — abandoned or rejected. Also terminal, and NOT the same as `PrMerged`
+        /// (#1680 AC4): both mean "there is nothing left to gate", but the next act is opposite. A merged PR
+        /// is finished work awaiting its stamp; this one must NOT be stamped, because nothing landed. It is
+        /// the neighbouring case on the same recovery path, so it is decided here rather than left to
+        /// whichever of the five wrong words it would otherwise fall into.
+        | PrClosed
 
     /// A `Blocked on: human/...` body-line sentinel (#1103 leg 2): the item is unschedulable because a
     /// HUMAN must act first, whatever its `Paths:` line declares. `Blocked by` is ref-typed and cannot say

@@ -489,7 +489,7 @@ jobs:
           set -uo pipefail
           # `|| rc=$?`: a non-zero exit means "do not merge", which is a NORMAL outcome (pending checks on a
           # slow day), not an error. The decision is the exit code — 0 green, 7 pending, 3 red/conflicted,
-          # 4 unknown — and only 0 merges. `--tries 24 --interval 20` is the ~8 min ceiling the old loop
+          # 10 not open (merged, or closed unmerged — .github#1680), 4 unknown — and only 0 merges. `--tries 24 --interval 20` is the ~8 min ceiling the old loop
           # had: measured, `.github`'s PR checks complete in ~90s, so this is slack, not an expectation.
           # Running out is not a failure — tomorrow's run re-pushes and re-gates. Latency is not a failure
           # mode; merging early is.
@@ -505,7 +505,7 @@ jobs:
             echo "not a required check, so nothing else would ever have looked at it). Safe to land."
           else
             echo "merge=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::not merging standing PR #$PR: \`landable\` exited $rc (0=green 7=pending 3=red/conflicted 4=unknown). Its reason is above."
+            echo "::warning::not merging standing PR #$PR: \`landable\` exited $rc (0=green 7=pending 3=red/conflicted 10=not-open 4=unknown). Its reason is above."
           fi
 
       # LAND IT. The App token merges, for the same reason it pushed (#514): GITHUB_TOKEN is held at

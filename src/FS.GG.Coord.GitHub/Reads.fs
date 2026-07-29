@@ -1279,7 +1279,25 @@ module Reads =
           ///
           /// It is computed by the same lazy background job as `mergeable` and rides in the same object,
           /// so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
-          MergeableState: string option }
+          MergeableState: string option
+          /// IS THE PR STILL OPEN, AND DID IT MERGE? (#1680) — `state` and `merged`, from the same object
+          /// as everything else here, so a verdict can never be scored against one PR's openness and
+          /// another PR's checks.
+          ///
+          /// Free, which is the point: both ride in the `pulls/{n}` body this function already reads, so
+          /// asking "is this PR merged?" costs no request, no pagination and no extra scope. That matters
+          /// because the alternative — leaving merged-ness out of the domain — is what made the answer
+          /// `pending`. GitHub reports `mergeable: null` and `mergeable_state: "unknown"` for a merged PR
+          /// (measured on #1675: `state=closed merged=true mergeable=null`), so a reader that knows only
+          /// about mergeability sees the SAME shape as a PR whose background job has not finished, and
+          /// #950's arm maps that to `PrPending` — correctly, for the case it was written for, and
+          /// catastrophically for this one. The distinction is not inferable from `mergeable`; it has to
+          /// be READ. So it is read.
+          ///
+          /// `Merged` is NOT derived from `State = "closed"`: a closed PR may or may not have merged, and
+          /// conflating them is exactly the collapse #1680 AC4 refuses. Both are carried.
+          State: string option
+          Merged: bool }
 
     /// Read a PR once: its mergeability state, head SHA, head branch ref, and base branch ref.
     let private prFacts
@@ -1333,12 +1351,25 @@ module Reads =
                     | true, b when b.ValueKind = JsonValueKind.Object -> str b "ref"
                     | _ -> None
 
+                // `merged` is a plain boolean on the PR object, and ABSENT/non-boolean reads as `false`
+                // (#1680). Fail-closed in the direction that matters: a body we cannot read `merged` from
+                // is treated as NOT merged, so the verdict falls through to the ordinary open-PR scoring
+                // rather than claiming a merge that may not have happened. The reverse default would let a
+                // malformed response manufacture "already landed", which is the one answer that tells a
+                // recovery path to stamp an item nothing landed for.
+                let merged =
+                    match root.TryGetProperty "merged" with
+                    | true, v when v.ValueKind = JsonValueKind.True -> true
+                    | _ -> false
+
                 Some
                     { Merge = merge
                       HeadSha = sha
                       HeadRef = headRef
                       BaseRef = baseRef
-                      MergeableState = str root "mergeable_state" }
+                      MergeableState = str root "mergeable_state"
+                      State = str root "state"
+                      Merged = merged }
 
     /// The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
     /// read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
@@ -1656,7 +1687,17 @@ module Reads =
                   HeadSha = None
                   HeadRef = None
                   BaseRef = None
-                  MergeableState = None }
+                  MergeableState = None
+                  State = None
+                  Merged = false }
+            // A CLOSED PR IS NEVER RE-READ (#1680). Its `mergeable` is `null` and will stay `null` forever
+            // — GitHub stops computing mergeability once a PR leaves `open` — so every try of this budget
+            // is spent waiting for a background job that will never run again. That is the FIRST of the two
+            // waits #1680 measured, and the quieter one: three PR reads and ~2s per `landable` call, paid
+            // even by the single-shot form the issue timed at "instantly". The `--wait` loop's 600s is the
+            // second, and `Landable.settled` closes that one; this closes this one. Both had to go, or
+            // "`--wait` never polls a merged PR" would still have cost a caller two seconds per invocation.
+            | Some facts when facts.State = Some "closed" -> facts
             | Some facts when facts.Merge = Computing && triesLeft > 1 ->
                 let ms = mergeableRetryMs ()
 
@@ -1696,6 +1737,46 @@ module Reads =
         // ONE read, bound once. `readMerge` spends the re-read budget (3 PR reads, ~1s apart), so asking it
         // twice would double every caller's reads to answer one question.
         let facts = readMerge 3
+
+        // IS THERE ANYTHING TO GATE AT ALL? (#1680) — asked FIRST, ahead of every other question, because
+        // it is prior to all of them. `landable` documents itself as "is this OPEN PR finished work?", and
+        // every guard below — the head-SHA reconciliation, the stale-tip measurement, the mergeability
+        // arms, the rollup — is a refinement of that question. None of them is meaningful for a PR that is
+        // not open: there is no merge to be clean, no branch tip to have caught up with, and no check set
+        // whose growth could settle. Asking them anyway is how the old code got here, and what it produced
+        // was `pending` — "come back later" — for a state that cannot change.
+        //
+        // ORDER IS THE WHOLE FIX. Put this arm anywhere below and the `Computing` arm reaches a merged PR
+        // first (GitHub nulls `mergeable` on merge), which is #1680 exactly. Put it here and the terminal
+        // fact wins, as terminal facts must.
+        //
+        // MERGED AND CLOSED-UNMERGED ARE HELD APART (AC4), for the same reason `Computing` and `Absent` are
+        // held apart above: they share a shape and differ in the act they call for. `merged` means the work
+        // LANDED and, on the recovery path this command's caller is usually walking, must now be STAMPED.
+        // `closed` means nothing landed and stamping it would record a lie. One word each, decided here.
+        //
+        // No `Unmet` reason for either, consistent with `PrConflicted`/`PrUnknown` below: that list carries
+        // assertions the CALLER added (`--require`, `--sha`) and GitHub's own refusal, and its stderr banner
+        // says so. Nobody asserted this. The verdict word carries it, and `Client.landable` speaks the
+        // sentence.
+        // ...WITH ONE THING STILL SAID. A caller who passed `--sha` asserted which commit they meant, and
+        // this arm returns before the reconciliation below would have checked it. Dropping that silently
+        // would be this issue's own defect in miniature — a verdict that is true while hiding the fact the
+        // caller actually asked about — so a DISAGREEING `--sha` is reported beside the verdict. It does not
+        // change the verdict: the PR really is merged, and that is the answer. It changes what the caller is
+        // told about the commit they named, which on the merged arm is the difference between "your work
+        // landed" and "something landed here, and it was not what you asked about".
+        let assertedSha =
+            match facts.HeadSha, expected with
+            | Some sha, Some want when sha <> want ->
+                [ Asserted
+                      $"you asked about %s{want}, but this PR's head is %s{sha} — the merge that landed is not the commit you named" ]
+            | _ -> []
+
+        match facts.State, facts.Merged with
+        | Some "closed", true -> PrMerged, 0, assertedSha
+        | Some "closed", false -> PrClosed, 0, assertedSha
+        | _ ->
 
         let staleHead =
             match facts.Merge, facts.HeadSha with

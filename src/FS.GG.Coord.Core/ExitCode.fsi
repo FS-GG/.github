@@ -41,6 +41,17 @@ module ExitCode =
         /// 9 — EX_PARTIAL: a `set-field --batch` write half-landed. Was `4`, which collided with
         /// `NoVerdict` (#918): a half-written board is an OUTCOME, not the absence of an answer.
         | Partial
+        /// 10 — EX_NOTOPEN (`landable`): the PR is NOT OPEN — merged, or closed without merging. A verdict,
+        /// and a TERMINAL one: there is no longer anything to gate (#1680).
+        ///
+        /// Its own number rather than a share of `Red`'s 3, which is the tempting reuse. Both are "stop", so
+        /// a poll loop is served equally by either — but the recipes do not stop at the loop. `landable`'s
+        /// documented action for 3 is "Stop. A red check is a finding; a conflicted PR needs a rebase", and
+        /// the caller that most often meets a MERGED PR is the recovery path (`pnext-item` §5, `adopt`),
+        /// whose successor must be told the opposite: the work LANDED, go stamp it. Folding a success into
+        /// the failure code would re-commit #1680's own defect one code over — a number that names the
+        /// wrong act — having just paid to remove it from 7.
+        | NotOpen
         /// 75 — EX_RATE: a rate budget is exhausted.
         | Rate
 
@@ -55,5 +66,7 @@ module ExitCode =
 
     /// The codes `landable` can return (#900). No `Rate`: `landable` is fail-closed by construction and
     /// folds a budget failure into `NoVerdict`, having no error channel of its own. No `NoneStartable`/
-    /// `Contended`: it has no queue and takes no lock.
+    /// `Contended`: it has no queue and takes no lock. `NotOpen` since #1680 — merged and closed-unmerged
+    /// are verdicts `landable` reaches, so omitting them here would leave the generated table incomplete in
+    /// the direction #889 fixed for `take`.
     val landableCodes: ExitCode list

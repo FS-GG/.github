@@ -139,6 +139,8 @@ module Types =
         | PrPending
         | PrRed
         | PrUnknown
+        | PrMerged
+        | PrClosed
 
     type Item =
         { Ref: Ref
