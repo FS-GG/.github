@@ -545,7 +545,12 @@ fi
 # THE REMEDY NAMES THE CHECKOUT AND THE BUILD (#1549's third criterion). The worker who hits this is
 # standing in a CURRENT worktree and has no reason to suspect a binary somewhere else, so "rebuild it"
 # without a path sends them to rebuild the tree that was never stale. Asserted on the absolute paths.
-if printf '%s' "$out" | grep -q "git -C $CL pull --ff-only" \
+#
+# THE FF-ONLY SPELLING IS `merge`, NOT `pull`, AND THE REF IS THE ONE THE COUNT WAS TAKEN AGAINST
+# (.github#1664). This leg only READS the line; the detached-HEAD legs below RUN it, which is what would
+# have caught the defect this pins — a remedy can name both absolute paths correctly and still not
+# execute in the state its reader is standing in.
+if printf '%s' "$out" | grep -q "git -C $CL merge --ff-only refs/remotes/origin/main" \
    && printf '%s' "$out" | grep -q "dotnet build $CL/src/FS.GG.Coord.Cli -c Release"; then
   ok ".github#1549: the refusal names WHICH checkout to update and WHICH build to re-run, by absolute path"
 else
@@ -576,16 +581,71 @@ else
 fi
 ( cd "$CL" && git worktree remove --force "$CLWT" ) >/dev/null 2>&1
 
-# CATCHING UP CLEARS IT, and that is what makes the refusal a stall rather than a wall. The message says
-# `pull --ff-only`; this asserts the message is TRUE. A guard whose printed remedy does not clear it is
-# the one the fleet learns to route around (#1572's `dotnet test` treadmill, one level up).
-( cd "$CL" && git merge -q --ff-only origin/main ) >/dev/null 2>&1
+# CATCHING UP CLEARS IT, and that is what makes the refusal a stall rather than a wall. A guard whose
+# printed remedy does not clear it is the one the fleet learns to route around (#1572's `dotnet test`
+# treadmill, one level up).
+#
+# AND THE REMEDY IS EXTRACTED FROM THE MESSAGE AND RUN AS PRINTED, never restated here (.github#1664).
+# This leg used to claim "the printed remedy is the real one" while executing a DIFFERENT command than
+# the one printed: the message said `pull --ff-only` and the test ran `merge --ff-only`. So the two were
+# free to disagree, and for the whole life of the leg they did — the assertion certified its own
+# restatement rather than the guard's output, which is precisely how a remedy that exits 1 in the field
+# stayed green here. Grepping the line out and `eval`ing it is what makes the claim testable.
+printed_ff() {  # $1 = refusal text → the ff-only remedy line it printed, verbatim, leading space trimmed
+  printf '%s\n' "$1" | grep -E '^[[:space:]]*git -C .*--ff-only' | head -1 | sed 's/^[[:space:]]*//'
+}
+
+out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"
+ff="$(printed_ff "$out")"
+eval "$ff" >/dev/null 2>&1; ffrc=$?
 touch -d '3 hours ago' "$CL/$FIXSRC" "$CL/docs/notes.md"   # the merge stamps the worktree; §3's rule
 out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' && ! printf '%s' "$out" | grep -qi 'stale'; then
-  ok ".github#1549: updating the checkout CLEARS the refusal — the printed remedy is the real one"
+if [ "$ffrc" -eq 0 ] && [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'stale'; then
+  ok ".github#1549: the remedy AS PRINTED (${ff/$CL/\$CL}) clears the refusal on a checkout that is on a branch"
 else
-  bad ".github#1549: a refusal whose remedy does not clear it teaches the fleet to ignore the remedy" "rc=$rc out=$out"
+  bad ".github#1549: a refusal whose remedy does not clear it teaches the fleet to ignore the remedy" \
+      "ff=$ff ffrc=$ffrc rc=$rc out=$out"
+fi
+
+# AND IT RUNS ON A DETACHED HEAD — THE STATE THE SHARED CHECKOUT IS ACTUALLY IN (.github#1664).
+# (A leg of §3e, deliberately not a section of its own: `§3f` is already spoken for by the #1586
+# kit-content section below, and ADR-0068, `registry/repos.CHANGELOG.md`, `scripts/fsgg-coord` and
+# `scripts/fsgg-coord-guards.sh` all cite it by that letter.)
+#
+# The fixture above is a `git clone`, so it sits on a BRANCH, and `git pull --ff-only` is correct on a
+# branch. That is exactly why the defect survived §3e for its whole life: the one state the remedy is
+# addressed to was the one state never constructed. The checkout it names is the SHARED one, and on this
+# host `git worktree list` reports it DETACHED — where `pull --ff-only` exits 1 with "You are not
+# currently on a branch" and moves nothing.
+#
+# The stakes are what make this worth its own leg rather than a parameter. The refusal the remedy is
+# attached to is fail-closed on EVERY board write in the fleet (.github#1549), so its reader is by
+# construction blocked: `claim`, `heartbeat`, `done`, `set-field` and `widen` are all refused until the
+# shared checkout is current. A remedy that exits 1 there hands that reader a git error about branches
+# with no visible connection to engine staleness, leaves the refusal standing, and invites the one
+# conclusion that is wrong — that the GUARD is broken rather than the escape hatch.
+push_upstream "$UP" "$CL" "$FIXSRC"
+( cd "$CL" && git checkout -q --detach HEAD ) >/dev/null 2>&1
+touch -d '3 hours ago' "$CL/$FIXSRC" "$CL/docs/notes.md"
+out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' \
+   && printf '%s' "$out" | grep -qi 'refused' && printf '%s' "$out" | grep -q 'BEHIND'; then
+  ok ".github#1664: a DETACHED checkout behind main still REFUSES the write — the state is reachable here"
+else
+  bad ".github#1664: the detached fixture must reproduce the refusal the remedy is attached to" "rc=$rc out=$out"
+fi
+
+ff="$(printed_ff "$out")"
+eval "$ff" >/dev/null 2>&1; ffrc=$?
+touch -d '3 hours ago' "$CL/$FIXSRC" "$CL/docs/notes.md"
+out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
+if [ "$ffrc" -eq 0 ] && [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'stale'; then
+  ok ".github#1664: the remedy AS PRINTED (${ff/$CL/\$CL}) fast-forwards a DETACHED checkout and clears the refusal"
+else
+  bad ".github#1664: the printed remedy must run AS PRINTED from the state the shared checkout is in — 'git pull --ff-only' exits 1 on a detached HEAD and leaves the fail-closed refusal standing" \
+      "ff=$ff ffrc=$ffrc rc=$rc out=$out"
 fi
 rm -rf "$UP" "$CL" "$CLWT"
 

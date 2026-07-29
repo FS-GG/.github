@@ -405,6 +405,33 @@ stale_guard() {
   # (2) HAS `main` MOVED PAST IT? The merge question (.github#1549), scoped to the engine's own trees.
   drift="$(upstream_drift "$top")"
   IFS="$(printf '\t')" read -r kind a b <<<"$drift"
+
+  # THE REMEDY IS `merge --ff-only`, NOT `pull --ff-only` (.github#1664). The checkout `$top` names —
+  # the SHARED one, the only one this arm ever sends you to — is routinely on a DETACHED HEAD, and
+  # `git pull --ff-only` there does not fast-forward. It exits 1 with "You are not currently on a
+  # branch", having moved nothing. That is the worst failure available to THIS reader, because the
+  # refusal it is attached to is fail-closed on every board write in the fleet (.github#1549): the
+  # remedy runs, prints a git error about branches with no visible connection to engine staleness,
+  # and the refusal is still standing — so the natural inference is that the GUARD is wrong, which
+  # is how a fleet learns to route around its own escape hatch. `merge --ff-only` fast-forwards a
+  # detached HEAD and a branch alike, and still refuses loudly on a DIVERGED tree — the one case
+  # that must be escalated rather than merged. The `noverdict` arm needs no such care: `fetch` has
+  # no opinion about detached HEADs.
+  #
+  # `merge` DOES NOT FETCH, AND THAT IS THE RIGHT AMOUNT OF WORK. Dropping `pull` drops an implicit
+  # `git fetch`, so the remedy now brings the checkout up to the ref as of its LAST fetch rather than
+  # to the true remote. That is exactly sufficient, because it is the same ref this guard measured:
+  # `upstream_drift` reads `refs/remotes/origin/*` and performs no network I/O (this file's "no
+  # network, ever" rule), so `merge --ff-only $b` clears precisely the drift that was counted, and
+  # nothing here ever claimed to know about commits nobody has fetched. The arm that DOES need a
+  # fetch — no resolvable default-branch ref at all — is `noverdict`, and it prints one.
+  #
+  # AND IT FAST-FORWARDS TO `$b`, THE REF THIS GUARD ACTUALLY MEASURED, rather than a literal
+  # `origin/main`. `$b` is whatever `upstream_drift` resolved — `refs/remotes/origin/HEAD` first,
+  # then `main`, then `master` — and it is already the ref named in the same sentence by
+  # `BEHIND $b by $a commit(s)`. Hard-coding `origin/main` would print a remedy that repairs a
+  # different ref than the one the count was taken against, and on a `master` checkout it would
+  # name a ref that does not resolve at all.
   case "$kind" in
     behind)
       detail="${detail:+$detail
@@ -413,7 +440,7 @@ stale_guard() {
               $top
             You can be standing in a CURRENT worktree and still be about to exec an engine
             that is not. Update the checkout that OWNS this build, then rebuild it:
-              git -C $top pull --ff-only
+              git -C $top merge --ff-only $b
               dotnet build $top/src/FS.GG.Coord.Cli -c Release" ;;
     noverdict)
       detail="${detail:+$detail
