@@ -103,13 +103,23 @@ module Landable =
 
     /// The `--wait` poll decision (#724): given this poll's verdict, its subject count `n`, and the PREVIOUS
     /// poll's count `prev`, has the verdict SETTLED (stop) or must the loop keep waiting? `conflicted`/
-    /// `unknown` settle at once; `red` settles only with a subject to be red about (`n > 0`, else it is the
-    /// registration race); `green` settles only once the count has STOPPED GROWING (`n > 0 && n = prev`, or
-    /// an early partial rollup merges a PR whose failing check had not been created yet); `pending` never
-    /// settles. Pure, so both premature-green traps are held by a unit test rather than a fixture.
+    /// `unknown` settle at once; `merged`/`closed` settle at once (#1680 — a closed PR has no subject left
+    /// to gate, and nothing reopens it); `red` settles only with a subject to be red about (`n > 0`, else it
+    /// is the registration race); `green` settles only once the count has STOPPED GROWING (`n > 0 && n =
+    /// prev`, or an early partial rollup merges a PR whose failing check had not been created yet);
+    /// `pending` never settles. Pure, so both premature-green traps are held by a unit test rather than a
+    /// fixture.
+    ///
+    /// THIS IS WHERE `--wait` STOPS POLLING A MERGED PR (#1680 AC3). The loop in `Client.landable` consults
+    /// nothing else to decide break-vs-wait, so a `merged` that settles here cannot cost a second poll —
+    /// which is the measured 600s (30 × 20s) the issue was filed about, driven to zero at its source rather
+    /// than by a special case in the caller.
     val settled: state: PrState -> n: int -> prev: int -> bool
 
-    /// The one-word verdict the corpus certifies (`green`/`conflicted`/`pending`/`red`/`unknown`), for the
-    /// `who --json` `prState` field and the human table. ONE projection, so the JSON and text surfaces
-    /// cannot name the same state differently.
+    /// The one-word verdict the corpus certifies (`green`/`conflicted`/`pending`/`red`/`unknown`/`merged`/
+    /// `closed`), for the `who --json` `prState` field and the human table. ONE projection, so the JSON and
+    /// text surfaces cannot name the same state differently.
+    ///
+    /// `merged` and `closed` are #1680's: the vocabulary had five words for an OPEN PR and none for a PR
+    /// that is not open, so the scorer answered the recovery path's question in words that were all false.
     val name: state: PrState -> string

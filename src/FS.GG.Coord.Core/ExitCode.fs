@@ -13,6 +13,7 @@ module ExitCode =
         | Pending
         | Offboard
         | Partial
+        | NotOpen
         | Rate
 
     let toInt (code: ExitCode) : int =
@@ -27,6 +28,7 @@ module ExitCode =
         | Pending -> 7
         | Offboard -> 8
         | Partial -> 9
+        | NotOpen -> 10
         | Rate -> 75
 
     // Ordered as a worker meets them: the one success first, then the failures by how likely they are
@@ -42,10 +44,13 @@ module ExitCode =
           Defect ]
 
     // Ordered as a poll loop meets it: green, then the one retryable code, then the ways to stop.
+    // `NotOpen` sits with the ways to stop — it is terminal, and #1680 is precisely that it used to be
+    // reported as the retryable one.
     let landableCodes: ExitCode list =
         [ Green
           Pending
           Red
+          NotOpen
           NoVerdict
           Error
           Defect ]

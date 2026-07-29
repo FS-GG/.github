@@ -1736,3 +1736,180 @@ let ``#1575 --require still binds a context the base branch does NOT require`` (
     match unmet with
     | [ Reads.Asserted reason ] -> Assert.Contains("registry-coherence", reason)
     | other -> failwith $"a --require the caller named stays an ASSERTION, not a branch policy — got %A{other}"
+
+// ---- #1680: a PR that is NOT OPEN ------------------------------------------------------------------
+//
+// THE MEASUREMENT THIS BLOCK PINS. `landable 1675 --repo .github --wait` — on a PR merged as `d52362c`,
+// whose head `a8f446d` carried 30 check-runs, 30 `success`, zero pending, zero failing — spent its entire
+// default budget (30 tries x 20s = 600s) and answered `pending`, exit 7: the ONE code the exit contract
+// defines as worth retrying, returned for the most terminal state GitHub has. `landable 1669` (merged as
+// `3fc96ca`) answered the same, so it was general to merged PRs, not a property of one.
+//
+// THE MECHANISM, MEASURED RATHER THAN ASSUMED. #1680's body reasoned that `pending` was produced "above
+// `score`, most plausibly on the must-have-reported path #1575 added". It is not. GitHub reports
+// `mergeable: null` and `mergeable_state: "unknown"` for a merged PR (confirmed on #1675 over REST:
+// `state=closed merged=true mergeable=null`), so `prFacts` reads `Computing`, and #950's arm — correctly,
+// for the case it was written for — maps a `null` that outlives the re-read budget to `PrPending`. The
+// must-have-reported path is never reached, because the runs are never read. That matters for the fix: no
+// change to `Landable.scoreRequired` could have repaired this, which is also why the issue's own declared
+// `Paths:` could not hold it.
+
+/// A PR whose `state`/`merged` the caller chooses, counting reads PER PATH. The counts are the point: a
+/// closed PR must cost ONE PR read (no re-read budget spent on a background job that will never run again)
+/// and ZERO runs/check-runs reads (there is nothing to score).
+type private ClosedPrServer(state: string, merged: bool) =
+    let mutable prReads = 0
+    let mutable otherReads = 0
+
+    member _.PrReads = prReads
+    member _.OtherReads = otherReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    prReads <- prReads + 1
+                    // Shaped exactly as GitHub answers a closed PR: `mergeable` is null and
+                    // `mergeable_state` is "unknown". This is the body that used to score `pending`.
+                    $"""{{"number":801,"state":"%s{state}","merged":%b{merged},"mergeable":null,"mergeable_state":"unknown","head":{{"ref":"item/42-x","sha":"sha-x"}},"base":{{"ref":"main"}}}}"""
+                else
+                    otherReads <- otherReads + 1
+                    """{"total_count":0,"workflow_runs":[]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``#1680 AC1 a MERGED pr is NOT pending and NOT exit 7`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ClosedPrServer("closed", true)
+
+    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    // AC1, asserted as the issue words it: whatever it returns, it must not be the retryable verdict.
+    Assert.NotEqual(PrPending, state)
+    // AC2: and it must NAME merged-ness, so a caller can tell "already landed" from "checks still
+    // running" without a second REST read.
+    Assert.Equal(PrMerged, state)
+    Assert.Equal("merged", Landable.name state)
+    Assert.Equal(0, n)
+    Assert.Empty unmet
+
+[<Fact>]
+let ``#1680 AC3 --wait never polls a merged pr — it settles, and costs ONE read`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ClosedPrServer("closed", true)
+
+    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    // The 600s: `Client.landable`'s poll loop consults `settled` and nothing else, so this IS "--wait does
+    // not poll it". `prev = 0` is deliberately the value a first poll passes.
+    Assert.True(Landable.settled state n 0, "a merged PR must SETTLE — this is the 600s of --wait budget the issue measured")
+
+    // The quieter wait, and the one a single-shot caller pays: GitHub stops computing mergeability once a
+    // PR leaves `open`, so the bounded `mergeable` re-read (3 tries, ~1s apart) waits on a job that will
+    // never run again. One read, not three.
+    Assert.Equal(1, server.PrReads)
+
+    // And the runs/check-runs are never read at all. There is no live check set on a merged PR, and the
+    // three-read poll is the per-poll REST cost the whole fleet shares.
+    Assert.Equal(0, server.OtherReads)
+
+[<Fact>]
+let ``#1680 AC4 a CLOSED-UNMERGED pr is decided too, and says so`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ClosedPrServer("closed", false)
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    // NOT `PrMerged`: nothing landed, so a recovery path must not stamp the item done. The two states
+    // share a shape and differ in the act they call for, which is why they are held apart.
+    Assert.Equal(PrClosed, state)
+    Assert.Equal("closed", Landable.name state)
+    Assert.NotEqual(PrPending, state)
+    Assert.True(Landable.settled state 0 0, "a closed PR cannot reopen by waiting")
+    Assert.Equal(1, server.PrReads)
+    Assert.Equal(0, server.OtherReads)
+
+[<Fact>]
+let ``#1680 AC5 the four fixtures side by side — open+green, open+pending, merged, closed-unmerged`` () =
+    // The whole point of the row: FOUR distinct verdicts from four PR states, in one place, so a future
+    // change that collapses any two of them fails here rather than in a worker's poll loop. Before this
+    // fix, rows 2 and 3 were the SAME verdict and the SAME exit code.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    // open + green: a mergeable PR whose one run and one check-run both passed.
+    let green = LandableServer "sha-green"
+    Assert.Equal(PrGreen, Reads.prLandable green.Recorder "FS-GG" "FS.GG.SDD" 801)
+
+    // open + pending: `mergeable` still computing past the re-read budget (#950).
+    let pending = MergeablePrServer(fun _ -> "null")
+    let pendingState, _, _ = Reads.prLandableRequire pending.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+    Assert.Equal(PrPending, pendingState)
+
+    // merged, and closed-unmerged.
+    let mergedState, _, _ =
+        Reads.prLandableRequire (ClosedPrServer("closed", true)).Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    let closedState, _, _ =
+        Reads.prLandableRequire (ClosedPrServer("closed", false)).Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrMerged, mergedState)
+    Assert.Equal(PrClosed, closedState)
+
+    // All four DISTINCT — the property the issue is about. `merged` rendering as `pending` is the defect.
+    let verdicts = [ PrGreen; pendingState; mergedState; closedState ] |> List.map Landable.name
+    Assert.Equal<string list>([ "green"; "pending"; "merged"; "closed" ], verdicts)
+    Assert.Equal<string list>(verdicts |> List.distinct, verdicts)
+
+[<Fact>]
+let ``#1680 an OPEN pr carrying merged:false is untouched — the guard reads state, not the flag alone`` () =
+    // The regression guard on the new arm's REACH. Every open PR carries `"merged": false`, so a guard
+    // keyed on that flag alone — or one that forgot to require `state = "closed"` — would divert every
+    // healthy PR in the fleet to a terminal verdict and stop `--wait` working at all. The arm must fire on
+    // CLOSED-ness and read `merged` only to choose between the two closed words.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    """{"number":801,"state":"open","merged":false,"mergeable":true,"head":{"ref":"item/42-x","sha":"sha-green"}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                else
+                    """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+    let state, n, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(2, n)
+
+[<Fact>]
+let ``#1680 a PR body with no `merged` field at all is NOT read as merged`` () =
+    // Fail-closed in the direction that matters. "Already landed" is the one verdict that tells a recovery
+    // path to STAMP an item, so a malformed or minimal body must never manufacture it. An absent `merged`
+    // reads false, and the verdict falls through to the ordinary open-PR scoring.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    """{"number":801,"state":"closed","mergeable":null,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                else
+                    """{"total_count":0,"workflow_runs":[]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.NotEqual(PrMerged, state)
+    Assert.Equal(PrClosed, state)

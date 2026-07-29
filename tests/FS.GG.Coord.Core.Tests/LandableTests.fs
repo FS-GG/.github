@@ -389,6 +389,39 @@ module LandableTests =
     let ``settled: pending never stops — a run still going is the one verdict worth waiting on`` () =
         Assert.False(settled PrPending 2 2)
 
+    // ---- settled: a PR that is NOT OPEN (#1680) ------------------------------------------------------
+    //
+    // THE MEASURED COST THIS DRIVES TO ZERO. `landable 1675 --wait` — on a PR merged as `d52362c`, whose
+    // head carried 30 check-runs, 30 `success`, zero pending — spent its ENTIRE default budget (30 tries x
+    // 20s = 600s) and then answered `pending`. `settled` is the only thing `Client.landable`'s poll loop
+    // consults to decide break-vs-wait, so these two assertions ARE AC3: with them true, the loop cannot
+    // reach a second poll on a closed PR.
+
+    [<Fact>]
+    let ``#1680 AC3 settled: a MERGED pr stops at once — --wait must never poll a settled fact`` () =
+        // `prev = -1` is the FIRST observation, which is the leg that matters: the loop must break before
+        // it ever sleeps. Asserting only the stable-count form would let a 20s sleep survive the test.
+        Assert.True(settled PrMerged 0 -1)
+        // And it does not depend on the subject count. A merged PR has no live check set, so `n` is 0 —
+        // exactly the count at which `PrRed` and `PrGreen` deliberately KEEP waiting. If merged-ness were
+        // ever routed through a count-sensitive arm it would inherit that wait, which is the bug again.
+        Assert.True(settled PrMerged 0 0)
+        Assert.True(settled PrMerged 30 30)
+
+    [<Fact>]
+    let ``#1680 AC4 settled: a CLOSED-unmerged pr stops at once too — the neighbouring terminal case`` () =
+        Assert.True(settled PrClosed 0 -1)
+        Assert.True(settled PrClosed 0 0)
+
+    [<Fact>]
+    let ``#1680 the two not-open verdicts are the ONLY new ones that settle at n=0 on first look`` () =
+        // The guard that keeps this fix from being written as "settle everything at zero subjects", which
+        // would silently disarm #606's registration race (a `red` at n=0 is "CI has not started YET") and
+        // #724's partial-rollup trap. Both must still keep waiting on the first observation.
+        Assert.False(settled PrRed 0 -1)
+        Assert.False(settled PrGreen 0 -1)
+        Assert.False(settled PrPending 0 -1)
+
     // ---- the name projection -------------------------------------------------------------------------
 
     [<Fact>]
@@ -398,3 +431,19 @@ module LandableTests =
         Assert.Equal("pending", name PrPending)
         Assert.Equal("red", name PrRed)
         Assert.Equal("unknown", name PrUnknown)
+        // #1680 AC2: the caller must be able to tell "already landed" from "checks still running" from the
+        // verdict ALONE, with no second REST read. These are the words that carry that.
+        Assert.Equal("merged", name PrMerged)
+        Assert.Equal("closed", name PrClosed)
+
+    [<Fact>]
+    let ``#1680 AC2 every verdict has a DISTINCT word — merged must not render as pending`` () =
+        // The issue's complaint in one assertion: `pending` meant BOTH "checks are still running" AND
+        // "this PR is merged and gone", and "the caller cannot tell which, because the two render
+        // identically". A projection that collapsed any two states would restore exactly that.
+        let all = [ PrGreen; PrConflicted; PrPending; PrRed; PrUnknown; PrMerged; PrClosed ]
+        let words = all |> List.map name
+
+        Assert.Equal<string list>(words |> List.distinct, words)
+        Assert.NotEqual<string>(name PrPending, name PrMerged)
+        Assert.NotEqual<string>(name PrMerged, name PrClosed)

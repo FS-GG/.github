@@ -210,6 +210,14 @@ module Protocol =
     /// the ONLY retryable code here, and there is no EX_RATE: `landable` has no error channel, so an
     /// exhausted budget arrives as `unknown` (4). `Cli.Tests` pins every `Code` here against the
     /// literal the engine returns; `Core.Tests` pins what the rows SAY.
+    ///
+    /// `NotOpen` (10) since #1680, and it is the same defect a third time, in the other direction: the
+    /// table was complete over the OPEN-PR vocabulary and had no row for a PR that is not open, so a
+    /// MERGED PR — the most terminal state there is — was answered with `7`, the one code documented as
+    /// worth retrying, and `--wait` burned its full 600s budget on it every time. The row is DERIVED
+    /// from the verdict vocabulary (`Types.PrState` gained `PrMerged`/`PrClosed`, `ExitCode.landableCodes`
+    /// gained `NotOpen`, and the completeness test checks this list against that set), which is #1680
+    /// AC6: a projection must follow the vocabulary rather than restate it alongside.
     val landableExitCodes: ExitCodeDoc list
 
     /// `release`/`reap`'s column precedence (#1099) — the third table in the class #889/#900 proved:

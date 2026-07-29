@@ -378,6 +378,14 @@ module Protocol =
     // channel, so a rate limit, a 404 and a `null` mergeability all resolve to `PrUnknown` — exit 4, an
     // honest no-verdict — rather than to a budget code. A `landable` that exited 75 would be a defect.
     //
+    // AND THE ENUMERATION GREW AGAIN AT #1680, which is the lesson above arriving a second time. The
+    // four-row match was complete over the OPEN-PR vocabulary and silent about a PR that is not open —
+    // so `landable` on a MERGED PR returned 7, the one code documented as worth retrying, for the most
+    // terminal state GitHub has. `NotOpen` (10) is that missing row. Note it is a row the ENGINE gained
+    // a verdict for, not merely a table entry: the fix is `PrMerged`/`PrClosed` in the vocabulary, and
+    // this table is DERIVED from that (`ExitCode.landableCodes` is checked complete against it), which
+    // is #1680 AC6 — the projections must follow the vocabulary, never restate it beside it.
+    //
     // Ordered as a poll loop meets it: the one green, then the one code worth retrying, then the ways
     // to stop.
     let landableExitCodes: ExitCodeDoc list =
@@ -398,6 +406,12 @@ module Protocol =
               "RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled."
             Action =
               "Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing." }
+          { Code = ExitCode.toInt ExitCode.NotOpen
+            Name = ""
+            Meaning =
+              "MERGED, or CLOSED without merging — the PR is NOT OPEN, so there is nothing left to gate (#1680). The word on stdout tells the two apart: `merged` means the work LANDED, `closed` means it was abandoned or rejected and nothing landed. Terminal, and deliberately NOT 7: GitHub reports `mergeable: null` for a merged PR, which used to read as \"still computing\" and return PENDING — the ONE code the contract defines as worth retrying — for the most terminal state there is. `landable <merged-pr> --wait` therefore spent its entire 600s budget (30 tries x 20s) on a settled fact, every time, and the caller that meets this most is the RECOVERY path (`pnext-item` §5, `adopt`), which re-gates a PR whose worker died between merge and stamp. It was told to wait forever on work that was already landed. It is also not 3: `merged` is a success, and folding it into the red/conflicted code would tell that same successor to stop rather than to stamp."
+            Action =
+              "Stop polling — no amount of waiting reopens a PR, and `--wait` does not poll this at all. READ THE WORD, because the next act is opposite. `merged`: the work is LANDED. Do not merge it again and do not treat it as a failure — if you are recovering an item whose worker died mid-flight, go STAMP it (`done <ref> --flip --pr <pr>`). `closed`: nothing landed, so do NOT stamp it done; the branch was abandoned or the PR rejected, and the item needs re-work or release, not a merge." }
           { Code = ExitCode.toInt ExitCode.NoVerdict
             Name = ""
             Meaning =

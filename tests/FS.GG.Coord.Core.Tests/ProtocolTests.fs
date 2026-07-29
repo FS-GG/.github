@@ -282,6 +282,48 @@ module ProtocolTests =
         | None -> Assert.Fail "landable exit 7 (pending) is not documented — the recipe's table had no 7, so a loop stops waiting on a PR that is still running"
         | Some m -> Assert.True(m.StartsWith "PENDING", "landable exit 7 does not say it is PENDING")
 
+    /// #1680 — THE SAME DEFECT, ONE STATE OVER. #900 was "3 is documented as pending"; this is "a MERGED
+    /// PR is ANSWERED with pending". Same consequence, same shape: the one code the contract defines as
+    /// worth retrying, returned for a state that cannot change, so `--wait` spins its whole budget.
+    ///
+    /// Anchored with `StartsWith` for the reason the test above records — and here the trap is sharper,
+    /// because row 10's text legitimately CONTAINS the word "PENDING" (it explains what it used to
+    /// return). A `Contains` assertion in either direction would be meaningless on this row.
+    [<Fact>]
+    let ``#1680 landable's 10 is the NOT-OPEN verdict, and it is not pending`` () =
+        let meaningOf code =
+            Protocol.landableExitCodes
+            |> List.tryFind (fun c -> c.Code = code)
+            |> Option.map (fun c -> c.Meaning.ToUpperInvariant())
+
+        match meaningOf 10 with
+        | None ->
+            Assert.Fail
+                "landable exit 10 (merged / closed-unmerged) is not documented — a merged PR has no documented outcome, which is #1680: the recovery path re-gates a landed PR and is told to wait"
+        | Some m ->
+            Assert.True(
+                m.StartsWith "MERGED",
+                "landable exit 10 does not open with MERGED — the caller must be able to tell 'already landed' from 'still running' from the verdict alone (#1680 AC2)")
+
+            Assert.False(
+                m.StartsWith "PENDING",
+                "landable exit 10 is documented as PENDING — that is #1680 exactly, and --wait burns its full 600s budget on a settled fact")
+
+            // AC4: the neighbouring case is DECIDED and STATED on the same row, not left to chance.
+            Assert.Contains("CLOSED", m)
+
+    /// #1680 AC1, as a property rather than a row read: the merged verdict must not be reachable through
+    /// the retryable code. `landableCodes` is the engine's own return set, so this also fails if someone
+    /// later maps `PrMerged` back onto `Pending` to avoid adding a row.
+    [<Fact>]
+    let ``#1680 the not-open verdict has a code of its own, distinct from pending`` () =
+        Assert.NotEqual(ExitCode.toInt ExitCode.NotOpen, ExitCode.toInt ExitCode.Pending)
+        // And distinct from RED, which is the other tempting reuse: `merged` is a SUCCESS, and 3's
+        // documented action is "stop, a red check is a finding" — the wrong instruction for a successor
+        // whose real next act is to STAMP the item.
+        Assert.NotEqual(ExitCode.toInt ExitCode.NotOpen, ExitCode.toInt ExitCode.Red)
+        Assert.Contains(ExitCode.NotOpen, ExitCode.landableCodes)
+
     /// THERE IS NO EX_RATE IN `landable`, and a reader of `take`'s table will expect one.
     /// `Reads.prLandableRequire` returns a bare `PrState` with no error channel, so a rate limit is
     /// `PrUnknown` — exit 4 — not 75. Documenting a 75 here would send a worker to wait out a budget
