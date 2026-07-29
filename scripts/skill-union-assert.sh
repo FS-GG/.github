@@ -96,6 +96,7 @@ set -euo pipefail
 
 PRODUCT="."
 DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 as amended by ADR-0067 §5 (#1636): TWO roots
+DEFAULT_LABEL="default (ADR-0065's two, as amended by ADR-0067 §5)"
 ROOTS_DECL_FILE=".agent-skill-roots"   # named in the missing-root hint below; lib/roots.sh reads it
 ROOTS=""
 ROOTS_ARG=""
@@ -377,7 +378,7 @@ fi
 # lib/roots.sh, because `coordination-sync` — the script that MATERIALIZES these roots — must resolve
 # them the same way the gate that ASSERTS them does. It did not, and a tree's root set had two sources
 # of truth agreeing only by coincidence of defaults (#525). ADR-0065 now makes both defaults identical.
-resolve_roots "$PRODUCT" "$DEFAULT_ROOTS" "default (ADR-0011's three)" "$ROOTS_ARG"
+resolve_roots "$PRODUCT" "$DEFAULT_ROOTS" "$DEFAULT_LABEL" "$ROOTS_ARG"
 
 # shellcheck disable=SC2206
 ROOT_ARR=($ROOTS)

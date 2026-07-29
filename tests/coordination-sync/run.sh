@@ -25,6 +25,44 @@ expect_rc() { local n="$1" want="$2"; shift 2; local out rc=0; out="$("$@" 2>&1)
 
 echo "coordination-sync fixture — receiver='$RECV'"
 
+# The root-selection diagnostic is the operator's explanation of the very constants that determine
+# where kit bytes go.  Keep every caller's DEFAULT_LABEL beside DEFAULT_ROOTS, and lint the literal
+# count instead of exercising a default run and hoping its prose happened to be inspected.  The four
+# callers deliberately have different defaults (two runtime roots versus one materialized root), so
+# each must describe its own constant rather than repeat an ADR-era count from another lane (#1879).
+assert_default_root_label() { # <script>
+  local script="$1" roots label count word
+  roots="$(sed -n 's/^DEFAULT_ROOTS="\(.*\)".*/\1/p' "$REPO_ROOT/$script")"
+  label="$(sed -n 's/^DEFAULT_LABEL="\(.*\)".*/\1/p' "$REPO_ROOT/$script")"
+  # shellcheck disable=SC2086 # these are the space-separated root literals under test
+  set -- $roots
+  count=$#
+  case "$count" in
+    1) word=one ;;
+    2) word=two ;;
+    3) word=three ;;
+    *) bad "root-label lint: $script has an unsupported root count" "DEFAULT_ROOTS='$roots'"; return ;;
+  esac
+
+  if [ -z "$label" ] || ! grep -Eq "(^|[^[:alpha:]])$word([^[:alpha:]]|$)" <<<"$label"; then
+    bad "root-label lint: $script labels its $count root(s) truthfully" \
+        "DEFAULT_ROOTS='$roots'; DEFAULT_LABEL='$label'"
+  elif ! grep -F 'resolve_roots ' "$REPO_ROOT/$script" | grep -Fq '"$DEFAULT_LABEL"'; then
+    bad "root-label lint: $script passes its adjacent DEFAULT_LABEL to resolve_roots" \
+        "the call site must use the variable, not an inlined label"
+  else
+    ok "root-label lint: $script's label states its own $count root(s)"
+  fi
+}
+
+for root_caller in \
+  scripts/skill-view \
+  scripts/skill-view-parity.sh \
+  scripts/skill-union-assert.sh \
+  scripts/coordination-sync; do
+  assert_default_root_label "$root_caller"
+done
+
 # The skill set under test is the REGISTRY's, read the same way the distributor reads it — by `source`
 # path, not by id. Naming one skill here is the defect this fixture exists to catch (#338): it proves
 # nothing about the others, and stayed green while `check-board` and `pnext-item` went undistributed.
