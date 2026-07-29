@@ -9,6 +9,8 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_): pass
     def do_GET(self):
         path, _, query = self.path.partition('?')
+        if os.environ.get('GFH_RATE_LIMIT'):
+            self.send_response(429); self.send_header('Retry-After', '0'); self.end_headers(); return
         if path == '/repos/FS-GG/fixture': reply = doc['repo']
         elif path == '/repos/FS-GG/fixture/actions/workflows':
             reply = dict(doc['workflows'])
