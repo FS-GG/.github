@@ -1105,7 +1105,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             // that second reader used to return BARE, dropping every semantic assertion without
             // reporting one, and the id is now stated once as `CONTRACT_SCHEMA` rather than twice, so
             // two readers of one document can no longer disagree about whether it is supported. So the
-            // cost of a bump is now what it looks like: port those assertions and move one literal.
+            // cost of a bump is now LOUD rather than silent — but it is not one edit, and the third of
+            // the three id literals that move with it is a TRAP. `CONTRACT_SCHEMA` and
+            // `CommandSurfaceTests` are the obvious two. The third is the `/2` MUTANT in
+            // `tests/skill-quality/run.sh`, which `expect_rejection` feeds the gate to prove an
+            // unsupported schema still fails: make `/2` the SUPPORTED id and that mutant becomes a
+            // supported document, the gate exits 0, and the fixture goes red asserting the opposite of
+            // what it means.
             let writes, gate =
                 match writeSurface command with
                 | Writes -> "always", None
