@@ -13,12 +13,19 @@ cross-repo allocation, not item implementation.
 2. Run the [backlog-triage](references/backlog-triage.md) stage. Classify every relevant `Backlog`
    row without guessing human judgement, and promote only evidenced actionable work to `Ready`.
 3. Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
-   available agent slots. **Reorder by rank inputs, never by parking work in `Backlog`.** The scheduler
+   available agent slots. **Dispatch breadth-first across repositories:** inspect each rostered repo's
+   safe lanes and assign one disjoint, high-ranked lane per repo before assigning a second lane in any
+   one repo. That prevents a `.github` chokepoint from consuming the whole worker pool while another
+   repository has independently schedulable work. **Reorder by rank inputs, never by parking work in
+   `Backlog`.** The scheduler
    packs lanes priority-greedily by a rank DERIVED from blocking count, `Class`, `Phase` and age
    (`.github#1598`), so raising an item's priority means fixing the fact that makes it important — draw
    the real `Blocked by` edge, set the `Class`, set the `Phase` — not moving a column. Read the ordering
    with `scripts/fsgg-coord batch --repo <repo> --explain`, which prints every candidate's rank, the
-   inputs behind it, and how many lanes each admitted item displaced.
+   inputs behind it, and how many lanes each admitted item displaced. Treat repeated path overlap as
+   evidence to review, not permission to merge: consolidate only rows that are genuinely one operation,
+   whose resulting acceptance criteria are their explicit union. Keep merely adjacent work separate and
+   record why; a shared chokepoint alone is not a shared story.
 4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
    [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo.
 5. Report live item state immediately. Whenever the host changes or observes a material transition

@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-29** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-29** — ADD `lane-steward` and `publishing-and-deployment` operator skills (owner `.github`; [.github#1531](https://github.com/FS-GG/.github/issues/1531)): the `.github` producer manifest now declares both never-materialized operator skills (`materializes-when: "false"`), and the registry rows were reconciled from that manifest. The generator also closes its directory-classification set, with `spectre-console` retained as the explicit repo-native exemption. registry = manifest = bytes.
 
 - **2026-07-29** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
