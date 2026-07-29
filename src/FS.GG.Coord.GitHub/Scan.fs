@@ -884,8 +884,17 @@ module Scan =
                 // Ready/Backlog row whose marker never existed (or was cleaned) fell through to `Startable`
                 // and got handed out a second time. Probe it here — only when there is NO marker (a marker
                 // carries its own liveness above, and offering it is decided by that). An unreadable probe
-                // writes nothing (fail open to the disjointness check, exactly as a markerless row behaved
-                // before): #651 is a false NEGATIVE we are closing, not a new fail-closed surface.
+                // writes nothing: #651 is a false NEGATIVE we are closing, not a new fail-closed surface.
+                //
+                // #651's OWN JUSTIFICATION FOR THAT — *"fail open to the disjointness check, exactly as a
+                // markerless row behaved before"* — IS TRUE ONLY OF ITS OWN POPULATION, AND IS DELETED HERE
+                // RATHER THAN LEFT TO COVER THE NEW ONE (.github#1738). It holds for a `Ready`/`Backlog` row:
+                // step 5b failing open lands on step 6, disjointness, and offering a row is read-only and
+                // re-decided next scan. It does NOT hold for the `Blocked` rows probed below — step 2 answers
+                // `WrongStatus Blocked` and step 6 is never reached, so there is no disjointness check to
+                // fall open to. What that arm falls open into now is a BOARD WRITE, and the paragraph at the
+                // end of this block is where that is stated. A justification that outlives the population it
+                // was measured on is how a fail-open keeps its cover.
                 //
                 // WHICH COLUMNS ARE PROBED IS THE WHOLE QUESTION, AND `Ready`/`Backlog` ALONE WAS THE WRONG
                 // ANSWER (.github#1738). That set is "the columns a scheduler would OFFER" — the right
@@ -919,9 +928,16 @@ module Scan =
                 // blocker-carrying `Blocked` row still has an open blocker.
                 //
                 // AND THE `| _ -> ()` BELOW IS A KNOWN FAIL-OPEN WITH A NEW CONSUMER — .github#1924.
-                // `Reads.prAlive` answers four ways and this field carries ONE of them: `LivenessUnknown`
-                // (the probe failed) and `LeaseExpiredBranchPushed` (#1055's pushed branch) both collapse to
-                // "no PR". That was #651's deliberate choice while the only consumer was step 5b, which
+                // `Reads.prAlive : IoResult<Liveness>` has FIVE outcomes and this field carries ONE, so
+                // THREE collapse to "no PR" — count them, because the third is the expensive one:
+                //   * `Ok LeaseExpiredBranchPushed` — #1055's pushed branch, work in flight before its PR;
+                //   * `Ok LivenessUnknown` — the read failed;
+                //   * `Error _`, INCLUDING `RateLimited`, which `Reads.prAlive` propagates DELIBERATELY
+                //     ("an exhausted budget is a fact about the CLIENT, not about this item's PR") and this
+                //     arm then swallows. Rate limiting is SYSTEMIC, not per-row, so one exhausted scan
+                //     answers "no PR" for every row it probes and promotes all of them in one pass — which
+                //     is the shape of the multi-row event #1738 was filed off.
+                // That collapse was #651's deliberate choice while the only consumer was step 5b, which
                 // fails open into OFFERING — read-only, and corrected by the next scan. `BLOCKER-CLEARED`
                 // fails open into a board WRITE, which `choresFor`'s header calls the asymmetry that makes
                 // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot

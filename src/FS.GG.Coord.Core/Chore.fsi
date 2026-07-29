@@ -193,9 +193,10 @@ module Chore =
         /// other direction.
         ///
         /// **IT IS NOT FAIL-CLOSED ON A FAILED PROBE, AND THAT RESIDUAL IS FILED — .github#1924.** Unlike
-        /// the human-park gate above, this one has no receipt to fail closed on: `Reads.prAlive` answers
-        /// four ways and `int option` carries one, so `LivenessUnknown` (we could not ask) and
-        /// `LeaseExpiredBranchPushed` (#1055) both arrive as `None` = "no PR". #651 chose that collapse
+        /// the human-park gate above, this one has no receipt to fail closed on: `Reads.prAlive` has FIVE
+        /// outcomes and `int option` carries one, so THREE arrive as `None` = "no PR" —
+        /// `LeaseExpiredBranchPushed` (#1055), `LivenessUnknown` (we could not ask), and `Error _`
+        /// including the `RateLimited` that `prAlive` propagates on purpose. #651 chose that collapse
         /// while step 5b was the only consumer — and step 5b fails open into OFFERING, which is read-only
         /// and re-decided next scan. This rule fails open into a board WRITE, the asymmetry `derive`'s note
         /// below says the mechanism rests on. Fixing it changes a shared wire fact and its readers, so it

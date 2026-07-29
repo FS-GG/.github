@@ -152,9 +152,12 @@ module Chore =
     ///
     /// **IT DOES NOT FAIL CLOSED ON A PROBE THAT FAILED, AND THAT IS A KNOWN RESIDUAL — .github#1924.**
     /// This gate is NOT the fail-closed shape `humanBlockAllowsFlip` is, and saying it were would be the
-    /// fail-open wearing the fix's clothes. `Reads.prAlive` answers FOUR ways; `Item.ItemPr` is an
-    /// `int option` and carries ONE, so `LivenessUnknown` (we could not ask) and `LeaseExpiredBranchPushed`
-    /// (#1055's pushed branch, work in flight before its PR exists) both arrive here as `None` = "no PR".
+    /// fail-open wearing the fix's clothes. `Reads.prAlive : IoResult&lt;Liveness&gt;` has FIVE outcomes;
+    /// `Item.ItemPr` is an `int option` and carries ONE, so THREE arrive here as `None` = "no PR":
+    /// `LeaseExpiredBranchPushed` (#1055's pushed branch, work in flight before its PR exists),
+    /// `LivenessUnknown` (we could not ask), and `Error _` — INCLUDING `RateLimited`, which `Reads.prAlive`
+    /// propagates on purpose and `Scan`'s probe then swallows. The third is the expensive one, because rate
+    /// limiting is SYSTEMIC: one exhausted scan answers "no PR" for every row it probes.
     /// #651 chose that collapse deliberately, and it was sound while the only consumer was step 5b: that
     /// consumer fails open into OFFERING a row — read-only, and re-decided by the next scan. THIS consumer
     /// fails open into a board WRITE on somebody else's item, which `choresFor`'s own header names as the

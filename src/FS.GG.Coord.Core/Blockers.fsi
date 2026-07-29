@@ -34,6 +34,11 @@ module Blockers =
     val isResolvedState: state: BlockerState -> bool
 
     /// The blockers still holding this item. Empty = not blocked.
+    ///
+    /// **NOT the negation of `cleared` below, and the two must not be read as one question.** This asks
+    /// *"is anything holding this item?"*, for which a row with no blockers at all correctly answers no.
+    /// `cleared` asks *"did a blocker RESOLVE?"*, for which that same row answers no as well — so
+    /// `unresolved xs = []` and `cleared xs = false` are both true of `[]`, and neither is wrong.
     val unresolved: blockers: Blocker list -> Blocker list
 
     /// **DID EVERY RECORDED BLOCKER CLEAR — the `BLOCKER-CLEARED` precondition (.github#1738).**

@@ -649,9 +649,14 @@ module ChoreTests =
             let bs = [ blocker 2 st ]
             Assert.Equal(Blockers.cleared bs, fires bs)
 
-            // ...and over a PAIR, so "every" is asserted rather than "the first".
-            let mixed = [ blocker 2 BlockerClosed; blocker 3 st ]
-            Assert.Equal(Blockers.cleared mixed, fires mixed)
+            // ...and over a PAIR in BOTH ORDERS, so "every" is asserted rather than "the first" OR "the
+            // last". One order alone refutes only the implementation that reads the other end: with the
+            // swept state second, a first-blocker-only rule is caught and a last-blocker-only rule passes.
+            let firstClosed = [ blocker 2 BlockerClosed; blocker 3 st ]
+            Assert.Equal(Blockers.cleared firstClosed, fires firstClosed)
+
+            let lastClosed = [ blocker 3 st; blocker 2 BlockerClosed ]
+            Assert.Equal(Blockers.cleared lastClosed, fires lastClosed)
 
     // ---- STATUS-NOT-BLOCKED: do not advertise work that cannot start ---------------------------------
 
