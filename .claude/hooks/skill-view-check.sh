@@ -91,8 +91,15 @@ fi
 # The checker's classified findings — one line per root or skill, each tagged with the class
 # classify_root/do_check assigned it. A `die` (exit 2) carries no tag, which is why an untagged
 # failure below can never reach the excuse.
+#
+# THE EXCUSE IS MATCHED AS A FIXED STRING, NOT A PATTERN. A root NAME interpolated into a regex is a
+# regex: `.agents/skills` unescaped also matches `Xagents/skills`, so an absent root that was not the
+# excused one bought silence — the wrong root, quietly, from a test that could not tell two names
+# apart. That is this item's own defect one layer down, in the single place where a false positive
+# buys quiet, so it is settled by removing the pattern rather than by escaping it. The trailing space
+# is load-bearing: it is what stops a LONGER root name from matching a prefix of itself.
 findings="$(printf '%s\n' "$out" | grep -c '^::error::skill-view: \[')"
-excused="$(printf '%s\n' "$out" | grep -c "^::error::skill-view: \[absent-root\] $CANON ")"
+excused="$(printf '%s\n' "$out" | grep -cF -- "::error::skill-view: [absent-root] $CANON ")"
 
 if [ "$findings" -gt 0 ] && [ "$findings" -eq "$excused" ]; then
   # The one shape the deleted `-d` guard was right about: this tree simply has no view root.

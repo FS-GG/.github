@@ -558,10 +558,23 @@ LEGACY
 expect_silent "14j the DELETED -d guard is silent over 14c's tree — so 14c is not vacuous" \
   -- env CLAUDE_PROJECT_DIR="$H_DANG" bash "$WORK/legacy-skill-view-check.sh"
 
+# The excuse is matched against a root NAME, and a name interpolated into a grep pattern is a REGEX.
+# `.agents/skills` unescaped also matches `Xagents/skills`, so an absent root that is not the excused
+# one bought silence — this item's own defect (a test that cannot tell two things apart) one layer
+# down, in the single place where a false positive buys quiet. Declared root names are the subject
+# here, so the leg declares one.
+H_RE="$WORK/hook-regex-canon"; make_hook_tree "$H_RE"
+printf 'Xagents/skills\n.agents/skills\n' > "$H_RE/.agent-skill-roots"
+mkdir -p "$H_RE/Xagents/skills/skill-1"
+printf -- '---\nname: skill-1\n---\nBody.\n' > "$H_RE/Xagents/skills/skill-1/SKILL.md"
+rm -rf "$H_RE/Xagents/skills"
+expect "14k an absent root that merely LOOKS like the excused one is not excused" 1 "[absent-root]" \
+  -- env CLAUDE_PROJECT_DIR="$H_RE" bash "$HOOK"
+
 # =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=53
+EXPECTED_LEGS=54
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 
