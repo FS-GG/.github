@@ -807,7 +807,7 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 >
 > **What is NOT closed by the sequence ending.** `#1676` AC 6 — closing the board rows whose subject
 > retired — is [`#1875`](https://github.com/FS-GG/.github/issues/1875), split out because it is a sweep
-> over ~103 open rows rather than a retirement step. The open findings the retirement surfaced are
+> over ~100 open rows rather than a retirement step. The open findings the retirement surfaced are
 > enumerated in the order's §9 and are unaffected by this note.
 
 ## Consequences
