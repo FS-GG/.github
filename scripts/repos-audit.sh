@@ -3020,6 +3020,12 @@ while IFS= read -r repo; do
   [ -d "$ddir" ] || continue
   while IFS= read -r wf; do
     [ -n "$wf" ] || continue
+    # A malformed unrelated workflow cannot decide this graph's verdict.  Conversely, a file that
+    # names either dispatch surface but will not parse is a no-verdict: it may carry a sender or
+    # listener that a text scan cannot safely reconstruct.
+    if ! grep -qE 'repository_dispatch|dispatch-sender\.ya?ml' "$ddir/$wf"; then
+      continue
+    fi
     if ! dispatch_extract "$repo" "$wf" >> "$DISPATCH_FILE"; then
       echo "::error::repos-audit: $repo workflow '$wf' will not parse while extracting repository_dispatch contracts; the graph has no verdict for it."
       dispatch_refusals=$((dispatch_refusals + 1))
