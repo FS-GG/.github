@@ -26,9 +26,10 @@
 #                                                           # The audit's closure check reads this (#628).
 #   repos.sh absence-cover [--registry <file>]              # full<TAB>absence-cover (or `-`), one row
 #                                                           # per coordination-kit PACKAGE receiver, in
-#                                                           # roster order. The word repos-audit's
-#                                                           # absence-cover sweep grades against live
-#                                                           # branch protection (#1785).
+#                                                           # roster order. Historical field name; the
+#                                                           # sweep grades whether an unexcused
+#                                                           # assertion/materialize path is required
+#                                                           # (#1785/#1869).
 #   repos.sh kit [--field id|kind|source|dest] [--kind skill|client|config] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh relock [--registry <file>] [--root <dir>]      # REGENERATE registry/repos.lock from the
@@ -318,29 +319,23 @@ cmd_list() {
 # received but undeclared is invisible to all of them — which is exactly how `build-config` stayed
 # invisible while four repos received it. This is the query that can SEE the gap, so it is the one the
 # audit's closure check reads.
-# `absence-cover` (per repo; #1785) — WHAT CATCHES AN ABSENT GENERATED VIEW ROOT IN THIS RECEIVER.
+# `absence-cover` (per repo; #1785, semantics corrected by #1869) — WHETHER AN UNEXCUSED VIEW-ROOT
+# ASSERTION OR MATERIALIZE PATH IS BRANCH-REQUIRED. The field name is historical. Measurements on #1869
+# show that the receiver's `BeforeTargets` generate creates an absent root, replaces a dangling root,
+# and refuses a text-file root before `FsggKitCheckSkillView`; none of those three can be that
+# assertion's verdict on the receiver per-PR path.
 #
-# ADR-0067 §6 makes `.agents/skills` a generated view: untracked, git-ignored, and therefore ABSENT in
-# every fresh checkout. §8's alarm reds on that by default, and a receiver whose alarm runs on a bare
-# checkout excuses it with `--absent-ok "<why>"`. That reason is free text, it is a claim about THIS
-# REPO'S BRANCH PROTECTION, and until #1785 nothing re-checked it. This word is that claim, moved to
-# where a sweep can grade it daily against the API:
+#   required    a context the default branch REQUIRES is produced by a job that reaches an unexcused
+#               view-root assertion or materialize path.
+#   unrequired  such a path runs somewhere, but on NO required context.
 #
-#   required    a context the default branch REQUIRES is produced by a job that runs the kit's
-#               view-root assertion WITHOUT `--absent-ok`. An absent view root cannot reach `main`.
-#   unrequired  the assertion runs un-excused somewhere, but on NO required context. Absence is
-#               caught on a lane that blocks no merge — true of a receiver whose only materialize is
-#               its Renovate kit-bump workflow.
+# There is deliberately no third word. "No such assertion/materialize path runs here" is a state
+# repos-audit.sh DERIVES and reds on; it is not one a roster row may assert.
 #
-# There is deliberately no third word. "Nothing catches absence here" is a state repos-audit.sh
-# DERIVES and reds on; it is not one a roster row may assert, because asserting it would be asking
-# for precisely the silent exit 0 over an ungenerated view that §8 forbids.
-#
-# THE WORD IS NOT THE AUTHORITY — the API is. This row says what the org BELIEVES covers absence in
-# that receiver; repos-audit's absence-cover sweep reads the union of classic protection and rulesets
-# plus the receiver's committed workflows, derives the real answer, and reds when the two disagree in
-# EITHER direction. A stale row is a finding, not a licence. Legal only on a coordination-kit
-# receiver, for the same reason `kit-delivery` is: nothing else has a view root to miss.
+# THE WORD IS NOT THE AUTHORITY — the API is. The historical absence-cover sweep reads the union of
+# classic protection and rulesets plus the receiver's committed workflows, derives whether that path
+# is required, and reds when the two disagree in either direction. A stale row is a finding, not a
+# licence. Legal only on a coordination-kit receiver, because only those receivers own this path.
 cmd_absence_cover() {
   local reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
@@ -775,21 +770,22 @@ cmd_validate() {
           || err "repo '$id' sets kit-delivery '$delivery' but does not receive coordination-kit — the field only governs how a coordination-kit receiver takes the kit." ;;
       *) err "repo '$id' kit-delivery '$delivery' invalid (byte-copy|package)." ;;
     esac
-    # absence-cover (#1785): what catches an ABSENT generated view root here. Optional in the schema
-    # and required in practice by repos-audit's absence-cover sweep, which reds a coordination-kit
-    # package receiver that declares none — the split is deliberate, because "this row is missing" is
-    # a finding about the org that belongs in the daily sweep beside the derived answer, not a parse
-    # error that stops every other fabric from reading the roster at all.
+    # absence-cover (#1785/#1869): historical name for whether an unexcused view-root assertion or
+    # materialize path is branch-required. Optional in the schema and required in practice by repos-audit's
+    # sweep, which reds a coordination-kit package receiver that declares none — the split is
+    # deliberate, because "this row is missing" is a finding about the org that belongs in the daily
+    # sweep beside the derived answer, not a parse error that stops every other fabric from reading
+    # the roster at all.
     #
-    # 'none' is NOT in the vocabulary, and its absence is the point: a receiver may not write down
-    # that nothing catches an absent view root. That state is DERIVED by the sweep and red there.
+    # 'none' is NOT in the vocabulary: a receiver may not write down that it has no such path at all.
+    # That state is DERIVED by the sweep and red there.
     case "$cover" in
       "") ;;
       required|unrequired)
         echo "$recv" | grep -qw coordination-kit \
-          || err "repo '$id' sets absence-cover '$cover' but does not receive coordination-kit — the field states what catches an absent GENERATED VIEW ROOT (ADR-0067 §6/§8), which only a kit receiver has." ;;
+          || err "repo '$id' sets absence-cover '$cover' but does not receive coordination-kit — the historical field states whether an unexcused view-root assertion/materialize path is branch-required (#1785/#1869), which only a kit receiver has." ;;
       none)
-        err "repo '$id' sets absence-cover 'none'. That is not a declarable state (#1785): a receiver may not assert that NOTHING catches an absent generated view root — that is the silent exit 0 over an ungenerated view ADR-0067 §8 forbids. repos-audit DERIVES that state and reds on it. Either name the cover (required|unrequired) or fix the repo." ;;
+        err "repo '$id' sets absence-cover 'none'. That is not a declarable state (#1785/#1869): a receiver may not assert that NO unexcused view-root assertion/materialize path runs. repos-audit DERIVES that state and reds on it. Either name the path requirement (required|unrequired) or fix the repo." ;;
       *) err "repo '$id' absence-cover '$cover' invalid (required|unrequired)." ;;
     esac
   done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), ((."kit-delivery" // "-") | if . == "" then "-" else . end), ((."absence-cover" // "-") | if . == "" then "-" else . end)] | @tsv')

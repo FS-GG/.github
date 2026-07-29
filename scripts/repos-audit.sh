@@ -85,16 +85,14 @@
 # fix it. Seven receivers each hand-copied that target and nothing compared them until this sweep.
 # See THE VIEW-ROOT GENERATE SWEEP below.
 #
-# AND IT RE-DERIVES, DAILY, WHAT ACTUALLY CATCHES AN ABSENT VIEW ROOT IN EACH RECEIVER (#1785). A
-# fifth mandate, and the first one whose subject is a claim held in the GitHub API rather than in a
-# file. ADR-0067 §8's alarm reds on an absent view root by default; a receiver whose alarm runs on a
-# bare checkout excuses it with `--absent-ok "<why>"`, and that reason — required and printed, so the
-# carve-out cannot be a shrug — is FREE TEXT asserting something about that repo's BRANCH PROTECTION.
-# Three receivers carry one. Adding a required context, removing one, moving a materialize step
-# between jobs, or renaming a job all change the answer, and none of them touches the string. So the
-# claim moved to the roster (`absence-cover:`) where a sweep can grade it, and this is that sweep:
-# the union of classic protection and rulesets, against the receiver's own committed jobs. The prose
-# is never read. See THE ABSENCE-COVER SWEEP below.
+# AND IT RE-DERIVES, DAILY, WHETHER AN UNEXCUSED VIEW-ROOT ASSERTION OR MATERIALIZE PATH IS REQUIRED
+# (#1785, corrected by #1869). A fifth mandate, and the first one whose subject is a claim held in
+# the GitHub API rather than in a file. The historical roster field remains `absence-cover`, but
+# #1869 measured that the receiver generate repairs absent/dangling roots and refuses a text-file
+# root before the assertion: this sweep grades the detected path's REQUIREDNESS, not those verdicts'
+# reachability. Adding a required context, removing one, moving the path between jobs, or renaming a job changes
+# the answer. The union of classic protection and rulesets is compared with the receiver's own
+# committed jobs. See THE ABSENCE-COVER SWEEP below.
 #
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
@@ -110,13 +108,13 @@
 #       NuGet feed the kit pins are graded against could not be read, the git TREE a cross-repo
 #       sparse-checkout fetches could not be read, so rule (4) did not run for it (#1556), or a
 #       receiver project would not read, or a receiver's branch protection / rulesets would not read
-#       (#1785 — an unread protection is never a verified excuse)
+#       (#1785 — unread protection cannot establish whether the detected path is required)
 #   3 = no verdict, PERMANENT — a roster that cannot be enumerated, a capability that names no
 #       receiver, a capability that is RECEIVED but has no detector (#628), a cross-repo
 #       sparse-checkout whose SHAPE the closure rule refuses to grade, a coordination-kit receiver
 #       whose FS.GG.Kit pin cannot be located or contradicts itself, a view-root generate whose
-#       ORDERING against FsggKitCheckSkillView cannot be read (#1759), a receiver whose absence cover
-#       cannot be graded — no `administration: read` credential, a workflow that will not parse, or a
+#       ORDERING against FsggKitCheckSkillView cannot be read (#1759), a receiver whose view-root path
+#       requirement cannot be graded — no `administration: read` credential, a workflow that will not parse, or a
 #       matrix whose check-run names cannot be enumerated (#1785) — or a bad invocation
 #
 # "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
@@ -1696,53 +1694,32 @@ print("\n".join(out))
 PY
 )
 
-# --- THE ABSENCE-COVER SWEEP (#1785) -------------------------------------------------------------
+# --- THE ABSENCE-COVER SWEEP (HISTORICAL NAME; #1785/#1869) -------------------------------------
 #
 # WHAT IT ASSERTS. For every coordination-kit package receiver: the roster's `absence-cover:` word
 # for that repo is what its REAL branch protection plus its REAL committed workflows say. The word
 # has two legal values and they are a statement about strength:
 #
-#   required    at least one context the DEFAULT BRANCH REQUIRES is produced by a job that runs the
-#               kit's view-root assertion WITHOUT `--absent-ok`. Absence cannot reach `main`.
-#   unrequired  something runs that assertion un-excused, but no REQUIRED context does. Absence is
-#               caught on a lane that blocks no merge.
+#   required    at least one context the DEFAULT BRANCH REQUIRES is produced by a job that reaches an
+#               unexcused view-root assertion or materialize path.
+#   unrequired  such a path runs, but no REQUIRED context produces it.
 #
-# and the third state is DERIVED ONLY, never declarable: nothing in the repo runs the assertion
-# un-excused at all. A receiver may not write that down, because writing it down would be asking for
-# the carve-out ADR-0067 §8 exists to refuse.
+# The third state is DERIVED ONLY, never declarable: nothing in the repo runs that path at all.
 #
-# WHY IT EXISTS (#1785, from #1777). ADR-0067 §8's alarm reds on an absent view root by default, and
-# a receiver whose alarm runs on a bare checkout excuses it with `--absent-ok "<why>"`. The reason is
-# required and printed — and it is FREE TEXT making a claim about that repo's BRANCH PROTECTION:
+# WHY THE NAME NO LONGER DESCRIBES THE SUBJECT (#1869). On the receiver path,
+# `Fsgg<Repo>GenerateSkillView` runs `BeforeTargets="FsggKitCheckSkillView"`: absent and dangling
+# roots are repaired before the assertion, and a text-file root makes generation refuse first.
+# Therefore none of §8's three absence classes can be the receiver assertion's verdict. Their
+# mutation-proven home is FS.GG.Kit's no-generate `verify-package.sh` fixtures. This sweep still does
+# useful work: it establishes whether a detected unexcused view-root assertion/materialize path is
+# branch-required. The separate generate sweep proves a generator is declared and ordered in the
+# receiver project; a direct bare `scripts/skill-view check` does not prove generation ran in its job.
+# The field and command keep their historical name for schema/CLI compatibility.
 #
-#   FS.GG.Game       "the SAME required job runs -t:FsggKitMaterialize below, where
-#                     FsggKitCheckSkillView reds an absent or dangling root on a REQUIRED context"
-#   FS.GG.Audio      "NO required context on this repo runs -t:FsggKitMaterialize … so absence is
-#                     caught on the materialize path instead"
-#   FS.GG.Templates  "absence is caught on the materialize path instead … and NOT on any required
-#                     context here"
-#
-# Every one of those is falsifiable and NOTHING falsified it. Adding a required context, removing
-# one, moving a materialize step between jobs, or renaming a job all change the answer, and none of
-# them touches the string. Game's is the one that rots UNSAFELY: it says a required context covers
-# absence, so if the materialize step ever leaves that job the excuse still prints, the check still
-# passes, and an ungenerated view reaches `main` unremarked — ADR-0067 §8's silent class re-entering
-# through the door built to keep it out.
-#
-# SO THE CLAIM STOPS BEING PROSE. The word lives in the roster, where every fabric already reads it
-# and where changing it is a reviewed edit to `.github`; the FACT is derived here, daily, from the
-# API. Prose is not consulted, not parsed and not graded — a receiver's reason string is a message to
-# a human, and this sweep is what makes it stay true. That direction is deliberate: a worker on this
-# very item nearly shipped a wrong change on the authority of a `gate.yml` COMMENT asserting a
-# context was not required when protection said it was.
-#
-# IT IS ASKED OF ALL SEVEN, NOT ONLY THE THREE THAT EXCUSE ABSENCE. Restricting the subject to
-# repos carrying `--absent-ok` would make the sweep's reach depend on finding every invocation of it
-# — and Templates' is not in a workflow at all, it is inside `tests/composition/run.sh`, which this
-# audit does not fetch. Asking every receiver the same question needs no such search, covers the
-# receivers that red on absence today (SDD, Rendering, Governance red BECAUSE their generate runs
-# first — that divergence is a parameter, not a fork, and this sweep records it rather than
-# flattening it), and reports the day one of THEM loses its cover too.
+# IT IS ASKED OF ALL SEVEN because all seven own a receiver assertion/materialize path. The separate
+# view-root generate sweep above proves the receiver project declares and orders a generator; this
+# sweep joins assertion/materialize job names to live branch protection. Neither sweep claims a bare
+# direct check co-runs generation or that the receiver assertion can emit an absence-class verdict.
 #
 # WHY NOT `check-required-contexts.py`. That gate asks whether every required context is PRODUCIBLE.
 # This asks whether a particular THING a context does is still done by a required one. Different
@@ -1753,10 +1730,10 @@ PY
 # implementation in this org.
 #
 # WHAT IT CANNOT SEE, SAID OUT LOUD RATHER THAN PAPERED OVER:
-#   - Inside a script a workflow SHELLS OUT to. Templates' excused invocation lives in
+#   - Inside a script a workflow SHELLS OUT to. Templates' invocation lives in
 #     `tests/composition/run.sh`; this sweep sees the `run:` block, not the file it runs. So a
-#     receiver whose only un-excused assertion is inside a called script derives `none` and reds
-#     HERE — a false finding, in the safe direction, that a human resolves in one read.
+#     receiver whose only assertion is inside a called script derives `none` and reds HERE — a
+#     false finding that a human resolves in one read.
 #   - Inside a composite action (`uses: ./.github/actions/…`). Same shape, same direction.
 #   - Whether a step's `if:` actually evaluates true on a given pull request. Templates' composition
 #     step is guarded by a docs-only scope gate, so its lane really is absent on a docs-only PR;
@@ -1848,7 +1825,7 @@ def unquoted(text):
     that denies it. That is the same defect as #1785 itself, one level in, and it is why this check
     reads prose NOWHERE: not the reason, not a comment, not a quoted argument.
 
-    The cost is a known over-strip in the SAFE direction: an invocation hidden inside a quoted
+    The cost is a known over-strip in the false-red direction: an invocation hidden inside a quoted
     `bash -c "…"` is not seen, so its job does not count as covering and the receiver derives a
     WEAKER cover than it has — a false RED a human clears in one read, never a false green.
     """
@@ -1888,8 +1865,8 @@ def grade_repo(repo, declared):
     wfdir = os.path.join(STAGING, slug)
     if not os.path.isdir(wfdir):
         emit("undetermined", repo,
-             "no workflow was staged for this receiver, so nothing about what covers an absent view "
-             "root could be read. That is not 'this repo covers nothing'.")
+             "no workflow was staged for this receiver, so its unexcused view-root assertion or "
+             "materialize path could not be read. That is not 'this repo has no such path'.")
         return
 
     covering, excused = [], []
@@ -1901,10 +1878,10 @@ def grade_repo(repo, declared):
             jobs = gate.jobs_of(doc, subject)
         except gate.GateError as e:
             # A workflow that will not parse, or declares no jobs, is not evidence that this repo
-            # covers nothing. Refuse the repo rather than grade it on the files that did parse.
+            # has no detected path. Refuse the repo rather than grade it on the files that did parse.
             emit("refusal", repo,
-                 f"{subject} could not be read ({e}), so this receiver's covering jobs cannot be "
-                 f"enumerated. Unparsable is not 'covers nothing'.")
+                 f"{subject} could not be read ({e}), so this receiver's assertion/materialize jobs "
+                 f"cannot be enumerated. Unparsable is not 'has no detected path'.")
             return
         for job_id, job in jobs.items():
             steps = job.get("steps")
@@ -1955,15 +1932,15 @@ def grade_repo(repo, declared):
     except (gate.Unreachable, gate.Missing) as e:
         emit("undetermined", repo,
              f"branch protection / rulesets on {BRANCH} would not read ({e}). #266: a protection "
-             f"read that failed is UNREAD, and an unread protection is never a valid excuse.")
+             f"read that failed is UNREAD, so path requiredness is unknown.")
         return
     except (gate.Forbidden, gate.GateError) as e:
         emit("refusal", repo,
              f"branch protection / rulesets on {BRANCH} are unreadable and re-running will not "
              f"change that ({str(e).splitlines()[0]}). Reading required checks needs "
              f"`administration: read`, which is NOT grantable to a workflow GITHUB_TOKEN — the "
-             f"audit must run with the org App's installation token. Nothing about this receiver's "
-             f"absence cover was asserted.")
+             f"audit must run with the org App's installation token. Nothing about whether this "
+             f"detected assertion/materialize path is required was asserted.")
         return
 
     hits = sorted(set(covering) & required)
@@ -1974,23 +1951,21 @@ def grade_repo(repo, declared):
     else:
         derived = "unrequired"
 
-    where = f"un-excused assertion on: {', '.join(sorted(set(covering))) or '(nothing)'}"
+    where = f"unexcused assertion/materialize path on: {', '.join(sorted(set(covering))) or '(nothing)'}"
     if excused:
-        where += f"; excused by --absent-ok on: {', '.join(sorted(set(excused)))}"
+        where += f"; --absent-ok-only lane on: {', '.join(sorted(set(excused)))}"
 
     if derived == "none":
         emit("finding", repo,
              f"NOTHING in this receiver runs the kit's view-root assertion without `--absent-ok`. "
-             f"An absent view root is therefore excused everywhere and caught nowhere — exit 0 with "
-             f"no diagnostic over an ungenerated view, which is the exact silent class ADR-0067 §8 "
-             f"forbids. The roster says `absence-cover: {declared or '(unset)'}`. "
-             f"{where}. Either restore a lane that asserts it un-excused, or this repo has no "
-             f"business excusing absence at all.")
+             f"No unexcused view-root assertion/materialize path was found. The roster says "
+             f"`absence-cover: {declared or '(unset)'}` (historical field name). {where}. "
+             f"Restore a lane that reaches the unexcused assertion or materialize path.")
         return
     if not declared:
         emit("finding", repo,
-             f"declares no `absence-cover:` in registry/repos.yml, so what covers an absent view "
-             f"root here is unstated and therefore ungraded. Derived from live protection today: "
+             f"declares no `absence-cover:` in registry/repos.yml, so whether its unexcused "
+             f"view-root assertion/materialize path is required is unstated. Derived from live protection today: "
              f"{derived}"
              + (f" (required context(s): {', '.join(hits)})" if hits else "") +
              f". Add `absence-cover: {derived}` to this repo's roster row — the word is what makes "
@@ -1999,24 +1974,22 @@ def grade_repo(repo, declared):
     if declared == derived:
         emit("ok", repo,
              f"absence-cover: {derived}"
-             + (f" — required context(s) running the assertion un-excused: {', '.join(hits)}"
+             + (f" — required context(s) running an unexcused assertion/materialize path: {', '.join(hits)}"
                 if hits else " — no REQUIRED context runs it; " + where))
         return
     if declared == "required" and derived == "unrequired":
         emit("finding", repo,
              f"the roster says `absence-cover: required` and live branch protection says otherwise: "
-             f"the assertion still runs un-excused ({where}), but NO context this branch REQUIRES "
-             f"produces it. This is the UNSAFE direction — the receiver's own `--absent-ok` reason "
-             f"claims a required context covers absence, that claim is now FALSE, and an ungenerated "
-             f"view can reach `main` while the excuse keeps printing (ADR-0067 §8 via #1785). Either "
-             f"put the assertion back on a required context, or change the roster word and accept "
-             f"that absence no longer blocks a merge here.")
+             f"the gate still runs ({where}), but NO context this branch REQUIRES produces it. "
+             f"The detected path is weaker than the roster claims: the unexcused view-root "
+             f"assertion/materialize path no longer blocks a merge. Put it back on a required "
+             f"context, or change the roster word.")
         return
     emit("finding", repo,
          f"the roster says `absence-cover: {declared}` and live branch protection says `{derived}` "
-         f"(required context(s) running the assertion un-excused: {', '.join(hits) or 'none'}). "
-         f"This is the SAFE direction — the repo is covered more strongly than it claims — but the "
-         f"roster word is what the next reader trusts and it is wrong. Update the row.")
+         f"(required context(s) running an unexcused assertion/materialize path: {', '.join(hits) or 'none'}). "
+         f"The detected path is required more strongly than the roster claims, but the roster word is what "
+         f"the next reader trusts and it is wrong. Update the row.")
 
 
 with open(MANIFEST, encoding="utf-8") as fh:
@@ -3398,7 +3371,7 @@ else
   fi
 fi
 
-# --- the absence-cover sweep (#1785) -------------------------------------------------------------
+# --- the view-root path requirement sweep (historical field: absence-cover; #1785/#1869) ---------
 #
 # IT RIDES THE DETECTOR PASS'S WORKFLOW READS AND ADDS EXACTLY TWO API CALLS PER RECEIVER — the two
 # protection stores. Every workflow it grades was staged by `repo_calls` as that pass read it, so the
@@ -3415,11 +3388,11 @@ fi
 absentok_findings=0; absentok_refusals=0; absentok_undet=0; absentok_ok=0; absentok_graded=0
 absentok_manifest="$ABSENTOK_DIR/manifest.tsv"
 if [ "$kit_cap_declared" -eq 0 ]; then
-  echo "repos-audit: absence-cover (#1785) — the roster declares no $KIT_CAP capability, so no receiver has a generated view root and this sweep had no subject. NOTHING was asserted."
+  echo "repos-audit: absence-cover (#1785/#1869) — the roster declares no $KIT_CAP capability, so this view-root path requirement sweep had no subject. NOTHING was asserted."
 elif ! roster_absence_cover > "$absentok_manifest" 2>/dev/null; then
-  die "cannot enumerate the $KIT_CAP package receivers' absence-cover words — repos.sh absence-cover failed. That is not a clean sweep: no receiver's absence cover was graded."
+  die "cannot enumerate the $KIT_CAP package receivers' absence-cover words — repos.sh absence-cover failed. That is not a clean sweep: no assertion/materialize path requirement was graded."
 elif [ ! -s "$absentok_manifest" ]; then
-  echo "repos-audit: absence-cover (#1785) — no $KIT_CAP package receiver is rostered, so this sweep graded nothing. NOTHING was asserted about what catches an absent generated view root anywhere."
+  echo "repos-audit: absence-cover (#1785/#1869) — no $KIT_CAP package receiver is rostered, so this sweep graded nothing. NOTHING was asserted about view-root path requiredness."
 else
   # The App token, and ONLY for this sweep. Every other read in this script is a public-repo read the
   # run-scoped token makes correctly, and handing them a repo-scoped installation token would 404 the
@@ -3427,7 +3400,7 @@ else
   GH_TOKEN="${ABSENTOK_TOKEN:-${GH_TOKEN:-}}" \
     python3 -c "$ABSENTOK_PY" "$CONTEXT_RULE" "$ABSENTOK_DIR" "$absentok_manifest" \
             "$HERE/../.github/workflows" >> "$ABSENTOK_FILE" \
-    || die "the absence-cover verdict program failed to run. That is not a clean sweep — no receiver's absence cover was graded."
+    || die "the absence-cover verdict program failed to run. That is not a clean sweep — no assertion/materialize path requirement was graded."
 
   absentok_count() { grep -cE "^$1"$'\t' "$ABSENTOK_FILE" 2>/dev/null || true; }
   absentok_findings="$(absentok_count finding)"
@@ -3447,9 +3420,9 @@ else
   absentok_graded=$(( absentok_ok + absentok_findings ))
   absentok_subjects="$(wc -l < "$absentok_manifest" | tr -d ' ')"
   if [ "$absentok_graded" -eq 0 ]; then
-    echo "repos-audit: absence-cover (#1785) — NONE of the $absentok_subjects $KIT_CAP package receiver(s) could be graded ($absentok_refusals refusal(s), $absentok_undet unread). NOTHING was asserted about what catches an absent generated view root; that is not a clean bill (#266)."
+    echo "repos-audit: absence-cover (#1785/#1869) — NONE of the $absentok_subjects $KIT_CAP package receiver(s) could be graded ($absentok_refusals refusal(s), $absentok_undet unread). NOTHING was asserted about view-root path requiredness; that is not a clean bill (#266)."
   else
-    echo "repos-audit: absence-cover (#1785) — graded $absentok_graded of $absentok_subjects $KIT_CAP package receiver(s): $absentok_ok match the roster's word, $absentok_findings do NOT, $absentok_refusals refusal(s), $absentok_undet unread. The roster's word is what a reader trusts; branch protection is what actually holds, and this is the only thing in the org that compares them. It does NOT read any receiver's \`--absent-ok\` reason: that string is prose for a human, and this sweep is what keeps it true."
+    echo "repos-audit: absence-cover (#1785/#1869) — graded $absentok_graded of $absentok_subjects $KIT_CAP package receiver(s): $absentok_ok match the roster's path-requiredness word, $absentok_findings do NOT, $absentok_refusals refusal(s), $absentok_undet unread. The historical field name does not claim that receiver per-PR checks can emit §8 absence-class verdicts; those are mutation-proven in FS.GG.Kit's no-generate verify suite."
   fi
 fi
 
@@ -3522,9 +3495,9 @@ if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdic
   # "could not determine WIRING" about a file that answers a different question (#327/#335).
   [ "$viewgen_undet" -eq 0 ] || echo "::error::repos-audit: could not read the receiver project of $viewgen_undet repo(s), so nothing was proven about whether their declared view skill root can be generated. This is a failure to READ, not a missing generate target." >&2
   # Its own counter and sentence again, and here the wrong subject is the one #266 is FOR: an unread
-  # branch protection is not "this receiver has no cover for an absent view root" and must never be
-  # allowed to render as "its excuse checks out". A protection we could not read is UNREAD.
-  [ "$absentok_undet" -eq 0 ] || echo "::error::repos-audit: could not read the branch protection or rulesets of $absentok_undet receiver(s), so NOTHING was proven about what catches an absent generated view root there. An unread protection is not a verified excuse (#266/#1785)." >&2
+  # branch protection is not "this assertion/materialize path is unrequired" and must never render that way.
+  # A protection we could not read is UNREAD.
+  [ "$absentok_undet" -eq 0 ] || echo "::error::repos-audit: could not read the branch protection or rulesets of $absentok_undet receiver(s), so NOTHING was proven about whether their unexcused view-root assertion/materialize paths are required (#266/#1785/#1869)." >&2
   # Its own counter and sentence for the same reason as the two above, and here the wrong subject
   # would be actively dangerous: an unread PR list means we do not know whether a bump was OFFERED,
   # which is a different question from whether the pin is stale (we KNOW it is — that is why this
@@ -3596,7 +3569,7 @@ if [ "$engman_refusals" -ne 0 ]; then
   exit 3
 fi
 
-# A receiver whose absence cover this sweep REFUSES joins the permanent no-verdicts on the same
+# A receiver whose path requirement this sweep REFUSES joins the permanent no-verdicts on the same
 # argument once more, and the dominant cause is a credential rather than a commit: reading required
 # checks needs `administration: read`, which no workflow GITHUB_TOKEN can hold, so an audit run
 # without the org App's installation token refuses EVERY receiver rather than grading them from the
@@ -3605,7 +3578,7 @@ fi
 # whose check-run names cannot be enumerated — a guessed context that happened to be required would
 # certify an unguarded repo.
 if [ "$absentok_refusals" -ne 0 ]; then
-  echo "::error::repos-audit: $absentok_refusals receiver(s) had their absence cover REFUSED rather than graded — most often because this run holds no token with \`administration: read\`, so the required-context set could not be read from BOTH stores. Nothing was asserted about what catches an absent generated view root in them. Not transient: a re-run with the same credential reproduces it. The annotations above name each one (#1785/#574)." >&2
+  echo "::error::repos-audit: $absentok_refusals receiver(s) had their path requirement REFUSED rather than graded — most often because this run holds no token with \`administration: read\`, so the required-context set could not be read from BOTH stores. Nothing was asserted about whether their unexcused view-root assertion/materialize paths are required. Not transient: a re-run with the same credential reproduces it. The annotations above name each one (#1785/#1869/#574)." >&2
   exit 3
 fi
 
@@ -3659,7 +3632,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
   [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
-  [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's \`absence-cover:\` word for them, or declare none. That word is a claim about BRANCH PROTECTION — the same claim each receiver's \`--absent-ok\` reason makes in free text and nothing re-checked until now — and live protection says otherwise. Where the derived answer is WEAKER than the word, an absent generated view root can now reach \`main\` while the excuse keeps printing: ADR-0067 §8's silent class, through the door §8 opened (#1785/#1777)." >&2
+  [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   exit 1
 fi
