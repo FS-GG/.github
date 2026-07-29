@@ -73,4 +73,85 @@ module LintApplication =
         unlinked: string list ->
             EpicFinding list
 
+    /// One board row as the consolidation rule sees it.
+    type ConsolidationRow =
+        { /// The row's display ref, as the finding will name it.
+          Ref: string
+          /// The repo its tokens are relative to. Rows from different repos are NEVER compared (#353).
+          Repo: string
+          TouchSet: TouchSet }
+
+    /// A candidate set of rows that MAY be one piece of work — never a claim that they are.
+    type ConsolidationGroup =
+        { /// Every member's ref, sorted. Never fewer than two.
+          Members: string list
+          /// The subtrees EVERY member declares. Never empty — a set with no common token is not a
+          /// candidate operation, and this is the evidence the runner judges on.
+          Shared: string list
+          /// The WEAKEST member pair's coverage (plain Jaccard) — a floor over the group, not a mean.
+          Coverage: float
+          /// The WEAKEST member pair's hub-discounted shared-token evidence.
+          Evidence: float }
+
+    /// What the consolidation rule saw, INCLUDING what it could not.
+    type ConsolidationVerdict =
+        { Groups: ConsolidationGroup list
+          /// Rows whose `Paths:` could not be read, with the reason. While this is non-empty the verdict
+          /// is a NO-VERDICT and not an absence of clusters (#266).
+          Unreadable: (string * string) list
+          /// How many rows carried a declaration the rule could compare.
+          Compared: int
+          /// The whole population it was handed.
+          Population: int }
+
+    /// Coverage floor — plain Jaccard over declared tokens, at the reference measurement's own
+    /// threshold, deliberately unchanged. Every difference from the reference lives in the evidence
+    /// floor, so the effect of the hub discount can be stated rather than asserted.
+    [<Literal>]
+    val consolidationCoverageFloor: float = 0.5
+
+    /// Evidence floor, `1 / sqrt 2`. The reading that matters: ONE shared token is enough on its own
+    /// only when at most THREE rows in the population declare it; four or more, and it needs company.
+    val consolidationEvidenceFloor: float
+
+    /// What one shared token is worth when `rowsDeclaring` rows declare it — `1 / sqrt(n - 1)`.
+    ///
+    /// 1.00 when exactly two rows declare it (the token is that pair's own), 0.71 at three, 0.35 at
+    /// nine. A token shared by `n` rows is evidence for `n - 1` partners at once, so no pair may claim
+    /// all of it; the square root DAMPS that rather than crushing it, and both halves are measured.
+    /// Undamped (`1/(n-1)`) loses four of the six real groups on the live board — the repos-audit group's
+    /// two shared tokens are declared by nine and six rows. Flat keeps every false pair. This is where
+    /// both hold.
+    val consolidationTokenWeight: rowsDeclaring: int -> float
+
+    /// Which open rows MAY be the same piece of work.
+    ///
+    /// **PAIRWISE, NEVER TRANSITIVE.** A group is a set in which EVERY pair independently clears both
+    /// floors AND which retains a token every member declares. Nothing is admitted through a third row.
+    /// Connected components over "shares at least one token" puts **74 of 78** `Ready` rows in a single
+    /// cluster (measured 2026-07-29), because a few files are hubs — that is #1732/#1843's directory-token
+    /// problem resurfacing inside the analysis.
+    ///
+    /// **TWO FACTORS, AND THE SECOND IS WHY THE FIRST IS NOT ENOUGH.** Coverage is plain Jaccard;
+    /// evidence is the hub-discounted weight of the shared tokens, summed and NOT divided. Down-weighting
+    /// hubs *inside* the ratio achieves nothing — the weight cancels between numerator and denominator,
+    /// and #1869/#1875 score 1.00 under every weighting because they declare the identical single hub
+    /// token. The discount only bites when spent absolutely.
+    ///
+    /// **FAILS CLOSED (#266).** A row whose `Paths:` could not be read is reported, never dropped, and
+    /// the verdict over such a board is a no-verdict rather than "no clusters".
+    ///
+    /// **REPO-PARTITIONED (#353).** Tokens are repo-relative, so rows from different repos are never
+    /// compared and hub frequencies are counted per repo.
+    val consolidationVerdict: rows: ConsolidationRow list -> ConsolidationVerdict
+
+    /// The `CONSOLIDATION-CANDIDATE` sentence: the members, the SHARED TOKENS the runner judges on, both
+    /// scores, what the rule cannot see, and whose decision it is. All four are in the finding rather
+    /// than in a docstring, because the finding is where the reader is standing.
+    val consolidationDetail: group: ConsolidationGroup -> string
+
+    /// The `CONSOLIDATION-UNREADABLE` sentence — a row this rule could not read, and the statement that
+    /// the board's verdict is therefore incomplete rather than clean.
+    val consolidationUnreadableDetail: reason: string -> string
+
     val summarize: strict: bool -> severities: string list -> Summary
