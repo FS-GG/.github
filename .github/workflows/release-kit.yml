@@ -50,6 +50,75 @@ name: release-kit
 # coord engine relies on it; check-publish-flags.py asserts it). Renaming either afterwards invalidates the
 # token exchange (see .github#624). Until the policy exists, NuGet/login fail-closes with a 401 — the correct
 # direction: never a silent no-op, never a half-published set.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# THIS RELEASE DOES NOT `repository_dispatch`, AND THAT PART IS DECIDED (.github#1776).
+#
+# Neither this workflow nor release-coord-engine.yml calls `dispatch-sender.yml`. #1776 asked whether
+# they should, and the answer is NO — but only about that MECHANISM. The push half #1776 was filed
+# about is real and still missing; it simply does not live at `repository_dispatch`. Read both halves
+# below before concluding anything from the first. This is the record #1776 AC1 asked for, written
+# here because a reader of this file is the one who will wonder; release-coord-engine.yml states the
+# same decision and points back at this block.
+#
+# WHY NOT `repository_dispatch` — two independent reasons, each measured 2026-07-29 against every
+# receiver's DEFAULT BRANCH through the API, not a local clone:
+#
+#   1. NOTHING ON THE RECEIVING END LISTENS. Across all seven `receives: coordination-kit` +
+#      `kit-delivery: package` rows (`repos.sh list --receives coordination-kit --kit-delivery
+#      package`), exactly TWO carry `on: repository_dispatch` at all — FS.GG.SDD
+#      (`composition-registry-updated`) and FS.GG.Templates (`fs-gg-ui-template-released`) — and
+#      neither names the kit or the engine. FS.GG.Rendering's `template-dispatch.yml` matches a grep
+#      for the word but is a SENDER, not a listener. So a dispatch added here would POST to seven
+#      repos, take a 204 from each, and change nothing: a mechanism reporting success over a subject
+#      that does not exist, which is epic #266's signature and strictly worse than the silence it
+#      would replace. Nothing re-checks this premise — filed as .github#1919.
+#
+#   2. RENOVATE IS NOT REACHABLE BY DISPATCH. It is the hosted Mend App, not a self-hosted runner —
+#      `renovatebot/github-action` and `renovate/renovate` match NOTHING in any workflow of this repo
+#      or of the seven receivers. `repository_dispatch` starts a workflow in the TARGET repo; it has
+#      no way to make the App re-scan. For a dispatch to move a pin, each receiver would need its own
+#      dispatch-triggered workflow that edits the pin and opens the PR — the FS.GG.Templates
+#      `upstream-bump.yml` pattern, authored seven times, duplicating what the App already does.
+#
+# BUT THE GAP #1776 NAMED IS REAL, AND IT IS NOT ANSWERED HERE. Do not read the paragraph above as
+# "delivery is fine". Measured the same morning: FS.GG.Kit 0.21.0 (published 05:28:30Z) was offered
+# by Renovate at FS.GG.Templates#334, FS.GG.Audio#223 and FS.GG.Game#537 — three of seven, at 21, 24
+# and 63 minutes — while FS.GG.Rendering and FS.GG.Net sat pinned at 0.18.0 with FOUR versions
+# published above them, each held behind an UNTICKED checkbox in its own Dependency Dashboard. From
+# FS.GG.Net#36's `## Rate-Limited` section, and FS.GG.Rendering#14 carries the kit line alone:
+#
+#        - [ ] <!-- unlimit-branch=renovate/fs.gg.coord.cli-0.x -->chore(deps): update dependency
+#              fs.gg.coord.cli to v0.15.0
+#        - [ ] <!-- unlimit-branch=renovate/fs.gg.kit-0.x -->chore(deps): update dependency
+#              fs.gg.kit to 0.21.0
+#
+# That is a human ticking a box in another repo, exactly as #1776 said, and `scripts/repos-audit.sh`
+# (the #1768 sweep) records it happening by hand on 2026-07-28 and names the tick as the repair. So
+# the push half is warranted. Its mechanism is the DASHBOARD, not a dispatch: ticking one of those
+# boxes is a `PATCH .../issues/<n>` the hub can make with the App credential and NO receiver-side
+# workflow at all — and the hub already performs the READ half of it, in
+# `scripts/check-pin-coherence.py` (which finds each receiver's dashboard by title and parses its
+# body) under `pin-coherence.yml`, which grants `issues: read` for exactly that. That work is
+# .github#1923.
+#
+# WHAT THIS RECORD DOES NOT CLAIM, AND CANNOT SEE (#1776 AC5).
+#
+#   • It does NOT discharge #1776 AC4 (a release that notifies nobody must be REPORTED, mutation-
+#     proven). Nothing here reports it. AC4 moves to .github#1923 with the mechanism it belongs to,
+#     and is deferred rather than met — say so rather than reading this block as coverage.
+#   • It CANNOT see whether Renovate ran and chose to do nothing. A push that fires and a Renovate
+#     run that then does nothing are different failures, and only the second is #1768's subject. The
+#     latencies above bound DELIVERY; they say nothing about when the bot woke up.
+#   • The three-of-seven figure is one morning, not a rate. It is enough to refuse the
+#     `repository_dispatch` design and enough to keep #1923 open; it is not a measurement of how
+#     often a receiver is held, which nothing currently trends.
+#
+# THE CREDENTIAL IS NOT WHAT BLOCKS ANY OF THIS (#1776 AC3). The `fs-gg-cross-repo-dispatch` App and
+# its org secrets were provisioned by .github#21, which is closed, and four workflows in this repo
+# mint tokens from them today. Which SCOPES that installation carries is #1923's question, not this
+# file's — recorded there so one paragraph holds it rather than two drifting copies.
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 on:
   push:

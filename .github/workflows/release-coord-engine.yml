@@ -27,6 +27,22 @@ name: release-coord-engine
 #
 # Release by pushing a tag `coord-engine/v<version>` matching the fsproj <Version>; or run manually
 # (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+#
+# THIS RELEASE DOES NOT `repository_dispatch`, AND THAT PART IS DECIDED (.github#1776). This workflow
+# does not call `dispatch-sender.yml`, and should not: no receiver has an `on: repository_dispatch`
+# listener for an engine or kit release, so the POST would take a 204 from every target and change
+# nothing; and Renovate — which does carry these releases — is the hosted Mend App, not a self-hosted
+# runner, so a dispatch cannot make it re-scan in the first place.
+#
+# THAT IS A VERDICT ON THE MECHANISM, NOT ON THE GAP. The push half #1776 was filed about is real and
+# still missing: on 2026-07-29 FS.GG.Net sat behind an unticked `unlimit-branch=renovate/
+# fs.gg.coord.cli-0.x` box on its own Dependency Dashboard while v0.15.0 was published. The mechanism
+# that reaches it is that dashboard, not a dispatch, and it is .github#1923.
+#
+# THE FULL RECORD — the measurement, both halves, what it cannot see (including that #1776 AC4 is
+# DEFERRED to #1923, not met), and the credential question — is in `release-kit.yml`'s header, stated
+# ONCE there rather than copied here. Deciding differently means changing both files; nothing
+# re-checks the listener premise, which is filed as .github#1919.
 
 on:
   push:

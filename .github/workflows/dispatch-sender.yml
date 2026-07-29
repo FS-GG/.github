@@ -10,10 +10,22 @@
 #
 # Why an App token, not GITHUB_TOKEN: a workflow's GITHUB_TOKEN cannot dispatch to another
 # repo or trigger its workflows (research C4) — only a GitHub App installation token can.
-# The App + its `app-id`/`app-private-key` secrets are provisioned by org-admin in
-# FS-GG/.github#21 (BLOCKS this at runtime). This workflow is authored ahead of that so a
-# producer just wires the call + the admin just sets two org secrets — it stays DORMANT and
-# fails closed with a pointer to #21 until they exist.
+# The App + its `app-id`/`app-private-key` secrets were provisioned by org-admin in
+# FS-GG/.github#21, which is CLOSED: they exist and are live org secrets today
+# (FSGG_DISPATCH_APP_ID / FSGG_DISPATCH_APP_PRIVATE_KEY). This workflow was authored ahead of
+# that provisioning and both its header and its preflight described the pre-#21 world for long
+# after — it is no longer DORMANT, and the preflight no longer says it is. That check still
+# fails closed on an empty secret, but the cause it now names is the real one: a CALLER that
+# cannot SEE the org secrets (not on their selected-repositories list, #468) or is not
+# forwarding them. lockfile-sync.yml's own preflight diagnoses the same failure at length.
+#
+# A `uses:` OF THIS WORKFLOW IS ONLY HALF A FABRIC (.github#1776). The other half is an
+# `on: repository_dispatch` in the TARGET naming the same `event-type`, and NOTHING HERE CAN
+# CHECK THAT IT EXISTS: `POST /repos/{owner}/{repo}/dispatches` is accepted with a 204 whether
+# or not any workflow listens, so a sender wired at a repo with no listener succeeds on every
+# run, forever, and delivers nothing. Wire the listener first and be able to name it. Grading
+# that pairing is filed as .github#1919; `release-kit.yml`'s header records the one live case
+# where a producer weighed calling this and did not, and why.
 name: dispatch-sender
 
 on:
@@ -60,8 +72,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${APP_ID}" || -z "${APP_KEY}" ]]; then
-            echo "::error::dispatch-sender: the cross-repo GitHub App secrets (app-id/app-private-key) are not set." >&2
-            echo "::error::These are provisioned by org-admin in FS-GG/.github#21 (the H4 App + feed). Until then this sender is dormant." >&2
+            echo "::error::dispatch-sender: the caller forwarded an EMPTY app-id/app-private-key." >&2
+            echo "::error::The App itself exists (FS-GG/.github#21, closed). An empty value here means the CALLING repo cannot see the org secrets: add it to the selected-repositories list for BOTH FSGG_DISPATCH_APP_ID and FSGG_DISPATCH_APP_PRIVATE_KEY (FS-GG/.github#468), or the caller is not forwarding them at all." >&2
             exit 1
           fi
           if [[ "${TARGET}" != */* ]]; then
