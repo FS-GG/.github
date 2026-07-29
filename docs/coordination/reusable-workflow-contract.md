@@ -196,8 +196,10 @@ from a renamed one, and both deadlock identically.
 to say, and it is strictly wider: a workflow whose `pull_request` trigger carries a `paths:` filter
 does trigger on `pull_request` and still reports nothing on a PR that touches none of those paths.
 GitHub does not skip such a required check — it never creates the check run — so protection waits on
-it forever. The gate models `paths:`/`paths-ignore:` on both PR events; `branches:` and `types:` are
-the same class and are not modelled yet ([#1519](https://github.com/FS-GG/.github/issues/1519)).
+it forever. The gate models `paths:`/`paths-ignore:`, `branches:`/`branches-ignore:` against the
+audited base branch (GitHub glob semantics), and `types:` on both PR events. A type set must include
+at least one ordinary PR event — `opened`, `synchronize`, or `reopened` — while a superset remains
+safe ([#1519](https://github.com/FS-GG/.github/issues/1519)).
 
 Reading protection needs a token with `administration: read`. A person with an admin token can run it
 by hand:
