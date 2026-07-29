@@ -1,0 +1,192 @@
+# Does the retirement order's standing verdict still agree with the receivers' own trees? (.github#1750)
+#
+# `docs/coordination/skill-apparatus-retirement-order.md` carries a per-receiver retirement verdict, and
+# on 2026-07-28 it was stale THREE SEPARATE TIMES IN ONE DAY — then a fourth, then a fifth on a second
+# axis. The sharpest instance: `#1723`, a board row filed SPECIFICALLY to fix a stale count, was itself
+# two stages out of date before a worker reached it. Consolidating the count into one block made the
+# repair one edit; it did not make anyone able to take the lock, and it did not make anything NOTICE.
+# This workflow is the thing that notices.
+#
+# THE LIVE JOB RUNS ON PULL REQUESTS AND ON PUSH, AND THAT IS THE DIFFERENCE FROM `skillmirror-freshness`.
+# That gate's subject is entirely in another repository, so no event here is evidence about it and its
+# live job is schedule-only. HALF of THIS gate's subject is a file in THIS repository: the standing
+# verdict. A PR that edits the verdict is the single most likely way to make it disagree with the
+# receivers, so a PR is exactly when the comparison must run — and `#1750`'s own history is a list of
+# edits to that file that were wrong the moment they landed.
+#
+# IT IS NOT SCHEDULE-ONLY FOR A SECOND REASON, LEARNED THE EXPENSIVE WAY. A job gated to
+# `schedule`/`workflow_dispatch` is SKIPPED on a push, and a skipped job reports SUCCESS — so the green
+# push that "proved" the change proved nothing, and the gate has to be dispatched by hand before anyone
+# knows. A gate whose proof is not reachable from a push is a gate nobody runs.
+#
+# THE SCHEDULE IS STILL THERE, AND IT COVERS THE OTHER HALF: a receiver can re-commit a second skill
+# root, or retire one, with no event in this repository at all. That is the direction the document went
+# stale in every recorded time, and nothing here would ever fire for it.
+#
+# THE GATE FAILS CLOSED (epic #266): an unreadable subject is exit 2 or 3, never "the verdict is
+# current". So this workflow must never gain a `continue-on-error`, and no job below may be given an
+# `if:` that lets it be skipped on its own triggers — "I could not look" and "I looked, and it agrees"
+# must not share an outcome.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence — and they select every entry in the checker's declared `PATHS_SUBJECT`
+# (`docs/coordination/skill-apparatus-retirement-order.md`, `registry/repos.yml`, `scripts/skill-view`),
+# which rule (c) reds this file against. `scripts/skill-view` is in that list because its
+# `DEFAULT_ROOTS` assignment is where the gate learns which roots a receiver is graded against; a change
+# there changes every verdict this gate reaches, so it must re-run.
+name: retirement-order-coherence
+
+on:
+  pull_request:
+    paths:
+      - "docs/coordination/skill-apparatus-retirement-order.md"
+      - "registry/repos.yml"
+      - "scripts/skill-view"
+      - "scripts/check-retirement-order-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/retirement-order-coherence/**"
+      - ".github/workflows/retirement-order-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/coordination/skill-apparatus-retirement-order.md"
+      - "registry/repos.yml"
+      - "scripts/skill-view"
+      - "scripts/check-retirement-order-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/retirement-order-coherence/**"
+      - ".github/workflows/retirement-order-coherence.yml"
+  schedule:
+    # Daily, offset from the 06:xx/07:xx cluster (feed-coherence 06:17, engine-pin-coherence 06:29,
+    # kit-published-coherence 06:37, engine-freshness/pin-coherence 06:43, paths/publish 06:47/06:53,
+    # skillmirror-freshness 07:11) so the API reads do not contend. This is the trigger that catches a
+    # receiver's tree moving when nothing here changes — the direction the document went stale in.
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retirement-order-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes (#266).
+  # `gh` is stubbed on PATH and fails like the real one, so the fail-closed legs exercise the real
+  # transport. The leg that matters most is the MUTATED VERDICT — receivers unchanged, the document's
+  # `retired:` list edited to drop one — because that is the exact staleness `#1750` was filed for, and
+  # a gate that stops catching it must not reach the job below.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the retirement-order-coherence fixture (no network)
+        run: bash tests/retirement-order-coherence/run.sh
+
+  # Online. The comparison itself: two API reads per receiver, and one verdict per receiver.
+  #
+  # A RED HERE NAMES WHICH END IS WRONG, and the two repairs are opposite. "R IS retired and the
+  # document does not say so" is the document being behind its subject: change the heading's count and
+  # `retired:` in one edit and APPEND a dated record — never edit a historical block to carry a new
+  # headline. "R is NOT retired and the document says it is" is the document recording an outcome
+  # nobody observed: go read R's tree, and do not re-run anything here expecting a different answer.
+  verdict-agrees:
+    name: verdict-agrees
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Does the standing verdict agree with every rostered receiver's tree?
+        id: check
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern. `gh` reads GH_TOKEN; the run-scoped token needs only `contents: read`, and every
+          # receiver repository is public.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rc=0
+          out="$(python3 scripts/check-retirement-order-coherence.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and it
+      # is fine" (#266). The exit code is the contract; nothing here greps the gate's prose. `run:` is a
+      # BLOCK scalar, not a plain one — the `: ` inside a quoted message makes a plain scalar an invalid
+      # mapping, and the workflow then fails to PARSE, which is no gate at all rather than a red one.
+      - name: 'OK: the standing verdict agrees with the receivers'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "retirement-order-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: the standing verdict disagrees with the receivers'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### retirement-order-coherence: the standing verdict does not match the trees"
+            echo
+            echo 'The job log names the receiver, what its tree says, and what the document says.'
+            echo 'Four shapes, and the repair differs:'
+            echo
+            echo '**A receiver IS retired and the verdict does not list it.** The document is behind'
+            echo 'its own subject — the staleness `#1750` was filed for. Change the heading count and'
+            echo 'the `retired:` list in ONE edit, and **append** a dated record. Never edit a'
+            echo 'historical block to carry a new headline.'
+            echo
+            echo '**A receiver is NOT retired and the verdict says it is.** Either the retirement was'
+            echo 'reverted in that repo, or an unobserved outcome was written down as an observed one.'
+            echo 'Go read that receiver'"'"'s tree; nothing in this repository can fix it.'
+            echo
+            echo '**The heading and the verdict block disagree.** The block is an HTML comment and'
+            echo 'renders as nothing, so the sentence a human reads has drifted from the list this'
+            echo 'gate grades. Fix whichever is wrong, in the same edit.'
+            echo
+            echo '**A SECOND COUNT is on the live surface** — in a heading, or in the header block'
+            echo 'above the first `---`. The count lives in the standing verdict and nowhere else;'
+            echo 'every copy goes stale on its own and no single edit can reach it. Replace it with a'
+            echo 'pointer at the standing verdict — a pointer cannot go stale.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=retirement-order-coherence: the verdict disagrees with the receivers::See the job log for the receiver and which end is wrong."
+          exit 1
+
+      - name: 'NO VERDICT (retryable): the receivers could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          {
+            echo "### retirement-order-coherence: no verdict (retryable)"
+            echo
+            echo 'A rate limit, an outage, a timeout, or a repository this token cannot see. GitHub'
+            echo 'answers 404 both for "no such repository" and for "you may not know whether this'
+            echo 'exists", so an invisible receiver is **we did not look** — never a verdict about'
+            echo 'its roots. Re-run once the cause has passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=retirement-order-coherence: no verdict (retryable)::The receivers could not be read. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the subject could not be established'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### retirement-order-coherence: no verdict (permanent)"
+            echo
+            echo 'No `gh`, no verdict block, two verdict blocks, a block this gate cannot parse, a'
+            echo 'roster that yielded ZERO receivers, or a tree the API returned TRUNCATED.'
+            echo
+            echo '**An empty roster is a broken read, not a completed sequence**, and a truncated tree'
+            echo 'is not a tree — the entries the API drops are exactly the ones whose absence would'
+            echo 'read as "retired". Reporting green over either is the #266 fail-open, inside the'
+            echo 'gate written to close one. Retrying will not help; fix the wiring.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=retirement-order-coherence: no verdict (permanent)::The subject could not be established. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=retirement-order-coherence: inconclusive::check-retirement-order-coherence.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

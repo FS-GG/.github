@@ -23,10 +23,24 @@ that produced it appears with it.
 > it could not make anyone able to take the lock.
 >
 > **`docs/architecture.md` carried a second count until 2026-07-28 and no longer does.** It now points
-> at §4's standing verdict. There is exactly one count in the repository; keep it that way, and see
-> [`#1750`](https://github.com/FS-GG/.github/issues/1750).
+> at §4's standing verdict. There is exactly one count in the repository; keep it that way.
 >
-> **The receiver sequence is COMPLETE — 7 of 7.** Nothing in §6's *stage 1* is dispatchable.
+> **Part of that rule is now MECHANICAL, and it is important to know WHICH part**
+> ([`#1750`](https://github.com/FS-GG/.github/issues/1750),
+> `scripts/check-retirement-order-coherence.py`). The checker derives each rostered receiver's real
+> state from that receiver's own tree and reds when §4's standing verdict disagrees — so the *count
+> going stale*, the failure that happened five times, is now caught. Its second-copy leg is **narrower
+> than the rule above**: it covers this file's LIVE SURFACE only — this header block, and every heading
+> — and it is scoped to this FILE. A live count in this document's body prose, or in another file, is
+> still yours to not write. The sentence above is a rule for humans; the checker is a floor under part
+> of it, and reading it as the whole would be this document's own defect one level up.
+>
+> **The receiver sequence is COMPLETE — §4's standing verdict carries the number, and this block does
+> not.** Nothing in §6's *stage 1* is dispatchable. This sentence used to restate the count here, which
+> is the failure it was describing: it is a live restatement in the one block a reader opens FIRST, it
+> would go stale on the next stage, and `#1723`'s single-edit consolidation could not reach it.
+> `scripts/check-retirement-order-coherence.py` now reds on exactly that (`#1750`), and it red on this
+> line before this line was written that way.
 >
 > **There is a SECOND axis, and it has its own single home.** The receiver count lives in §4; the
 > **stage** the order has reached lives in §6's *standing stage verdict* and nowhere else. This
@@ -164,6 +178,23 @@ verdict.
 
 ### The standing verdict — 2026-07-28 09:55Z: **7 of 7 retired. The receiver sequence is COMPLETE.**
 
+<!-- fsgg:retirement-verdict
+retired: templates, audio, net, game, governance, rendering, sdd
+in-flight:
+-->
+
+> **THE BLOCK ABOVE IS THE ANCHOR, AND IT IS THE ONLY MACHINE-READABLE COPY OF THIS VERDICT** (`#1750`).
+> `scripts/check-retirement-order-coherence.py` reads it, derives each rostered receiver's real state
+> from that receiver's own tree, and **reds when the two disagree** — which is what this document lacked
+> every one of the five times it went stale. It also reds if a second count appears in a heading or in
+> the header block above, and if the heading immediately above it stops agreeing with the list.
+>
+> Keeping it current is the same one edit as before, with one more line in it: change the heading's
+> count, change `retired:`, append the dated record. A receiver whose stage is RUNNING goes in
+> `in-flight:` as `<id>(<ref>)` — it is then not graded either way, because the honest record for an
+> unfinished stage is *no outcome* rather than a guess (`#1734`), and the ref is required so that a
+> receiver can never be parked out of the comparison anonymously.
+>
 > **No receiver commits its skills twice. Nothing is in flight.** `FS.GG.SDD` was refused at attempt 2
 > and retired at attempt 8, after the two findings that refused it were fixed in that repo.
 >
@@ -226,6 +257,10 @@ a worker reached it, asking for a count of 2 when the truth was 3.
 > the same change that wrote this one. **There is now exactly one count in the repository. Do not add
 > a second.** The checker that would catch a fifth recurrence is
 > [`#1750`](https://github.com/FS-GG/.github/issues/1750); it is deliberately not built here.
+> **(`#1750` LANDED 2026-07-29 as `scripts/check-retirement-order-coherence.py`. This paragraph is left
+> as it was written — the sentence above was true of the change that wrote it, and editing a record to
+> carry a later fact is the habit this whole block is about. Its coverage, which is narrower than the
+> "do not add a second" rule, is stated in the header block at the top of this file.)**
 
 #### How the verdict got here (historical — do not read as current)
 
@@ -1426,7 +1461,7 @@ retirement was safe to make.** Those are different questions and §7 only ever a
   fact about seven trees and it is measured. Soundness is a different claim and this document does not
   make it.
 
-## 9. What is still open after 7 of 7
+## 9. What is still open after the receiver sequence completed
 
 Recorded here so that "complete" is never read as "finished". None of these is retired, fixed or
 answered by this document, and each has an owner:
@@ -1440,7 +1475,7 @@ answered by this document, and each has an owner:
 | [`FS.GG.Governance#338`](https://github.com/FS-GG/FS.GG.Governance/issues/338) | the same write-set defect in Governance's own `materialize-skill-roots.sh`; `--check` fails on an untouched `main` and no workflow runs it | **OPEN** |
 | [`FS.GG.Rendering#1126`](https://github.com/FS-GG/FS.GG.Rendering/issues/1126) | should the `dotnet new` payload source the tracked root instead of the retired one? | **OPEN** |
 | [`#1710`](https://github.com/FS-GG/.github/issues/1710) | collapse seven hand-copied §8 alarms into one kit-shipped assertion | **OPEN**; seven hand-copies now paid |
-| [`#1750`](https://github.com/FS-GG/.github/issues/1750) | a checker that compares §4's standing verdict against the receivers' trees | **OPEN**, and deliberately not built here |
+| [`#1750`](https://github.com/FS-GG/.github/issues/1750) | a checker that compares §4's standing verdict against the receivers' trees | **LANDED 2026-07-29** — `scripts/check-retirement-order-coherence.py`, gated by `retirement-order-coherence.yml` on PRs, on push to `main`, and daily. Its second-copy leg is narrower than §4's rule and the header block says how |
 | [`#1725`](https://github.com/FS-GG/.github/issues/1725) | the kit pin is not in the same file on every receiver | all seven now measured — **three** distinct locations (§4) |
 | [`#1864`](https://github.com/FS-GG/.github/issues/1864) | what replaces *"is receiver R's pin current?"*, without which the freshness sweep cannot retire | **OPEN**, `Blocked`, a `decision` for a human — the row §6's stage 3 defers to |
 | [`#1875`](https://github.com/FS-GG/.github/issues/1875) | `#1676` AC 6's bulk closure — every open board row swept against today's tree | **OPEN**, split out of `#1676` because it is a pass over ~100 rows and a different kind of work from a retirement step |
