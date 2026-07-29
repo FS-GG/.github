@@ -48,27 +48,45 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
-    <!-- 0.13.0 to 0.14.0 is a MINOR, and under 0.x SemVer that is also the BREAKING signal — the rule
-         registry/dependencies.yml's coord-engine row states twice: "on the 0.x line an observable-to-
-         callers behaviour change is spelled a minor, because 0.x has no major to take" (at 0.13.0), and
-         "a 0.x minor is the only spelling available for it" (at 0.12.0). Patch is not defensible here;
-         THREE of the six shipped commits force the minor independently (.github#1761):
+    <!-- 0.14.0 to 0.15.0 is a MINOR, and under 0.x SemVer that is also the BREAKING signal — the rule
+         registry/dependencies.yml's coord-engine row states three times: "on the 0.x line an observable-
+         to-callers behaviour change is spelled a minor, because 0.x has no major to take" (at 0.13.0 and
+         restated at 0.14.0), and "a 0.x minor is the only spelling available for it" (at 0.12.0). Patch
+         is not defensible here, and MAJOR IS NOT AVAILABLE — that is the whole reason this line reads the
+         way it does. TEN engine commits ship (.github#1906), and SIX force the minor independently:
 
-           * #1646 (b047b1a) — `claim` and `take` now REFUSE a `worker` flag naming somebody else over
-             another worker's live lock. A call 0.13.0 PERMITS now fails. The 0.12.0 case verbatim.
-           * #1628 (0beb561) — the blocking count ranks over the WHOLE board rather than the
-             repo-scoped candidate set, so `batch` and `next` can select a DIFFERENT item for the same
-             board. Scheduling order is what every caller of those verbs consumes.
-           * #1541 (cb5e291) — `reconcile` with the `apply` and `json` flags together is now ACCEPTED
-             by the parser and emits a machine projection; 0.13.0 rejects the combination.
+           * #1680 (06c1887) — THE WIRE SURFACE. `landable` returns exit **10** (`merged` / `closed`), a
+             code it could not return before, and prints two verdict words it could not print before. A
+             caller that switched exhaustively on the old five codes meets an unrecognised status. This
+             one alone forces the minor, and it is the reason this cut is OWED rather than merely due:
+             `check-engine-freshness.py` reds on `src/FS.GG.Coord.Core/Protocol.fs` and has been red on
+             main since that merge.
+           * #1740 (474ef9e), #1779 (071780e), #1792 (bfcdefb) — the #353 collision gate behind `widen`,
+             `set-paths` and `overlap` in its active mode no longer decides reservation from the board's `Status`
+             COLUMN, and no longer asks the identity function a reservation question. It answers OVERLAP
+             where 0.14.0 answered DISJOINT — so a `widen` 0.14.0 PERMITS now refuses. Measured live on
+             2026-07-28: DISJOINT (wrong) -> OVERLAP (right) over one unchanged board.
+           * #1794 (06b8ac7) — `Reads.openIssues` FAILS CLOSED. An unidentifiable element or an unreadable
+             body over a live reservation now refuses the whole read rather than silently answering
+             "declares nothing". Calls that exited 0 on a partially-unreadable board now exit non-zero.
+           * #1668 (c6489d1) — `who` gains a FOURTH row state, `UNDETERMINED`, with its own `.state` word
+             in the json projection. Any consumer switching exhaustively on that vocabulary meets a new value; the
+             residue is filed as #1897.
+           * #1677 (fc1a8aa) — `FSGG_CLAIM_LEASE_MIN` is READ. It was named across the repo and honoured
+             by no line of code, so a worker who exported it now gets a DIFFERENT lease than 0.14.0 gave
+             them, and a malformed value now exits 1 where 0.14.0 silently used 120.
+           * #1823 (b3f0e2e) — `add` WRITES `Status: Backlog` where 0.14.0 left the column unset. A verb
+             that made one board write now makes two, and the filed row is schedulable where it was not.
 
-         #1636 (debbce6) additionally changes a computed KitDigest for the same input tree.
+         #1666 (7019939) additionally changes what `budget` reports and how a 403 is classified (secondary
+         limits are told from the primary budget and carry no reset). #1654 (5fbde62) is a comment-only
+         correction in the `command-contract` emitter and moves no behaviour.
 
          This property is the RELEASE ACT (see scripts/check-engine-freshness.py): the engine's version
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.14.0</Version>
+    <Version>0.15.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -91,52 +109,115 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.14.0 — MINOR on the 0.x line, which is also the 0.x BREAKING signal.
+    <PackageReleaseNotes>0.15.0 — MINOR on the 0.x line, which is also the 0.x BREAKING signal.
 
-Six engine commits since 0.13.0. None touches the wire surface (src/FS.GG.Coord.Core/Protocol.fs), so
-the exit codes and verb contract this repo's skills document are the ones this build enforces.
+TEN engine commits since 0.14.0, and ONE OF THEM MOVES THE WIRE SURFACE
+(src/FS.GG.Coord.Core/Protocol.fs). That file is the source the exit-code tables in every worker-facing
+skill are GENERATED from, so between .github#1680 landing and this release the org's own documents
+described a verb contract no published engine implemented. This release is what makes them true again.
 
-THE REASON TO TAKE THIS RELEASE: three of the six are fixes to the CLAIM PROTOCOL, found in production
-on 2026-07-27 when seven workers ran concurrently against it. Every worker vendors `scripts/fsgg-coord`,
-which resolves and execs this package, so a receiver on 0.13.0 is running the protocol without them.
+THE REASON TO TAKE THIS RELEASE: every worker vendors `scripts/fsgg-coord`, which resolves and execs
+this package. A receiver on 0.14.0 runs a collision gate that answers DISJOINT over live locks, a
+`landable` that burns 600 seconds waiting on already-merged work, and an `add` that files rows no
+scheduler can see.
 
-BREAKING: a session is not a credential (.github#1646). `verifyHeld` granted `Held` when the claim
-marker's id matched the id `--worker` NAMED and the two sessions were not known-different. Subagents
-share a session id, so an impersonator satisfied both legs and could act on a lock they did not hold.
-The refusal is enforced in the ENGINE at both of `Held`'s doors — `verifyHeld` and `claim` — so every
-verb that takes the capability is covered by construction: `release`, `heartbeat`, `widen`, `done`'s
-lock-drop, and the ADR-0041 chore lock. A call 0.13.0 accepted now exits non-zero.
+BREAKING — THE WIRE SURFACE. `landable` answers a PR THAT IS NOT OPEN with exit 10 (.github#1680).
+GitHub reports mergeable as null on a merged PR, which the four-row match read as "still computing" and
+returned as `pending` / exit 7 — the ONE code the contract defines as worth retrying, for the most
+terminal state there is. So the waiting form spent its entire 600s budget (30 tries x 20s) on a settled
+fact, every time, and the caller that meets this most is the RECOVERY path, which re-gates a PR whose
+worker died between merge and stamp.
 
-  $ fsgg-coord-engine claim .github#123 --worker someone-else   # 0.13.0: may succeed
-                                                                # 0.14.0: refused
+  $ fsgg-coord-engine landable 1675 --wait
+      0.14.0:  pending   rc=7    after 600s
+      0.15.0:  merged    rc=10   after 0.69s
 
-WHO THIS BREAKS: anything that passed a `--worker` it does not own — which was never a supported act,
-but was reachable. The remedy is to pass your OWN minted id (`whoami --mint`), or `--force` if you
-really mean to steal, which is loud and posts the theft.
+Exit 10 prints one of two words on stdout and they call for OPPOSITE acts. `merged` means the work
+LANDED: do not merge it again, go STAMP it. `closed` means nothing landed: do NOT stamp it done. It is
+deliberately not 3 (red/conflicted), because folding a success into the stop code would tell that
+successor to give up rather than to finish.
 
-ALSO in the same fix: `claim --force --worker THEM` used to destroy a third party's lock and sign the
-theft notice with the INNOCENT worker's id, falsifying the accounting rather than merely bypassing it.
-The notice now names the actor.
+WHO THIS BREAKS: any caller that switched exhaustively over `landable`'s previous five codes, or that
+treated "not 0 and not 7" as a failure. Exit 10 on `merged` is a SUCCESS. An unmet `--sha` on the merged
+arm is now reported with its own sentences rather than dropped.
 
-BREAKING for consumers of scheduling ORDER: the blocking count ranks over the WHOLE board, not the
---repo-scoped candidate set (.github#1628). `batch` and `next` can therefore choose a different item
-for the same board than 0.13.0 would. The ranking is more correct — a row blocking ten items across
-three repos outranks one blocking two in this repo — but it is an observable change for any caller that
-depended on the previous pick.
+BREAKING — THE #353 COLLISION GATE REFUSES WHERE IT USED TO PERMIT. Three fixes, one surface:
+`widen`, `set-paths` and `overlap --active`.
 
-NEW PROJECTION: `reconcile --apply --json` now PARSES (.github#1541). 0.13.0 rejected the combination,
-so the org's one mutating reconcile verb had no machine projection at all and callers scraped prose.
+  * .github#1740 — the scan was served from the 90-second scheduling cache, and a `Status` write can sit
+    QUEUED on an exhausted budget, so the freshest possible board still showed the pre-claim column.
+  * .github#1779 — the candidate set is no longer derived from the board at all. `claim` exits GREEN with
+    that column unwritten in FOUR ways and the cache/queue fixes could reach only two. The scan now keys
+    on the LOCK: `Reads.openIssues` lists open issues with their bodies in one paginated call, token
+    conflicts are computed on those free bodies, and a marker is read only for a row that actually
+    collides. Measured either side of one `overlap --active` on the live board: 24/27/31 GraphQL points
+    and the wrong answer, to 0/0/0 points and the right one.
+  * .github#1792 — `Scan.snapshot` asked `reserver` (a lapsed lease still reserves) while the collision
+    gate asked `winner` (it does not), so "is this file reserved?" had two answers depending on which
+    verb asked. The gate asks a reservation question and now calls the reservation function.
 
-FIXES:
+  $ fsgg-coord-engine widen .github#123 --paths src/A.fs
+      0.14.0:  DISJOINT   (over a live, uncolumned claim on src/A.fs)
+      0.15.0:  OVERLAP
 
-  * The chore offer's board read is FRESH (.github#1679). It read the board through the 90-second
-    scheduling cache, so a CLASS-PROJECTION-LAG chore survived the very write that discharged it and
-    was offered again to the next worker. A signal that lies, in a fabric where workers are told to
-    trust signals. Fixed with a third ReadIntent rather than by borrowing Reconciling's warrant.
-  * BLOCKER-CLEARED respects the human-park sentinel it would overwrite (.github#1644). A row carrying
-    `Blocked on: human/...` was promoted to Ready by the very chore that is supposed to honour it.
-  * KitDigest hashes TWO runtime skill roots, not three (.github#1636) — .codex/skills is retired
-    (ADR-0065 as amended). This changes the computed digest for the same input tree.</PackageReleaseNotes>
+WHO THIS BREAKS: anything that read DISJOINT as licence to edit. There is no CAS on a file, so nothing
+downstream ever re-decided that answer — which is why a wrong DISJOINT was final and this is the fix
+worth taking the release for. Two workers really did edit one file this way on 2026-07-28.
+
+BREAKING — READS FAIL CLOSED (.github#1794). `Reads.openIssues` DROPPED an element with no numeric
+`number` silently, and read an absent or ill-typed `body` as an empty string — which parses as
+"declares nothing" and collides with nothing. Both failed OPEN, into the gate above, where a wrong
+DISJOINT is final. Now an unidentifiable element refuses the whole read quoting `element N of M`, and an
+unreadable body is carried to the marker phase: no reserver means it is safely skipped, a reserver means
+we may not answer DISJOINT over a live reservation, so it refuses and names the row and the holder.
+`body: null` stays a real observed empty body. Calls that exited 0 over a partially unreadable board now
+exit non-zero — that is the point of the change, not a regression.
+
+BREAKING — `who` GAINS A FOURTH ROW STATE (.github#1668). `Reads.markers` classified every comment as
+marker-or-nothing, so two failures to READ were indistinguishable from a successful observation of
+ABSENCE, and `Ok []` on an In-progress row rendered as `UNCLAIMED` with the "someone is working outside
+the protocol" accusation attached. That was printed 32 seconds before a `--force` deleted a live marker
+on the same item. `who` now has `UNDETERMINED`, with a distinct `.state` word in `--json`, no
+accusation, and an explicit instruction not to dispatch, `reap` or `adopt`. The incompleteness rides
+EVERY row, not only markerless ones: a hidden marker with a lower id makes a `held` row name the wrong
+holder. Consumers switching exhaustively over the state vocabulary meet a new value (residue: #1897).
+
+BREAKING — `FSGG_CLAIM_LEASE_MIN` IS ACTUALLY READ (.github#1677). It was named across this repo as the
+way to configure the claim lease and honoured by no line of code; `--lease` was the only control that
+ever existed. Precedence is now `--lease` then `FSGG_CLAIM_LEASE_MIN` then 120. A malformed value is
+REFUSED (exit 1, naming the variable and what was read), identically to `--lease abc` — deliberately,
+because falling back to 120 on garbage would rebuild the exact unfalsifiability this fixes. Unset and
+empty mean "not configured" and take the default.
+
+WHO THIS BREAKS: anyone who exported the variable and got 120 anyway. They now get the lease they asked
+for, which may not be the lease their scripts were tuned against.
+
+BREAKING for board writers — `add` DEFAULTS `Status` TO `Backlog` (.github#1823). A row with no `Status`
+is invisible to every scheduler. Fourteen were filed that way on 2026-07-28, in three batches, and every
+one was found by accident. `Backlog` and not `Ready`: visible to triage, not startable without a
+deliberate promotion. THE DEFAULT ONLY EVER FILLS AN EMPTY COLUMN — `add` is idempotent and re-run
+routinely, so the already-on-board arm reads the column first and an unreadable column is left alone
+rather than defaulted. `add` never becomes a refusal: an underivable identity degrades the column by
+name instead of refusing the filing. Ships with the `STATUS-UNSET` chore, which reports rather than
+prevents.
+
+CHANGED DIAGNOSTICS — A SECONDARY RATE LIMIT IS TOLD FROM THE PRIMARY BUDGET (.github#1666). `EX_RATE`
+halted a six-worker fan-out repeatedly while the primary REST budget read 62%, 87%, 88% free, and a
+retry seconds later succeeded. Four diagnoses were filed on that reading; three were withdrawn by their
+own authors. There was never an internal counter — `Budget.classify` reacts to a real 403, computed
+which of five wordings matched, discarded that, and rendered ONE sentence for THREE mechanisms. A
+secondary (abuse-detection) limit is triggered by burst CONCURRENCY, fires with the primary counter
+untouched, and NEVER APPEARS IN /rate_limit; the reset was being read off the primary window, which is
+why "resets in ~6m" preceded a retry that succeeded in seconds; and `Retry-After`, the only header that
+describes a secondary limit, was read nowhere. `RateLimitResource` now carries the mechanism and the
+bucket, `SecondaryLimit` gets no resetAt, and the remedy is stated correctly: reduce concurrency, do not
+wait fleet-wide. An unclassifiable 403 fails closed. `budget` now says whose budget it reports and what
+it omits. The same defect was found and fixed in three more sites (Board, Scan, Done), which classified
+GraphQL error arrays with `isRateLimited` and advised "REST-only work may still run" into the detector
+that had just fired.
+
+ALSO: a comment-only correction in the `command-contract` emitter (.github#1654) — it argued against a
+schema bump using an asymmetry .github#1574 had already removed. No behaviour moves.</PackageReleaseNotes>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
