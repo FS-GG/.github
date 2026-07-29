@@ -322,16 +322,18 @@
          so exactly one lock row advances (`.claude/skills/pnext-item`) and BOTH gates see it —
          `repos-registry-selftest` through the lock, `kit-published-coherence` through the per-file
          kit manifest. -->
-    <!-- 0.21.1 -> 0.22.0, a MINOR: `scripts/skill-view generate` gains the receiver-proj option (#1893).
+    <!-- 0.21.1 -> 0.22.0, a MINOR: `scripts/skill-view generate` gains the receiver-proj option (#1893),
+         and the kit-delivered pnext-item rate-limit contract corrects its secondary-limit handling (#1891).
          This is receiver-visible behaviour, not a prose repair: a workflow can now derive BOTH its
          source root and its generated view roots from the same receiver declaration that `check`
          grades, and it refuses source or roots overrides of that declaration.
          The shipped selftest mutation-proves the two override refusals, both missing properties, the
          declared resolution, and the legal disposition swap.  The delivered member set, destinations,
          and materialize properties remain unchanged, so this is not a major; a 0.x minor records the
-         new receiver invocation contract.  `registry/repos.lock` is generated from the roster and is
-         intentionally not authored here; the per-file kit manifest changes and this package is
-         republished before receivers adopt the new invocation. -->
+         new receiver invocation contract.  The #1891 correction is a reference-file repair, but it
+         ships in this coherent minor alongside the new runtime invocation. `registry/repos.lock` is
+         generated from the roster and is intentionally not authored here; the per-file kit manifest
+         changes and this package is republished before receivers adopt the new invocation. -->
     <!-- 0.21.0 -> 0.21.1, a PATCH: two kit-delivered reference files corrected stale rationale
          about the now-landed engine-currency ownership (#1883). `pnext-item` still requires every
          worker to check before its first board write; it now names `drive-board` as the landed host
