@@ -173,7 +173,8 @@ module Chore =
     ///
     /// `true` — the flip may proceed — in exactly one case: no open `item/<n>-*` PR was RECORDED for this
     /// row. Which, per the paragraph above, is not yet the same sentence as "none was found".
-    let private itemPrAllowsFlip (item: Item) : bool = item.ItemPr.IsNone
+    let private itemPrAllowsFlip (item: Item) : bool =
+        item.ItemPr.IsNone && not item.ItemPrUnreadable
 
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =

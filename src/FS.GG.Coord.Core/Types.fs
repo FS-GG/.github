@@ -165,6 +165,10 @@ module Types =
           /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
           /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
           ItemPr: int option
+          /// A markerless item-PR probe could not be completed. This is deliberately separate from
+          /// `ItemPr`: `None` means no open PR was observed, while this receipt says no answer was
+          /// available at all. Mutating chores must fail closed on it (#1924).
+          ItemPrUnreadable: bool
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
           /// declares no such line. When present it refuses scheduling regardless of `TouchSet` — AND it
           /// holds `BLOCKER-CLEARED` off the row (.github#1644). `None` is ambiguous ("no sentinel" vs "the

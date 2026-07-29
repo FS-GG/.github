@@ -314,8 +314,13 @@ module Snapshot =
             | None -> Ok None
             | Some _ -> intField path "itemPr" el |> Result.map Some
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock, declaredPredicate, itemClass with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb, Ok dp, Ok ic ->
+        let itemPrUnreadable =
+            match optProp "itemPrUnreadable" el with
+            | None -> Ok false
+            | Some v -> asBool $"%s{path}.itemPrUnreadable" v
+
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, itemPrUnreadable, humanBlock, declaredPredicate, itemClass with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok ipu, Ok hb, Ok dp, Ok ic ->
             Ok
                 { Item =
                     { Ref = r
@@ -325,6 +330,7 @@ module Snapshot =
                       Blockers = bl
                       Claim = cl
                       ItemPr = ip
+                      ItemPrUnreadable = ipu
                       HumanBlock = hb
                       // The registry predicate VERDICT is RESOLVED impurely — it needs the owning producer's
                       // manifest off disk — so it is never set here: `parse` is pure (ADR-0050 call-site B,
@@ -353,7 +359,7 @@ module Snapshot =
                       AgeDays = None }
                   BashPaths = bp
                   DeclaredPredicate = dp }
-        | a, b, c, d, e, f, g, h, i, j, k ->
+        | a, b, c, d, e, f, g, h, i, j, k, l ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
@@ -364,7 +370,8 @@ module Snapshot =
               h |> Result.map ignore
               i |> Result.map ignore
               j |> Result.map ignore
-              k |> Result.map ignore ]
+              k |> Result.map ignore
+              l |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
