@@ -80,6 +80,22 @@ module WhoLivenessTests =
     /// hidden, so `UNCLAIMED` is the true answer and must survive the repair intact.
     let private noComments = "[]"
 
+    /// The OTHER unreadable shape: a comment with no `body` field at all. We cannot say whether it was a
+    /// marker, which is exactly why it may not be dropped — the `markerRe` test never even runs on it.
+    let private noBodyComment =
+        """[{"id":9002,"user":{"login":"EHotwagner"},"created_at":"2026-07-27T19:51:00Z","updated_at":"2026-07-27T19:51:00Z"}]"""
+
+    /// A LAPSED marker (10h old against the 120m default lease) sitting beside a comment we could not read.
+    ///
+    /// This is the arm the first repair MISSED, and it is the dangerous one: the marker list is NOT empty,
+    /// so classification reaches `Stale` and the read's incompleteness had nowhere to go. `STALE` is the row
+    /// a human reads immediately before `reap`, and the hidden comment may be a LIVE marker sitting behind
+    /// the lapsed one — in which case the claim is not dead and reaping it destroys a live lock.
+    let private staleMarkerPlusUnreadable =
+        let old = DateTimeOffset.UtcNow.AddHours(-10.0).ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+        $"""[{{"id":9003,"body":"<!-- fsgg:claim worker=heron-99e5 lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}},{{"id":9004,"user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}}]"""
+
     let private world (comments: string) =
         Fake.Recorder(fun (req: Request) ->
             let path = req.Path.Trim '/'
@@ -173,7 +189,7 @@ module WhoLivenessTests =
 
         // What replaces it must say the answer is a LOWER BOUND, not a fact...
         Assert.Contains("INCOMPLETE", err)
-        Assert.Contains("not free", err)
+        Assert.Contains("LOWER BOUND", err)
 
         // ...and must name WHY, or an operator cannot act on it. The reason identifies the offending comment
         // and what was wrong with it.
@@ -215,8 +231,62 @@ module WhoLivenessTests =
         Assert.Contains("\"worker\":null", hidden)
         Assert.Contains("\"worker\":null", plain)
 
-        // The reasons ride the row, so a consumer can report them without re-deriving anything...
+        // The reasons ride the row, so a consumer can report them without re-deriving anything — and the
+        // ARRAY'S CONTENTS are asserted, not merely its presence. An empty `undetermined: []` would satisfy
+        // a presence check while telling a consumer nothing, which is the shape of a vacuous gate.
         Assert.Contains("\"undetermined\":[", hidden)
+        Assert.Contains("comment 0", hidden)
 
         // ...and appear ONLY there, so every existing unclaimed row stays byte-identical.
         Assert.DoesNotContain("\"undetermined\":[", plain)
+
+    [<Fact>]
+    let ``#1668 a comment with no readable body is unclassifiable too — not 'not a marker'`` () =
+        let transport = world noBodyComment
+
+        let code, out, err = runWho transport [ "who"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(0, code)
+
+        // The `markerRe` test never runs on a comment whose body did not read, so "it is not a marker" is
+        // not something the engine is in a position to say. Both unreadable shapes must fail closed, or the
+        // repair only covers the half that happened to be noticed first.
+        Assert.DoesNotContain("UNCLAIMED", out)
+        Assert.Contains("UNDETERMINED", out)
+        Assert.DoesNotContain("working outside the protocol", err)
+        Assert.Contains("no readable `body`", err)
+
+    [<Fact>]
+    let ``#1668 a STALE row built from an incomplete read is flagged and is NOT offered to reap or adopt`` () =
+        let transport = world staleMarkerPlusUnreadable
+
+        let code, out, err = runWho transport [ "who"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(0, code)
+
+        // The marker list is NOT empty here, so the row is legitimately STALE and must still say so — the
+        // caveat qualifies the verdict, it does not replace it.
+        Assert.Contains("STALE", out)
+
+        // ...but the read was short, and `STALE` is the row a human reads immediately before `reap`. If the
+        // hidden comment is a LIVE marker behind this lapsed one, the claim is not dead at all. Keying the
+        // caveat on the STATE rather than on the READ is exactly the gap this leg exists to hold shut.
+        Assert.Contains("INCOMPLETE", err)
+        Assert.Contains("LOWER BOUND", err)
+        Assert.Contains("stale", err)
+        Assert.Contains("Do NOT dispatch a worker, `reap`, or `adopt`", err)
+
+    [<Fact>]
+    let ``#1668 --json carries the incompleteness on a STALE row, whose state word is still stale`` () =
+        let transport = world staleMarkerPlusUnreadable
+
+        let _, out, _ = runWho transport [ "who"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        // The wire contract must carry the same pairing the human stream does: a real lock state, AND the
+        // fact that the read behind it was short. A consumer that keys only on `.state` would reap this row.
+        Assert.Contains("\"state\":\"stale\"", out)
+        Assert.Contains("\"undetermined\":[", out)
+        // NOTE the backtick-free substring: `Utf8JsonWriter`'s default encoder escapes ` as \u0060, so a
+        // literal "`body`" would never match however correct the payload was — a gate that fails for a
+        // reason with nothing to do with what it is testing.
+        Assert.Contains("no readable", out)

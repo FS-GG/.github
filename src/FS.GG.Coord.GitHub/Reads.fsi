@@ -81,11 +81,24 @@ module Reads =
     /// nothing, and the empty string that fell out of that pipeline is precisely how a live claim became
     /// invisible. Guessing the lock state from a failed read is the one thing a lock may never do.
     ///
-    /// **IT DISCARDS `MarkerScan.Unreadable`, AND ONLY ITS OWN CALLERS MAY DO THAT.** Every caller of this
-    /// function is about to WRITE against the lock, and every one of those writes re-reads and re-checks —
-    /// the CAS's post-and-re-read, `verifyHeld`, `reap`'s re-confirmation — so a marker hidden from one read
-    /// costs a lost race, not a double-hold. A caller that REPORTS, where nothing re-checks the answer and an
-    /// operator acts on it, must take `markerScan` instead. That is `who`, and .github#1668 is what it cost.
+    /// **IT DISCARDS `MarkerScan.Unreadable`, AND THAT IS A KNOWN, UNCLOSED FAIL-OPEN — NOT A SAFE DEFAULT.**
+    ///
+    /// Say plainly what this costs, because the comment .github#1668 deleted from `parseMarker` was a
+    /// confident safety argument that happened to be false, and replacing it with a second one would be the
+    /// same mistake wearing the fix's clothes:
+    ///
+    /// * **A re-read does not recover a hidden marker.** `Unclassifiable` is a DETERMINISTIC property of a
+    ///   fixed comment, not a timing race, so the CAS's post-and-re-read, `verifyHeld` and `reap`'s
+    ///   re-confirmation all parse it the same way and are blind to it identically. A marker hidden here is
+    ///   hidden from every read that follows — which is a DOUBLE-HOLD, not a lost race.
+    /// * **Not every caller writes.** `Scan.snapshot` reads markers through here for the scheduler
+    ///   snapshot that `next`, `batch`, `ready` and `reconcile` decide from, and nothing re-checks it.
+    ///
+    /// So this function is `markerScan` minus its safety, kept because changing every caller at once is a
+    /// larger change than .github#1668 is, and its remaining callers were audited as no WORSE than they were
+    /// before that item. `who` — the verb an operator reads before dispatching, reaping or adopting — was
+    /// moved to `markerScan`. Routing the rest is tracked, and until it lands this doc is a warning rather
+    /// than a licence: do not add a caller here without reading the two bullets above.
     val markers: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Marker list>
 
     /// `markers`, plus every comment the scan could not classify — the read for callers that REPORT.

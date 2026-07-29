@@ -457,11 +457,16 @@ module Reads =
     /// `reap`, `adopt` and the claim scan all read markers through here, and a second copy of the parse is
     /// how "who holds this?" comes to be computed in five places and agree in none (#485).
     ///
-    /// It DISCARDS `Unreadable`, and that is safe for exactly the callers that use it and no others: each of
-    /// them is about to WRITE against the lock, and every one of those writes re-reads and re-checks (the
-    /// CAS's post-and-re-read, `verifyHeld`, `reap`'s re-confirmation), so a marker hidden from one read
-    /// costs a lost race rather than a double-hold. `who` is the caller that is NOT like that — it REPORTS,
-    /// nothing re-checks its answer, and an operator acts on it. That is why `who` takes the scan.
+    /// It DISCARDS `Unreadable`, and that is a KNOWN FAIL-OPEN rather than a safe default. Do not repair the
+    /// discomfort with an argument: the comment .github#1668 deleted from `parseMarker` was exactly that, and
+    /// it was false. Two things are true here and both are bad. A re-read recovers NOTHING — `Unclassifiable`
+    /// is a deterministic property of a fixed comment, so the CAS's re-read parses it identically and a
+    /// marker hidden once is hidden always, which is a double-hold, not a lost race. And not every caller
+    /// writes: `Scan.snapshot` reads through here for the snapshot `next`/`batch`/`reconcile` decide from.
+    ///
+    /// It stays because moving every caller at once is a larger change than #1668, and the callers left here
+    /// are no worse off than before it. `who` — where nothing re-checks the answer and an operator acts on it
+    /// — took the scan. See the `.fsi` for the warning a new caller must read first.
     let markers
         (transport: IGitHubTransport)
         (owner: string)

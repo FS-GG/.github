@@ -24,8 +24,10 @@ module Render =
         | Held of Reads.Marker
         | Stale of Reads.Marker
         | Unclaimed
-        /// One reason per comment the marker read could not classify. Never empty.
-        | Undetermined of reasons: string list
+        /// The marker read was incomplete AND yielded no marker at all, so there is no lock state to
+        /// report. The reasons live on `WhoRow.Incomplete` — an incomplete read is a property of the READ,
+        /// not of this verdict, and a `Held` or `Stale` row can suffer it too.
+        | Undetermined
 
     /// A classified in-flight row: the item, its lock state, the paths it reserves, and — on a STALE row
     /// only — the proof-of-life a human needs before reaping (#581/#697/#1055).
@@ -44,7 +46,18 @@ module Render =
           PrState: PrState option
           /// `who --local` — the local git worktree this item is checked out in, if any (#959). Emitted
           /// only when `--local` was asked.
-          Worktree: string option }
+          Worktree: string option
+
+          /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
+          /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
+          /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
+          /// list licenses acting on this row's state as a fact.
+          ///
+          /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
+          /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
+          /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
+          /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
+          Incomplete: string list }
 
     /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
     /// separate observations; `Converged` is true only when both were read back successfully.
@@ -175,8 +188,9 @@ module Render =
     val renderReadyJson: rows: Scan.Row list -> string
 
     /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
-    /// with `number`, `repo`, `state`, the `worker` (`null` when unclaimed), and the `paths` it reserves;
-    /// a STALE row also carries `livePr`/`prState`/`branchPushed`. `includeWorktree` is `who --local`
+    /// with `number`, `repo`, `state`, the `worker` (`null` when unclaimed OR undetermined), and the `paths`
+    /// it reserves; a STALE row also carries `livePr`/`prState`/`branchPushed`, and ANY row whose marker read
+    /// was incomplete carries `undetermined` — the reasons — including `held`/`stale` rows (.github#1668). `includeWorktree` is `who --local`
     /// (#959): the `worktree` field is emitted ONLY when asked, so the no-`--local` shape is byte-identical.
     val renderWhoJson: includeWorktree: bool -> rows: WhoRow list -> string
 

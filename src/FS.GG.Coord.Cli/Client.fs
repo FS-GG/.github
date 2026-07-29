@@ -1747,8 +1747,7 @@ module Client =
                                     // normally not in flight at all and is simply dropped — it makes the row
                                     // APPEAR, because an off-board issue hiding an unreadable marker is
                                     // precisely the held item this verb must not omit.
-                                    | None when not (List.isEmpty scan.Unreadable) ->
-                                        Some(Undetermined scan.Unreadable)
+                                    | None when not (List.isEmpty scan.Unreadable) -> Some Undetermined
                                     | None -> if isInProgress (o, r, n) then Some Unclaimed else None
 
                             match state with
@@ -1800,7 +1799,7 @@ module Client =
                                     | Stale _ -> Some(Reads.prAlive ctx.Transport o r n)
                                     | Held _
                                     | Unclaimed
-                                    | Undetermined _ -> None
+                                    | Undetermined -> None
 
                                 let livePr =
                                     match liveness with
@@ -1837,7 +1836,16 @@ module Client =
                                       // Filled in below, once the worktree read has run once for the whole
                                       // set rather than per row — a claim's worktree is a local fact, not one
                                       // of the network reads this loop is spending.
-                                      Worktree = None }
+                                      Worktree = None
+
+                                      // .github#1668: ON EVERY ROW, not just the markerless one. The
+                                      // `Undetermined` STATE is only reachable when the short read left no
+                                      // marker at all; this field is the READ's own completeness, and a
+                                      // `Held`/`Stale` row needs it just as badly — a hidden marker with a
+                                      // lower id means the holder named above is the wrong holder, and a
+                                      // hidden LIVE marker behind a lapsed one means the `STALE` a human is
+                                      // reading before reaping is not free.
+                                      Incomplete = scan.Unreadable }
                                 )
 
                 match failure with
@@ -1932,22 +1940,27 @@ module Client =
                                 // declining to answer. The count goes in the line because "1 comment" and
                                 // "all 40 comments" are very different situations to walk into, and the
                                 // reasons follow on stderr where the rest of `who`'s diagnosis lives.
-                                | Undetermined reasons ->
+                                | Undetermined ->
                                     printfn
                                         "  %-16s UNDETERMINED — the marker read was INCOMPLETE (%d comment(s) unreadable); this item may be HELD%s"
                                         row.Ref.Short
-                                        (List.length reasons)
+                                        (List.length row.Incomplete)
                                         wt
 
                     // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
                     // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the
                     // best work on the board ends up in the bin. `reap` is a destructive verb, and pointing
                     // it at finished work is precisely the advice this change exists to delete: land it.
+                    // .github#1668: AND ITS READ MUST HAVE BEEN COMPLETE. This block tells a human the claim
+                    // is DEAD and the work is finished — `adopt` it. On a row whose marker read was short,
+                    // "the claim is DEAD" is precisely the thing not established: the hidden comment may be
+                    // a live marker sitting behind the lapsed one. The row still prints, and the warning
+                    // below still names it; what is withheld is the instruction to take it over.
                     let orphans =
                         inFlight
                         |> List.filter (fun r ->
                             match r.State, r.PrState with
-                            | Stale _, Some PrGreen -> true
+                            | Stale _, Some PrGreen -> List.isEmpty r.Incomplete
                             | _ -> false)
 
                     if not (List.isEmpty orphans) then
@@ -1971,20 +1984,46 @@ module Client =
                                 $"fsgg-coord-engine: WARNING — %s{row.Ref.Short} is In progress with NO claim marker (someone is working outside the protocol)."
                         // .github#1668: THE ACCUSATION IS WITHHELD HERE, AND THAT IS THE POINT. "Someone is
                         // working outside the protocol" is a charge against a person, and on an incomplete
-                        // read it was levelled at a worker who held a perfectly valid marker. What replaces
-                        // it says what we know (the read was short), what we do not (whether it is held),
-                        // and what NOT to do on the strength of it.
-                        | Undetermined reasons ->
-                            eprint
-                                $"fsgg-coord-engine: WARNING — %s{row.Ref.Short}: the claim-marker read was INCOMPLETE, so its lock state is UNKNOWN, not free."
+                        // read it was levelled at a worker who held a perfectly valid marker. The
+                        // replacement is emitted by the loop BELOW, which is keyed on the read rather than
+                        // on this verdict.
+                        | Undetermined
+                        | Held _
+                        | Stale _ -> ()
 
-                            for reason in reasons do
+                    // .github#1668 — THE INCOMPLETE-READ CAVEAT, KEYED ON THE READ AND NOT ON THE VERDICT.
+                    //
+                    // It fires on EVERY row whose marker read was short, in every state, because every state
+                    // is compromised by a hidden marker and two of them are compromised in the direction
+                    // that destroys work:
+                    //
+                    //   * `held`  — the CAS winner is the LOWEST id, so a marker we could not order may be
+                    //               the real holder. The name we printed would then be the wrong one.
+                    //   * `stale` — a hidden LIVE marker behind the lapsed one means this is not a dead
+                    //               claim, and `stale` is the row a human reads immediately before `reap`.
+                    //   * `undetermined` — no marker at all survived the read.
+                    for row in inFlight do
+                        if not (List.isEmpty row.Incomplete) then
+                            // The state WORD, so the warning names the very verdict it is qualifying. Spelled
+                            // here rather than reaching for `Render.whoStateName`, which is the JSON wire
+                            // contract's vocabulary and not this stream's — cases 20/25 certify that one, and
+                            // a human sentence must not be able to change it by needing a different word.
+                            let state =
+                                match row.State with
+                                | Held _ -> "held"
+                                | Stale _ -> "stale"
+                                | Unclaimed -> "unclaimed"
+                                | Undetermined -> "undetermined"
+
+                            eprint
+                                $"fsgg-coord-engine: WARNING — %s{row.Ref.Short}: the claim-marker read was INCOMPLETE, so its lock state (%s{state}) is a LOWER BOUND, not a fact."
+
+                            for reason in row.Incomplete do
                                 eprint $"fsgg-coord-engine:   - %s{reason}"
 
                             eprint
-                                "fsgg-coord-engine:   Do NOT dispatch a worker, `reap`, or `adopt` on this row: this answer is a LOWER BOUND on what is held. Re-run `who`, and if it persists, read the issue's comments directly."
-                        | Held _
-                        | Stale _ -> ()
+                                "fsgg-coord-engine:   Do NOT dispatch a worker, `reap`, or `adopt` on this row. Re-run `who`, and if it persists, read the issue's comments directly."
+
 
                     ExitGreen
 
