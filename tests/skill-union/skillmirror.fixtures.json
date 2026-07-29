@@ -141,13 +141,12 @@
       "vector whose recorded value differs. skillmirror-conformance.sh then drives the two SHELLS over",
       "the same bytes hermetically, on every PR, via their `--digest` reference seams.",
       "",
-      "EVERY VECTOR IS VALID UTF-8, AND THAT BOUNDARY IS DELIBERATE. The three agree for any body that",
-      "decodes cleanly; on INVALID UTF-8 they do not, and #1547 changed nothing there. The shells hash",
-      "raw bytes, while the library hashes text whose invalid sequences a decoder already replaced with",
-      "U+FFFD — so a file of 0xFF and a file of 0xFE are different files the LIBRARY gives one digest,",
-      "a collision the byte-hashing shells do not have. Pinning that here would mean recording a",
-      "library fail-open as an expectation, so it is filed instead (.github#1589) and this table stays",
-      "the statement of what is actually agreed."
+      "EVERY VECTOR IS VALID UTF-8, AND THAT BOUNDARY IS DELIBERATE. The canonical digest is defined",
+      "over decoded text, while the in-repo shells hash raw bytes; those implementations therefore do not",
+      "claim an invalid-byte digest in common. FS.GG.Contracts now REFUSES a body that does not decode at",
+      "its read seam, with a distinct diagnostic, before it reaches SkillMirror.sha256. An invalid body",
+      "has no expected digest by design, so this table records exactly one expected value only for the",
+      "valid-UTF-8 domain where all implementations are meaningfully comparable (.github#1656)."
     ],
     "measuredAgainst": {
       "_comment": [
