@@ -174,12 +174,13 @@ module ApplicationServiceTests =
     /// `bodies` was both — every issue the fixture knew about was necessarily on the board, so the state
     /// `claim` reports as `statusWrite:"not-on-board"` was unrepresentable, and a test could not have
     /// failed for the reason #1779 is about even in principle.
-    let private worldOf
+    let private worldOfWithIncomplete
         (statusFor: int -> string)
         (bodies: Map<int, string>)
         (holders: Map<int, string>)
         (markerAge: Map<int, int>)
         (offBoard: Set<int>)
+        (incomplete: Set<int>)
         (sayFails: bool)
         =
         // THE ROWS ARE RENDERED PER REQUEST, not once at construction. `statusFor` is a function, and it is
@@ -238,7 +239,21 @@ module ApplicationServiceTests =
             | "GET", p when p.EndsWith "/issues" ->
                 Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
             | "GET", _ when (issueNumber "/comments").IsSome ->
-                ok (commentsAged holders markerAge (issueNumber "/comments").Value)
+                let n = (issueNumber "/comments").Value
+                let readable = commentsAged holders markerAge n
+
+                let body =
+                    if incomplete.Contains n then
+                        let unreadable = $"""{{"id":%d{9000 + n},"body":null}}"""
+
+                        if readable = "[]" then
+                            $"[%s{unreadable}]"
+                        else
+                            readable.TrimEnd(']') + "," + unreadable + "]"
+                    else
+                        readable
+
+                ok body
             | "POST", _ when (issueNumber "/comments").IsSome ->
                 if sayFails then
                     Error(Errors.NotFound "the notice could not be posted")
@@ -254,6 +269,9 @@ module ApplicationServiceTests =
                     ok (JsonSerializer.Serialize {| number = n; body = body |})
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private worldOf statusFor bodies holders markerAge offBoard sayFails =
+        worldOfWithIncomplete statusFor bodies holders markerAge offBoard Set.empty sayFails
 
     /// `worldOf` with no aged markers and nothing off the board — every pre-#1779 caller's world.
     let private worldWith (statusFor: int -> string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
@@ -331,6 +349,10 @@ module ApplicationServiceTests =
                 match opts.Command with
                 | Options.Widen -> Client.widen (context transport) opts
                 | Options.SetPaths -> Client.setPaths (context transport) opts
+                | Options.Reap -> Client.reap (context transport) opts
+                | Options.Claim -> Client.claim (context transport) opts
+                | Options.Adopt -> Client.adopt (context transport) opts
+                | Options.Heartbeat -> Client.heartbeat (context transport) opts
                 // `batch` IS THE OTHER SURFACE, AND IT IS DRIVEN FROM THE SAME WORLD ON PURPOSE
                 // (.github#1792). The defect that item is about is two components answering "who has
                 // reserved this file" differently, so a fixture that could only reach ONE of them could
@@ -338,7 +360,7 @@ module ApplicationServiceTests =
                 // answer it was already able to see. `Client.batch` runs the real `Scan.snapshot`, so
                 // this dispatch is what lets one board, one marker and one second be put to both.
                 | Options.BatchCmd -> Client.batch (context transport) opts
-                | other -> failwithf "this fixture drives widen/set-paths/batch only, got %A" other
+                | other -> failwithf "this fixture does not drive %A" other
 
             Console.Out.Flush()
             code, captured.ToString()
@@ -592,6 +614,83 @@ module ApplicationServiceTests =
 
         Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
         Assert.Equal(6, code)
+
+    // ---- .github#1896 — CLIENT CALLERS REFUSE INCOMPLETE LOCK READS -------------------------------
+
+    let private incompleteWorld bodies holders ages incomplete =
+        worldOfWithIncomplete
+            (fun _ -> "In progress")
+            bodies
+            holders
+            ages
+            Set.empty
+            incomplete
+            false
+
+    [<Fact>]
+    let ``#1896 reap refuses a readable stale marker beside an unclassifiable comment`` () =
+        let transport =
+            incompleteWorld
+                (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ])
+                (Map.ofList [ 74, "ghost-222" ])
+                (Map.ofList [ 74, 180 ])
+                (Set.ofList [ 74 ])
+
+        let code, _, err = runCapturingStderr transport [ "reap"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(1, code)
+        Assert.Contains("claim-marker scan is incomplete", err)
+        Assert.False(transport.Logged "comment-delete", "reap deleted from a lower-bound marker list")
+
+    [<Fact>]
+    let ``#1896 claim's one-item guard refuses an incomplete read of another in-flight item`` () =
+        let transport =
+            incompleteWorld
+                (Map.ofList [ 74, "Paths: src/Target.fs"; 75, "Paths: src/Other.fs" ])
+                (Map.ofList [ 75, "kite-469" ])
+                Map.empty
+                (Set.ofList [ 75 ])
+
+        let code, _, err =
+            runCapturingStderr
+                transport
+                [ "claim"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json" ]
+
+        Assert.Equal(1, code)
+        Assert.Contains("claim-marker scan is incomplete", err)
+        Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 74", "claim reached its CAS after an incomplete guard read")
+
+    [<Fact>]
+    let ``#1896 adopt refuses an incomplete orphan read instead of choosing the readable marker`` () =
+        let transport =
+            incompleteWorld
+                (Map.ofList [ 74, "Paths: src/Target.fs" ])
+                (Map.ofList [ 74, "ghost-222" ])
+                (Map.ofList [ 74, 180 ])
+                (Set.ofList [ 74 ])
+
+        let code, _, err =
+            runCapturingStderr transport [ "adopt"; "FS.GG.SDD#74"; "--worker"; "kite-469" ]
+
+        Assert.Equal(1, code)
+        Assert.Contains("claim-marker scan is incomplete", err)
+
+    [<Fact>]
+    let ``#1896 touch-set collision scan refuses an incomplete neighbour lock`` () =
+        let transport =
+            incompleteWorld
+                (Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ])
+                (Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ])
+                Map.empty
+                (Set.ofList [ 75 ])
+
+        let code, _, err =
+            runCapturingStderr
+                transport
+                [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal(1, code)
+        Assert.Contains("claim-marker scan is incomplete", err)
 
     // ---- .github#1740 / .github#1779 — THE CANDIDATE SET IS THE LOCK, NEVER A PROJECTION OF IT ---------
     //
@@ -978,8 +1077,8 @@ module ApplicationServiceTests =
         // .github#1779 made this scan CHEAPER — 24/27/31 GraphQL points to ZERO, REST at one issue-list read
         // plus one marker read per COLLIDING row — and #1792 must not spend that back. It does not, and this
         // is the measurement rather than the assertion that it does not: `Reads.reserver` is a pure function
-        // over the marker list `Reads.markers` already fetched on the line above it, so the reservation rule
-        // changed and the REQUEST COUNT did not.
+        // over the complete marker scan already fetched on the line above it, so the reservation rule changed
+        // and the REQUEST COUNT did not.
         //
         // COUNTED, NOT ESTIMATED (.github#1086 got this same trade wrong by an order of magnitude by
         // estimating). `Fake.Recorder` records every request the engine issues, so these are exact and

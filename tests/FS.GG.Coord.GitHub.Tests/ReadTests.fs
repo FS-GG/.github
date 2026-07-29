@@ -60,16 +60,17 @@ let ``#461 a MALFORMED comments page is a failed read, NOT an empty lock`` () =
     // nobody holds anything." A failed scan is not entitled to make it.
     let recorder = serving "<html>502 Bad Gateway</html>"
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(Malformed _) -> ()
-    | Ok markers -> failwith $"a malformed page must NEVER read as an empty lock — got %d{List.length markers} marker(s)"
+    | Ok scan ->
+        failwith $"a malformed page must NEVER read as an empty lock — got %d{List.length scan.Markers} marker(s)"
     | Error other -> failwith $"expected Malformed — got %A{other}"
 
 [<Fact>]
 let ``#461 ...and an EMPTY body is a failed read too, not an unheld item`` () =
     let recorder = serving ""
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(Malformed _) -> ()
     | other -> failwith $"an empty body is not an empty result — got %A{other}"
 
@@ -80,14 +81,14 @@ let ``#461 the guard must NOT fire on a legitimately empty comment list`` () =
     // would deadlock the board.
     let recorder = serving "[]"
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
-    | Ok [] -> ()
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok { Markers = []; Unreadable = [] } -> ()
     | other -> failwith $"a successful scan with no markers is an empty set — got %A{other}"
 
 [<Fact>]
 let ``the marker read is NEVER conditional - a 304 could hide a live lock`` () =
     let recorder = serving "[]"
-    Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 |> ignore
+    Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 |> ignore
 
     // **A lock may never be read from a cache.** A 304 serving a body captured before the marker was posted
     // would report zero comments over a live claim. Going direct means there is no ETag to be stale.
@@ -113,8 +114,8 @@ let ``a marker is ANCHORED - a say message that QUOTES one cannot forge a lock``
 
     let recorder = serving $"[{comment 901 forgery now}]"
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
-    | Ok [] -> ()
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok { Markers = []; Unreadable = [] } -> ()
     | other -> failwith $"a quoted marker is not a marker — got %A{other}"
 
 [<Fact>]
@@ -126,8 +127,8 @@ let ``a marker we cannot parse a WORKER out of is held by nobody - and it BLOCKS
     let recorder =
         serving $"""[{comment 901 "<!-- fsgg:claim lease=120 -->" now}]"""
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
-    | Ok [ m ] -> Assert.Equal(WorkerId "unparsed-marker", m.Worker)
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok { Markers = [ m ]; Unreadable = [] } -> Assert.Equal(WorkerId "unparsed-marker", m.Worker)
     | other -> failwith $"an unparseable marker must still block — got %A{other}"
 
 [<Fact>]
@@ -140,8 +141,8 @@ let ``the marker's prev= column is decoded, and %% comes out LAST`` () =
 
     let recorder = serving $"[{comment 901 body now}]"
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
-    | Ok [ m ] -> Assert.Equal(Some InProgress, m.PreviousStatus)
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok { Markers = [ m ]; Unreadable = [] } -> Assert.Equal(Some InProgress, m.PreviousStatus)
     | other -> failwith $"the previous column must be recovered — got %A{other}"
 
 // ---- the CAS's total order -------------------------------------------------------------------------
@@ -377,7 +378,7 @@ let ``#461 a malformed issue list is an error, not an empty candidate set`` () =
 let ``#1794 an element with NO number REFUSES the read - it is never silently dropped`` () =
     // THE FIRST FABRICATION. An element with no numeric `number` used to vanish from the candidate set
     // entirely: a lock on it reserved nothing, and nothing anywhere reported an element had been discarded.
-    // It cannot be carried as an unreadable ENTRY either — `Reads.markers` is keyed on the number, so there
+    // It cannot be carried as an unreadable ENTRY either — a marker scan is keyed on the number, so there
     // is no lock to look up and no ref to report — so the whole read refuses. #266: never "I looked and it
     // was fine".
     let recorder =
@@ -489,7 +490,7 @@ let ``#421 a rate-limited read propagates as RateLimited - never as 'not there'`
     // `item-add` for an issue already on the board is idempotent (#871); the invented certainty is not.
     let recorder = failing (RateLimited(UnknownBudget, None))
 
-    match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
+    match Reads.markerScan recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
     | other -> failwith $"an exhausted budget must not become an empty lock — got %A{other}"
 

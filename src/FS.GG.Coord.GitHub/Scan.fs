@@ -785,8 +785,12 @@ module Scan =
                 // would then schedule every other item against a surface it cannot see.
                 let body = Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number
 
-                // THE MARKERS. Unconditional, uncached: a lock may never be read from a cache.
-                let markers = Reads.markers transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                // THE MARKERS. Unconditional, uncached, and COMPLETE: a lock may never be read from a cache
+                // or decided from a lower bound. One unclassifiable comment may be the real winner, so the
+                // scheduler refuses the scan rather than reserving only the markers it happened to parse.
+                let markers =
+                    Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                    |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
 
                 match markers with
                 // A FAILED MARKER READ IS FATAL, and it is the one read that must be. Guessing the lock
@@ -1076,7 +1080,12 @@ module Scan =
                         // held) by the candidate loop, so re-reading it here would pay the same budget twice
                         // and risk double-reserving. Only issues the board never listed reach the marker read.
                         if failure.IsNone && not (boardRefs.Contains(o, r, n)) then
-                            match Reads.markers transport o r n with
+                            let markerSubject = $"%s{o}/%s{r}#%d{n}"
+
+                            match
+                                Reads.markerScan transport o r n
+                                |> Result.bind (Reads.requireCompleteMarkerScan markerSubject)
+                            with
                             | Error e -> failure <- Some e
                             | Ok markers ->
                                 match Reads.reserver leaseMinutes markers with

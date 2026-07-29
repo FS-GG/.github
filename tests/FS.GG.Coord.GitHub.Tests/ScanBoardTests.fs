@@ -555,6 +555,52 @@ let private liveMarker (worker: string) (n: int) =
 
     $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"updated_at":"%s{now}"}}]"""
 
+/// One readable live marker plus one comment whose body cannot be classified. The readable marker is a
+/// lower bound, not permission to reserve only its holder's declared surface.
+let private incompleteLiveMarker (worker: string) (n: int) =
+    let now = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","updated_at":"%s{now}"}},
+         {{"id":%d{8000 + n},"body":null,"updated_at":"%s{now}"}}]"""
+
+[<Fact>]
+let ``#1896 a board candidate with an incomplete marker scan refuses the scheduler snapshot`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let transport =
+        offBoardRoutes
+            "[]"
+            (fun n -> if n = 99 then incompleteLiveMarker "visible-holder" 99 else "[]")
+            """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("claim-marker scan is incomplete", detail)
+        Assert.Contains("comment 1", detail)
+    | other -> failwith $"the candidate loop must refuse an incomplete lock read — got %A{other}"
+
+[<Fact>]
+let ``#1896 an off-board issue with an incomplete marker scan refuses the scheduler snapshot`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let list =
+        """[{"number":99,"state":"open","body":"Paths: src/Board/**"},
+            {"number":500,"state":"open","body":"Paths: src/OffBoard/**"}]"""
+
+    let transport =
+        offBoardRoutes
+            list
+            (fun n -> if n = 500 then incompleteLiveMarker "visible-holder" 500 else "[]")
+            """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ scopeRow "FS.GG.SDD" 99 ] (Some "FS.GG.SDD") false None 120 with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("claim-marker scan is incomplete", detail)
+        Assert.Contains("comment 1", detail)
+    | other -> failwith $"the off-board sweep must refuse an incomplete lock read — got %A{other}"
+
 [<Fact>]
 let ``#1794 an OFF-BOARD live claim whose body could not be read reserves an UNKNOWN surface, not nothing`` () =
     use _sandbox = new Sandbox()

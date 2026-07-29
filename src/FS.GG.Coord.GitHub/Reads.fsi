@@ -70,7 +70,7 @@ module Reads =
     /// It is ONE parser so the claim that records a column and the read that restores it cannot drift.
     val statusOfName: name: string -> BoardStatus option
 
-    /// The claim markers on an issue, in comment-id order (lowest first — the winner is `List.head`).
+    /// The claim markers, plus every comment the scan could not classify.
     ///
     /// **NEVER CONDITIONAL, AND NEVER CACHED.** This is the one read that may not carry an `If-None-Match`
     /// and may not be served from the scan cache. A 304 serving a body captured before a marker was posted
@@ -81,31 +81,17 @@ module Reads =
     /// nothing, and the empty string that fell out of that pipeline is precisely how a live claim became
     /// invisible. Guessing the lock state from a failed read is the one thing a lock may never do.
     ///
-    /// **IT DISCARDS `MarkerScan.Unreadable`, AND THAT IS A KNOWN, UNCLOSED FAIL-OPEN — NOT A SAFE DEFAULT.**
-    ///
-    /// Say plainly what this costs, because the comment .github#1668 deleted from `parseMarker` was a
-    /// confident safety argument that happened to be false, and replacing it with a second one would be the
-    /// same mistake wearing the fix's clothes:
-    ///
-    /// * **A re-read does not recover a hidden marker.** `Unclassifiable` is a DETERMINISTIC property of a
-    ///   fixed comment, not a timing race, so the CAS's post-and-re-read, `verifyHeld` and `reap`'s
-    ///   re-confirmation all parse it the same way and are blind to it identically. A marker hidden here is
-    ///   hidden from every read that follows — which is a DOUBLE-HOLD, not a lost race.
-    /// * **Not every caller writes.** `Scan.snapshot` reads markers through here for the scheduler
-    ///   snapshot that `next`, `batch`, `ready` and `reconcile` decide from, and nothing re-checks it.
-    ///
-    /// So this function is `markerScan` minus its safety, kept because changing every caller at once is a
-    /// larger change than .github#1668 is, and its remaining callers were audited as no WORSE than they were
-    /// before that item. `who` — the verb an operator reads before dispatching, reaping or adopting — was
-    /// moved to `markerScan`. Routing the rest is tracked, and until it lands this doc is a warning rather
-    /// than a licence: do not add a caller here without reading the two bullets above.
-    val markers: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Marker list>
-
-    /// `markers`, plus every comment the scan could not classify — the read for callers that REPORT.
-    ///
-    /// Same request, same guarantees (unconditional, uncached, paginated, malformed-is-an-error); the only
-    /// difference is that this one does not throw away the evidence that its answer may be incomplete.
+    /// Reporting callers keep the whole scan and can render an honest `Undetermined`; decision and write
+    /// callers must pass it through `requireCompleteMarkerScan`.
     val markerScan: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<MarkerScan>
+
+    /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
+    /// error that names every unclassifiable comment.
+    ///
+    /// This is the gate for every caller that DECIDES or WRITES from the lock. There is deliberately no
+    /// public projection that silently discards `Unreadable`: a new caller must choose this fail-closed gate
+    /// or handle incompleteness itself.
+    val requireCompleteMarkerScan: subject: string -> scan: MarkerScan -> IoResult<Marker list>
 
     /// Has this marker's lease lapsed?
     ///
@@ -395,7 +381,7 @@ module Reads =
     /// One element of the open-issue list: an issue we could IDENTIFY, and what we could read of its body.
     ///
     /// There is no `OpenIssue` for an element with no numeric `number` — an element nobody can name has no
-    /// marker route (`Reads.markers` needs the number) and no ref to report, so it cannot be carried as an
+    /// marker route (a marker scan needs the number) and no ref to report, so it cannot be carried as an
     /// unreadable entry. `openIssues` refuses the whole read instead. See its remarks.
     type OpenIssue = { Number: int; Body: IssueBodyRead }
 
