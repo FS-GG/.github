@@ -3010,51 +3010,50 @@ if isinstance(jobs, dict):
 }
 
 dispatch_findings=0; dispatch_refusals=0; dispatch_declared=0
-if [ -n "$dispatches" ]; then
-  while IFS=$'\t' read -r dp dt de; do
-    [ -n "$dp" ] || continue
-    dispatch_declared=$((dispatch_declared + 1))
-  done <<< "$dispatches"
-  while IFS= read -r repo; do
-    [ -n "$repo" ] || continue
-    ddir="$ABSENTOK_DIR/${repo//\//__}"
-    [ -d "$ddir" ] || continue
-    while IFS= read -r wf; do
-      [ -n "$wf" ] || continue
-      if ! dispatch_extract "$repo" "$wf" >> "$DISPATCH_FILE"; then
-        echo "::error::repos-audit: $repo workflow '$wf' will not parse while extracting repository_dispatch contracts; the graph has no verdict for it."
-        dispatch_refusals=$((dispatch_refusals + 1))
-      fi
-    done < <(find "$ddir" -maxdepth 1 -type f -printf '%f\n')
-  done <<< "$all_repos"
-
-  # Forward: every declared edge has BOTH a real sender and a target listener for the same string.
-  while IFS=$'\t' read -r dp dt de; do
-    [ -n "$dp" ] || continue
-    if ! grep -qxF $'S\t'"$dp"$'\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
-      echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching dispatch-sender.yml caller."
-      dispatch_findings=$((dispatch_findings + 1))
+while IFS=$'\t' read -r dp dt de; do
+  [ -n "$dp" ] || continue
+  dispatch_declared=$((dispatch_declared + 1))
+done <<< "$dispatches"
+while IFS= read -r repo; do
+  [ -n "$repo" ] || continue
+  ddir="$ABSENTOK_DIR/${repo//\//__}"
+  [ -d "$ddir" ] || continue
+  while IFS= read -r wf; do
+    [ -n "$wf" ] || continue
+    if ! dispatch_extract "$repo" "$wf" >> "$DISPATCH_FILE"; then
+      echo "::error::repos-audit: $repo workflow '$wf' will not parse while extracting repository_dispatch contracts; the graph has no verdict for it."
+      dispatch_refusals=$((dispatch_refusals + 1))
     fi
-    if ! grep -qxF $'L\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
-      echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching repository_dispatch listener."
-      dispatch_findings=$((dispatch_findings + 1))
-    fi
-  done <<< "$dispatches"
+  done < <(find "$ddir" -maxdepth 1 -type f -printf '%f\n')
+done <<< "$all_repos"
 
-  # Reverse: a sender or listener missing from the roster is drift.  Keep the two halves separate:
-  # a live listener is evidence even if its producer was deleted, and vice versa.
-  while IFS=$'\t' read -r kind a b c; do
-    case "$kind" in
-      S) if ! grep -qxF "$a"$'\t'"$b"$'\t'"$c" <<< "$dispatches"; then
-           echo "::error::repos-audit: live dispatch sender $a -> $b ($c) is not declared in registry/repos.yml."
-           dispatch_findings=$((dispatch_findings + 1)); fi ;;
-      L) if ! awk -F '\t' -v target="$a" -v event="$b" '$2 == target && $3 == event { found=1 } END { exit !found }' <<< "$dispatches"; then
-           echo "::error::repos-audit: live repository_dispatch listener $a ($b) is not declared in registry/repos.yml."
-           dispatch_findings=$((dispatch_findings + 1)); fi ;;
-    esac
-  done < "$DISPATCH_FILE"
-  echo "repos-audit: repository_dispatch graph — $dispatch_declared declared edge(s), $dispatch_findings finding(s), $dispatch_refusals refusal(s)."
-fi
+# Forward: every declared edge has BOTH a real sender and a target listener for the same string.
+while IFS=$'\t' read -r dp dt de; do
+  [ -n "$dp" ] || continue
+  if ! grep -qxF $'S\t'"$dp"$'\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
+    echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching dispatch-sender.yml caller."
+    dispatch_findings=$((dispatch_findings + 1))
+  fi
+  if ! grep -qxF $'L\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
+    echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching repository_dispatch listener."
+    dispatch_findings=$((dispatch_findings + 1))
+  fi
+done <<< "$dispatches"
+
+# Reverse: a sender or listener missing from the roster is drift.  Keep the two halves separate:
+# a live listener is evidence even if its producer was deleted, and vice versa.  This executes even
+# with zero declarations: an omitted graph must never turn live dispatches into a green blind spot.
+while IFS=$'\t' read -r kind a b c; do
+  case "$kind" in
+    S) if ! grep -qxF "$a"$'\t'"$b"$'\t'"$c" <<< "$dispatches"; then
+         echo "::error::repos-audit: live dispatch sender $a -> $b ($c) is not declared in registry/repos.yml."
+         dispatch_findings=$((dispatch_findings + 1)); fi ;;
+    L) if ! awk -F '\t' -v target="$a" -v event="$b" '$2 == target && $3 == event { found=1 } END { exit !found }' <<< "$dispatches"; then
+         echo "::error::repos-audit: live repository_dispatch listener $a ($b) is not declared in registry/repos.yml."
+         dispatch_findings=$((dispatch_findings + 1)); fi ;;
+  esac
+done < "$DISPATCH_FILE"
+echo "repos-audit: repository_dispatch graph — $dispatch_declared declared edge(s), $dispatch_findings finding(s), $dispatch_refusals refusal(s)."
 
 # Per-capability, so a green audit is green FOR A NAMED REASON. The old summary was one aggregate
 # line, which is precisely how auditing a third of the mandate looked identical to auditing all of it.

@@ -960,6 +960,14 @@ sed -i 's/types: \["fixture-event"\]/types: ["unrostered-event"]/' "$FIX/FS-GG__
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
   && ok "unrostered dispatch listener -> audit fails" || bad "unrostered dispatch listener" "rc=$rc: $out"
+# The inverse of the declared-edge mutations: deleting the WHOLE graph must not hide a live sender
+# or listener. The reverse sweep is deliberately unconditional, or an omitted top-level key becomes
+# a mute button for precisely the fabric this audit owns.
+mkreg "$REG"; dispatch_wire fixture-event fixture-event
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live dispatch sender.*not declared' \
+    && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
+  && ok "omitting every dispatch declaration -> live graph fails closed" || bad "omitted dispatch graph" "rc=$rc: $out"
 mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---
