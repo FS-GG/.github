@@ -66,6 +66,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/gate-finding-history/run.sh",
       "workflow": ".github/workflows/gate-finding-history-selftest.yml"
+    },
+    {
+      "source": "scripts/check-adr-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/adr-coherence/run.sh",
+      "workflow": ".github/workflows/adr-coherence.yml"
     }
   ]
 }
