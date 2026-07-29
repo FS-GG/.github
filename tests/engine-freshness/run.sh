@@ -6,8 +6,9 @@
 # because the subject here is invisible to every version comparison in the repo: this engine's
 # `<Version>` moves only at RELEASE time, so `version == package-version` is precisely the state the
 # bug lives in. The gate counts COMMITS instead. So this fixture spends most of its length on the
-# FAILURE legs: it proves the gate goes red when the wire surface has drifted, and ERRORS — never
-# "no drift" — when the feed is unreadable, the tag is absent, or a measured path has moved.
+# FAILURE legs: it proves the gate goes red when the wire surface has drifted OR an unreleased
+# commit closes a defect-class issue, and ERRORS — never "no drift" — when the feed is unreadable,
+# the tag is absent, issue metadata is malformed, or a measured path has moved.
 #
 # Every negative leg asserts the REASON, not just a non-zero exit — the .github#266 vacuous-failure
 # defect (SDD#299) was a "must fail" test whose non-zero exit came from a path guard rather than from
@@ -142,7 +143,56 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 4. A commit OUTSIDE the engine's source trees is not drift at all.
+# 4. CLASS IS THE SECOND RED BAR (#1671). Hardening stays reported/green; an issue whose unfenced
+#    declaration says `Class: defect` reds immediately. The commit sha keys the fixture because the
+#    live gate asks GitHub for the merged commit's associated PR and structural closing-issue edge —
+#    it never guesses from `#123` prose in the subject.
+# ---------------------------------------------------------------------------------------------
+R="$WORK/hardening"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: harden the parser (#77)"
+sha="$(git_ -C "$R" rev-parse HEAD)"
+F="$WORK/feed-hardening.json"
+printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":{"%s":[{"number":77,"body":"Class: hardening"}]}}' \
+  "$sha" > "$F"
+run "$R" "$F"
+must_pass "a hardening-class engine commit stays GREEN" "Reported, not red"
+
+R="$WORK/defect"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: repair a live wrong answer (#88)"
+sha="$(git_ -C "$R" rev-parse HEAD)"
+F="$WORK/feed-defect.json"
+printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":{"%s":[{"number":88,"body":"Class: hardening\\n\\nClass: defect"}]}}' \
+  "$sha" > "$F"
+run "$R" "$F"
+must_fail "an unreleased DEFECT-class engine commit is RED" "unreleased engine commit(s) close an issue declaring"
+if grep -q 'DEFECT .*closes #88' <<<"$out"; then
+  ok "the defect RED names the commit and structurally closing issue"
+else
+  bad "the defect RED names the commit and structurally closing issue" "$out"
+fi
+
+# A `Class: defect` example inside a fence is documentation, not a declaration — the same grammar
+# the engine's Class.fromBody uses. This keeps the new red bar from classifying prose examples.
+R="$WORK/fenced"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: document a hardening (#99)"
+sha="$(git_ -C "$R" rev-parse HEAD)"
+F="$WORK/feed-fenced.json"
+printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":{"%s":[{"number":99,"body":"```\\nClass: defect\\n```\\n\\nClass: hardening"}]}}' \
+  "$sha" > "$F"
+run "$R" "$F"
+must_pass "a fenced defect EXAMPLE does not reclassify a hardening" "Reported, not red"
+
+# An unreadable metadata shape is not "no defect". The gate owns a policy decision based on this
+# read, so malformed issue data must fail closed before it can pronounce the drift harmless.
+R="$WORK/bad-issues"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: metadata cannot be guessed"
+F="$WORK/feed-bad-issues.json"
+printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":[]}' > "$F"
+run "$R" "$F"
+must_fail "malformed closing-issue metadata is an ERROR" '_closingIssues` is not an object'
+
+# ---------------------------------------------------------------------------------------------
+# 5. A commit OUTSIDE the engine's source trees is not drift at all.
 # ---------------------------------------------------------------------------------------------
 R="$WORK/outside"; make_repo "$R"
 touch_commit "$R" "README.md" "docs: unrelated to the engine"
@@ -151,7 +201,7 @@ run "$R" "$F"
 must_pass "a commit outside the engine trees is not drift" "no engine commits since"
 
 # ---------------------------------------------------------------------------------------------
-# 5. A TAG IS NOT A PUBLISH. The comparison point is the FEED's newest, never the newest tag: a tag
+# 6. A TAG IS NOT A PUBLISH. The comparison point is the FEED's newest, never the newest tag: a tag
 #    that was cut but never published must not be believed. (The fs-gg-ui-template PHANTOM 0.9.1
 #    precedent: three tags cut, zero packages.) Here v0.4.0 is tagged but the feed still serves
 #    0.3.0 — the gate must measure from v0.3.0 and SEE the drift, not from v0.4.0 and report clean.
@@ -164,7 +214,7 @@ run "$R" "$F"
 must_fail "a PHANTOM tag is not believed — drift is measured from the FEED" "since coord-engine/v0.3.0"
 
 # ---------------------------------------------------------------------------------------------
-# 6. FAIL CLOSED — the feed's newest version has no tag. "I cannot name the released commit" is an
+# 7. FAIL CLOSED — the feed's newest version has no tag. "I cannot name the released commit" is an
 #    ERROR, never "no drift".
 # ---------------------------------------------------------------------------------------------
 R="$WORK/notag"; make_repo "$R"
@@ -173,7 +223,7 @@ run "$R" "$F"
 must_fail "an untagged feed version is an ERROR, not 'current'" "has no tag"
 
 # ---------------------------------------------------------------------------------------------
-# 7. FAIL CLOSED — the feed has no such package / zero versions / only prereleases.
+# 8. FAIL CLOSED — the feed has no such package / zero versions / only prereleases.
 # ---------------------------------------------------------------------------------------------
 R="$WORK/feedbad"; make_repo "$R"
 printf '{"Some.Other.Package": ["1.0.0"]}' > "$WORK/feed-absent.json"
@@ -192,7 +242,7 @@ run "$R" "$WORK/does-not-exist.json"
 must_fail "an unreadable fixture is an ERROR" "cannot read fixture"
 
 # ---------------------------------------------------------------------------------------------
-# 8. FAIL CLOSED — a measured path has MOVED. A hard-coded path that silently measures nothing is
+# 9. FAIL CLOSED — a measured path has MOVED. A hard-coded path that silently measures nothing is
 #    the exact fails-open shape this gate exists to refuse, so its absence must red.
 # ---------------------------------------------------------------------------------------------
 R="$WORK/moved"; make_repo "$R"
@@ -210,7 +260,7 @@ run "$R" "$F"
 must_fail "a missing engine source tree is an ERROR" "does not exist at"
 
 # ---------------------------------------------------------------------------------------------
-# 9. THE FIXTURE HOOK IS LOCKED. A --fixture that works outside this harness is a way to turn the
+# 10. THE FIXTURE HOOK IS LOCKED. A --fixture that works outside this harness is a way to turn the
 #    gate into a no-op, which is the defect class above.
 # ---------------------------------------------------------------------------------------------
 R="$WORK/lock"; make_repo "$R"
@@ -227,7 +277,7 @@ set -e
 must_fail "a missing token is an ERROR, not a skip" "not skip it"
 
 # ---------------------------------------------------------------------------------------------
-# 10. FAIL CLOSED — git itself unreadable.
+# 11. FAIL CLOSED — git itself unreadable.
 # ---------------------------------------------------------------------------------------------
 mkdir -p "$WORK/notgit"
 F="$WORK/feed-notgit.json"; feed "$F" 0.3.0

@@ -10,11 +10,12 @@
 # scalars are EQUAL — the registry row is green *because* the defect is happening. So the gate
 # counts COMMITS since the tag that produced the feed's newest version.
 #
-# WHY THIS IS NOT A pull_request GATE. The `freshness` job would red every PR that touches the wire
-# surface — you could not change the protocol without first releasing the protocol you had not
-# changed yet. The subject is a property of MAIN plus the feed, not of a PR, and it is fixed by
-# releasing, not by editing the PR. So the live job runs on main, on a schedule, and on demand. The
-# `fixture` job DOES run on PRs, because that one's subject IS the diff.
+# WHY THIS IS NOT A pull_request GATE. The `freshness` job reds unreleased wire drift and engine
+# commits whose merged PR closes a `Class: defect` issue. Running that on a PR would demand release
+# before the source change exists on main. The subject is a property of MAIN plus the feed and
+# GitHub's structural closing-issue edges, and it is fixed by a separate release transaction, not
+# by editing the source PR. So the live job runs on main, on a schedule, and on demand. The `fixture`
+# job DOES run on PRs, because that one's subject IS the diff.
 #
 # THE SCHEDULE IS THE POINT, as it is for feed-coherence: a release that never happened touches no
 # file here, so no path-filtered trigger can ever see it. Only a periodic read of the feed can.
@@ -79,6 +80,7 @@ jobs:
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
+      issues: read     # closingIssuesReferences + the issue body's Class declaration (#1671)
       packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
     steps:
       - uses: actions/checkout@v7
@@ -94,6 +96,6 @@ jobs:
         env:
           # Env-passed, never interpolated into the run script — the org's uniform anti-injection
           # pattern (cf. feed-coherence.yml, architecture-map.yml). The run-scoped token carries
-          # `packages: read`, which is what the feed's HTTP Basic auth wants.
+          # `packages: read` for the feed and `issues: read` for the structural defect-class leg.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/check-engine-freshness.py --repo . --ref HEAD
