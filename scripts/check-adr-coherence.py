@@ -108,6 +108,33 @@ WHAT IT DOES NOT ASSERT
   already drifted 139 -> 205 while this paragraph went on naming :139 — by then the blank line above
   §7, an unrelated clause.
 
+  THE THRESHOLD .github#1709 NAMED IS NOW CROSSED, AND THIS IS WHERE THAT IS RECORDED
+  #1709 said: "if a THIRD instance of an amender misdescribing its own amendments appears, that is the
+  ADR-0059 threshold for revisiting whether the amender's side is gateable at all — but the answer
+  today is a prose fix." Working #1709 found FIVE, across TWO distinct moving facts, all in ADR-0067
+  and its index row, all hand-written restatements of a fact whose authoritative home is elsewhere:
+
+    the ROOT SET (authoritative home: ADR-0067 §5's own EXECUTED note)
+      1. ADR-0067:6    `**Amends:**`  "the root set they declare is unchanged today"   (#1709's own 1)
+      2. ADR-0067:205  §9 phase-4     ADR-0065's root set "remain[s] amended in direction only"  (2)
+      3. ADR-0067:802  §9 stage-2     bare "in direction only" — landed 2026-07-29, AFTER #1709 was
+                                      filed, which is why #1709's census said TWO and found three
+    HOW FAR §6 HAS SHIPPED (authoritative home: docs/coordination/skill-apparatus-retirement-order.md
+    §6's standing stage verdict, whose own §4 block says "do not restate the stage anywhere either")
+      4. ADR-0067:6    `**Amends:**`  "§6's generated view is NOT landed" — false since stage 1
+      5. docs/adr/README.md:134       the SAME sentence, in the index row
+
+  All five are fixed. The count is recorded because the trigger is worth more than the repairs: five
+  instances in one record is ADR-0034 §4's projection family, in the corpus that named it.
+
+  WHAT IS DELIBERATELY NOT CONCLUDED HERE: that the amender's side should be gated, or how. #1709's
+  argument against a tense regex (above) is not weakened by five instances — it is the same argument,
+  and .github#1706 still protects a record quoting its own falsified sentences. Note also that
+  instance 4/5's fact is not even THIS gate's subject: its home is a coordination document, and
+  .github#1750 is the open row for nothing checking that document's verdict against ground truth.
+  A mechanism is NOT proposed here, because none has been shown to beat the one already rejected
+  (.github#266: do not assert a mechanism you have not measured).
+
 EXIT CODES (the contract; nothing greps this script's prose)
   0  coherent
   1  finding — a real incoherence, named, with the file and line
