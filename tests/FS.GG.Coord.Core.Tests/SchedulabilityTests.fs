@@ -322,8 +322,45 @@ module SchedulabilityTests =
             Assert.False(System.String.IsNullOrWhiteSpace reason, $"%A{v} produced no reason")
 
     // ================================================================================================
-    // #1103 leg 2 — the `Blocked on: human/...` sentinel refuses REGARDLESS of the touch-set.
+    // #1103/#1887 — human decisions/actions refuse REGARDLESS of the touch-set.
     // ================================================================================================
+
+    [<Fact>]
+    let ``#1887 Class decision refuses a Ready item with no human sentinel`` () =
+        // The live defect's exact disagreement: the item's own body class says decision, the sentinel is
+        // absent, and the board advertises Ready. Before #1887 this was Startable and blind `take` claimed
+        // it. BoardClass is deliberately stale in the opposite direction: the body-derived Class wins.
+        Assert.Equal(
+            AwaitingHuman AwaitingHumanDecision,
+            ask
+                { item 1887 with
+                    Class = Some Decision
+                    BoardClass = Some Hardening
+                    HumanBlock = None })
+
+    [<Fact>]
+    let ``#1887 Class decision refuses Backlog even when the caller opts into Backlog`` () =
+        Assert.Equal(
+            AwaitingHuman AwaitingHumanDecision,
+            schedulable
+                true
+                []
+                { item 1887 with
+                    Status = Backlog
+                    Class = Some Decision
+                    HumanBlock = None })
+
+    [<Fact>]
+    let ``#1887 negative control — a non-decision class with no sentinel remains Startable`` () =
+        // This is the mutation discriminator: deleting the Decision guard makes the two tests above match
+        // this control and red. The remedy narrows one class; it does not park every classed item.
+        Assert.Equal(
+            Startable,
+            ask
+                { item 1887 with
+                    Class = Some Hardening
+                    BoardClass = Some Decision
+                    HumanBlock = None })
 
     [<Fact>]
     let ``a human/decision sentinel refuses even a Ready item that carries a real touch-set (#918)`` () =

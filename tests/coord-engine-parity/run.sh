@@ -4,6 +4,7 @@
 # The corpus (case 22) certifies, on the parallel-work board:
 #   bash scripts/fsgg-coord batch --repo sdd --json   →   ["FS.GG.SDD#70","FS.GG.SDD#74"]
 # and the skip reasons for #71 (in-flight overlap), #72 (no touch-set), #73 (batch-member overlap).
+# #1887 adds #75 as a decision-class negative control: it must stay absent from that same answer.
 #
 # This drives `fsgg-coord-engine batch` against that exact board, served over HTTP (`pw_server.py`,
 # lifted verbatim from the corpus fixtures), and asserts the engine reaches the SAME answer with NO
@@ -120,6 +121,7 @@ check_skip() { printf '%s' "$err" | grep -q "$1" && ok "$2" || bad "$2" "not in 
 check_skip "FS.GG.SDD#71 — overlaps in-flight work"           "batch: #71 is a LIVE-CLAIM overlap — 'overlaps in-flight work' (case 22)"
 check_skip "FS.GG.SDD#72 — no 'Paths:' declared"              "batch: #72 is UNDECLARED — 'no Paths: declared' (case 22)"
 check_skip "FS.GG.SDD#73 — overlaps batch member FS.GG.SDD#70" "batch: #73 is a BATCH-MEMBER overlap — names its peer #70 (case 22)"
+check_skip "FS.GG.SDD#75 — the item's own text records a human DECISION" "#1887: batch refuses a body-classed decision row with no human sentinel"
 
 # ---- #428: a LIVE-CLAIM overlap and a BATCH-MEMBER overlap are the SAME verdict (skipped) but two
 #      DIFFERENT instructions — one is queued behind a holder's lease, the other clashes a peer being
@@ -159,6 +161,44 @@ if [ "$tkrc" -eq 0 ] && printf '%s' "$tk" | grep -q 'claimed FS.GG.SDD#70 by wor
 else
   bad "take parity" "rc=$tkrc: $tk"
 fi
+
+# ---- #1887: BLIND TAKE MUST NOT CIRCULATE A DECISION ROW -----------------------------------------
+#
+# A fresh copy of the same board lets blind take consume both ordinary candidates (#70 then #74).
+# What remains is #75 — Ready, disjoint, real Paths, no human/decision sentinel, and `Class: decision`
+# in its OWN BODY. A third take must return EX_NONE rather than claim it. Remove the Decision guard
+# from `Schedulability` and this exact leg flips to exit 0 with "claimed #75": the negative control AC5
+# asks for, through the compiled engine and the real batch/take boundary rather than a pure unit call.
+DEC_OUT="$(mktemp)"; DEC_CACHE="$(mktemp -d)"
+python3 "$HERE/pw_server.py" >"$DEC_OUT" 2>/dev/null & DEC_SRV=$!
+DEC_PORT=""; for _ in $(seq 1 50); do DEC_PORT="$(head -n1 "$DEC_OUT" 2>/dev/null)"; [ -n "$DEC_PORT" ] && break; sleep 0.1; done
+if [ -z "$DEC_PORT" ]; then
+  unmeasured "#1887: decision-class take fixture bound no port"
+else
+  decenv() {
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$DEC_PORT" \
+      FSGG_COORD_CACHE="$DEC_CACHE" "$ENGINE" "$@"
+  }
+
+  dec1="$(decenv take --repo FS.GG.SDD --worker dec-1887-a 2>&1)"; dec1rc=$?
+  dec2="$(decenv take --repo FS.GG.SDD --worker dec-1887-b 2>&1)"; dec2rc=$?
+  dec3="$(decenv take --repo FS.GG.SDD --worker dec-1887-c 2>&1)"; dec3rc=$?
+
+  { [ "$dec1rc" -eq 0 ] && printf '%s' "$dec1" | grep -q 'claimed FS.GG.SDD#70'; } \
+    && ok "#1887: take fixture first consumes ordinary candidate #70" \
+    || bad "#1887: first positive control must claim #70" "rc=$dec1rc: $dec1"
+  { [ "$dec2rc" -eq 0 ] && printf '%s' "$dec2" | grep -q 'claimed FS.GG.SDD#74'; } \
+    && ok "#1887: take fixture then consumes ordinary candidate #74" \
+    || bad "#1887: second positive control must claim #74" "rc=$dec2rc: $dec2"
+  { [ "$dec3rc" -eq 5 ] \
+      && printf '%s' "$dec3" | grep -q 'FS.GG.SDD#75 — the item' \
+      && ! printf '%s' "$dec3" | grep -q 'claimed FS.GG.SDD#75'; } \
+    && ok "#1887: blind take returns EX_NONE instead of claiming the remaining decision-class row" \
+    || bad "#1887: Class: decision must gate the real take boundary" "rc=$dec3rc: $dec3"
+fi
+kill "$DEC_SRV" 2>/dev/null
+rm -f "$DEC_OUT"
+rm -rf "$DEC_CACHE"
 
 # ---- FAIL-CLOSED (case 42): #461 — an unreadable LOCK is never an empty lock ----------------------
 #

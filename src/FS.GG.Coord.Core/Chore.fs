@@ -85,21 +85,20 @@ module Chore =
         | Some(RegistryPredicate.Contradicts _)
         | Some(RegistryPredicate.Unknown _) -> false
 
-    /// THE HUMAN-PARK GATE — ADR-0045's sentinel, respected by the one chore that would overwrite it
-    /// (.github#1644).
+    /// THE HUMAN-PARK GATE — ADR-0045's sentinel and the item's decision class, respected by the one
+    /// chore that would overwrite them (.github#1644/#1887).
     ///
     /// `BLOCKER-CLEARED` clears an item `Blocked → Ready` when its recorded blockers resolve. An item whose
-    /// body carries `Blocked on: human/decision` (or `human/action`) is unstartable until a HUMAN acts,
-    /// whatever its concrete edges say — `Schedulability` step 3b refuses it outright, and ADR-0045's whole
-    /// consequence is that such an item is "refused by construction". Promoting it writes the board a column
-    /// that CONTRADICTS the scheduler, and the promotion is not self-correcting: `Ready` is what advertises
-    /// the row to `ready`/`batch --include-backlog` and to every human reading the board, `lint`'s
+    /// body carries `Class: decision`, `Blocked on: human/decision`, or `Blocked on: human/action` is
+    /// unstartable until a HUMAN chooses or acts, whatever its concrete edges say — `Schedulability` step
+    /// 3b refuses it outright. Promoting it writes a misleading `Ready` projection even though the scheduler
+    /// now refuses it on every pass: `Ready` advertises the row to humans and to `ready` reports, `lint`'s
     /// `BLOCKED-NO-REASON` only watches a `Blocked` row so it stops watching the park, and
     /// `STATUS-NOT-BLOCKED` cannot push the row back because its blockers are all resolved. One write, and
     /// the parking record is a body line nothing on the board agrees with any more.
     ///
-    /// `true` — the flip may proceed — in exactly one case: the item declares NO sentinel **and we read the
-    /// body that would have carried one**.
+    /// `true` — the flip may proceed — only when the item is not a decision, declares no human sentinel,
+    /// **and we read the body that would have carried either declaration**.
     ///
     /// THE SECOND CLAUSE IS THE FAIL-CLOSED, AND IT IS NOT DECORATION (#266). `HumanBlock = None` means BOTH
     /// "the body declares no sentinel" and "nobody read the body": `HumanBlock option` has nowhere to put
@@ -121,10 +120,11 @@ module Chore =
     /// we DID read is untouched: `None` + a readable touch-set flips exactly as it did before. That is the
     /// entire population #620's remedy was built for, and this narrows the flip condition rather than
     /// adding a second way to trigger it.
-    let private humanBlockAllowsFlip (item: Item) : bool =
-        match item.HumanBlock with
-        | Some _ -> false
-        | None ->
+    let private humanHoldAllowsFlip (item: Item) : bool =
+        match item.Class, item.HumanBlock with
+        | Some Decision, _
+        | _, Some _ -> false
+        | _, None ->
             match item.TouchSet with
             | Unreadable _ -> false
             | Undeclared
@@ -151,7 +151,7 @@ module Chore =
     /// on" structural instead of remembered.
     ///
     /// **IT DOES NOT FAIL CLOSED ON A PROBE THAT FAILED, AND THAT IS A KNOWN RESIDUAL — .github#1924.**
-    /// This gate is NOT the fail-closed shape `humanBlockAllowsFlip` is, and saying it were would be the
+    /// This gate is NOT the fail-closed shape `humanHoldAllowsFlip` is, and saying it were would be the
     /// fail-open wearing the fix's clothes. `Reads.prAlive : IoResult&lt;Liveness&gt;` has FIVE outcomes;
     /// `Item.ItemPr` is an `int option` and carries ONE, so THREE arrive here as `None` = "no PR":
     /// `LeaseExpiredBranchPushed` (#1055's pushed branch, work in flight before its PR exists),
@@ -336,12 +336,11 @@ module Chore =
               // (FS.GG.Rendering#923). An item that declares no predicate (`None`) is ungated and flips as
               // today (ADR-0050 decision 5).
               //
-              // ...AND the item must not be PARKED ON A HUMAN — .github#1644. `Blocked on: human/decision`
-              // is ADR-0045's sentinel for "a person must choose before this is startable", and this is the
-              // one mechanical rule that could overwrite it: promoting such a row to `Ready` converts "a
-              // human must decide this" into "a worker may pick this up". `humanBlockAllowsFlip` also fails
-              // closed on a body we did not READ, because `HumanBlock = None` cannot tell that apart from
-              // "declares no sentinel".
+              // ...AND the item must not be PARKED ON A HUMAN — .github#1644/#1887. `Class: decision`
+              // and ADR-0045's `Blocked on: human/...` sentinel both say a person must choose or act before
+              // this is startable. This is the one mechanical rule that could overwrite that fact with a
+              // misleading `Ready` projection. `humanHoldAllowsFlip` also fails closed on a body we did
+              // not READ, because `None` cannot tell that apart from "declares no class/sentinel".
               //
               // ...AND the item must not already carry an IMPLEMENTATION IN FLIGHT — .github#1738. An open
               // `item/<n>-*` PR on a markerless row is exactly what `Schedulability` step 5b refuses on
@@ -359,7 +358,7 @@ module Chore =
                   // exactly this population for `Item.ItemPr`, so the two projects ask ONE function
                   // rather than agreeing by inspection (.github#1738, #1012).
                   && Blockers.cleared item.Blockers
-                  && humanBlockAllowsFlip item
+                  && humanHoldAllowsFlip item
                   && itemPrAllowsFlip item
                   && predicateAllowsFlip item
               then

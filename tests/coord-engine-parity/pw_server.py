@@ -3,8 +3,9 @@
 
 This is the parity fixture. The shell corpus drives `bash scripts/fsgg-coord batch` against this exact
 board through its `gh` stub and CERTIFIES the answer (case 22): `batch --repo sdd --json` →
-`["FS.GG.SDD#70","FS.GG.SDD#74"]`, skipping #71 (overlaps the in-flight #42), #72 (no touch-set), and #73
-(overlaps batch-member #70). This server presents the SAME board — the same items, the same seeded
+`["FS.GG.SDD#70","FS.GG.SDD#74"]`, skipping #71 (overlaps the in-flight #42), #72 (no touch-set), #73
+(overlaps batch-member #70), and #75 (`Class: decision`, #1887). This server presents that board with
+the decision-class negative control added — the same original items, the same seeded
 touch-sets, the same pre-existing claims — so the ENGINE, over HTTP with no bash in sight, can be held to
 that same certified answer. Any divergence is a real gap in the drop-in.
 
@@ -38,14 +39,18 @@ BODIES = {
     72: "",  # no touch-set declared
     73: "Paths: src/Scene/Sub/**",
     74: "Paths: docs/adr/**",
+    # No human/decision sentinel: the item's own Class body line is the authority #1887 requires the
+    # scheduler to read. Its neutral title also prevents the compatibility title prefix from proving it.
+    75: "Paths: docs/architecture/**\n\nClass: decision",
 }
 
 # Board Status per item (In progress for the claimed/orphaned ones, Ready for the candidates).
 STATUS = {42: "In progress", 43: "In progress", 60: "In progress",
-          70: "Ready", 71: "Ready", 72: "Ready", 73: "Ready", 74: "Ready"}
+          70: "Ready", 71: "Ready", 72: "Ready", 73: "Ready", 74: "Ready", 75: "Ready"}
 
 TITLES = {42: "Audio mixer", 43: "Legacy port", 60: "Nobody claimed me", 70: "Scene graph",
           71: "Mixer tweak", 72: "No touch-set declared", 73: "Scene subtree", 74: "ADR housekeeping"}
+TITLES[75] = "Architecture delivery choice"
 
 
 def _now(offset_hours=0):

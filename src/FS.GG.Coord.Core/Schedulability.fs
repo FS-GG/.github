@@ -101,20 +101,36 @@ module Schedulability =
         | _ :: _ as holding -> BlockedBy holding
         | [] ->
 
-        // 3b. THE HUMAN-BLOCK SENTINEL, BEFORE THE TOUCH-SET (#1103 leg 2). A `Blocked on: human/...`
-        //     item is unstartable because a HUMAN must act first, and that governs whatever the `Paths:`
-        //     line says — a decision item may legitimately carry a real touch-set recording where its fix
-        //     will land (#918). So this is checked here, not folded into the touch-set: reporting
-        //     "unmatchable token" or "nobody has claimed this" about an item awaiting a human sends the
-        //     reader to fix the wrong thing.
+        // 3b. THE HUMAN DECISION/ACTION, BEFORE THE TOUCH-SET (#1103/#1887). `Class: decision` is the
+        //     item's own declaration that a HUMAN must choose first; a `Blocked on: human/...` sentinel
+        //     records the same hold for a decision, or the distinct "human must act" hold. Either governs
+        //     whatever the `Paths:` line says — a decision item may legitimately carry a real touch-set
+        //     recording where its eventual implementation will land (#918). So this is checked here, not
+        //     folded into the touch-set: reporting "unmatchable token" or "nobody has claimed this" about
+        //     an item awaiting a human sends the reader to fix the wrong thing.
         //
         //     AFTER the concrete blockers (step 3): a `Blocked by #999` is a more actionable sentence
-        //     than "a human must decide", and an item can carry both. AFTER the column (step 2): the
-        //     sentinel must refuse even a `Backlog` item that `--include-backlog` opts in — which is the
-        //     door `take --include-backlog` walked through on #918/#1081, and the column cannot close.
-        match item.HumanBlock with
-        | Some hb -> AwaitingHuman hb
-        | None ->
+        //     than "a human must decide", and an item can carry both. AFTER the column (step 2): neither
+        //     body declaration may be defeated by `--include-backlog`.
+        //
+        //     THE AUTHORITY IS THE ITEM'S TEXT, NOT THE BOARD COLUMN (#1887 AC6). `item.Class` is parsed
+        //     from the `Class:` body line (with the title/sentinel compatibility evidence folded in by
+        //     `Class.derive`); `item.BoardClass` is deliberately not consulted. The column is a projection
+        //     and can lag. This makes all decision-class rows unschedulable even when they carry no
+        //     duplicated human/decision sentinel, and makes release-to-Ready harmless: the guard is
+        //     evaluated on every scheduling pass.
+        //
+        //     CHOSEN OVER "REQUIRE THE SENTINEL" (#1887 AC2): reading `Class` here does give scheduling
+        //     two human-hold inputs, but they are not rival authorities — both come from the issue's own
+        //     text, and `Class: decision` already promises "surfaced, never dispatched". Requiring every
+        //     decision to repeat itself as `Blocked on: human/decision` would preserve one input only by
+        //     creating a second mandatory encoding on every issue; one missing copy recreates the defect,
+        //     and release circulates that row until the copy lands. The direct guard makes the declared
+        //     class true immediately and keeps the action-vs-decision sentinel distinction intact.
+        match item.Class, item.HumanBlock with
+        | Some Decision, _ -> AwaitingHuman AwaitingHumanDecision
+        | _, Some hb -> AwaitingHuman hb
+        | _, None ->
 
         // 4. THE TOUCH-SET, BEFORE THE LOCK. "Nobody can claim this item" is a stronger and cheaper
         //    statement than "somebody already has", and a worker told the second when the first is
@@ -334,7 +350,7 @@ module Schedulability =
 
             $"%s{id} — blocked by %s{names}"
         | AwaitingHuman AwaitingHumanDecision ->
-            $"%s{id} — 'Blocked on: human/decision': a human must DECIDE before this can start; not schedulable by design, whatever its `Paths:` line records (#1103)"
+            $"%s{id} — the item's own text records a human DECISION (`Class: decision` and/or `Blocked on: human/decision`): not schedulable by design, whatever its `Paths:` line records (#1103/#1887)"
         | AwaitingHuman AwaitingHumanAction ->
             $"%s{id} — 'Blocked on: human/action': blocked on a human ACTION (e.g. a scope grant); startable the moment it lands, not before (#1103)"
         | HeldBy(WorkerId w) -> $"%s{id} — already claimed by worker %s{w} (%s{leaseWindow leaseMinutes age})"
