@@ -45,16 +45,7 @@ module Followups =
 
     // ---- the queue file ----------------------------------------------------------------------------
 
-    let path (worker: Worker) : Result<string, string> =
-        // AN ID THAT CANNOT NAME A WORKER MUST NOT NAME A QUEUE. `Identity.resolve` slugs `--worker`/
-        // `$FSGG_WORKER` and returns Ok for a slug that trims to nothing — `--worker '///'` is `Ok ""` —
-        // so without this every such caller shares ONE file, which is property 1 defeated by the id
-        // itself. Refuse rather than key on it (#419's fail-closed read).
-        if String.IsNullOrWhiteSpace worker.Id then
-            Error
-                "the resolved worker id is EMPTY, so it cannot key a queue — every worker with an empty id would share one file, which is the collision the per-worker path exists to prevent. Mint one: eval \"$(scripts/fsgg-coord whoami --mint)\"."
-        else
-            Ok(Path.Combine(Cache.root (), "followups", worker.Id + ".txt"))
+    let path (worker: Worker) : Result<string, string> = FollowupAudit.path worker
 
     /// The STORED form — fully qualified, always.
     ///

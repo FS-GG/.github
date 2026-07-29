@@ -242,6 +242,8 @@ schema bump using an asymmetry .github#1574 had already removed. No behaviour mo
     <Compile Include="Options.fs" />
     <Compile Include="Identity.fsi" />
     <Compile Include="Identity.fs" />
+    <Compile Include="FollowupAudit.fsi" />
+    <Compile Include="FollowupAudit.fs" />
     <Compile Include="Chores.fsi" />
     <Compile Include="Chores.fs" />
     <Compile Include="KitDigest.fsi" />

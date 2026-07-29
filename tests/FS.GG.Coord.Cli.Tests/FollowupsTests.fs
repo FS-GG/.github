@@ -149,6 +149,34 @@ module FollowupsTests =
             Assert.NotEqual(Client.ExitGreen, exitCode Empty))
 
     [<Fact>]
+    let ``the terminal audit is local, worker-keyed, and does not consume an owed queue`` () =
+        withCache (fun _ ->
+            let owner = workerNamed "rook-audit-owner"
+            let stranger = workerNamed "wren-audit-stranger"
+            apply owner (Add "FS.GG.Game#171") |> ignore
+            Assert.Equal(FollowupAudit.Owed 1, FollowupAudit.inspect owner)
+            Assert.Equal(FollowupAudit.Empty, FollowupAudit.inspect stranger)
+            Assert.Equal(Head(ref' "FS-GG" "FS.GG.Game" 171), apply owner Peek))
+
+    [<Fact>]
+    let ``the terminal audit refuses an unusable worker key rather than calling it empty`` () =
+        withCache (fun _ ->
+            match FollowupAudit.inspect (workerWithRawId "") with
+            | FollowupAudit.Unreadable why -> Assert.Contains("EMPTY", why)
+            | other -> failwith $"an unusable worker key is not an empty queue: %A{other}")
+
+    [<Fact>]
+    let ``the terminal audit reports a locked queue as unreadable, never empty`` () =
+        withCache (fun _ ->
+            let w = workerNamed "rook-audit-locked"
+            apply w (Add "FS.GG.Game#171") |> ignore
+            let file = match path w with | Ok value -> value | Error why -> failwith why
+            use held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+            match FollowupAudit.inspect w with
+            | FollowupAudit.Unreadable why -> Assert.Contains("NOT an empty queue", why)
+            | other -> failwith $"a held queue must fail closed, got %A{other}")
+
+    [<Fact>]
     let ``Empty and Unreadable are DIFFERENT outcomes and different codes`` () =
         // #266's whole lesson, as an assertion: "I looked and there is nothing" must never be reachable
         // from "I could not look". A worker who reads the second as the first walks away from a promise.
@@ -167,6 +195,8 @@ module FollowupsTests =
                 | Error e -> failwith e
 
             File.WriteAllText(file, "not-a-ref\nFS-GG/FS.GG.Game#171\n")
+
+            Assert.Equal(FollowupAudit.Owed 2, FollowupAudit.inspect w)
 
             // Skipping the bad line would be THIS ITEM'S BUG rebuilt inside its own fix: a promise
             // discarded by a machine nobody asked. Fail closed, name the file, let the operator repair it.

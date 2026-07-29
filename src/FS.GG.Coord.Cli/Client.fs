@@ -4791,6 +4791,21 @@ module Client =
                                 eprint
                                     $"fsgg-coord-engine: the stamp is GREEN, but %s{w.Id}'s claim on %s{ref.Short} could not be checked: %s{Errors.explain e}. If it is still held, run `release` so it stops reserving its touch-set (#533)."
 
+                            // A follow-up is a LOCAL promise, keyed to THIS resolved worker. The irreversible
+                            // work facts above must stand even if this audit cannot read a local file: a queue
+                            // failure cannot unstamp a merged PR. But it must not be quiet — `Empty` means we
+                            // looked and found nothing, whereas `Unreadable` means a promise may still exist.
+                            // Never pop here: `done` reports the obligation; the worker drains its OWN queue
+                            // sequentially after this stamp, one claimed item at a time.
+                            match FollowupAudit.inspect w with
+                            | FollowupAudit.Empty -> ()
+                            | FollowupAudit.Owed count ->
+                                eprint
+                                    $"fsgg-coord-engine: %d{count} follow-up(s) remain for worker %s{w.Id}. After this done stamp, drain only your OWN queue sequentially: `scripts/fsgg-coord followup pop`; claim and complete one item before considering the next."
+                            | FollowupAudit.Unreadable why ->
+                                eprint
+                                    $"fsgg-coord-engine: %s{why} The done stamp stands, but do not treat this as an empty queue. Retry `scripts/fsgg-coord followup list` before ending this worker."
+
                             // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
                             //
                             // Condition 3 names two boundaries: "offer after `done`, or at `next` when the
