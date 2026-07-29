@@ -1,0 +1,6 @@
+{
+  "recordedFrom": "GitHub Actions REST API response shapes, 2026-07-29",
+  "repo": {"default_branch": "main"},
+  "workflows": {"total_count": 1, "workflows": [{"id": 7, "name": "fixture", "path": ".github/workflows/fixture.yml", "state": "active"}]},
+  "runs": {"total_count": 12, "workflow_runs": [{"conclusion": "success", "created_at": "2026-07-29T00:00:00Z", "head_sha": "abcdef012345"}]}
+}

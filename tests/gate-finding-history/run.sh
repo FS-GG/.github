@@ -117,6 +117,12 @@ PY
 
 echo "== PART A: the clean corpus must produce NO finding =="
 
+# #1811 acquisition increment: this is the REAL --fetch path against a replay of a recorded Actions
+# API transcript, not a urllib mock and not a second implementation of fetch.
+if [ -z "${GFH_MUTANT:-}" ]; then
+  bash "$HERE/fetch-run.sh"
+fi
+
 # THE MOST IMPORTANT LEG IN THE FILE, and it is the green one. Everything below asserts the gate CAN
 # red; this asserts it does not red at random. Without it, `sys.exit(1)` would pass every other leg.
 corpus "$WORK/clean.json" 'pass'
