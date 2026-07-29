@@ -58,6 +58,7 @@ namespace FS.GG.Coord.Cli
 ///    assumption property 1 was added to stop relying on.
 module Followups =
 
+    open System
     open FS.GG.Coord.Types
     open FS.GG.Coord.Cli.Identity
 
@@ -72,6 +73,21 @@ module Followups =
         | Pop
         /// `followup list` — everything you owe yourself, in order.
         | List
+        /// `followup audit` — inspect every local worker queue without consuming one.
+        | Audit
+
+    /// One queue the local fleet audit could read.
+    type AuditedQueue =
+        { Worker: string
+          Age: TimeSpan
+          Refs: Ref list }
+
+    /// The local fact before GitHub correlation: queues old enough to need a live-claim check, or files
+    /// that could not be read. `Unreadable` is never represented as an empty queue.
+    type Audit =
+        { Stale: AuditedQueue list
+          Fresh: AuditedQueue list
+          Unreadable: (string * string) list }
 
     /// The answer, as a TYPE — not a bool, not an option, and never an int at this layer.
     ///
@@ -95,6 +111,7 @@ module Followups =
         | Refused of why: string
         /// The queue could not be READ or WRITTEN. "I could not look" — never `Empty`, never a silent 0.
         | Unreadable of why: string
+        | Audited of Audit
 
     /// Parse `Args` into an action. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Action, string>
@@ -113,6 +130,9 @@ module Followups =
 
     /// Run an action against this worker's queue. The one IO surface; totally determined by `Outcome`.
     val apply: worker: Worker -> action: Action -> Outcome
+
+    /// Enumerate every worker-keyed local queue at `now`, without consuming a ref.
+    val audit: now: DateTimeOffset -> Audit
 
     /// The lines an outcome prints, and where. `fst` is stdout — the ref a caller consumes; `snd` is stderr
     /// — the commentary. Split here rather than in `run` so the projection is testable without capturing a

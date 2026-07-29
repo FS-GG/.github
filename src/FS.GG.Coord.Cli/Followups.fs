@@ -14,6 +14,17 @@ module Followups =
         | Peek
         | Pop
         | List
+        | Audit
+
+    type AuditedQueue =
+        { Worker: string
+          Age: TimeSpan
+          Refs: Ref list }
+
+    type Audit =
+        { Stale: AuditedQueue list
+          Fresh: AuditedQueue list
+          Unreadable: (string * string) list }
 
     type Outcome =
         | Added of Ref
@@ -23,11 +34,12 @@ module Followups =
         | Empty
         | Refused of why: string
         | Unreadable of why: string
+        | Audited of Audit
 
     // ---- parsing the action ------------------------------------------------------------------------
 
     /// The verbs, spelled once. A refusal names them, so the remedy is in the message that refused (#611).
-    let private verbs = "add <ref> | peek | pop | list"
+    let private verbs = "add <ref> | peek | pop | list | audit"
 
     let parse (args: string list) : Result<Action, string> =
         match args with
@@ -40,6 +52,7 @@ module Followups =
         | [ "peek" ] -> Ok Peek
         | [ "pop" ] -> Ok Pop
         | [ "list" ] -> Ok List
+        | [ "audit" ] -> Ok Audit
         | [] -> Error $"followup needs a subcommand: %s{verbs}."
         | other :: _ -> Error $"unknown followup subcommand '%s{other}' (%s{verbs})."
 
@@ -215,6 +228,59 @@ module Followups =
 
                         Listed refs, None)
 
+        | Audit ->
+            // `run` handles this before identity resolution: a fleet audit is deliberately NOT scoped to
+            // whoever invoked it. Keeping the impossible branch explicit makes that boundary total.
+            Refused "followup audit reads every worker queue and does not take a worker argument."
+
+    // ---- fleet audit -------------------------------------------------------------------------------
+
+    /// A queue older than one item lease is not evidence that its worker is gone — chunk 2 correlates
+    /// that with live claims — but it IS the bounded local candidate a driver must be able to see.
+    let private abandonedAfter = TimeSpan.FromMinutes 120.0
+
+    let private queueDirectory () = Path.Combine(Cache.root (), "followups")
+
+    let private readAuditQueue (now: DateTimeOffset) (file: string) : Result<AuditedQueue, string> =
+        let worker = Path.GetFileNameWithoutExtension file
+
+        try
+            use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None)
+            let bytes = Array.zeroCreate<byte> (int stream.Length)
+            stream.ReadExactly(bytes, 0, bytes.Length)
+            let lines = splitLines (Encoding.UTF8.GetString bytes)
+
+            match lines |> List.map (parseLine file) |> List.tryPick (function Error why -> Some why | Ok _ -> None) with
+            | Some why -> Error why
+            | None ->
+                // The parser has already proved every line above. Re-read it here only to preserve the
+                // canonical `Ref` values rather than printing raw file bytes as if they were refs.
+                let parsed = lines |> List.choose (fun line -> parseLine file line |> Result.toOption)
+                let age = now - DateTimeOffset(File.GetLastWriteTimeUtc file)
+                Ok { Worker = worker; Age = age; Refs = parsed }
+        with
+        | :? IOException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message} This is NOT an empty queue."
+        | :? UnauthorizedAccessException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message}"
+
+    let audit (now: DateTimeOffset) : Audit =
+        let directory = queueDirectory ()
+
+        if not (Directory.Exists directory) then
+            { Stale = []; Fresh = []; Unreadable = [] }
+        else
+            let mutable stale, fresh, unreadable = [], [], []
+
+            for file in Directory.EnumerateFiles(directory, "*.txt") do
+                let worker = Path.GetFileNameWithoutExtension file
+
+                match readAuditQueue now file with
+                | Error why -> unreadable <- (worker, why) :: unreadable
+                | Ok queue when List.isEmpty queue.Refs -> ()
+                | Ok queue when queue.Age >= abandonedAfter -> stale <- queue :: stale
+                | Ok queue -> fresh <- queue :: fresh
+
+            { Stale = List.rev stale; Fresh = List.rev fresh; Unreadable = List.rev unreadable }
+
     // ---- the projection ----------------------------------------------------------------------------
 
     let render (outcome: Outcome) : string list * string list =
@@ -225,6 +291,15 @@ module Followups =
         | Head r -> [ qualified r ], []
         | Popped r -> [ qualified r ], []
         | Listed refs -> refs |> List.map qualified, [ $"%d{List.length refs} follow-up(s) owed." ]
+        | Audited audit ->
+            let queueLines label queues =
+                queues
+                |> List.collect (fun queue ->
+                    [ $"%s{label}: worker %s{queue.Worker}, age %O{queue.Age}" ]
+                    @ (queue.Refs |> List.map (fun r -> $"  %s{qualified r}")))
+
+            let unreadable = audit.Unreadable |> List.map (fun (worker, why) -> $"UNREADABLE: worker %s{worker}: %s{why}")
+            [], queueLines "ABANDONED-CANDIDATE" audit.Stale @ queueLines "ACTIVE-CANDIDATE" audit.Fresh @ unreadable
         | Empty -> [], [ "the follow-up queue is empty — nothing owed. Back to the board." ]
         | Refused why -> [], [ $"fsgg-coord-engine: %s{why}" ]
         | Unreadable why -> [], [ $"fsgg-coord-engine: %s{why}" ]
@@ -235,6 +310,8 @@ module Followups =
         | Head _
         | Popped _
         | Listed _ -> Client.ExitGreen
+        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) -> Client.ExitRed
+        | Audited _ -> Client.ExitGreen
         // EX_NONE, and `Client`'s own constant rather than a 5 typed here — "I looked and there is nothing"
         // has exactly one meaning across this engine, and `take` already owns it (#585).
         | Empty -> Client.ExitNone
@@ -251,6 +328,13 @@ module Followups =
         | Error msg ->
             Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
             Client.ExitError
+        | Ok Audit ->
+            let outcome = Audited(audit DateTimeOffset.UtcNow)
+            let out, err = render outcome
+
+            for line in out do Console.Out.WriteLine(line: string)
+            for line in err do Console.Error.WriteLine(line: string)
+            exitCode outcome
         | Ok action ->
             match Identity.resolve opts.Worker with
             | Error msg ->

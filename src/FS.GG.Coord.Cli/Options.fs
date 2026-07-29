@@ -378,7 +378,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   whoami [--mint]                            this worker's id and how it was derived
   budget [--json]                            the GraphQL budget, and the depth of the deferral queue
                                              (`pendingBoardWrites`) — free, and 0 GraphQL
-  followup add <ref> | peek | pop | list     this worker's follow-up queue — the "I can fix this, just not
+  followup add <ref> | peek | pop | list | audit
+                                             `audit` inspects every local worker queue without consuming it;
+                                             the other verbs operate on this worker's follow-up queue — the "I can fix this, just not
                                              in THIS PR" promise, kept where something can test it (#1063).
                                              A FILE: no board, no token, so it survives the exhausted budget
                                              that strands the worker who made the promise. Keyed on the

@@ -78,6 +78,13 @@ module FollowupsTests =
 
     let private ref' owner repo n : Ref = { Owner = owner; Repo = repo; Number = n }
 
+    let private writeQueue (cache: string) (worker: string) (text: string) (written: DateTime) =
+        let directory = Path.Combine(cache, "followups")
+        Directory.CreateDirectory directory |> ignore
+        let file = Path.Combine(directory, worker + ".txt")
+        File.WriteAllText(file, text)
+        File.SetLastWriteTimeUtc(file, written)
+
     // ---- property 2: a queued ref is QUALIFIED, always ---------------------------------------------
 
     [<Theory>]
@@ -208,6 +215,40 @@ module FollowupsTests =
 
             // ...and the queue is UNTOUCHED — a pop that cannot name what it removed must remove nothing.
             Assert.Equal("not-a-ref\nFS-GG/FS.GG.Game#171\n", File.ReadAllText file))
+
+    [<Fact>]
+    let ``fleet audit names an abandoned queued ref rather than leaving it as an invisible file`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "orphaned-worker" "FS-GG/.github#1900\n" (now.UtcDateTime.AddHours -3)
+
+            let report = audit now
+            let queue = Assert.Single report.Stale
+            Assert.Equal("orphaned-worker", queue.Worker)
+            Assert.Equal<Ref list>([ ref' "FS-GG" ".github" 1900 ], queue.Refs)
+            Assert.Empty report.Unreadable)
+
+    [<Fact>]
+    let ``fleet audit keeps a recently active queue visible without calling it abandoned`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "recent-worker" "FS-GG/.github#1900\n" (now.UtcDateTime.AddMinutes -119)
+
+            let report = audit now
+            Assert.Empty report.Stale
+            let queue = Assert.Single report.Fresh
+            Assert.Equal("recent-worker", queue.Worker))
+
+    [<Fact>]
+    let ``fleet audit fails closed on a malformed queue and names its worker`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "broken-worker" "not-a-ref\n" (now.UtcDateTime.AddHours -3)
+
+            let report = audit now
+            let worker, why = Assert.Single report.Unreadable
+            Assert.Equal("broken-worker", worker)
+            Assert.Contains("not-a-ref", why))
 
     // ---- property 1: per-worker by construction ----------------------------------------------------
 
@@ -386,6 +427,7 @@ module FollowupsTests =
         Assert.Equal<Result<Action, string>>(Ok Peek, parse [ "peek" ])
         Assert.Equal<Result<Action, string>>(Ok Pop, parse [ "pop" ])
         Assert.Equal<Result<Action, string>>(Ok List, parse [ "list" ])
+        Assert.Equal<Result<Action, string>>(Ok Audit, parse [ "audit" ])
 
     [<Theory>]
     [<InlineData("")>]
