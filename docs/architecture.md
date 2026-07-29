@@ -630,8 +630,12 @@ picture above is unchanged**; what moves is which of them holds bytes of its own
 the byte-identity invariant is not asserted but **structurally impossible to violate** — there is one
 object — and what is asserted instead is *visibility*, because an absent root, a dangling link and a
 `core.symlinks=false` checkout are all exit 0 and silent in both runtimes (ADR-0067 §8). The property
-defaults empty, and turning it on is per-receiver work sequenced by
-[the retirement order](coordination/skill-apparatus-retirement-order.md).
+defaulted empty while turning it on was per-receiver work sequenced by
+[the retirement order](coordination/skill-apparatus-retirement-order.md); **as of `FS.GG.Kit` 0.19.0 it
+defaults to `.agents/skills` and `FsggKitSkillRoots` defaults to `.claude/skills` alone**
+([#1868](https://github.com/FS-GG/.github/pull/1868), the order's §6 stage 2). The union — and so the
+picture above — is unchanged by that flip; what changed is what a receiver that overrides *neither*
+property gets.
 
 **EVERY rostered receiver holds a view root as of 2026-07-28, and the picture above has flipped from
 rule to exception.** Each generates `.agents/skills` from `.claude/skills`, and **no receiver's runtime

@@ -774,6 +774,41 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > bump once rather than three times). `#1710`'s piece 1 — moving `Fsgg<Repo>GenerateSkillView` into the
 > kit — remains blocked on teaching `repos-audit.sh`'s §6.1 sweep, exactly as recorded above.
 
+> **§9's SEQUENCE HAS TERMINATED, 2026-07-29 ([#1676](https://github.com/FS-GG/.github/issues/1676)).**
+> Build the view and the absence check — done, `#1635`. Run it alongside unchanged and **port** the
+> fixtures — done, `#1674`, 8/8 AGREE. Retire per repo — done, and the receiver count lives in
+> [the retirement order](../coordination/skill-apparatus-retirement-order.md) §4, **not here**. Freshness
+> sweep last — **reached, and DECLINED**.
+>
+> **The stage this order has reached lives in that document's §6 standing stage verdict and nowhere
+> else, including here.** This block records that the sequence ended; it deliberately restates neither
+> the receiver count nor the stage. Four separate blocks answering *"has stage 2 started?"* is how that
+> document went stale a fifth time.
+>
+> **Stage 2 landed** ([#1868](https://github.com/FS-GG/.github/pull/1868), `FS.GG.Kit` 0.19.0) and
+> narrowed the kit's default root properties to one materialized root plus one view root. **The runtime
+> root set is unchanged** — it is the union of the two properties, and that union is still the TWO §5
+> left. A default flip is not a mechanism retirement, which is why ADR-0011 Decision 1 and ADR-0014
+> Decision 5 are still amended *in direction only* and still in force. ADR-0065 **was** amended for it,
+> by [#1874](https://github.com/FS-GG/.github/pull/1874) — and **late, not in the same change**, which
+> is `#1676` AC 5's own rule broken inside the item that wrote it. Recorded as late rather than
+> backdated.
+>
+> **Stage 3 was reached and declined, and that is the sequence completing rather than stalling.** The
+> kit-pin freshness sweep is the one member of the apparatus list whose subject this record does not
+> dissolve: resolve-don't-copy removes a repo committing the same skill twice; it does not remove
+> `.github` shipping a versioned package to seven receivers, so *"is receiver R's pin current?"* still
+> has to be asked by something. Retiring the sweep because a sequence ran out would remove the alarm
+> for the reason §9 put it last. The replacement question is
+> [`#1864`](https://github.com/FS-GG/.github/issues/1864), a decision for a human; **until it is
+> answered the sweep keeps running and keeps being repaired**, exactly as this record has said since it
+> was accepted.
+>
+> **What is NOT closed by the sequence ending.** `#1676` AC 6 — closing the board rows whose subject
+> retired — is [`#1875`](https://github.com/FS-GG/.github/issues/1875), split out because it is a sweep
+> over ~103 open rows rather than a retirement step. The open findings the retirement surfaced are
+> enumerated in the order's §9 and are unaffected by this note.
+
 ## Consequences
 
 - The apparatus named for eventual replacement — `coordination-sync`, kit materialization,

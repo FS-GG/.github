@@ -26,9 +26,16 @@ that produced it appears with it.
 > at §4's standing verdict. There is exactly one count in the repository; keep it that way, and see
 > [`#1750`](https://github.com/FS-GG/.github/issues/1750).
 >
-> **The receiver sequence is COMPLETE — 7 of 7.** Nothing in §6's *stage 1* is dispatchable. What is
-> still open is §6's stage 2 (the fleet-wide narrowing) and stage 3 (the freshness sweep, which on
-> today's evidence is reached and then declined), plus the open rows §4 and §8 name.
+> **The receiver sequence is COMPLETE — 7 of 7.** Nothing in §6's *stage 1* is dispatchable.
+>
+> **There is a SECOND axis, and it has its own single home.** The receiver count lives in §4; the
+> **stage** the order has reached lives in §6's *standing stage verdict* and nowhere else. This
+> document went stale a fifth time on exactly that axis — this block and §6 and §8 and §9 each carried
+> their own answer to *"has stage 2 started?"*, and stage 2 landed while all four said *not started*.
+> Same failure as the count, one axis over. **Do not restate the stage anywhere either.**
+>
+> As of **2026-07-29**: stage 1 complete, **stage 2 LANDED**, **stage 3 reached and DECLINED** into a
+> decision row. §9's sequence has terminated — see §6. Still open are the rows §4, §8 and §9 name.
 
 ---
 
@@ -957,6 +964,25 @@ sub-resource, never the bare protection endpoint, whose whole-object `PUT` disab
 
 ## 6. The order
 
+### The standing stage verdict — 2026-07-29: **§9's sequence has TERMINATED. Stage 1 complete, stage 2 landed, stage 3 declined.**
+
+> **This heading carries the stage, and nothing anywhere else does** — the same rule §4 carries for the
+> receiver count, and for the same reason. The stage blocks below are dated, append-only records; when
+> the stage changes, change *this* line and append.
+>
+> | stage | subject | state |
+> |---|---|---|
+> | 0 | unblock (B1–B3) | **complete** |
+> | 1 | per receiver, one at a time | **complete — 7 of 7**, and the count is §4's, not this table's |
+> | 2 | fleet-wide narrowing of kit materialization and `coordination-coherence`'s skill paths | **LANDED 2026-07-29** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871)) |
+> | 3 | the kit-pin freshness sweep — **last** | **REACHED and DECLINED** — [#1864](https://github.com/FS-GG/.github/issues/1864) holds the decision |
+>
+> **"Terminated" is not "everything retired", and the difference is the whole of stage 3.** §9 ordered
+> the sweep last so that the alarm outlived the fire. The order reached it, measured that its subject
+> — distribution staleness — **survives this rewrite** (§1), and therefore did **not** retire it. A
+> declined last step is a completed order, not an abandoned one; what it is not is authority to retire
+> the sweep later without answering `#1864` first.
+
 ### Stage 0 — unblock (no retirement)
 
 B1 + B2 in one kit change and one republish; B3; then the seven bumps land. Nothing is retired here.
@@ -1112,12 +1138,50 @@ had already falsified.
 Narrow (do not delete) kit materialization to one root, and narrow `coordination-coherence`'s skill
 paths. Both keep their non-skill subjects.
 
+> **STAGE 2 LANDED 2026-07-29** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as
+> `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871)). Its precondition was stage
+> 1 at 7 of 7, and that was met before it was opened.
+>
+> | property, in `src/FS.GG.Kit/build/FS.GG.Kit.props` | before | 0.19.0 |
+> |---|---|---|
+> | `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | `.claude/skills` |
+> | `FsggKitViewSkillRoots` | *(empty)* | `.agents/skills` |
+> | `DEFAULT_ROOTS`, in `scripts/coordination-sync` | `.claude/skills .agents/skills` | `.claude/skills` |
+>
+> **It narrowed defaults, not the contract, and it deleted nothing** — the runtime surface is the
+> UNION of the materialized and view roots, and that union is still ADR-0011's two. That is what makes
+> this the *narrowing* §9 asks for rather than a retirement.
+>
+> **And it changed no receiver's evaluated answer on the day it landed:** all seven already override
+> both properties inline with exactly these values. What the old defaults broke is the receiver that
+> overrides **neither** — it materialized real bytes into a root that is supposed to be generated. The
+> flip closes that in the package that tells every tool what the roots are, which is the same defect
+> `FS.GG.SDD#770` and `FS.GG.Governance#338` each had to close inside one tool.
+>
+> **AC 5 was NOT satisfied by that change, and this record says so rather than smoothing it.**
+> ADR-0065 §A root's three dispositions states those defaults *normatively*, and #1868 flipped them
+> without amending it in the same change. The amendment is
+> [#1874](https://github.com/FS-GG/.github/pull/1874) and it landed **late** — recorded as late, not
+> backdated. #1868 is the counter-example to AC 5's own rule, sitting inside the item that wrote it.
+
 ### Stage 3 — LAST
 
 The kit-pin freshness sweep (`scripts/repos-audit.sh:1892`, `#1540`). §9 orders it last because it is the
 alarm that would say a retirement went wrong. Phase 4's finding (§1) is that its subject — distribution
 staleness — **survives the rewrite**, so on today's evidence stage 3 is reached and then declined.
 Retiring it requires a separate decision that says what replaces *"is receiver R's pin current?"*.
+
+> **STAGE 3 REACHED AND DECLINED 2026-07-29. The decision the paragraph above asks for is filed as
+> [#1864](https://github.com/FS-GG/.github/issues/1864)** — a `decision` row, currently `Blocked`, and
+> it belongs to a human. It is not being routed around and this order does not answer it.
+>
+> **Reaching the last step and declining it is how this order ENDS.** The sweep is the only member of
+> §1's list whose subject the rewrite does not dissolve: resolve-don't-copy removes a repo committing
+> the same skill twice, and *"is receiver R's pin current?"* is a distribution question that survives
+> it intact. Retiring it on the strength of "the order reached stage 3" would remove a live alarm
+> because a sequence ran out — the precise inversion of why §9 put it last.
+>
+> **Nothing here authorizes retiring it later without `#1864`.** See §8.
 
 ### Not in this order
 
@@ -1320,7 +1384,22 @@ retirement was safe to make.** Those are different questions and §7 only ever a
 - Hand-deleting a mirror on a receiver. ADR-0065 §Retiring a root, unchanged and still governing.
 - Amending ADR-0011 Decision 1, ADR-0014 Decision 5, or ADR-0065's root set. Those are amended **in
   direction only** and stay in force until a change actually lands a mechanism retirement — ADR-0067 §9,
-  and `#1676` AC 5. **No such change has landed**, so this document amends none of them.
+  and `#1676` AC 5. **This document amends none of them**, and never did.
+  > **The sentence here used to read *"no such change has landed"*, and that stopped being true on
+  > 2026-07-29.** Two did. Neither is a mechanism retirement and neither touched ADR-0011 Decision 1 or
+  > ADR-0014 Decision 5, so the prohibition above is unchanged — but the *reason* given for it was a
+  > fact with a shelf life, and it expired:
+  > - **§5's root-set flip** ([#1636](https://github.com/FS-GG/.github/issues/1636)) executed on
+  >   2026-07-28; ADR-0065 carries the `EXECUTED` marker and was amended in that same change.
+  > - **Stage 2** ([#1868](https://github.com/FS-GG/.github/pull/1868)) narrowed defaults on
+  >   2026-07-29; ADR-0065 was amended for it by
+  >   [#1874](https://github.com/FS-GG/.github/pull/1874), **late** rather than in the same change.
+  >
+  > Cite the prohibition, not the expired premise. What still authorizes an amendment is a change that
+  > lands a mechanism retirement, and **stage 3 declined to be one** — see §6.
+- **Retiring the kit-pin freshness sweep on the strength of this order alone.** The order reached
+  stage 3 and **declined** it. [`#1864`](https://github.com/FS-GG/.github/issues/1864) is where that
+  decision lives; until it is answered, the sweep keeps running and keeps being repaired.
 - Closing a board row whose subject has not dissolved. See §1.
 - **Reading "the receiver sequence is complete" as "the receiver sequence is sound."** Completeness is a
   fact about seven trees and it is measured. Soundness is a different claim and this document does not
@@ -1342,4 +1421,6 @@ answered by this document, and each has an owner:
 | [`#1710`](https://github.com/FS-GG/.github/issues/1710) | collapse seven hand-copied §8 alarms into one kit-shipped assertion | **OPEN**; seven hand-copies now paid |
 | [`#1750`](https://github.com/FS-GG/.github/issues/1750) | a checker that compares §4's standing verdict against the receivers' trees | **OPEN**, and deliberately not built here |
 | [`#1725`](https://github.com/FS-GG/.github/issues/1725) | the kit pin is not in the same file on every receiver | all seven now measured — **three** distinct locations (§4) |
-| §6 stage 2 / stage 3 | the fleet-wide narrowing, then the freshness sweep last | not started; §1 measures that stage 3 is reached and then **declined** |
+| [`#1864`](https://github.com/FS-GG/.github/issues/1864) | what replaces *"is receiver R's pin current?"*, without which the freshness sweep cannot retire | **OPEN**, `Blocked`, a `decision` for a human. Stage 3 reached it and declined — §6 |
+| [`#1875`](https://github.com/FS-GG/.github/issues/1875) | `#1676` AC 6's bulk closure — every open board row swept against today's tree | **OPEN**, split out of `#1676` because it is a pass over ~103 rows and a different kind of work from a retirement step |
+| §6 stage 2 / stage 3 | the fleet-wide narrowing, then the freshness sweep last | **settled — see §6's standing stage verdict, which is the only place that carries it.** Stage 2 landed; stage 3 declined into `#1864` |
