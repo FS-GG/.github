@@ -27,9 +27,9 @@ LOCK = threading.Lock()
 # issue number -> {"body": str, "state": "OPEN"|"CLOSED", "status": str, "repo": str}
 #
 # `repo` defaults to FS.GG.SDD — the fixture's original single repo, and what every pre-#733 leg means.
-# #733 needs a SECOND repo, because the chore lock is per-repo and `Options.choreLockRef` knows exactly
-# one: `.github#1033` (ADR-0041). An `AfterDone` offer in FS.GG.SDD is REFUSED for want of a lock, so a
-# one-repo fixture can only ever prove the refusal — never the offer.
+# #733 needs receiver coverage because the chore lock is per-repo. All seven rostered repos have one
+# (#1087), including FS.GG.SDD#518; the receiver legs below prove an offer, while FS.GG.Legacy proves
+# the unrostered no-lock refusal.
 ISSUES = {
     42: {"body": "A schedulable item.\n\nPaths: src/Thing/**", "state": "OPEN", "status": "Ready"},
     43: {"body": "Another item.\n\nPaths: src/Other/**", "state": "OPEN", "status": "Ready"},
@@ -203,7 +203,7 @@ def graphql(query: str, variables: dict):
     if "closedByPullRequestsReferences" in query:
         # done facts — the asked-for issue was closed by a merged PR. Keyed on the VARIABLE rather than
         # hardcoded to 42 since #733: `done` must be drivable on a `.github` item (#51), because that is
-        # the only repo whose AfterDone offer can resolve a chore lock.
+        # a rostered repo whose AfterDone offer can resolve its own chore lock.
         # int(): the wire carries it as a JSON NUMBER, so Python hands us 51.0 — and 51.0 misses every
         # int-keyed lookup below without erroring, which would silently answer for the wrong repo.
         n = int(variables.get("number", 42))

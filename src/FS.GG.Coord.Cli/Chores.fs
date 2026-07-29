@@ -41,9 +41,9 @@ module Chores =
         (observed: Chore.Board)
         : (Chore.Chore * Ref) option =
         // 1. WHOSE LOCK? — FIRST, because it is what defines the SCOPE everything below reasons over, and
-        //    because it is a pure string match that spends nothing. `None` is every repo without a lock
-        //    issue (the six receivers today): ADR-0041 verbatim, a chore queue that cannot find its lock
-        //    offers nothing.
+        //    because it is a pure string match that spends nothing. `None` means an unrostered repo whose
+        //    lock the map does not know; all seven rostered repos have one. A queue that cannot find its
+        //    lock offers nothing, avoiding a board scan before a guaranteed refusal.
         match Options.choreLockRef extra owner repo with
         | None -> None
         | Some lockRef ->
