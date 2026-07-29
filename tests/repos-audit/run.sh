@@ -927,6 +927,49 @@ out="$(run 2>&1)"
 printf '%s' "$out" | grep -q 'FS-GG/.github receives' \
   && bad "authority wrongly audited" "$out" || ok "authority .github is not audited"
 
+# --- repository_dispatch is a declared producer -> target -> event graph (#1919) ----------------
+# The sender's POST succeeds without a listener, so presence of either half alone proves nothing.
+dispatch_wire() { # <sender-event> <listener-event>
+  wire FS-GG/FS.GG.Rendering; wire FS-GG/FS.GG.SDD
+  local rs='FS-GG__FS.GG.Rendering' ss='FS-GG__FS.GG.SDD'
+  printf '%s\n%s\n' coord.yml dispatch.yml > "$FIX/$rs.list"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/$rs/coord.yml"
+  printf 'jobs:\n  dispatch:\n    uses: FS-GG/.github/.github/workflows/dispatch-sender.yml@main\n    with: { target-repo: FS-GG/FS.GG.SDD, event-type: "%s" }\n' "$1" > "$FIX/$rs/dispatch.yml"
+  printf '%s\n%s\n' coord.yml listener.yml > "$FIX/$ss.list"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/$ss/coord.yml"
+  printf 'on: {repository_dispatch: {types: ["%s"]}}\njobs: {listen: {runs-on: ubuntu-latest}}\n' "$2" > "$FIX/$ss/listener.yml"
+}
+mkreg "$REG"
+cat >> "$REG" <<'YAML'
+dispatches:
+  - { producer: FS-GG/FS.GG.Rendering, target: FS-GG/FS.GG.SDD, event-type: fixture-event }
+YAML
+dispatch_wire fixture-event fixture-event
+if out="$(run 2>&1)"; then ok "declared dispatch sender and listener -> audit passes"; else bad "declared dispatch graph" "$out"; fi
+dispatch_wire fixture-event wrong-event
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'no matching repository_dispatch listener'; } \
+  && ok "dispatch event-type mutation -> audit fails" || bad "dispatch event mismatch" "rc=$rc: $out"
+dispatch_wire fixture-event fixture-event
+sed -i 's/target-repo: FS-GG\/FS.GG.SDD/target-repo: FS-GG\/FS.GG.Rendering/' "$FIX/FS-GG__FS.GG.Rendering/dispatch.yml"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live dispatch sender.*not declared'; } \
+  && ok "unrostered dispatch sender -> audit fails" || bad "unrostered dispatch sender" "rc=$rc: $out"
+dispatch_wire fixture-event fixture-event
+sed -i 's/types: \["fixture-event"\]/types: ["unrostered-event"]/' "$FIX/FS-GG__FS.GG.SDD/listener.yml"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
+  && ok "unrostered dispatch listener -> audit fails" || bad "unrostered dispatch listener" "rc=$rc: $out"
+# The inverse of the declared-edge mutations: deleting the WHOLE graph must not hide a live sender
+# or listener. The reverse sweep is deliberately unconditional, or an omitted top-level key becomes
+# a mute button for precisely the fabric this audit owns.
+mkreg "$REG"; dispatch_wire fixture-event fixture-event
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'live dispatch sender.*not declared' \
+    && printf '%s' "$out" | grep -q 'live repository_dispatch listener.*not declared'; } \
+  && ok "omitting every dispatch declaration -> live graph fails closed" || bad "omitted dispatch graph" "rc=$rc: $out"
+mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+
 # --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---
 # Both legs assert on the REASON string, not a bare exit code: a script that dies for an unrelated
 # reason would otherwise satisfy a plain `rc != 0` and the fixture would stop testing its own claim.

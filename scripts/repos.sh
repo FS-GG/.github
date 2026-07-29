@@ -735,6 +735,32 @@ cmd_validate() {
   local authority; authority="$(echo "$json" | jq -r '.authority // ""')"
   [ -n "$authority" ] || err "top-level 'authority' is required."
 
+  # A repository_dispatch succeeds even without a target listener, so each producer/target/event
+  # contract must be declared as one graph edge for repos-audit to grade.
+  echo "$json" | jq -e '(.dispatches // []) | type=="array"' >/dev/null \
+    || err "'dispatches' must be a list (omit it, or use [])."
+  local dp dt de dispatch_bad
+  dispatch_bad="$(echo "$json" | jq -r '
+    (.dispatches // [])[]
+    | select(type != "object"
+        or (.producer | type != "string") or (.producer | length == 0)
+        or (.target | type != "string") or (.target | length == 0)
+        or (."event-type" | type != "string") or (."event-type" | length == 0))
+    | @json')"
+  [ -z "$dispatch_bad" ] || err "each dispatch must be an object with non-empty string producer, target, and event-type."
+  while IFS=$'\t' read -r dp dt de; do
+    [ -n "$dp$dt$de" ] || continue
+    [[ "$dp" =~ ^FS-GG/.+ ]] && [[ "$dt" =~ ^FS-GG/.+ ]] \
+      || err "dispatch producer/target must be FS-GG/<repo>."
+    [ -n "$de" ] || err "dispatch '$dp' -> '$dt' needs event-type."
+    echo "$json" | jq -e --arg r "$dp" '[.repos[].full] | index($r)' >/dev/null \
+      || err "dispatch producer '$dp' is not rostered."
+    echo "$json" | jq -e --arg r "$dt" '[.repos[].full] | index($r)' >/dev/null \
+      || err "dispatch target '$dt' is not rostered."
+  done < <(echo "$json" | jq -r '(.dispatches // [])[] | [.producer, .target, ."event-type"] | @tsv')
+  local dispatch_dups; dispatch_dups="$(echo "$json" | jq -r '(.dispatches // []) | map([.producer,.target,."event-type"] | join("\u001f")) | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$dispatch_dups" ] || err "duplicate dispatch edge(s): $dispatch_dups"
+
   # --- duplicate ids ---
   local dups; dups="$(echo "$json" | jq -r '[.repos[].id] | group_by(.)[] | select(length>1)[0]')"
   [ -z "$dups" ] || err "duplicate repo id(s): $(echo "$dups" | tr '\n' ' ')"
