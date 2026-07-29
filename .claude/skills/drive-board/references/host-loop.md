@@ -11,7 +11,21 @@ consume the complete four-part `check-board` result, classify the current Backlo
 before that triage stage. Allocate only schedulable disjoint lanes and never exceed the host's
 available worker slots. Every worker must mint its own `FSGG_WORKER` identity and hold its own claim:
 a host session, account, or parent identity is not a substitute. Give it one bounded item and the
-complete item-driver contract. Do not reuse its context for another item.
+complete item-driver contract. Do not hand it a second item. It MAY, after its done stamp, drain its
+OWN follow-up queue sequentially — one claim at a time, never interleaved.
+
+**That permission is a trade, and it is deliberate.** Disposal is the feature, not an accident of
+implementation: ADR-0053 rejected the long-lived worker because context degrades across units, and a
+fresh worker per unit of work is the org's established quality lever. That reasoning is real, but it
+sits in one ADR's rejected alternatives, so the absolute this replaces read as costless while it
+dead-lettered the follow-up queue — `followup add` banks a finding keyed to the worker that found it,
+and a worker despawned at its done stamp leaves a promise no scheduler, gate, or driver can see (85
+orphaned queues when it was measured: `.github#1900`, cause `.github#1902`). The exception buys back
+exactly that: the author's context already holds the cause, the tree, and why the fix could not ride
+the merged PR — which is what a stranger re-deriving the row from the board spends a whole worker slot
+rebuilding. It buys nothing else, and the cost is real: a worker's context now grows across items. So
+keep the drain to the worker's OWN entries after its OWN done stamp, and prefer stopping with entries
+queued — they stay schedulable — over draining them from a context that has degraded.
 
 Invoke skills through the selector supported by the current host: for example, `$drive-board` in
 Codex or the host's skill picker. A literal `/skill` is documentation only unless that host explicitly
