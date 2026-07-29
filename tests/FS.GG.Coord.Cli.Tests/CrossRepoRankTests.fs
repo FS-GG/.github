@@ -44,6 +44,7 @@ let private row repo n blockedBy state isPr : Scan.Row =
       State = state
       IsPullRequest = isPr
       BoardClass = None
+      Severity = Unset
       Phase = None
       CreatedAt = None }
 

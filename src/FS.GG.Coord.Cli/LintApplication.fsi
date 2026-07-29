@@ -65,6 +65,9 @@ module LintApplication =
     /// already are. Fourteen were, in one day, and every one was found by accident.
     val statusVerdict: state: IssueState -> status: BoardStatus -> string option
 
+    /// `Some detail` for every open, non-`Done` row whose Severity is `Unset`; `None` once triaged.
+    val severityVerdict: state: IssueState -> status: BoardStatus -> severity: Severity -> string option
+
     val epicVerdict:
         state: IssueState ->
         status: BoardStatus ->

@@ -103,6 +103,29 @@ recreated a field's options and cleared the value on **every** item. The guarded
 snapshot → `add-option` → restore sequence below becomes relevant to `Class` only if a **later
 fourth option** is ever added — which is an ADR, not a board edit.
 
+## Severity
+
+How costly the row is, independently of what kind of work it represents. The operator decided the
+closed rank order on [.github#1901](https://github.com/FS-GG/.github/issues/1901):
+
+<!-- severity-options:start -->
+| option | meaning |
+|---|---|
+| `Critical` | highest-cost work; ranks before every other severity |
+| `High` | high-cost work |
+| `Medium` | medium-cost work |
+| `Low` | low-cost work |
+| `Unset` | not yet triaged; ranks last and triggers `SEVERITY-UNSET` lint |
+<!-- severity-options:end -->
+
+Severity is a hand-triaged board input. It ranks above `Class`; `Unset` never promotes a row and
+remains a lint error on every open, non-`Done` row until a human records an evidenced rating.
+The offline schema gate checks both the exact values and their order:
+
+```sh
+scripts/project-field-options check --field Severity --schema docs/coordination/board-schema.md
+```
+
 ## Guarded single-select migration
 
 `scripts/project-field-options` is field-generic and fail-closed. Its

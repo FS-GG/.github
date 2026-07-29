@@ -2,6 +2,8 @@ namespace FS.GG.Coord
 
 module Types =
 
+    open System
+
     type WorkerId =
         | WorkerId of string
 
@@ -94,7 +96,7 @@ module Types =
         /// becomes startable the moment the action lands (e.g. #574), but not before.
         | AwaitingHumanAction
 
-    /// How BAD an item is — the axis the board had no vocabulary for (.github#1588). See Types.fsi.
+    /// What KIND of work an item is (.github#1588): defect, hardening, or a human decision.
     type ItemClass =
         /// Something is broken NOW.
         | Defect
@@ -103,10 +105,20 @@ module Types =
         /// A human must choose before any work is authorable.
         | Decision
 
+    /// HOW MUCH an item costs when it goes wrong — the board's closed `Severity` vocabulary
+    /// (.github#1901). Unlike `Class`, this is an ordered priority axis.
+    type Severity =
+        | Critical
+        | High
+        | Medium
+        | Low
+        /// No human has rated the row yet. It ranks last and lint reports it until triaged.
+        | Unset
+
     /// WHICH PART OF THE PLAN an item belongs to — the board's `Phase` column (.github#1598).
     ///
     /// A CLOSED, ORDERED vocabulary. The order is the whole reason this is a union and not a string:
-    /// `P0 Decisions` is earlier in the plan than `P8 Net`, and "earlier in the plan" is the third rank
+    /// `P0 Decisions` is earlier in the plan than `P8 Net`, and "earlier in the plan" is a rank
     /// input. A string carries no order, and `List.sortBy` over one would sort `P10` before `P2` the day
     /// a tenth phase existed.
     type Phase =
@@ -182,7 +194,11 @@ module Types =
           /// split, for the same reason, as `Predicate` above.
           BoardClass: ItemClass option
 
-          /// The board's `Phase` COLUMN as OBSERVED (.github#1598) — the third rank input. Resolved at the
+          /// The board's `Severity` column as observed. Missing or unrecognised values become `Unset`,
+          /// the explicit fail-loud value that ranks last and remains visible to lint.
+          Severity: Severity
+
+          /// The board's `Phase` COLUMN as OBSERVED (.github#1598). Resolved at the
           /// impure edge on `BoardClass`'s exact terms; `None` means this reader did not look, or the row
           /// carries no phase, and it ranks LAST rather than defaulting to a phase.
           Phase: Phase option
@@ -286,6 +302,34 @@ module Types =
         else
             let t = s.Trim().ToLowerInvariant()
             everyItemClass |> List.tryFind (fun c -> itemClassWireName c = t)
+
+    let severityWireName (severity: Severity) =
+        match severity with
+        | Critical -> "Critical"
+        | High -> "High"
+        | Medium -> "Medium"
+        | Low -> "Low"
+        | Unset -> "Unset"
+
+    let private everySeverity = [ Critical; High; Medium; Low; Unset ]
+
+    let severityOfWireName (s: string) =
+        if isNull s then
+            None
+        else
+            let candidate = s.Trim()
+            everySeverity
+            |> List.tryFind (fun severity ->
+                String.Equals(severityWireName severity, candidate, StringComparison.OrdinalIgnoreCase))
+
+    /// Lower sorts earlier: Critical > High > Medium > Low > Unset.
+    let severityOrder (severity: Severity) =
+        match severity with
+        | Critical -> 0
+        | High -> 1
+        | Medium -> 2
+        | Low -> 3
+        | Unset -> 4
 
     // THE PHASE WIRE VOCABULARY, as a PAIR on day one — `itemClassWireName`'s rule, and for the reason
     // #1012 measured: a render/parse pair in two places with nothing asserting they are inverse stays

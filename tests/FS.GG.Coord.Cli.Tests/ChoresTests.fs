@@ -79,6 +79,7 @@ let private item n status state blockers claim =
       Predicate = None
       Class = None
       BoardClass = None
+      Severity = Unset
       Phase = None
       AgeDays = None }
 
@@ -298,6 +299,7 @@ let private classRow (boardClass: ItemClass option) : Scan.Row =
       State = Open
       IsPullRequest = false
       BoardClass = boardClass
+      Severity = Unset
       Phase = None
       CreatedAt = None }
 

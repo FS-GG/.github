@@ -479,6 +479,7 @@ module Client =
                                 | None when bodyWasRead c -> Class.fromTitle row.Title
                                 | None -> None
                             BoardClass = row.BoardClass
+                            Severity = row.Severity
                             Phase = row.Phase
                             AgeDays = ageDaysOf row } }
 
@@ -6165,6 +6166,14 @@ module Client =
                             | Some detail -> [ mk "STATUS-UNSET" "error" r detail ]
                             | None -> []
 
+                        // SEVERITY-UNSET (.github#1901). `Unset` is a real vocabulary value so the
+                        // absence stays representable in JSON and ranking, but it is not a completed
+                        // triage decision. Report every open, non-Done row until a human rates it.
+                        let severityUnsetFindings =
+                            match LintApplication.severityVerdict r.State r.Status r.Severity with
+                            | Some detail -> [ mk "SEVERITY-UNSET" "error" r detail ]
+                            | None -> []
+
                         // One body read serves the touch-set rules, the human-block rule, and the epic
                         // body-child-refs.
                         let bodyNeeded = isTouchSetCandidate || isEpic || isHumanBlockCandidate
@@ -6216,6 +6225,7 @@ module Client =
                                      @ hbFindings
                                      @ clsFindings
                                      @ statusUnsetFindings
+                                     @ severityUnsetFindings
                                      @ doneOpenNote
                                      @ epic)
                                     touchSets

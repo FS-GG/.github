@@ -30,6 +30,7 @@ module RankTests =
           Predicate = None
           Class = None
           BoardClass = None
+          Severity = Unset
           Phase = None
           AgeDays = None }
 
@@ -147,6 +148,17 @@ module RankTests =
               item 61 |> blockedBy 50 BlockerOpen ]
 
         Assert.Equal(50, order items |> List.head)
+
+    [<Fact>]
+    let ``#1901 Severity ranks above Class and Unset ranks last`` () =
+        let items =
+            [ { item 1 with Severity = Low; Class = Some Defect }
+              { item 2 with Severity = High; Class = Some Hardening }
+              { item 3 with Severity = Critical; Class = None }
+              { item 4 with Severity = Medium; Class = Some Defect }
+              { item 5 with Severity = Unset; Class = Some Defect } ]
+
+        Assert.Equal<int list>([ 3; 2; 4; 1; 5 ], order items)
 
     [<Fact>]
     let ``#1598 defect outranks hardening, and both outrank an unclassed row`` () =

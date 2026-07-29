@@ -409,6 +409,7 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       State = IssueState.Open
       IsPullRequest = false
       BoardClass = None
+      Severity = Unset
       Phase = None
       CreatedAt = None }
 
@@ -644,6 +645,42 @@ let private rankedNode (number: int) (phase: string) (createdAt: string) =
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
                       "state":"OPEN","createdAt":"%s{createdAt}",
                       "repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+
+[<Fact>]
+let ``#1901 Severity is read from the board and survives the scan cache`` () =
+    use _sandbox = new Sandbox()
+
+    let node =
+        """{"status":{"name":"Ready"},"blockedBy":{"text":""},"severity":{"name":"High"},
+             "content":{"__typename":"Issue","number":1,"title":"item 1","state":"OPEN",
+                        "createdAt":"2026-01-02T03:04:05Z",
+                        "repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
+
+    let transport = scripted [ ok (page node false "") ]
+    let first = Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12
+    let second = Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12
+
+    match first, second with
+    | Ok [ a ], Ok [ b ] ->
+        Assert.Equal(High, a.Severity)
+        Assert.Equal(a.Severity, b.Severity)
+        Assert.Equal(1, transport.GraphQlCalls)
+    | other -> failwith $"Severity did not survive the board/cache boundary — got %A{other}"
+
+[<Fact>]
+let ``#1901 a missing or unknown Severity is Unset and cannot promote the row`` () =
+    use _sandbox = new Sandbox()
+
+    let unknown =
+        """{"status":{"name":"Ready"},"blockedBy":{"text":""},"severity":{"name":"Urgent"},
+             "content":{"__typename":"Issue","number":1,"title":"item 1","state":"OPEN",
+                        "repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
+
+    let transport = scripted [ ok (page unknown false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] -> Assert.Equal(Unset, row.Severity)
+    | other -> failwith $"unknown Severity must read as Unset — got %A{other}"
 
 [<Fact>]
 let ``#1598 the Phase column and createdAt are READ off the board`` () =
