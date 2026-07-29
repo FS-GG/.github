@@ -34,7 +34,28 @@ module Blockers =
     val isResolvedState: state: BlockerState -> bool
 
     /// The blockers still holding this item. Empty = not blocked.
+    ///
+    /// **NOT the negation of `cleared` below, and the two must not be read as one question.** This asks
+    /// *"is anything holding this item?"*, for which a row with no blockers at all correctly answers no.
+    /// `cleared` asks *"did a blocker RESOLVE?"*, for which that same row answers no as well — so
+    /// `unresolved xs = []` and `cleared xs = false` are both true of `[]`, and neither is wrong.
     val unresolved: blockers: Blocker list -> Blocker list
+
+    /// **DID EVERY RECORDED BLOCKER CLEAR — the `BLOCKER-CLEARED` precondition (.github#1738).**
+    ///
+    /// `true` iff there is at least ONE blocker and every one of them `isResolved`. The emptiness guard is
+    /// the content: `List.forall` over `[]` answers TRUE, so without it a row that never recorded a blocker
+    /// would read as one whose blockers have all CLEARED — and #620's remedy is about a `Blocked` row whose
+    /// dependencies finished, not about one that never had any. (`.github#1689` and `#1737` are both
+    /// `Blocked` with an empty `Blocked by`; #602 is the incident that shape already caused.)
+    ///
+    /// **IT IS A `val` BECAUSE TWO PROJECTS MUST AGREE ABOUT IT EXACTLY, NOT BECAUSE IT IS LONG.**
+    /// `Chore.choresFor` FIRES `BLOCKER-CLEARED` on this condition; `Scan` must PROBE the same population
+    /// for `Item.ItemPr`, the fact that rule's #1738 gate reads. If the two ever disagree — Scan narrower
+    /// than Chore — the gate silently stops seeing its subject and goes green over the promotion it exists
+    /// to refuse, which is #266's shape re-armed inside the fix for it. A copy in each project is what
+    /// #1012 measured: two spellings pointing opposite ways, with 775 tests passing over the disagreement.
+    val cleared: blockers: Blocker list -> bool
 
     /// EVERY SET OF ITEMS MUTUALLY DEADLOCKED BY `Blocked by` — the question no per-item rule can ask.
     ///

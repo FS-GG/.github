@@ -726,3 +726,127 @@ let ``Protocol states exactly the snapshot's top-level keys, in the writer's ord
         doc.RootElement.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq
 
     Assert.Equal<string list>(written, Protocol.snapshotKeys |> List.map (fun k -> k.Key))
+
+// ---- the scan must COLLECT the fact `BLOCKER-CLEARED` reads (.github#1738) ---------------------------
+//
+// THE GATE AND ITS SUBJECT ARE ONE STORY, AND THIS FILE IS THE ONLY PLACE THAT CAN SAY SO. `Chore`'s #1738
+// gate reads `Item.ItemPr`; `Scan` is the only thing that ever writes it; `ChoreTests` builds its items by
+// hand, so it can prove the RULE and can never prove the rule has an INPUT. The probe used to fire only on
+// `Ready`/`Backlog` — the columns a scheduler offers as they STAND — while `BLOCKER-CLEARED` acts
+// exclusively on `Blocked` rows and writes the column that makes one offerable NEXT pass. So the field was
+// `None` for the rule's entire population and the gate would have been dead on arrival: green, and blind
+// (#266). Measured on `.github` on 2026-07-29 — `#1689` sat `Blocked` with PR #1911 open on `item/1689-*`,
+// and the snapshot reported `itemPr: null` for it.
+
+/// A `Blocked` board row whose recorded blocker has CLOSED — `BLOCKER-CLEARED`'s exact firing condition.
+/// `FS.GG.SDD#7` is OFF the board here, so its state is resolved by a REST read of `/issues/7`.
+let private aClearedBlockedRow: Scan.Row =
+    { aRow with
+        Status = Blocked
+        BlockedByRaw = "FS.GG.SDD#7" }
+
+/// A transport for the blocked-row legs. `pulls` counts its calls rather than asserting inside the
+/// recorder: an exception thrown through the scan would be indistinguishable from any other IO failure,
+/// and a leg that cannot tell "the probe fired" from "the scan broke" is not measuring the probe.
+let private blockedRowTransport (blockerJson: string) (openPrs: string) =
+    let mutable pullsReads = 0
+
+    let recorder =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/pulls" then
+                pullsReads <- pullsReads + 1
+                ok openPrs
+            elif req.Path.Contains "matching-refs" then
+                ok "[]" // no pushed branch either — #1055's second probe
+            elif req.Path.EndsWith "/issues" then
+                ok "[]" // no off-board claim
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // MARKERLESS — the whole point: no claim carries the liveness
+            elif req.Path.EndsWith "/issues/7" then
+                ok blockerJson
+            else
+                ok (issueBody "Paths: src/Audio/**"))
+
+    recorder, (fun () -> pullsReads)
+
+[<Fact>]
+let ``#1738 a BLOCKED row whose blockers ALL resolved IS probed - its open item PR reaches Item.ItemPr`` () =
+    let transport, pullsReads =
+        blockedRowTransport """{"number":7,"state":"closed"}""" """[{"number":1911,"head":{"ref":"item/42-already-written"}}]"""
+
+    match Scan.snapshot transport [ aClearedBlockedRow ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    match Snapshot.parse document with
+    | Error e -> failwith $"parse failed: %A{e}"
+    | Ok request ->
+
+    let item = request.Candidates.[0].Item
+
+    Assert.Equal(1, pullsReads ())
+
+    // THE FIELD IS POPULATED — the half that did not exist before #1738.
+    Assert.Equal(Some 1911, item.ItemPr)
+
+    // AND THE GATE THEREFORE FIRES, over an item the REAL writer produced. "The rule holds" and "the rule
+    // can see its subject" are different claims, and only this file can make the second one.
+    Assert.Empty(Chore.derive [ item ])
+
+[<Fact>]
+let ``#1738 the SAME blocked row with NO open item PR still derives BLOCKER-CLEARED - #620 intact end to end`` () =
+    // The mate, over the real writer: without it, "the probe reaches the gate" is satisfied by a scan that
+    // holds every blocked row, and #620's remedy would be deleted at the impure edge rather than in the rule.
+    let transport, _ = blockedRowTransport """{"number":7,"state":"closed"}""" "[]"
+
+    match Scan.snapshot transport [ aClearedBlockedRow ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    match Snapshot.parse document with
+    | Error e -> failwith $"parse failed: %A{e}"
+    | Ok request ->
+
+    let item = request.Candidates.[0].Item
+    Assert.Equal(None, item.ItemPr)
+
+    match Chore.derive [ item ] |> List.map (fun c -> c.Kind.RuleId) with
+    | [ "BLOCKER-CLEARED" ] -> ()
+    | other -> failwith $"a cleared Blocked row with no in-flight PR must still promote — got %A{other}"
+
+[<Fact>]
+let ``#1738 a BLOCKED row with an OPEN blocker is NOT probed - the widened probe buys no request it need not`` () =
+    // THE BOUND, AND THE REASON THIS IS NOT `| Open, _ ->`. Each probe is a REST request on the budget the
+    // claim lock lives on (ADR-0034 §3, #418). The probe covers the `BLOCKER-CLEARED` candidate set and NOT
+    // ONE ROW MORE, so a `Blocked` row still holding an open blocker — which the rule would refuse anyway —
+    // costs nothing.
+    let transport, pullsReads =
+        blockedRowTransport """{"number":7,"state":"open"}""" "[]"
+
+    match Scan.snapshot transport [ aClearedBlockedRow ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    Assert.Equal(0, pullsReads ())
+
+    match Snapshot.parse document with
+    | Error e -> failwith $"parse failed: %A{e}"
+    | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)
+
+[<Fact>]
+let ``#1738 a BLOCKED row with NO blockers at all is NOT probed - an empty list is not "every blocker resolved"`` () =
+    // `List.forall` over `[]` is TRUE, so an unguarded `forall` would probe every blocker-LESS `Blocked` row
+    // on the board — a whole population the rule refuses on `not item.Blockers.IsEmpty`. The scan carries the
+    // same `IsEmpty` guard for that reason, and this pins it. Not hypothetical: `.github#1689` and `#1737`
+    // are both `Blocked` with an empty `Blocked by`, and #1689 has an open `item/1689-*` PR.
+    let transport, pullsReads = blockedRowTransport "" "[]"
+
+    match Scan.snapshot transport [ { aRow with Status = Blocked } ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    Assert.Equal(0, pullsReads ())
+
+    match Snapshot.parse document with
+    | Error e -> failwith $"parse failed: %A{e}"
+    | Ok request -> Assert.Equal(None, request.Candidates.[0].Item.ItemPr)

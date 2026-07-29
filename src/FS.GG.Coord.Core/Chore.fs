@@ -132,6 +132,49 @@ module Chore =
             | DeclaredChore
             | Declared _ -> true
 
+    /// THE IN-FLIGHT-IMPLEMENTATION GATE — #651's refusal, respected by the one chore that would write the
+    /// column it refuses on (.github#1738).
+    ///
+    /// `Schedulability` step 5b refuses a markerless item carrying an open `item/<n>-*` PR: *"an
+    /// implementation is already in flight … claiming it now would duplicate work that is already written"*
+    /// (#651). `BLOCKER-CLEARED`'s remedy is `Status = Ready` — the ONE column `columnStartability` calls
+    /// `AlwaysStartable`, and therefore the column that ADVERTISES the row to every reader. So the two
+    /// mechanisms disagreed about one item and the WRITE won, which is #1644's shape exactly, one field over.
+    ///
+    /// MEASURED, three instances in one board event: `FS.GG.Rendering#1094` merging fired `BLOCKER-CLEARED`
+    /// on `#1086`, `#1089` and `#1092`, each of which had a complete open PR. `Ready` was wrong for all three.
+    ///
+    /// **IT READS EXACTLY WHAT STEP 5b READS, AND THAT IS THE POINT RATHER THAN A CONVENIENCE.** A gate that
+    /// consulted a second source, or read this one more strictly, would be a THIRD opinion about one row and
+    /// could disagree with the scheduler in the other direction. `Item.ItemPr` is the field step 5b refuses
+    /// on; asking it the same question is what makes "the chore never writes a column the scheduler refuses
+    /// on" structural instead of remembered.
+    ///
+    /// **IT DOES NOT FAIL CLOSED ON A PROBE THAT FAILED, AND THAT IS A KNOWN RESIDUAL — .github#1924.**
+    /// This gate is NOT the fail-closed shape `humanBlockAllowsFlip` is, and saying it were would be the
+    /// fail-open wearing the fix's clothes. `Reads.prAlive : IoResult&lt;Liveness&gt;` has FIVE outcomes;
+    /// `Item.ItemPr` is an `int option` and carries ONE, so THREE arrive here as `None` = "no PR":
+    /// `LeaseExpiredBranchPushed` (#1055's pushed branch, work in flight before its PR exists),
+    /// `LivenessUnknown` (we could not ask), and `Error _` — INCLUDING `RateLimited`, which `Reads.prAlive`
+    /// propagates on purpose and `Scan`'s probe then swallows. The third is the expensive one, because rate
+    /// limiting is SYSTEMIC: one exhausted scan answers "no PR" for every row it probes.
+    /// #651 chose that collapse deliberately, and it was sound while the only consumer was step 5b: that
+    /// consumer fails open into OFFERING a row — read-only, and re-decided by the next scan. THIS consumer
+    /// fails open into a board WRITE on somebody else's item, which `choresFor`'s own header names as the
+    /// asymmetry that makes this mechanism safe to run unattended. Closing it needs a receipt `int option`
+    /// cannot carry, which is a change to a shared wire fact and its four readers — filed as .github#1924
+    /// rather than bodged in here. Until it lands, a rate-limited scan can still promote a cleared row.
+    ///
+    /// What #1738 DID change is the population the probe covers: `Scan` probed only the columns a scheduler
+    /// offers TODAY (`Ready`/`Backlog`), and this rule writes the column that makes a row offerable TOMORROW —
+    /// so a `Blocked` row, the only population this rule acts on, was never probed and this gate would have
+    /// been dead on arrival. `Scan` now probes the `BLOCKER-CLEARED` candidate set as well, keyed on the
+    /// shared `Blockers.cleared` so the probed population cannot drift narrower than the firing one.
+    ///
+    /// `true` — the flip may proceed — in exactly one case: no open `item/<n>-*` PR was RECORDED for this
+    /// row. Which, per the paragraph above, is not yet the same sentence as "none was found".
+    let private itemPrAllowsFlip (item: Item) : bool = item.ItemPr.IsNone
+
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
         member _.Subject = subject
@@ -298,14 +341,26 @@ module Chore =
               // one mechanical rule that could overwrite it: promoting such a row to `Ready` converts "a
               // human must decide this" into "a worker may pick this up". `humanBlockAllowsFlip` also fails
               // closed on a body we did not READ, because `HumanBlock = None` cannot tell that apart from
-              // "declares no sentinel". The gate order mirrors `Schedulability`'s: concrete blockers, then
-              // the human park (step 3b), then the machine predicate.
+              // "declares no sentinel".
+              //
+              // ...AND the item must not already carry an IMPLEMENTATION IN FLIGHT — .github#1738. An open
+              // `item/<n>-*` PR on a markerless row is exactly what `Schedulability` step 5b refuses on
+              // (#651), and `Ready` is precisely the column that invites the duplicate implementation it
+              // refused. Same shape as the park one field over, and `itemPrAllowsFlip` asks the SAME field
+              // step 5b asks — so the two mechanisms cannot reach opposite answers about one row.
+              //
+              // The gate order mirrors `Schedulability`'s: concrete blockers (step 3), the human park (3b),
+              // the markerless in-flight PR (5b) — then the machine predicate, for which `Schedulability`
+              // has no step at all and which is therefore last.
               if
                   item.State = Open
                   && item.Status = Blocked
-                  && not item.Blockers.IsEmpty
-                  && item.Blockers |> List.forall Blockers.isResolved
+                  // `Blockers.cleared`, not a `not IsEmpty && forall` spelled here: `Scan` must probe
+                  // exactly this population for `Item.ItemPr`, so the two projects ask ONE function
+                  // rather than agreeing by inspection (.github#1738, #1012).
+                  && Blockers.cleared item.Blockers
                   && humanBlockAllowsFlip item
+                  && itemPrAllowsFlip item
                   && predicateAllowsFlip item
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)

@@ -462,6 +462,202 @@ module ChoreTests =
 
         Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ i ])
 
+    // ---- BLOCKER-CLEARED must RESPECT the in-flight implementation step 5b refuses on (.github#1738) --
+    //
+    // `Schedulability` step 5b refuses a markerless row carrying an open `item/<n>-*` PR: an implementation
+    // is already written, and offering the row costs a DUPLICATE one (#651). This rule's remedy is
+    // `Status = Ready` — the one column `columnStartability` calls `AlwaysStartable`, hence the one that
+    // ADVERTISES the row. So the scheduler refused and the chore promoted, and the write won: #1644's shape,
+    // one field over. Measured three times in ONE board event — `FS.GG.Rendering#1086`/`#1089`/`#1092` when
+    // `#1094` merged, each with a complete open PR.
+    //
+    // The pair below is #1644's shape and #620's requirement: the SAME fixture with and without the PR.
+
+    [<Fact>]
+    let ``#1738 BLOCKER-CLEARED does NOT promote a row whose item PR is already open — step 5b's refusal`` () =
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                ItemPr = Some 1911 }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1738 the SAME fixture WITHOUT the open item PR still promotes — #620's remedy is intact`` () =
+        // The other half of the pair, and the one that makes the half above a NARROWING rather than a
+        // deletion. Identical in every field but `ItemPr`.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                ItemPr = None }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1738 the PR gate does NOT reach an item whose blockers still HOLD — the blocker gate is first`` () =
+        // The in-flight PR NARROWS the flip condition; it is not a second thing that can trigger or suppress
+        // one. An open blocker still governs, and the sentence a reader gets is still about the blocker.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerOpen ]
+                ItemPr = Some 1911 }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1738 the item PR is read ONLY by BLOCKER-CLEARED — a Ready row with one still derives STATUS-NOT-BLOCKED`` () =
+        // Scoped to the `Blocked → Ready` flip, exactly as the park and the predicate gates are. A row wearing
+        // `Ready` over an OPEN blocker is still falsely advertised whatever PR is open on it, and the rule
+        // that pushes it back to `Blocked` must keep firing — suppressing it would leave the row in the one
+        // column that invites a worker, which is the failure this item is about, arrived at from the other
+        // side.
+        let i =
+            { item 1 with
+                Status = Ready
+                Blockers = [ blocker 2 BlockerOpen ]
+                ItemPr = Some 1911 }
+
+        Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1738 a CLOSED issue with an open item PR is still CLOSED-ISSUE-NOT-DONE — the PR gates the flip`` () =
+        // The in-flight PR must not become a blanket "derive nothing about this item". A closed issue wearing
+        // a live column is a projection error whatever is open on its branch, and a gate that suppressed it
+        // would be a new way for the board to lie, introduced by the fix for a way it lied.
+        let i =
+            { item 1 with
+                State = Closed
+                Status = Ready
+                ItemPr = Some 1911 }
+
+        Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ i ])
+
+    // ---- AC5: the OTHER column-writing rules, CHECKED rather than assumed (.github#1738) -------------
+    //
+    // #1644's general statement is *no mechanical remedy may overwrite a fact the scheduler refuses on*.
+    // #1738's AC5 refuses to let that be restated per rule and asks it once, of every kind: is
+    // `BLOCKER-CLEARED` special, or is this a family? The answer is that it is special, and `Write` is what
+    // makes it so — it is the only kind whose remedy writes a column `columnStartability` calls startable.
+    // The two legs below pin the two rules AC5 names by hand; the third derives the claim from the union so
+    // a SIXTH kind cannot join the family unclassified.
+
+    [<Fact>]
+    let ``#1738 AC5 CLAIM-STATUS-LAG cannot contradict step 5b — it fires only where ItemPr is None by construction`` () =
+        // TWO independent reasons, and this leg pins the structural one. `CLAIM-STATUS-LAG` lives in the
+        // RESERVED branch, and `Scan` probes for a markerless `item/<n>-*` PR ONLY where there is no marker —
+        // so on this branch `ItemPr` is `None` by construction and there is no refusal to contradict. (The
+        // second reason is `Write`: it writes `In progress`, which `columnStartability` calls NeverStartable,
+        // so even a populated field could not turn into an advertisement.) The fixture sets `ItemPr` anyway —
+        // an impossible combination on purpose — because a leg that could only assert the rule on inputs the
+        // scan cannot produce would be asserting the scan, not the rule.
+        let i =
+            { item 1 with
+                Status = Ready
+                Claim = Some(claim other, LeaseHeld)
+                ItemPr = Some 1911 }
+
+        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1738 AC5 STATUS-NOT-BLOCKED cannot contradict step 5b — its write AGREES with a refusal, in the same direction`` () =
+        // The other rule AC5 names, and the answer is NO for a different reason: it writes `Blocked`, which
+        // moves the row FURTHER from startable, and it requires an OPEN blocker — on which `Schedulability`
+        // step 3 already refuses, before step 5b is ever reached. So the scheduler's verdict on such a row is
+        // `BlockedBy`, not `ItemPrOpen`, and the write agrees with it rather than overwriting it. A gate here
+        // would suppress a correction the board needs.
+        let i =
+            { item 1 with
+                Status = Ready
+                Blockers = [ blocker 2 BlockerOpen ]
+                ItemPr = Some 1911 }
+
+        Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1738 AC5 BLOCKER-CLEARED is the ONLY kind that writes a STARTABLE column — derived, so a sixth kind cannot escape`` () =
+        // THE GENERAL STATEMENT, ASSERTED ONCE. AC5 asks whether the other column-writing rules share this
+        // contradiction; the reason they cannot is that a chore can only contradict a refusal by writing a
+        // column that ADVERTISES the row, and exactly one kind does. Derived from the union by reflection —
+        // the same refusal to hand-list a vocabulary the rest of this module makes — so a sixth `ChoreKind`
+        // whose remedy writes `Ready` fails HERE rather than shipping ungated.
+        //
+        // `Write` is the one source for the field/value pair (`Chore.fsi`), and `columnStartability` is the
+        // one source for which columns are startable (`Schedulability`, #1057). This joins them; it re-decides
+        // neither.
+        //
+        // EVERY ARM IS CLASSIFIED, AND THE TWO `failwith`s ARE THE POINT. A `| _ -> false` here would exempt
+        // exactly the cases nobody thought about: a kind whose `Write` is `None` (its remedy is DELEGATED —
+        // `STALE-CLAIM`'s is `reap`, which restores `PreviousStatus`, and that can be `Ready`), and a
+        // `Status` string no `BoardStatus` renders (a hand-written literal instead of `statusWireName`).
+        // Both would answer "harmless" by DEFAULT, which is the fail-open this whole item is about.
+        let kinds =
+            everyCaseOf<ChoreKind> (fun t ->
+                if t = typeof<WorkerId> then box (WorkerId "wren-0001")
+                elif t = typeof<BoardStatus> then box Ready
+                elif t = typeof<string list> then box ([ ".github#2" ]: string list)
+                elif t = typeof<ItemClass> then box (List.head (everyCaseOf<ItemClass> noFields))
+                else noFields t)
+
+        Assert.NotEmpty(kinds)
+
+        let writesStartableColumn (k: ChoreKind) =
+            match k.Write with
+            | Some("Status", wire) ->
+                match everyStatus |> List.tryFind (fun s -> statusWireName s = wire) with
+                | Some s -> Schedulability.columnStartability s <> Schedulability.NeverStartable
+                | None ->
+                    failwith
+                        $"%s{k.RuleId} writes Status=%s{wire}, which no BoardStatus renders — this test cannot classify it, and answering `not startable` by default is the fail-open it exists to catch"
+            | Some(field, _) ->
+                // Not a scheduling column at all (`CLASS-PROJECTION-LAG` writes `Class`). Named, not defaulted.
+                Assert.Equal("Class", field)
+                false
+            | None ->
+                // A DELEGATED remedy. `STALE-CLAIM` is the only one, and `reap` restoring `PreviousStatus`
+                // really can write `Ready` — so this arm may not simply answer `false`. It cannot contradict
+                // step 5b for a reason of its own: STALE-CLAIM fires ONLY on `LeaseExpiredNoPr`, a probe that
+                // SUCCEEDED and found no PR (pinned by the first test in this file). A SECOND delegating kind
+                // would need that argument made for it, so it fails here instead.
+                Assert.Equal("STALE-CLAIM", k.RuleId)
+                false
+
+        let offenders = kinds |> List.filter writesStartableColumn |> List.map (fun k -> k.RuleId)
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], offenders)
+
+    [<Fact>]
+    let ``#1738 BLOCKER-CLEARED fires exactly where Blockers.cleared says — the predicate Scan probes on`` () =
+        // THE SEAM, PINNED FROM THE CORE SIDE. `Scan` must probe for `Item.ItemPr` on exactly the rows this
+        // rule can fire on; if its population ever drifts NARROWER, the #1738 gate stops seeing its subject
+        // and goes green over the promotion it exists to refuse. Both sides now ask `Blockers.cleared`, and
+        // this asserts the rule really is keyed on it rather than on a `forall` that merely agrees today —
+        // the #1012 shape (two spellings pointing opposite ways, 775 tests green over the disagreement).
+        //
+        // Swept over every `BlockerState`, derived from the union, plus the EMPTY list — which is the case a
+        // bare `forall` gets wrong, and the one `.github#1689`/`#1737` actually sit in.
+        Assert.NotEmpty(everyBlockerState)
+
+        let fires (blockers: Blocker list) =
+            rules [ { item 1 with Status = Blocked; Blockers = blockers } ] = [ "BLOCKER-CLEARED" ]
+
+        Assert.Equal(Blockers.cleared [], fires [])
+
+        for st in everyBlockerState do
+            let bs = [ blocker 2 st ]
+            Assert.Equal(Blockers.cleared bs, fires bs)
+
+            // ...and over a PAIR in BOTH ORDERS, so "every" is asserted rather than "the first" OR "the
+            // last". One order alone refutes only the implementation that reads the other end: with the
+            // swept state second, a first-blocker-only rule is caught and a last-blocker-only rule passes.
+            let firstClosed = [ blocker 2 BlockerClosed; blocker 3 st ]
+            Assert.Equal(Blockers.cleared firstClosed, fires firstClosed)
+
+            let lastClosed = [ blocker 3 st; blocker 2 BlockerClosed ]
+            Assert.Equal(Blockers.cleared lastClosed, fires lastClosed)
+
     // ---- STATUS-NOT-BLOCKED: do not advertise work that cannot start ---------------------------------
 
     [<Fact>]
