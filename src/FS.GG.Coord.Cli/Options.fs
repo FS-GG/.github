@@ -275,7 +275,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              POSTs a claim marker TAKING this repo's chore lock. For the
                                              same decision WITHOUT the offer use `batch --text -n 1` —
                                              that is the read, and what a STALE engine still permits
-  batch  [--repo NAME] [-n N] [--include-backlog] [--explain]
+  batch  [--repo NAME] [-n N] [--include-backlog] [--explain] [--json|--text]
                                              every item schedulable in parallel right now — `next`
                                              uncapped, and the READ half of that pair: it makes no
                                              chore offer and takes no lock (#1535). Defaults to JSON;
@@ -289,9 +289,11 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              highest-ranked schedulable item is always admitted;
                                              --explain prints that ranking and why each item won or
                                              lost its lane
-  ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
+  ready  [--repo NAME] [--status S] [--all] [--json|--text]
+                                             the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
-                                             will refuse; --status/--all widen past the default)
+                                             will refuse; --status/--all widen past the default). Defaults
+                                             to JSON; --text gives the human-readable board table
   reconcile [--repo NAME] [--apply] [--json]  derive mechanically safe board repairs from a fresh scan;
                                              dry-run by default. Judgement findings remain report-only in
                                              `lint`; --apply performs only typed chore remedies
@@ -335,9 +337,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
           [--status S]                       --status lands it in S instead (#867: name the column you
                                              mean, e.g. `--status Blocked`, or it goes back to Ready)
   heartbeat <ref> [--worker W]               renew the lease
-  adopt  <ref> [--worker W]                  take over an ORPHAN — a stale claim whose PR is FINISHED —
+  adopt  <ref> [--worker W] [--json|--text]  take over an ORPHAN — a stale claim whose PR is FINISHED —
                                              and land it (#697/#720); reports the preconditions it checked,
-                                             then transfers the claim
+                                             then transfers the claim. Defaults to text; --json gives the
+                                             transferred claim's machine receipt
 
   add    <ref> [--status S]                  put an issue ON the board, idempotently (#861) — the metered
                                              verb the GraphQL monopoly rule names (#586); prints the item id.
@@ -404,14 +407,16 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   issues <repo> [--label L] [--state S]      list a repo's issues over REST, ETag-revalidated — a 304 costs
          [--refresh]                         nothing (#446/#418). <repo> is a short-id, owner/repo, or a
                                              repo name; emits the raw JSON array (project it with jq)
-  predicate <id> <field> <value>             the ADR-0050 registry oracle: does the row exist AND does the
+  predicate <id> <field> <value> [--json|--text]
+                                             the ADR-0050 registry oracle: does the row exist AND does the
   predicate  (cross-repo-request on stdin)   OWNING producer's manifest agree? One word — agrees/contradicts/
                                              unknown — decision in the exit code (0/3/4, the `landable` shape).
                                              Owner is authoritative (`owner:`), an absent value is UNKNOWN
                                              not false (.github#658), and a missing registry/manifest is
                                              UNKNOWN — fail closed. Reads registry/skills.yml ($FSGG_REGISTRY)
                                              and producer checkouts under $FSGG_REPOS_ROOT (default .repos).
-                                             Local: no board, no token. Only `mirrored` compared today.
+                                             Local: no board, no token. Defaults to text; --json gives the
+                                             machine verdict. Only `mirrored` compared today.
 
   --help    --version
 

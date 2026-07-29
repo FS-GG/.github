@@ -193,6 +193,19 @@ module CommandSurfaceTests =
             (row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq))
         |> Map.ofSeq
 
+    /// The render flags named on a command's anchored usage line. This intentionally reads the human
+    /// surface rather than `scopeOf`: the emitted contract is the typed source of truth, and this test is
+    /// the boundary that makes its promises visible to someone running `--help`.
+    let private usageRenderFlags (verb: string) =
+        let line =
+            Regex.Match(usage, $@"^  {Regex.Escape verb}(?:\s|$)[^\r\n]*", RegexOptions.Multiline)
+
+        Assert.True(line.Success, $"%s{verb}: no anchored usage line to compare with its contract")
+
+        Regex.Matches(line.Value, @"--(?:json|text)")
+        |> Seq.map _.Value
+        |> Set.ofSeq
+
     /// Every command the contract is emitted for, paired with its declared render support.
     let private contractCommands =
         surface |> List.map (fun (verb, command) -> verb, command, renderSupport command)
@@ -258,6 +271,30 @@ module CommandSurfaceTests =
             List.isEmpty wrong,
             "the emitted surface and the renderers disagree about `--text` (#1523):\n  "
             + String.concat "\n  " wrong
+        )
+
+    [<Fact>]
+    let ``#1548 usage names exactly the render flags emitted in the command contract`` () =
+        // The contract is deliberately derived from the parser/render declaration, not from this prose.
+        // Comparing both directions catches the two real failure modes: a flag callers can use but cannot
+        // discover, and a help promise that the engine does not honour. No command needs an exemption:
+        // each emitted row has an anchored usage line, including the one multi-word verb.
+        let emitted = emittedFlags ()
+
+        let disagreements =
+            contractCommands
+            |> List.choose (fun (verb, _, _) ->
+                let expected = emitted.[verb] |> Set.filter (fun flag -> flag = "--json" || flag = "--text")
+                let actual = usageRenderFlags verb
+
+                if actual = expected then
+                    None
+                else
+                    Some $"%s{verb}: usage has %A{Set.toList actual}; contract emits %A{Set.toList expected}")
+
+        Assert.True(
+            List.isEmpty disagreements,
+            "usage and the emitted render contract disagree (#1548):\n  " + String.concat "\n  " disagreements
         )
 
     [<Fact>]
