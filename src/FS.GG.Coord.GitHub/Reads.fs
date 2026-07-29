@@ -1759,9 +1759,23 @@ module Reads =
         // assertions the CALLER added (`--require`, `--sha`) and GitHub's own refusal, and its stderr banner
         // says so. Nobody asserted this. The verdict word carries it, and `Client.landable` speaks the
         // sentence.
+        // ...WITH ONE THING STILL SAID. A caller who passed `--sha` asserted which commit they meant, and
+        // this arm returns before the reconciliation below would have checked it. Dropping that silently
+        // would be this issue's own defect in miniature — a verdict that is true while hiding the fact the
+        // caller actually asked about — so a DISAGREEING `--sha` is reported beside the verdict. It does not
+        // change the verdict: the PR really is merged, and that is the answer. It changes what the caller is
+        // told about the commit they named, which on the merged arm is the difference between "your work
+        // landed" and "something landed here, and it was not what you asked about".
+        let assertedSha =
+            match facts.HeadSha, expected with
+            | Some sha, Some want when sha <> want ->
+                [ Asserted
+                      $"you asked about %s{want}, but this PR's head is %s{sha} — the merge that landed is not the commit you named" ]
+            | _ -> []
+
         match facts.State, facts.Merged with
-        | Some "closed", true -> PrMerged, 0, []
-        | Some "closed", false -> PrClosed, 0, []
+        | Some "closed", true -> PrMerged, 0, assertedSha
+        | Some "closed", false -> PrClosed, 0, assertedSha
         | _ ->
 
         let staleHead =

@@ -302,7 +302,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
   landable <pr> --repo NAME                  is this OPEN PR finished work? one verdict word on stdout
-    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown), the decision in the
+    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown, or merged/closed when
+                                             the PR is not open at all — .github#1680), the decision in the
                                              exit code — the #697/#720 gate as a query (#724). --wait polls
                                              until the verdict SETTLES: it never believes an early green (it
                                              waits for the run set to STOP GROWING), and keeps waiting while

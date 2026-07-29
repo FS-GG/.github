@@ -1925,10 +1925,14 @@ module Client =
                                             | Some PrConflicted -> $"STALE (#%d{pr} OPEN — conflicted)"
                                             | Some PrPending -> $"STALE (#%d{pr} OPEN — checks running)"
                                             | Some PrRed -> $"STALE (#%d{pr} OPEN — not green)"
-                                            // A PR that is not OPEN cannot be this row's `LivePr` — that
-                                            // field is populated from the OPEN-PR read — so these two are
-                                            // unreachable here. Named rather than swept into the catch-all
-                                            // so the compiler keeps this exhaustive if `LivePr` ever widens.
+                                            // `LivePr` comes from the OPEN-PR read, so these two are all
+                                            // but unreachable here — NOT structurally, though: the liveness
+                                            // read and the landable read are two separate REST calls, and a
+                                            // PR that merges between them lands right here. Sharing the
+                                            // `STALE (#N OPEN)` wording is deliberate rather than ideal —
+                                            // this is one cell of a human table, the row is stale either
+                                            // way, and `who` is advisory. `landable` is where the merged
+                                            // verdict is spoken precisely.
                                             | Some PrMerged
                                             | Some PrClosed
                                             | Some PrUnknown
@@ -2926,8 +2930,9 @@ module Client =
                                     ExitRed
 
     /// `landable <pr> --repo NAME` — is this OPEN PR finished work? The #697/#720 verdict as a first-class
-    /// QUERY: the ONE word (`green`/`conflicted`/`pending`/`red`/`unknown`) on stdout, the DECISION in the
-    /// exit code so a poll loop reads "keep waiting" from "stop" without parsing prose (#724).
+    /// QUERY: the ONE word (`green`/`conflicted`/`pending`/`red`/`unknown` — or `merged`/`closed` when the
+    /// PR is not open at all, #1680) on stdout, the DECISION in the exit code so a poll loop reads "keep
+    /// waiting" from "stop" without parsing prose (#724).
     ///
     /// IT IS THE READ `who`/`reap`/`adopt` ALREADY MAKE (`Reads.prLandable` → `Landable.score`), surfaced on
     /// its own so the verdict has ONE home. §5 of the worker recipes used to re-derive it in ~40 lines of jq,
@@ -3055,6 +3060,24 @@ module Client =
 
                         eprint
                             "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
+
+                    // AN UNMET `--sha` ON A MERGED PR GETS ITS OWN SENTENCES (#1680), and must NOT borrow
+                    // the block above. Every clause up there is FALSE here: this PR is not "not landable"
+                    // (it landed), the verdict is not `pending`, nothing is transient, and no amount of
+                    // waiting is implied. Printing a true reason under a false banner is precisely the
+                    // fault this issue is about, and #1575 split the refusal arms for the same reason.
+                    //
+                    // The verdict is untouched — the PR IS merged and stdout says so. What this adds is the
+                    // one fact that changes the caller's next act: on the recovery path, "your work landed,
+                    // go stamp it" and "something landed here and it was not what you asked about" call for
+                    // opposite responses, and only the asserted SHA can tell them apart.
+                    if state = PrMerged && not asserted.IsEmpty then
+                        for reason in asserted do
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} MERGED, but NOT the commit you named — %s{reason}."
+
+                        eprint
+                            "fsgg-coord-engine:   The verdict stands: this PR is merged and there is nothing to gate. But you asserted a commit with --sha and it is not the one that landed, so do NOT read this as a receipt for YOUR work. Someone else's push, a force-push, or a bot commit landed here. Check what merged before you stamp anything."
 
                     if not refused.IsEmpty then
                         for state, baseRef in refused do

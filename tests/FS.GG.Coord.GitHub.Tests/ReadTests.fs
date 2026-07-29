@@ -1913,3 +1913,38 @@ let ``#1680 a PR body with no `merged` field at all is NOT read as merged`` () =
 
     Assert.NotEqual(PrMerged, state)
     Assert.Equal(PrClosed, state)
+
+[<Fact>]
+let ``#1680 a merged pr still REPORTS a --sha the caller named that is not what landed`` () =
+    // The verdict is right and the fact is still owed. `--sha` is an assertion the caller made, and this
+    // arm returns before the reconciliation that would ordinarily check it — so dropping it silently
+    // would be #1680's own defect in miniature: an answer that is true while hiding the thing that was
+    // asked. The verdict does NOT change (the PR is merged, and that is the answer); what changes is that
+    // the caller is told the merge was not the commit they named.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ClosedPrServer("closed", true)
+
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-SOMEONE-ELSE")
+
+    Assert.Equal(PrMerged, state)
+
+    match unmet with
+    | [ Reads.Asserted reason ] ->
+        Assert.Contains("sha-SOMEONE-ELSE", reason)
+        Assert.Contains("sha-x", reason)
+    | other -> failwith $"an unmet --sha on a merged PR must still be REPORTED — got %A{other}"
+
+[<Fact>]
+let ``#1680 a merged pr whose head IS the asserted sha reports nothing extra`` () =
+    // The counterweight: agreement must stay silent, or every recovering worker who correctly names the
+    // commit that landed is handed a warning about nothing.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ClosedPrServer("closed", true)
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-x")
+
+    Assert.Equal(PrMerged, state)
+    Assert.Empty unmet
