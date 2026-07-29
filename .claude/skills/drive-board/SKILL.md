@@ -31,15 +31,15 @@ cross-repo allocation, not item implementation.
    item remains active, continue the host loop, and report each transition when it occurs.
 6. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
    and follow-up items against GitHub—not its narrative.
-7. **After each verified merge into `.github`, and before the next wave is dispatched, bring the shared
-   checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
+7. **Once this wave's merges into `.github` are verified, and before the next wave is dispatched, bring
+   the shared checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
    checkout, so merging a worker's PR can leave the binary the whole fleet execs behind `origin/main` —
    and `.github#1549`'s guard then refuses every board write, the host's own included (measured twice in
    one run; one `set-field` was silently lost). **This host owns that repair**: `pnext-item` §1 makes
    every worker *check*, and escalates the *repair* here (`.github#1594`), because it mutates a checkout
    N workers share and the host is both the actor that creates the drift and the only one that can
-   serialise the fix. The check is four local `git` calls (~5 ms, no network); gate the Release rebuild
-   on it answering non-zero rather than rebuilding every wave. Exact spelling, and why the repair is
+   serialise the fix. After a `git fetch`, the check itself is four local `git` calls (~5 ms); gate the
+   Release rebuild on it answering non-zero rather than rebuilding every wave. Exact spelling, and why the repair is
    `merge --ff-only` and never `pull --ff-only` (`.github#1664`), in
    [engine currency](references/deep-detail.md#engine-currency).
 8. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly

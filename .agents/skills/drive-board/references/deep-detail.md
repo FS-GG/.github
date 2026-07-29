@@ -203,10 +203,11 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 > 5. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
 >    exit code and stop — 5 means this repo is dry for now, 75 means the shared budget is gone and the
 >    host must back the whole fleet off (§3).
-> 6. **If `pnext-item` §1's engine check says the shared checkout is behind and you cannot repair it**,
->    do not `take` — the guard will refuse the write and you will have spent the lease learning that.
->    Report "the shared engine is N commits behind and I am refused that checkout" and stop. That is an
->    escalation to the host, which owns the repair; you are not expected to carry it.
+> 6. **If `pnext-item` §1's engine check says the shared checkout is behind, do not `take` — report
+>    "the shared engine is N commits behind" and stop.** The guard will refuse the write anyway, so
+>    taking first only spends the lease learning that. Report it whether or not you *could* reach that
+>    checkout: the repair mutates a tree every other live worker is reading, and serialising it is the
+>    host's job, not a favour a worker does on its way past. You are owed the repair, not blamed for it.
 > 7. **Report back**: the item number, the merged PR, the exact `FSGG-DONE` line, the post-merge
 >    obligation list and verification evidence (or explicitly `none`), any blocker/finding you filed
 >    (with issue numbers), and the `take` exit code if you got no item. Then exit.
@@ -260,14 +261,17 @@ tree that nothing in this loop used to move. Merging a wave's PRs is exactly wha
 `origin/main`, which is why the step belongs *after* §5's verification and *before* the next spawn.
 
 Since `.github#1549` that drift is not silent, it is a **refusal**: `stale_guard` compares the shared
-checkout's `HEAD` to `origin/main` under the engine's own source trees and refuses every board write
-while it is behind. Measured on this host, twice in one run (2026-07-27), both times in this shape — a
+checkout's `HEAD` to the default-branch ref it resolves (`refs/remotes/origin/HEAD`, falling back to
+`origin/main`, then `origin/master` — `origin/main` in this repo, and the recipe below names it
+directly) under the engine's own source trees, and refuses every board write while it is behind. Measured on this host, twice in one run (2026-07-27), both times in this shape — a
 worker's PR merged into `.github` main, the shared checkout fell behind, board writes refused. **The
 first occurrence cost a `set-field` that silently did not land**, caught only because a later `lint`
 contradicted it. The tax scales with how fast the fleet lands work, which is what a good run of this
 skill maximises.
 
-Run the check every wave; it is four local `git` calls, ~5 ms, no network:
+Run the check once per wave. Past the `git fetch` — which §5's verification already makes you run, and
+which does double duty here, because a linked worktree shares the common dir's refs — it is four local
+`git` calls, ~5 ms, and no network of its own:
 
 ```sh
 git fetch origin
@@ -308,9 +312,15 @@ worktree — and escalates the repair here (`.github#1594`). That escalation's l
 [host-loop](host-loop.md): a worker reporting "I am refused the shared checkout, and the engine is N
 behind" has done the right thing and is owed this repair, not a re-dispatch.
 
-Two notes on reach. In a **receiver** (no `src/FS.GG.Coord.*`) the count is `0` and the whole block is a
-no-op, correctly: a receiver execs a packaged engine and has nothing beside it to be stale against — so
-this step costs a workspace driver nothing and needs no repo special-case. And an **empty
+Two notes on reach. In a checkout with **no source build at all** the count is `0` and the whole block is
+a no-op, correctly: a receiver resolves a packaged engine at tiers 3/4, never reaches `stale_guard`, and
+has nothing beside it to be stale against — so this step costs a workspace driver nothing and needs no
+repo special-case. Do not read that backwards *inside* `.github`, where the guard does run: a pathspec
+that matches nothing also counts `0`, so if the engine's projects were ever renamed or moved, this check
+would answer "fresh" forever while `stale_guard` — which probes that the trees exist and returns *no
+verdict* when they do not — refuses every write. A host repairing nothing while blocked is the same
+fail-open one level up; if the count is `0` and the refusal persists, suspect the pathspec, not the
+board. And an **empty
 `SHARED_HEAD` refuses** rather than reporting fresh: `--porcelain`'s second line is `bare` for a bare
 main working tree, and `rev-list --count "..origin/main"` is valid git meaning `HEAD..origin/main` —
 i.e. it would measure *your* tree, which is current by construction, and answer `0`. Cannot look ≠

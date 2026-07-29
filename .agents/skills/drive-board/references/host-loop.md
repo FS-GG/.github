@@ -27,10 +27,11 @@ is where it lands.** `pnext-item` §1 makes every worker check the shared checko
 first board write, but the *repair* is a mutation of a tree N workers share, and a worktree-isolated
 worker may have its git operations against that checkout refused outright — so reporting it is the only
 move it has (`.github#1594`, `.github#1663`). Treat such a report as a wave-blocking repair **this host
-owns**, not as a worker failure and not as a note to file: run the engine-currency step before the next
-dispatch, and do not re-dispatch that worker until the check answers zero. A worker that stopped this way
-spent no lease and holds no claim — it is the protocol working, and the item it did not take is still
-schedulable.
+owns**, not as a worker failure and not as a note to file: run the engine-currency step, and do not
+dispatch the next wave until the check answers zero. The reporting worker is already gone — workers are
+disposable — so there is nothing to re-dispatch; what must not happen is the *next* wave going out over
+the same refusal. A worker that stopped this way spent no lease and holds no claim, which is the
+protocol working: the item it did not take is still schedulable.
 
 Terminate only from a fresh read. “Nothing schedulable” may mean empty, blocked, contended, stale, or
 unreadable. An empty Ready batch is not completion while Backlog is actionable or untriaged. Report
