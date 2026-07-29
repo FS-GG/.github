@@ -56,7 +56,23 @@ module Budget =
     ///
     /// FAIL-CLOSED ORDER, AND IT MATTERS: this test runs BEFORE the partial-apply arm, or an exhausted
     /// budget would be misreported as a half-written board.
+    ///
+    /// It answers "is this a rate limit", and DELIBERATELY not "which one" — see `isSecondaryLimit`.
     val isRateLimited: body: string -> bool
+
+    /// Is this specifically a SECONDARY (abuse-detection) limit, rather than the primary budget?
+    ///
+    /// The prose above says the three mechanisms "all arrive as a 403 with DIFFERENT prose" — and for its
+    /// whole life this module matched all five wordings into one bool and threw the distinction away. It
+    /// was never unknowable; it was computed and discarded.
+    ///
+    /// #1666 is the bill. A secondary limit is triggered by burst CONCURRENCY, not cumulative quota, so it
+    /// fires while the primary counter is nearly untouched — and it does not appear in `/rate_limit` at
+    /// all. Reported as "REST budget EXHAUSTED … resets in ~6m", it sent four investigations to the wrong
+    /// conclusion: the operator checked the primary counter, found 62% / 87% / 88% free, and inferred a
+    /// phantom internal counter. The remedies are opposite in kind — a primary limit is waited out, a
+    /// secondary limit is cleared by REDUCING CONCURRENCY, and waiting at full fan-out re-triggers it.
+    val isSecondaryLimit: body: string -> bool
 
     /// Read `rateLimit { cost remaining }` off a GraphQL response body.
     ///
@@ -84,8 +100,23 @@ module Budget =
     /// worker to wait out a token error is an infinite loop that reports progress.
     ///
     /// `header` looks up a RESPONSE header on the failing call, case-insensitively, and it is what lets a
-    /// rate limit name the budget that died (`X-RateLimit-Resource`) and the reset it named
-    /// (`X-RateLimit-Reset`). Without it this function could not tell a REST 403 from a GraphQL one, so
-    /// `explain` said "GraphQL" for both — and then recommended REST, on a REST limit, in the sentence
-    /// telling you what to do next.
+    /// rate limit name the budget that died (`X-RateLimit-Resource`), the reset it named
+    /// (`X-RateLimit-Reset`) and — since #1666 — a secondary limit's own `Retry-After`. Without it this
+    /// function could not tell a REST 403 from a GraphQL one, so `explain` said "GraphQL" for both — and
+    /// then recommended REST, on a REST limit, in the sentence telling you what to do next.
+    ///
+    /// TWO THINGS IT WILL NOT DO, both learned from #1666:
+    ///
+    /// It will not consult `GET /rate_limit` to second-guess a 403. That endpoint is free, and the item
+    /// that prompted this change asked for exactly that — but a SECONDARY limit does not appear in it, so
+    /// "the counter looks healthy" is not evidence the refusal was false. Overriding a real 403 on that
+    /// reading would convert a genuine refusal into a resume, at full fan-out, into the detector that just
+    /// fired. Worse, on this account `/rate_limit`'s `core` figure disagrees with the counter real requests
+    /// are billed against (measured 2026-07-16: it reported 2431/5000 while every real read 403'd with
+    /// `remaining: 0`, naming a different reset instant). The failing response's OWN headers are the only
+    /// reading definitionally about the request that failed.
+    ///
+    /// And it will not attach `X-RateLimit-Reset` to a secondary limit. That header describes the primary
+    /// window; presenting it as the resume signal for a limit that does not use it is what produced
+    /// "resets in ~6m" ahead of a retry that succeeded in seconds.
     val classify: subject: string -> status: int -> body: string -> header: (string -> string option) -> IoError

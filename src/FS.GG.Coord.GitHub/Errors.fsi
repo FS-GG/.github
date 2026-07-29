@@ -29,13 +29,36 @@ module Errors =
 
         /// `X-RateLimit-Resource: core` (or any other REST resource — `search`, `code_search`, …). The
         /// request budget, and the one the CLAIM LOCK lives on by ADR-0034 §3.
-        | RestBudget
+        ///
+        /// IT CARRIES THE BUCKET NAME GitHub actually sent, and #1666 is why. Every non-`graphql` resource
+        /// collapsed into this case with the name DISCARDED, so a 403 from `search` announced itself as
+        /// "REST budget EXHAUSTED"; the operator then checked `gh api rate_limit`'s top-level `core`, found
+        /// it 87% unused, and concluded the engine was tripping an internal counter of its own. Four
+        /// separate diagnoses were filed on that reading and all four were wrong. The name is the fact that
+        /// makes the reading checkable, so it is carried, not collapsed.
+        | RestBudget of resource: string option
 
-        /// GitHub did not name a resource. A secondary/abuse-detector 403 arrives this way.
+        /// A SECONDARY (abuse-detection) limit — a different mechanism from the primary budget, with a
+        /// different remedy, and the one #1666 was really made of.
+        ///
+        /// It is triggered by CONCURRENT REQUEST BURSTS rather than cumulative quota, which is why it fires
+        /// with the primary counter almost untouched — the 62% / 87% / 88% "headroom" readings that made
+        /// every observer conclude the refusal was phantom. It does NOT appear in `/rate_limit` at all, so a
+        /// healthy reading there can never rule it out.
+        ///
+        /// `retryAfter` is the `Retry-After` header, which is the ONLY reset that describes this limit.
+        /// There is deliberately NO `resetAt` alongside it: `X-RateLimit-Reset` is the PRIMARY window and
+        /// says nothing about a secondary limit, and presenting it as the resume signal is what made
+        /// "resets in ~6m" precede a retry that succeeded in seconds. Structurally absent beats
+        /// documented-as-not-to-be-used.
+        | SecondaryLimit of resource: string option * retryAfter: System.TimeSpan option
+
+        /// GitHub named no resource AND the wording did not say which mechanism fired.
         ///
         /// This case exists so the tool can say "a rate limit, and I do not know which" rather than
         /// guessing. An invented budget name is worse than an absent one, for the same reason an invented
-        /// reset is: it will be believed.
+        /// reset is: it will be believed. It FAILS CLOSED (#266): because a secondary limit cannot be ruled
+        /// out, the advice it renders is the conservative union — reduce concurrency *and* back off.
         | UnknownBudget
 
     /// Why a read or a write did not produce an answer.
