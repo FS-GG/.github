@@ -943,7 +943,10 @@ mapfile -t driven < <(printf '%s\n' "${!CONTRACT_DRIVEN[@]}" | sort)
 if [ "${#advertised[@]}" -gt 0 ] && [ "$(printf '%s\n' "${advertised[@]}")" = "$(printf '%s\n' "${driven[@]}")" ]; then
   ok "#1569: every one of the ${#advertised[@]} advertised contract rows has exactly one executable driver"
 else
-  bad "#1569: command-contract coverage must be exact and non-vacuous" "advertised (${#advertised[@]}): ${advertised[*]}\ndriven (${#driven[@]}): ${driven[*]}"
+  missing="$(comm -23 <(printf '%s\n' "${advertised[@]}") <(printf '%s\n' "${driven[@]}"))"
+  unexpected="$(comm -13 <(printf '%s\n' "${advertised[@]}") <(printf '%s\n' "${driven[@]}"))"
+  duplicates="$(printf '%s\n' "${!CONTRACT_DRIVEN[@]}" | sort | uniq -d)"
+  bad "#1569: command-contract coverage must be exact and non-vacuous" "missing: ${missing:-none}\nunexpected: ${unexpected:-none}\nduplicate driven rows: ${duplicates:-none}"
 fi
 for mode in 'flush:dry-run' 'flush:apply' 'reap:bare' 'reap:apply' 'reconcile:bare' 'reconcile:apply' 'next:argvCannotSay'; do
   if [ -n "${CONDITIONAL_MODES[$mode]:-}" ]; then
