@@ -166,13 +166,28 @@ reads(
     (["scripts"], True),
 )
 # Every `with:` value reaches an action as a string and the action reads this one with
-# `core.getBooleanInput`, so the quoted spelling is a workflow that WORKS. sparse_set.py refused it
-# before the hoist — a no-verdict over a healthy workflow, which is how a guard gets deleted.
-for spelling, expected_cone in (("false", False), ("FALSE", False), ("true", True), ("True", True)):
+# `core.getBooleanInput`, so precisely these six quoted spellings are workflows that WORK. This is a
+# case-sensitive action vocabulary, not a casefolded convenience set: the table itself is the oracle
+# for every accepted textual value. sparse_set.py refused quoted booleans before the hoist — a
+# no-verdict over a healthy workflow, which is how a guard gets deleted.
+for spelling, expected_cone in (
+    ("false", False),
+    ("False", False),
+    ("FALSE", False),
+    ("true", True),
+    ("True", True),
+    ("TRUE", True),
+):
     reads(
         f"a QUOTED boolean {spelling!r} is not unreadable — it is what every with: value already is",
         {"sparse-checkout": "/scripts/", "sparse-checkout-cone-mode": spelling},
         (["/scripts/"], expected_cone),
+    )
+for spelling in ("1", 1, "0", 0):
+    refuses(
+        f"a cone-mode {spelling!r} is refused — core.getBooleanInput accepts no numeric spelling",
+        {"sparse-checkout": "/scripts/", "sparse-checkout-cone-mode": spelling},
+        "unreadable",
     )
 refuses(
     "an unevaluated ${{ }} cone-mode is refused; its value is decided at run time",
