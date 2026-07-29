@@ -1313,6 +1313,28 @@ module Client =
                         let mutable failed = false
                         let reapExit = Collections.Generic.Dictionary<string, int>()
 
+                        // `BoardClass = None` has two different meanings at two different boundaries:
+                        // this scan's row may have an UNSET `Class` value, while this map can prove that
+                        // the project declares NO `Class` field at all. `Chore.derive` deliberately cannot
+                        // collapse those facts: it is pure and sees rows, not a board capability. Here we
+                        // have paid for that capability, so do not turn the second fact into one 422 per
+                        // classed row. This is not a fail-open: `lint` still reads the item's body and
+                        // reports `CLASS-UNSET`; only a projection whose destination demonstrably does not
+                        // exist is withheld. Create it first with `createProjectV2Field` as documented in
+                        // docs/coordination/board-schema.md, then the next reconcile projects every row.
+                        let classFieldMissing = not (Map.containsKey "Class" board.Fields)
+
+                        let withheldClassProjections =
+                            chores
+                            |> List.filter (fun c ->
+                                match c.Kind with
+                                | Chore.ClassProjectionLag _ -> true
+                                | _ -> false)
+
+                        if classFieldMissing && not (List.isEmpty withheldClassProjections) then
+                            eprint
+                                "fsgg-coord-engine: reconcile: board has no Class field; withheld Class projections. Create it with createProjectV2Field before writing the first Class: line (docs/coordination/board-schema.md)."
+
                         // `reap` owns the marker CAS and its column-restore rule. Run it once per affected
                         // repo; the same fresh derivation means every additional stale marker it safely
                         // collects there is another typed STALE-CLAIM remedy, never a broader judgement.
@@ -1402,6 +1424,15 @@ module Client =
                         let applied =
                             [ for chore in chores do
                                   match write chore with
+                                  | Some("Class", _) when classFieldMissing ->
+                                      // One map-level diagnostic above names the remedy. Repeating it for
+                                      // every row would turn a board configuration fact into N failures.
+                                      reconcileRow
+                                          chore
+                                          (Some(
+                                              NotAttempted
+                                                  "the board declares no Class field; create it with createProjectV2Field before projecting Class"
+                                          ))
                                   | None ->
                                       // `STALE-CLAIM` — no field write; the `reap` pass above owns it. Its
                                       // outcome is that pass's exit code, per REPO, and it is reported as

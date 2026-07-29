@@ -131,6 +131,11 @@ recreated a field's options and cleared the value on **every** item. The guarded
 snapshot → `add-option` → restore sequence below becomes relevant to `Class` only if a **later
 fourth option** is ever added — which is an ADR, not a board edit.
 
+On a product-workspace board, create `Class` with `createProjectV2Field` **before** the first item writes a
+`Class:` body line. `reconcile --apply` retains body-based `CLASS-UNSET` linting when the field is absent,
+but withholds the impossible downstream projection and reports the missing field once rather than failing a
+write for every classed row.
+
 ## Severity
 
 How costly the row is, independently of what kind of work it represents. The operator decided the
