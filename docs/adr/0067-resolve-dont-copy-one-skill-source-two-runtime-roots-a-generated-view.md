@@ -812,8 +812,8 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 >
 > **THE `absence policy` COLUMN IS CORRECTED ABOVE, FOR TWO DIFFERENT FAULTS, RE-MEASURED 2026-07-29**
 > ([`#1796`](https://github.com/FS-GG/.github/issues/1796)). Folding them together would hide both: one
-> row was false the moment this table landed, the other decayed sixteen hours later. Only the second is
-> the ordinary cost of writing a dated record.
+> row was false the moment this table landed, the other decayed 14h33m later. Only the second is the
+> ordinary cost of writing a dated record.
 >
 > **`FS.GG.Net` NEVER TOOK THE CARVE-OUT, AND THE COMMIT THIS ROW CITES IS THE PROOF.** `fec519d` — the
 > adoption commit in Net's own `adoption` cell — is the commit that ADDED the line *"by the time `check`
@@ -852,25 +852,36 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > ([`#266`](https://github.com/FS-GG/.github/issues/266) — the rule that an unread subject is named
 > rather than folded into "the others are fine"). Six were read at exactly their `main` HEAD
 > (`FS.GG.Net` `388e1f5`, `FS.GG.Audio` `fac66e9`, `FS.GG.Game` `fa9f0a9`, `FS.GG.Templates` `0c914a1`,
-> `FS.GG.Rendering` `1703c4a`, `FS.GG.Governance` `325241c`). `FS.GG.SDD`'s working checkout was three
-> commits behind `12038f9`, so its `skill-view-check.yml` was fetched from `main` over the API and the
-> intervening diff was read in full — `.claude/skills/pnext-item/*` and `Directory.Packages.local.props`,
-> no workflow and no script. Each repository was additionally grepped whole for the token: outside the
-> invocations tabulated above, every remaining hit is inside the kit-delivered `scripts/skill-view`
-> itself — its own help text, argument parser and selftest — which is the tool, not a use of it.
+> `FS.GG.Rendering` `1703c4a`, `FS.GG.Governance` `325241c`). `FS.GG.SDD`'s working checkout was ONE
+> commit behind `12038f9`, so its `skill-view-check.yml` was fetched from `main` over the API and the
+> intervening diff was read in full — three files, all of them
+> `.claude/skills/pnext-item/*` or `Directory.Packages.local.props`, no workflow and no script. Each
+> repository was additionally grepped whole for the token: outside the invocations tabulated above,
+> every remaining hit is inside the kit-delivered `scripts/skill-view` itself — its own help text,
+> argument parser and selftest — which is the tool, not a use of it. `FS.GG.Rendering` invokes `check`
+> in two places and only the `gate.yml` one is tabulated, because it is the one riding the required
+> context; its `skill-view-check.yml:195` invocation carries no excuse either, so the row is the same
+> from both.
 >
-> **WHY THE NET ROW SURVIVED FIFTY-TWO MINUTES OF WRITING AND A DAY OF READING.** It is load-bearing in
-> the safe-looking direction: the error made Net look **weaker** than it is, so no one auditing for risk
-> would find it, and no one reading for reassurance would question it. That is the same asymmetry
+> **WHY THE NET ROW WENT UNCHALLENGED FOR A DAY.** It errs in the *reassuring* direction: the cell made
+> Net look **weaker** than it is, so no one auditing for risk would find it, and no one reading for
+> reassurance would question it. The shared class with
 > [`#1724`](https://github.com/FS-GG/.github/issues/1724) and
-> [`#1607`](https://github.com/FS-GG/.github/issues/1607) turned on, and it is why the fix for this class
-> is a *mechanical* re-derivation rather than a more careful sentence.
+> [`#1607`](https://github.com/FS-GG/.github/issues/1607) is narrower than that and is the part worth
+> generalising: **a hand-written enumeration that nothing re-derives, undercounting its population**
+> (both of those named four adopters where seven adopt). Whether the undercount is reassuring or
+> alarming differs — `#1607`'s was the sole evidence for *not* building a check, which is the unsafe
+> direction — and that is exactly why the fix for the class is a *mechanical* re-derivation rather than
+> a more careful sentence: the direction of the error is not something a reader can be relied on to
+> notice.
 >
 > **THIS CORRECTS A RECORD, NOT A RECEIVER.** No receiver's absence policy changes here and none needs
-> to; all seven are already what the table above now says. `#1795`'s daily sweep derives the same
-> property from the branch-protection API and already reports Net as `absence-cover: required` — those
-> roster words were correct throughout and are untouched. What was wrong is the prose an adopter reads
-> to learn what the fleet does, and prose is what this correction repairs.
+> to; all seven are already what the table above now says. `#1795`'s daily sweep grades a RELATED but
+> not identical property — whether a receiver's un-excused absence assertion rides a context branch
+> protection requires, derived from the API — and it already reports Net as `absence-cover: required`,
+> which is only consistent with Net passing no `--absent-ok`. Those roster words were correct
+> throughout and are untouched. What was wrong is the prose an adopter reads to learn what the fleet
+> does, and prose is what this correction repairs.
 >
 > **THE ORDER WAS STRICT PER RECEIVER, AND THE SPLIT IS FORCED RATHER THAN STYLISTIC.** Bump → observe
 > the kit's alarm reporting in that repo, by run id and by **job log** → delete the local copy →
