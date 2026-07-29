@@ -2,5 +2,28 @@
   "recordedFrom": "GitHub Actions REST API response shapes, 2026-07-29",
   "repo": {"default_branch": "main"},
   "workflows": {"total_count": 1, "workflows": [{"id": 7, "name": "fixture", "path": ".github/workflows/fixture.yml", "state": "active"}]},
-  "runs": {"total_count": 12, "workflow_runs": [{"conclusion": "success", "created_at": "2026-07-29T00:00:00Z", "head_sha": "abcdef012345"}]}
+  "runs": {
+    "total_count": 12,
+    "workflow_runs": [
+      {"id": 90, "conclusion": "success", "created_at": "2026-07-29T00:00:00Z", "head_sha": "abcdef012345"}
+    ]
+  },
+  "failureRuns": {
+    "total_count": 3,
+    "workflow_runs": [
+      {"id": 101, "conclusion": "failure", "created_at": "2026-07-28T00:00:00Z", "head_sha": "finding012345"},
+      {"id": 102, "conclusion": "failure", "created_at": "2026-07-27T00:00:00Z", "head_sha": "crashed012345"},
+      {"id": 103, "conclusion": "failure", "created_at": "2026-07-26T00:00:00Z", "head_sha": "unknown012345"}
+    ]
+  },
+  "jobs": {
+    "101": {"total_count": 1, "jobs": [{"id": 1001, "check_run_url": "http://fixture/repos/FS-GG/fixture/check-runs/1001"}]},
+    "102": {"total_count": 1, "jobs": [{"id": 1002, "check_run_url": "http://fixture/repos/FS-GG/fixture/check-runs/1002"}]},
+    "103": {"total_count": 1, "jobs": [{"id": 1003, "check_run_url": "http://fixture/repos/FS-GG/fixture/check-runs/1003"}]}
+  },
+  "annotations": {
+    "1001": [{"title": "gate finding", "message": "fixture-gate FAILED — 1 finding(s)", "raw_details": ""}],
+    "1002": [{"title": "gate crash", "message": "fixture-gate: the gate CRASHED, so it has NO VERDICT", "raw_details": ""}],
+    "1003": [{"title": "", "message": "custom checker emitted an undocumented error", "raw_details": ""}]
+  }
 }

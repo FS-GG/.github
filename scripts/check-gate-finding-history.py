@@ -27,18 +27,21 @@ of the code, and every one of them is printed in the report so a reader cannot m
 a bigger one than it is:
 
   * RETENTION. GitHub retains workflow runs for a bounded window (90 days by default, and an org may
-    set it lower). `totalRuns` and `findingRuns` are counts over RETAINED history. "Never produced a
-    finding" therefore always means "never within retained history" — a gate that red-lit once a year
-    ago and has been green since reads as NEVER-FOUND here. That is why LOW-SAMPLE exists below.
+    set it lower). `totalRuns`, red-run ids, and their verdict evidence cover RETAINED history.
+    "Never produced a finding" therefore always means "never within retained history" — a gate that
+    red-lit once a year ago and has been green since reads as NEVER-FOUND here. Annotation/log
+    evidence may expire sooner than the run; that is EVIDENCE-EXPIRED, never an invented absence.
+    That is why LOW-SAMPLE and EVIDENCE-EXPIRED exist below.
   * IDENTITY. A workflow is keyed by its file path. Renaming the file starts a new history; the old
     runs are still in the API under the old id but are not joined to the new one. A recently renamed
     gate looks young.
   * `failure` IS NOT `finding`. A run concludes `failure` when the gate found something AND when the
-    gate itself crashed, ran out of a token, or hit a 5xx. This tool counts run conclusions, so it
-    measures "has this gate ever been RED", which is an UPPER bound on "has this gate ever found
-    something real". A gate with findingRuns > 0 is therefore only *probably* exercised. The bound
-    goes the safe way — it can never invent a gate that fired — but it can excuse one that only ever
-    fell over. Distinguishing the two needs log bodies and is out of scope; it is filed.
+    gate itself crashed, ran out of a token, or hit a 5xx. Acquisition therefore reads every retained
+    red run's check annotations and recognises the gate harness's `FAILED — N finding(s)` marker. A
+    red with an explicit crash/no-verdict marker is FALLEN-OVER, not EXERCISED. Readable prose that
+    proves neither is EVIDENCE-AMBIGUOUS; an annotation read that failed is UNREAD; evidence GitHub
+    retained for less time than the run is EVIDENCE-EXPIRED. None is rounded into a finding or a
+    fallover, and the per-run evidence stays in the corpus and JSON report.
   * SUBJECT CHANGE. This does not know whether the thing a gate guards ever changed. A gate that has
     never fired over a subject nobody touched is unremarkable; the same gate over a subject that moved
     daily is a suspect. Joining run history to path-filtered commit history is the obvious next leg
@@ -54,10 +57,10 @@ this" is never "I evaluated it and it passed". Three separate states here are NO
                   eleventh entry on the list above, and the funniest.
 
 THE TWO HALVES ARE SPLIT ON PURPOSE, AND #1772 IS WHY. That item found a fixture testing a HAND-WRITTEN
-MIRROR of the probe rather than the probe. So acquisition (`--fetch`, which talks to the network and
-cannot run in a fixture) is a separate mode from classification (pure, total, over a JSON corpus). The
-fixture feeds planted corpora to the REAL classifier by running THIS FILE — there is no second copy of
-the rules for a fixture to drift against, because there is only one copy and the fixture executes it.
+MIRROR of the probe rather than the probe. So acquisition (`--fetch`, which talks to the Actions API)
+is a separate mode from classification (pure, total, over a JSON corpus). The fixture feeds planted
+corpora to the REAL classifier and drives the REAL acquisition path against a recorded REST transcript
+on a local server — there is no second copy of either rule set for a fixture to drift against.
 
     scripts/check-gate-finding-history.py --fetch --repo FS-GG/.github --out corpus.json
     scripts/check-gate-finding-history.py --corpus corpus.json [--json] [--markdown]
@@ -82,13 +85,29 @@ from lib.gate import ExitCode, GateError, Unreachable, run  # noqa: E402
 
 NAME = "check-gate-finding-history"
 
-CORPUS_SCHEMA = 1
+CORPUS_SCHEMA = 2
 """Bumped when the corpus SHAPE changes. `classify` refuses an unknown schema rather than guessing at
 fields it does not recognise — a corpus it half-understands is a measurement of nothing."""
 
-FINDING_CONCLUSIONS = frozenset({"failure", "timed_out"})
-"""A run that REPORTED A PROBLEM. See the `failure` caveat in the module docstring: this is the upper
-bound on "produced a finding", not the exact set."""
+RED_CONCLUSIONS = frozenset({"failure", "timed_out"})
+"""A run whose colour was red. Its annotations decide whether that red was a finding."""
+
+FINDING_MARKER = " FAILED — "
+"""The stable summary emitted by :func:`lib.gate.report_findings` before ``N finding(s)``."""
+
+FALLOVER_MARKERS = (
+    "the gate crashed, so it has no verdict",
+    ": no verdict —",
+    "the operation was canceled",
+    "the runner has received a shutdown signal",
+    "no space left on device",
+    "the action has timed out",
+)
+"""Explicit crash/no-verdict/runner evidence. Unknown red prose stays ambiguous, never guessed."""
+
+
+class EvidenceExpired(GateError):
+    """The run remains retained, but GitHub no longer retains its diagnostic evidence."""
 
 PASS_CONCLUSIONS = frozenset({"success"})
 """A run that reported CLEAN."""
@@ -117,13 +136,15 @@ reach back past the red threshold; a full history walk would cost a page per wor
 the first few rows already contain. A streak that consumes the entire window is reported as
 `streakTruncated`, so "red for at least the whole window" is never rounded to an exact age."""
 
-VERDICTS = ("EXERCISED", "STANDING-RED", "NEVER-FOUND", "NEVER-RAN",
-            "REUSABLE-ELSEWHERE", "LOW-SAMPLE", "UNREAD")
+VERDICTS = ("EXERCISED", "STANDING-RED", "FALLEN-OVER", "NEVER-FOUND", "NEVER-RAN",
+            "REUSABLE-ELSEWHERE", "LOW-SAMPLE", "EVIDENCE-AMBIGUOUS", "EVIDENCE-EXPIRED", "UNREAD")
 
-FINDING_VERDICTS = frozenset({"STANDING-RED", "NEVER-FOUND", "NEVER-RAN"})
+FINDING_VERDICTS = frozenset({"STANDING-RED", "FALLEN-OVER", "NEVER-FOUND", "NEVER-RAN"})
 """Verdicts that are a real, actionable statement about the subject → exit 1."""
 
-UNKNOWN_VERDICTS = frozenset({"UNREAD", "LOW-SAMPLE", "REUSABLE-ELSEWHERE"})
+UNKNOWN_VERDICTS = frozenset({
+    "UNREAD", "LOW-SAMPLE", "REUSABLE-ELSEWHERE", "EVIDENCE-AMBIGUOUS", "EVIDENCE-EXPIRED"
+})
 """Verdicts that are an admission, not an answer → exit 2 or 3, and NEVER 0."""
 
 NON_SELF_STARTING_TRIGGERS = frozenset({"workflow_call"})
@@ -186,7 +207,7 @@ def red_streak(runs: Iterable[dict], *, what: str) -> tuple[int, str | None, boo
         if conclusion in PASS_CONCLUSIONS:
             ended_on_a_pass = True
             break
-        if conclusion in FINDING_CONCLUSIONS:
+        if conclusion in RED_CONCLUSIONS:
             length += 1
             oldest = entry.get("createdAt")
             _utc(oldest, f"{what}: run {entry.get('headSha', '?')}")  # validated, not merely read
@@ -223,30 +244,55 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
         return row
 
     total = wf.get("totalRuns")
-    findings = wf.get("findingRuns")
-    if not isinstance(total, int) or not isinstance(findings, int) or total < 0 or findings < 0:
+    red_count = wf.get("redRunCount")
+    red_runs = wf.get("redRuns")
+    if not isinstance(total, int) or not isinstance(red_count, int) or total < 0 or red_count < 0:
         # A corpus row that claims to be read but carries no counts is NOT a clean gate — it is a row
         # this cannot judge. Degrading it to UNREAD keeps it out of the green column (#266).
         row.update(
             verdict="UNREAD",
-            detail=f"corpus row has no usable run counts (totalRuns={total!r}, findingRuns={findings!r})",
+            detail=f"corpus row has no usable run counts (totalRuns={total!r}, redRunCount={red_count!r})",
         )
         return row
-    if findings > total:
+    if red_count > total:
         raise GateError(
-            f"{what}: findingRuns={findings} exceeds totalRuns={total}. That is an incoherent corpus, "
+            f"{what}: redRunCount={red_count} exceeds totalRuns={total}. That is an incoherent corpus, "
             f"not a gate with a lot of findings — refusing to classify it."
+        )
+    if not isinstance(red_runs, list):
+        row.update(verdict="UNREAD", detail="corpus row carries no per-run red evidence")
+        return row
+    if len(red_runs) != red_count:
+        raise GateError(
+            f"{what}: redRunCount={red_count}, but redRuns carries {len(red_runs)} row(s). "
+            "A partial evidence set cannot establish either findings or fallovers."
         )
 
     row["totalRuns"] = total
-    row["findingRuns"] = findings
+    row["redRunCount"] = red_count
+    evidence_counts = {"finding": 0, "fallover": 0, "ambiguous": 0, "unread": 0, "expired": 0}
+    normalised_evidence: list[dict[str, Any]] = []
+    for i, evidence in enumerate(red_runs):
+        if not isinstance(evidence, dict):
+            raise GateError(f"{what}: redRuns[{i}] is {type(evidence).__name__}, not an object")
+        kind = evidence.get("evidence")
+        if kind not in evidence_counts:
+            raise GateError(f"{what}: redRuns[{i}] has unknown evidence state {kind!r}")
+        evidence_counts[kind] += 1
+        normalised_evidence.append(dict(evidence))
+    row["findingRuns"] = evidence_counts["finding"]
+    row["falloverRuns"] = evidence_counts["fallover"]
+    row["ambiguousEvidenceRuns"] = evidence_counts["ambiguous"]
+    row["unreadEvidenceRuns"] = evidence_counts["unread"]
+    row["expiredEvidenceRuns"] = evidence_counts["expired"]
+    row["redEvidence"] = normalised_evidence
 
     default_runs = wf.get("defaultBranchRuns") or []
     streak, oldest, truncated = red_streak(default_runs, what=what)
     if streak:
         age_h = (now - _utc(oldest, what)).total_seconds() / 3600.0
         row.update(redStreak=streak, redSince=oldest, redHours=round(age_h, 2), streakTruncated=truncated)
-        if age_h >= red_hours:
+        if age_h >= red_hours and evidence_counts["finding"] > 0:
             row.update(
                 verdict="STANDING-RED",
                 detail=(
@@ -256,6 +302,47 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
                 ),
             )
             return row
+
+    if red_count > 0 and evidence_counts["finding"] == 0:
+        if evidence_counts["unread"]:
+            row.update(
+                verdict="UNREAD",
+                detail=(
+                    f"{red_count} retained red run(s), but evidence for "
+                    f"{evidence_counts['unread']} could not be read. Per-run failures are preserved; "
+                    "the workflow is neither EXERCISED nor classified as fallover-only."
+                ),
+            )
+            return row
+        if evidence_counts["expired"]:
+            row.update(
+                verdict="EVIDENCE-EXPIRED",
+                detail=(
+                    f"{red_count} retained red run(s), but GitHub no longer retains evidence for "
+                    f"{evidence_counts['expired']}. Run retention outlived annotation/log retention, "
+                    "so no finding verdict can be reconstructed."
+                ),
+            )
+            return row
+        if evidence_counts["ambiguous"]:
+            row.update(
+                verdict="EVIDENCE-AMBIGUOUS",
+                detail=(
+                    f"{red_count} retained red run(s); {evidence_counts['ambiguous']} had readable "
+                    "annotations but neither the gate finding marker nor an explicit crash/no-verdict "
+                    "marker. Unknown prose is not guessed into either bucket."
+                ),
+            )
+            return row
+        row.update(
+            verdict="FALLEN-OVER",
+            detail=(
+                f"{red_count} retained red run(s), all with readable evidence and none carrying the "
+                "gate finding marker — this gate has only ever fallen over, timed out, or failed "
+                "infrastructure; it has not demonstrated a verdict about its subject"
+            ),
+        )
+        return row
 
     if total == 0:
         # ZERO RUNS IS THREE DIFFERENT FACTS, AND THE TRIGGERS ARE WHAT SEPARATE THEM. A dead workflow
@@ -291,7 +378,7 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
         )
         return row
 
-    if findings == 0:
+    if red_count == 0:
         if total < min_runs:
             row.update(
                 verdict="LOW-SAMPLE",
@@ -308,7 +395,15 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
 
     row.update(
         verdict="EXERCISED",
-        detail=f"{findings} of {total} retained run(s) red — this gate demonstrably can fail",
+        detail=(
+            f"{evidence_counts['finding']} of {total} retained run(s) carried a gate finding marker"
+            + (
+                f"; {evidence_counts['fallover']} other red run(s) were fallovers"
+                if evidence_counts["fallover"]
+                else ""
+            )
+            + " — this gate demonstrably reached a finding verdict"
+        ),
     )
     return row
 
@@ -384,7 +479,7 @@ def verdict_exit(rows: list[dict]) -> ExitCode:
 API = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
 
 
-def _get(path: str, *, what: str) -> dict:
+def _get(path: str, *, what: str, expired_is_distinct: bool = False) -> Any:
     """One REST GET against the Actions API.
 
     REST, not GraphQL, and deliberately: `check-graphql-monopoly.py` reserves the shared 5,000-point
@@ -431,6 +526,10 @@ def _get(path: str, *, what: str) -> dict:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             last = e
+            if expired_is_distinct and e.code in (404, 410):
+                raise EvidenceExpired(
+                    f"{what}: HTTP {e.code} — the run is retained but its annotations/jobs are not"
+                ) from e
             retry_after = e.headers.get("Retry-After") if e.headers else None
             if retry_after:
                 try:
@@ -467,6 +566,144 @@ def _count(repo: str, wf_id: Any, query: dict, *, what: str) -> int:
     if not isinstance(n, int):
         raise Unreachable(f"{what}: response carried no integer total_count")
     return n
+
+
+def _red_runs(repo: str, wf_id: Any, conclusion: str) -> list[dict]:
+    """Every retained run with one red conclusion, paging until the API's declared count is met."""
+    rows: list[dict] = []
+    page = 1
+    declared: int | None = None
+    while declared is None or len(rows) < declared:
+        query = urllib.parse.urlencode({"status": conclusion, "per_page": 100, "page": page})
+        doc = _get(
+            f"repos/{repo}/actions/workflows/{wf_id}/runs?{query}",
+            what=f"{repo} workflow {wf_id}: {conclusion} run evidence listing",
+        )
+        if declared is None:
+            declared = doc.get("total_count")
+            if not isinstance(declared, int):
+                raise Unreachable(
+                    f"{repo} workflow {wf_id}: {conclusion} listing carried no integer total_count"
+                )
+        batch = doc.get("workflow_runs")
+        if not isinstance(batch, list):
+            raise Unreachable(f"{repo} workflow {wf_id}: {conclusion} listing carried no workflow_runs")
+        if any(not isinstance(run_row, dict) for run_row in batch):
+            raise Unreachable(f"{repo} workflow {wf_id}: {conclusion} listing carried a non-object run")
+        rows.extend(batch)
+        if not batch:
+            break
+        page += 1
+    if declared != len(rows):
+        raise Unreachable(
+            f"{repo} workflow {wf_id}: API declares {declared} {conclusion} run(s), but paging "
+            f"returned {len(rows)} — evidence would be partial"
+        )
+    return rows
+
+
+def _annotations(repo: str, check_run_url: str, *, what: str) -> list[dict]:
+    """Every annotation for one job/check-run, with expiry distinct from transient unreadability."""
+    path = urllib.parse.urlparse(check_run_url).path
+    if not path:
+        raise Unreachable(f"{what}: job carried no usable check_run_url")
+    rows: list[dict] = []
+    page = 1
+    while True:
+        sep = "&" if "?" in path else "?"
+        batch = _get(
+            f"{path}/annotations{sep}per_page=100&page={page}",
+            what=f"{what}: annotations page {page}",
+            expired_is_distinct=True,
+        )
+        if not isinstance(batch, list):
+            raise Unreachable(f"{what}: annotations response was not an array")
+        if any(not isinstance(annotation, dict) for annotation in batch):
+            raise Unreachable(f"{what}: annotations response carried a non-object row")
+        rows.extend(batch)
+        if len(batch) < 100:
+            return rows
+        page += 1
+
+
+def fetch_red_evidence(repo: str, run_row: dict) -> dict:
+    """One retained red run → finding/fallover/unread/expired, using its check annotations."""
+    run_id = run_row.get("id")
+    base = {
+        "runId": run_id,
+        "conclusion": run_row.get("conclusion"),
+        "createdAt": run_row.get("created_at"),
+        "headSha": (run_row.get("head_sha") or "")[:7],
+    }
+    if not isinstance(run_id, int):
+        return {**base, "evidence": "unread", "detail": "red run listing carried no integer id"}
+
+    what = f"{repo} run {run_id}"
+    try:
+        jobs_doc = _get(
+            f"repos/{repo}/actions/runs/{run_id}/jobs?filter=all&per_page=100",
+            what=f"{what}: jobs",
+            expired_is_distinct=True,
+        )
+        jobs = jobs_doc.get("jobs")
+        declared = jobs_doc.get("total_count")
+        if not isinstance(jobs, list) or not isinstance(declared, int):
+            raise Unreachable(f"{what}: jobs response carried no complete jobs array/count")
+        page = 2
+        while len(jobs) < declared:
+            more = _get(
+                f"repos/{repo}/actions/runs/{run_id}/jobs?filter=all&per_page=100&page={page}",
+                what=f"{what}: jobs page {page}",
+                expired_is_distinct=True,
+            )
+            batch = more.get("jobs")
+            if not isinstance(batch, list) or not batch:
+                break
+            jobs.extend(batch)
+            page += 1
+        if len(jobs) != declared:
+            raise Unreachable(f"{what}: API declares {declared} jobs but returned {len(jobs)}")
+
+        annotations: list[dict] = []
+        for job in jobs:
+            url = job.get("check_run_url") if isinstance(job, dict) else None
+            if not isinstance(url, str):
+                raise Unreachable(f"{what}: a job carried no check_run_url")
+            annotations.extend(_annotations(repo, url, what=f"{what} job {job.get('id', '?')}"))
+
+        text = "\n".join(
+            str(a.get(k) or "")
+            for a in annotations
+            for k in ("title", "message", "raw_details")
+        )
+        if FINDING_MARKER in text and " finding(s)" in text:
+            return {
+                **base,
+                "evidence": "finding",
+                "detail": f"finding marker present in {len(annotations)} annotation(s)",
+            }
+        lower = text.lower()
+        if run_row.get("conclusion") == "timed_out" or any(marker in lower for marker in FALLOVER_MARKERS):
+            return {
+                **base,
+                "evidence": "fallover",
+                "detail": (
+                    f"{len(annotations)} annotation(s) read; explicit crash/no-verdict/timeout/"
+                    "infrastructure evidence and no gate finding marker"
+                ),
+            }
+        return {
+            **base,
+            "evidence": "ambiguous",
+            "detail": (
+                f"{len(annotations)} annotation(s) read; neither a gate finding marker nor an "
+                "explicit crash/no-verdict marker was present"
+            ),
+        }
+    except EvidenceExpired as e:
+        return {**base, "evidence": "expired", "detail": str(e)}
+    except GateError as e:
+        return {**base, "evidence": "unread", "detail": str(e)}
 
 
 def fetch_triggers(repo: str, path: str) -> list[str]:
@@ -542,10 +779,15 @@ def fetch_repo(repo: str, *, window: int) -> dict:
             if wf_id is None:
                 raise Unreachable("workflow listing row carried no id")
             total = _count(repo, wf_id, {}, what=f"{repo} {row['path']}: total runs")
-            failed = _count(repo, wf_id, {"status": "failure"}, what=f"{repo} {row['path']}: failures")
-            timed = _count(repo, wf_id, {"status": "timed_out"}, what=f"{repo} {row['path']}: timeouts")
             row["totalRuns"] = total
-            row["findingRuns"] = failed + timed
+            red_rows = _red_runs(repo, wf_id, "failure") + _red_runs(repo, wf_id, "timed_out")
+            # The two conclusion queries are disjoint by contract. Refuse duplicate ids rather than
+            # counting one run twice if the API ever contradicts that contract.
+            ids = [r.get("id") for r in red_rows]
+            if len(ids) != len(set(ids)):
+                raise Unreachable(f"{repo} {row['path']}: red-run listings contained duplicate ids")
+            row["redRunCount"] = len(red_rows)
+            row["redRuns"] = [fetch_red_evidence(repo, r) for r in red_rows]
             if total == 0:
                 # FETCHED ONLY WHERE IT CHANGES AN ANSWER. The `on:` block is what separates a dead
                 # workflow from a reusable one, and that question only arises at zero runs — so this
@@ -591,6 +833,19 @@ def tally(rows: list[dict]) -> dict[str, int]:
     return {v: sum(1 for r in rows if r["verdict"] == v) for v in VERDICTS}
 
 
+def evidence_notes(row: dict) -> list[str]:
+    """Non-finding red evidence, kept per-run even when another run established EXERCISED."""
+    notes: list[str] = []
+    for evidence in row.get("redEvidence") or []:
+        if evidence.get("evidence") == "finding":
+            continue
+        notes.append(
+            f"run {evidence.get('runId', '?')} [{evidence.get('evidence', '?')}] "
+            f"{evidence.get('detail', '')}"
+        )
+    return notes
+
+
 def render_text(rows: list[dict], counts: dict[str, int], code: ExitCode) -> None:
     for verdict in VERDICTS:
         selected = [r for r in rows if r["verdict"] == verdict]
@@ -603,10 +858,13 @@ def render_text(rows: list[dict], counts: dict[str, int], code: ExitCode) -> Non
         print(f"{verdict}: {len(selected)}")
         for r in sorted(selected, key=lambda r: (r["repo"], r["path"])):
             print(f"  {r['repo']}  {r['path']}  — {r.get('detail', '')}")
+            for note in evidence_notes(r):
+                print(f"    {note}")
     print(
         f"{NAME}: {sum(counts.values())} workflow(s) over retained history; "
-        f"{counts['STANDING-RED'] + counts['NEVER-FOUND'] + counts['NEVER-RAN']} finding(s), "
-        f"{counts['UNREAD'] + counts['LOW-SAMPLE']} unmeasured; exit {int(code)}"
+        f"{counts['STANDING-RED'] + counts['FALLEN-OVER'] + counts['NEVER-FOUND'] + counts['NEVER-RAN']} finding(s), "
+        f"{counts['UNREAD'] + counts['LOW-SAMPLE'] + counts['EVIDENCE-AMBIGUOUS'] + counts['EVIDENCE-EXPIRED']} "
+        f"unmeasured; exit {int(code)}"
     )
 
 
@@ -618,12 +876,15 @@ def render_markdown(rows: list[dict], counts: dict[str, int], corpus: dict, code
     print("| verdict | count | meaning |")
     print("| --- | --- | --- |")
     meaning = {
-        "EXERCISED": "has been red at least once — demonstrably can fail",
+        "EXERCISED": "has emitted at least one confirmed gate finding",
         "STANDING-RED": "red on the default branch past the threshold — its colour carries no news",
+        "FALLEN-OVER": "red runs exist, but every readable one was crash/no-verdict/infrastructure",
         "NEVER-FOUND": "ran enough times and was never red — decorative, or guarding the unbreakable",
         "NEVER-RAN": "no runs in retained history despite a trigger that could start one",
         "REUSABLE-ELSEWHERE": "`workflow_call`-only — runs inside its callers, invisible here. UNMEASURED",
         "LOW-SAMPLE": "too few runs for 'never red' to mean anything — UNMEASURED, not clean",
+        "EVIDENCE-AMBIGUOUS": "red annotations were readable but proved neither finding nor fallover",
+        "EVIDENCE-EXPIRED": "runs remain, but their annotations/log evidence expired — UNMEASURED",
         "UNREAD": "the API did not answer — UNMEASURED, not clean (#266)",
     }
     for v in VERDICTS:
@@ -640,9 +901,14 @@ def render_markdown(rows: list[dict], counts: dict[str, int], corpus: dict, code
         print("| repo | workflow | runs | red runs | detail |")
         print("| --- | --- | --- | --- | --- |")
         for r in selected:
+            detail = str(r.get("detail", ""))
+            notes = evidence_notes(r)
+            if notes:
+                detail += "<br>" + "<br>".join(notes)
+            detail = detail.replace("|", r"\|")
             print(
                 f"| {r['repo']} | `{r['path']}` | {r.get('totalRuns', '—')} | "
-                f"{r.get('findingRuns', '—')} | {r.get('detail', '')} |"
+                f"{r.get('findingRuns', '—')} | {detail} |"
             )
         print()
 
