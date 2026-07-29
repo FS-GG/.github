@@ -6129,9 +6129,13 @@ module Client =
                 // Per item, in rule order: touch-set rules, then a Done-but-open NOTE, then the epic rules
                 // (only epics read their graph/body-child-refs). FAIL CLOSED (#266): an unreadable body or
                 // graph fails the whole pass — a gate that could not read an item must not report it clean.
-                let rec classify (acc: LintFinding list) (rows: Scan.Row list) : Errors.IoResult<LintFinding list> =
+                let rec classify
+                    (acc: LintFinding list)
+                    (touchSets: LintApplication.ConsolidationRow list)
+                    (rows: Scan.Row list)
+                    : Errors.IoResult<LintFinding list * LintApplication.ConsolidationRow list> =
                     match rows with
-                    | [] -> Ok acc
+                    | [] -> Ok(acc, touchSets)
                     | r :: rest ->
                         let isEpic =
                             r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
@@ -6186,6 +6190,26 @@ module Client =
                             match epicResult with
                             | Error e -> Error e
                             | Ok epic ->
+                                // The CONSOLIDATION population, collected on the body read the
+                                // touch-set rules already paid for (.github#1914). It is
+                                // `isSchedulableCandidate`'s set — the same rows `NO-TOUCH-SET` and
+                                // `CLASS-UNSET` speak about — because a row nobody can be handed is not
+                                // a row anybody would merge into another.
+                                //
+                                // The `Unreadable` case cannot arise HERE: `bodyResult` above is `fail`
+                                // on error, so an unread body aborts the whole pass (#266) rather than
+                                // reaching the rule. The rule handles it anyway, and is tested on it,
+                                // because it is a pure function with other possible callers and "the
+                                // caller is careful" is the assumption fail-open defects are built on.
+                                let touchSets =
+                                    if isTouchSetCandidate then
+                                        { LintApplication.ConsolidationRow.Ref = r.Ref.Short
+                                          LintApplication.ConsolidationRow.Repo = r.Ref.Repo
+                                          LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
+                                        :: touchSets
+                                    else
+                                        touchSets
+
                                 classify
                                     (acc
                                      @ tsFindings
@@ -6194,6 +6218,7 @@ module Client =
                                      @ statusUnsetFindings
                                      @ doneOpenNote
                                      @ epic)
+                                    touchSets
                                     rest
 
                 // The BLOCKER-CYCLE rule (#1090) — the one lint rule that is NOT per-item, and could not be.
@@ -6223,10 +6248,62 @@ module Client =
                                     row
                                     $"on a `Blocked by` CYCLE that can NEVER become startable — no lease, no merge and no waiting frees it; a human must break one edge. The ring: %s{members}")))
 
-                match classify [] items with
+                match classify [] [] items with
                 | Error e -> fail e
-                | Ok perItemFindings ->
-                    let findings = perItemFindings @ cycleFindings
+                | Ok(perItemFindings, touchSets) ->
+                    // CONSOLIDATION-CANDIDATE (.github#1914) — the SECOND lint rule that is not
+                    // per-item and could not be, for `BLOCKER-CYCLE`'s reason one axis over. Every row
+                    // in a consolidation group is individually well-formed; what is visible only from
+                    // above is that two of them may be the SAME piece of work. No worker can see it —
+                    // each declared its touch-set from locally correct information — and the board pays
+                    // for that three times in a single run (#1626): a finished item that could not merge
+                    // because its file was held continuously, an edit rehearsed in a scratch worktree,
+                    // a unit test that could not go in the file it belonged in.
+                    //
+                    // ONE FINDING PER GROUP, anchored on its lowest-numbered member — and that is the
+                    // deliberate difference from `BLOCKER-CYCLE`, which emits one per ring member. A
+                    // cycle is a PER-ROW defect: every row on the ring is individually stuck and each
+                    // must be flagged where a reader will meet it. A consolidation candidate is a
+                    // property of the SET, and repeating one proposal once per member would treble the
+                    // report without adding a fact.
+                    //
+                    // NOTE severity, on `EPIC-ROLLUP-READY`'s terms. This reports a state only the
+                    // runner can adjudicate — the rule cannot tell "the same operation split in two"
+                    // from "two unrelated objectives that happen to edit one file", and it says so in
+                    // the finding. Reddening a gate on a question nobody has been asked is how a gate
+                    // becomes noise (#698). `--strict` is for the caller who wants to be stopped.
+                    let consolidation = LintApplication.consolidationVerdict touchSets
+
+                    let rowByShort = items |> List.map (fun r -> r.Ref.Short, r) |> Map.ofList
+
+                    let anchored (short: string) (build: Scan.Row -> LintFinding) =
+                        Map.tryFind short rowByShort |> Option.map build |> Option.toList
+
+                    let consolidationFindings =
+                        // UNREADABLE FIRST, and it is an `error`. A board this rule could not read in
+                        // full is a NO-VERDICT, not "no clusters" (#266) — the absence of groups proves
+                        // nothing when a row was never compared, so the pass must not go green on it.
+                        (consolidation.Unreadable
+                         |> List.collect (fun (short, reason) ->
+                             anchored short (fun row ->
+                                 mk
+                                     "CONSOLIDATION-UNREADABLE"
+                                     "error"
+                                     row
+                                     (LintApplication.consolidationUnreadableDetail reason))))
+                        @ (consolidation.Groups
+                           |> List.collect (fun group ->
+                               match group.Members with
+                               | anchor :: _ ->
+                                   anchored anchor (fun row ->
+                                       mk
+                                           "CONSOLIDATION-CANDIDATE"
+                                           "note"
+                                           row
+                                           (LintApplication.consolidationDetail group))
+                               | [] -> []))
+
+                    let findings = perItemFindings @ cycleFindings @ consolidationFindings
                     let summary =
                         findings
                         |> List.map (fun finding -> finding.Severity)
