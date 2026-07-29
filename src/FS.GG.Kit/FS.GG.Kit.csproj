@@ -293,7 +293,36 @@
          alone, and no `SKILL.md` changed — only a `references/` file. The kit MANIFEST is per-file
          and raw, so it moves and the package must be republished, which is the axis
          `kit-published-coherence` reds on. -->
-    <Version>0.20.0</Version>
+    <!-- 0.20.0 -> 0.21.0, a MINOR: the packed `pnext-item` skill's §4 GAINS A REQUIREMENT that
+         previously lived only in a reference it framed as optional (.github#1904).
+         §4 told a worker to "dedupe over REST" and pointed at
+         `references/findings-and-filing.md` "for the recipes and judgement boundaries" — i.e. as
+         elaboration. TWO RULES LIVED ONLY IN THAT REFERENCE: the dedupe is keyed on the CAUSE
+         ("reuse an existing issue when it expresses the same cause"), and a filed issue states a
+         ROOT CAUSE at all. So a worker who read §4, complied with it exactly, and never loaded the
+         reference was CONFORMANT AND WRONG: deduping against the symptom, filing the shadow. That
+         is the #266 lesson ("evidence that this is one bug, not five") stated in a reference a
+         conformant reader may skip. §4 now carries both rules in the operative step and names the
+         reference BINDING rather than elaborative.
+         MINOR, not patch, and the precedent is 0.12.0 (.github#1594) rather than 0.19.1, 0.15.1 or
+         0.8.1 above. Those three were prose REPAIRS: nothing a prior reader had been told became
+         false and no behaviour moved. This is 0.12.0's shape, which took a minor for adding an
+         engine-currency step: it adds a REQUIRED action to the protocol a receiver materializes and
+         its agents execute, so the content a consumer restores instructs different behaviour than
+         0.20.0's did. A worker on 0.21.0 must establish a cause it was never previously asked for,
+         and must dedupe on a different key; a worker on 0.20.0 who skipped the reference was told
+         neither.
+         NOT MAJOR, measured rather than assumed: the member SET is unchanged at 8, no destination or
+         mode moves, no materialize property is added or altered, and no step is removed or
+         reordered. §4 is strengthened in place, and nothing 0.20.0 told a reader to do stops being
+         true — "dedupe over REST" survives verbatim inside the stronger sentence.
+         `registry/repos.lock` DOES MOVE here, unlike 0.19.1 and 0.20.0, and that is the difference
+         worth recording: `repos.sh digest` digests a skill DIRECTORY as its `SKILL.md` alone, and
+         both of those releases changed only a `references/` file. This change is IN the `SKILL.md`,
+         so exactly one lock row advances (`.claude/skills/pnext-item`) and BOTH gates see it —
+         `repos-registry-selftest` through the lock, `kit-published-coherence` through the per-file
+         kit manifest. -->
+    <Version>0.21.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
