@@ -29,9 +29,10 @@
 # #1772'S BUG IS ALSO DESIGNED OUT: this drives the REAL gate, as a subprocess, by path. There is no
 # second copy of the classification rules here for the fixture to drift against.
 #
-# Offline and credential-free: only the `--corpus` half is exercised. The `--fetch` half talks to the
-# GitHub API and is deliberately NOT tested here — that is named as unmeasured in the report rather
-# than covered by a mock that would only assert the mock.
+# Offline and credential-free. Classification drives planted corpora through the real gate; acquisition
+# drives the real `--fetch` path against a recorded Actions REST transcript replayed by a local server.
+# The transcript pins URL filters, paging shapes, jobs, annotations, and evidence loss without claiming
+# a network mock proves GitHub is reachable.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -83,11 +84,22 @@ out, expr = sys.argv[1:3]
 
 def wf(name, *, total=50, findings=3, runs=None, **extra):
     row = {"name": name, "path": f".github/workflows/{name}.yml", "state": "active",
-           "totalRuns": total, "findingRuns": findings,
+           "totalRuns": total, "redRunCount": findings,
+           "redRuns": [{"runId": 1000 + i, "conclusion": "failure",
+                        "createdAt": "2026-07-28T10:00:00Z", "headSha": f"f{i:06d}",
+                        "evidence": "finding", "detail": "fixture finding marker"}
+                       for i in range(findings)],
            "defaultBranchRuns": runs if runs is not None else [
                {"conclusion": "success", "createdAt": "2026-07-28T11:00:00Z", "headSha": "aaaaaaa"}]}
     row.update(extra)
     return row
+
+def set_red(row, kinds):
+    row["redRunCount"] = len(kinds)
+    row["redRuns"] = [{"runId": 2000 + i, "conclusion": "failure",
+                       "createdAt": "2026-07-28T10:00:00Z", "headSha": f"r{i:06d}",
+                       "evidence": kind, "detail": f"fixture {kind}"}
+                      for i, kind in enumerate(kinds)]
 
 def red(hours, sha="bbbbbbb"):
     import datetime
@@ -106,11 +118,12 @@ def other(hours, conclusion, sha="ddddddd"):
 
 # The BASELINE is deliberately all-EXERCISED: every leg below is the baseline plus exactly one planted
 # defect, so a leg that reds proves the defect reds — not that the scaffolding does.
-d = {"schema": 1, "fetchedAt": "2026-07-28T12:00:00Z", "runWindow": 30,
+d = {"schema": 2, "fetchedAt": "2026-07-28T12:00:00Z", "runWindow": 30,
      "repos": [{"repo": "FS-GG/fixture", "defaultBranch": "main",
                 "workflows": [wf("alpha"), wf("beta")]}]}
 W = d["repos"][0]["workflows"]
-exec(expr, {"d": d, "W": W, "wf": wf, "red": red, "green": green, "other": other})
+exec(expr, {"d": d, "W": W, "wf": wf, "set_red": set_red,
+            "red": red, "green": green, "other": other})
 json.dump(d, open(out, "w", encoding="utf-8"), indent=2)
 PY
 }
@@ -132,33 +145,33 @@ expect "...and names every verdict class that produced nothing, rather than omit
 
 echo "== PART A: each verdict class reds on its own planted defect =="
 
-corpus "$WORK/neverfound.json" 'W[0]["findingRuns"] = 0'
+corpus "$WORK/neverfound.json" 'set_red(W[0], [])'
 expect "a gate with 50 runs and 0 reds is NEVER-FOUND (finding)" 1 "NOT ONE red" "$WORK/neverfound.json"
 
 corpus "$WORK/neverran.json" \
-  'W[0].update(totalRuns=0, findingRuns=0, defaultBranchRuns=[], triggers=["push", "pull_request"])'
+  'W[0].update(totalRuns=0, defaultBranchRuns=[], triggers=["push", "pull_request"]); set_red(W[0], [])'
 expect "a gate with a self-starting trigger and no runs is NEVER-RAN (finding)" 1 "has never executed" "$WORK/neverran.json"
 
 # THE FALSE-ACCUSATION LEG (#238). A `workflow_call`-only workflow has no runs of its own BY
 # CONSTRUCTION — it executes inside its callers. The first version of this gate called all seven of
 # this repo's reusables "never executed", which is loud, confident and wrong.
 corpus "$WORK/reusable.json" \
-  'W[0].update(totalRuns=0, findingRuns=0, defaultBranchRuns=[], triggers=["workflow_call"])'
+  'W[0].update(totalRuns=0, defaultBranchRuns=[], triggers=["workflow_call"]); set_red(W[0], [])'
 expect "a workflow_call-only workflow is NOT accused of never running" 3 "REUSABLE-ELSEWHERE: 1" "$WORK/reusable.json"
 expect "...and it is UNMEASURED, not clean — exit 3, never 0" 3 "false accusation" "$WORK/reusable.json"
 
 corpus "$WORK/mixedtrig.json" \
-  'W[0].update(totalRuns=0, findingRuns=0, defaultBranchRuns=[], triggers=["workflow_call", "schedule"])'
+  'W[0].update(totalRuns=0, defaultBranchRuns=[], triggers=["workflow_call", "schedule"]); set_red(W[0], [])'
 expect "a reusable that ALSO has a self-starting trigger and never ran IS a finding" \
   1 "schedule" "$WORK/mixedtrig.json"
 
 # AN UNRECOGNISED TRIGGER MUST OVER-REPORT, NOT EXCUSE. If GitHub adds an event this set has never
 # heard of, a dead workflow must stay visible rather than be quietly filed as "reusable".
 corpus "$WORK/unknowntrig.json" \
-  'W[0].update(totalRuns=0, findingRuns=0, defaultBranchRuns=[], triggers=["some_future_event"])'
+  'W[0].update(totalRuns=0, defaultBranchRuns=[], triggers=["some_future_event"]); set_red(W[0], [])'
 expect "an unknown trigger is treated as self-starting (fail loud, not silent)" 1 "NEVER-RAN: 1" "$WORK/unknowntrig.json"
 
-corpus "$WORK/notriggers.json" 'W[0].update(totalRuns=0, findingRuns=0, defaultBranchRuns=[])'
+corpus "$WORK/notriggers.json" 'W[0].update(totalRuns=0, defaultBranchRuns=[]); set_red(W[0], [])'
 expect "zero runs with NO trigger data is an unanswered question, not a finding" \
   2 "cannot be distinguished" "$WORK/notriggers.json"
 
@@ -166,11 +179,35 @@ corpus "$WORK/standingred.json" 'W[0]["defaultBranchRuns"] = [red(1), red(20), r
 expect "a 40h unbroken default-branch red is STANDING-RED (finding)" 1 "STANDING-RED: 1" "$WORK/standingred.json"
 expect "...and the finding states the age" 1 "40.0h" "$WORK/standingred.json"
 
-corpus "$WORK/lowsample.json" 'W[0].update(totalRuns=3, findingRuns=0)'
+corpus "$WORK/lowsample.json" 'W[0]["totalRuns"] = 3; set_red(W[0], [])'
 expect "3 runs and 0 reds is LOW-SAMPLE — a NO VERDICT (3), never green" 3 "this is unmeasured" "$WORK/lowsample.json"
 
 corpus "$WORK/unread.json" 'W[0]["unread"] = "HTTP 403 rate limited"'
 expect "an unreadable workflow is UNREAD — exit 2, never green (#266)" 2 "HTTP 403" "$WORK/unread.json"
+
+corpus "$WORK/fallover.json" 'set_red(W[0], ["fallover", "fallover", "fallover"])'
+expect "a crash-only red history is FALLEN-OVER, never EXERCISED" \
+  1 "FALLEN-OVER: 1" "$WORK/fallover.json"
+
+corpus "$WORK/evidence-unread.json" 'set_red(W[0], ["unread"])'
+expect "an unread red run is preserved per-run and makes the workflow UNREAD" \
+  2 "neither EXERCISED nor classified as fallover-only" "$WORK/evidence-unread.json"
+expect "...and the default report names that unread run rather than summing it away" \
+  2 "run 2000 [unread]" "$WORK/evidence-unread.json"
+
+corpus "$WORK/evidence-expired.json" 'set_red(W[0], ["expired"])'
+expect "a retained run whose annotations expired gets its own named verdict" \
+  3 "EVIDENCE-EXPIRED: 1" "$WORK/evidence-expired.json"
+
+corpus "$WORK/evidence-ambiguous.json" 'set_red(W[0], ["ambiguous"])'
+expect "readable red prose without either marker is not guessed into a flattering bucket" \
+  3 "EVIDENCE-AMBIGUOUS: 1" "$WORK/evidence-ambiguous.json"
+
+corpus "$WORK/mixed-evidence.json" 'set_red(W[0], ["finding", "fallover", "unread"])'
+expect "one confirmed finding establishes EXERCISED while other per-run states remain recorded" \
+  0 "EXERCISED: 2" "$WORK/mixed-evidence.json"
+expect "...and an unread sibling run remains visible even beside a confirmed finding" \
+  0 "run 2002 [unread]" "$WORK/mixed-evidence.json"
 
 corpus "$WORK/unreadrepo.json" 'd["repos"][0] = {"repo": "FS-GG/dark", "unread": "HTTP 404"}'
 expect "an unreadable REPO is one UNREAD row, not zero rows" 2 "whole repo" "$WORK/unreadrepo.json"
@@ -210,7 +247,7 @@ expect "one UNREAD among greens is exit 2, NOT 0" 2 "UNREAD: 1" "$WORK/prec-unre
 corpus "$WORK/prec-low.json" 'W.append(wf("gamma", total=2, findings=0))'
 expect "one LOW-SAMPLE among greens is exit 3, NOT 0" 3 "LOW-SAMPLE: 1" "$WORK/prec-low.json"
 
-corpus "$WORK/prec-both.json" 'W.append(wf("gamma", unread="HTTP 500")); W[0]["findingRuns"] = 0'
+corpus "$WORK/prec-both.json" 'W.append(wf("gamma", unread="HTTP 500")); set_red(W[0], [])'
 expect "a real finding outranks an admission (exit 1), and the admission is still printed" \
   1 "UNREAD: 1" "$WORK/prec-both.json"
 
@@ -225,8 +262,8 @@ expect "a repo with zero workflows and no read error is a NO VERDICT" 3 "are not
 corpus "$WORK/badschema.json" 'd["schema"] = 99'
 expect "an unknown corpus schema is a NO VERDICT" 3 "half-understands" "$WORK/badschema.json"
 
-corpus "$WORK/incoherent.json" 'W[0].update(totalRuns=3, findingRuns=9)'
-expect "findingRuns > totalRuns is an incoherent corpus, not a busy gate" 3 "incoherent corpus" "$WORK/incoherent.json"
+corpus "$WORK/incoherent.json" 'W[0]["totalRuns"] = 3; set_red(W[0], ["finding"] * 9)'
+expect "redRunCount > totalRuns is an incoherent corpus, not a busy gate" 3 "incoherent corpus" "$WORK/incoherent.json"
 
 corpus "$WORK/nocounts.json" 'W[0].pop("totalRuns")'
 expect "a row claiming to be read but carrying no counts degrades to UNREAD, not to green" \
@@ -240,12 +277,12 @@ expect "an empty corpus FILE is a NO VERDICT" 3 "empty measurement" "$WORK/empty
 
 echo "== PART A: --json carries the same verdict as the exit code =="
 
-corpus "$WORK/json.json" 'W[0]["findingRuns"] = 0'
+corpus "$WORK/json.json" 'set_red(W[0], [])'
 expect "--json reports the same finding" 1 '"verdict": "NEVER-FOUND"' "$WORK/json.json" --json
 expect "--json carries the exit code it returned" 1 '"exit": 1' "$WORK/json.json" --json
 expect "--markdown renders the same finding" 1 "NEVER-FOUND — 1" "$WORK/json.json" --markdown
 
-corpus "$WORK/minruns.json" 'W[0].update(totalRuns=3, findingRuns=0)'
+corpus "$WORK/minruns.json" 'W[0]["totalRuns"] = 3; set_red(W[0], [])'
 expect "--min-runs is honoured: a lower floor turns LOW-SAMPLE into a real finding" \
   1 "NEVER-FOUND: 1" "$WORK/minruns.json" --min-runs 2
 expect "--min-runs 0 is refused — a floor of nothing measures nothing" \
@@ -355,9 +392,14 @@ PY
   fi
 
   survive "no-findings" \
-    'FINDING_VERDICTS = frozenset({"STANDING-RED", "NEVER-FOUND", "NEVER-RAN"})' \
+    'FINDING_VERDICTS = frozenset({"STANDING-RED", "FALLEN-OVER", "NEVER-FOUND", "NEVER-RAN"})' \
     'FINDING_VERDICTS = frozenset()' \
     "a gate that classifies nothing as a finding must fail part A"
+
+  survive "fallover-is-exercised" \
+    '            verdict="FALLEN-OVER",' \
+    '            verdict="EXERCISED",' \
+    "a crash-only gate rounded into EXERCISED — the upper-bound defect from #1812"
 
   survive "unread-is-green" \
     'if any(r["verdict"] == "UNREAD" for r in rows):
@@ -374,13 +416,13 @@ PY
     "an unmeasured gate reported as measured"
 
   survive "no-red-threshold" \
-    'if age_h >= red_hours:' \
-    'if age_h >= 1e18:' \
+    'if age_h >= red_hours and evidence_counts["finding"] > 0:' \
+    'if age_h >= 1e18 and evidence_counts["finding"] > 0:' \
     "a standing red that can never be recognised"
 
   survive "every-red-is-standing" \
-    'if age_h >= red_hours:' \
-    'if age_h >= 0:' \
+    'if age_h >= red_hours and evidence_counts["finding"] > 0:' \
+    'if age_h >= 0 and evidence_counts["finding"] > 0:' \
     "every fresh red misreported as wallpaper — the false-accusation direction (#238)"
 
   survive "cancelled-breaks-streak" \
@@ -417,8 +459,8 @@ PY
     "a repo whose workflow list failed to load reported as a repo with no workflows"
 
   survive "incoherent-corpus-accepted" \
-    'if findings > total:' \
-    'if findings > 1e18:' \
+    'if red_count > total:' \
+    'if red_count > 1e18:' \
     "a corpus that cannot be true, classified anyway"
 
   survive "reusable-is-never-ran" \
