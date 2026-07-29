@@ -32,7 +32,7 @@ lesson: "FAILED is noise, merge anyway" (the #698 trade, made explicit in pnext-
 for the same reason from the other side — at this velocity every unreleased commit is hours old, so
 an age bar is GREEN on the very drift this issue was filed about.
 
-So the bar is RELEVANCE, and it has a principled definition rather than a magic number:
+So the bar is RELEVANCE, and it has two principled definitions rather than a magic number:
 
   * `src/FS.GG.Coord.Core/Protocol.fs` is the engine's WIRE SURFACE — the exit codes and verb
     contract. It is ALSO the file `scripts/generate-projections` emits the exit-code tables into
@@ -42,19 +42,21 @@ So the bar is RELEVANCE, and it has a principled definition rather than a magic 
     does. That is not a latent risk; it is the reported experience — a `take` exit table the engine
     disagrees with, a `say` that demands a flag the recipe says is optional, a bare issue ref the
     docs accept and the binary refuses.
-  * Drift that is internal-only (a refactor behind the wire) does NOT degrade a worker's ability to
-    read the docs and be right. It is REPORTED, never red.
+  * A drift commit whose merged PR closes an issue declaring `Class: defect` carries a measured fix
+    for something broken NOW. Receivers cannot detect that they are still running the broken
+    behavior, and unlike ordinary development drift there is no safe latency to budget: any
+    unreleased defect-class engine commit is RED (.github#1671). The closing-issue relation comes
+    from GitHub's structural `closingIssuesReferences`, never from parsing `#123` prose out of a
+    commit subject; the class comes from the issue's unfenced `Class:` declaration.
+  * Drift that is internal-only and closes no defect (a refactor or hardening behind the wire) does
+    NOT degrade a worker's ability to read the docs and be right. It is REPORTED, never red.
 
-That is "loud exactly when the fleet is degraded, silent otherwise", keyed on a fact rather than a
-threshold. It catches three of the four occurrences above (#844 and #846 are literally
-"next/take/done/add are all unknown command" — the verb contract; #1067 is the landable exit codes).
-
-IT DOES NOT CATCH ALL FOUR, AND THAT IS STATED RATHER THAN HIDDEN. #964 — "#848's fix is merged but
-never published, so set-field writes no single-select" — is a BEHAVIOUR regression behind an
-unchanged wire contract, and this gate reports it without reddening. That is a deliberate policy on
-a subject the gate can see and does print, not a blind spot: "checked, and it is below the bar" is
-reported in full, with the commit list, every run. Widening the red bar to any behavioural drift is
-the `drift > 0` gate above, which the velocity measurement rules out.
+That is "loud exactly when the fleet is degraded, silent otherwise", keyed on facts rather than a
+threshold. The wire leg catches three of the four occurrences above (#844 and #846 are literally
+"next/take/done/add are all unknown command"; #1067 is the landable exit codes). The defect leg
+catches #964's class too: a BEHAVIOUR regression behind an unchanged wire contract is red when its
+closing issue declares `Class: defect`, while a hardening/refactor remains below the bar. That
+distinction is the board's closed vocabulary, not a subject-line heuristic.
 
 FAILS CLOSED, which is the whole point of epic #266. "I could not look" and "I looked, and it is
 current" must never share an exit code. Every one of these is an ERROR, not a skip and never
@@ -63,6 +65,7 @@ current" must never share an exit code. Every one of these is an ERROR, not a sk
   * the feed is unreachable, unauthorised, returns unparsable JSON, or serves zero versions;
   * the feed's newest version has NO matching `coord-engine/v<version>` tag (a publish with no tag,
     or a tag scheme that moved — either way the comparison point is unknown, not "current");
+  * GitHub's associated-PR / closing-issue metadata is unreadable, partial, or malformed;
   * the tag exists but git cannot read it, or the repo has no commits;
   * the wire-surface file does not exist at the path this gate names (the protocol moved, and a
     hard-coded path that silently checks nothing is the #266 shape this gate exists to refuse);
@@ -74,15 +77,18 @@ Usage:  scripts/check-engine-freshness.py [--repo <dir>] [--ref HEAD]
 and it refuses to run unless FSGG_ENGINE_FIXTURE_OK=1 — which only tests/engine-freshness/ sets. A
 test hook that can silently turn the gate into a no-op is the very defect class above.
 
-Exit 0 = the fleet's engine carries every wire-surface commit on this ref.
+Exit 0 = the fleet's engine carries every wire-surface and defect-class commit on this ref.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 # The feed reader and NuGet version ordering are SHARED with check-feed-coherence.py and
 # check-pin-coherence.py (.github#263) — one implementation of "what does the feed serve", so the
@@ -171,10 +177,149 @@ def resolve_tag(repo: str, version: str) -> str:
     return tag
 
 
-def drift_commits(repo: str, tag: str, ref: str, paths: tuple[str, ...]) -> list[str]:
-    """`git log tag..ref -- paths`, one 'sha subject' per line."""
-    out = git(repo, "log", "--format=%h %s", f"{tag}..{ref}", "--", *paths)
-    return [ln for ln in out.splitlines() if ln.strip()]
+def drift_commits(repo: str, tag: str, ref: str, paths: tuple[str, ...]) -> list[tuple[str, str]]:
+    """`git log tag..ref -- paths`, as `(full sha, 'short-sha subject')` rows."""
+    out = git(repo, "log", "--format=%H%x00%h %s", f"{tag}..{ref}", "--", *paths)
+    rows = []
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        try:
+            sha, display = line.split("\0", 1)
+        except ValueError as e:
+            raise GateError(f"git emitted an unreadable commit row {line!r}") from e
+        rows.append((sha, display))
+    return rows
+
+
+def _issue_rows(raw: object, where: str) -> list[dict]:
+    """Validate issue metadata before policy reads it. An unreadable class is never 'not defect'."""
+    if not isinstance(raw, list):
+        raise GateError(f"{where} is not an issue list")
+    rows = []
+    for issue in raw:
+        if not isinstance(issue, dict) or not isinstance(issue.get("number"), int):
+            raise GateError(f"{where} contains an issue without an integer `number`")
+        body = issue.get("body")
+        if body is not None and not isinstance(body, str):
+            raise GateError(f"{where} issue #{issue['number']} has a non-text `body`")
+        rows.append({"number": issue["number"], "body": body or ""})
+    return rows
+
+
+def closing_issues(
+    commits: list[tuple[str, str]], token: str, fixture_table: dict | None
+) -> dict[str, list[dict]]:
+    """Closing issues for each drift commit, structurally through its merged associated PR."""
+    if not commits:
+        return {}
+    if fixture_table is not None:
+        raw = fixture_table.get("_closingIssues", {})
+        if not isinstance(raw, dict):
+            raise GateError("fixture `_closingIssues` is not an object keyed by commit sha")
+        return {
+            sha: _issue_rows(raw.get(sha, []), f"fixture `_closingIssues[{sha}]`")
+            for sha, _ in commits
+        }
+
+    fields = []
+    for i, (sha, _) in enumerate(commits):
+        fields.append(
+            f"""c{i}: object(expression: "{sha}") {{
+              ... on Commit {{
+                associatedPullRequests(first: 20) {{
+                  pageInfo {{ hasNextPage }}
+                  nodes {{
+                    merged
+                    mergeCommit {{ oid }}
+                    closingIssuesReferences(first: 50) {{
+                      pageInfo {{ hasNextPage }}
+                      nodes {{ number body }}
+                    }}
+                  }}
+                }}
+              }}
+            }}"""
+        )
+    query = (
+        'query { repository(owner: "FS-GG", name: ".github") {\n'
+        + "\n".join(fields)
+        + "\n} }"
+    )
+    req = urllib.request.Request(
+        "https://api.github.com/graphql",
+        data=json.dumps({"query": query}).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "fsgg-check-engine-freshness",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise GateError(f"GitHub rejected the closing-issue read (HTTP {e.code} {e.reason})") from e
+    except urllib.error.URLError as e:
+        raise GateError(f"GitHub closing-issue read was unreachable: {e.reason}") from e
+    except ValueError as e:
+        raise GateError(f"GitHub closing-issue read returned unparsable JSON: {e}") from e
+
+    if not isinstance(payload, dict) or payload.get("errors"):
+        raise GateError(f"GitHub closing-issue GraphQL read failed: {payload.get('errors')!r}")
+    repository = ((payload.get("data") or {}).get("repository"))
+    if not isinstance(repository, dict):
+        raise GateError("GitHub closing-issue read returned no FS-GG/.github repository")
+
+    answer: dict[str, list[dict]] = {}
+    for i, (sha, _) in enumerate(commits):
+        commit = repository.get(f"c{i}")
+        if not isinstance(commit, dict):
+            raise GateError(f"GitHub could not resolve drift commit {sha}")
+        prs = commit.get("associatedPullRequests")
+        if not isinstance(prs, dict) or not isinstance(prs.get("nodes"), list):
+            raise GateError(f"GitHub returned no associated-PR connection for drift commit {sha}")
+        if (prs.get("pageInfo") or {}).get("hasNextPage"):
+            raise GateError(f"drift commit {sha} has more than 20 associated PRs; refusing a partial read")
+
+        issues = []
+        for pr in prs["nodes"]:
+            if not isinstance(pr, dict) or not pr.get("merged"):
+                continue
+            if (pr.get("mergeCommit") or {}).get("oid") != sha:
+                continue
+            closing = pr.get("closingIssuesReferences")
+            if not isinstance(closing, dict) or not isinstance(closing.get("nodes"), list):
+                raise GateError(f"GitHub returned no closing-issue connection for drift commit {sha}")
+            if (closing.get("pageInfo") or {}).get("hasNextPage"):
+                raise GateError(f"drift commit {sha} closes more than 50 issues; refusing a partial read")
+            issues.extend(_issue_rows(closing["nodes"], f"GitHub closing issues for {sha}"))
+
+        # A PR may be reachable through more than one association edge. Classify each issue once.
+        answer[sha] = list({row["number"]: row for row in issues}.values())
+    return answer
+
+
+def declares_defect(body: str) -> bool:
+    """The defect leg of Class.fromBody's grammar: unfenced, 0-3 spaces, case-insensitive."""
+    fence = None
+    for line in body.splitlines():
+        if fence is not None:
+            if re.match(rf"^ {{0,3}}{re.escape(fence[0])}{{{fence[1]},}}\s*$", line):
+                fence = None
+            continue
+
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if marker:
+            token = marker.group(1)
+            fence = (token[0], len(token))
+            continue
+        declaration = re.match(r"^ {0,3}[Cc]lass:\s*(.*?)\s*$", line)
+        if declaration and declaration.group(1).casefold() == "defect":
+            return True
+    return False
 
 
 def main(argv: list[str]) -> int:
@@ -185,6 +330,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--ref", default="HEAD", help="the ref to measure drift up to (default: HEAD)")
     ap.add_argument("--fixture", help="read the feed from a JSON file (tests only, never in CI)")
     args = ap.parse_args(argv)
+    fixture_table = None
+    token = ""
 
     if args.fixture:
         # A flag that makes the gate report green without reading the feed is precisely the
@@ -203,13 +350,16 @@ def main(argv: list[str]) -> int:
         print(f"FIXTURE MODE — reading {args.fixture}, NOT the live feed. Not a freshness signal.")
 
         def resolve() -> list[str]:
+            nonlocal fixture_table
             try:
-                table = json.load(open(args.fixture, encoding="utf-8"))
+                fixture_table = json.load(open(args.fixture, encoding="utf-8"))
             except (OSError, ValueError) as e:
                 raise GateError(f"cannot read fixture: {e}") from e
-            if PACKAGE not in table:
+            if not isinstance(fixture_table, dict):
+                raise GateError("fixture is not a JSON object")
+            if PACKAGE not in fixture_table:
                 raise GateError(f"package {PACKAGE!r} is not on the org feed (fixture: absent)")
-            vs = table[PACKAGE]
+            vs = fixture_table[PACKAGE]
             if not vs:
                 raise GateError(f"the feed served zero versions for {PACKAGE!r}")
             return list(vs)
@@ -251,6 +401,7 @@ def main(argv: list[str]) -> int:
         tag = resolve_tag(args.repo, version)
         all_drift = drift_commits(args.repo, tag, args.ref, ENGINE_SOURCE)
         wire_drift = drift_commits(args.repo, tag, args.ref, (WIRE_SURFACE,))
+        issues_by_commit = closing_issues(all_drift, token, fixture_table)
     except GateError as e:
         print(f"::error::check-engine-freshness: {e}", file=sys.stderr)
         return 1
@@ -266,9 +417,26 @@ def main(argv: list[str]) -> int:
     # below the bar" must be legible as such, not indistinguishable from "there is nothing here".
     if all_drift:
         print("\nunreleased engine commits (oldest first):")
-        for line in reversed(all_drift):
-            mark = "  WIRE " if line in wire_drift else "       "
-            print(f"{mark}{line}")
+        wire_shas = {sha for sha, _ in wire_drift}
+        for sha, display in reversed(all_drift):
+            mark = "  WIRE " if sha in wire_shas else "       "
+            issue_refs = ", ".join(f"#{row['number']}" for row in issues_by_commit[sha])
+            closes = f" — closes {issue_refs}" if issue_refs else ""
+            print(f"{mark}{display}{closes}")
+
+    defect_drift = []
+    for sha, display in all_drift:
+        defect_issues = [
+            issue["number"] for issue in issues_by_commit[sha] if declares_defect(issue["body"])
+        ]
+        if defect_issues:
+            defect_drift.append((sha, display, defect_issues))
+
+    if defect_drift:
+        print("\nunreleased defect-class engine commits (oldest first):")
+        for _, display, issues in reversed(defect_drift):
+            refs = ", ".join(f"#{number}" for number in issues)
+            print(f"  DEFECT {display} — closes {refs}")
 
     if wire_drift:
         print()
@@ -283,6 +451,18 @@ def main(argv: list[str]) -> int:
             f"{TAG_PREFIX}<version> tag (release-coord-engine.yml does the rest).",
             file=sys.stderr,
         )
+    if defect_drift:
+        print(
+            f"::error::check-engine-freshness: {len(defect_drift)} unreleased engine commit(s) "
+            f"close an issue declaring `Class: defect`. Receivers still restore {version}, so they "
+            f"still run behavior the merged defect fixes proved wrong. Defect-class drift has no "
+            f"green latency budget: create the separate release item and cut the next "
+            f"FS.GG.Coord.Cli version through release-coord-engine.yml; do not fold an unplanned "
+            f"publish into the source PR that exposed this signal.",
+            file=sys.stderr,
+        )
+
+    if wire_drift or defect_drift:
         return 1
 
     if all_drift:
