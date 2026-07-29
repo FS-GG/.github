@@ -15,12 +15,24 @@ name: Cross-repo request — registry predicate check
 on:
   issues:
     types: [opened, edited]
+  pull_request:
+    paths:
+      - ".github/workflows/cross-repo-request-predicate.yml"
+      - "tests/cross-repo-request-predicate/**"
 
 permissions:
   contents: read
   issues: write
 
 jobs:
+  fixture:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - run: bash tests/cross-repo-request-predicate/run.sh
   predicate:
     # Only cross-repo requests. Most issues carry no registry assertion and the oracle would no-op, but
     # gating here avoids building the engine and cloning three repos on every unrelated issue.
