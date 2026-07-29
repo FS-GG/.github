@@ -103,7 +103,7 @@ on:
       github-ref:
         description: "Ref of FS-GG/.github to source the check script from."
         type: string
-        default: "main"
+        default: ""
 
 permissions:
   contents: read
@@ -122,7 +122,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
-          ref: ${{ inputs.github-ref }}
+          ref: ${{ inputs.github-ref || github.job_workflow_sha }}
           path: dotgithub
           # THE DIRECTORY, NEVER A LIST OF FILES, and the leading slash is load-bearing. The argument
           # is in the file header under "WHY THIS FETCHES A DIRECTORY"; both halves are asserted by

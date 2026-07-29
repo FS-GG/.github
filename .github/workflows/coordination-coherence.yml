@@ -89,7 +89,7 @@ on:
           package, so moving this ref changes which program runs, never whether a coherent receiver
           passes.
         type: string
-        default: "main"
+        default: ""
       target-path:
         description: "Path within the caller's checkout to verify (the repo root by default)."
         type: string
@@ -142,7 +142,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
-          ref: ${{ inputs.github-ref }}
+          ref: ${{ inputs.github-ref || github.job_workflow_sha }}
           path: dotgithub
       - name: Verify the coordination kit matches the version this repo pins
         id: verify
