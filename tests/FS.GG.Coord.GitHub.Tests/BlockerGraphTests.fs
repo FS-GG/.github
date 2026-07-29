@@ -26,6 +26,7 @@ module BlockerGraphTests =
           State = state
           IsPullRequest = false
           BoardClass = None
+          Severity = Unset
           Phase = None
           CreatedAt = None }
 

@@ -339,6 +339,8 @@ module Snapshot =
                       // chore reads it as a disagreement — so a context that never enriches writes the
                       // column it already holds, an idempotent write, rather than suppressing a real one.
                       BoardClass = None
+                      // Severity is a board-column fact and this pure snapshot does not carry it.
+                      Severity = Unset
                       // The board's `Phase` COLUMN and the issue's `createdAt` are not on this document
                       // either, and for `BoardClass`'s exact reason: both are SCAN facts, and this parser
                       // is pure (.github#1598). `Client.enrichBoardFacts` joins them on the offer path.

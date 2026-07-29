@@ -239,6 +239,8 @@ module Render =
             | Some c -> w.WriteString("class", itemClassWireName c)
             | None -> w.WriteNull("class")
 
+            w.WriteString("severity", severityWireName row.Severity)
+
             w.WriteString(
                 "state",
                 match row.State with

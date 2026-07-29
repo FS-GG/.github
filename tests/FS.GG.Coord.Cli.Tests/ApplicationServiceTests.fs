@@ -22,6 +22,7 @@ module ApplicationServiceTests =
           State = state
           IsPullRequest = isPullRequest
           BoardClass = None
+          Severity = Unset
           Phase = None
           CreatedAt = None }
 
@@ -37,7 +38,7 @@ module ApplicationServiceTests =
 
         Assert.Equal(1, List.length selected.Rows)
         Assert.Equal(
-            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"state":"OPEN"}]""",
+            """[{"number":1,"repo":"FS-GG/.github","title":"quote: \u0022kept\u0022","status":"Ready","class":null,"severity":"Unset","state":"OPEN"}]""",
             Render.renderReadyJson selected.Rows
         )
 
@@ -58,7 +59,7 @@ module ApplicationServiceTests =
                 BoardClass = Some Defect }
 
         Assert.Equal(
-            """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","state":"OPEN"}]""",
+            """[{"number":1,"repo":"FS-GG/.github","title":"a defect","status":"Ready","class":"defect","severity":"Unset","state":"OPEN"}]""",
             Render.renderReadyJson [ classed ]
         )
 
@@ -82,6 +83,19 @@ module ApplicationServiceTests =
         Assert.True(strict.Fails)
         Assert.True(error.Fails)
         Assert.Equal(1, error.Errors)
+
+    [<Fact>]
+    let ``#1901 Unset Severity lints until an open row is triaged`` () =
+        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.Ready Unset |> Option.isSome)
+        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.InProgress Unset |> Option.isSome)
+        Assert.True(LintApplication.severityVerdict IssueState.Open BoardStatus.Done Unset |> Option.isNone)
+        Assert.True(LintApplication.severityVerdict IssueState.Closed BoardStatus.Ready Unset |> Option.isNone)
+
+        for severity in [ Critical; High; Medium; Low ] do
+            Assert.True(
+                LintApplication.severityVerdict IssueState.Open BoardStatus.Ready severity
+                |> Option.isNone
+            )
 
     // ---- .github#1517 — `widen`/`set-paths` HONOUR `--json` -----------------------------------------
     //

@@ -142,6 +142,15 @@ module LintApplication =
         else
             None
 
+    /// `lint`'s Severity verdict. `Unset` is representable so unread/untriaged rows rank last, but it is
+    /// not a completed triage decision and remains an error on every open, non-Done row.
+    let severityVerdict (state: IssueState) (status: BoardStatus) (severity: Severity) : string option =
+        if state = IssueState.Open && status <> BoardStatus.Done && severity = Severity.Unset then
+            Some
+                "Severity is `Unset` — this row ranks last until a human triages it. Set the board's `Severity` field to one of `Critical`, `High`, `Medium`, or `Low` from evidence in the row's own text (.github#1901)."
+        else
+            None
+
     let private shortRef (ref: string) =
         match ref.IndexOf '/' with
         | i when i >= 0 -> ref.Substring(i + 1)

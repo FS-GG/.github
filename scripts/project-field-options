@@ -29,7 +29,11 @@ class Refused(RuntimeError):
 # The bounded options table each gated field publishes in docs/coordination/board-schema.md.
 # `check` reads the table by MARKER rather than by heading, so a heading rename cannot silently
 # widen the block a gate reads; an absent marker is a refusal, never an empty option set.
-SCHEMA_MARKERS = {"Repo Scope": "repo-scope-options", "Class": "class-options"}
+SCHEMA_MARKERS = {
+    "Repo Scope": "repo-scope-options",
+    "Class": "class-options",
+    "Severity": "severity-options",
+}
 
 # The `Class` vocabulary, CLOSED at exactly three values (.github#1588).  Unlike Repo Scope there
 # is no roster file to be the authority here: this is the engine's `ItemClass` union
@@ -44,6 +48,7 @@ SCHEMA_MARKERS = {"Repo Scope": "repo-scope-options", "Class": "class-options"}
 # `paths:` trigger, which is a reminder rather than a proof.  Claiming more than that here would
 # be the gate-that-reports-more-than-it-checked shape (#266) inside a gate.
 CLASS_VOCABULARY = ("defect", "hardening", "decision")
+SEVERITY_VOCABULARY = ("Critical", "High", "Medium", "Low", "Unset")
 
 FIELD_QUERY = r"""
 query ProjectFieldOptionsField($owner:String!,$number:Int!){
@@ -460,6 +465,17 @@ def check_class(args: argparse.Namespace) -> None:
     print(f"Class matches the closed ItemClass vocabulary ({', '.join(CLASS_VOCABULARY)})")
 
 
+def check_severity(args: argparse.Namespace) -> None:
+    """Gate `Severity` against the operator-decided closed order (.github#1901)."""
+    options = check_options(args, SCHEMA_MARKERS["Severity"])
+    actual = [o["name"] for o in options]
+    if actual != list(SEVERITY_VOCABULARY):
+        raise Refused(
+            f"Severity drift: expected ordered options={list(SEVERITY_VOCABULARY)}; actual={actual}"
+        )
+    print(f"Severity matches the closed ordered vocabulary ({' > '.join(SEVERITY_VOCABULARY)})")
+
+
 def cmd_check(args: argparse.Namespace) -> None:
     # Dispatch on --field, and REFUSE anything unrecognised (.github#1588).  Falling through to the
     # Repo Scope leg would be the worst outcome this tool can produce: `check --field Severity
@@ -470,6 +486,8 @@ def cmd_check(args: argparse.Namespace) -> None:
         check_repo_scope(args)
     elif args.field == "Class":
         check_class(args)
+    elif args.field == "Severity":
+        check_severity(args)
     else:
         raise Refused(
             f"no check is defined for field {args.field!r}; known fields: "

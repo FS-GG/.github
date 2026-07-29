@@ -33,6 +33,7 @@ module BatchTests =
           Predicate = None
           Class = None
           BoardClass = None
+          Severity = Unset
           Phase = None
           AgeDays = None }
 

@@ -38,6 +38,7 @@ let private aRow: Scan.Row =
       State = Open
       IsPullRequest = false
       BoardClass = None
+      Severity = Unset
       Phase = None
       CreatedAt = None }
 

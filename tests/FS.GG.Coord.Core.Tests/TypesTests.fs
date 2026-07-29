@@ -266,6 +266,34 @@ module TypesTests =
         Assert.Equal(None, itemClassOfWireName "")
         Assert.Equal(None, itemClassOfWireName null)
 
+    // ---- Severity (.github#1901) -------------------------------------------------------------------
+
+    let private everySeverity: (string * Severity) list =
+        FSharpType.GetUnionCases typeof<Severity>
+        |> Array.map (fun c -> c.Name, FSharpValue.MakeUnion(c, [||]) :?> Severity)
+        |> Array.toList
+
+    [<Fact>]
+    let ``#1901 Severity is the exact closed ordered board vocabulary`` () =
+        Assert.Equal(5, List.length everySeverity)
+        Assert.Equal<string list>(
+            [ "Critical"; "High"; "Medium"; "Low"; "Unset" ],
+            everySeverity |> List.map (snd >> severityWireName)
+        )
+
+        Assert.Equal<int list>([ 0; 1; 2; 3; 4 ], everySeverity |> List.map (snd >> severityOrder))
+
+    [<Fact>]
+    let ``#1901 every Severity round-trips and unknown words remain unknown`` () =
+        for name, severity in everySeverity do
+            let wire = severityWireName severity
+            Assert.Equal(Some severity, severityOfWireName wire)
+            Assert.False(System.String.IsNullOrWhiteSpace wire, $"case {name} renders blank")
+
+        Assert.Equal(Some Critical, severityOfWireName " critical ")
+        Assert.Equal(None, severityOfWireName "urgent")
+        Assert.Equal(None, severityOfWireName null)
+
     // ================================================================================================
     // THE PHASE VOCABULARY (.github#1598) — `everyItemClass`'s pattern, one column over.
     // ================================================================================================

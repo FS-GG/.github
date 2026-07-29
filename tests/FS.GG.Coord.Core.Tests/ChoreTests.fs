@@ -53,6 +53,7 @@ module ChoreTests =
           Predicate = None
           Class = None
           BoardClass = None
+          Severity = Unset
           Phase = None
           AgeDays = None }
 
@@ -806,6 +807,7 @@ module ChoreTests =
                                         Blockers = bs
                                         Class = declared
                                         BoardClass = board
+                                        Severity = Unset
                                         Phase = None
                                         AgeDays = None }
 
@@ -867,6 +869,7 @@ module ChoreTests =
                 Blockers = [ blocker 2 BlockerOpen ]
                 Class = Some Defect
                 BoardClass = None
+                Severity = Unset
                 Phase = None
                 AgeDays = None }
 

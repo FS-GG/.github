@@ -25,6 +25,10 @@ module Scan =
           /// which is the authority, so nothing downstream has to guess which of the three this was.
           BoardClass: ItemClass option
 
+          /// The `Severity` column as observed. Missing or unrecognised values are explicitly `Unset`,
+          /// which ranks last and remains visible to lint.
+          Severity: Severity
+
           /// The `Phase` column as OBSERVED (.github#1598). `None` covers the same three facts
           /// `BoardClass` does — unset, a word this engine does not speak, or no such field on the
           /// project — and they collapse for the same reason: to the one consumer (`Rank`) all three mean
@@ -118,6 +122,7 @@ module Scan =
                  status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
                  class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
@@ -216,6 +221,10 @@ module Scan =
                       // project with no `Class` field (every board before .github#1588, and every parity
                       // fixture) reads `None` rather than failing the scan.
                       BoardClass = nested node "class" "name" |> Option.bind itemClassOfWireName
+                      Severity =
+                        nested node "severity" "name"
+                        |> Option.bind severityOfWireName
+                        |> Option.defaultValue Unset
                       // Same shape, same cost, same fail-soft as `class` above: a project with no `Phase`
                       // field (every parity fixture, and any board but the live one) reads `None` rather
                       // than failing the scan.
@@ -261,6 +270,8 @@ module Scan =
             match r.BoardClass with
             | Some c -> w.WriteString("class", itemClassWireName c)
             | None -> ()
+
+            w.WriteString("severity", severityWireName r.Severity)
 
             // OMITTED when absent, on `class`'s terms and for its reason: an empty string would be a
             // cache entry asserting a value for a column nobody read.
@@ -327,6 +338,10 @@ module Scan =
                               // one idempotent board write; the opposite default would suppress a real
                               // projection because an old cache said nothing.
                               BoardClass = s "class" |> Option.bind itemClassOfWireName
+                              Severity =
+                                s "severity"
+                                |> Option.bind severityOfWireName
+                                |> Option.defaultValue Unset
                               // Absent on every cache entry written before .github#1598, and that reads
                               // as `None` — which ranks the row LAST rather than promoting it. A stale
                               // cache therefore under-prioritises for at most one cache lifetime; the

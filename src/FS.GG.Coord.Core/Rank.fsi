@@ -9,25 +9,22 @@ namespace FS.GG.Coord
 /// says that column means "deliberately parked with a concrete evidenced reason", and nineteen rows sat
 /// there with their reason recorded only in a session transcript.
 ///
-/// **EVERY INPUT IS ALREADY ON THE BOARD.** That is the design constraint, not a convenience. A `Priority`
-/// field would be a fifth fact a human maintains, and hand-maintained facts drifting from the thing they
-/// describe is the defect class this repo closed five times in one day (#1507, #1510/#1515, #1528, #1538).
-/// So rank is COMPUTED, from four things the board already knows:
+/// Rank is COMPUTED from five facts rather than stored as an opaque priority:
 ///
 ///   1. **Blocking count** — how many open items name this one in a still-holding `Blocked by` edge. The
 ///      single best signal available, and free: the graph is on the candidate list already.
-///   2. **`Class`** (.github#1588) — `defect` before `decision` before `hardening`, which is
-///      `Class.fromBody`'s own dominance order rather than a second one.
-///   3. **`Phase`** — how early in the plan, the column that started all this.
-///   4. **Age** — oldest first, a stable tie-break, and the input starvation escalation reads.
+///   2. **`Severity`** (.github#1901) — Critical, High, Medium, Low, then Unset.
+///   3. **`Class`** (.github#1588) — defect, hardening, decision, then unclassed.
+///   4. **`Phase`** — how early in the plan, the column that started all this.
+///   5. **Age** — oldest first, a stable tie-break, and the input starvation escalation reads.
 ///
 /// Lexicographic, in that order, with the ISSUE NUMBER underneath as the final term. **The number is what
 /// keeps the scheduler DETERMINISTIC**, which the batch has always depended on: the board scan is cached
 /// and shared across the fleet (#418), so two workers reading one window must compute one batch. Every
 /// term above the number is a fact about the board, so this is still a total order on identical input.
 ///
-/// **NO PRIORITY DATA ⇒ NO BEHAVIOUR CHANGE.** An item with no dependents, no class, no phase and no
-/// readable age sorts LAST — but among a whole board of such items the number term alone survives, which
+/// **NO PRIORITY DATA ⇒ NO BEHAVIOUR CHANGE.** An item with `Severity = Unset`, no dependents, no class,
+/// no phase and no readable age sorts LAST — but among a whole board of such items the number term survives, which
 /// is precisely the pre-#1598 ordering. That is what made this safe to land in one step.
 ///
 /// **AN UNREAD INPUT NEVER PROMOTES.** `None` is the lowest tier of every term, and `AgeDays = None` never
@@ -58,7 +55,9 @@ module Rank =
           Escalated: bool
           /// Open items whose still-holding `Blocked by` names this one. More is earlier.
           Blocking: int
-          /// The item's severity — its own text first, the board column as fallback. `None` sorts last.
+          /// The board's explicit severity. Critical first; `Unset` last.
+          Severity: Severity
+          /// The item's class — its own text first, the board column as fallback. `None` sorts last.
           Class: ItemClass option
           /// The board's `Phase` column. `None` sorts after every phase.
           Phase: Phase option
@@ -72,7 +71,7 @@ module Rank =
     /// Returned as a tuple rather than a single score on purpose: a score would have to weight terms
     /// against each other, and there is no exchange rate between "blocks two items" and "is a defect".
     /// Lexicographic tiers need none — each term only breaks the ties the term above it left.
-    val key: r: Rank -> int * int * int * int * int * int
+    val key: r: Rank -> int * int * int * int * int * int * int
 
     /// How many of the GIVEN `Blocked by` EDGES still hold against each ref — the one counting rule, over
     /// whatever slice of the blocking graph the caller could see (.github#1628).

@@ -142,23 +142,16 @@ module Types =
 
     /// How BAD an item is (.github#1588) — the axis the board had no vocabulary for.
     ///
-    /// The board already carries `Status`, `Phase`, `Workstream`, `Effort` and `Repo Scope`: it has words
-    /// for *when*, *where* and *how big*, and had none for *how bad*. That gap is why a burn-down could
-    /// not terminate on its own terms — `drive-board` stops when "a fresh reconcile and backlog triage
-    /// have no startable item", and a run in which fixing one thing files two can never reach that state.
-    /// A human sorted the same rows by reading their titles in seconds; the fact was knowable and simply
-    /// nowhere in the data.
+    /// What KIND of work an item is: defect, hardening, or a human decision. Severity is a separate,
+    /// ordered axis (.github#1901); Class deliberately remains a single-purpose partition.
     ///
-    /// THREE CASES, AND THE SPLIT IS THE POINT. A red `main` and a stale comment in a test file are both
-    /// "an open item" to `batch`, to `ready` and to the driver's stopping rule, and they are not remotely
-    /// the same obligation. `decision` is a third thing again: it is not work at all until a human
-    /// chooses, so it must never be dispatched.
+    /// THREE CASES, AND THE SPLIT IS THE POINT. `decision` is not authorable work until a human chooses;
+    /// `defect` and `hardening` distinguish broken-now work from prevention.
     ///
     /// THERE IS NO `unknown` CASE, DELIBERATELY. An item whose class nobody has established carries
     /// `None`, and the absence is the finding — `lint`'s `CLASS-UNSET` reports it and `drive-board` treats
     /// it as POSSIBLY a defect. An `Unknown` case would be a value a rule could match and dismiss, which
-    /// is #266's fail-open wearing this union's clothes: untriaged severity must be as loud as untriaged
-    /// status, not a fourth quiet option.
+    /// is #266's fail-open wearing this union's clothes: an untriaged class remains loud.
     type ItemClass =
         /// Something is broken NOW: a gate red on `main`, a summary reporting a byte-identity it never
         /// computed, a reusable workflow that dies at load for every caller.
@@ -170,10 +163,19 @@ module Types =
         /// would make the machine answer the question the item exists to escalate.
         | Decision
 
+    /// The board's closed, ordered severity vocabulary (.github#1901).
+    type Severity =
+        | Critical
+        | High
+        | Medium
+        | Low
+        /// Explicitly untriaged. Ranks last and must remain a lint finding.
+        | Unset
+
     /// WHICH PART OF THE PLAN an item belongs to — the board's `Phase` column (.github#1598).
     ///
     /// A CLOSED, ORDERED vocabulary, and the ORDER is why this is a union rather than the string the
-    /// column holds. "Earlier in the plan" is the third rank input, and a string carries no order: sorted
+    /// column holds. "Earlier in the plan" is a rank input, and a string carries no order: sorted
     /// lexically, a tenth phase would sort between `P1` and `P2` the day it existed.
     ///
     /// The values are the live board options, documented in the `repo-phase-map` table of
@@ -347,6 +349,9 @@ module Types =
           /// which is the fail-closed answer — a projection we could not observe is not one we may write.
           BoardClass: ItemClass option
 
+          /// The observed `Severity` column. Missing/unrecognised values are represented as `Unset`.
+          Severity: Severity
+
           /// **WHAT THE BOARD'S `Phase` COLUMN CURRENTLY RENDERS** (.github#1598) — observed, never derived.
           ///
           /// The board has carried `Phase` since the project existed and NOTHING IN THE SCHEDULER READ IT:
@@ -473,6 +478,15 @@ module Types =
     /// the nearest of three would be a guess carrying a parser's authority, which is exactly what
     /// .github#1588's AC3 forbids; `lint` reports the item as unclassed instead, and a human decides.
     val itemClassOfWireName: s: string -> ItemClass option
+
+    /// Render a severity as the exact Projects v2 option name.
+    val severityWireName: severity: Severity -> string
+
+    /// Parse an exact severity option name, case-insensitively. Unknown words are not severity values.
+    val severityOfWireName: s: string -> Severity option
+
+    /// The priority order. Lower sorts earlier; `Unset` is last.
+    val severityOrder: severity: Severity -> int
 
     /// **THE PHASE WIRE VOCABULARY: a `Phase` as the Projects v2 OPTION NAME, spelled ONCE.**
     ///

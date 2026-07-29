@@ -61,6 +61,9 @@ module Scan =
           /// looked at. Here the source is the body, and `lint` reads it directly.
           BoardClass: ItemClass option
 
+          /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
+          Severity: Severity
+
           /// The `Phase` column as OBSERVED (.github#1598) — the third rank input, and the column whose
           /// invisibility to the scheduler is the whole subject of that item.
           ///

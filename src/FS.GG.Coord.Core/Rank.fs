@@ -14,6 +14,7 @@ module Rank =
     type Rank =
         { Escalated: bool
           Blocking: int
+          Severity: Severity
           Class: ItemClass option
           Phase: Phase option
           AgeDays: int option
@@ -50,8 +51,8 @@ module Rank =
 
     /// THE SORT KEY. Lower is EARLIER, and every term is a lexicographic tier below the one before it.
     ///
-    /// ESCALATION IS THE TOP TERM, above the blocking count and not merely above class and phase. That is
-    /// what makes it a LIVENESS guarantee rather than a nudge: the item anti-starvation exists for is one
+    /// ESCALATION IS THE TOP TERM, above the blocking count and not merely above severity, class and
+    /// phase. That is what makes it a LIVENESS guarantee rather than a nudge: the item anti-starvation exists for is one
     /// whose touch-set permanently collides with something better-ranked, and "something better-ranked"
     /// is most often a hub with many dependents. An escalation that lost to the blocking count would
     /// leave exactly that item starving.
@@ -59,9 +60,10 @@ module Rank =
     /// The negations are not decoration: MORE blocked dependents and MORE days old both mean EARLIER, and
     /// the natural order of an `int` says the opposite. An unknown age contributes 0 — the same as an item
     /// created today — which is deliberate: `None` must never out-rank a measured age.
-    let key (r: Rank) : int * int * int * int * int * int =
+    let key (r: Rank) : int * int * int * int * int * int * int =
         ((if r.Escalated then 0 else 1),
          -r.Blocking,
+         severityOrder r.Severity,
          classOrder r.Class,
          (r.Phase |> Option.map phaseOrder |> Option.defaultValue unphased),
          -(r.AgeDays |> Option.defaultValue 0),
@@ -128,6 +130,7 @@ module Rank =
     let ofItem (counts: Map<Ref, int>) (item: Item) : Rank =
         { Escalated = isEscalated item.Status item.AgeDays
           Blocking = counts |> Map.tryFind item.Ref |> Option.defaultValue 0
+          Severity = item.Severity
           Class =
             match item.Class with
             | Some c -> Some c
@@ -160,6 +163,7 @@ module Rank =
     let isUnranked (r: Rank) =
         not r.Escalated
         && r.Blocking = 0
+        && r.Severity = Unset
         && r.Class.IsNone
         && r.Phase.IsNone
         && r.AgeDays.IsNone
@@ -169,6 +173,8 @@ module Rank =
     /// It prints what each term CONTRIBUTED, never a single opaque score. A scheduler whose ordering
     /// cannot be inspected is one nobody trusts (AC5), and "rank 7" answers no question a driver has.
     let explain (r: Rank) : string =
+        let severity = severityWireName r.Severity
+
         let cls =
             match r.Class with
             | Some c -> itemClassWireName c
@@ -195,4 +201,4 @@ module Rank =
             else
                 ""
 
-        $"blocking %d{r.Blocking}, %s{cls}, %s{phase}, %s{age}%s{escalation}"
+        $"blocking %d{r.Blocking}, severity %s{severity}, %s{cls}, %s{phase}, %s{age}%s{escalation}"

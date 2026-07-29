@@ -157,9 +157,24 @@ fi
 
 # An unrecognised --field must not fall through to Repo Scope, which would pass against the real
 # roster and print green about a field nothing examined.
-if unknown_field_out="$(run_tool check --field Severity --schema "$SCHEMA" 2>&1)"; then
-  fail "unknown field fence" "--field Severity was gated as Repo Scope: $unknown_field_out"
-elif printf '%s' "$unknown_field_out" | grep -Fq "no check is defined for field 'Severity'"; then
+if run_tool check --field Severity --schema "$SCHEMA" >/dev/null; then
+  pass "documented Severity options match the closed ordered vocabulary"
+else
+  fail "Severity schema check" "$(run_tool check --field Severity --schema "$SCHEMA" 2>&1 || true)"
+fi
+
+# Order is semantic for Severity, unlike Class. Swapping two documented rows must red the gate.
+sed '/^| `High` /{h;d}; /^| `Medium` /{G}' "$SCHEMA" >"$WORK/severity-reordered.md"
+if run_tool check --field Severity --schema "$WORK/severity-reordered.md" >/dev/null 2>&1; then
+  fail "Severity order drift" "a documented table with High/Medium reordered was accepted"
+else
+  pass "Severity check refuses a reordered vocabulary"
+fi
+
+# An unrecognised --field must not fall through to Repo Scope.
+if unknown_field_out="$(run_tool check --field Urgency --schema "$SCHEMA" 2>&1)"; then
+  fail "unknown field fence" "--field Urgency was gated as Repo Scope: $unknown_field_out"
+elif printf '%s' "$unknown_field_out" | grep -Fq "no check is defined for field 'Urgency'"; then
   pass "an unrecognised --field refuses instead of falling through to Repo Scope"
 else
   fail "unknown field fence" "$unknown_field_out"
