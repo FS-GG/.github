@@ -1719,9 +1719,14 @@ module Client =
 
                         // A FAILED MARKER READ IS FATAL (#461): a claim set we could not read is never an
                         // empty one, so `who` fails closed rather than reporting a live lock as absent.
-                        match Reads.markers ctx.Transport o r n with
+                        // .github#1668: `markerScan`, not `markers` — `who` REPORTS, and nothing re-checks
+                        // what it says. See `Reads.markers`' own remarks for why every OTHER caller may
+                        // discard the completeness this one keeps.
+                        match Reads.markerScan ctx.Transport o r n with
                         | Error e -> failure <- Some e
-                        | Ok markers ->
+                        | Ok scan ->
+                            let markers = scan.Markers
+
                             // Classify by the LOCK. The lowest-id marker in the CAS's own total order names
                             // the holder; the lease decides live (`Held`) vs past its window (`Stale`). No
                             // marker at all is in flight ONLY when the board column says In progress — an
@@ -1732,6 +1737,17 @@ module Client =
                                 | None ->
                                     match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
                                     | Some m -> Some(Stale m)
+                                    // NO MARKER WE COULD READ. Before this may be reported as an ABSENCE,
+                                    // the read has to have been COMPLETE (.github#1668). If any comment on
+                                    // this issue could not be classified, one of them may have been the
+                                    // claim, and the honest answer is that we cannot tell.
+                                    //
+                                    // It fires on BOTH arms, deliberately. On arm A it replaces the
+                                    // `UNCLAIMED` accusation. On arm B — where a markerless issue is
+                                    // normally not in flight at all and is simply dropped — it makes the row
+                                    // APPEAR, because an off-board issue hiding an unreadable marker is
+                                    // precisely the held item this verb must not omit.
+                                    | None when not (List.isEmpty scan.Unreadable) -> Some Undetermined
                                     | None -> if isInProgress (o, r, n) then Some Unclaimed else None
 
                             match state with
@@ -1782,7 +1798,8 @@ module Client =
                                     match st with
                                     | Stale _ -> Some(Reads.prAlive ctx.Transport o r n)
                                     | Held _
-                                    | Unclaimed -> None
+                                    | Unclaimed
+                                    | Undetermined -> None
 
                                 let livePr =
                                     match liveness with
@@ -1819,7 +1836,16 @@ module Client =
                                       // Filled in below, once the worktree read has run once for the whole
                                       // set rather than per row — a claim's worktree is a local fact, not one
                                       // of the network reads this loop is spending.
-                                      Worktree = None }
+                                      Worktree = None
+
+                                      // .github#1668: ON EVERY ROW, not just the markerless one. The
+                                      // `Undetermined` STATE is only reachable when the short read left no
+                                      // marker at all; this field is the READ's own completeness, and a
+                                      // `Held`/`Stale` row needs it just as badly — a hidden marker with a
+                                      // lower id means the holder named above is the wrong holder, and a
+                                      // hidden LIVE marker behind a lapsed one means the `STALE` a human is
+                                      // reading before reaping is not free.
+                                      Incomplete = scan.Unreadable }
                                 )
 
                 match failure with
@@ -1910,16 +1936,31 @@ module Client =
                                         "  %-16s UNCLAIMED — In progress with NO claim marker%s"
                                         row.Ref.Short
                                         wt
+                                // .github#1668. NOT a variant spelling of UNCLAIMED: this row is the verb
+                                // declining to answer. The count goes in the line because "1 comment" and
+                                // "all 40 comments" are very different situations to walk into, and the
+                                // reasons follow on stderr where the rest of `who`'s diagnosis lives.
+                                | Undetermined ->
+                                    printfn
+                                        "  %-16s UNDETERMINED — the marker read was INCOMPLETE (%d comment(s) unreadable); this item may be HELD%s"
+                                        row.Ref.Short
+                                        (List.length row.Incomplete)
+                                        wt
 
                     // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
                     // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the
                     // best work on the board ends up in the bin. `reap` is a destructive verb, and pointing
                     // it at finished work is precisely the advice this change exists to delete: land it.
+                    // .github#1668: AND ITS READ MUST HAVE BEEN COMPLETE. This block tells a human the claim
+                    // is DEAD and the work is finished — `adopt` it. On a row whose marker read was short,
+                    // "the claim is DEAD" is precisely the thing not established: the hidden comment may be
+                    // a live marker sitting behind the lapsed one. The row still prints, and the warning
+                    // below still names it; what is withheld is the instruction to take it over.
                     let orphans =
                         inFlight
                         |> List.filter (fun r ->
                             match r.State, r.PrState with
-                            | Stale _, Some PrGreen -> true
+                            | Stale _, Some PrGreen -> List.isEmpty r.Incomplete
                             | _ -> false)
 
                     if not (List.isEmpty orphans) then
@@ -1941,8 +1982,48 @@ module Client =
                         | Unclaimed ->
                             eprint
                                 $"fsgg-coord-engine: WARNING — %s{row.Ref.Short} is In progress with NO claim marker (someone is working outside the protocol)."
+                        // .github#1668: THE ACCUSATION IS WITHHELD HERE, AND THAT IS THE POINT. "Someone is
+                        // working outside the protocol" is a charge against a person, and on an incomplete
+                        // read it was levelled at a worker who held a perfectly valid marker. The
+                        // replacement is emitted by the loop BELOW, which is keyed on the read rather than
+                        // on this verdict.
+                        | Undetermined
                         | Held _
                         | Stale _ -> ()
+
+                    // .github#1668 — THE INCOMPLETE-READ CAVEAT, KEYED ON THE READ AND NOT ON THE VERDICT.
+                    //
+                    // It fires on EVERY row whose marker read was short, in every state, because every state
+                    // is compromised by a hidden marker and two of them are compromised in the direction
+                    // that destroys work:
+                    //
+                    //   * `held`  — the CAS winner is the LOWEST id, so a marker we could not order may be
+                    //               the real holder. The name we printed would then be the wrong one.
+                    //   * `stale` — a hidden LIVE marker behind the lapsed one means this is not a dead
+                    //               claim, and `stale` is the row a human reads immediately before `reap`.
+                    //   * `undetermined` — no marker at all survived the read.
+                    for row in inFlight do
+                        if not (List.isEmpty row.Incomplete) then
+                            // The state WORD, so the warning names the very verdict it is qualifying. Spelled
+                            // here rather than reaching for `Render.whoStateName`, which is the JSON wire
+                            // contract's vocabulary and not this stream's — cases 20/25 certify that one, and
+                            // a human sentence must not be able to change it by needing a different word.
+                            let state =
+                                match row.State with
+                                | Held _ -> "held"
+                                | Stale _ -> "stale"
+                                | Unclaimed -> "unclaimed"
+                                | Undetermined -> "undetermined"
+
+                            eprint
+                                $"fsgg-coord-engine: WARNING — %s{row.Ref.Short}: the claim-marker read was INCOMPLETE, so its lock state (%s{state}) is a LOWER BOUND, not a fact."
+
+                            for reason in row.Incomplete do
+                                eprint $"fsgg-coord-engine:   - %s{reason}"
+
+                            eprint
+                                "fsgg-coord-engine:   Do NOT dispatch a worker, `reap`, or `adopt` on this row. Re-run `who`, and if it persists, read the issue's comments directly."
+
 
                     ExitGreen
 

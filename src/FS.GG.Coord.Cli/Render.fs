@@ -24,16 +24,31 @@ module Render =
     /// the protocol, which `who` exists to surface). A Ready/Backlog item nobody claimed is simply not in
     /// flight, and `who` does not list it. This is cases 20/25's certified `who`, and the JSON `.state` a
     /// consumer keys on (held/stale/unclaimed).
+    ///
+    /// **AND THERE IS A FOURTH ANSWER, WHICH IS NOT A LOCK STATE AT ALL** (.github#1668). `Undetermined` is
+    /// "the marker read came back with comments I could not classify, so I cannot tell you whether this item
+    /// is held". It exists because the other three are all ASSERTIONS about the lock, and an unreadable
+    /// comment supports none of them — least of all `Unclaimed`, which is the fail-open direction and which
+    /// carries an accusation ("someone is working outside the protocol") that was levelled, in the incident
+    /// that opened #1668, at a worker holding a valid marker.
     type WhoState =
         | Held of Reads.Marker
         | Stale of Reads.Marker
         | Unclaimed
+        /// The marker read was incomplete AND produced no marker at all, so there is no lock state to
+        /// report. It carries no payload: the reasons are on `WhoRow.Incomplete`, because an incomplete
+        /// read is a property of the READ and a `Held` or `Stale` row can suffer it just as badly — a
+        /// `STALE` built from a short read is the one that sends a human to `reap`.
+        | Undetermined
 
     let whoStateName =
         function
         | Held _ -> "held"
         | Stale _ -> "stale"
         | Unclaimed -> "unclaimed"
+        // A NEW WORD, NOT A REUSED ONE. A consumer keying on `unclaimed` must not silently start receiving
+        // rows that mean "could not determine" — that is the same substitution in a machine contract.
+        | Undetermined -> "undetermined"
 
     /// A classified in-flight row: the item, its lock state, the touch-set it reserves, and — on a STALE
     /// row only — the #581 proof of life that turns a bare `STALE` into `STALE (#NNN OPEN)`.
@@ -58,7 +73,18 @@ module Render =
           /// `who --local` — the local git worktree this item is checked out in, if any (#959). `None` when
           /// `--local` was not asked, or when no local worktree is on this item's `item/<n>-*` branch. It is
           /// informational: a claim with no local worktree is normal (another worker holds it, elsewhere).
-          Worktree: string option }
+          Worktree: string option
+
+          /// EVERY COMMENT THE MARKER READ COULD NOT CLASSIFY (.github#1668) — on EVERY row, whatever its
+          /// state, because an incomplete read is a property of the READ and not of the verdict drawn from
+          /// it. Empty on the overwhelmingly normal row, and empty is the load-bearing value: only an empty
+          /// list licenses acting on this row's state as a fact.
+          ///
+          /// It is NOT redundant with `Undetermined`. That state is the case where the short read left NO
+          /// marker at all; this field also fires on `Held` and `Stale`, where a marker WAS found and the
+          /// hidden one may be a lower id (so the named holder is the wrong holder) or a live claim behind
+          /// a lapsed one (so the `STALE` a human is about to `reap` is not free).
+          Incomplete: string list }
 
     type ClaimReceipt =
         { Ref: Ref
@@ -227,8 +253,12 @@ module Render =
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
     /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
-    /// carrying its `number`, `repo`, `state` (held/stale/unclaimed), the `worker` holding it (`null` when
-    /// unclaimed — only the column, not a marker, says so), and the `paths` it reserves. A STALE row also
+    /// carrying its `number`, `repo`, `state` (held/stale/unclaimed/undetermined — .github#1668 added the
+    /// fourth), the `worker` holding it (`null` when unclaimed, and ALSO null when undetermined, which is
+    /// why `.state` and not `worker` carries that distinction), and the `paths` it reserves. Any row whose
+    /// marker read was INCOMPLETE also carries `undetermined`: a non-empty array of the reasons. That field
+    /// is keyed on the READ, so it appears on `held` and `stale` rows too — a consumer must not treat a
+    /// `stale` row bearing it as reapable. A STALE row also
     /// carries `livePr` (#581): `null` when the lease lapsed and NO open PR was found (a bare stale a reaper
     /// may collect), the `#NNN item/<n>-*` ref where the work is demonstrably still alive. A real JSON
     /// writer, so a worker id, path, or branch name carrying a quote cannot forge the array.
@@ -250,7 +280,26 @@ module Render =
             match row.State with
             | Held m
             | Stale m -> w.WriteString("worker", m.Worker.Value)
-            | Unclaimed -> w.WriteNull("worker")
+            // BOTH null, and they are told apart by `.state`, never by this field. "Nobody holds it" and
+            // "I cannot say who holds it" have the same empty answer HERE — which is exactly why #1668
+            // needed a distinct `.state` word rather than a cleverer `worker`.
+            | Unclaimed
+            | Undetermined -> w.WriteNull("worker")
+
+            // .github#1668: WHY the answer may be incomplete, on the row itself, so a machine consumer can
+            // act on it without re-deriving anything.
+            //
+            // KEYED ON THE READ, NOT ON THE STATE. It rides a `held` or `stale` row too, and it has to: a
+            // hidden marker with a LOWER id makes `worker` above the wrong holder, and a hidden LIVE marker
+            // behind a lapsed one makes a `stale` row — the row a consumer reaps — not free at all. Emitted
+            // only when non-empty, so every row from a complete read stays byte-identical.
+            if not (List.isEmpty row.Incomplete) then
+                w.WriteStartArray("undetermined")
+
+                for reason in row.Incomplete do
+                    w.WriteStringValue reason
+
+                w.WriteEndArray()
 
             w.WriteStartArray("paths")
 
@@ -280,7 +329,8 @@ module Render =
                 if row.BranchPushed then
                     w.WriteBoolean("branchPushed", true)
             | Held _
-            | Unclaimed -> ()
+            | Unclaimed
+            | Undetermined -> ()
 
             if includeWorktree then
                 match row.Worktree with
