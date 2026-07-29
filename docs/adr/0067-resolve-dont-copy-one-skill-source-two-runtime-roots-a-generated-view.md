@@ -160,7 +160,7 @@ The right use of "yes, it can be pointed" is *to not need it*.
 > declared **plugin** instead of as bytes, and its own AC1 marked *"whether Codex has an equivalent
 > declared-package mechanism"* **NOT MEASURED**. The operator's decision of 2026-07-29 made that
 > measurement the whole of the startable work — *"No adoption, and no decline, until that number
-> exists."* Measured on a **running Codex CLI 0.145.0** against an isolated `CODEX_HOME`, in three legs,
+> exists."* Measured on a **running Codex CLI 0.145.0** against an isolated `CODEX_HOME`, in four legs,
 > because this clause prices *"a per-machine bootstrap (the local directory marketplace)"* and nobody
 > had checked whether Codex even had one.
 >
@@ -174,33 +174,52 @@ The right use of "yes, it can be pointed" is *to not need it*.
 >    `- fsgg-coord:pnext-demo: …`, resolved out of `$CODEX_HOME/plugins/cache/…`. Codex's own injected
 >    `<plugins_instructions>` states it in terms: *"A plugin is a local bundle of skills, MCP servers,
 >    and apps."*
-> 2. **The DECLARATION is per-machine, and there is NO repo-declared route.** The install is recorded in
->    `$CODEX_HOME/config.toml` as `[marketplaces.<name>]` + `[plugins."<plugin>@<marketplace>"]`. A
->    **project-level `.codex/config.toml` carrying the identical two stanzas installs nothing**:
->    `codex plugin marketplace list` answers *"No plugin marketplaces in scope."*, `codex plugin list`
->    reports zero installed, and the catalog carries zero matching entries. Codex has **no equivalent of
->    Claude Code's `.claude/settings.json` repo-declared plugins that install at session start.**
+> 2. **A repo CAN carry the declaration; nothing INSTALLS it without a per-machine act.** Codex's own
+>    bundled `plugin-creator` skill prescribes two marketplace locations — *"Personal plugin:
+>    `~/.agents/plugins/marketplace.json`"* and *"**Repo/team plugin:
+>    `<repo-root>/.agents/plugins/marketplace.json`**"* — with a per-entry `policy.installation` of
+>    `NOT_AVAILABLE | AVAILABLE | INSTALLED_BY_DEFAULT`. That repo-root path is **real and resolved**:
+>    `codex plugin marketplace add .` from a repo carrying it reads that exact file and lists
+>    `fsgg-coord@fsgg-repo`. **What it does not do is install itself.** With a fresh `CODEX_HOME` and the
+>    manifest sitting in the tree, `codex plugin marketplace list` answers *"No plugin marketplaces in
+>    scope."* and the catalog carries zero entries; after an explicit `marketplace add`, the plugin is
+>    still `installed=false` **even at `INSTALLED_BY_DEFAULT`**. The installed state lives only in
+>    `$CODEX_HOME/config.toml` (`[marketplaces.<name>]` + `[plugins."<plugin>@<marketplace>"]`). So the
+>    contrast with Claude is **not** "no in-repo surface exists" — it is that Codex's in-repo surface is
+>    **inert until a per-machine command runs**, where Claude's `.claude/settings.json` plugins install at
+>    session start. (The Claude half of that sentence is **read from documentation**, per `#1860`; only
+>    the Codex half is measured here.)
 > 3. **CONTROL — so leg 2's zero is a real negative and not a broken harness ([#266](https://github.com/FS-GG/.github/issues/266)).**
->    The incumbent route measured in the same harness — `.agents/skills` on disk, **empty** `CODEX_HOME`,
->    no plugin, no configuration — puts the skill in the catalog as `- pnext-demo: …`, **un-namespaced**.
->    §5's *"discovers `.agents/skills` with no configuration at all"* re-measured on 0.145.0 and holding.
+>    The incumbent route measured in the same harness — `.agents/skills` on disk, a `CODEX_HOME` **empty
+>    at start**, no plugin, no configuration — puts the skill in the catalog as `- pnext-demo: …`,
+>    **un-namespaced**. §5's *"discovers `.agents/skills` with no configuration at all"* re-measured on
+>    0.145.0 and holding.
+> 4. **The trust confound, named rather than left implicit — because #266 cuts against this record too.**
+>    A first pass tested only the `.codex/config.toml` shape against an untrusted project, and that zero
+>    proves nothing on its own: Codex **disables project-local config entirely until the project is
+>    trusted** (*"Project-local config, hooks, and exec policies are disabled … until the project is
+>    trusted, but skills still load"*), which is `#1860`'s own cost 2 arriving as a measurement hazard.
+>    Discriminated with a non-plugin key: a project `config.toml` setting `model = "o3"` leaves
+>    `codex doctor` at `model <default>` untrusted and flips it to `model o3` once `$CODEX_HOME` records
+>    `trust_level = "trusted"`. **Re-run with the project trusted, the plugin result is identical** —
+>    *"No plugin marketplaces in scope."*, zero installed, zero catalog entries. The layer was live and
+>    the stanzas still did nothing.
 >
 > **What that settles.** The operator's load-bearing sub-question was whether **one declaration** can
 > serve both runtimes — *"the only version of this proposal that makes the detect-divergence-between-copies
 > question lose its subject rather than shrink."* Measured answer: **no.** The **package** can be one
 > artifact, since both runtimes read the same `.claude-plugin/` tree; the **declaration** cannot be one
-> act, because Claude's lives in the repo and Codex's is a per-machine act that in-repo configuration
-> cannot reach. A receiver therefore gets the plugin on a developer machine or a CI runner only by
-> bootstrapping each one — **exactly the cost this clause already prices**, now measured for Codex
-> rather than inferred, and against a clause whose own conclusion is that producing the view at each
-> runtime's expected path is *strictly cheaper than all of them*.
+> act, because Codex's in-repo manifest does not install itself and Claude's does. A receiver therefore
+> gets the plugin on a developer machine or a CI runner only by bootstrapping each one — **exactly the
+> cost this clause already prices**, now measured for Codex rather than inferred.
 >
 > **Two things this measurement changes about `#1860` that the row could not know.** Its "what it does
 > NOT solve" item 1 — *"Codex is unaffected… a Claude plugin does not feed it"* — is **refuted as
-> stated**: a Claude-shaped plugin **does** feed Codex, so the proposal is not "removes one of two
-> consumers" and must not be decided as if it were. And its cost 3, the invocation-namespace change, is
-> **worse than the row states**: Codex prefixes plugin skills `plugin_name:skill-name` too, so the
-> rename is fleet-wide across **both** runtimes rather than Claude's alone.
+> stated**: a Claude-shaped plugin **does** feed Codex. That does not make the Codex-side view
+> disposable — leg 2 is exactly why it is not — but it does mean the proposal cannot be decided as
+> *"removes one of two consumers"*; the real trade is the bootstrap. And its cost 3, the
+> invocation-namespace change, is **worse than its item 1 implies**: Codex prefixes plugin skills
+> `plugin_name:skill-name` too, so the rename is fleet-wide across **both** runtimes rather than one.
 >
 > **No adoption and no decline is recorded here, by operator decision** — this note records the
 > measurement and nothing else. The adoption question returns as
