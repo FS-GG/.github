@@ -563,4 +563,5 @@ kit:
   #
   # Adding it later is cheap and correct. It costs one FS.GG.Kit republish and a seven-receiver
   # fan-out, exactly like the three rows above, and it must not be added by a PR that cannot also
-  # bump the version — see #1581/#1591 in this workflow's own header for what that costs `main`.
+  # bump the version — see `.github/workflows/kit-published-coherence.yml`'s header on #1581/#1591
+  # for what that costs `main` when the row lands without it.

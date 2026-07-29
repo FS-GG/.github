@@ -539,7 +539,7 @@ expect_silent "14h a tree without the tool is not a tree with a finding" \
 H_BOTHBAD="$WORK/hook-both-dangling"; make_hook_tree "$H_BOTHBAD"
 rm -rf "$H_BOTHBAD/.claude/skills" "$H_BOTHBAD/.agents/skills"
 ln -s ../nowhere "$H_BOTHBAD/.claude/skills"; ln -s ../nowhere "$H_BOTHBAD/.agents/skills"
-expect "14i neither root readable is LOUD, and names that rather than guessing a class" 2 "could be read as the expected skill set" \
+expect "14i neither root readable is LOUD, and names that rather than guessing a class" 2 "it names no class for them" \
   -- env CLAUDE_PROJECT_DIR="$H_BOTHBAD" bash "$HOOK"
 
 # ANTI-VACUITY FOR 14c: the deleted guard, reconstructed, over 14c's own tree.
@@ -563,18 +563,37 @@ expect_silent "14j the DELETED -d guard is silent over 14c's tree — so 14c is 
 # one bought silence — this item's own defect (a test that cannot tell two things apart) one layer
 # down, in the single place where a false positive buys quiet. Declared root names are the subject
 # here, so the leg declares one.
+# `Xagents/skills` is DECLARED and never created. The assertion names the ROOT and not just the
+# class, because both candidate roots emit `[absent-root]` and telling two names apart is this leg's
+# entire point — matching the class alone would pass against the bug.
 H_RE="$WORK/hook-regex-canon"; make_hook_tree "$H_RE"
 printf 'Xagents/skills\n.agents/skills\n' > "$H_RE/.agent-skill-roots"
-mkdir -p "$H_RE/Xagents/skills/skill-1"
-printf -- '---\nname: skill-1\n---\nBody.\n' > "$H_RE/Xagents/skills/skill-1/SKILL.md"
-rm -rf "$H_RE/Xagents/skills"
-expect "14k an absent root that merely LOOKS like the excused one is not excused" 1 "[absent-root]" \
+expect "14k an absent root that merely LOOKS like the excused one is not excused" 1 "[absent-root] Xagents/skills" \
   -- env CLAUDE_PROJECT_DIR="$H_RE" bash "$HOOK"
+
+# An untagged exit 2 is NOT automatically a source refusal, and the hook's own sentence about one is
+# a claim it has to earn. An empty roots declaration is a counterexample: the checker stops for a
+# different reason entirely, and asserting "neither root could be read as the expected set" there
+# would be a mechanism nobody measured (.github#1858). This leg asserts the relay AND the silence of
+# that sentence, so a repair that emits it unconditionally reds here.
+H_NOROOTS="$WORK/hook-empty-roots"; make_hook_tree "$H_NOROOTS"
+: > "$H_NOROOTS/.agent-skill-roots"
+leg
+out14l="$(env CLAUDE_PROJECT_DIR="$H_NOROOTS" bash "$HOOK" 2>&1)"; rc14l=$?
+if [ "$rc14l" -eq 0 ]; then
+  bad "14l an empty roots declaration is LOUD, and claims no source refusal — exit $rc14l, want non-zero" "$out14l"
+elif ! printf '%s' "$out14l" | grep -qF -- "declares no roots"; then
+  bad "14l ...it must relay the checker's OWN reason" "$out14l"
+elif printf '%s' "$out14l" | grep -qF -- "it names no class for them"; then
+  bad "14l ...but it claimed a --source refusal that never happened" "$out14l"
+else
+  ok "14l an empty roots declaration is LOUD, and claims no source refusal"
+fi
 
 # =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=54
+EXPECTED_LEGS=55
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 

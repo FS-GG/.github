@@ -65,8 +65,17 @@ DIR="${CLAUDE_PROJECT_DIR:-.}"
 cd "$DIR" || exit 0
 
 # The two declared roots of this repo (.agent-skill-roots). CANON is the checker's `--source` and the
-# dogfood job's; MIRROR is only ever a fallback SOURCE, never a different subject — the root SET
-# still comes from .agent-skill-roots in both runs.
+# dogfood job's; MIRROR is only ever a fallback SOURCE, never a different subject — the root SET the
+# checker RESOLVES AGAINST still comes from .agent-skill-roots in both runs.
+#
+# WHERE THAT STOPS BEING TRUE, SAID PLAINLY. The last-resort silence gate below cannot consult the
+# declared set: it is reached only when the checker refused BOTH of these as a `--source`, which is
+# before it resolves or prints any root. So that one branch reasons over these two names alone, and a
+# THIRD declared root that is present-but-broken while both of these are absent would go quiet — this
+# item's own defect displaced onto a root the hook cannot see. It is latent at two roots and it is
+# NOT closed here: the cause is that `scripts/skill-view` exposes no way to ask for a root's class
+# independently of a readable `--source`, and that file is a `kit:` source whose edit obliges a kit
+# republish. Tracked separately; do not read this comment as a claim that the gate is general.
 CANON=".agents/skills"
 MIRROR=".claude/skills"
 
@@ -98,8 +107,12 @@ fi
 # apart. That is this item's own defect one layer down, in the single place where a false positive
 # buys quiet, so it is settled by removing the pattern rather than by escaping it. The trailing space
 # is load-bearing: it is what stops a LONGER root name from matching a prefix of itself.
-findings="$(printf '%s\n' "$out" | grep -c '^::error::skill-view: \[')"
-excused="$(printf '%s\n' "$out" | grep -cF -- "::error::skill-view: [absent-root] $CANON ")"
+# Both counts are ANCHORED to the start of the line and both are LITERAL. `grep -cF` alone would
+# have matched the excused text mid-line while `findings` matched only at the start — two counts of
+# different shapes compared as if they were the same, which is how the first version of this gate
+# went wrong. awk's `index(...) == 1` is a fixed-string match that is also an anchor.
+findings="$(printf '%s\n' "$out" | awk 'index($0, "::error::skill-view: [") == 1 { n++ } END { print n + 0 }')"
+excused="$(printf '%s\n' "$out" | awk -v s="::error::skill-view: [absent-root] $CANON " 'index($0, s) == 1 { n++ } END { print n + 0 }')"
 
 if [ "$findings" -gt 0 ] && [ "$findings" -eq "$excused" ]; then
   # The one shape the deleted `-d` guard was right about: this tree simply has no view root.
@@ -116,10 +129,15 @@ if [ "$findings" -eq 0 ]; then
   if [ ! -e "$CANON" ] && [ ! -L "$CANON" ] && [ ! -e "$MIRROR" ] && [ ! -L "$MIRROR" ]; then
     exit 0
   fi
-  # Reaching here means at least one root exists and NEITHER could be read as the expected set, so
-  # the checker refused before classifying anything. State that, and do not guess a class for it: an
-  # unnamed cause beats a wrong one (.github#1858).
-  unreadable="Neither $CANON nor $MIRROR could be read as the expected skill set, so the checker refused before classifying either root. At least one of those paths exists and is not a readable skill directory."
+  # An untagged failure is not automatically a source refusal: an empty roots declaration, a
+  # `scripts/skill-view` that will not parse, and two present-but-EMPTY roots all land here too, and
+  # for all three the sentence below would be false. So it is emitted only when the checker's own
+  # refusal text is present, and even then it claims no CLASS for either path — the checker stopped
+  # before classifying, so what is at them is unknown here and saying otherwise would be inventing a
+  # mechanism (.github#1858).
+  if printf '%s\n' "$out" | grep -qF -- "--source is not a directory"; then
+    unreadable="The checker refused BOTH $CANON and $MIRROR as the expected skill set, so it stopped before classifying any root. What is at those two paths is unknown to this hook — it names no class for them."
+  fi
 fi
 
 printf 'skill-view: THIS WORKTREE'\''S AGENT SKILLS ARE NOT ALL VISIBLE (exit %d).\n' "$rc" >&2
