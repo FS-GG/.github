@@ -17,9 +17,11 @@ namespace FS.GG.Coord.Cli
 ///     declared: #563 pinned the fail-open where declaring `registry/repos.yml` marked the obligation
 ///     met while the lock went stale. A declaration cannot prove a digest matches, so it is never asked
 ///     to.
-///   * *Will this worker owe a relock?* — `declaredWarn`, read off the DECLARATION, because at claim
-///     time nothing is edited yet and there is no digest to compare. `staleSources` is silent by
-///     construction on a clean tree, which is exactly why the obligation went unnamed until CI (#509).
+///   * *Which kit obligation did this worker take on?* — `declaredWarn`, read off the DECLARATION,
+///     because at claim time nothing is edited yet and there is no digest to compare. A skill's digest is
+///     its `SKILL.md`, while its other packed files still require a kit republish (#1878). `staleSources`
+///     is silent by construction on a clean tree, which is exactly why the obligation went unnamed until CI
+///     (#509).
 ///
 /// The second is not a re-run of the inference the first replaced: it can only ADD advice, never
 /// suppress it, so it cannot fail open the way its ancestor did. `Kit.declaredSources` carries that
@@ -147,6 +149,30 @@ module KitDigest =
             | Some bytes -> Some((source, mirror), Some bytes, readBytes (skillMd mirror)))
         |> Kit.divergedRoots
 
+    /// The lock deliberately carries only the digest and source: that is enough to check staleness, but not
+    /// enough to say which file a source hashes.  The authored kit rows carry that second fact.  Keep this
+    /// reader deliberately narrow — the roster's kit rows are single-line flow mappings, and an unreadable
+    /// or unknown row is silence rather than advice invented from a directory name (#1878).
+    let private kitKinds (root: string) : Map<string, string> =
+        let roster = Path.Combine(root, "registry", "repos.yml")
+
+        let field name (line: string) =
+            let m = Text.RegularExpressions.Regex.Match(line, $"\\b{name}:\\s*([^,\\s}}]+)")
+            if m.Success then Some m.Groups.[1].Value else None
+
+        if not (File.Exists roster) then
+            Map.empty
+        else
+            try
+                File.ReadLines roster
+                |> Seq.choose (fun line ->
+                    match field "kind" line, field "source" line with
+                    | Some kind, Some source -> Some(source, kind)
+                    | _ -> None)
+                |> Map.ofSeq
+            with _ ->
+                Map.empty
+
     /// OBSERVE the kit-digest obligation and warn on stderr (advisory, never fatal — `repos-registry-selftest`
     /// is the authority). Silent when there is no root or no lock to read.
     let digestWarn () : unit =
@@ -193,7 +219,7 @@ module KitDigest =
                     for source, mirror in roots do
                         eprint $"  cp %s{source}/SKILL.md %s{mirror}/SKILL.md"
 
-    /// Name the relock a worker has just signed up for, off the touch-set they claimed (#509).
+    /// Name the kit obligation a worker has just signed up for, off the touch-set they claimed (#509/#1878).
     ///
     /// **THE READ IS ON THE WIN PATH ONLY, AND THAT IS NOT AN OPTIMISATION.** `claim` is the hottest command
     /// in the org and REST is the budget that dies first under fan-out (#895, measured: core at 0/5,000 while
@@ -223,6 +249,8 @@ module KitDigest =
                     with _ ->
                         []
 
+                let kinds = kitKinds root
+
                 match Reads.issueBody transport ref.Owner ref.Repo ref.Number with
                 | Error _ -> () // an advisory read that failed says nothing, and must not say something
                 | Ok body ->
@@ -250,20 +278,54 @@ module KitDigest =
                         // nobody looked at.
                         | Unreadable _ -> []
 
-                    match Kit.declaredSources lock declared with
+                    let sources =
+                        Kit.declaredSources lock declared
+                        |> List.choose (fun source ->
+                            match Map.tryFind source kinds with
+                            | Some kind -> Some(source, kind)
+                            | None -> None)
+
+                    let isDigestTarget source kind =
+                        kind <> "skill"
+                        || declared
+                           |> List.exists (fun token -> TouchSet.tokensOverlap token (source + "/SKILL.md"))
+
+                    let relock, republish = sources |> List.partition (fun (source, kind) -> isDigestTarget source kind)
+
+                    match sources with
                     | [] -> ()
-                    | sources ->
+                    | _ ->
                         eprint ""
                         eprint "fsgg-coord-engine: KIT DIGEST — the touch-set you just claimed names a content-addressed kit source:"
 
-                        for s in sources do
+                        for s, _ in sources do
                             eprint $"  %s{s}"
 
-                        eprint "If you EDIT it, `registry/repos.lock` goes stale and `repos-registry-selftest` reds `main`"
-                        eprint "(ADR-0019, #469). Before you open the PR:"
-                        eprint "  scripts/repos.sh relock"
-                        eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
-                        eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
-                        eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
+                        match relock with
+                        | [] -> ()
+                        | _ ->
+                            eprint "These declared files are digest targets, so `registry/repos.lock` goes stale and `repos-registry-selftest` reds `main`:"
+
+                            for source, kind in relock do
+                                let target = if kind = "skill" then source + "/SKILL.md" else source
+                                eprint $"  %s{target}"
+
+                            eprint "Before you open the PR:"
+                            eprint "  scripts/repos.sh relock"
+                            eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
+                            eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+                            eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
+
+                        match republish with
+                        | [] -> ()
+                        | _ ->
+                            eprint "These skill-directory files do NOT change `registry/repos.lock` (only `SKILL.md` is digested):"
+
+                            for source, _ in republish do
+                                eprint $"  %s{source}"
+
+                            eprint "Their packed kit manifest still changes: bump `FS.GG.Kit`'s `<Version>` and republish before merging;"
+                            eprint "`kit-published-coherence` reds `main` until the changed kit is published."
+
                         eprint "If you only READ it, ignore this — and give the path back (`widen`), so it stops"
                         eprint "reserving files nobody is editing (#601)."

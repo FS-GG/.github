@@ -380,6 +380,62 @@ module ApplicationServiceTests =
         finally
             Console.SetError stderr
 
+    /// Drive the claim-time advisory against a tiny authored roster.  The lock alone intentionally does
+    /// not say whether a source is a skill directory or a plain client file, so this fixture includes both
+    /// inputs the real engine has and captures the stderr-only operator guidance.
+    let private declaredKitWarning (body: string) : string =
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-1878-" + Guid.NewGuid().ToString "n")
+        let previousRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let stderr = Console.Error
+        use captured = new StringWriter()
+
+        try
+            Directory.CreateDirectory(Path.Combine(root, "registry")) |> ignore
+            File.WriteAllText(
+                Path.Combine(root, "registry", "repos.lock"),
+                "aaaa  .claude/skills/pnext-item\nbbbb  scripts/fsgg-coord\n"
+            )
+            File.WriteAllText(
+                Path.Combine(root, "registry", "repos.yml"),
+                "kit:\n  - { id: pnext-item, kind: skill, source: .claude/skills/pnext-item }\n  - { id: fsgg-coord, kind: client, source: scripts/fsgg-coord }\n"
+            )
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", root)
+            Console.SetError captured
+
+            KitDigest.declaredWarn
+                (world (Map.ofList [ 74, body ]) Map.empty false)
+                { Owner = "FS-GG"
+                  Repo = "FS.GG.SDD"
+                  Number = 74 }
+
+            Console.Error.Flush()
+            captured.ToString()
+        finally
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousRoot)
+
+            try
+                Directory.Delete(root, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``#1878 claim advice separates a skill SKILL.md digest from other packed skill files`` () =
+        let referenceOnly = declaredKitWarning "Paths: .claude/skills/pnext-item/references/command-contracts.md"
+        let skillMd = declaredKitWarning "Paths: .claude/skills/pnext-item/SKILL.md"
+        let client = declaredKitWarning "Paths: scripts/fsgg-coord"
+
+        Assert.Contains("do NOT change `registry/repos.lock`", referenceOnly)
+        Assert.Contains("kit-published-coherence", referenceOnly)
+        Assert.DoesNotContain("scripts/repos.sh relock", referenceOnly)
+
+        Assert.Contains(".claude/skills/pnext-item/SKILL.md", skillMd)
+        Assert.Contains("scripts/repos.sh relock", skillMd)
+        Assert.DoesNotContain("do NOT change `registry/repos.lock`", skillMd)
+
+        Assert.Contains("scripts/fsgg-coord", client)
+        Assert.Contains("scripts/repos.sh relock", client)
+
     let private disjointWorld () =
         world (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) (Map.ofList [ 74, "kite-469" ]) false
 
