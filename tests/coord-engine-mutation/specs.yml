@@ -241,3 +241,24 @@ mutations:
     anchor:
       pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
       produced_by: tests/coord-engine-mutation/leg.sh
+
+  # ===================================================================================================
+  # M11 — #1849's migrated corpus, proved on one of the 26 formerly raw absence conclusions.
+  # ===================================================================================================
+  - id: M11/migrated-refute-has-no-measurement
+    gate: "#1849 refute(): a migrated raw absence leg reports NOT MEASURED when its output disappears"
+    command: ["bash", "tests/coord-engine-mutation/leg.sh"]
+    target: tests/coord-engine-parity/run.sh
+    find: 'l73="$(printf ''%s'' "$err" | grep ''FS.GG.SDD#73'')"'
+    replace: 'l73="" # M11: erase the command output that anchors the migrated #428 refutation'
+    breaks: >-
+      the migrated #428 negative leg receives no batch-member verdict at all. Its forbidden holder text
+      is therefore absent, exactly as it was in the old raw `*) ok` arm, but the new positive anchor
+      cannot match and the leg must report NOT-MEASURED instead of PASS
+    note: >-
+      This mutates the parity fixture rather than engine behavior deliberately: the acceptance property
+      is the harness's third verdict when a command produces no evidence. The mutation leg preserves
+      the parity log's `NOT-MEASURED #428` line and counts it as a fired assertion in its terminal tally.
+    anchor:
+      pattern: 'coord-engine-mutation leg: \d+ passed, \d+ failed'
+      produced_by: tests/coord-engine-mutation/leg.sh

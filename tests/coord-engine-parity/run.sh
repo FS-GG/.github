@@ -32,6 +32,29 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 # over the failure class it exists for.
 unmeasured() { echo "NOT-MEASURED  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; notmeasured=$((notmeasured+1)); }
 
+# A refutation earns its PASS only after a positive anchor proves the command produced one of its
+# possible verdicts. The optional rc/output pair lets every fixture use the same guard; callers that
+# omit it use the OIP helper's globals.
+refute() {  # refute <label> <must-not-contain-ERE> <must-contain-ERE> [rc] [output]
+  local label="$1" forbidden="$2" anchor="$3"
+  local measured_rc="${4:-${OIP_RC:-99}}" measured_out="${5-${OIP_OUT:-}}"
+  if [ "$measured_rc" = 99 ]; then
+    unmeasured "$label — FIXTURE DID NOT RUN, SO NOTHING WAS MEASURED (#1815)" "$measured_out"; return
+  fi
+  if ! printf '%s' "$measured_out" | grep -Eq "$anchor"; then
+    unmeasured "$label — the command matched no /$anchor/, so it reached no verdict and the refutation is VACUOUS (#1815/#1825)" "$measured_out"; return
+  fi
+  if printf '%s' "$measured_out" | grep -Eq "$forbidden"; then
+    bad "$label" "$measured_out"
+  else
+    ok "$label"
+  fi
+}
+
+# CENSUS (.github#1849): 34 absence conclusions now use `refute` (the original 6, all 26
+# pre-existing absence-shaped raw `*) ok` arms, and two adjacent pipeline-shaped absences). Two raw
+# `*) ok` arms remain, and both are positive presence conclusions; zero absence-shaped raw arms remain.
+
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
 SRV_OUT="$(mktemp)"; CACHE="$(mktemp -d)"
@@ -143,10 +166,8 @@ fi
 printf '%s' "$l71" | grep -q 'finch-a3f' \
   && ok "#428: the live-claim overlap names the HOLDER (finch-a3f) — the fact a batch-member line has not got" \
   || bad "#428: live-claim overlap names its holder" "$l71"
-case "$l73" in
-  *finch-a3f*|*"held by"*) bad "#428: a batch-member line must NOT name a worker/holder — it is not a live claim" "$l73" ;;
-  *) ok "#428: the batch-member overlap names a peer item, not a worker — the two lines cannot be confused" ;;
-esac
+refute "#428: the batch-member overlap names a peer item, not a worker — the two lines cannot be confused" \
+       "finch-a3f|held by" 'FS\.GG\.SDD#73.*batch member' 0 "$l73"
 
 # ---- next: the first schedulable item ------------------------------------------------------------
 nxt="$("$ENGINE" next --repo FS.GG.SDD 2>/dev/null)"
@@ -218,10 +239,8 @@ if [ -n "$MALPORT" ]; then
   [ "$rcw" -ne 0 ] \
     && ok "#461: who over an unreadable claim marker FAILS CLOSED (non-zero)" \
     || bad "#461: who must fail closed on a malformed marker read" "rc=$rcw: $who461"
-  case "$who461" in
-    *"nothing is in flight"*) bad "#461: who must NOT report 'nothing is in flight' off a failed scan" "$who461" ;;
-    *) ok "#461: ...and does NOT report 'nothing is in flight' — a failed read is not an empty one" ;;
-  esac
+  refute "#461: ...and does NOT report 'nothing is in flight' — a failed read is not an empty one" \
+         "nothing is in flight" 'malformed|not JSON|FAILED READ|nothing is in flight' "$rcw" "$who461"
   printf '%s' "$who461" | grep -qi 'malformed\|not JSON\|FAILED READ' \
     && ok "#461: ...and NAMES the unreadable read, rather than swallowing it" \
     || bad "#461: who must name the failed read" "$who461"
@@ -230,10 +249,8 @@ if [ -n "$MALPORT" ]; then
   [ "$rct" -ne 0 ] \
     && ok "#461: take REFUSES to schedule off an unreadable claim set (non-zero)" \
     || bad "#461: take must fail closed on a malformed marker read" "rc=$rct: $take461"
-  case "$take461" in
-    *"claimed "*) bad "#461: ...and claims NOTHING — no double-book" "$take461" ;;
-    *) ok "#461: ...and claims NOTHING — no double-book" ;;
-  esac
+  refute "#461: ...and claims NOTHING — no double-book" \
+         "claimed " 'malformed|not JSON|FAILED READ|claimed ' "$rct" "$take461"
   # #584: #461's fix guarded the CANDIDATE read; the sibling defect was the IN-FLIGHT claim read one
   # variable over, where a transient failure made a LIVE claim INVISIBLE and the scheduler handed out an
   # item overlapping it (the double-book with no marker to see). In the engine there is no missed call
@@ -1809,14 +1826,12 @@ else
          FSGG_COORD_SCAN_TTL_SEC=0 "$ENGINE" "$@" ); }
 
   # (1) A bare worker command takes the checkout's repo — and ONLY that repo.
-  n_sdd="$(scoped "$CO/sdd" next 2>/dev/null)"
+  n_sdd="$(scoped "$CO/sdd" next 2>/dev/null)"; n_sdd_rc=$?
   [ "$n_sdd" = "FS.GG.SDD#127" ] \
     && ok "#480: a bare 'next' from an FS.GG.SDD checkout picks THAT repo's item (FS.GG.SDD#127)" \
     || bad "#480: bare next scopes to the checkout" "expected FS.GG.SDD#127, got: $n_sdd"
-  case "$n_sdd" in
-    *Templates*|*Game*) bad "#480: a bare SDD-checkout next must not reach another repo" "$n_sdd" ;;
-    *) ok "#480: ...and never reaches into Templates or Game — the org-wide default is gone" ;;
-  esac
+  refute "#480: ...and never reaches into Templates or Game — the org-wide default is gone" \
+         'Templates|Game' 'FS\.GG\.(SDD|Templates|Game)#[0-9]+' "$n_sdd_rc" "$n_sdd"
 
   # (2) An explicit --repo SPELLS OUT the scope and wins over the checkout — and a registry short-id
   #     (`templates`) resolves to the repo name board rows carry, exactly as bash's resolve_repo maps it.
@@ -2021,14 +2036,13 @@ if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
   # 2. THE #446 POSTER CHILD. `game` is one of the two short-ids resolve_repo once let fall through to the
   #    literal token (#381), so `issues game` asked for `repos/FS-GG/game` and 404'd. It must resolve to
   #    FS-GG/FS.GG.Game, and the bare `FS-GG/game` must NEVER reach the fixture.
-  iss game >/dev/null
+  iss game >/dev/null; iss_game_rc=$?
   [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Game" ] \
     && ok "#446: 'issues game' resolves to FS-GG/FS.GG.Game (the short-id that once 404'd as repos/FS-GG/game)" \
     || bad "#446: issues game must resolve, not 404" "requested: $(isslast '.nwo')"
-  case " $(issnwos) " in
-    *" FS-GG/game "*) bad "#446: the bare short-id must NEVER reach GitHub unresolved" "saw FS-GG/game" ;;
-    *) ok "#446: ...and 'FS-GG/game' NEVER reaches the fixture — the 404 (and the gh-issue-list fallback) is gone" ;;
-  esac
+  iss_seen="$(issnwos)"
+  refute "#446: ...and 'FS-GG/game' NEVER reaches the fixture — the 404 (and the gh-issue-list fallback) is gone" \
+         'FS-GG/game' 'FS-GG/(FS\.GG\.Game|game)' "$iss_game_rc" "$iss_seen"
 
   # 3. An EXPLICIT owner/repo is authoritative — split and passed through untouched, never re-resolved.
   iss FS-GG/FS.GG.Game >/dev/null
@@ -2298,9 +2312,9 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths #430 fixture bound a port"; else
   #       bash's bug was reading `gh repo view`'s empty result (a spent GraphQL call that had FAILED, its
   #       reason `2>/dev/null || true`-d away) as "not inside a checkout". The engine reads `git config` —
   #       offline, free — so a dead budget can never be misreported as a checkout problem: no /graphql.
-  grep -q 'POST /graphql' "$VP_REQLOG" \
-    && bad "#430: resolving the repo must spend NO GraphQL" "spent a /graphql call: $(cat "$VP_REQLOG")" \
-    || ok "#430: ...and resolved the repo with NO GraphQL — a dead budget can never be blamed on the checkout (case 23)"
+  vp_requests="$(cat "$VP_REQLOG")"
+  refute "#430: ...and resolved the repo with NO GraphQL — a dead budget can never be blamed on the checkout (case 23)" \
+         'POST /graphql' 'GET /repos/.*/pulls/7|POST /graphql' "$r7rc" "$vp_requests"
 
   # (b) No remote AND no flag: there is no subject to check, so it REFUSES — an EARNED refusal, since
   #     `git config` failing is not a rate limit dressed up as one (the engine never spends budget to
@@ -2312,10 +2326,8 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths #430 fixture bound a port"; else
       && printf '%s' "$nr" | grep -q -- '--repo FS-GG/<repo>'; } \
     && ok "#430: no remote + no flag REFUSES with the earned 'not inside a checkout' + the --repo remedy (case 23)" \
     || bad "#430 no-remote refusal parity" "rc=$nrrc: $nr"
-  case "$nr" in
-    *"FSGG-PATHS"*) bad "#430: a refusal is NOT a verdict" "printed a verdict with no subject: $nr" ;;
-    *) ok "#430: ...and reaches NO FSGG-PATHS verdict — a repo it could not name is a subject it never looked at (case 23)" ;;
-  esac
+  refute "#430: ...and reaches NO FSGG-PATHS verdict — a repo it could not name is a subject it never looked at (case 23)" \
+         'FSGG-PATHS' 'not inside a GitHub checkout|FSGG-PATHS' "$nrrc" "$nr"
   kill "$VP_SRV" 2>/dev/null
 fi
 rm -f "$VP_REQLOG"; rm -rf "$VP_CO"
@@ -2338,10 +2350,8 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths closing-ref fixture bound a port"; 
   printf '%s' "$x11" | grep -q 'FS.GG.Rendering#70' \
     && ok "verify-paths: ...and names the other repo it would have straddled (case 24)" \
     || bad "cross-repo closing-ref must name the other repo" "$x11"
-  case "$x11" in
-    *"FSGG-PATHS OK"*|*"FSGG-PATHS DRIFT"*) bad "verify-paths: a cross-repo close reaches NO verdict" "printed a verdict across the boundary: $x11" ;;
-    *) ok "verify-paths: ...reaching no OK/DRIFT across the repo boundary (case 24)" ;;
-  esac
+  refute "verify-paths: ...reaching no OK/DRIFT across the repo boundary (case 24)" \
+         'FSGG-PATHS (OK|DRIFT)' 'FSGG-PATHS (SKIP|OK|DRIFT)' "$x11rc" "$x11"
   x9="$(vpx --pr 9 --repo FS.GG.SDD)"
   printf '%s' "$x9" | grep -q 'FSGG-PATHS SKIP' \
     && ok "verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)" \
@@ -2662,7 +2672,7 @@ rm -f "$LINT_OUT"
 if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   lt() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LINT_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
              FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint "$@"; }
-  ljson="$(lt --json 2>/dev/null)"
+  ljson="$(lt --json 2>/dev/null)"; ljson_rc=$?
   nts() { jq -r "[.[] | select(.code==\"NO-TOUCH-SET\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$ljson"; }
 
   # SEVERITY-UNSET is accumulated from the scanned board, not just tested as a pure verdict.
@@ -2687,16 +2697,17 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
                    *)     bad "case14: a fenced-only Paths: must still be NO-TOUCH-SET" "$(nts)" ;; esac
 
   # The negatives — the rule must NOT fire on any of these, or a gate always-red is a gate nobody reads.
-  case "$(nts)" in *400*) bad "case14: must NOT fire on an epic declaring 'Paths: none'" "$(nts)" ;;
-                   *)     ok "case14: 'Paths: none' suppresses NO-TOUCH-SET — the sentinel is the whole point" ;; esac
-  case "$(nts)" in *422*) bad "case14: must NOT fire on a decision item declaring 'Paths: none'" "$(nts)" ;;
-                   *)     ok "case14: a decision item declaring 'Paths: none' is clean" ;; esac
-  case "$(nts)" in *407*) bad "case14: must NOT fire on an item with a real Paths: line" "$(nts)" ;;
-                   *)     ok "case14: an item with a real touch-set is clean" ;; esac
-  case "$(nts)" in *423*) bad "case14: must NOT fire on an In progress item" "$(nts)" ;;
-                   *)     ok "case14: NO-TOUCH-SET is scoped to Ready/Backlog — not items in flight" ;; esac
-  case "$(nts)" in *424*) bad "case14: must NOT fire on a CLOSED issue" "$(nts)" ;;
-                   *)     ok "case14: NO-TOUCH-SET does not fire on a closed issue" ;; esac
+  nts_out="$(nts)"
+  refute "case14: 'Paths: none' suppresses NO-TOUCH-SET — the sentinel is the whole point" \
+         'FS\.GG\.SDD#400' 'FS\.GG\.SDD#(400|420)' "$ljson_rc" "$nts_out"
+  refute "case14: a decision item declaring 'Paths: none' is clean" \
+         'FS\.GG\.SDD#422' 'FS\.GG\.SDD#(422|420)' "$ljson_rc" "$nts_out"
+  refute "case14: an item with a real touch-set is clean" \
+         'FS\.GG\.SDD#407' 'FS\.GG\.SDD#(407|420)' "$ljson_rc" "$nts_out"
+  refute "case14: NO-TOUCH-SET is scoped to Ready/Backlog — not items in flight" \
+         'FS\.GG\.SDD#423' 'FS\.GG\.SDD#(423|420)' "$ljson_rc" "$nts_out"
+  refute "case14: NO-TOUCH-SET does not fire on a closed issue" \
+         'FS\.GG\.SDD#424' 'FS\.GG\.SDD#(424|420)' "$ljson_rc" "$nts_out"
 
   # BAD-TOUCH-SET (#496, reopened for the unmatchable case): a declared touch-set the scheduler cannot use
   # is just as dead. #430 declares only `**/only-unmatchable` (ALL unmatchable); #431 declares a real subtree
@@ -2769,12 +2780,13 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
     || bad "#1588: CLASS-UNSET must fire on exactly 400,407,420,421,422,430,431" "$(cus)"
 
   # The three derivations, as NEGATIVES — the half that proves the rule is not simply always-red.
-  case "$(cus)" in *432*) bad "#1588: an explicit 'Class: hardening' body line must suppress CLASS-UNSET" "$(cus)" ;;
-                   *)     ok "#1588: an explicit 'Class:' body line is a declaration — CLASS-UNSET is silent" ;; esac
-  case "$(cus)" in *433*) bad "#1588: a '[decision]' TITLE prefix must derive a class (AC3)" "$(cus)" ;;
-                   *)     ok "#1588: a '[decision]' title prefix derives 'decision' with no body line (AC3)" ;; esac
-  case "$(cus)" in *434*) bad "#1588: ADR-0045's 'Blocked on: human/decision' must derive a class (AC5)" "$(cus)" ;;
-                   *)     ok "#1588: ADR-0045's human/decision sentinel derives 'decision' — no second line (AC5)" ;; esac
+  cus_out="$(cus)"
+  refute "#1588: an explicit 'Class:' body line is a declaration — CLASS-UNSET is silent" \
+         'FS\.GG\.SDD#432' 'FS\.GG\.SDD#(432|420)' "$ljson_rc" "$cus_out"
+  refute "#1588: a '[decision]' title prefix derives 'decision' with no body line (AC3)" \
+         'FS\.GG\.SDD#433' 'FS\.GG\.SDD#(433|420)' "$ljson_rc" "$cus_out"
+  refute "#1588: ADR-0045's human/decision sentinel derives 'decision' — no second line (AC5)" \
+         'FS\.GG\.SDD#434' 'FS\.GG\.SDD#(434|420)' "$ljson_rc" "$cus_out"
 
   # AC3's refusal, and the one worth stating loudest: an unknown word is NOT a declaration. If `Class: bug`
   # resolved to the nearest of three, #435 would go clean and look triaged — a guess carrying a parser's
@@ -2788,9 +2800,8 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   # and `FS.GG.SDD#747` (`Class: enhancement`) were both told their text records no `Class:` over a body
   # that had one, and both had to be corrected by hand after a human read the body.
   d435="$(jq -r '.[] | select(.code=="CLASS-INVALID" and (.id|test("435"))) | .detail' <<<"$ljson")"
-  printf '%s' "$d435" | grep -q 'records no `Class:`' \
-    && bad "#1651: a row that DID write a Class: line must never be told it records none" "$d435" \
-    || ok "#1651: the invalid-value diagnostic does not claim the row records no Class: line"
+  refute "#1651: the invalid-value diagnostic does not claim the row records no Class: line" \
+         'records no `Class:`' '"bug"|records no `Class:`' "$ljson_rc" "$d435"
 
   # AC3: quote the offending value back AND list the legal set. Both measured authors believed they were
   # classing the row correctly, so "invalid" alone sends them to the ADR to find out what was wanted.
@@ -2801,8 +2812,9 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   # AC4: a case/whitespace variant of a legal value is ACCEPTED — ADR-0066's "value normalised for case
   # and space", which is `Types.itemClassOfWireName`, which is the same normalisation `reconcile` reads the
   # board column back with. #436 must be clean of BOTH class codes.
-  case "$(cus),$(civ)" in *436*) bad "#1651 AC4: 'Class:   Defect  ' is a legal declaration" "$(cus) / $(civ)" ;;
-                          *)     ok "#1651 AC4: a case/whitespace variant of a legal value is ACCEPTED" ;; esac
+  class_findings="$(cus),$(civ)"
+  refute "#1651 AC4: a case/whitespace variant of a legal value is ACCEPTED" \
+         'FS\.GG\.SDD#436' 'FS\.GG\.SDD#(436|420)' "$ljson_rc" "$class_findings"
 
   # Both codes are ERRORS, not notes: untriaged severity is exactly as invisible as an untriaged status,
   # and a note would not fail the gate that makes anybody fix it.
@@ -3114,10 +3126,8 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   p96="$(dp 'FS.GG.SDD#96' --pr 97 --flip --worker w-dp)"; rc96=$?
   printf '%s' "$p96" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#96' \
     && ok "case14: --pr REFUSES a PR that only MENTIONS the issue (#543)" || bad "case14: #96 --pr should refuse" "$p96"
-  case "$p96" in
-    *FSGG-DONE*) bad "case14: --pr must not be an override of PROVENANCE (#543)" "$p96" ;;
-    *) ok "case14: --pr overrides WHICH pr, never WHETHER it closed the issue (#543)" ;;
-  esac
+  refute "case14: --pr overrides WHICH pr, never WHETHER it closed the issue (#543)" \
+         'FSGG-DONE' 'FSGG-(NOT-)?DONE +FS\.GG\.SDD#96' "$rc96" "$p96"
   [ "$rc96" -ne 0 ] \
     && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #96 non-zero exit" "rc=$rc96"
 
@@ -3205,10 +3215,8 @@ if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
   oa="$(ov 'FS.GG.SDD#401' --active)"; oarc=$?
   printf '%s' "$oa" | grep -q 'DISJOINT' \
     && ok "case34: overlap --active — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 --active should be DISJOINT" "$oa"
-  case "$oa" in
-    *OVERLAP*|*Rendering*|*402*) bad "case34: overlap --active must never invent a cross-repo overlap (#353)" "$oa" ;;
-    *) ok "case34: overlap --active names no cross-repo holder (#353)" ;;
-  esac
+  refute "case34: overlap --active names no cross-repo holder (#353)" \
+         'OVERLAP|Rendering|402' 'FS\.GG\.SDD#401' "$oarc" "$oa"
   [ "$oarc" -eq 0 ] \
     && ok "case34: overlap --active exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: 401 --active exit 0" "rc=$oarc"
 
@@ -3216,10 +3224,8 @@ if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
   op="$(ov 'FS.GG.SDD#401' 'FS-GG/FS.GG.Rendering#402')"; oprc=$?
   printf '%s' "$op" | grep -q 'different repos' \
     && ok "case34: overlap a b — different repos are DISJOINT even on a same-named token (#353)" || bad "case34: cross-repo pair" "$op"
-  case "$op" in
-    *OVERLAP*) bad "case34: overlap a b must never invent a cross-repo overlap (#353)" "$op" ;;
-    *) ok "case34: overlap a b names no cross-repo collision (#353)" ;;
-  esac
+  refute "case34: overlap a b names no cross-repo collision (#353)" \
+         'OVERLAP' 'FS\.GG\.SDD#401|FS\.GG\.Rendering#402' "$oprc" "$op"
   [ "$oprc" -eq 0 ] \
     && ok "case34: overlap a b exits 0 for a cross-repo pair (#353)" || bad "case34: cross-repo pair exit 0" "rc=$oprc"
 
@@ -3265,16 +3271,12 @@ if [ -z "$OVK_PORT" ]; then bad "overlap fail-closed fixture bound a port"; else
   printf '%s' "$ovk" | grep -q 'refusing to schedule' \
     && ok "case24(k): a failed touch-set read refuses to schedule against an unknown touch-set" \
     || bad "case24(k): failed read must refuse to schedule" "$ovk"
-  case "$ovk" in
-    *"no 'Paths:' touch-set declared"*|*"declared nothing"*)
-      bad "case24(k): a failed read must NOT be diagnosed as 'the issue declared nothing'" "$ovk" ;;
-    *) ok "case24(k): a failed read is not mis-diagnosed as an empty declaration (#266 fail-open avoided)" ;;
-  esac
+  refute "case24(k): a failed read is not mis-diagnosed as an empty declaration (#266 fail-open avoided)" \
+         "no 'Paths:' touch-set declared|declared nothing" \
+         "refusing to schedule|no 'Paths:' touch-set declared|declared nothing" 0 "$ovk"
   # ...and it never fell through to a DISJOINT — the fail-OPEN that hands out the overlapping tree.
-  case "$ovk" in
-    *DISJOINT*) bad "case24(k): a failed read must never read as DISJOINT (the fail-open double-book)" "$ovk" ;;
-    *) ok "case24(k): a failed read never reads as DISJOINT (fails closed, not open)" ;;
-  esac
+  refute "case24(k): a failed read never reads as DISJOINT (fails closed, not open)" \
+         'DISJOINT' 'refusing to schedule|DISJOINT' 0 "$ovk"
   kill "$OVK_SRV" 2>/dev/null
 fi
 
@@ -3345,19 +3347,6 @@ oip() {  # oip <env-assignments...> -- <engine args...>
 # alternative can only match when the guard is present, and the ref-produced one covers precisely the
 # mutant case where it is gone — so between them one always matches a real verdict, and neither matches a
 # transport failure or an empty output.
-refute() {  # refute <label> <must-not-contain> <must-contain-ERE>
-  if [ "${OIP_RC:-99}" = 99 ]; then
-    unmeasured "$1 — FIXTURE DID NOT RUN, SO NOTHING WAS MEASURED (#1815)" "$OIP_OUT"; return
-  fi
-  if ! printf '%s' "$OIP_OUT" | grep -Eq "$3"; then
-    unmeasured "$1 — the command matched no /$3/, so it reached no verdict and the refutation is VACUOUS (#1815/#1825)" "$OIP_OUT"; return
-  fi
-  case "$OIP_OUT" in
-    *"$2"*) bad "$1" "$OIP_OUT" ;;
-    *) ok "$1" ;;
-  esac
-}
-
 # ---- PAGINATION: the answer LIVES ON PAGE TWO ------------------------------------------------------
 # `Reads.fsi` has promised "PAGINATED, AND UNCONDITIONAL" all along, and `Transport.Send` kept it — but no
 # fixture ever served this route a `Link` header, so the merge that keeps the promise was never run for
@@ -3519,10 +3508,8 @@ if [ -z "$WN_PORT" ]; then bad "widen-notify fixture bound a port"; else
     && ok "case34: widen lands the re-declaration (#353)" || bad "case34: widen should land" "$wx"
   printf '%s' "$wx" | grep -q 'DISJOINT' \
     && ok "case34: widen — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 cross-repo widen DISJOINT" "$wx"
-  case "$wx" in
-    *OVERLAP*|*Rendering*|*402*|*render-x1*) bad "case34: widen must never invent a cross-repo overlap (#353)" "$wx" ;;
-    *) ok "case34: widen names no cross-repo holder (#353)" ;;
-  esac
+  refute "case34: widen names no cross-repo holder (#353)" \
+         'OVERLAP|Rendering|402|render-x1' 'FS\.GG\.SDD#401' "$wxrc" "$wx"
   [ "$wxrc" -eq 0 ] \
     && ok "case34: widen exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: cross-repo widen exit 0" "rc=$wxrc"
   # ...and it left the innocent cross-repo bystander UNCOMMENTED (the corpus's before/after count check).
@@ -4123,11 +4110,8 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
   printf '%s' "$rerp" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
     && ok "#697: ...and names \`adopt\` as the remedy (case 30)" \
     || bad "#697: reap #970 names adopt" "$rerp"
-  case "$rerp" in
-    *"close it, then reap"*)
-      bad "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun" "$rerp" ;;
-    *) ok "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)" ;;
-  esac
+  refute "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)" \
+         'close it, then reap' 'REFUSING to reap FS\.GG\.SDD#970|close it, then reap' 0 "$rerp"
 
   # 4. A MERGEABLE PR WHOSE CHECKS ARE STILL RUNNING is not abandoned — `reap` must refuse it too, and must
   #    NOT tell anyone to close it: "Not green YET" is not "not green" (case 30, #697 4e's reap leg).
@@ -4767,10 +4751,8 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
   printf '%s' "$ADV_OUT" | grep -q 'marker vanished' \
     && ok "case24(i): ...it says the marker vanished" \
     || bad "case24(i): refusal must say the marker vanished" "$ADV_OUT"
-  case "$ADV_OUT" in
-    *"claimed FS.GG.SDD#92"*) bad "case24(i): must not announce a lock it cannot show" "$ADV_OUT" ;;
-    *) ok "case24(i): ...and it does NOT announce a lock it cannot show" ;;
-  esac
+  refute "case24(i): ...and it does NOT announce a lock it cannot show" \
+         'claimed FS\.GG\.SDD#92' 'marker vanished|claimed FS\.GG\.SDD#92' "$ADV_RC" "$ADV_OUT"
 
   # The workers whose claim markers sit on an issue right now — the `worker=` of every LIVE marker the
   # /comments read serves back (the fixture reflects the DELETEs, so a collected stale marker is gone).
@@ -4801,10 +4783,8 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
     && ok "case24(b): a worker whose OWN marker went stale ends with ONE marker (a renew, not a duplicate)" \
     || bad "case24(b): a self-renew must leave exactly one marker" "rc=$ADV_RC workers: $(adv_workers_on 85)"
   # Renewing your OWN stale marker is not an eviction to announce — you do not message yourself.
-  case "$ADV_OUT" in
-    *"collected worker 'otter-b55'"*) bad "case24(b): a self-renew must not announce collecting itself" "$ADV_OUT" ;;
-    *) ok "case24(b): ...and it does NOT announce collecting its own marker (no self-eviction)" ;;
-  esac
+  refute "case24(b): ...and it does NOT announce collecting its own marker (no self-eviction)" \
+         "collected worker 'otter-b55'" "claimed FS\\.GG\\.SDD#85|collected worker 'otter-b55'" "$ADV_RC" "$ADV_OUT"
 
   # (l) Two claimants collecting the SAME expired marker: the loser's collect DELETE 404s because the winner
   #     already removed it. "Already gone" is the goal state of a collector, so the claim still WINS. #95's
@@ -5140,11 +5120,9 @@ if [ -z "$ARGV_PORT" ]; then bad "argv fixture bound a port"; else
     || bad "#497: the fixture set must EXCEED 131072 bytes or it tests nothing" "$fatbytes"
   # The scan READS it. Pre-fix bash died with `Argument list too long` / `invalid JSON text` / #461's
   # `cannot read the claim set`; the engine never touches argv, so none of those can appear.
-  case "$fatwho" in
-    *"cannot read the claim set"*|*"Argument list too long"*|*"--argjson"*)
-      bad "#497: a claim set over the arg cap must still be READ, not die (case 43)" "$fatwho" ;;
-    *) ok "#497: a claim set over the arg cap is still READ, not died (structurally absent in the engine) (case 43)" ;;
-  esac
+  refute "#497: a claim set over the arg cap is still READ, not died (structurally absent in the engine) (case 43)" \
+         'cannot read the claim set|Argument list too long|--argjson' \
+         '"number"[[:space:]]*:[[:space:]]*530|cannot read the claim set|Argument list too long|--argjson' 0 "$fatwho"
   [ "$(printf '%s' "$fatwho" | jq -r '.[] | select(.number==530) | .worker' 2>/dev/null)" = "kite-497" ] \
     && ok "#497: ...and the claim inside that oversized set is reported, with its holder (case 43)" \
     || bad "#497: the claim in the oversized set must be reported" "$fatwho"
