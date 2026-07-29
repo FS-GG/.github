@@ -113,13 +113,10 @@ KIT_ROSTER = "registry/repos.yml"
 # `edc8404b` staled the manifest and no workflow asked, the second when #1605 repaired it and the
 # gate it repaired never ran.
 #
-# RULE (c) CANNOT READ THIS TODAY, AND SAYING SO IS THE POINT. `named_scripts()` links a workflow to
-# a gate script only when the filter names a path ending in `.py`; this emitter is extensionless (so
-# is `scripts/fsgg-skill-registry-check`), so the linkage never forms and a declaration nobody reads
-# is worse than none. `tests/skill-registry/run.sh` therefore reads it — with the gate's OWN
-# `declared_subject()` and `selects()`, so there is still exactly one reader of this shape — and the
-# `.py`-suffix blind spot is `.github#1639`. When that lands, rule (c) picks this up for free and the
-# fixture leg becomes redundant rather than wrong.
+# Rule (c) reads this declaration structurally. #1639 taught `named_scripts()` that an extensionless
+# executable with a Python shebang is a Python gate script, so every workflow filter naming this
+# emitter exactly must cover this composed surface. `tests/skill-registry/run.sh` keeps its narrower
+# historical `edc8404b` regression even though the general trigger-set linkage now lives in rule (c).
 PATHS_SUBJECT = SKILL_ROOTS + (TRIGGER_FIXTURES, KIT_ROSTER, MANIFEST_PATH, KIT_MANIFEST_PATH)
 
 # The `.github`-authored non-kit skills this repo emits into registry/skills.yml — two scopes:

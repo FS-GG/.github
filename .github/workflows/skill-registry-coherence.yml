@@ -45,9 +45,9 @@ name: skill-registry-coherence
 # The list is not maintained by memory. `scripts/generate-driver-manifest` declares its surface as
 # `PATHS_SUBJECT`, and `tests/skill-registry/run.sh` asserts that BOTH copies below select every
 # entry of it — so widening what the emitter walks reds this filter until it is widened to match.
-# That assertion lives in the fixture rather than in `check-paths-coherence.py`'s rule (c), which
-# would be its natural home and cannot reach: `named_scripts()` requires a `.py` suffix, and this
-# emitter — like `scripts/fsgg-skill-registry-check` beside it — has none. That is `.github#1639`.
+# #1639 made `check-paths-coherence.py` rule (c) recognize extensionless Python gates by shebang, so
+# that general linkage now guards this filter too. The fixture retains its historical `edc8404b`
+# regression, which is narrower than rule (c)'s declaration-level guarantee.
 on:
   pull_request:
     paths:

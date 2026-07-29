@@ -612,6 +612,29 @@ wf "$RC2/.github/workflows/w.yml" '      - "docs/**"
       - "scripts/check-x.py"'
 expect "...and covering the declared surface satisfies the rule" 0 "ok:" "$RC2"
 
+# EXTENSIONLESS PYTHON IS STILL A GATE SCRIPT (#1639). The executable declaration is the shebang,
+# not the fact that arbitrary text can happen to parse as Python. This pair pins both halves: the
+# extensionless/shebang form attaches and finds the omission, while the same valid Python without a
+# shebang remains outside rule (c).
+RC2a="$(root "$WORK/subject-extensionless-python")"
+gate "$RC2a" "scripts/check-x" '("docs", "src")'
+mkdir -p "$RC2a/docs" "$RC2a/src"
+wf "$RC2a/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x"' '      - "docs/**"
+      - "scripts/check-x"'
+expect "an extensionless PYTHON-SHEBANG gate attaches to rule (c)" \
+  1 "nothing in the filter selects 'src'" "$RC2a"
+
+RC2b="$(root "$WORK/subject-extensionless-no-shebang")"
+mkdir -p "$RC2b/scripts" "$RC2b/docs" "$RC2b/src"
+printf 'PATHS_SUBJECT = ("docs", "src")\nprint("valid Python, not an executable declaration")\n' \
+  > "$RC2b/scripts/check-x"
+wf "$RC2b/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x"' '      - "docs/**"
+      - "scripts/check-x"'
+expect "a shebang-less extensionless file does NOT attach merely because it parses as Python" \
+  0 "ok:" "$RC2b"
+
 # THE CONSTANT IS COMPOSED, AND THE READER MUST FOLD IT. This is not a convenience: a reader that
 # only took literals would force `PATHS_SUBJECT` to be a RETYPED copy of the surface, free to drift
 # from the constants beside it — #865, the cure reintroducing the disease. Every real declaration in
@@ -818,13 +841,20 @@ fi
 # is graded against — so rule (c) attaches to `retirement-order-coherence.yml` and the census counts it.
 # THE TRIPWIRE FIRED AS DESIGNED — this leg went red on that PR's first CI run, the NINTH time it has
 # caught a surface changing, and again before the workflow reached `main`.
+# 14 -> 18 on 2026-07-29 (#1639): extensionless Python gates now attach structurally through their
+# Python shebang. `scripts/generate-driver-manifest` declares one PATHS_SUBJECT and is named exactly
+# by drivers-package.yml, skill-quality.yml, skill-registry-coherence.yml, and
+# skill-roots-selfcheck.yml, so all FOUR workflow/script surfaces join the census at once. Three
+# filters were widened to cover the declaration; skill-registry-coherence was the already-complete
+# control. This is the first census move caused by fixing the linkage itself rather than adding a
+# declaration.
 # The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
 # that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "14" ]; then
+if [ "${s:-0}" = "18" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 14 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 18 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

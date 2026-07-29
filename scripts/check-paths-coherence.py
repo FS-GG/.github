@@ -611,9 +611,26 @@ def named_scripts(patterns: list[str], root: str) -> list[str]:
         # stays because the two say different things: this states the RULE (only an exact name is a
         # declaration), isfile() asks a question about the disk. Collapsing them would leave the
         # rule resting on a filesystem accident.
-        if "*" in p or "?" in p or not p.endswith(".py"):
+        if "*" in p or "?" in p:
             continue
-        if os.path.isfile(os.path.join(root, p)):
+        path = os.path.join(root, p)
+        if not os.path.isfile(path):
+            continue
+
+        # `.py` is an explicit Python declaration. The repo also has CLI-shaped Python gates with
+        # no extension; for those, the executable declaration is the shebang, just as
+        # `scripts/lint-shell.sh` classifies extensionless shell. Requiring BOTH no extension and a
+        # Python shebang keeps a shebang-less text file that happens to parse as Python out of the
+        # linkage — ast.parse() says only that bytes are syntactically valid, not that the file is a
+        # gate script (#1639).
+        if p.endswith(".py"):
+            out.append(p)
+            continue
+        if os.path.splitext(os.path.basename(p))[1]:
+            continue
+        with open(path, "rb") as f:
+            first = f.readline(256).decode("ascii", errors="ignore")
+        if re.match(r"^#!\s*(?:\S*/)?(?:env\s+)?python(?:[0-9.]+)?(?:\s|$)", first):
             out.append(p)
     return sorted(set(out))
 
