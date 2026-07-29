@@ -114,9 +114,9 @@ name: release-kit
 #   • It CANNOT see whether Renovate ran and chose to do nothing. A push that fires and a Renovate
 #     run that then does nothing are different failures, and only the second is #1768's subject. The
 #     latencies above bound DELIVERY; they say nothing about when the bot woke up.
-#   • The three-of-seven figure is one morning, not a rate. It is enough to refuse the
-#     `repository_dispatch` design and enough to keep #1923 open; it is not a measurement of how
-#     often a receiver is held, which nothing currently trends.
+#   • The three-of-seven figure is one morning, not a rate. It was enough to refuse the
+#     `repository_dispatch` design and establish #1923's dashboard-tick work; it is not a measurement
+#     of how often a receiver is held, which nothing currently trends.
 #
 # THE CREDENTIAL IS NOT WHAT BLOCKS ANY OF THIS (#1776 AC3). The `fs-gg-cross-repo-dispatch` App and
 # its org secrets were provisioned by .github#21, which is closed, and four workflows in this repo
