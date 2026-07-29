@@ -777,13 +777,14 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > **§9's SEQUENCE HAS TERMINATED, 2026-07-29 ([#1676](https://github.com/FS-GG/.github/issues/1676)).**
 > Build the view and the absence check — done, `#1635`. Run it alongside unchanged and **port** the
 > fixtures — done, `#1674`, 8/8 AGREE. Retire per repo — done, and the receiver count lives in
-> [the retirement order](../coordination/skill-apparatus-retirement-order.md) §4, **not here**. Freshness
-> sweep last — **reached, and DECLINED**.
+> [the retirement order](../coordination/skill-apparatus-retirement-order.md) §4, **not in this block**.
+> Freshness sweep last — **reached, and DECLINED**.
 >
-> **The stage this order has reached lives in that document's §6 standing stage verdict and nowhere
-> else, including here.** This block records that the sequence ended; it deliberately restates neither
-> the receiver count nor the stage. Four separate blocks answering *"has stage 2 started?"* is how that
-> document went stale a fifth time.
+> **This is a DATED RECORD of how the sequence ended, not a running status.** The live answer to
+> *"which stage is the order at?"* lives in that document's §6 standing stage verdict; if it ever
+> disagrees with the sentences below, §6 wins and this block is the history. The distinction matters
+> because four blocks each answering *"has stage 2 started?"* is how that document went stale a fifth
+> time — and an ADR that restates a running status becomes the fifth.
 >
 > **Stage 2 landed** ([#1868](https://github.com/FS-GG/.github/pull/1868), `FS.GG.Kit` 0.19.0) and
 > narrowed the kit's default root properties to one materialized root plus one view root. **The runtime

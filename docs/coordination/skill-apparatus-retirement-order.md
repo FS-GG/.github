@@ -34,8 +34,8 @@ that produced it appears with it.
 > their own answer to *"has stage 2 started?"*, and stage 2 landed while all four said *not started*.
 > Same failure as the count, one axis over. **Do not restate the stage anywhere either.**
 >
-> As of **2026-07-29**: stage 1 complete, **stage 2 LANDED**, **stage 3 reached and DECLINED** into a
-> decision row. §9's sequence has terminated — see §6. Still open are the rows §4, §8 and §9 name.
+> **§6 carries that answer. This block does not, on purpose** — writing it here too is the failure
+> being described, and a pointer cannot go stale. Still open are the rows §4, §8 and §9 name.
 
 ---
 
@@ -973,7 +973,7 @@ sub-resource, never the bare protection endpoint, whose whole-object `PUT` disab
 > | stage | subject | state |
 > |---|---|---|
 > | 0 | unblock (B1–B3) | **complete** |
-> | 1 | per receiver, one at a time | **complete — 7 of 7**, and the count is §4's, not this table's |
+> | 1 | per receiver, one at a time | **complete** — the count is §4's, and deliberately not restated here |
 > | 2 | fleet-wide narrowing of kit materialization and `coordination-coherence`'s skill paths | **LANDED `2026-07-28T22:40:20Z`** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871), `23:04:26Z`) |
 > | 3 | the kit-pin freshness sweep — **last** | **REACHED and DECLINED** — [#1864](https://github.com/FS-GG/.github/issues/1864) holds the decision |
 >
@@ -982,6 +982,12 @@ sub-resource, never the bare protection endpoint, whose whole-object `PUT` disab
 > API's `mergedAt`, in **UTC**, which is what §4 and the rest of this document use. `22:40:20Z` on the
 > 28th *is* `00:40:20+0200` on the 29th. Same instant, two clocks — recorded because a reader
 > reconciling the two records otherwise finds a day of drift and no explanation.
+>
+> **ADR-0065 is NOT edited to match, deliberately** — though it is inside this item's touch-set and
+> could have been. It is a landed record that was accurate on the clock it was written from, and
+> quietly restamping a merged record to fit a later convention destroys the evidence that the drift
+> happened. The reconciliation belongs here, where the two records meet. One clock across all records
+> is a convention worth adopting deliberately, not as a side effect of this item.
 >
 > **"Terminated" is not "everything retired", and the difference is the whole of stage 3.** §9 ordered
 > the sweep last so that the alarm outlived the fire. The order reached it, measured that its subject
@@ -1395,18 +1401,23 @@ retirement was safe to make.** Those are different questions and §7 only ever a
 - Amending ADR-0011 Decision 1, ADR-0014 Decision 5, or ADR-0065's root set. Those are amended **in
   direction only** and stay in force until a change actually lands a mechanism retirement — ADR-0067 §9,
   and `#1676` AC 5. **This document amends none of them**, and never did.
-  > **The sentence here used to read *"no such change has landed"*, and it stopped being true on
-  > 2026-07-28.** Two did. Neither is a mechanism retirement and neither touched ADR-0011 Decision 1 or
-  > ADR-0014 Decision 5, so the prohibition above is unchanged — but the *reason* given for it was a
-  > fact with a shelf life, and it expired:
-  > - **§5's root-set flip** ([#1636](https://github.com/FS-GG/.github/issues/1636)) executed on
-  >   2026-07-28; ADR-0065 carries the `EXECUTED` marker and was amended in that same change.
-  > - **Stage 2** ([#1868](https://github.com/FS-GG/.github/pull/1868)) narrowed defaults at
-  >   `2026-07-28T22:40:20Z`; ADR-0065 was amended for it by
-  >   [#1874](https://github.com/FS-GG/.github/pull/1874), **late** rather than in the same change.
+  > **This bullet used to end *"no such change has landed"*. That is STILL TRUE, and the sentence was
+  > removed anyway — because it is true for a reason a reader cannot see, and two things have landed
+  > that look like counter-examples.** *"Such change"* means **a change that lands a mechanism
+  > retirement**. None has: stage 2 narrowed *defaults*, and stage 3 **declined** to retire the one
+  > mechanism left (§6). So the premise holds and the prohibition rests on it exactly as written.
   >
-  > Cite the prohibition, not the expired premise. What still authorizes an amendment is a change that
-  > lands a mechanism retirement, and **stage 3 declined to be one** — see §6.
+  > What HAS landed is two amendments to ADR-0065 — a **different predicate**, and the one a reader
+  > checking this bullet will trip over:
+  > - **§5's root-set flip** ([#1636](https://github.com/FS-GG/.github/issues/1636)), executed
+  >   2026-07-28; ADR-0065 carries the `EXECUTED` marker and was amended in that same change.
+  > - **Stage 2** ([#1868](https://github.com/FS-GG/.github/pull/1868)) at `2026-07-28T22:40:20Z`;
+  >   ADR-0065 amended for it by [#1874](https://github.com/FS-GG/.github/pull/1874), **late**.
+  >
+  > Neither is a mechanism retirement, and neither touched ADR-0011 Decision 1 or ADR-0014 Decision 5.
+  > **"ADR-0065 has been amended" and "a mechanism retirement has landed" are not the same claim** —
+  > conflating them is the only way to read this bullet as expired, and it is why the premise is now
+  > spelled out rather than left as four words to be checked against the wrong thing.
 - **Retiring the kit-pin freshness sweep on the strength of this order alone.** The order reached
   stage 3 and **declined** it. [`#1864`](https://github.com/FS-GG/.github/issues/1864) is where that
   decision lives; until it is answered, the sweep keeps running and keeps being repaired.
@@ -1431,6 +1442,6 @@ answered by this document, and each has an owner:
 | [`#1710`](https://github.com/FS-GG/.github/issues/1710) | collapse seven hand-copied §8 alarms into one kit-shipped assertion | **OPEN**; seven hand-copies now paid |
 | [`#1750`](https://github.com/FS-GG/.github/issues/1750) | a checker that compares §4's standing verdict against the receivers' trees | **OPEN**, and deliberately not built here |
 | [`#1725`](https://github.com/FS-GG/.github/issues/1725) | the kit pin is not in the same file on every receiver | all seven now measured — **three** distinct locations (§4) |
-| [`#1864`](https://github.com/FS-GG/.github/issues/1864) | what replaces *"is receiver R's pin current?"*, without which the freshness sweep cannot retire | **OPEN**, `Blocked`, a `decision` for a human. Stage 3 reached it and declined — §6 |
-| [`#1875`](https://github.com/FS-GG/.github/issues/1875) | `#1676` AC 6's bulk closure — every open board row swept against today's tree | **OPEN**, split out of `#1676` because it is a pass over ~103 rows and a different kind of work from a retirement step |
-| §6 stage 2 / stage 3 | the fleet-wide narrowing, then the freshness sweep last | **settled — see §6's standing stage verdict, which is the only place that carries it.** Stage 2 landed; stage 3 declined into `#1864` |
+| [`#1864`](https://github.com/FS-GG/.github/issues/1864) | what replaces *"is receiver R's pin current?"*, without which the freshness sweep cannot retire | **OPEN**, `Blocked`, a `decision` for a human — the row §6's stage 3 defers to |
+| [`#1875`](https://github.com/FS-GG/.github/issues/1875) | `#1676` AC 6's bulk closure — every open board row swept against today's tree | **OPEN**, split out of `#1676` because it is a pass over ~100 rows and a different kind of work from a retirement step |
+| §6 stage 2 / stage 3 | the fleet-wide narrowing, then the freshness sweep last | **see §6's standing stage verdict — the only place that carries it, so this cell does not** |
