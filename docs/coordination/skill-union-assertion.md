@@ -521,7 +521,10 @@ a fix for it. It also verifies the `SkillMirror.fs` digest recorded in the table
 so a table derived from a *different* library revision cannot claim to have been derived from this one.
 
 **The residual gap, and what now watches it.** This closes shell-drifts-from-table (a gate on every
-PR) and table-drifts-from-library-at-`5debf6e` (a re-runnable derivation). Neither notices a **future**
+PR) and table-drifts-from-library-at-the-revision-`derivedFrom`-records (a re-runnable derivation).
+Naming that revision here rather than pointing at the block would be a second copy of a fact that
+moves on every re-derive; it has been correctly updated alongside each one so far, and pointing at
+the block is what keeps that true without anyone having to remember. Neither notices a **future**
 library change: this repo's CI holds neither the source nor the package. That third leg landed as
 [#1546](https://github.com/FS-GG/.github/issues/1546) (`f3a6d15`) — a scheduled cross-repo freshness
 check, [`skillmirror-freshness.yml`](../../.github/workflows/skillmirror-freshness.yml) plus
@@ -536,7 +539,7 @@ never says whether the move altered `verify`'s behaviour — only re-running the
 `Schemas.fs` can move `verify` while this gate stays green:
 [#1577](https://github.com/FS-GG/.github/issues/1577). A freshness gate is a tripwire on one file, not a
 proof of alignment, and calling it the latter would re-create the fail-open #1513 was filed about.
-**#1577 is not hypothetical**: across the very span re-derived below, `Schemas.fs` moved
+**#1577 is not hypothetical**: across the span #1576 re-derived below, `Schemas.fs` moved
 `skillManifestVersion` from `1` to `2` (FS.GG.SDD#727 — the manifest now content-addresses a skill's
 whole file set), and no digest this gate watches covered that line.
 
@@ -552,6 +555,31 @@ said the library *moved* and could not say more; the **oracle** is what establis
 answers were unchanged. `#120`'s claim is pinned in one direction on every PR and re-measured in the
 other on demand, and drift is now **announced by a gate** on a schedule instead of waiting to be found
 by hand for a fourth time.
+
+**It has now happened a second time, and the loop closed the same way — but the first turn of it was
+unattended for a day, which is its own finding.** The gate went red on `main` on **2026-07-28** and
+stayed red, because a *scheduled* job blocks no PR: two workers hit it as a pre-merge surprise on two
+unrelated items before anyone owned it. That is
+[#1880](https://github.com/FS-GG/.github/issues/1880), and it closed by re-running the oracle against
+**`bc93f94`** (`e44de4a0…`) — again every one of the 10 `verify` vectors and 11 `digestVectors`
+reproduced **unchanged**, with both provenance blocks updated in the same change. The span
+`5debf6e..bc93f94` is **31 commits** wide and touches `SkillMirror.fs` in exactly **two** of them,
+both additive at the surface this table measures: FS.GG.SDD#737 appended the byte seam
+(`decodeBody`/`sha256Bytes`, leaving `sha256` itself untouched), and FS.GG.SDD#760 gave the mirror
+fold its third observation state, re-expressing `verifyFiles` and `verifyFileSet` as private cores
+called with an *empty* unobserved set. Neither touches `verify` or `sha256`. **`Schemas.fs` did not
+move at all across those 31 commits** — so unlike the #1576 turn, #1577's blind spot was not
+exercised here, and that is a measurement across the whole span rather than a glance at two diffs.
+
+**The re-derive is a race against a moving default branch, and #1880 lost the first heat.** The oracle
+was run first against `58a1414` (`20fdb35c…`) — the head when the item was **claimed**, and the last
+one still carrying the digest the issue recorded — and `FS-GG/FS.GG.SDD` `main` advanced to `bc93f94`
+mid-item. (`58a1414` postdates the issue by four hours, so it is not the head #1880 was *filed*
+against; what #1880 pinned was the **digest**, current from `da07830` through `58a1414`.) Both runs
+reproduced every vector, and only the later revision is recorded, because the gate grades the
+**default branch**: a provenance block naming a superseded head is red the moment it lands. Nothing in
+this repo can close that race. It is the cost of pinning a revision of a repository that moves
+independently, and it is the tripwire working rather than a defect in it.
 
 ### Intentional differences are asserted, not commented
 
