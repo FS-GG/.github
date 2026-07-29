@@ -31,20 +31,31 @@ cross-repo allocation, not item implementation.
    item remains active, continue the host loop, and report each transition when it occurs.
 6. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
    and follow-up items against GitHub—not its narrative.
-7. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
+7. **Once this wave's merges into `.github` are verified, and before the next wave is dispatched, bring
+   the shared checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
+   checkout, so merging a worker's PR can leave the binary the whole fleet execs behind `origin/main` —
+   and `.github#1549`'s guard then refuses every board write, the host's own included (measured twice in
+   one run; one `set-field` was silently lost). **This host owns that repair**: `pnext-item` §1 makes
+   every worker *check*, and escalates the *repair* here (`.github#1594`), because it mutates a checkout
+   N workers share and the host is both the actor that creates the drift and the only one that can
+   serialise the fix. After a `git fetch`, the check itself is four local `git` calls (~5 ms); gate the
+   Release rebuild on it answering non-zero rather than rebuilding every wave. Exact spelling, and why the repair is
+   `merge --ff-only` and never `pull --ff-only` (`.github#1664`), in
+   [engine currency](references/deep-detail.md#engine-currency).
+8. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
    parked rows from that wave enter the next plan.
-8. Stop only when a fresh reconcile and backlog triage leave **no startable `Class: defect`**, and no
+9. Stop only when a fresh reconcile and backlog triage leave **no startable `Class: defect`**, and no
    live claim, unresolved repair, queued write, or actionable follow-up. `hardening` accumulates as
    ordinary backlog and is drained deliberately — it is not a reason to keep running. `decision` is
    surfaced to a human and never dispatched. Surface deliberately parked and human-blocked backlog
    instead of spinning or declaring it completed.
-9. **An unclassed row counts as a possible defect.** Read classes from `ready --json`'s `class` field
-   *after* a `reconcile --apply` (it is the projection, current only as of the last reconcile), and
-   read `lint`'s `CLASS-UNSET` for the rows that column cannot speak for. An unclassed row's severity
-   is unknown, not minor — never count one as "no defect left". You may still **stop** with unclassed
-   rows outstanding: report them by number as unresolved, and say the run ended without establishing
-   the board is defect-free. Fixing one thing legitimately files two, so a wave producing only
-   `hardening` and `decision` is completion, not a stall.
+10. **An unclassed row counts as a possible defect.** Read classes from `ready --json`'s `class` field
+    *after* a `reconcile --apply` (it is the projection, current only as of the last reconcile), and
+    read `lint`'s `CLASS-UNSET` for the rows that column cannot speak for. An unclassed row's severity
+    is unknown, not minor — never count one as "no defect left". You may still **stop** with unclassed
+    rows outstanding: report them by number as unresolved, and say the run ended without establishing
+    the board is defect-free. Fixing one thing legitimately files two, so a wave producing only
+    `hardening` and `decision` is completion, not a stall.
 
 Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.
