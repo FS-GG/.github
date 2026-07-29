@@ -1719,9 +1719,14 @@ module Client =
 
                         // A FAILED MARKER READ IS FATAL (#461): a claim set we could not read is never an
                         // empty one, so `who` fails closed rather than reporting a live lock as absent.
-                        match Reads.markers ctx.Transport o r n with
+                        // .github#1668: `markerScan`, not `markers` — `who` REPORTS, and nothing re-checks
+                        // what it says. See `Reads.markers`' own remarks for why every OTHER caller may
+                        // discard the completeness this one keeps.
+                        match Reads.markerScan ctx.Transport o r n with
                         | Error e -> failure <- Some e
-                        | Ok markers ->
+                        | Ok scan ->
+                            let markers = scan.Markers
+
                             // Classify by the LOCK. The lowest-id marker in the CAS's own total order names
                             // the holder; the lease decides live (`Held`) vs past its window (`Stale`). No
                             // marker at all is in flight ONLY when the board column says In progress — an
@@ -1732,6 +1737,18 @@ module Client =
                                 | None ->
                                     match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
                                     | Some m -> Some(Stale m)
+                                    // NO MARKER WE COULD READ. Before this may be reported as an ABSENCE,
+                                    // the read has to have been COMPLETE (.github#1668). If any comment on
+                                    // this issue could not be classified, one of them may have been the
+                                    // claim, and the honest answer is that we cannot tell.
+                                    //
+                                    // It fires on BOTH arms, deliberately. On arm A it replaces the
+                                    // `UNCLAIMED` accusation. On arm B — where a markerless issue is
+                                    // normally not in flight at all and is simply dropped — it makes the row
+                                    // APPEAR, because an off-board issue hiding an unreadable marker is
+                                    // precisely the held item this verb must not omit.
+                                    | None when not (List.isEmpty scan.Unreadable) ->
+                                        Some(Undetermined scan.Unreadable)
                                     | None -> if isInProgress (o, r, n) then Some Unclaimed else None
 
                             match state with
@@ -1782,7 +1799,8 @@ module Client =
                                     match st with
                                     | Stale _ -> Some(Reads.prAlive ctx.Transport o r n)
                                     | Held _
-                                    | Unclaimed -> None
+                                    | Unclaimed
+                                    | Undetermined _ -> None
 
                                 let livePr =
                                     match liveness with
@@ -1910,6 +1928,16 @@ module Client =
                                         "  %-16s UNCLAIMED — In progress with NO claim marker%s"
                                         row.Ref.Short
                                         wt
+                                // .github#1668. NOT a variant spelling of UNCLAIMED: this row is the verb
+                                // declining to answer. The count goes in the line because "1 comment" and
+                                // "all 40 comments" are very different situations to walk into, and the
+                                // reasons follow on stderr where the rest of `who`'s diagnosis lives.
+                                | Undetermined reasons ->
+                                    printfn
+                                        "  %-16s UNDETERMINED — the marker read was INCOMPLETE (%d comment(s) unreadable); this item may be HELD%s"
+                                        row.Ref.Short
+                                        (List.length reasons)
+                                        wt
 
                     // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
                     // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the
@@ -1941,6 +1969,20 @@ module Client =
                         | Unclaimed ->
                             eprint
                                 $"fsgg-coord-engine: WARNING — %s{row.Ref.Short} is In progress with NO claim marker (someone is working outside the protocol)."
+                        // .github#1668: THE ACCUSATION IS WITHHELD HERE, AND THAT IS THE POINT. "Someone is
+                        // working outside the protocol" is a charge against a person, and on an incomplete
+                        // read it was levelled at a worker who held a perfectly valid marker. What replaces
+                        // it says what we know (the read was short), what we do not (whether it is held),
+                        // and what NOT to do on the strength of it.
+                        | Undetermined reasons ->
+                            eprint
+                                $"fsgg-coord-engine: WARNING — %s{row.Ref.Short}: the claim-marker read was INCOMPLETE, so its lock state is UNKNOWN, not free."
+
+                            for reason in reasons do
+                                eprint $"fsgg-coord-engine:   - %s{reason}"
+
+                            eprint
+                                "fsgg-coord-engine:   Do NOT dispatch a worker, `reap`, or `adopt` on this row: this answer is a LOWER BOUND on what is held. Re-run `who`, and if it persists, read the issue's comments directly."
                         | Held _
                         | Stale _ -> ()
 

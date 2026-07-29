@@ -18,6 +18,19 @@ module Reads =
           PreviousStatus: BoardStatus option
           Raw: string }
 
+    /// THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
+    ///
+    /// `Markers` alone cannot distinguish *"this issue carries no claim"* from *"this issue carries comments
+    /// I could not read, and any of them may have been the claim"*. Those are different facts, and the whole
+    /// of `who`'s under-report is the second one being rendered as the first.
+    type MarkerScan =
+        { /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
+          Markers: Marker list
+          /// One entry per comment the scan could NOT classify, each saying which comment and why. EMPTY is
+          /// the load-bearing value: empty means the marker list is COMPLETE, and only then may a caller
+          /// say an item is unheld.
+          Unreadable: string list }
+
     type RateLimitSnapshot = { Remaining: int; Limit: int }
 
     /// Parse a JSON document, or say we could not. There is no third option, and in particular there is no
@@ -237,10 +250,35 @@ module Reads =
         | "done" -> Some Done
         | _ -> None
 
-    let private parseMarker (now: DateTimeOffset) (comment: JsonElement) : Marker option =
+    /// WHAT ONE COMMENT TURNED OUT TO BE — three answers, and the third one is .github#1668's whole subject.
+    ///
+    /// `NotAMarker` and `Unclassifiable` were the SAME answer (`None`) for this function's entire life, and
+    /// collapsing them is a fail-OPEN on the lock itself: "I read this comment and it is not a claim" and "I
+    /// could not read this comment at all" both left the marker list one element shorter and said nothing.
+    /// An issue whose ONLY marker is unreadable then returns `Ok []` — a failed read wearing an empty set's
+    /// clothes, which is #461/#1794 one layer down, inside the read those items were closed to protect.
+    ///
+    /// The old code KNEW this was the risk and argued it away in a comment that was simply false: it said an
+    /// unorderable marker "still matches `markerRe` and still blocks below". Nothing blocked. `None` removed
+    /// it from the list, and `who` printed `UNCLAIMED — In progress with NO claim marker` over it.
+    type private CommentRead =
+        /// A claim marker, read whole.
+        | IsMarker of Marker
+        /// POSITIVELY identified as something other than a claim — an ordinary comment, a `fsgg:msg`. We
+        /// looked, and there is no lock here. This one is safe to drop, and it is the only one that is.
+        | NotAMarker
+        /// WE COULD NOT TELL. Either the comment carried no readable body — so it may have been a marker and
+        /// we cannot say — or its body IS a marker and it carries no id to order it by. Never a silent drop.
+        | Unclassifiable of reason: string
+
+    let private readComment (now: DateTimeOffset) (index: int) (comment: JsonElement) : CommentRead =
         match str comment "body" with
-        | None -> None
-        | Some body when not (markerRe.IsMatch body) -> None
+        // NOT "not a marker". A comment whose `body` is absent or ill-typed is a comment we did not read,
+        // and a claim marker is exactly the thing that could have been in it.
+        | None ->
+            Unclassifiable
+                $"comment %d{index} carries no readable `body` field, so it could not be examined for a claim marker"
+        | Some body when not (markerRe.IsMatch body) -> NotAMarker
         | Some body ->
 
         let id =
@@ -250,11 +288,13 @@ module Reads =
 
         match id with
         // A COMMENT WITH NO ID IS NOT A MARKER WE CAN ORDER, and the id IS the lock — it is the total order
-        // every racer observes. A marker we cannot place in that order cannot win or lose a race, so it
-        // cannot be treated as a marker at all. Dropping it is safe only because the claim CAS re-reads and
-        // re-checks; it can never be the thing that makes an item look FREE, because an unparseable marker
-        // still matches `markerRe` and still blocks below.
-        | None -> None
+        // every racer observes. A marker we cannot place in that order cannot win or lose a race. But it is
+        // a MARKER: `markerRe` matched, so we are looking at a claim. Reporting the item free on the
+        // strength of it is the one thing a lock may never do, so it leaves as `Unclassifiable` and the
+        // caller fails closed on it.
+        | None ->
+            Unclassifiable
+                $"comment %d{index} IS a claim marker (its body matches the marker grammar) but carries no numeric `id`, so it cannot be placed in the CAS's total order"
         | Some id ->
 
         let m = workerRe.Match body
@@ -293,7 +333,7 @@ module Reads =
                 | _ -> -1
             | None -> -1
 
-        Some
+        IsMarker
             { Id = id
               Worker = worker
               Session = session
@@ -346,12 +386,12 @@ module Reads =
         | Some m -> Some m
         | None -> markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
 
-    let markers
+    let markerScan
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (number: int)
-        : IoResult<Marker list> =
+        : IoResult<MarkerScan> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
@@ -380,16 +420,55 @@ module Reads =
                 else
                     let now = DateTimeOffset.UtcNow
 
-                    let found =
+                    let read =
                         doc.RootElement.EnumerateArray()
-                        |> Seq.choose (parseMarker now)
+                        |> Seq.mapi (fun index comment -> readComment now index comment)
+                        |> List.ofSeq
+
+                    let found =
+                        read
+                        |> List.choose (function
+                            | IsMarker m -> Some m
+                            | NotAMarker
+                            | Unclassifiable _ -> None)
                         // LOWEST COMMENT ID FIRST. This is the CAS's total order and the winner is the
                         // head. Sorting here — once, in the one place markers are read — is what stops a
                         // caller inventing its own idea of who won.
-                        |> Seq.sortBy (fun m -> m.Id)
-                        |> List.ofSeq
+                        |> List.sortBy (fun m -> m.Id)
 
-                    Ok found
+                    // EVERY COMMENT WE COULD NOT CLASSIFY, CARRIED OUT WITH THE ANSWER (.github#1668).
+                    // This is the whole repair: the marker list is now accompanied by the reason it might
+                    // be SHORT. A caller that reports "no claim here" while this list is non-empty is
+                    // reporting a lower bound as a fact — which is what `who` did, and what it no longer
+                    // does. Note the pairing: `[]` markers with `[]` unreadable is a real, complete
+                    // observation of an unclaimed item, and it stays exactly that.
+                    let unreadable =
+                        read
+                        |> List.choose (function
+                            | Unclassifiable reason -> Some reason
+                            | IsMarker _
+                            | NotAMarker -> None)
+
+                    Ok { Markers = found; Unreadable = unreadable }
+
+    /// THE LOCK, WITHOUT THE PROVENANCE — every existing caller's shape, unchanged.
+    ///
+    /// Deliberately a projection of `markerScan` rather than a second implementation: the CAS, `heartbeat`,
+    /// `reap`, `adopt` and the claim scan all read markers through here, and a second copy of the parse is
+    /// how "who holds this?" comes to be computed in five places and agree in none (#485).
+    ///
+    /// It DISCARDS `Unreadable`, and that is safe for exactly the callers that use it and no others: each of
+    /// them is about to WRITE against the lock, and every one of those writes re-reads and re-checks (the
+    /// CAS's post-and-re-read, `verifyHeld`, `reap`'s re-confirmation), so a marker hidden from one read
+    /// costs a lost race rather than a double-hold. `who` is the caller that is NOT like that — it REPORTS,
+    /// nothing re-checks its answer, and an operator acts on it. That is why `who` takes the scan.
+    let markers
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<Marker list> =
+        markerScan transport owner repo number |> Result.map (fun scan -> scan.Markers)
 
     // ---- worker-to-worker messages (the `say` / `inbox` channel) ----------------------------------
 

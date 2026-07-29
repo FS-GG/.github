@@ -24,16 +24,29 @@ module Render =
     /// the protocol, which `who` exists to surface). A Ready/Backlog item nobody claimed is simply not in
     /// flight, and `who` does not list it. This is cases 20/25's certified `who`, and the JSON `.state` a
     /// consumer keys on (held/stale/unclaimed).
+    ///
+    /// **AND THERE IS A FOURTH ANSWER, WHICH IS NOT A LOCK STATE AT ALL** (.github#1668). `Undetermined` is
+    /// "the marker read came back with comments I could not classify, so I cannot tell you whether this item
+    /// is held". It exists because the other three are all ASSERTIONS about the lock, and an unreadable
+    /// comment supports none of them — least of all `Unclaimed`, which is the fail-open direction and which
+    /// carries an accusation ("someone is working outside the protocol") that was levelled, in the incident
+    /// that opened #1668, at a worker holding a valid marker.
     type WhoState =
         | Held of Reads.Marker
         | Stale of Reads.Marker
         | Unclaimed
+        /// The reasons the marker read was incomplete — one per comment it could not classify. Never empty:
+        /// a row is only `Undetermined` because there was something to report.
+        | Undetermined of reasons: string list
 
     let whoStateName =
         function
         | Held _ -> "held"
         | Stale _ -> "stale"
         | Unclaimed -> "unclaimed"
+        // A NEW WORD, NOT A REUSED ONE. A consumer keying on `unclaimed` must not silently start receiving
+        // rows that mean "could not determine" — that is the same substitution in a machine contract.
+        | Undetermined _ -> "undetermined"
 
     /// A classified in-flight row: the item, its lock state, the touch-set it reserves, and — on a STALE
     /// row only — the #581 proof of life that turns a bare `STALE` into `STALE (#NNN OPEN)`.
@@ -250,7 +263,26 @@ module Render =
             match row.State with
             | Held m
             | Stale m -> w.WriteString("worker", m.Worker.Value)
-            | Unclaimed -> w.WriteNull("worker")
+            // BOTH null, and they are told apart by `.state`, never by this field. "Nobody holds it" and
+            // "I cannot say who holds it" have the same empty answer HERE — which is exactly why #1668
+            // needed a distinct `.state` word rather than a cleverer `worker`.
+            | Unclaimed
+            | Undetermined _ -> w.WriteNull("worker")
+
+            // .github#1668: WHY the answer is incomplete, on the row itself, so a machine consumer can act
+            // on it without re-deriving anything. Emitted ONLY on an `undetermined` row, so every existing
+            // held/stale/unclaimed row stays byte-identical.
+            match row.State with
+            | Undetermined reasons ->
+                w.WriteStartArray("undetermined")
+
+                for reason in reasons do
+                    w.WriteStringValue reason
+
+                w.WriteEndArray()
+            | Held _
+            | Stale _
+            | Unclaimed -> ()
 
             w.WriteStartArray("paths")
 
@@ -280,7 +312,8 @@ module Render =
                 if row.BranchPushed then
                     w.WriteBoolean("branchPushed", true)
             | Held _
-            | Unclaimed -> ()
+            | Unclaimed
+            | Undetermined _ -> ()
 
             if includeWorktree then
                 match row.Worktree with

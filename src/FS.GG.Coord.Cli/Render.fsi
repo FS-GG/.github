@@ -16,10 +16,16 @@ module Render =
     /// a marker holds it — LIVE (`Held`) or past its lease (`Stale`, still a lock only `reap` may break) —
     /// or when the board column says In progress with NO marker (`Unclaimed`). The JSON `.state` a
     /// consumer keys on (held/stale/unclaimed) is derived from this.
+    ///
+    /// `Undetermined` (.github#1668) is the FOURTH answer, and it is not a lock state: it is "the marker read
+    /// returned comments I could not classify, so I cannot tell you whether this item is held". It must never
+    /// collapse into `Unclaimed` — that is the fail-open direction, and it carries an accusation.
     type WhoState =
         | Held of Reads.Marker
         | Stale of Reads.Marker
         | Unclaimed
+        /// One reason per comment the marker read could not classify. Never empty.
+        | Undetermined of reasons: string list
 
     /// A classified in-flight row: the item, its lock state, the paths it reserves, and — on a STALE row
     /// only — the proof-of-life a human needs before reaping (#581/#697/#1055).

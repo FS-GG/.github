@@ -45,6 +45,25 @@ module Reads =
           /// forgetting a field it never parsed (#550).
           Raw: string }
 
+    /// THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
+    ///
+    /// A `Marker list` on its own cannot tell *"this issue carries no claim"* apart from *"this issue carries
+    /// comments I could not read, and any one of them may have been the claim"*. `who` rendered the second as
+    /// the first — `UNCLAIMED — In progress with NO claim marker`, plus an accusation that somebody was
+    /// working outside the protocol — which is the fail-open direction on the one read that separates
+    /// workers. This type is what makes the difference sayable.
+    type MarkerScan =
+        { /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
+          Markers: Marker list
+          /// One entry per comment the scan could NOT classify, each naming which comment and why: a comment
+          /// with no readable `body` (it may have been a marker), or a comment whose body IS a marker but
+          /// which carries no numeric `id` to order it by.
+          ///
+          /// **EMPTY IS THE LOAD-BEARING VALUE.** Only an empty list licenses "there is no claim here".
+          /// Non-empty means `Markers` is a LOWER BOUND, and a caller that reports absence off it is
+          /// manufacturing an answer out of what it could not read (#266, .github#1794).
+          Unreadable: string list }
+
     /// The `BoardStatus` for a Projects v2 Status option NAME (case-insensitive), or for a marker's decoded
     /// `prev=` value — the two callers that turn a column's human name back into the type. A name we do not
     /// recognise, or the empty string, is `None`: "this records no restorable column" (#481), never a guess.
@@ -61,7 +80,19 @@ module Reads =
     /// A malformed page is an ERROR, not an empty list. `gh` exits 0 on a truncated page and `jq` prints
     /// nothing, and the empty string that fell out of that pipeline is precisely how a live claim became
     /// invisible. Guessing the lock state from a failed read is the one thing a lock may never do.
+    ///
+    /// **IT DISCARDS `MarkerScan.Unreadable`, AND ONLY ITS OWN CALLERS MAY DO THAT.** Every caller of this
+    /// function is about to WRITE against the lock, and every one of those writes re-reads and re-checks —
+    /// the CAS's post-and-re-read, `verifyHeld`, `reap`'s re-confirmation — so a marker hidden from one read
+    /// costs a lost race, not a double-hold. A caller that REPORTS, where nothing re-checks the answer and an
+    /// operator acts on it, must take `markerScan` instead. That is `who`, and .github#1668 is what it cost.
     val markers: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Marker list>
+
+    /// `markers`, plus every comment the scan could not classify — the read for callers that REPORT.
+    ///
+    /// Same request, same guarantees (unconditional, uncached, paginated, malformed-is-an-error); the only
+    /// difference is that this one does not throw away the evidence that its answer may be incomplete.
+    val markerScan: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<MarkerScan>
 
     /// Has this marker's lease lapsed?
     ///
