@@ -451,29 +451,30 @@ module Reads =
 
                     Ok { Markers = found; Unreadable = unreadable }
 
-    /// THE LOCK, WITHOUT THE PROVENANCE — every existing caller's shape, unchanged.
+    /// REQUIRE A COMPLETE LOCK READ before a caller decides or writes from it (.github#1896).
     ///
-    /// Deliberately a projection of `markerScan` rather than a second implementation: the CAS, `heartbeat`,
-    /// `reap`, `adopt` and the claim scan all read markers through here, and a second copy of the parse is
-    /// how "who holds this?" comes to be computed in five places and agree in none (#485).
+    /// `markerScan` deliberately preserves a lower bound for `who`, which can report the honest
+    /// `Undetermined` verdict. The scheduler and the CAS have no safe partial answer: reserving only the
+    /// markers they happened to parse can double-book a touch-set, and posting against that lower bound can
+    /// double-hold the lock. They pass their scan through this gate and a single unclassifiable comment
+    /// refuses the whole operation.
     ///
-    /// It DISCARDS `Unreadable`, and that is a KNOWN FAIL-OPEN rather than a safe default. Do not repair the
-    /// discomfort with an argument: the comment .github#1668 deleted from `parseMarker` was exactly that, and
-    /// it was false. Two things are true here and both are bad. A re-read recovers NOTHING — `Unclassifiable`
-    /// is a deterministic property of a fixed comment, so the CAS's re-read parses it identically and a
-    /// marker hidden once is hidden always, which is a double-hold, not a lost race. And not every caller
-    /// writes: `Scan.snapshot` reads through here for the snapshot `next`/`batch`/`reconcile` decide from.
-    ///
-    /// It stays because moving every caller at once is a larger change than #1668, and the callers left here
-    /// are no worse off than before it. `who` — where nothing re-checks the answer and an operator acts on it
-    /// — took the scan. See the `.fsi` for the warning a new caller must read first.
-    let markers
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<Marker list> =
-        markerScan transport owner repo number |> Result.map (fun scan -> scan.Markers)
+    /// This is separate from `markerScan`, rather than making that read itself fail, because the lower bound
+    /// plus its provenance is useful to a reporting caller. There is deliberately no projection that returns
+    /// `scan.Markers` alone: adding a new decision caller now requires choosing this gate or explicitly
+    /// handling `Unreadable`, so the old fail-open cannot be reached by accident.
+    let requireCompleteMarkerScan (subject: string) (scan: MarkerScan) : IoResult<Marker list> =
+        match scan.Unreadable with
+        | [] -> Ok scan.Markers
+        | unreadable ->
+            let reasons = String.concat "; " unreadable
+
+            Error(
+                Malformed(
+                    subject,
+                    $"the claim-marker scan is incomplete: %s{reasons}. Refusing to decide the lock from a lower bound."
+                )
+            )
 
     // ---- worker-to-worker messages (the `say` / `inbox` channel) ----------------------------------
 
@@ -2119,7 +2120,7 @@ module Reads =
 
                         match i.TryGetProperty "number" with
                         // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
-                        // carried as an unreadable ENTRY the way a bad body can: `Reads.markers` is keyed
+                        // carried as an unreadable ENTRY the way a marker scan is keyed
                         // on the number, so there is no lock to look up, no ref to report, and nothing a
                         // caller could fail closed *about*. Dropping it was the fail-open — the issue
                         // vanished from the claim scan, its lock reserved nothing, and nothing anywhere

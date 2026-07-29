@@ -277,13 +277,13 @@ let ``If-None-Match is SENT when given, and a 304 comes back as a SUCCESS with a
 [<Fact>]
 let ``a request with NO IfNoneMatch sends NO validator - which is what the LOCK depends on`` () =
     // **A lock may never be read from a cache.** A 304 serving a body captured before a claim marker was
-    // posted would report `comments: 0` over a LIVE lock. `Reads.markers` sets `IfNoneMatch = None`, and
+    // posted would report `comments: 0` over a LIVE lock. `Reads.markerScan` sets `IfNoneMatch = None`, and
     // this is the assertion that the adapter honours it rather than adding one of its own.
     use server = new Server()
     server.On(fun _ res -> server.Json res 200 "[]" [])
 
     use transport = new HttpTransport(server.Base, "t")
-    Reads.markers (transport :> IGitHubTransport) "FS-GG" "FS.GG.SDD" 42 |> ignore
+    Reads.markerScan (transport :> IGitHubTransport) "FS-GG" "FS.GG.SDD" 42 |> ignore
 
     match server.Requests with
     | [ (_, path, inm, _) ] ->

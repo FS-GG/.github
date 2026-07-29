@@ -285,7 +285,10 @@ module Writes =
 
         // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
         //    marker to clean up — this is the only cheap place to fail, and it is why the read comes first.
-        match Reads.markers transport ref.Owner ref.Repo ref.Number with
+        match
+            Reads.markerScan transport ref.Owner ref.Repo ref.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+        with
         | Error e -> Error e
         | Ok before ->
 
@@ -347,7 +350,10 @@ module Writes =
                             $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
                     )
 
-            match Reads.markers transport ref.Owner ref.Repo ref.Number with
+            match
+                Reads.markerScan transport ref.Owner ref.Repo ref.Number
+                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+            with
             | Error e -> withdraw $"the re-read failed (%s{explain e})"
             | Ok after ->
 
@@ -551,7 +557,10 @@ module Writes =
         // because `DoesNotHold` says "we looked, and this worker does not hold it", which is a claim a failed
         // read is not entitled to make. Manufacturing a capability from a failed read would be the fail-open
         // this whole type exists to prevent, sitting inside its own constructor.
-        match Reads.markers transport ref.Owner ref.Repo ref.Number with
+        match
+            Reads.markerScan transport ref.Owner ref.Repo ref.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+        with
         | Error e -> Error e
         | Ok markers ->
             match Reads.winner leaseMinutes markers with
@@ -803,7 +812,10 @@ module Writes =
         // marker because it USED TO BE stale evicts a worker that is alive and believes its lease was
         // renewed, which is the double-hold `reap` exists to CLEAN UP, caused BY `reap`. So the marker's
         // freshness is the last thing checked before it is broken.
-        match Reads.markers transport reapable.Ref.Owner reapable.Ref.Repo reapable.Ref.Number with
+        match
+            Reads.markerScan transport reapable.Ref.Owner reapable.Ref.Repo reapable.Ref.Number
+            |> Result.bind (Reads.requireCompleteMarkerScan reapable.Ref.Short)
+        with
         | Error e -> Error e
         | Ok markers ->
             match markers |> List.tryFind (fun m -> m.Id = reapable.MarkerId) with

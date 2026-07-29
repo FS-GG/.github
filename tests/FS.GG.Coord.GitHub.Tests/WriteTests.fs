@@ -41,6 +41,11 @@ let private staleClaimJson (id: int) (worker: string) (extra: string) =
 /// interpolation hole, so the array is built here rather than spelled inline at every call site.
 let private comments (ms: string list) = "[" + String.concat "," ms + "]"
 
+/// A comment the lock reader cannot classify: its id is readable, but its body is not. It may be a claim
+/// marker, so a decision made from the readable markers beside it would be a decision from a lower bound.
+let private unclassifiableComment (id: int) =
+    $"""{{"id":%d{id},"body":null,"updated_at":"%s{now}"}}"""
+
 /// A transport that answers a SEQUENCE of canned responses — so a CAS, which reads, posts, and re-reads,
 /// can be driven through a real race.
 let private scripted (responses: IoResult<Response> list) =
@@ -169,6 +174,34 @@ let ``the chore lock COLLECTS a dead holder's debris — the lock a worker died 
     Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 800")
 
 // ---- the CAS ---------------------------------------------------------------------------------------
+
+[<Fact>]
+let ``#1896 the CAS pre-read refuses one unclassifiable comment beside a readable marker, before posting`` () =
+    let transport =
+        scripted [ ok (comments [ marker 901 "kite-461" ""; unclassifiableComment 902 ]) ]
+
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Error(Malformed(_, detail)) ->
+        Assert.Contains("claim-marker scan is incomplete", detail)
+        Assert.Contains("comment 1", detail)
+    | other -> failwith $"an incomplete pre-read must refuse the CAS — got %A{other}"
+
+    Assert.False(transport.Logged "comment-post", "the CAS posted against an incomplete lock read")
+
+[<Fact>]
+let ``#1896 the CAS re-read refuses incompleteness and withdraws the marker it already posted`` () =
+    let transport =
+        scripted
+            [ ok "[]"
+              ok """{"id":901}"""
+              ok (comments [ marker 901 "vole-418" ""; unclassifiableComment 902 ])
+              ok "" ]
+
+    match claim transport 120 RefuseLiveHolder ignore me itsMe None aRef (fun () -> None) with
+    | Ok(Undecided reason) -> Assert.Contains("claim-marker scan is incomplete", reason)
+    | other -> failwith $"an incomplete re-read must be an undecided loss — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901", "the CAS left its marker orphaned")
 
 [<Fact>]
 let ``the CAS WINS when our marker is the lowest live id`` () =
@@ -1114,6 +1147,15 @@ let ``verifyHeld fails CLOSED - an unreadable marker set yields an error, never 
     | other -> failwith $"a failed read must not mint a capability — got %A{other}"
 
 [<Fact>]
+let ``#1896 verifyHeld refuses an incomplete successful scan, never minting a capability`` () =
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" ""; unclassifiableComment 902 ]) ]
+
+    match verifyHeld transport 120 me itsMe None aRef with
+    | Error(Malformed(_, detail)) -> Assert.Contains("claim-marker scan is incomplete", detail)
+    | other -> failwith $"a lower-bound marker list must not mint Held — got %A{other}"
+
+[<Fact>]
 let ``verifyHeld returns the capability when the live winner IS us`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
 
@@ -1501,6 +1543,20 @@ let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its co
         match reap transport 120 r with
         | Ok Reaped -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
         | other -> failwith $"the reap should have deleted the marker — got %A{other}"
+
+[<Fact>]
+let ``#1896 reap refuses an incomplete re-verification and deletes no marker`` () =
+    let transport =
+        scripted [ ok (comments [ staleClaimJson 880 "ghost-222" ""; unclassifiableComment 902 ]) ]
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Error(Malformed(_, detail)) -> Assert.Contains("claim-marker scan is incomplete", detail)
+        | other -> failwith $"an incomplete re-verification must refuse the reap — got %A{other}"
+
+    Assert.False(transport.Logged "comment-delete", "reap deleted a marker from an incomplete scan")
 
 [<Fact>]
 let ``reap SKIPS a marker the holder RENEWED between the scan and the delete`` () =

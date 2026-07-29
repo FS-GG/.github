@@ -1731,9 +1731,10 @@ module Client =
 
                         // A FAILED MARKER READ IS FATAL (#461): a claim set we could not read is never an
                         // empty one, so `who` fails closed rather than reporting a live lock as absent.
-                        // .github#1668: `markerScan`, not `markers` — `who` REPORTS, and nothing re-checks
-                        // what it says. See `Reads.markers`' own remarks for why every OTHER caller may
-                        // discard the completeness this one keeps.
+                        // .github#1668: `markerScan` because `who` REPORTS and can carry an honest
+                        // `Undetermined` result. Decision and write callers pass this same scan through
+                        // `requireCompleteMarkerScan` and refuse; no projection may discard completeness
+                        // anymore (.github#1896).
                         match Reads.markerScan ctx.Transport o r n with
                         | Error e -> failure <- Some e
                         | Ok scan ->
@@ -2134,7 +2135,10 @@ module Client =
                           Number = number }
 
                     // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
-                    match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                    match
+                        Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                    with
                     | Error e -> failure <- Some e
                     | Ok markers ->
                         // A live winner is a claim reap may not touch. Only when NO winner is live but a
@@ -2416,8 +2420,9 @@ module Client =
     /// `take` the board scan is already paid, and a bare `claim` rides the window like `next` — paying a
     /// fresh board scan per claim is the burn #418 exists to stop. A stale-by-90s set cannot cause a
     /// double-hold: it can only miss OUR OWN very recent second claim, and the item's own CAS still holds.
-    /// A held item's markers are read fresh (`Reads.markers` — the lock is never cached), and `winner`
-    /// applies the lease, so a lapsed claim of ours does not count.
+    /// A held item's markers are read fresh and complete (`markerScan` plus
+    /// `requireCompleteMarkerScan` — the lock is never cached), and `winner` applies the lease, so a
+    /// lapsed claim of ours does not count.
     let private heldElsewhere (ctx: Context) (leaseMinutes: int) (workerId: string) (ref: Ref) =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> Error e
@@ -2441,7 +2446,10 @@ module Client =
                     match rows with
                     | [] -> Ok(List.rev acc)
                     | (row: Scan.Row) :: rest ->
-                        match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        match
+                            Reads.markerScan ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
+                        with
                         | Error e -> Error e
                         | Ok markers ->
                             match Reads.winner leaseMinutes markers with
@@ -2794,7 +2802,10 @@ module Client =
                 ExitError
             | Ok ref ->
                 // Read the LOCK off the item (fresh — the lock is never cached).
-                match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                match
+                    Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                    |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                with
                 | Error e -> fail e
                 | Ok markers ->
                     match Reads.winner opts.LeaseMinutes markers with
@@ -3330,7 +3341,10 @@ module Client =
                 | Ok Writes.DoesNotHold ->
                     // Either someone else holds it, or the lease expired. Read the markers to say which —
                     // "a non-holder cannot renew" and "the lease expired" are different remedies.
-                    match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                    match
+                        Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                    with
                     | Ok markers ->
                         match Reads.winner opts.LeaseMinutes markers with
                         | Some m when m.Worker <> WorkerId w.Id ->
@@ -3919,7 +3933,10 @@ module Client =
                 match rows with
                 | [] -> Ok(List.rev acc)
                 | ((other: Ref), verdict) :: rest ->
-                    match Reads.markers ctx.Transport other.Owner other.Repo other.Number with
+                    match
+                        Reads.markerScan ctx.Transport other.Owner other.Repo other.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan other.Short)
+                    with
                     | Error e -> Error e
                     | Ok markers ->
                         // NO EXTRA READ. `reserver` is a pure function over the marker list already fetched
@@ -4759,7 +4776,10 @@ module Client =
                             | Ok Writes.DoesNotHold ->
                                 // We do not hold it. If ANOTHER worker's lock is live, this engine leaves it
                                 // alone and says so — it never silently deletes a claim that is not ours.
-                                match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                                match
+                                    Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                                with
                                 | Ok markers ->
                                     match Reads.winner opts.LeaseMinutes markers with
                                     | Some m when m.Worker <> WorkerId w.Id ->
