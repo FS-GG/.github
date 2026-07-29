@@ -149,6 +149,7 @@ module Options =
           AllowBacklog: bool
           Limit: int option
           LeaseMinutes: int
+          LeaseGiven: bool
 
           /// Positional arguments in order — the ref, the field, the value, the child ref. Each command
           /// reads what it needs and refuses the wrong count.
