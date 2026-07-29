@@ -452,8 +452,21 @@ expect "13e --absent-ok without --receiver-proj is REFUSED — nothing says whic
 expect "13f --roots alongside --receiver-proj is REFUSED" 2 "would grade one set and resolve another" \
   -- bash "$SV" check --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj" --roots ".claude/skills"
 
-expect "13g --receiver-proj is a check flag; generate REFUSES it" 2 "is a 'check' flag" \
-  -- bash "$SV" generate --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj"
+# `generate` now reads this same declaration rather than accepting a hand-copied source/root pair.
+# Start with the live root only, precisely as a receiver checkout does before its generate target.
+T13G="$WORK/t13-generate"; make_tree "$T13G" 2
+mkdir -p "$T13G/.claude"
+mv "$T13G/canonical/skills" "$T13G/.claude/skills"
+printf '<Project>\n  <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>\n  <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>\n</Project>\n' > "$T13G/receiver.proj"
+
+expect "13g generate follows --receiver-proj for both source and view roots" 0 "skill-view check: OK" \
+  -- bash "$SV" generate --tree "$T13G" --receiver-proj "$T13G/receiver.proj"
+
+expect "13h generate REFUSES --source alongside --receiver-proj" 2 "--source and --receiver-proj" \
+  -- bash "$SV" generate --tree "$T13G" --receiver-proj "$T13G/receiver.proj" --source "$T13G/.claude/skills"
+
+expect "13i generate REFUSES --roots alongside --receiver-proj" 2 "--roots and --receiver-proj" \
+  -- bash "$SV" generate --tree "$T13G" --receiver-proj "$T13G/receiver.proj" --roots ".agents/skills"
 
 # =============================================================================================
 # 14 — THE CHECKOUT HALF (.github#1700). Everything above grades the TOOL; §8 requires the assertion
@@ -593,7 +606,7 @@ fi
 # =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=55
+EXPECTED_LEGS=57
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 
