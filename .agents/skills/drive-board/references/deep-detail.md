@@ -157,7 +157,12 @@ says the board is genuinely done:
 5. **Collect each worker as it returns, and verify — do not trust (§5).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is
    gone, which is deliberate.
-6. **Re-plan.** New blockers a worker discovered are now `Blocked by` edges on the board; items it
+6. **Bring the shared engine current** — after the merges of this wave are verified, before the next
+   wave is spawned. Every worker execs the engine built in the **shared** `.github` checkout, and the
+   merges you just verified are what leave it behind. Run the check below; rebuild only if it answers
+   non-zero. Skip it and `.github#1549` refuses the next wave's board writes — including your own.
+   See [engine currency](#engine-currency).
+7. **Re-plan.** New blockers a worker discovered are now `Blocked by` edges on the board; items it
    finished are `Done`; follow-ups it filed are new `Backlog` rows. Discard the prior inventory and go
    back to step 1. Reconcile and Backlog triage are both mandatory before another spawn: that is how an
    edge or follow-up that only appears after work enters the very next wave.
@@ -198,7 +203,11 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 > 5. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
 >    exit code and stop — 5 means this repo is dry for now, 75 means the shared budget is gone and the
 >    host must back the whole fleet off (§3).
-> 6. **Report back**: the item number, the merged PR, the exact `FSGG-DONE` line, the post-merge
+> 6. **If `pnext-item` §1's engine check says the shared checkout is behind and you cannot repair it**,
+>    do not `take` — the guard will refuse the write and you will have spent the lease learning that.
+>    Report "the shared engine is N commits behind and I am refused that checkout" and stop. That is an
+>    escalation to the host, which owns the repair; you are not expected to carry it.
+> 7. **Report back**: the item number, the merged PR, the exact `FSGG-DONE` line, the post-merge
 >    obligation list and verification evidence (or explicitly `none`), any blocker/finding you filed
 >    (with issue numbers), and the `take` exit code if you got no item. Then exit.
 >
@@ -240,6 +249,72 @@ instead of narrating the intended state as current.
   replays reads later as drift you will "find" and duplicate.
 
 Do not take a merge you can check on the worker's say-so. Pull and look.
+
+### Engine currency
+
+**You are the actor that creates this drift, and you are the one that owns the repair**
+(`.github#1663`). In `.github` the coordination engine is a *source build*: `scripts/fsgg-coord`
+resolves `src/FS.GG.Coord.Cli/bin/Release/net10.0/` under the **shared** checkout for every caller
+standing in a worktree, so the binary the whole fleet execs — workers and host alike — comes from one
+tree that nothing in this loop used to move. Merging a wave's PRs is exactly what leaves it behind
+`origin/main`, which is why the step belongs *after* §5's verification and *before* the next spawn.
+
+Since `.github#1549` that drift is not silent, it is a **refusal**: `stale_guard` compares the shared
+checkout's `HEAD` to `origin/main` under the engine's own source trees and refuses every board write
+while it is behind. Measured on this host, twice in one run (2026-07-27), both times in this shape — a
+worker's PR merged into `.github` main, the shared checkout fell behind, board writes refused. **The
+first occurrence cost a `set-field` that silently did not land**, caught only because a later `lint`
+contradicted it. The tax scales with how fast the fleet lands work, which is what a good run of this
+skill maximises.
+
+Run the check every wave; it is four local `git` calls, ~5 ms, no network:
+
+```sh
+git fetch origin
+SHARED="$(git worktree list --porcelain | head -1 | cut -d' ' -f2-)"       # the path, for the repair
+SHARED_HEAD="$(git worktree list --porcelain | sed -n '2s/^HEAD //p')"     # the commit it is sitting on
+[ -n "$SHARED_HEAD" ] || { echo "cannot read the shared checkout's HEAD — that is not freshness"; exit 1; }
+git rev-list --count "$SHARED_HEAD..origin/main" -- \
+  src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub
+```
+
+Non-zero, and **only** then — this half is a Release build, so it is gated on the answer, never run per
+wave on principle:
+
+```sh
+git -C "$SHARED" merge --ff-only origin/main
+dotnet build "$SHARED/src/FS.GG.Coord.Cli" -c Release
+```
+
+This is the same recipe `pnext-item` §1 gives the workers, deliberately — the check and the refusal must
+have one subject, and so must the check and the repair. Three clauses are worth keeping intact:
+
+- **`merge --ff-only origin/main`, NOT `pull --ff-only`.** The shared checkout is routinely on a
+  **detached HEAD** — measured mid-run — where `git pull --ff-only` exits 1 with *"You are not currently
+  on a branch"* and moves nothing, leaving the refusal exactly where it was while looking like a repair.
+  `merge --ff-only` fast-forwards a detached HEAD and a branch alike, and still refuses loudly if the
+  tree has diverged, which is the case you want escalated rather than merged. `stale_guard`'s own
+  printed remedy still says `pull --ff-only`; that is `.github#1664`, and it is why this does not.
+- **The rebuild names `$SHARED` explicitly.** A bare `dotnet build src/FS.GG.Coord.Cli -c Release`
+  rebuilds whatever tree you are standing in — never the stale one — and changes nothing.
+- **Scoped to the engine's three source trees, not `main` as a whole.** A docs commit, a workflow edit
+  or a registry row must not send the fleet into a Release rebuild; "halting the fleet whenever `main`
+  moves" is the outcome #1549 explicitly refused.
+
+**This is a protocol step, not a new gate.** `#1549`'s guard is already the enforcement, and it fails
+closed; what was missing was an actor that owned the repair before the refusal landed. `pnext-item` §1
+makes each worker *check* — a floor, because whether anyone else did it is not observable from inside a
+worktree — and escalates the repair here (`.github#1594`). That escalation's landing place is named in
+[host-loop](host-loop.md): a worker reporting "I am refused the shared checkout, and the engine is N
+behind" has done the right thing and is owed this repair, not a re-dispatch.
+
+Two notes on reach. In a **receiver** (no `src/FS.GG.Coord.*`) the count is `0` and the whole block is a
+no-op, correctly: a receiver execs a packaged engine and has nothing beside it to be stale against — so
+this step costs a workspace driver nothing and needs no repo special-case. And an **empty
+`SHARED_HEAD` refuses** rather than reporting fresh: `--porcelain`'s second line is `bare` for a bare
+main working tree, and `rev-list --count "..origin/main"` is valid git meaning `HEAD..origin/main` —
+i.e. it would measure *your* tree, which is current by construction, and answer `0`. Cannot look ≠
+nothing to find (`.github#266`).
 
 ## 6. Termination — via check-board, not via an empty `take`
 
