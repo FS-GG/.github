@@ -616,6 +616,42 @@ module Reads =
                 | true, v when v.ValueKind = JsonValueKind.Null -> Ok ""
                 | _ -> Ok ""
 
+    /// A per-ref state read for reconcilers. Unlike an open-list membership test, this distinguishes a
+    /// valid CLOSED off-board issue from a missing, unreadable, or pull-request ref; those latter cases
+    /// remain `Error` and callers must retain their local queue entry.
+    let issueState
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<IssueState> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} state"
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                match doc.RootElement.TryGetProperty "pull_request", doc.RootElement.TryGetProperty "state" with
+                | (true, _), _ -> Error(Malformed(subject, "the ref names a pull request, not a queued issue"))
+                | _, (true, state) when state.ValueKind = JsonValueKind.String ->
+                    match state.GetString().ToUpperInvariant() with
+                    | "OPEN" -> Ok IssueState.Open
+                    | "CLOSED" -> Ok IssueState.Closed
+                    | other -> Error(Malformed(subject, $"unknown issue state '%s{other}'"))
+                | _ -> Error(Malformed(subject, "the issue response has no readable state"))
+
     // ---- blockers -------------------------------------------------------------------------------
 
     let blockerState

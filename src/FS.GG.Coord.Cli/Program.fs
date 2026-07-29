@@ -336,7 +336,13 @@ let main argv =
             // the queue is a worker's own promise, and the state that most reliably strands one is an
             // exhausted budget (#1063/§1). A promise you cannot pop without a board read is a promise that
             // breaks exactly when it is needed.
-            | Followup -> Followups.run opts
+            | Followup ->
+                // Queue mutation stays local and available during a budget outage. Fleet audit is a
+                // different operation: it claims to distinguish an orphan from a worker that is still
+                // alive, so it must make the fresh GitHub reads that establish that fact.
+                match Followups.parse opts.Args with
+                | Ok Followups.Audit -> Client.followupAudit opts
+                | _ -> Followups.run opts
 
             // `predicate` reads LOCAL files (registry + producer manifests) — no board, no token — so it is
             // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).

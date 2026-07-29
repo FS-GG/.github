@@ -480,6 +480,21 @@ let ``an issue body we could NOT read is an error - never an empty touch-set`` (
     | Error(Http(502, _)) -> ()
     | other -> failwith $"an unreadable body must refuse to become a touch-set — got %A{other}"
 
+[<Theory>]
+[<InlineData("OPEN")>]
+[<InlineData("CLOSED")>]
+let ``a per-ref issue-state read distinguishes valid open and closed refs off board`` (wire: string) =
+    let recorder = serving $"""{{"number":42,"state":"%s{wire}"}}"""
+    let expected = if wire = "OPEN" then IssueState.Open else IssueState.Closed
+    Assert.Equal(Ok expected, Reads.issueState recorder "FS-GG" "FS.GG.SDD" 42)
+
+[<Fact>]
+let ``a pull request or malformed state is UNKNOWN to reconciliation, never closed`` () =
+    let pr = serving """{"number":42,"state":"CLOSED","pull_request":{}}"""
+    let malformed = serving """{"number":42,"state":"GONE"}"""
+    Assert.True(Result.isError (Reads.issueState pr "FS-GG" "FS.GG.SDD" 42))
+    Assert.True(Result.isError (Reads.issueState malformed "FS-GG" "FS.GG.SDD" 42))
+
 // ---- #421, at the read ----------------------------------------------------------------------------
 
 [<Fact>]

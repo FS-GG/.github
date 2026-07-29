@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open FS.GG.Coord.Types
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.Cli.Identity
 
@@ -14,20 +15,33 @@ module Followups =
         | Peek
         | Pop
         | List
+        | Audit
+
+    type AuditedQueue =
+        { Worker: string
+          Age: TimeSpan
+          Refs: Ref list }
+
+    type Audit =
+        { Stale: AuditedQueue list
+          Fresh: AuditedQueue list
+          Unreadable: (string * string) list }
 
     type Outcome =
         | Added of Ref
         | Head of Ref
         | Popped of Ref
         | Listed of Ref list
+        | Reconciled of removed: int
         | Empty
         | Refused of why: string
         | Unreadable of why: string
+        | Audited of Audit
 
     // ---- parsing the action ------------------------------------------------------------------------
 
     /// The verbs, spelled once. A refusal names them, so the remedy is in the message that refused (#611).
-    let private verbs = "add <ref> | peek | pop | list"
+    let private verbs = "add <ref> | peek | pop | list | audit"
 
     let parse (args: string list) : Result<Action, string> =
         match args with
@@ -40,21 +54,13 @@ module Followups =
         | [ "peek" ] -> Ok Peek
         | [ "pop" ] -> Ok Pop
         | [ "list" ] -> Ok List
+        | [ "audit" ] -> Ok Audit
         | [] -> Error $"followup needs a subcommand: %s{verbs}."
         | other :: _ -> Error $"unknown followup subcommand '%s{other}' (%s{verbs})."
 
     // ---- the queue file ----------------------------------------------------------------------------
 
-    let path (worker: Worker) : Result<string, string> =
-        // AN ID THAT CANNOT NAME A WORKER MUST NOT NAME A QUEUE. `Identity.resolve` slugs `--worker`/
-        // `$FSGG_WORKER` and returns Ok for a slug that trims to nothing — `--worker '///'` is `Ok ""` —
-        // so without this every such caller shares ONE file, which is property 1 defeated by the id
-        // itself. Refuse rather than key on it (#419's fail-closed read).
-        if String.IsNullOrWhiteSpace worker.Id then
-            Error
-                "the resolved worker id is EMPTY, so it cannot key a queue — every worker with an empty id would share one file, which is the collision the per-worker path exists to prevent. Mint one: eval \"$(scripts/fsgg-coord whoami --mint)\"."
-        else
-            Ok(Path.Combine(Cache.root (), "followups", worker.Id + ".txt"))
+    let path (worker: Worker) : Result<string, string> = FollowupAudit.path worker
 
     /// The STORED form — fully qualified, always.
     ///
@@ -86,7 +92,7 @@ module Followups =
         // it?", i.e. "is this the bare form?", and the answer never reaches the queue.
         let probe = ".github"
 
-        match Client.parseRefIn ownr None raw, Client.parseRefIn ownr (Some probe) raw with
+        match RefParsing.parse ownr None raw, RefParsing.parse ownr (Some probe) raw with
         | Ok r, _ -> Ok r
         | Error _, Ok _ ->
             Error
@@ -224,6 +230,85 @@ module Followups =
 
                         Listed refs, None)
 
+        | Audit ->
+            // `run` handles this before identity resolution: a fleet audit is deliberately NOT scoped to
+            // whoever invoked it. Keeping the impossible branch explicit makes that boundary total.
+            Refused "followup audit reads every worker queue and does not take a worker argument."
+
+    /// Remove only refs whose durable disposition was already written. The queue is re-read under its
+    /// exclusive handle, so a concurrent append survives this reconciliation; an unreadable line aborts
+    /// the rewrite rather than letting a closed-item cleanup discard an unrelated promise.
+    let remove (worker: Worker) (refs: Set<Ref>) : Result<int, string> =
+        match path worker with
+        | Error why -> Error why
+        | Ok file ->
+            match withQueue file (fun lines ->
+                let parsed = lines |> List.map (fun line -> line, parseLine file line)
+
+                match parsed |> List.tryPick (function _, Error why -> Some why | _ -> None) with
+                | Some why -> Unreadable why, None
+                | None ->
+                    let remaining =
+                        parsed
+                        |> List.choose (function
+                            | line, Ok r when not (Set.contains r refs) -> Some line
+                            | _ -> None)
+
+                    let removed = List.length lines - List.length remaining
+                    Reconciled removed, Some remaining) with
+            | Unreadable why
+            | Refused why -> Error why
+            | Reconciled removed -> Ok removed
+            | _ -> Error "the follow-up queue did not return a reconciliation receipt; it was not treated as rewritten."
+
+    // ---- fleet audit -------------------------------------------------------------------------------
+
+    /// A queue older than one item lease is not evidence that its worker is gone — chunk 2 correlates
+    /// that with live claims — but it IS the bounded local candidate a driver must be able to see.
+    let private abandonedAfter = TimeSpan.FromMinutes 120.0
+
+    let private queueDirectory () = Path.Combine(Cache.root (), "followups")
+
+    let private readAuditQueue (now: DateTimeOffset) (file: string) : Result<AuditedQueue, string> =
+        let worker = Path.GetFileNameWithoutExtension file
+
+        try
+            use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None)
+            let bytes = Array.zeroCreate<byte> (int stream.Length)
+            stream.ReadExactly(bytes, 0, bytes.Length)
+            let lines = splitLines (Encoding.UTF8.GetString bytes)
+
+            match lines |> List.map (parseLine file) |> List.tryPick (function Error why -> Some why | Ok _ -> None) with
+            | Some why -> Error why
+            | None ->
+                // The parser has already proved every line above. Re-read it here only to preserve the
+                // canonical `Ref` values rather than printing raw file bytes as if they were refs.
+                let parsed = lines |> List.choose (fun line -> parseLine file line |> Result.toOption)
+                let age = now - DateTimeOffset(File.GetLastWriteTimeUtc file)
+                Ok { Worker = worker; Age = age; Refs = parsed }
+        with
+        | :? IOException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message} This is NOT an empty queue."
+        | :? UnauthorizedAccessException as error -> Error $"could not open the follow-up queue %s{file}: %s{error.Message}"
+
+    let audit (now: DateTimeOffset) : Audit =
+        let directory = queueDirectory ()
+
+        if not (Directory.Exists directory) then
+            { Stale = []; Fresh = []; Unreadable = [] }
+        else
+            let mutable stale, fresh, unreadable = [], [], []
+
+            for file in Directory.EnumerateFiles(directory, "*.txt") do
+                let worker = Path.GetFileNameWithoutExtension file
+
+                match readAuditQueue now file with
+                | Error why -> unreadable <- (worker, why) :: unreadable
+                | Ok queue when List.isEmpty queue.Refs -> ()
+                | Ok queue when queue.Age >= abandonedAfter -> stale <- queue :: stale
+                | Ok queue -> fresh <- queue :: fresh
+
+            { Stale = List.rev stale; Fresh = List.rev fresh; Unreadable = List.rev unreadable }
+
     // ---- the projection ----------------------------------------------------------------------------
 
     let render (outcome: Outcome) : string list * string list =
@@ -234,6 +319,16 @@ module Followups =
         | Head r -> [ qualified r ], []
         | Popped r -> [ qualified r ], []
         | Listed refs -> refs |> List.map qualified, [ $"%d{List.length refs} follow-up(s) owed." ]
+        | Reconciled removed -> [], [ $"%d{removed} reconciled follow-up(s) removed." ]
+        | Audited audit ->
+            let queueLines label queues =
+                queues
+                |> List.collect (fun queue ->
+                    [ $"%s{label}: worker %s{queue.Worker}, age %O{queue.Age}" ]
+                    @ (queue.Refs |> List.map (fun r -> $"  %s{qualified r}")))
+
+            let unreadable = audit.Unreadable |> List.map (fun (worker, why) -> $"UNREADABLE: worker %s{worker}: %s{why}")
+            [], queueLines "ABANDONED-CANDIDATE" audit.Stale @ queueLines "ACTIVE-CANDIDATE" audit.Fresh @ unreadable
         | Empty -> [], [ "the follow-up queue is empty — nothing owed. Back to the board." ]
         | Refused why -> [], [ $"fsgg-coord-engine: %s{why}" ]
         | Unreadable why -> [], [ $"fsgg-coord-engine: %s{why}" ]
@@ -243,12 +338,15 @@ module Followups =
         | Added _
         | Head _
         | Popped _
-        | Listed _ -> Client.ExitGreen
+        | Listed _ -> ExitCode.toInt ExitCode.Green
+        | Reconciled _ -> ExitCode.toInt ExitCode.Green
+        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) -> ExitCode.toInt ExitCode.Red
+        | Audited _ -> ExitCode.toInt ExitCode.Green
         // EX_NONE, and `Client`'s own constant rather than a 5 typed here — "I looked and there is nothing"
         // has exactly one meaning across this engine, and `take` already owns it (#585).
-        | Empty -> Client.ExitNone
+        | Empty -> ExitCode.toInt ExitCode.NoneStartable
         | Refused _
-        | Unreadable _ -> Client.ExitError
+        | Unreadable _ -> ExitCode.toInt ExitCode.Error
 
     let run (opts: Options.Options) : int =
         // THE ARGUMENTS FIRST, THEN THE ENVIRONMENT. `parse` is pure and cannot fail for a reason outside
@@ -259,12 +357,19 @@ module Followups =
         match parse opts.Args with
         | Error msg ->
             Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
-            Client.ExitError
+            ExitCode.toInt ExitCode.Error
+        | Ok Audit ->
+            let outcome = Audited(audit DateTimeOffset.UtcNow)
+            let out, err = render outcome
+
+            for line in out do Console.Out.WriteLine(line: string)
+            for line in err do Console.Error.WriteLine(line: string)
+            exitCode outcome
         | Ok action ->
             match Identity.resolve opts.Worker with
             | Error msg ->
                 Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
-                Client.ExitError
+                ExitCode.toInt ExitCode.Error
             | Ok worker ->
                 let outcome = apply worker action
                 let out, err = render outcome

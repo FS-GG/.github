@@ -543,6 +543,10 @@ module Writes =
     /// silence exactly the worker with something urgent to say.
     val say: transport: IGitHubTransport -> from: WorkerId -> toWorker: WorkerId -> ref: Ref -> text: string -> IoResult<unit>
 
+    /// Record a follow-up disposition on the owed issue itself. Unlike a worker message this is durable
+    /// evidence for a driver that later audits an abandoned queue.
+    val followupDisposition: transport: IGitHubTransport -> ref: Ref -> worker: WorkerId -> text: string -> IoResult<unit>
+
     /// Attach a child issue to a parent (`sub_issues`).
     ///
     /// The child's REST INTEGER ID, never its number — two repos can each have an issue #7, and posting a

@@ -78,6 +78,13 @@ module FollowupsTests =
 
     let private ref' owner repo n : Ref = { Owner = owner; Repo = repo; Number = n }
 
+    let private writeQueue (cache: string) (worker: string) (text: string) (written: DateTime) =
+        let directory = Path.Combine(cache, "followups")
+        Directory.CreateDirectory directory |> ignore
+        let file = Path.Combine(directory, worker + ".txt")
+        File.WriteAllText(file, text)
+        File.SetLastWriteTimeUtc(file, written)
+
     // ---- property 2: a queued ref is QUALIFIED, always ---------------------------------------------
 
     [<Theory>]
@@ -149,6 +156,34 @@ module FollowupsTests =
             Assert.NotEqual(Client.ExitGreen, exitCode Empty))
 
     [<Fact>]
+    let ``the terminal audit is local, worker-keyed, and does not consume an owed queue`` () =
+        withCache (fun _ ->
+            let owner = workerNamed "rook-audit-owner"
+            let stranger = workerNamed "wren-audit-stranger"
+            apply owner (Add "FS.GG.Game#171") |> ignore
+            Assert.Equal(FollowupAudit.Owed 1, FollowupAudit.inspect owner)
+            Assert.Equal(FollowupAudit.Empty, FollowupAudit.inspect stranger)
+            Assert.Equal(Head(ref' "FS-GG" "FS.GG.Game" 171), apply owner Peek))
+
+    [<Fact>]
+    let ``the terminal audit refuses an unusable worker key rather than calling it empty`` () =
+        withCache (fun _ ->
+            match FollowupAudit.inspect (workerWithRawId "") with
+            | FollowupAudit.Unreadable why -> Assert.Contains("EMPTY", why)
+            | other -> failwith $"an unusable worker key is not an empty queue: %A{other}")
+
+    [<Fact>]
+    let ``the terminal audit reports a locked queue as unreadable, never empty`` () =
+        withCache (fun _ ->
+            let w = workerNamed "rook-audit-locked"
+            apply w (Add "FS.GG.Game#171") |> ignore
+            let file = match path w with | Ok value -> value | Error why -> failwith why
+            use held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None)
+            match FollowupAudit.inspect w with
+            | FollowupAudit.Unreadable why -> Assert.Contains("NOT an empty queue", why)
+            | other -> failwith $"a held queue must fail closed, got %A{other}")
+
+    [<Fact>]
     let ``Empty and Unreadable are DIFFERENT outcomes and different codes`` () =
         // #266's whole lesson, as an assertion: "I looked and there is nothing" must never be reachable
         // from "I could not look". A worker who reads the second as the first walks away from a promise.
@@ -168,6 +203,8 @@ module FollowupsTests =
 
             File.WriteAllText(file, "not-a-ref\nFS-GG/FS.GG.Game#171\n")
 
+            Assert.Equal(FollowupAudit.Owed 2, FollowupAudit.inspect w)
+
             // Skipping the bad line would be THIS ITEM'S BUG rebuilt inside its own fix: a promise
             // discarded by a machine nobody asked. Fail closed, name the file, let the operator repair it.
             match apply w Pop with
@@ -178,6 +215,40 @@ module FollowupsTests =
 
             // ...and the queue is UNTOUCHED — a pop that cannot name what it removed must remove nothing.
             Assert.Equal("not-a-ref\nFS-GG/FS.GG.Game#171\n", File.ReadAllText file))
+
+    [<Fact>]
+    let ``fleet audit names an abandoned queued ref rather than leaving it as an invisible file`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "orphaned-worker" "FS-GG/.github#1900\n" (now.UtcDateTime.AddHours -3)
+
+            let report = audit now
+            let queue = Assert.Single report.Stale
+            Assert.Equal("orphaned-worker", queue.Worker)
+            Assert.Equal<Ref list>([ ref' "FS-GG" ".github" 1900 ], queue.Refs)
+            Assert.Empty report.Unreadable)
+
+    [<Fact>]
+    let ``fleet audit keeps a recently active queue visible without calling it abandoned`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "recent-worker" "FS-GG/.github#1900\n" (now.UtcDateTime.AddMinutes -119)
+
+            let report = audit now
+            Assert.Empty report.Stale
+            let queue = Assert.Single report.Fresh
+            Assert.Equal("recent-worker", queue.Worker))
+
+    [<Fact>]
+    let ``fleet audit fails closed on a malformed queue and names its worker`` () =
+        withCache (fun cache ->
+            let now = DateTimeOffset(2026, 7, 29, 16, 0, 0, TimeSpan.Zero)
+            writeQueue cache "broken-worker" "not-a-ref\n" (now.UtcDateTime.AddHours -3)
+
+            let report = audit now
+            let worker, why = Assert.Single report.Unreadable
+            Assert.Equal("broken-worker", worker)
+            Assert.Contains("not-a-ref", why))
 
     // ---- property 1: per-worker by construction ----------------------------------------------------
 
@@ -278,6 +349,39 @@ module FollowupsTests =
             Assert.False(File.Exists file, "a drained queue must cease to exist, not linger zero-byte"))
 
     [<Fact>]
+    let ``reconciliation removes only durably selected refs and preserves a concurrent obligation`` () =
+        withCache (fun _ ->
+            let w = workerNamed "rook-reconcile"
+            let closed = ref' "FS-GG" "FS.GG.Game" 1
+            let open' = ref' "FS-GG" "FS.GG.Audio" 2
+            apply w (Add closed.Short) |> ignore
+            apply w (Add open'.Short) |> ignore
+
+            match remove w (set [ closed ]) with
+            | Error why -> failwith why
+            | Ok _ -> ()
+
+            // A reconciliation may clear only the ref whose issue disposition has landed. The other
+            // promise is still owed; treating a queue rewrite as a truncate would recreate #1900.
+            Assert.Equal(Listed [ open' ], apply w List))
+
+    [<Fact>]
+    let ``reconciliation refuses a corrupt queue before rewriting any selected ref`` () =
+        withCache (fun cache ->
+            let w = workerNamed "rook-reconcile-corrupt"
+            writeQueue cache w.Id "FS-GG/FS.GG.Game#1\nnot-a-ref\n" DateTime.UtcNow
+
+            match remove w (set [ ref' "FS-GG" "FS.GG.Game" 1 ]) with
+            | Ok removed -> failwith $"a corrupt queue must not report a rewrite (%d{removed})"
+            | Error _ -> ()
+
+            let file =
+                match path w with
+                | Ok value -> value
+                | Error why -> failwith why
+            Assert.Equal("FS-GG/FS.GG.Game#1\nnot-a-ref\n", File.ReadAllText file))
+
+    [<Fact>]
     let ``concurrent pops CONSERVE the queue — no ref handed twice, none lost`` () =
         withCache (fun _ ->
             let w = workerNamed "rook-test"
@@ -356,6 +460,7 @@ module FollowupsTests =
         Assert.Equal<Result<Action, string>>(Ok Peek, parse [ "peek" ])
         Assert.Equal<Result<Action, string>>(Ok Pop, parse [ "pop" ])
         Assert.Equal<Result<Action, string>>(Ok List, parse [ "list" ])
+        Assert.Equal<Result<Action, string>>(Ok Audit, parse [ "audit" ])
 
     [<Theory>]
     [<InlineData("")>]
