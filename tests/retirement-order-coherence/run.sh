@@ -71,8 +71,10 @@ shift
 path=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    -H) shift 2 ;;
-    --jq) shift 2 ;;
+    # `shift 2` with ONE argument left returns 1 and shifts NOTHING under `set -uo pipefail`, so the
+    # loop spins forever and the job dies on its timeout — a non-zero for the wrong reason, reported as
+    # infrastructure rather than as a finding. Refuse the malformed call instead.
+    -H|--jq) [ $# -ge 2 ] || refuse "dangling $1 with no value"; shift 2 ;;
     repos/*) path="$1"; shift ;;
     *) shift ;;
   esac
@@ -93,7 +95,14 @@ case "$rest" in
     ;;
   /git/trees/*)
     [ -e "$dir/invisible" ] && notfound
+    [ -e "$dir/no-commits" ] && notfound
     case "$rest" in *"recursive=1"*) ;; *) refuse "tree read is not ?recursive=1: $rest" ;; esac
+    # THE BRANCH IS ASSERTED, not answered. Without this a gate that hardcoded `/git/trees/main` and
+    # never read `default_branch` passes every leg in this file.
+    case "$rest" in
+      "/git/trees/$(cat "$dir/branch")?recursive=1") ;;
+      *) refuse "tree read is not at this repo's default branch ($(cat "$dir/branch")): $rest" ;;
+    esac
     truncated=false; [ -e "$dir/truncated" ] && truncated=true
     TREE_FILE="$dir/tree" TRUNCATED="$truncated" python3 -c '
 import json, os
@@ -104,6 +113,8 @@ print(json.dumps({"truncated": os.environ["TRUNCATED"] == "true",
     ;;
   /contents/.agent-skill-roots)
     [ -e "$dir/invisible" ] && notfound
+    # Reachable: leg 24 puts `.agent-skill-roots` in the TREE without a `roots` file, which is the
+    # blob-present/contents-404 disagreement the gate must refuse rather than crash on.
     [ -f "$dir/roots" ] || notfound
     cat "$dir/roots"
     ;;
@@ -174,7 +185,7 @@ $out"
     return
   fi
   for needle in "$@"; do
-    if ! printf '%s' "$out" | grep -qi -- "$needle"; then
+    if ! printf '%s' "$out" | grep -qiF -- "$needle"; then
       bad "$name" "exit $rc was right, but the message never said: $needle
 $out"
       return
@@ -392,6 +403,140 @@ if [ "$rc" = 1 ] && printf '%s' "$out" | grep -qi "the heading says 1 of 2"; the
   ok "--offline still reds on a document defect (exit 1)"
 else
   bad "--offline still reds on a document defect" "expected exit 1, got $rc
+$out"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# Legs 24-32 — every one of these was a REPRODUCED defect in this gate's first reviewed revision,
+# and every one of them was a way to reach GREEN, or a crash, without establishing the subject.
+# ---------------------------------------------------------------------------------------------
+
+# `in-flight:` IS a mute button unless it has a floor. With every receiver parked the gate read ZERO
+# trees and reported OK having invoked `gh` not once — green over nothing, the same shape the empty
+# roster leg already refuses one level up. The ref requirement makes parking attributable, not bounded.
+WORLD="$WORK/w1"; export FIXTURE_WORLD="$WORLD"
+mktree "$WORK/t24" '<!-- fsgg:retirement-verdict
+retired:
+in-flight: alpha(#1), beta(#2)
+-->' "0 of 2"
+expect 3 "$WORK/t24" "parking EVERY receiver in-flight is refused, not green" "ZERO trees" "not a way to switch the comparison off"
+
+# An `.agent-skill-roots` that parses to NOTHING is a misconfiguration, not an empty root set.
+# Falling back to the default there silently substitutes a set the tree explicitly declined —
+# `scripts/lib/roots.sh:resolve_roots` dies on exactly this, and so must this gate. The receiver below
+# commits TWO roots it once declared; the fall-through graded it retired, green.
+WORLD="$WORK/w25"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta ".agent-skill-roots" ".other/skills/b/SKILL.md" ".another/skills/b/SKILL.md"
+printf '# all comments, no roots\n' >"$WORLD/Fixture-Org__Fixture.Beta/roots"
+mktree "$WORK/t25" "$BLOCK_BOTH" "2 of 2"
+expect 3 "$WORK/t25" "a roots declaration that parses to nothing is refused" "declares no roots" "explicitly declined"
+
+# A `./`-prefixed root never prefix-matches a tree path, so BOTH roots looked empty and the receiver
+# was graded retired — green, forever, on a declaration `roots.sh` and `skill-view` both accept.
+WORLD="$WORK/w26"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta ".agent-skill-roots" ".src/skills/b/SKILL.md" ".view/skills/b/SKILL.md"
+printf './.src/skills\n./.view/skills\n' >"$WORLD/Fixture-Org__Fixture.Beta/roots"
+mktree "$WORK/t26" "$BLOCK_BOTH" "2 of 2"
+expect 1 "$WORK/t26" "a ./-prefixed root still matches the tree" "(beta) is NOT retired"
+
+# An INLINE `#` comment is stripped to end-of-line, exactly as `roots.sh:read_roots_decl`'s
+# `sed 's/#.*$//'` does. Treating only whole-line comments as comments turned the rest of the line into
+# roots — `docs` then matched `docs/x.md` and the gate red, blaming the receiver for a root it never had.
+WORLD="$WORK/w27"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta ".agent-skill-roots" ".src/skills/b/SKILL.md" "docs/x.md"
+printf '.src/skills # docs are not skills\n' >"$WORLD/Fixture-Org__Fixture.Beta/roots"
+mktree "$WORK/t27" "$BLOCK_BOTH" "2 of 2"
+expect 0 "$WORK/t27" "an inline # comment is stripped, as roots.sh strips it" "2 of 2 retired"
+
+# A readable repository whose default branch has NO TREE (no commits) 404s on the tree read. That 404
+# escaped uncaught and surfaced as "the gate CRASHED — a bug in the gate", which is the wrong story
+# about routine remote state; and an absent tree is not an absent root either way.
+WORLD="$WORK/w28"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta  ".src/skills/b/SKILL.md"
+touch "$WORLD/Fixture-Org__Fixture.Beta/no-commits"
+mktree "$WORK/t28" "$BLOCK_BOTH" "2 of 2"
+expect 3 "$WORK/t28" "a repo with no tree on its default branch is refused, not a crash" "has no tree (404)" "not a receiver that retired"
+
+# `.agent-skill-roots` is a blob in the tree and its contents read 404s — the two reads disagree about
+# the same tree. Also uncaught, also a crash. Falling back to the default here would grade the receiver
+# against a set it may have declined.
+WORLD="$WORK/w29"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta ".agent-skill-roots" ".src/skills/b/SKILL.md"
+mktree "$WORK/t29" "$BLOCK_BOTH" "2 of 2"
+expect 3 "$WORK/t29" "a tree/contents disagreement about .agent-skill-roots is refused, not a crash" \
+  "contents read for it answers 404" "cannot establish which roots"
+
+# ZERO occupied roots is not a retirement. An emptied tree is indistinguishable from a completed
+# retirement, and scoring it "retired" is the same absence-as-evidence the truncated-tree guard refuses.
+WORLD="$WORK/w30"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta  "README.md"
+mktree "$WORK/t30" "$BLOCK_BOTH" "2 of 2"
+expect 3 "$WORK/t30" "a receiver committing no skill root at all is refused" "commits NO blobs" "zero is not 'retired'"
+
+# The DEFAULT BRANCH is read, not assumed. The stub refuses a tree read that is not at this repo's
+# branch, so a gate that hardcoded `/git/trees/main` cannot pass this leg.
+WORLD="$WORK/w31"; export FIXTURE_WORLD="$WORLD"
+mkrepo "$WORLD" Fixture-Org/Fixture.Alpha ".src/skills/a/SKILL.md"
+mkrepo "$WORLD" Fixture-Org/Fixture.Beta  ".src/skills/b/SKILL.md"
+echo trunk >"$WORLD/Fixture-Org__Fixture.Beta/branch"
+mktree "$WORK/t31" "$BLOCK_BOTH" "2 of 2"
+expect 0 "$WORK/t31" "the tree is read at the repo's OWN default branch" "2 of 2 retired"
+
+# ---------------------------------------------------------------------------------------------
+# Legs 32-34 — the document's live surface, in the two shapes that made half of leg 4 evaporate.
+# ---------------------------------------------------------------------------------------------
+
+# A count WRAPPED across a line break was invisible to a per-line match. The document is hard-wrapped
+# at ~100 columns, so the very sentence this change removed was one reflow from surviving the gate.
+WORLD="$WORK/w1"; export FIXTURE_WORLD="$WORLD"
+mktree "$WORK/t32" "$BLOCK_BOTH" "2 of 2" "> The sequence is COMPLETE — 2
+> of 2."
+expect 1 "$WORK/t32" "a count wrapped across a line break is still a second count" "the header block states a second count"
+
+# A `---` at line 1 (YAML front matter, or a leading rule) collapsed the header block to nothing and
+# SILENTLY retired half of leg 4 — one added front-matter block, no signal at all.
+mktree "$WORK/t33" "$BLOCK_BOTH" "2 of 2" "> The sequence is COMPLETE — 2 of 2."
+printf '%s\n' '---' "title: x" '---' "$(cat "$WORK/t33/docs/coordination/skill-apparatus-retirement-order.md")" \
+  >"$WORK/t33/docs/coordination/skill-apparatus-retirement-order.md.new"
+mv "$WORK/t33/docs/coordination/skill-apparatus-retirement-order.md.new" \
+   "$WORK/t33/docs/coordination/skill-apparatus-retirement-order.md"
+expect 3 "$WORK/t33" "a rule at line 1 empties the header block and is refused" "header block" "is EMPTY"
+
+# No `---` at all: the gate cannot tell the header block from the body, so it refuses rather than
+# grading every historical record as a live restatement (#698).
+mktree "$WORK/t34" "$BLOCK_BOTH" "2 of 2"
+python3 - "$WORK/t34/docs/coordination/skill-apparatus-retirement-order.md" <<'PY'
+import sys
+p = sys.argv[1]
+# Read BEFORE opening for write. `open(p,"w").write(<expr reading p>)` truncates first and the
+# expression then reads an empty file — which made this leg pass on the wrong refusal entirely.
+kept = [l for l in open(p).read().splitlines() if l.rstrip() != "---"]
+open(p, "w").write("\n".join(kept) + "\n")
+PY
+expect 3 "$WORK/t34" "no --- rule at all is refused" "has no" "rule"
+
+# An unknown key in the verdict block is refused: a key the gate ignores is a fact a writer believes
+# is graded and is not.
+mktree "$WORK/t35" '<!-- fsgg:retirement-verdict
+retired: alpha, beta
+in-flight:
+refused: sdd
+-->' "2 of 2"
+expect 3 "$WORK/t35" "an unknown key in the verdict block is refused" "does not read"
+
+# An explicitly EMPTY transport knob is a misconfiguration, not the default — two ways of getting a
+# knob wrong must not have opposite consequences.
+rc=0; out="$(FSGG_RETIREMENT_TRIES='' $PY "$GATE" --root "$WORK/t1" 2>&1)" || rc=$?
+if [ "$rc" = 3 ] && printf '%s' "$out" | grep -qiF -- "FSGG_RETIREMENT_TRIES"; then
+  ok "an explicitly empty transport knob is refused (exit 3)"
+else
+  bad "an explicitly empty transport knob is refused" "expected exit 3 naming the variable, got $rc
 $out"
 fi
 
