@@ -135,6 +135,19 @@ printf '%s' "$OUT" | grep -q 'discovered ZERO' \
   && ok "#266: ...and it SAYS the discovery is what broke, not the tree" \
   || bad "#266: rc=3 must name discovery as the fault" "$OUT"
 
+# ---- 5b. AN UNFOLLOWED SOURCE IS A NO-VERDICT, EVEN AT WARNING. ---------------------------------
+# SC1091 is info. The gate must run its one scan at info to see it, then keep warning/error findings
+# as the ordinary floor; changing SEVERITY must never make an unread library look like a clean audit.
+d="$(newrepo unfollowed-source)"
+mkdir -p "$d/lib"
+printf '#!/usr/bin/env bash\n. "lib/missing.sh"\n' > "$d/client.sh"; git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 4 ] && ok "#1719: an unfollowed source is rc=4, not a clean warning-floor audit" \
+  || bad "#1719: SC1091 must be its own no-verdict" "rc=$RC\n$OUT"
+OUT="$(cd "$d" && SEVERITY=warning bash "$GATE" 2>&1)"; RC=$?
+[ "$RC" = 4 ] && ok "#1719: SEVERITY=warning does NOT disarm the SC1091 guard" \
+  || bad "#1719: warning must not hide an unread source" "rc=$RC\n$OUT"
+
 # ---- 6. "I COULD NOT CHECK" IS NOT "IT PASSED". ---------------------------------------------------
 d="$(newrepo noshellcheck)"
 printf '%s' "$BAD_SHELL" > "$d/bad.sh"; git -C "$d" add -A

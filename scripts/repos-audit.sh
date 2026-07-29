@@ -126,6 +126,8 @@
 
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOS_SH="$HERE/repos.sh"
 REGISTRY=""                       # empty => repos.sh default

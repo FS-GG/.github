@@ -36,6 +36,8 @@
 #   3  the gate discovered ZERO shell files. Not a clean tree: a broken discovery. This repo
 #      demonstrably contains shell, so an empty subject means `is_shell` broke, and reporting green
 #      over nothing is the failure this gate exists to end.
+#   4  shellcheck could not follow a sourced file (SC1091). The rest of the subject is not a
+#      trustworthy audit; declare `# shellcheck source-path=SCRIPTDIR` in the sourcing script.
 #
 # Usage:  scripts/lint-shell.sh [--list]
 #   --list            print the discovered subject and exit 0 (no linting). For debugging discovery.
@@ -129,20 +131,33 @@ fi
 
 echo "shell-lint: shellcheck $("$SHELLCHECK" --version | awk '/^version:/{print $2}'), severity=$SEVERITY, ${#subject[@]} file(s)"
 
-# `-x` follows `source`d files, which this repo needs: `scripts/lib/*.sh` are sourced fragments, and
-# without -x every caller reads as using undefined functions.
+# One INFO-level JSON scan serves TWO verdicts. SC1091 is info, so a warning-level invocation hides
+# exactly the fact that says the scan did not read its whole subject. The JSON level keeps the enforced
+# warning floor independent: only warning/error comments are ordinary findings; SC1091 is a distinct
+# no-verdict. Do not raise the invocation floor back to warning — that silently disarms this guard.
 #
-# One invocation over the whole subject, NOT one per file: shellcheck's `source` resolution and its
-# exit code are both cleaner that way, and a parse failure is REPORTED (SC1009/SC1073 are `error`
-# severity, which any floor at or below `warning` includes) rather than swallowed as a clean file.
+# One invocation over the whole subject, NOT one per file: shellcheck's source resolution is global.
+report="$(mktemp "${TMPDIR:-/tmp}/shell-lint.XXXXXX")" || exit 2
+trap 'rm -f "$report"' EXIT
 rc=0
-"$SHELLCHECK" -x -S "$SEVERITY" -f gcc "${subject[@]}" || rc=$?
+"$SHELLCHECK" -x -S info -f json "${subject[@]}" >"$report" || rc=$?
 
 case "$rc" in
-  0) echo "shell-lint: OK — ${#subject[@]} file(s) clean at severity '$SEVERITY'." ;;
-  1) echo "::error::shellcheck reported findings (see above)." ;;
+  0|1) ;;
   *) echo "::error::shellcheck exited $rc, which is neither clean (0) nor findings (1) — treating as 'could not check'."
      exit 2 ;;
 esac
 
-exit "$rc"
+if grep -Eq '"code"[[:space:]]*:[[:space:]]*1091' "$report"; then
+  cat "$report"
+  echo "::error::shellcheck could not follow a sourced file (SC1091). Add '# shellcheck source-path=SCRIPTDIR' to the sourcing script; this audit is incomplete."
+  exit 4
+fi
+
+if grep -Eq '"level"[[:space:]]*:[[:space:]]*"(error|warning)"' "$report"; then
+  cat "$report"
+  echo "::error::shellcheck reported warning/error findings (see above)."
+  exit 1
+fi
+
+echo "shell-lint: OK — ${#subject[@]} file(s) clean at severity '$SEVERITY' (SC1091 checked at info)."

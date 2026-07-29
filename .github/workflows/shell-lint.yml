@@ -166,8 +166,14 @@ jobs:
           echo "::error title=shell-lint: could not run::The gate could not execute (rc=2) — this is not a verdict about the tree. See the job log."
           exit 1
 
+      - name: 'NO VERDICT: shellcheck could not follow a sourced file'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '4' }}
+        run: |
+          echo "::error title=shell-lint: unread sourced file::SC1091 means the shell audit did not read its whole subject. Add source-path=SCRIPTDIR to the sourcing script."
+          exit 1
+
       - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
-        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3","4"]'), steps.check.outputs.rc) }}
         run: |
           echo "::error title=shell-lint: inconclusive::lint-shell.sh exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
           exit 1

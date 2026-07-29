@@ -110,6 +110,8 @@
 
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"

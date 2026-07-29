@@ -81,6 +81,8 @@
 
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR
+
 TREE="."
 ROOTS=""
 ROOTS_ARG=""
