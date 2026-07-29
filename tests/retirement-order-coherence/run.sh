@@ -280,6 +280,15 @@ mktree "$WORK/t11" "$BLOCK_BOTH" "2 of 2"
 printf '\n## Unrelated: 0 of 7 receivers pass include-build-config\n' >>"$WORK/t11/docs/coordination/skill-apparatus-retirement-order.md"
 expect 0 "$WORK/t11" "a count with another denominator is not this document's count" "2 of 2 retired"
 
+# A `# …` line INSIDE a fenced block is a shell comment, not a heading. This document is full of
+# fenced commands — the standing verdict's own measurement is one — and grading them as headings would
+# eventually red on a legitimate append, which is how a gate stops being read (#698).
+mktree "$WORK/t11b" "$BLOCK_BOTH" "2 of 2"
+{
+  printf '\n```\n# a measurement command, 1 of 2 receivers\ngh api repos/x/y\n```\n'
+} >>"$WORK/t11b/docs/coordination/skill-apparatus-retirement-order.md"
+expect 0 "$WORK/t11b" "a # comment inside a fence is not a heading" "2 of 2 retired"
+
 # ---------------------------------------------------------------------------------------------
 # Legs 12-14 — the anchor itself. Missing, doubled, or naming a repo the roster does not carry.
 # Every one is a NO VERDICT (3): with no unambiguous block there is nothing to compare, and the

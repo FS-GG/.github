@@ -443,6 +443,31 @@ def count_in(line: str, total: int) -> int | None:
     return None
 
 
+def headings(lines: list[str]) -> set[int]:
+    """The indices of the ATX headings in ``lines``, skipping fenced code blocks.
+
+    A `# ` line inside a fence is a SHELL COMMENT, not a heading, and this document is full of fenced
+    commands — the standing verdict's own measurement is one, and it carries a `# per receiver in
+    registry/repos.yml…` comment. Grading those as headings would eventually red on a legitimate append
+    of a command, which is precisely how a gate stops being read (#698). The fence tracker is the plain
+    one: a line whose first non-space run is ``` or ~~~ toggles.
+    """
+    inside = ""
+    found: set[int] = set()
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        fence = "```" if stripped.startswith("```") else "~~~" if stripped.startswith("~~~") else ""
+        if fence:
+            if not inside:
+                inside = fence
+            elif inside == fence:
+                inside = ""
+            continue
+        if not inside and HEADING.match(line):
+            found.add(index)
+    return found
+
+
 def headline_finding(root: str, anchor_line: int, retired: int, total: int) -> str | None:
     """Leg 2: the heading the anchor annotates must state the count the anchor implies.
 
@@ -452,9 +477,10 @@ def headline_finding(root: str, anchor_line: int, retired: int, total: int) -> s
     the heading is not merely allowed to carry a count but REQUIRED to.
     """
     lines = read_text(os.path.join(root, ORDER), f"the retirement order ({ORDER})").splitlines()
+    atx = headings(lines)
     for index in range(anchor_line - 2, -1, -1):
         line = lines[index]
-        if not HEADING.match(line):
+        if index not in atx:
             continue
         stated = count_in(line, total)
         if stated is None:
@@ -486,13 +512,18 @@ def second_count_findings(root: str, anchor_line: int, total: int) -> list[str]:
     2 above is what grades it.
     """
     lines = read_text(os.path.join(root, ORDER), f"the retirement order ({ORDER})").splitlines()
+    atx = headings(lines)
 
     governing = None
     for index in range(anchor_line - 2, -1, -1):
-        if HEADING.match(lines[index]):
+        if index in atx:
             governing = index
             break
 
+    # The header block ends at the first `---` rule. THE DEGENERATE CASE FAILS LOUD, NOT OPEN: a
+    # document with no rule at all has every line on the live surface, so the gate reds noisily rather
+    # than quietly grading nothing. That is the safe direction — the opposite default would make one
+    # deleted line silently retire the whole leg.
     header_end = len(lines)
     for index, line in enumerate(lines):
         if line.rstrip() == "---":
@@ -503,7 +534,7 @@ def second_count_findings(root: str, anchor_line: int, total: int) -> list[str]:
     for index, line in enumerate(lines):
         if index == governing:
             continue
-        live = index < header_end or HEADING.match(line)
+        live = index < header_end or index in atx
         if not live:
             continue
         stated = count_in(line, total)
