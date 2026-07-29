@@ -217,6 +217,7 @@ if not (List.isEmpty digestVectors) then
 let srcPath = Path.Combine(libDir, "SkillMirror.fs")
 let got = sourceDigest srcPath
 let declared = doc.RootElement.GetProperty("derivedFrom").GetProperty("skillMirrorFsSha256").GetString()
+let declaredFiles = doc.RootElement.GetProperty("derivedFrom").GetProperty("libraryFiles")
 
 printfn ""
 printfn "library source:   %s" srcPath
@@ -226,6 +227,13 @@ printfn "sha256 in table:  %s" declared
 if got <> declared then
     disagreements <- disagreements + 1
     eprintfn "DISAGREES  derivedFrom.skillMirrorFsSha256 is stale — this table was derived from a DIFFERENT library revision."
+
+for file in [ "Schemas.fs"; "SkillMirror.fs" ] do
+    let path = Path.Combine(libDir, file)
+    let expected = declaredFiles.GetProperty($"src/FS.GG.Contracts/{file}").GetString()
+    if sourceDigest path <> expected then
+        disagreements <- disagreements + 1
+        eprintfn "DISAGREES  derivedFrom.libraryFiles[%s] is stale." file
 
 // `digestVectors` carries its OWN provenance, because it was added (.github#1547) while the
 // top-level `derivedFrom` was already stale about a revision #1576 owns re-deriving. A measured

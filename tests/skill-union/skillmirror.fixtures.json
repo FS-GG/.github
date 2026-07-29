@@ -26,6 +26,10 @@
     "path": "src/FS.GG.Contracts/SkillMirror.fs",
     "commit": "bc93f94ddf6e036a9bd4580556a799927a25d8db",
     "skillMirrorFsSha256": "e44de4a013891890f545ff4544bb779b461f329ee03127964c6f37ed47dd3950",
+    "libraryFiles": {
+      "src/FS.GG.Contracts/Schemas.fs": "bb03c89056b89ae4c6713c01a167114a028db4b5bc6f9f221728ee694ca154d0",
+      "src/FS.GG.Contracts/SkillMirror.fs": "e44de4a013891890f545ff4544bb779b461f329ee03127964c6f37ed47dd3950"
+    },
     "derivedOn": "2026-07-29",
     "howToRedrive": "bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts",
     "residualGap": [

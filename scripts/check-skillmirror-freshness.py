@@ -253,7 +253,7 @@ def gh_api(*args: str) -> bytes:
     raise Unreachable("unreachable")  # pragma: no cover — the loop always returns or raises
 
 
-def derived_from(root: str, fixtures: str | None) -> tuple[str, dict[str, str]]:
+def derived_from(root: str, fixtures: str | None) -> tuple[str, dict[str, str], dict[str, str]]:
     """``(path read, the validated derivedFrom block)`` — or a no-verdict naming what is wrong.
 
     EVERY DEGENERATE SHAPE IS A NO-VERDICT, NEVER A GREEN. This gate's entire subject arrives
@@ -314,7 +314,23 @@ def derived_from(root: str, fixtures: str | None) -> tuple[str, dict[str, str]]:
             f"{where}: `{BLOCK}.{PATH_KEY}` is {fields[PATH_KEY]!r}, which is not a plain "
             f"repository-relative path. Refusing to build an API path out of it."
         )
-    return where, fields
+    files = block.get("libraryFiles")
+    if not isinstance(files, dict) or not files:
+        raise GateError(
+            f"{where}: `{BLOCK}.libraryFiles` is not a non-empty object. The oracle loads a set of "
+            "library files; partial or absent coverage is a no-verdict, never a green (#1577)."
+        )
+    checked: dict[str, str] = {}
+    for file_path, digest in files.items():
+        if not isinstance(file_path, str) or not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            raise GateError(f"{where}: `{BLOCK}.libraryFiles` contains an invalid path/digest entry.")
+        if file_path.startswith("/") or ".." in file_path.split("/"):
+            raise GateError(f"{where}: `{BLOCK}.libraryFiles` contains non-relative path {file_path!r}.")
+        checked[file_path] = digest
+    # Keep the legacy named digest as a checked member while fixtures and downstream provenance migrate.
+    # The mapping is authoritative for coverage; this duplicate preserves the established field's evidence.
+    checked[fields[PATH_KEY]] = fields[DIGEST_KEY]
+    return where, fields, checked
 
 
 def repository_is_readable(repo: str) -> bool:
@@ -385,35 +401,31 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    where, fields = derived_from(args.root, args.fixtures)
-    repo, path = fields[REPO_KEY], fields[PATH_KEY]
-
-    try:
-        live = live_digest(repo, path)
-    except Missing as error:
-        # THE SPLIT. A 404 on the path is not graded until the repository has been confirmed
-        # readable — otherwise a token that cannot see the repo at all would be rendered as a
-        # confident "the library moved" (#266, in the false-accusation direction).
+    where, fields, files = derived_from(args.root, args.fixtures)
+    repo = fields[REPO_KEY]
+    findings: list[str] = []
+    for path, expected in files.items():
+        file_fields = {**fields, PATH_KEY: path, DIGEST_KEY: expected}
         try:
-            repository_is_readable(repo)
-        except Missing as invisible:
-            raise Unreachable(
-                f"{repo} answers 404 for the repository ITSELF ({invisible}), so this gate cannot "
-                f"see the subject: the recorded path's 404 may mean the file moved, or may mean "
-                f"only that this token has no access. Those are opposite verdicts and nothing here "
-                f"can tell them apart, so this is a NO VERDICT rather than a finding. Check the "
-                f"token's scope, and whether {repo} was renamed or made private."
-            ) from invisible
-        return report_findings(NAME, [moved(where, fields, str(error))])
-
-    if live == fields[DIGEST_KEY]:
-        return report_ok(
-            NAME,
-            f"{repo}:{path} still hashes to {fields[DIGEST_KEY]}, the revision "
-            f"{where}'s `library` column was measured against (recorded commit "
-            f"{fields[COMMIT_KEY]}). This compares BYTES, not behaviour — see the docstring.",
-        )
-    return report_findings(NAME, [stale(where, fields, live)])
+            live = live_digest(repo, path)
+        except Missing as error:
+            try:
+                repository_is_readable(repo)
+            except Missing as invisible:
+                raise Unreachable(
+                    f"{repo} answers 404 for the repository ITSELF ({invisible}), so this gate cannot "
+                    f"see the subject: the recorded path's 404 may mean the file moved, or may mean "
+                    f"only that this token has no access. Those are opposite verdicts and nothing here "
+                    f"can tell them apart, so this is a NO VERDICT rather than a finding. Check the "
+                    f"token's scope, and whether {repo} was renamed or made private."
+                ) from invisible
+            findings.append(moved(where, file_fields, str(error)))
+            continue
+        if live != expected:
+            findings.append(stale(where, file_fields, live))
+    if findings:
+        return report_findings(NAME, findings)
+    return report_ok(NAME, f"{repo}: every recorded SkillMirror library file still hashes to its measured digest (BYTES, not behaviour).")
 
 
 if __name__ == "__main__":
