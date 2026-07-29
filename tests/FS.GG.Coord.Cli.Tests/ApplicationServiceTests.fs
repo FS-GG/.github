@@ -1494,7 +1494,7 @@ module ApplicationServiceTests =
     /// no option for, three lines under a table that correctly said `Class=defect`. Every test passed,
     /// because the four older kinds all write `Status` and so the hardcoded word was right for all of them.
     /// A rule exercised only where it is DERIVED is a rule nobody has watched run.
-    let private classWorld () =
+    let private classWorld (withClass: bool) =
         let item =
             """{"status":{"name":"Ready"},"blockedBy":null,"class":null,"content":{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
 
@@ -1515,7 +1515,12 @@ module ApplicationServiceTests =
                         // The `Class` field, with its three options — a single-select write resolves its
                         // value to an option id before it is attempted, so the write cannot even be tried
                         // against a project that does not declare it.
-                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        if withClass then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_defect","name":"defect"},{"id":"opt_hard","name":"hardening"},{"id":"opt_dec","name":"decision"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        else
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
                         ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                     else
@@ -1682,7 +1687,8 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#1588 reconcile --apply names the FIELD it wrote, not the literal Status`` () =
-        let code, out, _ = runReconcile (classWorld ()) (reconcileArgs [ "--apply" ])
+        let code, out, err = runReconcile (classWorld true) (reconcileArgs [ "--apply" ])
+        Assert.True((code = 0), err)
 
         // THE ASSERTION THAT WAS MISSING. Both projections of one write — the finding table and the
         // apply receipt — must name `Class`, because that is the column `boardWrite` was handed. The
@@ -1709,7 +1715,7 @@ module ApplicationServiceTests =
     let ``#1588 the --json write object agrees with the text receipt about the field`` () =
         // `runApplyJson` is now `--apply --json` on argv itself (.github#1541) — the same command line a
         // caller runs, not an internal state this fixture reaches around the parser.
-        let code, out, _ = runApplyJson (classWorld ())
+        let code, out, _ = runApplyJson (classWorld true)
 
         // The machine projection was CORRECT the whole time the human one was wrong, which is what made
         // the defect survivable long enough to reach a live board: `--json` said `Class`, the text said
@@ -1722,6 +1728,14 @@ module ApplicationServiceTests =
         Assert.Equal("defect", row.GetProperty("value").GetString())
         Assert.Equal("Class=defect", row.GetProperty("remedy").GetString())
         Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#1625 reconcile --apply with no Class field withholds every projection once`` () =
+        let code, _, err = runReconcile (classWorld false) (reconcileArgs [ "--apply" ])
+
+        Assert.Equal(0, code)
+        Assert.Equal(1, err.Split("board has no Class field").Length - 1)
+        Assert.Contains("createProjectV2Field", err)
 
     [<Fact>]
     let ``the dry-run --json projection is unchanged, alphabetical keys and all`` () =
