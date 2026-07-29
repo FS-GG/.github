@@ -18,10 +18,10 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>/dev/null &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT"; rm -rf "$CACHE_DIR"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -730,8 +730,106 @@ no_mutation "command-contract" run command-contract --json
 no_mutation "facts" run facts
 no_mutation "field-id" run field-id Status
 no_mutation "inbox" run inbox --repo FS.GG.SDD
-no_mutation "issues" run issues
+no_mutation "issues" run issues FS.GG.SDD
 no_mutation "option-id" run option-id Status Ready
+
+# The first cut above deliberately started with the cache-shaped readers.  Keep extending the
+# ledger with SUCCESSFUL invocations: a parser refusal costs no wire mutation too, but proves
+# nothing about a command that actually reached its implementation (#266).
+no_mutation "scan" run scan --repo FS.GG.SDD
+no_mutation "ready" run ready --repo FS.GG.SDD
+no_mutation "who" run who --repo FS.GG.SDD
+no_mutation "reap (bare)" run reap --repo FS.GG.SDD
+no_mutation "reconcile (bare)" run reconcile --repo FS.GG.SDD
+no_mutation "landable" run landable 500 --repo FS.GG.SDD
+no_mutation "overlap" run overlap FS.GG.SDD#42 FS.GG.SDD#43
+no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
+no_mutation "item-id" run item-id FS.GG.SDD#42
+no_mutation "lint" run lint --repo FS.GG.SDD
+no_mutation "whoami" run whoami
+
+# `followup add` is intentionally a local-file write, not a shared-board write.  It is a valid
+# (and therefore non-vacuous) driver for the command-contract row; `list` then proves the add
+# reached the command rather than being accepted and ignored.
+no_mutation "followup" run followup add FS.GG.SDD#42
+followups="$(run followup list 2>&1)"; followups_rc=$?
+if [ "$followups_rc" -eq 0 ] && printf '%s' "$followups" | grep -q 'FS.GG.SDD#42'; then
+  ok "#1569: followup's local driver completed successfully"
+else
+  bad "#1569: followup's local driver must be valid" "rc=$followups_rc: $followups"
+fi
+
+# These two pure commands consume the real snapshot that `scan` emitted.  Supplying that
+# snapshot, rather than malformed JSON, makes an empty wire ledger evidence about the execution
+# path rather than an accidental parser refusal.
+no_mutation_snapshot() {
+  local name="$1" command="$2"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  snapshot="$(run scan --repo FS.GG.SDD)"; snapshot_rc=$?
+  result="$(printf '%s' "$snapshot" | "$ENGINE" "$command" --worker vole-418 2>&1)"; result_rc=$?
+  ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  if [ "$snapshot_rc" -eq 0 ] && [ "$result_rc" -eq 0 ] && [ "$(printf '%s' "$ledger" | jq -r .count)" = 0 ]; then
+    ok "#1569: $name is a valid never-write invocation (wire ledger empty)"
+  else
+    bad "#1569: $name must execute without mutating" "scan_rc=$snapshot_rc rc=$result_rc output=$result ledger=$ledger"
+  fi
+}
+no_mutation_snapshot "decide" decide
+no_mutation_snapshot "lanes" lanes
+
+# `predicate` is local too, but its successful arm needs a registry and its owning manifest.
+# The dedicated predicate suite owns the broader truth table; this small fixture merely makes the
+# command-contract driver's no-wire claim executable here.
+mkdir -p "$PREDICATE_FIX/registry" "$PREDICATE_FIX/.repos/FS.GG.Game/template/skill-manifest"
+printf '%s\n' \
+  'schemaVersion: 1' \
+  'skills:' \
+  '  - { id: contract-probe, scope: product, owner: fs-gg-game, source: x, sha256: x, mirrored: false }' \
+  >"$PREDICATE_FIX/registry/skills.yml"
+printf '%s\n' '{"skills":[{"id":"contract-probe","mirrored":false}]}' \
+  >"$PREDICATE_FIX/.repos/FS.GG.Game/template/skill-manifest/skill-manifest.json"
+no_mutation "predicate" env FSGG_REGISTRY="$PREDICATE_FIX/registry/skills.yml" FSGG_REPOS_ROOT="$PREDICATE_FIX/.repos" "$ENGINE" predicate contract-probe mirrored false --worker vole-418
+
+# `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
+# Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their
+# read/decision path.  Their bare arms above are the no-write proofs; these establish the gate's
+# other spelling as executable.
+valid_driver() {
+  local name="$1"; shift
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  "$@" >/dev/null 2>&1; local rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "#1569: $name is a valid driver"
+  else
+    bad "#1569: $name must not be a parser refusal" "rc=$rc"
+  fi
+}
+valid_driver "reap --apply" run reap --repo FS.GG.SDD --apply
+valid_driver "reconcile --apply" run reconcile --repo FS.GG.SDD --apply
+
+# `next` is the one conditional row whose mutation cannot be inferred from argv.  The exemption
+# is taken from the emitted field, so a renamed/new argvCannotSay row is not silently omitted.
+next_reason="$(run command-contract --json | jq -r '.commands[] | select(.name == "next") | .writesWhen.argvCannotSay // empty')"
+if [ -n "$next_reason" ]; then
+  valid_driver "next (argvCannotSay: $next_reason)" run next --repo FS.GG.SDD
+else
+  bad "#1569: next must declare its argvCannotSay exemption" "command-contract omitted writesWhen.argvCannotSay"
+fi
+
+# `flush` is the opposite polarity from the two `--apply` commands: dry-run is the read arm.
+# A deferred field write supplies real pending work, so neither invocation is being accepted over
+# an empty, unexercised queue.  The normal arm must then land that queued write.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null
+run set-field FS.GG.SDD#42 Status Ready >/dev/null 2>&1
+no_mutation "flush --dry-run" run flush --dry-run
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+flush_out="$(run flush 2>&1)"; flush_rc=$?
+flush_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$flush_rc" -eq 0 ] && [ "$(printf '%s' "$flush_ledger" | jq -r .count)" -gt 0 ]; then
+  ok "#1569: flush without --dry-run mutates the queued board write"
+else
+  bad "#1569: flush without --dry-run must mutate pending work" "rc=$flush_rc output=$flush_out ledger=$flush_ledger"
+fi
 
 # ---- report ----------------------------------------------------------------------------------------
 echo
