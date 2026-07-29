@@ -729,6 +729,23 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > tool — it is the workflow line that invokes it, and one line in a `gate.yml` is not a hand-copy of an
 > invariant.
 >
+> > **RE-READ AGAINST THE 2026-07-29 MEASUREMENT, AND ONE CLAUSE ABOVE IS A FALSE DICHOTOMY**
+> > ([`#1796`](https://github.com/FS-GG/.github/issues/1796)). This paragraph names no receiver *count*,
+> > so there is no "four" here to correct down — the count lives in the §9 table below, and it is
+> > corrected there. What does not survive re-reading is *"a receiver whose alarm runs on a bare checkout
+> > must excuse it or fire on every green build"*. There is a third option and two receivers took it:
+> > **generate the view root in the job, then check it**. `FS.GG.Net` did so on 2026-07-28 with
+> > `dotnet build … -t:FsggKitCheckSkillView`, in the same commit (`fec519d`) the §9 table cites as its
+> > adoption; `FS.GG.Audio` did so on 2026-07-29 with a bare `scripts/skill-view generate` step
+> > ([`FS.GG.Audio#215`](https://github.com/FS-GG/FS.GG.Audio/issues/215)), which needs no MSBuild and so
+> > works on exactly the bare checkout this clause said had no other move. The `on Audio it does not`
+> > half is still TRUE as written — no required context on Audio runs `-t:FsggKitMaterialize`, and
+> > `kit / coordination-kit` still grades `<FsggKitSkillRoots>` bytes only — but it is no longer why
+> > Audio's job is green, because Audio stopped excusing absence and started resolving it. **The
+> > standard the last sentence sets is unchanged and was never the problem**: a receiver that cannot
+> > state what covers absence has not earned the carve-out. What the two receivers above show is that
+> > earning it is not the only way out.
+>
 > **How the propagation risk is actually paid for: `skill-view selftest`, and the demo is itself
 > mutation-tested.** Every lane's can-fire demonstration ships *in the tool*, so a receiver runs the same
 > demonstration rather than a copy of it, and every negative case asserts the **specific diagnostic
@@ -786,12 +803,85 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > | receiver | pin bump | adoption | copy deleted | absence policy | required context the alarm rides |
 > |---|---|---|---|---|---|
 > | `FS.GG.Templates` | `#327` | `#325` `f7ff8f6` | 10,798 B | `--absent-ok` | `composition` |
-> | `FS.GG.Net` | `#50` | `#47` `fec519d` | (its own name) | `--absent-ok` | `Build + test (locked restore)` |
+> | `FS.GG.Net` | `#50` | `#47` `fec519d` | (its own name) | **RED (host generates first)** — this cell said `--absent-ok` and was WRONG WHEN WRITTEN; see the correction below | `Build + test (locked restore)` |
 > | `FS.GG.SDD` | `#773` `1bd301b` | `#780` `15773b7` | **23,050 B** | RED (host generates first) | `skill-view-check` |
-> | `FS.GG.Audio` | `#214` `bbc8ca5` | `#216` `e489678` | 21,353 B | `--absent-ok` | `Build + test (locked restore, net10.0, headless)` |
+> | `FS.GG.Audio` | `#214` `bbc8ca5` | `#216` `e489678` | 21,353 B | `--absent-ok` on 2026-07-28, **RED (host generates first) since 2026-07-29T02:50:13Z**; see the correction below | `Build + test (locked restore, net10.0, headless)` |
 > | `FS.GG.Rendering` | `#1123` `b4a951c` | `#1127` `6890f13` | 18,346 B | RED (host generates first) | `Deterministic gate` |
 > | `FS.GG.Game` | `#520` `7c689c6` | `#521` `123052a` | 18,277 B | `--absent-ok` | `Build-config drift check (shared-build-config)` |
 > | `FS.GG.Governance` | `#335` `98fa76c` | `#339` `3f1cd25` | 14,864 B | RED (host generates first) | `skill-view-check` |
+>
+> **THE `absence policy` COLUMN IS CORRECTED ABOVE, FOR TWO DIFFERENT FAULTS, RE-MEASURED 2026-07-29**
+> ([`#1796`](https://github.com/FS-GG/.github/issues/1796)). Folding them together would hide both: one
+> row was false the moment this table landed, the other decayed 14h33m later. Only the second is the
+> ordinary cost of writing a dated record.
+>
+> **`FS.GG.Net` NEVER TOOK THE CARVE-OUT, AND THE COMMIT THIS ROW CITES IS THE PROOF.** `fec519d` — the
+> adoption commit in Net's own `adoption` cell — is the commit that ADDED the line *"by the time `check`
+> runs the view MUST exist — `--absent-ok` is deliberately NOT passed."* It landed
+> **2026-07-28T11:25:44Z**; this table landed at `6fcbc6d`, **2026-07-28T12:17:25Z**, fifty-two minutes
+> later. The row therefore did not go stale — **it was false when it was written, contradicted by a
+> commit it names in the cell beside it.** Net's `build-test` job runs
+> `dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitCheckSkillView` and only then
+> `scripts/skill-view check --source .claude/skills --receiver-proj …`, with no excuse of any kind:
+> host generates first, absence is RED. That is SDD/Rendering/Governance's posture, not
+> Templates/Game's, and this table recorded Net as having a carve-out it deliberately declined.
+>
+> **`FS.GG.Audio`'s ROW WAS TRUE ON 2026-07-28 AND BECAME FALSE AT 2026-07-29T02:50:13Z**, when
+> [`FS.GG.Audio#221`](https://github.com/FS-GG/FS.GG.Audio/pull/221) (for
+> [`#215`](https://github.com/FS-GG/FS.GG.Audio/issues/215)) deleted the `--absent-ok` and put an
+> unconditional `scripts/skill-view generate` step in front of the check, so that the one required
+> context Audio authors grades the view root instead of excusing it. Audio's posture is now RED, host
+> generates first — the same as Net's, reached from the opposite direction and a day later.
+>
+> **THE LIVE COUNT OF `--absent-ok` RECEIVERS IS TWO — not the four this table and
+> [`#1785`](https://github.com/FS-GG/.github/issues/1785) recorded, and not the three `#1796` measured
+> the day before.** Re-measured **2026-07-29** by reading each receiver's `main` and grepping for the
+> token, not by reading any table:
+>
+> | receiver | absence policy, 2026-07-29 | the invocation that decides it |
+> |---|---|---|
+> | `FS.GG.Templates` | **`--absent-ok`** | `tests/composition/run.sh:177-181`, run by job `composition` |
+> | `FS.GG.Game` | **`--absent-ok`** | `.github/workflows/gate.yml:439-445`, job `build-config-drift` |
+> | `FS.GG.Net` | RED (host generates first) | `.github/workflows/gate.yml:84-92`, job `build-test` |
+> | `FS.GG.Audio` | RED (host generates first) | `.github/workflows/gate.yml:192-193` generates, `258-263` checks, job `build-test` |
+> | `FS.GG.SDD` | RED (host generates first) | `.github/workflows/skill-view-check.yml:275`, job `skill-view-check` |
+> | `FS.GG.Rendering` | RED (host generates first) | `.github/workflows/gate.yml:144`, job `gate` |
+> | `FS.GG.Governance` | RED (host generates first) | `.github/workflows/skill-view-check.yml:244`, job `skill-view-check` |
+>
+> **ALL SEVEN TREES WERE READ, AND NONE IS RECORDED AS UNREAD**
+> ([`#266`](https://github.com/FS-GG/.github/issues/266) — the rule that an unread subject is named
+> rather than folded into "the others are fine"). Six were read at exactly their `main` HEAD
+> (`FS.GG.Net` `388e1f5`, `FS.GG.Audio` `fac66e9`, `FS.GG.Game` `fa9f0a9`, `FS.GG.Templates` `0c914a1`,
+> `FS.GG.Rendering` `1703c4a`, `FS.GG.Governance` `325241c`). `FS.GG.SDD`'s working checkout was ONE
+> commit behind `12038f9`, so its `skill-view-check.yml` was fetched from `main` over the API and the
+> intervening diff was read in full — three files, all of them
+> `.claude/skills/pnext-item/*` or `Directory.Packages.local.props`, no workflow and no script. Each
+> repository was additionally grepped whole for the token: outside the invocations tabulated above,
+> every remaining hit is inside the kit-delivered `scripts/skill-view` itself — its own help text,
+> argument parser and selftest — which is the tool, not a use of it. `FS.GG.Rendering` invokes `check`
+> in two places and only the `gate.yml` one is tabulated, because it is the one riding the required
+> context; its `skill-view-check.yml:195` invocation carries no excuse either, so the row is the same
+> from both.
+>
+> **WHY THE NET ROW WENT UNCHALLENGED FOR A DAY.** It errs in the *reassuring* direction: the cell made
+> Net look **weaker** than it is, so no one auditing for risk would find it, and no one reading for
+> reassurance would question it. The shared class with
+> [`#1724`](https://github.com/FS-GG/.github/issues/1724) and
+> [`#1607`](https://github.com/FS-GG/.github/issues/1607) is narrower than that and is the part worth
+> generalising: **a hand-written enumeration that nothing re-derives, undercounting its population**
+> (both of those named four adopters where seven adopt). Whether the undercount is reassuring or
+> alarming differs — `#1607`'s was the sole evidence for *not* building a check, which is the unsafe
+> direction — and that is exactly why the fix for the class is a *mechanical* re-derivation rather than
+> a more careful sentence: the direction of the error is not something a reader can be relied on to
+> notice.
+>
+> **THIS CORRECTS A RECORD, NOT A RECEIVER.** No receiver's absence policy changes here and none needs
+> to; all seven are already what the table above now says. `#1795`'s daily sweep grades a RELATED but
+> not identical property — whether a receiver's un-excused absence assertion rides a context branch
+> protection requires, derived from the API — and it already reports Net as `absence-cover: required`,
+> which is only consistent with Net passing no `--absent-ok`. Those roster words were correct
+> throughout and are untouched. What was wrong is the prose an adopter reads to learn what the fleet
+> does, and prose is what this correction repairs.
 >
 > **THE ORDER WAS STRICT PER RECEIVER, AND THE SPLIT IS FORCED RATHER THAN STYLISTIC.** Bump → observe
 > the kit's alarm reporting in that repo, by run id and by **job log** → delete the local copy →
