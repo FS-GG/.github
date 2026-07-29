@@ -8,4 +8,8 @@ out="$(python3 "$here/../../scripts/check-board-paths-live.py" --items "$work/it
 grep -q '#3 declares retired root token .codex/skills/pnext-item' <<<"$out"
 grep -q '1 retired-root token(s)' <<<"$out"
 ! grep -q 'new-planned\|check-board' <<<"$out"
+printf 'not json' >"$work/bad.json"
+if python3 "$here/../../scripts/check-board-paths-live.py" --items "$work/bad.json" >/dev/null 2>&1; then
+  echo 'fixture must reject unreadable board evidence' >&2; exit 1
+fi
 echo 'board-paths-live fixture: OK'
