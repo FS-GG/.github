@@ -105,7 +105,8 @@ WHAT IT DOES NOT ASSERT
   see above. That example is HISTORY: the sentence was corrected by hand on .github#1709 — with two
   more in the same record that scoped "direction only" over the root set as well as over §6 — and the
   note there records what it used to say. Cited by SECTION rather than by line, because the line had
-  already drifted 139 -> 205 while this paragraph went on naming :139, which by then was §7.
+  already drifted 139 -> 205 while this paragraph went on naming :139 — by then the blank line above
+  §7, an unrelated clause.
 
 EXIT CODES (the contract; nothing greps this script's prose)
   0  coherent
