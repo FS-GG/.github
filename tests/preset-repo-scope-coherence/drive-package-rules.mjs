@@ -255,6 +255,29 @@ async function expectAutomerge(rules, repository, dep, want, label) {
 
 console.log('\n--- 5. FS.GG.Kit automerges as `mechanical`-only, and nothing else does (#1587) ---');
 
+const OPT_OUT = /^fsgg-platform-automerge:\s*false\s*—\s*(\S.*)$/;
+function checkPlatformAutomergeAnnotations(rules, label, expectValid = true) {
+  const autos = rules.filter((r) => r?.automerge === true);
+  const problems = [];
+  if (!autos.length) problems.push('no automerging rules were graded');
+  for (const [i, rule] of autos.entries()) {
+    const lines = Array.isArray(rule.description) ? rule.description : [];
+    const annotation = lines.filter((line) => typeof line === 'string' && line.startsWith('fsgg-platform-automerge:'));
+    if (rule.platformAutomerge === false) {
+      if (!(annotation.length === 1 && OPT_OUT.test(annotation[0]))) problems.push(`rule ${i} needs one anchored non-empty platform opt-out reason`);
+    } else if (annotation.length) problems.push(`rule ${i} places platform opt-out annotation without platformAutomerge:false`);
+    else problems.push(`rule ${i} automerges through GitHub-native auto-merge without an annotated opt-out`);
+  }
+  if ((problems.length === 0) === expectValid) ok(`${label}: ${expectValid ? 'valid annotation' : 'invalid annotation rejected'}`);
+  else bad(`${label}: expected ${expectValid ? 'valid' : 'rejection'}`, problems.join('; '));
+}
+checkPlatformAutomergeAnnotations(RULES, 'live automerge rules');
+const AUTO = { automerge: true, description: ['fsgg-platform-automerge: false — required guard'] };
+checkPlatformAutomergeAnnotations([{ ...AUTO, platformAutomerge: false }], 'fixture valid');
+checkPlatformAutomergeAnnotations([{ automerge: true }], 'fixture missing', false);
+checkPlatformAutomergeAnnotations([{ ...AUTO, platformAutomerge: true }], 'fixture misplaced', false);
+checkPlatformAutomergeAnnotations([{ automerge: true, platformAutomerge: false, description: ['fsgg-platform-automerge: false —   '] }], 'fixture empty', false);
+
 // 5a. the kit itself, in a receiver: on, through a PR, with platform automerge OFF.
 for (const repo of ['FS-GG/FS.GG.Net', 'FS-GG/FS.GG.Templates', 'FS-GG/FS.GG.SDD']) {
   await expectAutomerge(RULES, repo, 'FS.GG.Kit', 'ON', `${repo} FS.GG.Kit`);
