@@ -326,3 +326,11 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: p-add,                  scope: operator,owner: .github,         source: .github/.claude/skills/p-add/SKILL.md, sha256: fd120ff7eafe56d93e2066c7130983eef606f74ebb63fe07daaf458d0a8ba12e, materializes-when: "false" }
+  # lane-steward — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: lane-steward,           scope: operator,owner: .github,         source: .github/.claude/skills/lane-steward/SKILL.md, sha256: d45808282c4a2a02397159cfa781fd73ef841e9210c344d4e82a087202f4c9ca, materializes-when: "false" }
+  # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d, materializes-when: "false" }

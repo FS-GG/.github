@@ -124,8 +124,10 @@ PATHS_SUBJECT = SKILL_ROOTS + (TRIGGER_FIXTURES, KIT_ROSTER, MANIFEST_PATH, KIT_
 #   * `scope: operator` (ADR-0057) — materialized NOWHERE; runs only in the operator checkout where
 #     every repo is a sibling. Its `materializes-when` is the never-true literal `false`, so the
 #     scope-agnostic union gate reads it as a justified downstream absence (no gate change needed).
-# See the module docstring for why each predicate is what it is. `supplied-by` is the authored skill
-# dir under the repo root; the SKILL.md under it is digested.
+# Together with REPO_NATIVE_EXEMPTIONS, this list classifies every skill directory in `.claude/skills`:
+# the closure check below rejects a directory that is neither a driver/operator row, a coordination-kit
+# row, nor an explicit repo-native exemption (#1531). `supplied-by` is the authored skill dir under the
+# repo root; the SKILL.md under it is digested.
 DRIVERS = [
     {
         "id": "work-roadmap",
@@ -163,7 +165,25 @@ DRIVERS = [
         "supplied-by": ".claude/skills/cut-nuget-release",
         "materializes-when": "false",
     },
+    {
+        "id": "lane-steward",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/lane-steward",
+        "materializes-when": "false",
+    },
+    {
+        "id": "publishing-and-deployment",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/publishing-and-deployment",
+        "materializes-when": "false",
+    },
 ]
+
+# Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
+# appear in DRIVERS or in the coordination-kit manifest.
+REPO_NATIVE_EXEMPTIONS = {
+    "spectre-console": "repo-native co-tenant; it has no producer manifest",
+}
 
 
 def frontmatter(path: str) -> tuple[dict[str, str], list[str]]:
@@ -294,6 +314,31 @@ def validate_catalog(catalog_root: str) -> tuple[dict[str, object], list[str]]:
                 pass
         if len(copies) == len(SKILL_ROOTS) and any(files != copies[0][1] for _, files in copies[1:]):
             errors.append(f"{name}: directory files, bytes, or executable modes differ across roots")
+
+    # The two manifests have different authorship, but together they must classify the complete
+    # `.github` skill tree. An omitted directory otherwise stays invisible to both emitters and their
+    # downstream registry gates (#1531).
+    driver_ids = {str(driver["id"]) for driver in DRIVERS}
+    kit_ids: set[str] = set()
+    kit_path = os.path.join(catalog_root, KIT_MANIFEST_PATH)
+    try:
+        kit_doc = json.load(open(kit_path, encoding="utf-8"))
+        rows = kit_doc.get("skills") if isinstance(kit_doc, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError("top-level skills must be an array")
+        for row in rows:
+            skill_id = row.get("id") if isinstance(row, dict) else None
+            if not isinstance(skill_id, str) or not skill_id:
+                raise ValueError("every skill must carry a non-empty id")
+            kit_ids.add(skill_id)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        errors.append(f"{KIT_MANIFEST_PATH}: cannot read skill classifications: {exc}")
+    undeclared = sorted(canonical_names - driver_ids - kit_ids - set(REPO_NATIVE_EXEMPTIONS))
+    if undeclared:
+        errors.append(
+            "undeclared skill directories (add DRIVERS, coordination-kit, or a commented "
+            f"REPO_NATIVE_EXEMPTIONS entry): {undeclared}"
+        )
 
     fixture_path = os.path.join(catalog_root, TRIGGER_FIXTURES)
     try:

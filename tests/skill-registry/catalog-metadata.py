@@ -35,6 +35,9 @@ def make_catalog(base: pathlib.Path, description: str) -> None:
     fixture_path = base / module.TRIGGER_FIXTURES
     fixture_path.parent.mkdir(parents=True)
     fixture_path.write_text(json.dumps(fixtures))
+    manifest_path = base / module.KIT_MANIFEST_PATH
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(json.dumps({"schemaVersion": 2, "skills": [{"id": "sample-skill"}]}))
 
 
 def findings(base: pathlib.Path) -> list[str]:
@@ -46,6 +49,13 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
     valid = "Use when " + "x" * (module.DESCRIPTION_MIN - len("Use when "))
     make_catalog(root, valid)
     assert not findings(root), findings(root)
+
+    # The catalog must not silently accept a directory omitted from both producer classifications.
+    (root / module.KIT_MANIFEST_PATH).write_text(json.dumps({"schemaVersion": 2, "skills": []}))
+    assert any("undeclared skill directories" in item for item in findings(root))
+    (root / module.KIT_MANIFEST_PATH).write_text(
+        json.dumps({"schemaVersion": 2, "skills": [{"id": "sample-skill"}]})
+    )
 
     skill = root / ".agents/skills/sample-skill/SKILL.md"
     skill.write_text(skill_text("sample-skill", "x" * (module.DESCRIPTION_MIN - 1)))

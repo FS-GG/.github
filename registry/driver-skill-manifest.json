@@ -195,6 +195,46 @@
       ],
       "supplied-by": ".claude/skills/cut-nuget-release",
       "materializes-when": "false"
+    },
+    {
+      "id": "lane-steward",
+      "scope": "operator",
+      "sha256": "d45808282c4a2a02397159cfa781fd73ef841e9210c344d4e82a087202f4c9ca",
+      "tree-sha256": "93d58b8b8a197af4b565a5ed86faeb8fc9e57502ade9253a721da5b3562b7603",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "d45808282c4a2a02397159cfa781fd73ef841e9210c344d4e82a087202f4c9ca",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "07ae0bf88a7a82592faa531b0c1cdcbcd918619bdc1461b31a61ad25f91e58ef",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/lane-steward",
+      "materializes-when": "false"
+    },
+    {
+      "id": "publishing-and-deployment",
+      "scope": "operator",
+      "sha256": "b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d",
+      "tree-sha256": "cad9626ae391d2d6a9bc308b92891a734f4e43dbe2439afacc1b1005f4eb26e7",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "f174167a129646a4b0d46f5867196753bee3490950f904b8486c2608976c3409",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/publishing-and-deployment",
+      "materializes-when": "false"
     }
   ]
 }
