@@ -96,18 +96,34 @@ import re
 import subprocess
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 
 API = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
 DASHBOARD_TITLE = "Dependency Dashboard"
+ROSTER_SCRIPT = "scripts/repos.sh"
 ROSTER_QUERY = ["list", "--receives", "coordination-kit", "--kit-delivery", "package"]
 
-# The boxes this writer is allowed to tick, and the ones it must never tick. The deny list is
-# explicit rather than implied by the allow list: an allow list alone would silently start ticking a
-# new `-all-` box the day Renovate renames one, and the blast radius of that is every dependency in
-# the receiver.
-ALLOWED_MARKERS = ("unlimit-branch=", "manual job")
+# check-paths-coherence.py rule (c) (#996): this script's subject, COMPOSED from the constant it
+# actually shells out to rather than retyped beside it. Any workflow whose `paths:` names this file
+# must also select everything here, so a change to the roster query re-runs the gate that covers it.
+PATHS_SUBJECT = (ROSTER_SCRIPT,)
+
+# Renovate's dashboard is authored by the App, and the AUTHOR is half the identity of the issue this
+# writer PATCHes — see find_dashboard.
+RENOVATE_LOGIN = "renovate[bot]"
+
+# An HTTP status that means "this credential may not do that here". A FINDING about the receiver,
+# never a transport failure, and 401 belongs with 403/404: an expired token is a credential fact, and
+# routing it to the retryable arm would hand the operator seven identical no-verdicts instead of one
+# sentence naming the credential.
+REFUSED_STATUSES = (401, 403, 404)
+
+# The boxes this writer must NEVER tick, listed explicitly rather than left implied by the two narrow
+# allow-checks in `choose` (`startswith("unlimit-branch=")` and `== "manual job"`). Those two are the
+# allow list, and they are expressed where they are used so there is no third place to drift; this
+# list exists on top of them because the blast radius of a wrong tick is every dependency in the
+# receiver, and a deny list also refuses a marker that is BOTH — a hypothetical
+# `unlimit-branch=...-all-...` — instead of admitting it on a prefix.
 DENIED_MARKERS = (
     "create-all-rate-limited-prs",
     "rebase-all-open-prs",
@@ -116,6 +132,11 @@ DENIED_MARKERS = (
     "approve-branch=",
     "retry-branch=",
 )
+
+# The open-issue list is walked oldest-first (the dashboard is created once, then edited forever), so
+# the cap is only reached on a repo with hundreds of open issues. Reaching it is "I could not finish
+# looking", which is NOT the same fact as "it is not there" — see find_dashboard.
+PAGE_CAP = 10
 
 UNCHECKED = re.compile(r"^(?P<indent>\s*)-\s\[ \]\s*(?P<rest>.*)$")
 MARKER = re.compile(r"<!--\s*(?P<marker>[^>]*?)\s*-->")
@@ -175,7 +196,7 @@ def api(path: str, *, method: str = "GET", payload: dict | None = None) -> tuple
 
 def receivers(registry: str | None) -> list[str]:
     """The roster query, run as a subprocess. One derivation, not a second copy of the predicate."""
-    script = Path(__file__).resolve().parent / "repos.sh"
+    script = Path(__file__).resolve().parents[1] / ROSTER_SCRIPT
     command = ["bash", str(script), *ROSTER_QUERY]
     if registry:
         command += ["--registry", registry]
@@ -197,19 +218,34 @@ def receivers(registry: str | None) -> list[str]:
     return rows
 
 
-def find_dashboard(repo: str) -> tuple[int | None, str]:
-    """Renovate's Dependency Dashboard issue number, or (None, why-not).
+def find_dashboard(repo: str) -> tuple[int | None, str, str]:
+    """Renovate's Dependency Dashboard issue: (number, kind, why).
+
+    `kind` is a TOKEN, not prose — `ok`, `refused`, `absent`, `unreadable` — because the caller acts
+    differently on each and #335 is emphatic that a reason string is a diagnostic, never an
+    interface. Classifying by grepping this function's own sentences would let a reword silently
+    downgrade a 403 from a finding to a shrug.
+
+    IDENTITY IS TITLE **AND** AUTHOR, and the author half is what makes this safe to WRITE through.
+    `scripts/check-pin-coherence.py` — the READ half of this same mechanism — restricts to
+    `author:app/renovate` before it title-matches, and a writer may not be less careful than the
+    reader it was modelled on. Any issue somebody titles `Dependency Dashboard` would otherwise
+    receive a cross-repo `PATCH` that rewrites its body.
 
     Deliberately the issues LIST, not `/search/issues`: search is eventually consistent, rate-limited
-    on a separate and much smaller budget, and would make a release's fate depend on an index. The
-    dashboard is an OPEN issue with a fixed title, so the list answers exactly and deterministically.
+    on a separate and much smaller budget, and would make a release's fate depend on an index.
+    OLDEST FIRST, because the dashboard is created once and then edited forever — it is among the
+    first issues a repo ever got, and the API's default `direction=desc` would put it last.
     """
-    for page in range(1, 6):
-        status, body = api(f"/repos/{repo}/issues?state=open&per_page=100&page={page}")
-        if status == 403 or status == 404:
-            return None, f"the issues list returned {status} — the App cannot read {repo}"
+    walked = 0
+    for page in range(1, PAGE_CAP + 1):
+        status, body = api(
+            f"/repos/{repo}/issues?state=open&sort=created&direction=asc&per_page=100&page={page}"
+        )
+        if status in REFUSED_STATUSES:
+            return None, "refused", f"the issues list returned {status} — the App cannot read {repo}"
         if status != 200 or not isinstance(body, list):
-            raise Retryable(f"{repo}: the issues list returned {status}")
+            return None, "unreadable", f"the issues list returned {status}"
         for item in body:
             # The issues endpoint returns pull requests too. A PR titled `Dependency Dashboard`
             # would otherwise be PATCHed instead of the dashboard. Tested with `in`, not for
@@ -217,14 +253,24 @@ def find_dashboard(repo: str) -> tuple[int | None, str]:
             # legal value for it — a truthiness test passes the PR straight through.
             if "pull_request" in item:
                 continue
+            login = str((item.get("user") or {}).get("login") or "")
+            if login.lower() != RENOVATE_LOGIN:
+                continue
             if str(item.get("title", "")).strip() == DASHBOARD_TITLE:
-                return int(item["number"]), ""
+                return int(item["number"]), "ok", ""
+        walked += len(body)
         if len(body) < 100:
-            break
-    return None, (
-        f"Renovate has opened no {DASHBOARD_TITLE!r} issue in {repo}. The org preset enables "
-        f"`:dependencyDashboard`, so its absence means the bot is not running here at all — a "
-        f"bigger finding than a held bump, and not one a release may report green over"
+            return None, "absent", (
+                f"Renovate has opened no {DASHBOARD_TITLE!r} issue in {repo} ({walked} open issue(s) "
+                f"read, the whole list). The org preset enables `:dependencyDashboard`, so its "
+                f"absence means the bot is not running here at all — a bigger finding than a held "
+                f"bump, and not one a release may report green over"
+            )
+    return None, "unreadable", (
+        f"walked {walked} open issues in {repo} over {PAGE_CAP} pages and the list was STILL full at "
+        f"the cap, so the dashboard was not found and was not ruled out either. That is 'I could not "
+        f"finish looking', which is a different fact from 'it is not there' and must not be reported "
+        f"as the bot being absent (#266)"
     )
 
 
@@ -238,8 +284,10 @@ def names(line: str, package: str, version: str) -> bool:
     low = line.lower()
     package_hit = re.search(rf"(?<![\w.]){re.escape(package.lower())}(?![\w.])", low)
     # Renovate writes `to 0.21.0` for some managers and `to v0.15.0` for others; both are this
-    # version, and neither is `v0.15.01`.
-    version_hit = re.search(rf"(?<![\w.])v?{re.escape(version)}(?![\w.])", low)
+    # version, and neither is `v0.15.01`. Lowercased like the package half — a `0.21.0-RC1` compared
+    # against a lowercased line matches nothing, and the symptom is not an error but the blunt
+    # `manual job` box being pressed on every receiver that had a precise one.
+    version_hit = re.search(rf"(?<![\w.])v?{re.escape(version.lower())}(?![\w.])", low)
     return bool(package_hit and version_hit)
 
 
@@ -290,11 +338,25 @@ def choose(body: str, package: str, version: str) -> tuple[str, str, str]:
                 f"it look",
             )
 
+    # A `manual job` box that is ALREADY TICKED is a re-extraction somebody has already requested and
+    # Renovate has not yet consumed. Re-ticking it is impossible (there is no unchecked box left) and
+    # grading it `undetermined` would turn a perfectly healthy state into a red release — the
+    # false-accusation shape this org refuses (#238). The push this receiver needs is already in
+    # flight; say so and count it reached.
+    if re.search(r"^\s*-\s\[x\]\s*<!--\s*manual job\s*-->", body, re.M | re.I):
+        return (
+            "already-offered",
+            "",
+            f"{package} {version} appears nowhere on the dashboard, but its `manual job` box is "
+            f"ALREADY ticked — a re-extraction is queued and Renovate has not consumed it yet. "
+            f"Nothing to press",
+        )
+
     return (
         "undetermined",
         "",
-        f"{package} {version} appears nowhere on the dashboard AND it carries no `manual job` box, "
-        f"so there is no surface to push through. Not graded as ok",
+        f"{package} {version} appears nowhere on the dashboard AND it carries no unchecked "
+        f"`manual job` box, so there is no surface to push through. Not graded as ok",
     )
 
 
@@ -319,7 +381,7 @@ def tick(repo: str, number: int, body: str, line: str) -> tuple[str, str]:
     new_body = body.replace(line, ticked_line, 1)
 
     status, response = api(f"/repos/{repo}/issues/{number}", method="PATCH", payload={"body": new_body})
-    if status in (401, 403, 404):
+    if status in REFUSED_STATUSES:
         return "refused", (
             f"PATCH /repos/{repo}/issues/{number} returned {status}. The App installation cannot "
             f"write issues here, so this release cannot tell {repo} anything"
@@ -348,11 +410,18 @@ def annotate(level: str, message: str) -> None:
 def run_probe(registry: str | None) -> int:
     reached, undetermined, refused = [], [], []
     for repo in receivers(registry):
-        number, why = find_dashboard(repo)
-        if number is not None:
+        try:
+            number, kind, why = find_dashboard(repo)
+        except Retryable as error:
+            # ONE receiver's transport failure is not a verdict about the other six. Before this was
+            # caught here it propagated out of the loop and every remaining receiver went uncontacted.
+            undetermined.append(repo)
+            annotate("warning", f"{repo}: {error}")
+            continue
+        if kind == "ok":
             reached.append(f"{repo}#{number}")
             print(f"  ok           {repo}: Dependency Dashboard #{number} is readable with this token")
-        elif "cannot read" in why:
+        elif kind == "refused":
             refused.append(repo)
             annotate("error", f"{repo}: {why}")
         else:
@@ -382,26 +451,37 @@ def run_tick(package: str, version: str, registry: str | None, dry_run: bool) ->
 
     reached, undetermined, findings = 0, [], []
     for repo in rows:
-        number, why = find_dashboard(repo)
-        if number is None:
-            if "cannot read" in why:
+        # ONE receiver, ONE verdict. A transport failure against receiver 1 used to propagate out of
+        # this loop, so a release stopped after a single HTTP request and the other six — including
+        # any carrying a live hold — were never contacted, while the package was already published.
+        # A failure to reach one receiver is undetermined for THAT receiver and nothing more.
+        try:
+            number, kind, why = find_dashboard(repo)
+            if kind == "refused":
                 findings.append(f"{repo}: {why}")
                 annotate("error", f"{repo}: {why}")
-            else:
+                continue
+            if kind != "ok":
                 undetermined.append(f"{repo}: {why}")
                 annotate("warning", f"{repo}: {why}")
+                continue
+
+            status, issue = api(f"/repos/{repo}/issues/{number}")
+            if status in REFUSED_STATUSES:
+                findings.append(f"{repo}#{number}: reading the dashboard returned {status}")
+                annotate("error", f"{repo}#{number}: reading the dashboard returned {status}")
+                continue
+            if status != 200 or not isinstance(issue, dict):
+                undetermined.append(f"{repo}#{number}: reading the dashboard returned {status}")
+                annotate("warning", f"{repo}#{number}: reading the dashboard returned {status}")
+                continue
+            body = str(issue.get("body") or "")
+            outcome, line, note = choose(body, package, version)
+        except Retryable as error:
+            undetermined.append(f"{repo}: {error}")
+            annotate("warning", f"{repo}: {error}")
             continue
 
-        status, issue = api(f"/repos/{repo}/issues/{number}")
-        if status in (401, 403, 404):
-            findings.append(f"{repo}#{number}: reading the dashboard returned {status}")
-            annotate("error", f"{repo}#{number}: reading the dashboard returned {status}")
-            continue
-        if status != 200 or not isinstance(issue, dict):
-            raise Retryable(f"{repo}#{number}: reading the dashboard returned {status}")
-        body = str(issue.get("body") or "")
-
-        outcome, line, note = choose(body, package, version)
         if outcome == "undetermined":
             undetermined.append(f"{repo}#{number}: {note}")
             annotate("warning", f"{repo}#{number}: {note}")
@@ -415,7 +495,12 @@ def run_tick(package: str, version: str, registry: str | None, dry_run: bool) ->
             print(f"  would tick   {repo}#{number}: {note}\n               {line.strip()}")
             continue
 
-        state, detail = tick(repo, number, body, line)
+        try:
+            state, detail = tick(repo, number, body, line)
+        except Retryable as error:
+            undetermined.append(f"{repo}#{number}: {error}")
+            annotate("warning", f"{repo}#{number}: {error}")
+            continue
         if state != "ok":
             findings.append(f"{repo}#{number}: {detail}")
             annotate("error", f"{repo}#{number}: {detail}")

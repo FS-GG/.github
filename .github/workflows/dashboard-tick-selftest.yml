@@ -35,6 +35,10 @@ on:
   pull_request:
     paths:
       - "scripts/dashboard-tick.py"
+      # Declared by dashboard-tick.py's `PATHS_SUBJECT` (#996): the writer shells out to it for the
+      # roster, and the fixture drives it directly. A change here that breaks the subject set must
+      # re-run this gate.
+      - "scripts/repos.sh"
       - "tests/dashboard-tick/**"
       - ".github/workflows/dashboard-tick-selftest.yml"
       - ".github/workflows/release-kit.yml"
@@ -44,6 +48,7 @@ on:
     branches: [main]
     paths:
       - "scripts/dashboard-tick.py"
+      - "scripts/repos.sh"
       - "tests/dashboard-tick/**"
       - ".github/workflows/dashboard-tick-selftest.yml"
       - ".github/workflows/release-kit.yml"
@@ -111,7 +116,20 @@ jobs:
       - name: The token reaches every receiver's Dependency Dashboard
         env:
           DASHBOARD_TICK_TOKEN: ${{ steps.mint.outputs.token }}
-        run: python3 scripts/dashboard-tick.py --probe
+        run: |
+          set +e
+          python3 scripts/dashboard-tick.py --probe
+          rc=$?
+          set -e
+          # THIS JOB'S SUBJECT IS THE CREDENTIAL, and its arms say so. A receiver with no dashboard
+          # (rc=2) is a real thing to know and is NOT a credential finding — the probe reports it,
+          # and failing a job named "the App carries issues:write" over it would be the same
+          # conflation the fork-skip `if:` above exists to avoid. A refused read (rc=1) IS one.
+          case "$rc" in
+            0) echo "credential: minted with issues:write, and every roster receiver's dashboard read back." >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "::warning title=dashboard-tick: a receiver could not be graded::The credential is fine — at least one receiver has no readable Dependency Dashboard. See the job log." ;;
+            *) echo "::error title=dashboard-tick: the App cannot reach a kit receiver::scripts/dashboard-tick.py --probe exited $rc. #1923 AC1 is not satisfied." ; exit 1 ;;
+          esac
 
       - name: Record the answer
         if: always()

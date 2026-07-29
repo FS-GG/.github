@@ -237,25 +237,34 @@ jobs:
           owner: FS-GG
           permission-issues: write
 
-      - name: Tell every kit receiver the release exists
+      # The subject set is the SAME seven repos as the kit's, and that is not a copy-paste slip: the
+      # engine reaches receivers through the kit's `.config/dotnet-tools.json`, so `receives:
+      # coordination-kit` + `kit-delivery: package` is exactly who pins `fs.gg.coord.cli`.
+      - name: Tell every engine receiver the release exists
         if: steps.v.outputs.push == 'true'
         env:
           DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
+          VERSION: ${{ steps.v.outputs.version }}
         run: |
-          set +e
-          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "${{ steps.v.outputs.version }}"
+          set +eu
+          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "$VERSION"
           rc=$?
-          set -e
-          # By EXIT CODE, never by prose (#335). 2 is a NO VERDICT and is still red: "I could not
-          # tell them" must never wear the same green as "I told them" (#266).
+          set -eu
+          # By EXIT CODE, never by prose (#335). Every non-zero is red; the arms differ so the
+          # operator reads the right sentence. 2 = a receiver could not be GRADED; 3 = nothing was
+          # ATTEMPTED at all. See release-kit.yml's copy for the full reasoning.
           case "$rc" in
             0) echo "delivery: every engine receiver was reached." >> "$GITHUB_STEP_SUMMARY" ;;
             2) echo "::error title=release-coord-engine: delivery not verified::At least one receiver could not be graded. The engine IS published; some receivers may not have been told. See the job log." ; exit 1 ;;
+            3) echo "::error title=release-coord-engine: delivery never ran::scripts/dashboard-tick.py exited 3 — a permanent no-verdict (the roster would not read, or the credential was empty). NOTHING was attempted, so no receiver was told. The engine IS published." ; exit 1 ;;
             *) echo "::error title=release-coord-engine: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The engine IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
           esac
       # ─────────────────────────────────────────────────────────────────────────────────────────
 
+      # `always()`: a DELIVERY failure above must not suppress the record that the package reached
+      # the feeds. See release-kit.yml.
       - name: Summary
+        if: always()
         run: |
           {
             echo "### fsgg-coord-engine ${{ steps.v.outputs.version }}"

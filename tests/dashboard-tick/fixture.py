@@ -104,14 +104,23 @@ class Repo:
         *,
         dashboard: bool = True,
         list_status: int = 200,
+        get_status: int = 200,
         patch_status: int = 200,
         patch_noop: bool = False,
+        decoy: bool = False,
+        flood: int = 0,
     ) -> None:
         self.body = body
         self.dashboard = dashboard
         self.list_status = list_status
+        self.get_status = get_status
         self.patch_status = patch_status
         self.patch_noop = patch_noop
+        # A HUMAN-authored issue with the dashboard's exact title, listed BEFORE the real one.
+        self.decoy = decoy
+        # Pad the open-issue list so the reader must paginate; `flood` full pages precede the real
+        # dashboard. `flood >= PAGE_CAP` never yields it, which is the cap-exhaustion leg.
+        self.flood = flood
 
 
 class Fake(http.server.BaseHTTPRequestHandler):
@@ -135,9 +144,20 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _authorized(self) -> bool:
+        """A writer that dropped the credential entirely must not pass every leg but one."""
+        header = self.headers.get("Authorization") or ""
+        if header.startswith("Bearer ") and header[len("Bearer "):].strip():
+            return True
+        self._send(401, {"message": "no credential presented"})
+        return False
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's contract
         path = urllib.parse.urlparse(self.path).path
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         type(self).log.append(("GET", path))
+        if not self._authorized():
+            return
         name, repo = self._repo(self.path)
         if repo is None:
             self._send(404, {"message": f"no such repo {name}"})
@@ -146,19 +166,36 @@ class Fake(http.server.BaseHTTPRequestHandler):
             if repo.list_status != 200:
                 self._send(repo.list_status, {"message": "refused"})
                 return
+            page = int((query.get("page") or ["1"])[0])
+            if page <= repo.flood:
+                # A full page of somebody else's open issues — the reader must keep going.
+                self._send(200, [{"number": 1000 + page * 100 + n, "title": "unrelated"} for n in range(100)])
+                return
             issues = []
+            if repo.decoy:
+                # A HUMAN's issue with the dashboard's exact title, listed FIRST. Title alone is not
+                # identity: PATCHing this would rewrite an unrelated issue in another repo.
+                issues.append({"number": 6, "title": "Dependency Dashboard", "user": {"login": "EHotwagner"}})
             if repo.dashboard:
-                issues.append({"number": 7, "title": "Dependency Dashboard"})
-            # A PULL REQUEST with the dashboard's exact title. The writer must skip it; PATCHing a
-            # PR body instead of the dashboard would report success and tell nobody.
-            issues.append({"number": 8, "title": "Dependency Dashboard", "pull_request": {}})
+                issues.append({"number": 7, "title": "Dependency Dashboard", "user": {"login": "renovate[bot]"}})
+            # A PULL REQUEST with the dashboard's exact title, authored by the bot. The writer must
+            # skip it; PATCHing a PR body instead of the dashboard would report success and tell
+            # nobody.
+            issues.append(
+                {"number": 8, "title": "Dependency Dashboard", "user": {"login": "renovate[bot]"}, "pull_request": {}}
+            )
             self._send(200, issues)
+            return
+        if repo.get_status != 200:
+            self._send(repo.get_status, {"message": "refused"})
             return
         self._send(200, {"number": 7, "body": repo.body})
 
     def do_PATCH(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's contract
         path = urllib.parse.urlparse(self.path).path
         type(self).log.append(("PATCH", path))
+        if not self._authorized():
+            return
         _name, repo = self._repo(self.path)
         if repo is None:
             self._send(404, {"message": "no such repo"})
@@ -302,6 +339,26 @@ def leg_silent_noop_write_is_red() -> None:
     server.shutdown()
 
 
+def leg_already_requested_reextraction_is_not_a_red() -> None:
+    leg("A `manual job` box somebody ALREADY ticked is reached, not undetermined")
+    state = all_repos()
+    state["FS-GG/FS.GG.Governance"] = Repo(STALE.replace("- [ ] <!-- manual job -->", "- [x] <!-- manual job -->"))
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 0 — a queued re-extraction is not a failure", rc == 0, f"exit {rc}\n{out}")
+    check("no PATCH was made", not any(m == "PATCH" for m, _ in Fake.log), str(Fake.log))
+    check("and it says why", "ALREADY ticked" in out, out)
+    server.shutdown()
+
+    leg("A receiver with NO manual-job box at all and no mention IS undetermined")
+    state = all_repos()
+    state["FS-GG/FS.GG.Governance"] = Repo(" - `FS.GG.Kit 0.19.1`\n")
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 2 — no surface to push through", rc == 2, f"exit {rc}\n{out}")
+    server.shutdown()
+
+
 def leg_missing_dashboard_is_undetermined() -> None:
     leg("A receiver with no Dependency Dashboard is UNDETERMINED, never ok (#1923 AC6)")
     state = all_repos()
@@ -332,6 +389,97 @@ def leg_decoys_are_never_ticked() -> None:
     server.shutdown()
 
 
+def leg_identity_is_title_and_author() -> None:
+    leg("The dashboard is identified by TITLE **and** AUTHOR — a human's decoy is never written to")
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(HELD, decoy=True)
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 0", rc == 0, f"exit {rc}\n{out}")
+    check(
+        "the write went to the bot's issue 7, never the human's issue 6",
+        ("PATCH", "/repos/FS-GG/FS.GG.Net/issues/7") in Fake.log
+        and ("PATCH", "/repos/FS-GG/FS.GG.Net/issues/6") not in Fake.log,
+        str(Fake.log),
+    )
+    server.shutdown()
+    server.server_close()
+
+
+def leg_pagination_and_its_cap() -> None:
+    leg("The dashboard is found past page 1, and the CAP is not reported as absence")
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(HELD, flood=3)
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 0 — found on page 4", rc == 0, f"exit {rc}\n{out}")
+    check(
+        "it really did paginate — four list reads against the flooded receiver",
+        Fake.log.count(("GET", "/repos/FS-GG/FS.GG.Net/issues")) == 4,
+        str(Fake.log.count(("GET", "/repos/FS-GG/FS.GG.Net/issues"))),
+    )
+    check("and it ticked", ("PATCH", "/repos/FS-GG/FS.GG.Net/issues/7") in Fake.log, str(Fake.log))
+    server.shutdown()
+    server.server_close()
+
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(HELD, flood=99)
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 2 — a cap reached is a no-verdict, not an absence", rc == 2, f"exit {rc}\n{out}")
+    check(
+        "and it refuses to claim the bot is absent",
+        "could not finish looking" in out and "has opened no" not in out,
+        out,
+    )
+    server.shutdown()
+    server.server_close()
+
+
+def leg_one_transient_failure_does_not_abort_the_rest() -> None:
+    leg("A 5xx on ONE receiver does not silently strand the other six")
+    state = all_repos()
+    state["FS-GG/FS.GG.SDD"] = Repo(CURRENT, list_status=500)
+    state["FS-GG/FS.GG.Net"] = Repo(HELD)
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port)
+    check("exit 2 — the failed receiver is a no-verdict", rc == 2, f"exit {rc}\n{out}")
+    check(
+        "and FS.GG.Net, six rows later, still got its tick",
+        ("PATCH", "/repos/FS-GG/FS.GG.Net/issues/7") in Fake.log,
+        str(Fake.log),
+    )
+    server.shutdown()
+    server.server_close()
+
+
+def leg_dry_run_writes_nothing() -> None:
+    leg("`--dry-run` decides exactly as the real run and writes NOTHING")
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(HELD)
+    state["FS-GG/FS.GG.Governance"] = Repo(STALE)
+    server = serve(state)
+    rc, out = run(kit("--dry-run"), port=server.server_port)
+    check("exit 0", rc == 0, f"exit {rc}\n{out}")
+    check("no PATCH at all", not any(m == "PATCH" for m, _ in Fake.log), str(Fake.log))
+    check("the held receiver's body is untouched", state["FS-GG/FS.GG.Net"].body == HELD)
+    check("it reported the unlimit decision", "unlimit-branch=renovate/fs.gg.kit-0.x" in out, out)
+    check("and the manual-job decision", "manual job" in out, out)
+    server.shutdown()
+    server.server_close()
+
+
+def leg_the_credential_is_actually_presented() -> None:
+    leg("Every request carries the credential — the fake 401s one that does not")
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(HELD)
+    server = serve(state)
+    rc, out = run(kit(), port=server.server_port, token="t0ken")
+    check("exit 0 with a token", rc == 0, f"exit {rc}\n{out}")
+    server.shutdown()
+    server.server_close()
+
+
 def leg_word_boundaries() -> None:
     leg("`fs.gg.coord` must not tick an `fs.gg.coord.cli` hold, and 0.2.1 is not 0.2.10")
     state = all_repos()
@@ -355,8 +503,27 @@ def leg_word_boundaries() -> None:
     server = serve(state)
     rc, out = run(["--package", "FS.GG.Kit", "--version", "0.2.1"], port=server.server_port)
     body = state["FS-GG/FS.GG.Net"].body
+    check("exit 0", rc == 0, f"exit {rc}\n{out}")
     check("0.2.1 did not match 0.2.10", "- [ ] <!-- unlimit-branch=renovate/fs.gg.kit-0.x -->" in body, body)
+    # Without this the leg passes when the script does NOTHING, which is the shape it exists to
+    # refuse: "it did not tick the wrong box" and "it did not run" look identical from outside.
+    check("and it fell through to `manual job` instead", "- [x] <!-- manual job -->" in body, body)
     server.shutdown()
+    server.server_close()
+
+    leg("A version with letters is matched case-insensitively, like the package half")
+    state = all_repos()
+    state["FS-GG/FS.GG.Net"] = Repo(
+        " - [ ] <!-- unlimit-branch=renovate/fs.gg.kit-0.x -->update dependency fs.gg.kit to 0.21.0-rc1\n"
+        " - [ ] <!-- manual job -->run again\n"
+    )
+    server = serve(state)
+    rc, out = run(["--package", "FS.GG.Kit", "--version", "0.21.0-RC1"], port=server.server_port)
+    body = state["FS-GG/FS.GG.Net"].body
+    check("the precise box was ticked, not the blunt one", "- [x] <!-- unlimit-branch=renovate/fs.gg.kit-0.x -->" in body, body)
+    check("`manual job` was left alone", "- [ ] <!-- manual job -->" in body, body)
+    server.shutdown()
+    server.server_close()
 
 
 def leg_pull_request_is_not_the_dashboard() -> None:
@@ -436,30 +603,52 @@ def leg_the_wiring_is_still_there() -> None:
     check("the selftest runs this fixture", "tests/dashboard-tick/run.sh" in selftest)
     check("the selftest probes the credential", "scripts/dashboard-tick.py --probe" in selftest)
     check("the credential job asks for issues:write", "permission-issues: write" in selftest)
-    # A YAML KEY, not the word — the comment above that step explains why there is no such key, and
-    # a substring test would fail on its own rationale.
-    check(
-        "the credential job hand-lists no receivers",
-        re.search(r"^\s+repositories:", selftest, re.M) is None,
-        "a `repositories:` block is a second, drifting copy of the roster (#1923 AC2)",
-    )
+    # The selftest's `paths:` must select everything dashboard-tick.py declares it reads (#996), or
+    # a change to the roster query never re-runs the gate that covers it.
+    for entry in ("scripts/dashboard-tick.py", "scripts/repos.sh"):
+        check(f"the selftest triggers on {entry}", selftest.count(f'"{entry}"') >= 2, "both triggers must agree")
 
     for name, package in (
+        ("dashboard-tick-selftest.yml", None),
         ("release-kit.yml", "FS.GG.Kit"),
         ("release-coord-engine.yml", "FS.GG.Coord.Cli"),
     ):
         workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
-        check(f"{name} calls the writer for {package}", f"--package {package}" in workflow)
-        check(f"{name} gates the writer on a real publish", "steps.v.outputs.push == 'true'" in workflow)
-        check(f"{name} mints issues:write for it", "permission-issues: write" in workflow)
+        # A YAML KEY, not the word — the comment above each mint explains why there is no such key,
+        # and a substring test would fail on its own rationale.
+        check(
+            f"{name} hand-lists no receivers",
+            re.search(r"^\s+repositories:", workflow, re.M) is None,
+            "a `repositories:` block is a second, drifting copy of the roster (#1923 AC2)",
+        )
+        check(f"{name} mints issues:write", "permission-issues: write" in workflow)
         check(
             f"{name} does not swallow the writer's failure",
             re.search(r"^\s*continue-on-error:", workflow, re.M) is None,
             "a `continue-on-error` here turns a release that told nobody green (#1923 AC4)",
         )
+        if package is None:
+            continue
+        check(f"{name} calls the writer for {package}", f"--package {package}" in workflow)
+        # BOUND TO THE STEP, not to the file. `steps.v.outputs.push == 'true'` appears on the two
+        # nuget pushes independently, so a file-wide substring test passes with the tick step's
+        # `if:` deleted — a gate that cannot fail on its subject.
+        step = re.search(
+            r"^      - name: Tell every [^\n]*\n(?P<block>(?:^(?:        |\n).*\n)+)", workflow, re.M
+        )
+        check(f"{name}'s tick step is findable", step is not None, "the assertions below grade nothing without it")
+        block = step.group("block") if step else ""
+        check(f"{name} gates the tick on a real publish", "if: steps.v.outputs.push == 'true'" in block, block)
+        check(f"{name} passes the version through env, not into the shell", "VERSION: ${{ steps.v" in block, block)
         # A `case` arm that let rc=2 pass would make "I could not tell them" wear the same green as
-        # "I told them" — the exact #266 shape, and invisible in a diff without this assertion.
-        check(f"{name} treats a no-verdict (2) as red", re.search(r"^\s*2\)[^\n]*exit 1", workflow, re.M) is not None)
+        # "I told them" — the exact #266 shape, and invisible in a diff without this assertion. rc=3
+        # needs its own arm because "nothing was attempted" is not "a write was refused".
+        for code in ("2", "3"):
+            check(
+                f"{name} treats exit {code} as red, in its own arm",
+                re.search(rf"^\s*{code}\)[^\n]*exit 1", block, re.M) is not None,
+                block,
+            )
 
 
 def main() -> int:
@@ -470,8 +659,14 @@ def main() -> int:
     leg_unreadable_receiver_is_red()
     leg_refused_write_is_red()
     leg_silent_noop_write_is_red()
+    leg_already_requested_reextraction_is_not_a_red()
     leg_missing_dashboard_is_undetermined()
     leg_decoys_are_never_ticked()
+    leg_identity_is_title_and_author()
+    leg_pagination_and_its_cap()
+    leg_one_transient_failure_does_not_abort_the_rest()
+    leg_dry_run_writes_nothing()
+    leg_the_credential_is_actually_presented()
     leg_word_boundaries()
     leg_pull_request_is_not_the_dashboard()
     leg_probe_is_read_only()

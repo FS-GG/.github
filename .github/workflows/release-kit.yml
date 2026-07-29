@@ -346,22 +346,36 @@ jobs:
         if: steps.v.outputs.push == 'true'
         env:
           DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
+          # Through `env:`, not spliced into the `run:` body — the same discipline the version step
+          # above uses, and the reason is that a `${{ }}` inside shell is substituted before bash
+          # ever parses the line.
+          VERSION: ${{ steps.v.outputs.version }}
         run: |
-          set +e
-          python3 scripts/dashboard-tick.py --package FS.GG.Kit --version "${{ steps.v.outputs.version }}"
+          set +eu
+          python3 scripts/dashboard-tick.py --package FS.GG.Kit --version "$VERSION"
           rc=$?
-          set -e
-          # Classify by EXIT CODE, never by prose (#335). 2 is a NO VERDICT — a receiver could not be
-          # graded — and it is red, because "I could not tell them" must never wear the same green as
-          # "I told them" (#266). It is separated from 1 only so the operator reads the right sentence.
+          set -eu
+          # Classify by EXIT CODE, never by prose (#335). Every non-zero is red; they are separate
+          # arms so the operator reads the right sentence, which is the whole point of the script
+          # having four codes instead of two.
+          #   2 — a receiver could not be GRADED. "I could not tell them" must never wear the same
+          #       green as "I told them" (#266).
+          #   3 — nothing was ATTEMPTED: the roster would not read, or the credential was empty. Not
+          #       the same event as a refused write, and folding it into that arm names a cause that
+          #       did not happen.
           case "$rc" in
             0) echo "delivery: every kit receiver was reached." >> "$GITHUB_STEP_SUMMARY" ;;
             2) echo "::error title=release-kit: delivery not verified::At least one receiver could not be graded. The kit IS published; some receivers may not have been told. See the job log." ; exit 1 ;;
+            3) echo "::error title=release-kit: delivery never ran::scripts/dashboard-tick.py exited 3 — a permanent no-verdict (the roster would not read, or the credential was empty). NOTHING was attempted, so no receiver was told. The kit IS published." ; exit 1 ;;
             *) echo "::error title=release-kit: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The kit IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
           esac
       # ─────────────────────────────────────────────────────────────────────────────────────────
 
+      # `always()`: the publish is the thing this summary reports, and a DELIVERY failure above must
+      # not suppress the record that the package went to the feeds. The two facts are separate and
+      # the operator needs both.
       - name: Summary
+        if: always()
         run: |
           {
             echo "### FS.GG.Kit ${{ steps.v.outputs.version }}"
