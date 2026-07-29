@@ -178,8 +178,45 @@ module Chore =
         /// body", off the same body, and the flip is held on it. See `derive`'s note below, which this
         /// makes the ONE exception to.
         ///
+        /// ...AND NEVER ON AN ITEM WHOSE IMPLEMENTATION IS ALREADY IN FLIGHT (.github#1738). An open
+        /// `item/<n>-*` PR on a markerless row is what `Schedulability` step 5b refuses on — *"an
+        /// implementation is already in flight … claiming it now would duplicate work that is already
+        /// written"* (#651) — and this remedy writes `Ready`, the one column `columnStartability` calls
+        /// `AlwaysStartable` and therefore the one that ADVERTISES the row. Two mechanisms disagreeing about
+        /// one item, with the write winning: the human-park shape above, one field over, and MEASURED three
+        /// times in a single board event (`FS.GG.Rendering#1086`/`#1089`/`#1092` when `#1094` merged, each
+        /// with a complete open PR).
+        ///
+        /// It reads `Item.ItemPr` — the SAME field step 5b refuses on, asked the same way. That is the
+        /// mechanism, not a convenience: a gate consulting a second source, or reading this one more
+        /// strictly, would be a third opinion about one row and could disagree with the scheduler in the
+        /// other direction. `None` collapsing "no such PR" with "the probe could not be made" is #651's own
+        /// decided posture (`Scan` writes nothing on an unreadable probe — a false NEGATIVE closed without
+        /// opening a new fail-closed surface), inherited here rather than introduced, and it is why this gate
+        /// makes no `HumanBlock`-style fail-closed claim: there is no `TouchSet.Unreadable`-shaped receipt
+        /// behind it to make one with.
+        ///
+        /// **THE PROBE'S POPULATION IS PART OF THIS RULE.** `Scan` used to probe only the columns a scheduler
+        /// offers TODAY (`Ready`/`Backlog`); this rule writes the column that makes a row offerable TOMORROW,
+        /// so a `Blocked` row — the ONLY population this rule acts on — was never probed and `ItemPr` was
+        /// `None` for every one of them. A gate that could never see its subject is the fail-open wearing the
+        /// fix's clothes (#266), so #1738 widened the probe to the `BLOCKER-CLEARED` candidate set exactly:
+        /// a markerless `Blocked` row with at least one blocker and every blocker resolved.
+        ///
         /// Never on a RESERVED item: that `Blocked` is most likely the holder's own, and their column wins
         /// (#331). See "the reserver owns the column" below.
+        ///
+        /// **AND IT IS THE ONLY KIND THAT NEEDS ANY OF THIS** — the general statement of .github#1644 (*"no
+        /// mechanical remedy may overwrite a fact the scheduler refuses on"*), applied once rather than
+        /// restated per rule, and pinned by `ChoreTests` rather than asserted here. `Write` above is what
+        /// settles it: `BLOCKER-CLEARED` is the only kind whose remedy writes a column
+        /// `Schedulability.columnStartability` calls startable. `CLAIM-STATUS-LAG` writes `In progress` and
+        /// fires only on a RESERVED item, where `ItemPr` is `None` by construction (`Scan` probes only
+        /// markerless rows); `STATUS-NOT-BLOCKED` writes `Blocked` and requires an OPEN blocker, on which
+        /// `Schedulability` step 3 already refuses — so its write AGREES with the scheduler and moves the row
+        /// further from startable; `CLOSED-ISSUE-NOT-DONE` writes `Done` on a row step 1 refuses as
+        /// `IssueClosed`; `CLASS-PROJECTION-LAG` writes no scheduling column at all. None of the four can
+        /// contradict a refusal, in either direction.
         | BlockerCleared of resolved: string list
 
         /// `STATUS-NOT-BLOCKED` — an OPEN blocker, but the column is `Ready`/`Backlog`, so the scheduler is

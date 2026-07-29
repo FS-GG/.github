@@ -132,6 +132,37 @@ module Chore =
             | DeclaredChore
             | Declared _ -> true
 
+    /// THE IN-FLIGHT-IMPLEMENTATION GATE — #651's refusal, respected by the one chore that would write the
+    /// column it refuses on (.github#1738).
+    ///
+    /// `Schedulability` step 5b refuses a markerless item carrying an open `item/<n>-*` PR: *"an
+    /// implementation is already in flight … claiming it now would duplicate work that is already written"*
+    /// (#651). `BLOCKER-CLEARED`'s remedy is `Status = Ready` — the ONE column `columnStartability` calls
+    /// `AlwaysStartable`, and therefore the column that ADVERTISES the row to every reader. So the two
+    /// mechanisms disagreed about one item and the WRITE won, which is #1644's shape exactly, one field over.
+    ///
+    /// MEASURED, three instances in one board event: `FS.GG.Rendering#1094` merging fired `BLOCKER-CLEARED`
+    /// on `#1086`, `#1089` and `#1092`, each of which had a complete open PR. `Ready` was wrong for all three.
+    ///
+    /// **IT READS EXACTLY WHAT STEP 5b READS, AND THAT IS THE POINT RATHER THAN A CONVENIENCE.** A gate that
+    /// consulted a second source, or read this one more strictly, would be a THIRD opinion about one row and
+    /// could disagree with the scheduler in the other direction. `Item.ItemPr` is the field step 5b refuses
+    /// on; asking it the same question is what makes "the chore never writes a column the scheduler refuses
+    /// on" structural instead of remembered.
+    ///
+    /// **THE `None` COLLAPSE IS #651's, INHERITED AND NOT INTRODUCED, AND IT IS STATED RATHER THAN HIDDEN.**
+    /// `ItemPr = None` means both "no such PR" and "the probe could not be made" — `Scan` writes nothing on
+    /// an unreadable probe, deliberately, because #651 closed a false NEGATIVE and declined to open a new
+    /// fail-closed surface. This gate therefore cannot be more fail-closed than the scheduler it agrees with,
+    /// and pretending otherwise would be a `HumanBlock`-shaped claim with no `TouchSet.Unreadable` behind it.
+    /// What #1738 DID change is the population the probe covers: `Scan` probed only the columns a scheduler
+    /// offers TODAY (`Ready`/`Backlog`), and this rule writes the column that makes a row offerable TOMORROW —
+    /// so a `Blocked` row, the only population this rule acts on, was never probed and this gate would have
+    /// been dead on arrival. `Scan` now probes exactly the `BLOCKER-CLEARED` candidate set as well.
+    ///
+    /// `true` — the flip may proceed — in exactly one case: no open `item/<n>-*` PR was found for this row.
+    let private itemPrAllowsFlip (item: Item) : bool = item.ItemPr.IsNone
+
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
         member _.Subject = subject
@@ -298,14 +329,24 @@ module Chore =
               // one mechanical rule that could overwrite it: promoting such a row to `Ready` converts "a
               // human must decide this" into "a worker may pick this up". `humanBlockAllowsFlip` also fails
               // closed on a body we did not READ, because `HumanBlock = None` cannot tell that apart from
-              // "declares no sentinel". The gate order mirrors `Schedulability`'s: concrete blockers, then
-              // the human park (step 3b), then the machine predicate.
+              // "declares no sentinel".
+              //
+              // ...AND the item must not already carry an IMPLEMENTATION IN FLIGHT — .github#1738. An open
+              // `item/<n>-*` PR on a markerless row is exactly what `Schedulability` step 5b refuses on
+              // (#651), and `Ready` is precisely the column that invites the duplicate implementation it
+              // refused. Same shape as the park one field over, and `itemPrAllowsFlip` asks the SAME field
+              // step 5b asks — so the two mechanisms cannot reach opposite answers about one row.
+              //
+              // The gate order mirrors `Schedulability`'s: concrete blockers (step 3), the human park (3b),
+              // the markerless in-flight PR (5b) — then the machine predicate, for which `Schedulability`
+              // has no step at all and which is therefore last.
               if
                   item.State = Open
                   && item.Status = Blocked
                   && not item.Blockers.IsEmpty
                   && item.Blockers |> List.forall Blockers.isResolved
                   && humanBlockAllowsFlip item
+                  && itemPrAllowsFlip item
                   && predicateAllowsFlip item
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)

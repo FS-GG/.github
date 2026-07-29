@@ -883,19 +883,44 @@ module Scan =
                 // already in flight. #581's proof-of-life read the PR only THROUGH a claim marker, so a
                 // Ready/Backlog row whose marker never existed (or was cleaned) fell through to `Startable`
                 // and got handed out a second time. Probe it here — only when there is NO marker (a marker
-                // carries its own liveness above, and offering it is decided by that) and the column is one
-                // a scheduler would OFFER; an In-progress/Done/etc. row is never offered, so the read would
-                // be wasted budget. An unreadable probe writes nothing (fail open to the disjointness check,
-                // exactly as a markerless row behaved before): #651 is a false NEGATIVE we are closing, not a
-                // new fail-closed surface.
+                // carries its own liveness above, and offering it is decided by that). An unreadable probe
+                // writes nothing (fail open to the disjointness check, exactly as a markerless row behaved
+                // before): #651 is a false NEGATIVE we are closing, not a new fail-closed surface.
+                //
+                // WHICH COLUMNS ARE PROBED IS THE WHOLE QUESTION, AND `Ready`/`Backlog` ALONE WAS THE WRONG
+                // ANSWER (.github#1738). That set is "the columns a scheduler would OFFER" — the right
+                // subject while `Item.ItemPr`'s only consumer was `Schedulability` step 5b, which is asked
+                // about a row's column AS IT STANDS. It is the wrong subject for the OTHER consumer:
+                // `Chore`'s `BLOCKER-CLEARED` reads the same field to decide whether to WRITE `Ready` onto a
+                // `Blocked` row — the column that makes the row offerable NEXT pass. A `Blocked` row was
+                // never probed, so `ItemPr` was `None` for every single one of them, and the gate that reads
+                // it could never see its subject: green, and blind (#266). Measured on `.github` on
+                // 2026-07-29 — `#1689` is `Blocked` with PR #1911 open on `item/1689-*`, and the snapshot
+                // reported `itemPr: null` for it.
+                //
+                // SO THE PROBE COVERS EXACTLY THE `BLOCKER-CLEARED` CANDIDATE SET AS WELL, AND NOT ONE ROW
+                // MORE. Not every `Blocked` row: only one with at least one blocker and EVERY blocker
+                // resolved, which is `Chore`'s own firing condition and is already in hand here — `blockers`
+                // is resolved above, so this costs no read to decide. That precision is not tidiness. This
+                // is a REST request per row, on the budget the claim lock lives on (ADR-0034 §3, #418), and
+                // a blanket `| Open, _ ->` would spend one on every parked, in-progress and blocked row on
+                // the board, every scan. Bounded this way, the extra cost is one request per row that is
+                // ABOUT TO BE PROMOTED — measured at ZERO additional requests on `.github`'s live board,
+                // whose one blocker-carrying `Blocked` row still has an open blocker.
                 match holder with
                 | Some _ -> ()
                 | None ->
-                    match row.State, row.Status with
-                    | Open, (Ready | Backlog) ->
+                    let blockerClearedCandidate =
+                        not blockers.IsEmpty && blockers |> List.forall Blockers.isResolved
+
+                    let probe () =
                         match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                         | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
                         | _ -> ()
+
+                    match row.State, row.Status with
+                    | Open, (Ready | Backlog) -> probe ()
+                    | Open, Blocked when blockerClearedCandidate -> probe ()
                     | _ -> ()
 
                 w.WriteEndObject()
