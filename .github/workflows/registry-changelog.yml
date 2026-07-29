@@ -1,0 +1,18 @@
+name: registry-changelog
+on:
+  pull_request:
+    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
+  push:
+    branches: [main]
+    paths: ["registry/dependencies.yml", "registry/CHANGELOG.md", "scripts/check-registry-changelog.py", "tests/registry-changelog/**", ".github/workflows/registry-changelog.yml"]
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash tests/registry-changelog/run.sh
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 scripts/check-registry-changelog.py --changed registry/dependencies.yml --changed registry/CHANGELOG.md
