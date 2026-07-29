@@ -418,6 +418,14 @@ stale_guard() {
   # that must be escalated rather than merged. The `noverdict` arm needs no such care: `fetch` has
   # no opinion about detached HEADs.
   #
+  # `merge` DOES NOT FETCH, AND THAT IS THE RIGHT AMOUNT OF WORK. Dropping `pull` drops an implicit
+  # `git fetch`, so the remedy now brings the checkout up to the ref as of its LAST fetch rather than
+  # to the true remote. That is exactly sufficient, because it is the same ref this guard measured:
+  # `upstream_drift` reads `refs/remotes/origin/*` and performs no network I/O (this file's "no
+  # network, ever" rule), so `merge --ff-only $b` clears precisely the drift that was counted, and
+  # nothing here ever claimed to know about commits nobody has fetched. The arm that DOES need a
+  # fetch — no resolvable default-branch ref at all — is `noverdict`, and it prints one.
+  #
   # AND IT FAST-FORWARDS TO `$b`, THE REF THIS GUARD ACTUALLY MEASURED, rather than a literal
   # `origin/main`. `$b` is whatever `upstream_drift` resolved — `refs/remotes/origin/HEAD` first,
   # then `main`, then `master` — and it is already the ref named in the same sentence by

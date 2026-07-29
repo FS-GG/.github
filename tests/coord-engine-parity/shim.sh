@@ -602,7 +602,7 @@ touch -d '3 hours ago' "$CL/$FIXSRC" "$CL/docs/notes.md"   # the merge stamps th
 out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
 if [ "$ffrc" -eq 0 ] && [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' \
    && ! printf '%s' "$out" | grep -qi 'stale'; then
-  ok ".github#1549: the remedy AS PRINTED ($ff) clears the refusal on a checkout that is on a branch"
+  ok ".github#1549: the remedy AS PRINTED (${ff/$CL/\$CL}) clears the refusal on a checkout that is on a branch"
 else
   bad ".github#1549: a refusal whose remedy does not clear it teaches the fleet to ignore the remedy" \
       "ff=$ff ffrc=$ffrc rc=$rc out=$out"
@@ -642,7 +642,7 @@ touch -d '3 hours ago' "$CL/$FIXSRC" "$CL/docs/notes.md"
 out="$(cd "$CL" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" widen "$FIXREF" --paths src/Foo.fs 2>&1)"; rc=$?
 if [ "$ffrc" -eq 0 ] && [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'CLONE ENGINE RAN' \
    && ! printf '%s' "$out" | grep -qi 'stale'; then
-  ok ".github#1664: the remedy AS PRINTED ($ff) fast-forwards a DETACHED checkout and clears the refusal"
+  ok ".github#1664: the remedy AS PRINTED (${ff/$CL/\$CL}) fast-forwards a DETACHED checkout and clears the refusal"
 else
   bad ".github#1664: the printed remedy must run AS PRINTED from the state the shared checkout is in — 'git pull --ff-only' exits 1 on a detached HEAD and leaves the fail-closed refusal standing" \
       "ff=$ff ffrc=$ffrc rc=$rc out=$out"
