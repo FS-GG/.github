@@ -928,7 +928,7 @@ must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS
 # These ten write rows are driven by their dedicated state-transition assertions above.  Marking
 # them here keeps the ledger at one entry per advertised command while the assertions remain next
 # to the preconditions that make each mutation meaningful.
-for command in adopt child claim done heartbeat release say set-field set-paths widen; do
+for command in adopt child claim "done" heartbeat release say set-field set-paths widen; do
   mark_contract "$command" "dedicated-write-driver"
 done
 
