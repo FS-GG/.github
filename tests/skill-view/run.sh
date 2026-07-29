@@ -74,6 +74,27 @@ expect() {
   ok "$label"
 }
 
+# expect_silent <label> -- <argv...>
+# Exit 0 AND NOT ONE BYTE on either stream. `expect "$label" 0 ""` would NOT do: .github#1700's whole
+# defect was an exit 0 that said nothing, so a leg asserting only the exit code passes against the
+# exact bug it exists to catch. Silence is the assertion here, not a side effect of one.
+expect_silent() {
+  local label="$1"; shift
+  [ "$1" = "--" ] && shift
+  leg
+  local out rc=0
+  out="$("$@" 2>&1)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    bad "$label — exit $rc, want 0" "$out"
+    return
+  fi
+  if [ -n "$out" ]; then
+    bad "$label — exit 0 as wanted, but it PRINTED (silence was the assertion)" "$out"
+    return
+  fi
+  ok "$label"
+}
+
 # ---------------------------------------------------------------------------------------------
 # make_tree <dir> [<n-skills>] — a repository whose ONE source of truth is canonical/skills, whose
 # roots are DECLARED (so the suite exercises lib/roots.sh's real precedence rather than a default),
@@ -435,9 +456,112 @@ expect "13g --receiver-proj is a check flag; generate REFUSES it" 2 "is a 'check
   -- bash "$SV" generate --tree "$T13" --source "$T13/canonical/skills" --receiver-proj "$T13/good.proj"
 
 # =============================================================================================
+# 14 — THE CHECKOUT HALF (.github#1700). Everything above grades the TOOL; §8 requires the assertion
+#      "at checkout AND in CI", and the checkout half is `.claude/hooks/skill-view-check.sh`. It had
+#      a `[ -d "$DIR/.agents/skills" ] || exit 0` guard, and `-d` is FALSE for a dangling link, for a
+#      `core.symlinks=false` text file, and for a non-directory — so the hook exited 0 in silence on
+#      three of the five classes, which are exactly the three phase 1 measured as exit-0-and-silent
+#      in both runtimes. The tool was loud over the very same tree. Legs 14c/14d/14e are that tree.
+#
+#      SILENCE IS ASSERTED AS PRECISELY AS LOUDNESS HERE. `expect_silent` demands zero output, and
+#      leg 14j re-runs 14c's tree through a RECONSTRUCTION of the deleted guard: if 14c ever passes
+#      for a reason other than the repair, 14j is what shows it, because the two legs disagree only
+#      when the fix is real.
+# =============================================================================================
+HOOK="$ROOT/.claude/hooks/skill-view-check.sh"
+
+# make_hook_tree <dir> — THIS repo's shape, because this hook is .github's own and is not shipped:
+# two DECLARED roots that are committed mirrors of one another, `.agents/skills` canonical
+# (ADR-0067 §5), and `scripts/skill-view` plus BOTH libraries present, since the hook execs the tool
+# out of the tree it is judging rather than out of this checkout.
+make_hook_tree() {
+  local dir="$1" root i id
+  for root in .claude/skills .agents/skills; do
+    for i in 1 2; do
+      id="skill-$i"
+      mkdir -p "$dir/$root/$id"
+      printf -- '---\nname: %s\ndescription: fixture skill %s.\n---\n\nBody of %s.\n' "$id" "$i" "$id" \
+        > "$dir/$root/$id/SKILL.md"
+    done
+  done
+  printf '.claude/skills\n.agents/skills\n' > "$dir/.agent-skill-roots"
+  mkdir -p "$dir/scripts/lib"
+  cp "$SV" "$dir/scripts/skill-view"
+  cp "$ROOT/scripts/lib/args.sh" "$ROOT/scripts/lib/roots.sh" "$dir/scripts/lib/"
+}
+
+# Every leg below runs from THIS suite's working directory, never from inside the fixture tree. That
+# is not incidental: `--source` resolves against the process's cwd while `--tree` resolves on its
+# own, so a hook that did not `cd` first would grade one tree's roots against another tree's source.
+H_OK="$WORK/hook-ok"; make_hook_tree "$H_OK"
+expect "14a a coherent tree is green, and says so in ONE line" 0 "declared skill(s) visible in every one of" \
+  -- env CLAUDE_PROJECT_DIR="$H_OK" bash "$HOOK"
+
+H_ABS="$WORK/hook-canon-absent"; make_hook_tree "$H_ABS"; rm -rf "$H_ABS/.agents/skills"
+expect_silent "14b a tree that simply has NO view root stays silent (.github#698)" \
+  -- env CLAUDE_PROJECT_DIR="$H_ABS" bash "$HOOK"
+
+H_DANG="$WORK/hook-canon-dangling"; make_hook_tree "$H_DANG"
+rm -rf "$H_DANG/.agents/skills"; ln -s ../nowhere "$H_DANG/.agents/skills"
+expect "14c a DANGLING view root is LOUD, and is not called absent" 1 "[dangling-root]" \
+  -- env CLAUDE_PROJECT_DIR="$H_DANG" bash "$HOOK"
+
+# The tool's classification of this class is already proven against a REAL `core.symlinks=false`
+# clone by leg 6; what 14d adds is that the HOOK reaches it and relays the class rather than
+# swallowing it, so the checked-out link BODY is the right subject here.
+H_TXT="$WORK/hook-canon-textlink"; make_hook_tree "$H_TXT"
+rm -rf "$H_TXT/.agents/skills"; printf '../../.claude/skills' > "$H_TXT/.agents/skills"
+expect "14d a core.symlinks=false text-file view root is LOUD" 1 "[text-file-root]" \
+  -- env CLAUDE_PROJECT_DIR="$H_TXT" bash "$HOOK"
+
+H_NOTDIR="$WORK/hook-canon-notdir"; make_hook_tree "$H_NOTDIR"
+rm -rf "$H_NOTDIR/.agents/skills"; printf 'not a link body\nand not a directory\n' > "$H_NOTDIR/.agents/skills"
+expect "14e a NON-DIRECTORY view root is LOUD" 1 "[not-a-directory-root]" \
+  -- env CLAUDE_PROJECT_DIR="$H_NOTDIR" bash "$HOOK"
+
+# The excuse is scoped to ONE finding on ONE root — the same tree the deleted guard excused and no
+# other. A repair that widened it into "absence is quiet" would red here, which is the point.
+H_MIRR="$WORK/hook-mirror-absent"; make_hook_tree "$H_MIRR"; rm -rf "$H_MIRR/.claude/skills"
+expect "14f an absent .claude/skills is STILL loud — the excuse did not widen" 1 "[absent-root]" \
+  -- env CLAUDE_PROJECT_DIR="$H_MIRR" bash "$HOOK"
+
+H_NONE="$WORK/hook-both-absent"; make_hook_tree "$H_NONE"
+rm -rf "$H_NONE/.claude/skills" "$H_NONE/.agents/skills"
+expect_silent "14g a tree carrying no skill apparatus at all stays silent" \
+  -- env CLAUDE_PROJECT_DIR="$H_NONE" bash "$HOOK"
+
+H_NOTOOL="$WORK/hook-no-tool"; make_hook_tree "$H_NOTOOL"; rm -f "$H_NOTOOL/scripts/skill-view"
+expect_silent "14h a tree without the tool is not a tree with a finding" \
+  -- env CLAUDE_PROJECT_DIR="$H_NOTOOL" bash "$HOOK"
+
+# Neither root readable: the checker refuses BEFORE classifying anything, so no class can honestly be
+# named. The hook says that, loudly, and does not invent one (.github#1858).
+H_BOTHBAD="$WORK/hook-both-dangling"; make_hook_tree "$H_BOTHBAD"
+rm -rf "$H_BOTHBAD/.claude/skills" "$H_BOTHBAD/.agents/skills"
+ln -s ../nowhere "$H_BOTHBAD/.claude/skills"; ln -s ../nowhere "$H_BOTHBAD/.agents/skills"
+expect "14i neither root readable is LOUD, and names that rather than guessing a class" 2 "could be read as the expected skill set" \
+  -- env CLAUDE_PROJECT_DIR="$H_BOTHBAD" bash "$HOOK"
+
+# ANTI-VACUITY FOR 14c: the deleted guard, reconstructed, over 14c's own tree.
+cat > "$WORK/legacy-skill-view-check.sh" <<'LEGACY'
+#!/usr/bin/env bash
+set -uo pipefail
+DIR="${CLAUDE_PROJECT_DIR:-.}"
+[ -x "$DIR/scripts/skill-view" ] || exit 0
+[ -d "$DIR/.agents/skills" ] || exit 0
+out="$(bash "$DIR/scripts/skill-view" check --source .agents/skills --tree "$DIR" 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ]; then printf '%s\n' "$out" | tail -n 1; exit 0; fi
+printf '%s\n' "$out" >&2
+exit "$rc"
+LEGACY
+expect_silent "14j the DELETED -d guard is silent over 14c's tree — so 14c is not vacuous" \
+  -- env CLAUDE_PROJECT_DIR="$H_DANG" bash "$WORK/legacy-skill-view-check.sh"
+
+# =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=43
+EXPECTED_LEGS=53
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 

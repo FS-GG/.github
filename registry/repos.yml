@@ -536,3 +536,31 @@ kit:
   - { id: skill-view,              kind: client, source: scripts/skill-view }
   - { id: skill-view-lib-args,     kind: config, source: scripts/lib/args.sh,  dest: scripts/lib/args.sh }
   - { id: skill-view-lib-roots,    kind: config, source: scripts/lib/roots.sh, dest: scripts/lib/roots.sh }
+  #
+  # THE SESSIONSTART HOOK IS NOT A KIT ROW (.github#1700, 2026-07-29). Read this before adding one:
+  # it is a decision with a named blocker, not an omission nobody noticed.
+  #
+  # ADR-0067 §8 requires the loud absence check *"at checkout AND in CI"*. #1696 made the CI half
+  # structural for every receiver through the kit materializer. The CHECKOUT half is
+  # `.claude/hooks/skill-view-check.sh`, and #1700 repaired the hole in it — it now asks
+  # `scripts/skill-view` for the root's CLASS instead of re-deriving a weaker `-d` test that read
+  # "dangling" as "not here" and exited 0 in silence. THAT REPAIR IS `.github`-ONLY. So on the fleet,
+  # §8's checkout half is `.github`-only today; the three rows above deliver the tool, not the hook
+  # that runs it at session start.
+  #
+  # WHY THE ROW WAS NOT ADDED BY #1700, in the order the two reasons bind:
+  #   1. Shipping the script alone RESTORES NOTHING on any receiver. A hook does not run because it
+  #      is on disk — it runs because `.claude/settings.json` names it under `SessionStart`, and that
+  #      file is receiver-AUTHORED. Overwriting it would destroy their hooks: the #387 class, which
+  #      the materializer already refuses to do for `.props`. So the wiring is per-receiver stage-1
+  #      work (docs/coordination/skill-apparatus-retirement-order.md) either way, and a row here only
+  #      pre-positions the script so that change is a settings-only edit instead of authoring a script.
+  #   2. A new row changes kit CONTENT, so `kit-published-coherence`'s `pr-arm` requires
+  #      `src/FS.GG.Kit/FS.GG.Kit.csproj` `<Version>` to move ahead of the newest published kit in the
+  #      SAME diff. That file sat in another worker's declared touch-set for the whole of #1700
+  #      (`.github#1680`), so the bump could not ride that PR without the overlap the claim protocol
+  #      forbids. This is a scheduling fact with a date on it, not a property of the row.
+  #
+  # Adding it later is cheap and correct. It costs one FS.GG.Kit republish and a seven-receiver
+  # fan-out, exactly like the three rows above, and it must not be added by a PR that cannot also
+  # bump the version — see #1581/#1591 in this workflow's own header for what that costs `main`.
