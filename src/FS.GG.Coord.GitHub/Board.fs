@@ -73,13 +73,12 @@ module Board =
                         | _ -> "(no message)")
                     |> List.ofSeq
 
-                // RATE LIMIT FIRST. See above — this ordering is load-bearing.
-                if messages |> List.exists Budget.isRateLimited then
-                    // Asserted, not read: this arm parses a GraphQL `errors` array (same reasoning as
-                    // `Scan.fs`).
-                    Error(RateLimited(GraphQlBudget, None))
-                else
-                    Error(GraphQlErrors messages)
+                // RATE LIMIT FIRST. See above — this ordering is load-bearing. `ofGraphQlErrors` also
+                // tells a SECONDARY limit from the primary budget (#1666); this site used to call
+                // `isRateLimited`, which matches both, and reported either as the GraphQL budget.
+                match Budget.ofGraphQlErrors messages with
+                | Some limited -> Error limited
+                | None -> Error(GraphQlErrors messages)
 
         with :? JsonException as e ->
             Error(Malformed(subject, $"the GraphQL response is not JSON: %s{e.Message}"))

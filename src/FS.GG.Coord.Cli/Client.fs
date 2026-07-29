@@ -2245,17 +2245,33 @@ module Client =
 
             match opts.Render with
             | Json ->
+                // `source` and `restReported` are ADDITIVE (#1666). The object carried a `graphql` figure
+                // and nothing saying where it came from or what was missing, so a JSON consumer had exactly
+                // the ambiguity the text line had: no way to tell this is one bucket of GitHub's own
+                // accounting rather than the account's whole picture. `restReported: false` is the
+                // machine-readable form of "do not conclude REST is healthy from this".
                 let doc =
                     JsonSerializer.Serialize(
                         {| graphql =
                             {| remaining = meter.Remaining
-                               limit = meter.Limit |}
+                               limit = meter.Limit
+                               source = "github:/rate_limit" |}
+                           restReported = false
                            pendingBoardWrites = pending |}
                     )
 
                 printfn "%s" doc
             | Text ->
-                printfn "GraphQL budget: %d / %d remaining" meter.Remaining meter.Limit
+                // SAY WHOSE BUDGET THIS IS, AND WHAT IT DOES NOT COVER (#1666). This line used to read
+                // "GraphQL budget: N / 5000 remaining", and a board driver reasonably took it for the
+                // account's whole rate-limit picture — then, holding a REST refusal in one hand and this
+                // healthy-looking number in the other, concluded the engine was tripping a counter of its
+                // own. It reports ONE bucket, read from GitHub's own free `/rate_limit`, and the claim lock
+                // does not live in it. Neither does a secondary limit, which never appears there at all.
+                printfn "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining" meter.Remaining meter.Limit
+
+                printfn
+                    "REST requests: NOT REPORTED here — /rate_limit's `core` figure disagrees with the counter real requests are billed against on this account, and a SECONDARY (abuse-detection) limit never appears in it. The claim lock lives on REST (ADR-0034 §3), so a healthy line above is not evidence that `claim`/`take`/`who` will run."
 
                 match pending with
                 | Some 0 -> printfn "pending board writes: 0"

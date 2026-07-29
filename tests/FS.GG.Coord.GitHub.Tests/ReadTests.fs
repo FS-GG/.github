@@ -325,7 +325,7 @@ let ``#1055 the branch probe FAILS CLOSED - an unreadable probe is Unknown, neve
 let ``#1055 the branch probe propagates a RATE LIMIT - not swallowed as Unknown`` () =
     // A rate limit is a fact about the CLIENT (EX_RATE), not this item — the caller must back off, not go on
     // deciding liveness from a read it cannot make. The open-PR read propagates it; so must the branch probe.
-    let recorder = prNoneRefsFail (RateLimited(RestBudget, None))
+    let recorder = prNoneRefsFail (RateLimited(RestBudget(Some "core"), None))
 
     match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()

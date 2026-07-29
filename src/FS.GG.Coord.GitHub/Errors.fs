@@ -7,7 +7,8 @@ module Errors =
 
     type RateLimitResource =
         | GraphQlBudget
-        | RestBudget
+        | RestBudget of resource: string option
+        | SecondaryLimit of resource: string option * retryAfter: TimeSpan option
         | UnknownBudget
 
     type IoError =
@@ -96,21 +97,70 @@ module Errors =
             // either way, which is how it came to promise REST at the exact moment REST was gone. Both
             // budgets CAN be dead at once; a sentence that rules that out by construction is the same
             // defect, merely pointing the other way.
+            // NAME THE BUCKET GITHUB NAMED. `X-RateLimit-Resource` can say `search`, `code_search`,
+            // `integration_manifest` — not just `core`. Collapsing all of them into the words "REST budget"
+            // sent every operator to `gh api rate_limit`'s top-level `core` figure, which was untouched, and
+            // from that they concluded the tool was lying about a counter of its own (#1666). It was not: a
+            // different bucket refused the call. Name it, and that reading is available to them.
+            //
+            // SANITISED, because this is header-sourced text going straight into operator output. A bucket
+            // name is a short identifier (`core`, `code_search`); anything else is not a name we should be
+            // quoting back. Unfiltered, a backtick in the header breaks out of the code span it is rendered
+            // in — a small thing, but this is the sentence people read when nothing else works.
+            let onResource (r: string option) =
+                match r with
+                | Some name when
+                    not (String.IsNullOrWhiteSpace name)
+                    && name.Length <= 40
+                    && name |> Seq.forall (fun c -> Char.IsAsciiLetterOrDigit c || c = '_' || c = '-')
+                    ->
+                    $" GitHub named the resource `%s{name}`."
+                | _ -> ""
+
             match resource with
             | GraphQlBudget ->
                 $"GraphQL budget EXHAUSTED.%s{waitFor} This is not a protocol error and it is not a lost race — REST-only work may still run."
 
-            | RestBudget ->
+            | RestBudget r ->
                 // THE LOCK LIVES HERE (ADR-0034 §3), so this arm is the one that stops the protocol dead:
                 // `claim`/`take`/`who` read and write the marker over REST. Say that, rather than let a
                 // worker read "rate limited" and assume the GraphQL back-off advice applies.
-                $"REST budget EXHAUSTED.%s{waitFor} This is not a protocol error and it is not a lost race — but the claim lock lives on REST (ADR-0034 §3), so `claim`/`take`/`who` cannot run until it resets. GraphQL-only work may still run."
+                $"REST budget EXHAUSTED.%s{onResource r}%s{waitFor} This is not a protocol error and it is not a lost race — but the claim lock lives on REST (ADR-0034 §3), so `claim`/`take`/`who` cannot run until it resets. GraphQL-only work may still run."
+
+            | SecondaryLimit(r, retryAfter) ->
+                // A DIFFERENT MECHANISM WITH A DIFFERENT REMEDY, and collapsing it into the primary budget
+                // is #1666 itself. A secondary/abuse-detection limit is triggered by BURST CONCURRENCY, not
+                // by cumulative quota, so:
+                //   * the primary counter is typically almost untouched — every operator who checked
+                //     `gh api rate_limit` saw 62% / 87% / 88% headroom and concluded the refusal was phantom;
+                //   * it does NOT appear in `/rate_limit` at all, so a healthy reading there is not evidence
+                //     against it;
+                //   * waiting for `X-RateLimit-Reset` is the WRONG action — that is the PRIMARY window and
+                //     it does not describe this limit. `resetAt` is `None` here BY CONSTRUCTION, so the
+                //     wrong number cannot be printed even by accident.
+                // The remedy is to REDUCE CONCURRENCY and back off, which is why this must not render as a
+                // plain fleet-wide "wait for the budget to reset".
+                let wait =
+                    match retryAfter with
+                    | Some(after: TimeSpan) ->
+                        let secs = int (Math.Ceiling after.TotalSeconds)
+                        $" GitHub sent `Retry-After: %d{secs}s` — honour THAT, not the primary reset."
+                    | None ->
+                        " GitHub sent no `Retry-After`, and the primary `X-RateLimit-Reset` does NOT describe this limit — back off with increasing delay rather than to a named instant."
+
+                $"GitHub SECONDARY rate limit (abuse detection) — NOT the primary budget.%s{onResource r}%s{wait} This is not a protocol error and it is not a lost race. It is triggered by CONCURRENT REQUEST BURSTS, so the remedy is to REDUCE CONCURRENCY and retry with backoff; the primary budget may look almost untouched and does not appear in `/rate_limit`, which is not evidence that this refusal was false."
 
             | UnknownBudget ->
-                // GitHub named no resource — a secondary limit or the abuse detector. Do NOT guess which
-                // budget: the remedy (wait) is the same, and a guessed name is the exact failure this
-                // change exists to end.
-                $"A GitHub rate limit is EXHAUSTED (GitHub did not name which budget).%s{waitFor} This is not a protocol error and it is not a lost race."
+                // WHAT THIS ARM ACTUALLY KNOWS, stated exactly. It is reached when the body matched a
+                // PRIMARY wording and GitHub named no resource — so the mechanism reads as primary and it
+                // is the BUCKET that is unknown. An earlier draft of this sentence also claimed "the
+                // wording did not say whether this was primary or secondary", which was false in every
+                // reachable case: over-claiming uncertainty is the same defect as over-claiming certainty,
+                // and this change is not entitled to either.
+                //
+                // Which budget is still not guessed (#266) — `core` and `graphql` are waited out the same
+                // way, so the missing name costs advice, not correctness.
+                $"A GitHub rate limit is EXHAUSTED — the wording reads as the PRIMARY budget, but GitHub named no resource, so WHICH bucket is unknown.%s{waitFor} This is not a protocol error and it is not a lost race. Wait it out; if it recurs immediately on resuming, suspect a secondary limit instead and reduce concurrency."
 
         | NotFound subject -> $"not found: %s{subject}. The server said so — this is an absence, not a failed read."
 

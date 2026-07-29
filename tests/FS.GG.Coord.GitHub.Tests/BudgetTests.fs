@@ -54,17 +54,288 @@ let ``#421 ...and it carries EX_RATE (75), the back-off signal - not a generic 1
     Assert.Equal(Errors.ExRate, exitCode error)
 
 [<Fact>]
-let ``both rate-limit WORDINGS are recognised - primary and secondary are one remedy`` () =
+let ``every rate-limit WORDING is recognised - an unrecognised one would be dropped, not queued`` () =
     // GitHub does not report this failure one way. The primary limit, the SECONDARY limit and the abuse
     // detector all arrive as a 403 with different prose, and `gh project` renders it differently again from
     // `gh api graphql`. The corpus injects two distinct wordings on purpose and asserts the client
     // recognises BOTH — because a wording we do not recognise becomes a PERMANENT failure, a permanent
     // failure is never queued, and the board write is then silently dropped. That is #510 arriving through
     // the classifier instead of through the queue.
+    //
+    // This test used to be titled "...primary and secondary are one remedy". THEY ARE NOT (#1666), and the
+    // title was the claim that licensed collapsing them. `isRateLimited` still answers only "is it a rate
+    // limit at all" — which is the question the fail-closed ordering in `classify` needs — and
+    // `isSecondaryLimit` below carries the distinction the remedy depends on.
     Assert.True(Budget.isRateLimited "API rate limit exceeded for user ID 1.")
     Assert.True(Budget.isRateLimited "You have exceeded a secondary rate limit.")
     Assert.True(Budget.isRateLimited "was submitted too quickly")
     Assert.True(Budget.isRateLimited "rate limit already exceeded")
+
+// ---- #1666: a SECONDARY limit is a different mechanism with a different remedy ---------------------
+//
+// THE INCIDENT, measured across 2026-07-27/28 in a six-worker fan-out. `claim`/`take`/`who` refused with
+//
+//     REST budget EXHAUSTED. The budget resets in ~6m. ...
+//
+// while `gh api rate_limit` reported 62%, then 87%, then 88% of the primary REST budget still free — and a
+// retry issued SECONDS later succeeded. The board driver reasoned from this to two different wrong
+// conclusions (first that the account was exhausted and the fleet should be halved; then that the engine
+// had an internal counter of its own), and three separate diagnoses were filed and withdrawn.
+//
+// The engine never had an internal counter. Every one of those refusals was a REAL 403 from GitHub — a
+// SECONDARY (abuse-detection) limit, which is triggered by concurrent request BURSTS rather than by
+// cumulative quota. That is why the primary counter looked healthy: it was healthy. A secondary limit does
+// not appear in `/rate_limit` at all, so the number everyone reached for could never have settled it.
+//
+// Two defects follow, and these tests pin both:
+//   1. the mechanism was not classified, so one message served all three limits; and
+//   2. the reset was read off `X-RateLimit-Reset` — the PRIMARY window — which is why "resets in ~6m"
+//      could precede a successful retry seconds later. `Retry-After`, the header that DOES describe a
+//      secondary limit, was read nowhere in the codebase.
+
+[<Fact>]
+let ``#1666 a SECONDARY limit is classified as one - not as the REST budget`` () =
+    // The exact shape measured: a secondary 403 that still carries `X-RateLimit-Resource: core`, because
+    // the primary bucket is real and reported on every response. Reading that header alone says "REST
+    // budget", and the body is the only thing that says "secondary".
+    let error =
+        Budget.classify
+            "FS-GG/.github#1666"
+            403
+            """{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"""
+            (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Remaining", "4382" ])
+
+    match error with
+    | RateLimited(SecondaryLimit(Some "core", _), _) -> ()
+    | other -> failwith $"a secondary-limit body must classify as SecondaryLimit — got %A{other}"
+
+    let sentence = explain error
+    Assert.Contains("SECONDARY rate limit", sentence)
+    Assert.Contains("REDUCE CONCURRENCY", sentence)
+
+    // THE REGRESSION, PINNED. This is the sentence that halted a fleet three times: it named the primary
+    // budget, and it told the operator to wait for a window that did not describe this limit.
+    Assert.DoesNotContain("REST budget EXHAUSTED", sentence)
+    Assert.DoesNotContain("GraphQL budget EXHAUSTED", sentence)
+
+[<Fact>]
+let ``#1666 a SECONDARY limit NEVER carries the primary reset - that is the false countdown`` () =
+    // `X-RateLimit-Reset` is present on the response and names a real instant — for the PRIMARY bucket,
+    // which was never exhausted. Attaching it here is what produced "The budget resets in ~6m" in front of
+    // a retry that succeeded within seconds, and a countdown that sat at "~1m" across several minutes
+    // without reaching zero. `resetAt` is None BY CONSTRUCTION on this arm.
+    let inSixMinutes = System.DateTimeOffset.UtcNow.AddMinutes 6.0
+
+    let error =
+        Budget.classify
+            "FS-GG/.github#1666"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers
+                [ "X-RateLimit-Resource", "core"
+                  "X-RateLimit-Reset", string (inSixMinutes.ToUnixTimeSeconds()) ])
+
+    match error with
+    | RateLimited(SecondaryLimit _, None) -> ()
+    | other -> failwith $"a secondary limit must not inherit the PRIMARY reset — got %A{other}"
+
+    let sentence = explain error
+    Assert.DoesNotContain("resets in ~6m", sentence)
+    Assert.DoesNotContain("The budget resets in", sentence)
+
+[<Fact>]
+let ``#1666 Retry-After is READ, and it is the reset a secondary limit actually uses`` () =
+    // Nothing in this codebase read `Retry-After` before #1666 — `grep -rn 'Retry-After' src/` matched
+    // nothing — while it is the ONLY header that describes the limit that was firing.
+    let error =
+        Budget.classify
+            "FS-GG/.github#1666"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers [ "X-RateLimit-Resource", "core"; "Retry-After", "45" ])
+
+    match error with
+    | RateLimited(SecondaryLimit(_, Some after), None) -> Assert.Equal(45.0, after.TotalSeconds, 3)
+    | other -> failwith $"`Retry-After: 45` must be read — got %A{other}"
+
+    Assert.Contains("Retry-After: 45s", explain error)
+
+[<Fact>]
+let ``#1666 a secondary limit with NO Retry-After says so - it does not fall back to the primary window`` () =
+    let error =
+        Budget.classify "FS-GG/.github#1666" 403 """{"message":"was submitted too quickly"}""" noHeaders
+
+    match error with
+    | RateLimited(SecondaryLimit(None, None), None) -> ()
+    | other -> failwith $"an unheadered secondary limit is (None, None) — got %A{other}"
+
+    let sentence = explain error
+    Assert.Contains("no `Retry-After`", sentence)
+    Assert.Contains("back off with increasing delay", sentence)
+
+[<Fact>]
+let ``#1666 a HOSTILE Retry-After is NO reading - never 'retry now', never a fabricated window`` () =
+    // Same discipline as `X-RateLimit-Reset` below: a header we cannot read is not a delay of zero, and a
+    // value we do not believe is not a figure to hand a worker as fact. Zero and negatives would render as
+    // "retry now" on a limit that just fired — straight back into the detector.
+    // "23:59" IS THE ONE THAT GOT THROUGH, and it is here because review caught it, not the suite. The
+    // first draft used a loose `DateTimeOffset.TryParse` for the HTTP-date form, which accepts far more
+    // than an HTTP-date: "23:59" parsed as *today at 23:59* and was rendered as
+    // "GitHub sent `Retry-After: 72213s`" — a fabricated ~20-hour delay attributed to GitHub, one branch
+    // after the numeric arm had rejected "999999999" for being unbelievable. The original list held only
+    // strings that fail BOTH parsers, so it could not have caught it. `TryParseExact` over RFC 9110's three
+    // formats is the fix; these are the inputs that pin it.
+    // "2026" is deliberately NOT in this list, though it looks like a bare year: `Retry-After` is
+    // delta-SECONDS first, and 2026 seconds (~34m) is a perfectly legitimate value. Rejecting it because
+    // it also parses as a date would lose a real delay. The numeric reading wins, and that is correct.
+    for hostile in [ "0"; "-30"; "not-a-number"; "999999999"; ""; "23:59"; "Oct 21" ] do
+        let error =
+            Budget.classify
+                "FS-GG/.github#1666"
+                403
+                """{"message":"You have exceeded a secondary rate limit."}"""
+                (headers [ "Retry-After", hostile ])
+
+        match error with
+        | RateLimited(SecondaryLimit(_, None), _) -> ()
+        | other -> failwith $"a hostile Retry-After (%s{hostile}) must read as NO delay — got %A{other}"
+
+[<Fact>]
+let ``#1666 a legitimate HTTP-date Retry-After IS still read - exactness is not blanket refusal`` () =
+    // The mirror of the hostile case: tightening to `TryParseExact` must not silently stop reading the
+    // form RFC 9110 actually permits, or the repair would be a second way to lose the header.
+    let at = System.DateTimeOffset.UtcNow.AddMinutes 3.0
+
+    let error =
+        Budget.classify
+            "s"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers [ "Retry-After", at.ToString("r", System.Globalization.CultureInfo.InvariantCulture) ])
+
+    match error with
+    | RateLimited(SecondaryLimit(_, Some after), _) -> Assert.InRange(after.TotalSeconds, 60.0, 200.0)
+    | other -> failwith $"an RFC 9110 HTTP-date Retry-After must still be read — got %A{other}"
+
+// ---- #1666: the GraphQL `errors` paths must make the SAME distinction --------------------------------
+//
+// Found in review, not by the suite. `Board.fs`, `Scan.fs` and `Done.fs` each open a GraphQL `errors`
+// array and each wrote the same line — `if messages |> List.exists Budget.isRateLimited then
+// Error(RateLimited(GraphQlBudget, None))`. `isRateLimited` matches the SECONDARY wordings too, so a
+// secondary limit arriving on any of those three rendered as
+//
+//     GraphQL budget EXHAUSTED. The reset time could not be read. ... REST-only work may still run.
+//
+// which is worse than the REST case it was filed for: a secondary limit is account-wide and burst-
+// triggered, so "REST-only work may still run" sends the fan-out straight back into the detector that
+// just fired. And these are the Projects-v2 MUTATION paths — the fan-out that causes secondary limits.
+//
+// The decision now lives in ONE function so a fourth site cannot omit it.
+
+[<Fact>]
+let ``#1666 a SECONDARY limit inside a GraphQL errors array is not the GraphQL budget`` () =
+    match Budget.ofGraphQlErrors [ "You have exceeded a secondary rate limit." ] with
+    | Some(RateLimited(SecondaryLimit(None, None), None) as error) ->
+        let sentence = explain error
+        Assert.Contains("SECONDARY rate limit", sentence)
+        // THE REGRESSION, PINNED — the advice that would re-trigger the limit.
+        Assert.DoesNotContain("REST-only work may still run", sentence)
+        Assert.DoesNotContain("GraphQL budget EXHAUSTED", sentence)
+    | other -> failwith $"a secondary limit in a GraphQL errors array must classify as one — got %A{other}"
+
+[<Fact>]
+let ``#1666 a PRIMARY limit inside a GraphQL errors array is still the GraphQL budget`` () =
+    match Budget.ofGraphQlErrors [ "API rate limit exceeded" ] with
+    | Some(RateLimited(GraphQlBudget, None)) -> ()
+    | other -> failwith $"a primary limit on the GraphQL path is the GraphQL budget — got %A{other}"
+
+[<Fact>]
+let ``#1666 a GraphQL errors array with NO rate limit is not a rate limit`` () =
+    // `None` is the caller's cue to report `GraphQlErrors`. Answering `Some` here would turn every
+    // ordinary GraphQL failure into a back-off signal.
+    Assert.True((Budget.ofGraphQlErrors [ "Field 'foo' doesn't exist"; "(no message)" ]).IsNone)
+
+[<Fact>]
+let ``#1666 the three fixture cases the item asked for, as one table`` () =
+    // The acceptance criteria name three states that must be told apart. `EX_RATE` is correct for all
+    // three — every one of them is a real, temporary refusal — so what is asserted here is that the
+    // DIAGNOSIS differs, which is the thing that was collapsed.
+    let secondaryHealthyPrimary =
+        Budget.classify
+            "s"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Remaining", "4382" ])
+
+    let primaryExhausted =
+        Budget.classify
+            "s"
+            403
+            """{"message":"API rate limit exceeded for user ID 1."}"""
+            (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Remaining", "0" ])
+
+    let unclassifiable =
+        Budget.classify "s" 403 """{"message":"rate limit already exceeded"}""" noHeaders
+
+    // All three are the back-off signal. None of them is a protocol error.
+    for error in [ secondaryHealthyPrimary; primaryExhausted; unclassifiable ] do
+        Assert.Equal(Errors.ExRate, exitCode error)
+        Assert.True(isQueueable error)
+
+    // ...and all three say something DIFFERENT about what to do.
+    Assert.Contains("SECONDARY rate limit", explain secondaryHealthyPrimary)
+    Assert.Contains("REST budget EXHAUSTED", explain primaryExhausted)
+    Assert.Contains("WHICH bucket is unknown", explain unclassifiable)
+
+[<Fact>]
+let ``#1666 an UNCLASSIFIED limit fails closed - it advises the conservative union, not the primary`` () =
+    // #266's rule: an unreadable classification is not a safe one to resume from. GitHub named no resource
+    // and the wording did not say which mechanism fired, so a secondary limit CANNOT BE RULED OUT — and
+    // advising "wait for the reset" alone would send the fleet back in at full concurrency.
+    let error =
+        Budget.classify "s" 403 """{"message":"API rate limit exceeded"}""" noHeaders
+
+    match error with
+    | RateLimited(UnknownBudget, _) -> ()
+    | other -> failwith $"an unnamed limit must not be attributed to a budget — got %A{other}"
+
+    let sentence = explain error
+    // It states exactly what it knows: the WORDING reads as primary, the BUCKET is unnamed. An earlier
+    // draft claimed the wording was ambiguous too — false in every reachable case, and over-claiming
+    // uncertainty is the same defect as over-claiming certainty.
+    Assert.Contains("reads as the PRIMARY budget", sentence)
+    Assert.Contains("WHICH bucket is unknown", sentence)
+    Assert.DoesNotContain("REST budget EXHAUSTED", sentence)
+
+[<Fact>]
+let ``#1666 the classifier does NOT consult /rate_limit to override a real 403`` () =
+    // The item's body asked for exactly this ("`GET /rate_limit` is free — so the engine can check the real
+    // number before halting a fleet on an estimate"). It must not be implemented, and this test is the
+    // guard.
+    //
+    // A SECONDARY limit does not appear in `/rate_limit` at all. So the healthy primary counter that made
+    // this look like a false alarm is precisely what a real secondary limit looks like from that endpoint —
+    // and an engine that resumed on it would convert a genuine refusal into a resume, at full fan-out, into
+    // the detector that had just fired. On this account the endpoint is not even reliable for the primary
+    // bucket (measured 2026-07-16: `/rate_limit` said 2431/5000 while every real read 403'd with
+    // `remaining: 0`).
+    //
+    // `classify` takes a body and a header lookup. It has no transport, so it CANNOT make that call — the
+    // absence is structural, and this test pins the structure rather than a comment.
+    let error =
+        Budget.classify
+            "s"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Remaining", "4382" ])
+
+    // A 403 with 4382 primary requests remaining is STILL a refusal. It is not downgraded, not retried
+    // silently, and not reported as healthy.
+    Assert.Equal(Errors.ExRate, exitCode error)
+
+    match error with
+    | RateLimited(SecondaryLimit _, _) -> ()
+    | other -> failwith $"a real 403 must stand regardless of the primary counter — got %A{other}"
 
 [<Fact>]
 let ``a 403 that is NOT a rate limit is Unauthorized - the remedies are opposite`` () =
@@ -114,8 +385,8 @@ let ``a REST rate limit says REST - it must NEVER be reported as the GraphQL bud
             (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Remaining", "0" ])
 
     match error with
-    | RateLimited(RestBudget, _) -> ()
-    | other -> failwith $"a `core` 403 is the REST budget — got %A{other}"
+    | RateLimited(RestBudget(Some "core"), _) -> ()
+    | other -> failwith $"a `core` 403 is the REST budget, and it must NAME `core` — got %A{other}"
 
     let sentence = explain error
     Assert.Contains("REST budget EXHAUSTED", sentence)
@@ -150,18 +421,26 @@ let ``a GraphQL rate limit still says GraphQL`` () =
 
 [<Fact>]
 let ``the resource is READ from the header, not inferred - and an UNNAMED budget is not guessed`` () =
-    // A secondary/abuse-detector 403 carries no `X-RateLimit-Resource`. The remedy is the same (wait), but
-    // the NAME is not knowable — and inventing one is the precise defect this whole change removes. Saying
-    // "I do not know which" is the honest answer, and it is better than a confident wrong one.
+    // A secondary/abuse-detector 403 carries no `X-RateLimit-Resource`, so the BUCKET is not knowable and
+    // inventing one is the defect this arm removes. That invariant is unchanged and is asserted below.
+    //
+    // WHAT CHANGED (#1666): this case is no longer `UnknownBudget`. The body says "secondary rate limit",
+    // and that is the MECHANISM — a fact the classifier always had and used to throw away, along with the
+    // remedy that depends on it. Its old comment ("the remedy is the same (wait)") is the refuted claim.
+    // So the honest answer here is richer than it was: the bucket is still unknown (`None`), but the limit
+    // is identified.
     let error =
         Budget.classify "FS-GG/.github#1" 403 """{"message":"You have exceeded a secondary rate limit."}""" noHeaders
 
     match error with
-    | RateLimited(UnknownBudget, _) -> ()
-    | other -> failwith $"an unnamed limit must not be attributed to a budget — got %A{other}"
+    | RateLimited(SecondaryLimit(None, _), _) -> ()
+    | other -> failwith $"an unnamed secondary limit keeps a `None` bucket, and is not guessed — got %A{other}"
 
     let sentence = explain error
-    Assert.Contains("did not name which budget", sentence)
+    Assert.Contains("SECONDARY rate limit", sentence)
+
+    // The bucket is still never invented, and neither budget is ever named on this evidence.
+    Assert.DoesNotContain("GitHub named the resource", sentence)
     Assert.DoesNotContain("GraphQL budget EXHAUSTED", sentence)
     Assert.DoesNotContain("REST budget EXHAUSTED", sentence)
 
@@ -183,7 +462,7 @@ let ``the reset is read from X-RateLimit-Reset - the header that was there the w
                   "X-RateLimit-Reset", string (inTenMinutes.ToUnixTimeSeconds()) ])
 
     match error with
-    | RateLimited(RestBudget, Some at) -> Assert.Equal(inTenMinutes.ToUnixTimeSeconds(), at.ToUnixTimeSeconds())
+    | RateLimited(RestBudget(Some "core"), Some at) -> Assert.Equal(inTenMinutes.ToUnixTimeSeconds(), at.ToUnixTimeSeconds())
     | other -> failwith $"the reset header must be read — got %A{other}"
 
     Assert.Contains("resets in ~10m", explain error)
@@ -202,7 +481,7 @@ let ``an UNPARSEABLE reset header is no reset - never 1970, which renders as 're
             (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Reset", "not-a-number" ])
 
     match error with
-    | RateLimited(RestBudget, None) -> Assert.Contains("could not be read", explain error)
+    | RateLimited(RestBudget(Some "core"), None) -> Assert.Contains("could not be read", explain error)
     | other -> failwith $"an unreadable reset is None, not an epoch of 0 — got %A{other}"
 
 [<Fact>]
@@ -221,7 +500,7 @@ let ``an OUT-OF-RANGE reset header does not CRASH - Int64 parses where DateTimeO
                 (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Reset", hostile ])
 
         match error with
-        | RateLimited(RestBudget, None) -> Assert.Contains("could not be read", explain error)
+        | RateLimited(RestBudget(Some "core"), None) -> Assert.Contains("could not be read", explain error)
         | other -> failwith $"an out-of-range epoch (%s{hostile}) must read as NO reset — got %A{other}"
 
 [<Fact>]
@@ -240,13 +519,24 @@ let ``a GraphQL body's resetAt answers when no header does - INCLUDING inside er
     | other -> failwith $"the body's resetAt must still be read when no header carries one — got %A{other}"
 
 [<Fact>]
-let ``every REST resource is the REST budget - search and code_search are not GraphQL`` () =
-    // GitHub meters `search` and `code_search` separately from `core`, but they are all REST. The
-    // distinction a worker needs is which of the TWO transports just died — not which REST sub-counter.
+let ``every REST resource is the REST budget - and it NAMES the bucket rather than collapsing it`` () =
+    // GitHub meters `search` and `code_search` separately from `core`, but they are all REST, so the
+    // REST-vs-GraphQL distinction still holds. WHAT CHANGED IS THE DISCARD.
+    //
+    // This test previously asserted `RateLimited(RestBudget, _)` — a shape with nowhere to put the bucket
+    // name — and its comment said the sub-counter was not a distinction a worker needs. #1666 is the
+    // measured refutation. `core` is the bucket every operator checks (`gh api rate_limit`'s top level), so
+    // a 403 from `search` reported as the flat words "REST budget EXHAUSTED" sends them to a counter that
+    // is 87% free, from which the only available conclusion is that the tool is lying. It was not lying; it
+    // was declining to say which bucket. Four investigations were filed on that reading, three of them
+    // withdrawn by their own authors.
     for resource in [ "core"; "search"; "code_search"; "integration_manifest" ] do
         match Budget.classify "s" 403 """{"message":"API rate limit exceeded"}""" (headers [ "X-RateLimit-Resource", resource ]) with
-        | RateLimited(RestBudget, _) -> ()
-        | other -> failwith $"`%s{resource}` is a REST resource — got %A{other}"
+        | RateLimited(RestBudget(Some named), _) ->
+            Assert.Equal(resource, named)
+            // and it must reach the OPERATOR, not merely the type.
+            Assert.Contains($"`%s{resource}`", explain (RateLimited(RestBudget(Some named), None)))
+        | other -> failwith $"`%s{resource}` is a REST resource and must be NAMED — got %A{other}"
 
 // ---- #510: only ONE failure may be queued ---------------------------------------------------------
 

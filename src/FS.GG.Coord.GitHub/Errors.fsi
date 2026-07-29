@@ -29,13 +29,43 @@ module Errors =
 
         /// `X-RateLimit-Resource: core` (or any other REST resource — `search`, `code_search`, …). The
         /// request budget, and the one the CLAIM LOCK lives on by ADR-0034 §3.
-        | RestBudget
+        ///
+        /// IT CARRIES THE BUCKET NAME GitHub actually sent, and #1666 is why. Every non-`graphql` resource
+        /// collapsed into this case with the name DISCARDED, so a 403 from `search` announced itself as
+        /// "REST budget EXHAUSTED"; the operator then checked `gh api rate_limit`'s top-level `core`, found
+        /// it 87% unused, and concluded the engine was tripping an internal counter of its own. Four
+        /// separate diagnoses were filed on that reading and all four were wrong. The name is the fact that
+        /// makes the reading checkable, so it is carried, not collapsed.
+        | RestBudget of resource: string option
 
-        /// GitHub did not name a resource. A secondary/abuse-detector 403 arrives this way.
+        /// A SECONDARY (abuse-detection) limit — a different mechanism from the primary budget, with a
+        /// different remedy, and the one #1666 was really made of.
+        ///
+        /// It is triggered by CONCURRENT REQUEST BURSTS rather than cumulative quota, which is why it fires
+        /// with the primary counter almost untouched — the 62% / 87% / 88% "headroom" readings that made
+        /// every observer conclude the refusal was phantom. It does NOT appear in `/rate_limit` at all, so a
+        /// healthy reading there can never rule it out.
+        ///
+        /// `retryAfter` is the `Retry-After` header, which is the ONLY reset that describes this limit.
+        /// `X-RateLimit-Reset` is the PRIMARY window and says nothing about a secondary limit; presenting
+        /// it as the resume signal is what made "resets in ~6m" precede a retry that succeeded in seconds.
+        ///
+        /// THE INVARIANT IS ENFORCED, NOT STRUCTURAL, and the difference is worth stating plainly because
+        /// an earlier draft of this comment claimed the latter. `resetAt` is a field of `RateLimited`, not
+        /// of this case, so `RateLimited(SecondaryLimit _, Some at)` remains CONSTRUCTIBLE — the type does
+        /// not forbid it. What forbids it is `Budget.classify`, which withholds the primary reset on this
+        /// arm, and `ofGraphQlErrors`, which passes `None`. A new construction site inherits no protection
+        /// from the type and must withhold it too. (Making it structural means moving the reset into each
+        /// case; that is a larger change than this defect needed, and pretending it is already done would
+        /// be exactly the confident-wrong-comment failure #1666 is made of.)
+        | SecondaryLimit of resource: string option * retryAfter: System.TimeSpan option
+
+        /// GitHub named no resource AND the wording did not say which mechanism fired.
         ///
         /// This case exists so the tool can say "a rate limit, and I do not know which" rather than
         /// guessing. An invented budget name is worse than an absent one, for the same reason an invented
-        /// reset is: it will be believed.
+        /// reset is: it will be believed. It FAILS CLOSED (#266): because a secondary limit cannot be ruled
+        /// out, the advice it renders is the conservative union — reduce concurrency *and* back off.
         | UnknownBudget
 
     /// Why a read or a write did not produce an answer.

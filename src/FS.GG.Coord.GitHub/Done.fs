@@ -284,12 +284,11 @@ module Done =
                         | _ -> "(no message)")
                     |> List.ofSeq
 
-                if messages |> List.exists Budget.isRateLimited then
-                    // Asserted, not read — this arm parses a GraphQL `errors` array, so the response is a
-                    // GraphQL one by construction (same reasoning as `Scan.fs`).
-                    Error(RateLimited(GraphQlBudget, None))
-                else
-                    Error(GraphQlErrors messages)
+                // Tells a SECONDARY limit from the primary budget (#1666); `isRateLimited`, which this
+                // site used to call, matches both and named the GraphQL budget for either.
+                match Budget.ofGraphQlErrors messages with
+                | Some limited -> Error limited
+                | None -> Error(GraphQlErrors messages)
 
             | _ ->
 
