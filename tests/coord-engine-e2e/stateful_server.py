@@ -71,6 +71,7 @@ def repo_of(n):
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
 COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 1033: []}
 NEXT_COMMENT_ID = [900]
+NEXT_ROOM_NUMBER = [700]
 def now_iso():
     # REAL current time, so a just-posted marker is fresh — a fixed timestamp would land it at the
     # lease boundary and flip stale under the wall clock, which is a fixture bug, not a lock bug.
@@ -107,6 +108,22 @@ FAIL_FIELD_WRITES = [0]
 # is, one transport down: `_fixture/` routes are excluded (they are the meter, not the spend) and so is
 # `/graphql`, which `BOARD_READS` already counts.
 REST_READS = []
+
+# The command-contract executable proof needs a wire ledger, not an inference from endpoint names:
+# GraphQL reads are POSTs too.  Each fixture leg resets and reads this list, whose rows say whether the
+# request was a REST mutation or a GraphQL mutation.
+MUTATIONS = []
+
+
+def record_mutation(method, path, graphql_document=None):
+    """Record only shared-server mutations; fixture probes themselves are never evidence."""
+    if path.startswith("/_fixture/"):
+        return
+    if path.rstrip("/") == "/graphql":
+        if re.search(r"\bmutation\b", graphql_document or "", re.IGNORECASE):
+            MUTATIONS.append({"method": method, "path": path, "kind": "graphql-mutation"})
+    elif method in ("POST", "PATCH", "DELETE", "PUT"):
+        MUTATIONS.append({"method": method, "path": path, "kind": "rest-mutation"})
 
 
 def project_fields():
@@ -168,6 +185,8 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    if "issue(number" in query and "projectItems" not in query:
+        return {"data": {"repository": {"issue": {"id": "I_contract_probe"}}, "rateLimit": RATE_LIMIT}}
     if "projectsV2" in query:
         return {
             "data": {
@@ -248,6 +267,8 @@ def graphql(query: str, variables: dict):
                 FAIL_FIELD_WRITES[0] -= 1
                 return {"errors": [{"message": "fixture: the field write failed permanently"}]}
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
+    if "addProjectV2ItemById" in query:
+        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_added"}}}}
     return None
 
 
@@ -303,11 +324,27 @@ class Handler(BaseHTTPRequestHandler):
                 doc = json.loads(raw)
             except json.JSONDecodeError:
                 return self._send(500, {"errors": [{"message": "fixture: bad graphql body"}]})
+            with LOCK:
+                record_mutation("POST", path, doc.get("query", ""))
             answer = graphql(doc.get("query", ""), doc.get("variables", {}))
             if answer is None:
                 return self._send(500, {"errors": [{"message": f"fixture: unhandled query {doc.get('query','')[:60]}"}]})
             return self._send(200, answer)
 
+        with LOCK:
+            record_mutation("POST", path)
+        m = re.match(r"^/repos/[^/]+/([^/]+)/issues$", path)
+        if m:
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                payload = {}
+            with LOCK:
+                number = NEXT_ROOM_NUMBER[0]
+                NEXT_ROOM_NUMBER[0] += 1
+                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": True}
+                COMMENTS[number] = []
+            return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             n = int(m.group(1))
@@ -335,6 +372,8 @@ class Handler(BaseHTTPRequestHandler):
         self._meter()
         path = self.path.split("?", 1)[0]
         raw = self._body()
+        with LOCK:
+            record_mutation("PATCH", path)
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", path)
         if m:
@@ -369,6 +408,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self._meter()
         path = self.path.split("?", 1)[0]
+        with LOCK:
+            record_mutation("DELETE", path)
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", path)
         if m:
             cid = int(m.group(1))
@@ -412,6 +453,24 @@ class Handler(BaseHTTPRequestHandler):
                 spent = list(REST_READS)
                 REST_READS.clear()
                 return self._send(200, {"count": len(spent), "paths": spent})
+
+        if path.rstrip("/") == "/_fixture/mutations":
+            with LOCK:
+                spent = list(MUTATIONS)
+                MUTATIONS.clear()
+                return self._send(200, {"count": len(spent), "requests": spent})
+
+        # #1569: `reap --apply` must see a genuinely expired marker.  Claims use the real wall
+        # clock so all normal CAS legs remain live; this narrow test-only route ages the existing
+        # marker after it has been created through the real command.
+        m = re.match(r"^/_fixture/expire-claim/(\d+)$", path)
+        if m:
+            n = int(m.group(1))
+            with LOCK:
+                for comment in COMMENTS.get(n, []):
+                    if "fsgg:claim" in comment.get("body", ""):
+                        comment["updated_at"] = "2000-01-01T00:00:00Z"
+            return self._send(200, {"expired": n})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
@@ -480,6 +539,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls$", path)
         if m:
             return self._send(200, [])   # no open PRs → prAlive says lease-expired-no-pr
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/\d+-$", path)
+        if m:
+            return self._send(200, [])   # no pushed item branch → the expired claim is reapable
 
         if path.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4999, "limit": 5000}}})
