@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-27
 - **Affects:** FS-GG/.github, every coordination-kit receiver, FS.GG.SDD, FS.GG.Rendering, FS.GG.Templates, and scaffolded product workspaces
-- **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1, [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5, and [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set. ADR-0011 and ADR-0014 are amended **in DIRECTION only** — both stay in force, this record retires nothing they mandate, the root set they declare is unchanged today, and ADR-0014's Decision 6 is untouched and re-affirmed. See §6, §9. ADR-0065's **§5 is EXECUTED as of 2026-07-28** ([#1636](https://github.com/FS-GG/.github/issues/1636)): the ordered set is now TWO, `.claude/skills` + `.agents/skills`, and ADR-0065 was amended in that same change. Its transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. §6's generated view is NOT landed. See §5, §9.
+- **Amends:** [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) Decision 1, [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) Decision 5, and [ADR-0065](0065-one-agent-skill-root-contract.md)'s root set. **§5 is EXECUTED as of 2026-07-28** ([#1636](https://github.com/FS-GG/.github/issues/1636)) against **all three**: the ordered set is now TWO, `.claude/skills` + `.agents/skills`, `.codex/skills` is retired, and each of the three records says so on its own page — ADR-0065 in that same change, ADR-0011 Decision 1 and ADR-0014 Decision 5 a day later by [#1703](https://github.com/FS-GG/.github/issues/1703). **What is amended in DIRECTION only is §6**, the generated view, and it is **NOT landed**: all three stay in force, this record retires no *mechanism* they mandate, and ADR-0014's Decision 6 is untouched and re-affirmed. ADR-0065's transport contract still governs unchanged; ADR-0065 §Retiring a root now states how a root leaves the set without violating it. See §5, §6, §9.
 - **Amended by:** [ADR-0070](0070-restore-is-a-precondition-no-committed-skill-content-in-a-receiver.md) §1 — **2026-07-28, and NOT executed: that record decides a contract and retires nothing** ([#1837](https://github.com/FS-GG/.github/issues/1837)). §6 is written about a view root resolved from a **committed** source root, and in a `coordination-kit` receiver that source root goes away: `.claude/skills` is generated too, so no runtime root is committed. §6's *mechanism* is not thereby made mandatory for every root — which ADR-0065 disposition a root takes is a per-receiver choice ADR-0070 §1 explicitly leaves open — but §6's *premise*, a committed source, no longer holds anywhere in a receiver. §6's rejection of a committed symlink is untouched and re-affirmed — with nothing committed, `core.symlinks=false` has no committed link to degrade. §1, §2, §3, §4, §5, §8 and §9 are all unchanged, and §8 binds **harder**: it becomes the whole of the guarantee rather than one requirement among several. **ADR-0067 §7 does NOT reach that decision** — see ADR-0070 §4, which argues it from §7's own subject and conclusion rather than citing §7 either way.
 - **Applies:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — *derive, don't restate* — to files rather than to facts.
 
@@ -201,9 +201,17 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 >    one generated view — is exit 0 and AGREE in both directions of source. #1685 binds the end state
 >    §1 reads most naturally, not the step §9 takes next.
 >
-> Consistent with §9 and with #1676's own AC 5, that item amended **nothing else**: ADR-0011 Decision 1,
-> ADR-0014 Decision 5 and ADR-0065's root set remain amended *in direction only* and stay in force,
-> because no mechanism was retired.
+> Consistent with §9 and with #1676's own AC 5, that item amended **nothing else**: ADR-0011 Decision 1
+> and ADR-0014 Decision 5 stay in force and are amended *in direction only* by **§6**, because that item
+> retired no mechanism. That dated claim about what `#1676` retired is unchanged and still true.
+>
+> **This sentence also listed ADR-0065's root set among the direction-only amendments, and that was
+> false when it was typed** — 02:13 on 2026-07-28 ([#1697](https://github.com/FS-GG/.github/issues/1697),
+> `257d016`), **56 minutes after** `debbce6` executed §5. ADR-0065's root set is not direction-only; it
+> is **EXECUTED**, by `#1636`, which is not this item. Corrected on
+> [#1709](https://github.com/FS-GG/.github/issues/1709) rather than backdated, and left visible here
+> because `adr-coherence` assertion 5 cannot see a sentence like it (`scripts/check-adr-coherence.py`,
+> *what it does not assert*).
 
 > **STAGE 1 EXECUTED on ONE receiver, 2026-07-28 — `FS.GG.Templates`, and only it
 > ([#1676](https://github.com/FS-GG/.github/issues/1676),
@@ -790,7 +798,8 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > narrowed the kit's default root properties to one materialized root plus one view root. **The runtime
 > root set is unchanged** — it is the union of the two properties, and that union is still the TWO §5
 > left. A default flip is not a mechanism retirement, which is why ADR-0011 Decision 1 and ADR-0014
-> Decision 5 are still amended *in direction only* and still in force. ADR-0065 **was** amended for it,
+> Decision 5 are still amended *in direction only* **by §6** — their root set is not: §5 executed
+> against it on 2026-07-28 — and are still in force. ADR-0065 **was** amended for it,
 > by [#1874](https://github.com/FS-GG/.github/pull/1874) — and **late, not in the same change**, which
 > is `#1676` AC 5's own rule broken inside the item that wrote it. Recorded as late rather than
 > backdated.

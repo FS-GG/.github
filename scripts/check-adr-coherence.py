@@ -99,9 +99,13 @@ WHAT IT DOES NOT ASSERT
   Assertion 5 is not an exception to that. It asserts that an execution recorded in ONE place is
   recorded in the OTHERS; it does not read the repo to find out whether anything actually shipped, and
   a corpus that unanimously and wrongly says EXECUTED is coherent by this gate. Nor does it judge the
-  PROSE around the marker: ADR-0067:139 asserted, an hour after the flip, that *"ADR-0065's root set
-  remain[s] amended in direction only"* while ADR-0065's own header said EXECUTED. Assertion 5 does not
-  see that sentence, and closing that gap would mean gating tense — see above.
+  PROSE around the marker: ADR-0067's §9 phase-4 note asserted, an hour after the flip, that
+  *"ADR-0065's root set remain[s] amended in direction only"* while ADR-0065's own header said
+  EXECUTED. Assertion 5 does not see that sentence, and closing that gap would mean gating tense —
+  see above. That example is HISTORY: the sentence was corrected by hand on .github#1709 — with two
+  more in the same record that scoped "direction only" over the root set as well as over §6 — and the
+  note there records what it used to say. Cited by SECTION rather than by line, because the line had
+  already drifted 139 -> 205 while this paragraph went on naming :139, which by then was §7.
 
 EXIT CODES (the contract; nothing greps this script's prose)
   0  coherent
