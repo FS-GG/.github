@@ -194,8 +194,60 @@ module Options =
           /// written onto its body. `RoomOpen` is the only reader; `scopeOf FOver` refuses it everywhere else.
           Over: string list }
 
+    /// The CLIENT's lease default, and the value `FSGG_CLAIM_LEASE_MIN` overrides.
+    ///
+    /// **`Snapshot.DefaultLeaseMinutes` IS THE SAME NUMBER AND IS DELIBERATELY NOT THE SAME FACT**
+    /// (`.github#1677` AC5, which proposed reconciling them to one source). They are two different
+    /// defaults that agree today: this one is what THIS process uses when nothing configured it, and
+    /// Snapshot's is the WIRE default — what the engine assumes when a shim too old to send
+    /// `leaseMinutes` omits it from the snapshot (`Snapshot.fs`, `Snapshot.fsi`).
+    ///
+    /// Collapsing them would COUPLE the wire default to this process's configured value, which is
+    /// exactly what Snapshot's own comment forbids: *"It is CONFIGURABLE in the client
+    /// (`FSGG_CLAIM_LEASE_MIN`, default 120), so the engine may not assume it."* Under an
+    /// `FSGG_CLAIM_LEASE_MIN=30` export, a single shared source would make the engine read an old
+    /// shim's silence as "30" when that shim meant 120 — inventing a shortened lease for a client that
+    /// never asked for one, and reaping live claims on the strength of it. The duplication is the
+    /// decoupling, and it is recorded here rather than removed. They are also not reachable from one
+    /// another as a `[<Literal>]`: `Snapshot.fs` compiles BEFORE `Options.fs`.
     [<Literal>]
     let DefaultLeaseMinutes = 120
+
+    /// `FSGG_CLAIM_LEASE_MIN` — the claim lease, in minutes, when no `--lease` is given.
+    ///
+    /// **THIS FUNCTION IS THE WHOLE OF `.github#1677`, AND ITS ABSENCE WAS THE DEFECT.** Seventeen
+    /// places in this repo — ADR-0027, ADR-0038, `docs/coordination/parallel-work.md`, the generated
+    /// `Protocol.fs` region and the KIT-MIRRORED skill copies it emits into every receiver, plus
+    /// `Snapshot.fsi` and `Options.fsi` right here — told every worker in the fleet that this variable
+    /// configures the lease. Nothing read it. An ignored environment variable is INDISTINGUISHABLE from
+    /// an honoured one that happened to match the default, so the claim was unfalsifiable from where a
+    /// worker stands, and it survived for as long as it did precisely because it could not be caught.
+    ///
+    /// The load-bearing copy is `Snapshot.fs`'s: it justifies why the engine keeps its OWN wire default
+    /// rather than assuming 120 — *"a repo that shortened its lease and an engine that hard-coded 120
+    /// would together tell every worker to wait out a window that already closed."* That rationale
+    /// asserts this function exists. Deleting the variable instead would have had to rewrite the reason
+    /// the two defaults are deliberately separate, which is the eighth site the audit did not count.
+    ///
+    /// **A MALFORMED VALUE IS REFUSED, NOT SILENTLY DROPPED, AND THAT IS THE POINT.** This is the same
+    /// input as `--lease` arriving down a different channel, so it gets `--lease`'s contract exactly:
+    /// a positive number of minutes, or an error naming what was read. Falling back to 120 on garbage —
+    /// the soft direction `FSGG_COORD_SCAN_TTL_SEC` takes, correctly, because a cache is optional — would
+    /// rebuild the very unfalsifiability this issue is about: a worker who typos the value would see no
+    /// error and no change, which is the state that already cost the fleet seventeen lying documents.
+    ///
+    /// UNSET and EMPTY are not malformed. They are "I did not configure this", and they take the default.
+    let private leaseMinutesFromEnv () : Result<int, string> =
+        match System.Environment.GetEnvironmentVariable "FSGG_CLAIM_LEASE_MIN" with
+        // WHITESPACE-ONLY IS UNSET, NOT MALFORMED, AND THE `Trim` BELOW IS WHY THIS ARM SAYS SO. Matching
+        // only `null | ""` here would refuse `export FSGG_CLAIM_LEASE_MIN="$SOMETHING_UNSET "` — empty in
+        // intent, fatal in effect, and refused by a function whose own contract says empty is fine.
+        | v when System.String.IsNullOrWhiteSpace v -> Ok DefaultLeaseMinutes
+        | v ->
+            match System.Int32.TryParse(v.Trim()) with
+            | true, n when n > 0 -> Ok n
+            | true, n -> Error $"FSGG_CLAIM_LEASE_MIN must be a positive number of minutes (got %d{n})"
+            | _ -> Error $"FSGG_CLAIM_LEASE_MIN needs a number of minutes (got '%s{v}')"
 
     let usage =
         """fsgg-coord-engine — the typed coordination engine (ADR-0034), and the client it becomes (ADR-0040).
@@ -1649,6 +1701,20 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         let start (o: Options) =
             { o with Render = defaultRender o.Command }
 
+        // `--help`, `--version` and a bare invocation answer BEFORE the environment is consulted, and
+        // that exemption is load-bearing rather than tidiness.
+        //
+        // A malformed `FSGG_CLAIM_LEASE_MIN` is a MISCONFIGURED SHELL, and these three are the verbs an
+        // operator reaches for to diagnose one. Gating them would make `--help` unreachable to exactly
+        // the person told to go read it — and `usage` does not name this variable, so the refusal would
+        // point at a page that cannot explain it.
+        //
+        // `--version` is worse, and it is not hypothetical: `scripts/fsgg-coord` probes
+        // `dotnet tool run fsgg-coord-engine -- --version` to decide whether the tool is restored. A
+        // typo'd export in one shell profile would fail that probe on EVERY invocation, forcing a full
+        // `dotnet tool restore` each time and — when that restore failed for any unrelated reason —
+        // handing the worker a manifest/feed misdiagnosis for a problem that is a typo. A lease nobody
+        // reads must not be able to break the command that reports which binary you are running.
         match args with
         | []
         | "--help" :: _
@@ -1656,6 +1722,27 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | "--version" :: _ -> Ok(start { defaults with Command = Version })
 
+        | _ ->
+
+        // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
+        // out of WHERE this sits rather than from a rule anybody has to remember — the env only re-seeds
+        // `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
+        // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
+        // non-optional default and no record of having been given), so seeding the default is the ONLY
+        // place an env fallback can go without inventing one.
+        //
+        // The refusal is returned from `parse`, so it reaches the operator through the channel every
+        // other bad argument already uses, and no command that could ACT on a lease runs on one nobody
+        // could read.
+        match leaseMinutesFromEnv () with
+        | Error e -> Error e
+        | Ok envLeaseMinutes ->
+
+        let defaults =
+            { defaults with
+                LeaseMinutes = envLeaseMinutes }
+
+        match args with
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
@@ -1705,3 +1792,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | [ "room" ] -> Error "room needs a subcommand (open)"
 
         | other :: _ -> Error $"unknown command: %s{other}"
+
+        // UNREACHABLE: a bare invocation is answered above, before the environment is consulted. It is
+        // spelled anyway because F# checks each `match` independently, and it is routed to the SAME
+        // answer as the exemption arm rather than to an error — so if that arm's list is ever edited,
+        // the two cannot come to disagree about what a bare `fsgg-coord-engine` means.
+        | [] -> Ok(start { defaults with Command = Help })
