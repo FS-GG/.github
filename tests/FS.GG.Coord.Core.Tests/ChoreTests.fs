@@ -354,6 +354,67 @@ module ChoreTests =
         Assert.Empty(derive [ i ])
 
     [<Fact>]
+    let ``#1887 BLOCKER-CLEARED does NOT promote a decision-class row with no sentinel`` () =
+        // The live #1864 shape: concrete blockers cleared, no duplicated `Blocked on:
+        // human/decision`, and the item's own Class body line is the hold. The board projection is stale
+        // in the opposite direction to prove this gate reads the item, not the column.
+        let i =
+            { item 1864 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                HumanBlock = None
+                Class = Some Decision
+                BoardClass = Some Hardening }
+
+        let derived = rules [ i ]
+        Assert.DoesNotContain("BLOCKER-CLEARED", derived)
+        Assert.Contains("CLASS-PROJECTION-LAG", derived)
+
+    [<Fact>]
+    let ``#1887 BLOCKER-CLEARED negative control still promotes the same non-decision row`` () =
+        let i =
+            { item 1864 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                HumanBlock = None
+                Class = Some Hardening
+                BoardClass = Some Hardening }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``#1887 every recorded decision row is held, including the eight without a sentinel`` () =
+        // The eleven refs and sentinel states measured in #1887 AC3. The mechanism reconciles all eleven
+        // without rewriting the eight sentinel-less bodies to duplicate their decision in a second
+        // grammar.
+        let recorded =
+            [ "FS.GG.SDD", 754, true
+              "FS.GG.SDD", 778, false
+              "FS.GG.Game", 525, false
+              ".github", 1737, true
+              ".github", 1814, false
+              ".github", 1843, false
+              ".github", 1855, true
+              ".github", 1860, false
+              ".github", 1861, false
+              ".github", 1863, false
+              ".github", 1864, false ]
+
+        let rows =
+            recorded
+            |> List.map (fun (repo, n, hasSentinel) ->
+                { item n with
+                    Ref = { Owner = "FS-GG"; Repo = repo; Number = n }
+                    Status = Blocked
+                    Blockers = [ blocker 2 BlockerClosed ]
+                    HumanBlock =
+                        if hasSentinel then Some AwaitingHumanDecision else None
+                    Class = Some Decision
+                    BoardClass = Some Decision })
+
+        Assert.DoesNotContain("BLOCKER-CLEARED", rules rows)
+
+    [<Fact>]
     let ``#1644 the SAME fixture WITHOUT the parking record still promotes — #620's remedy is intact`` () =
         // The other half of the pair, and the one that makes the half above a NARROWING rather than a
         // deletion. Identical in every field but `HumanBlock`.

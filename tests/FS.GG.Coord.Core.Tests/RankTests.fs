@@ -176,10 +176,9 @@ module RankTests =
         // "what do we HAND a worker", and `decision` means a human must choose first — `Types.fsi` calls
         // it "surfaced, never dispatched".
         //
-        // The scheduler cannot enforce that on its own: it refuses a decision item only through
-        // ADR-0045's `Blocked on: human/decision` sentinel, so one classed by a `[decision]` TITLE alone,
-        // with a real touch-set, is Startable. Ranking it second would have taken the one class that must
-        // never be dispatched and dispatched it ahead of every hardening item on the board.
+        // Since #1887 the scheduler refuses the item's own decision class directly. The rank stays lower
+        // as a second line of defence and for reports that display the complete board, but it is no longer
+        // the only thing between a sentinel-less decision row and blind `take`.
         let items =
             [ { item 1 with Class = Some Decision }
               { item 2 with Class = Some Hardening } ]

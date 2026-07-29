@@ -811,6 +811,30 @@ module BatchTests =
     let private aged d it = { it with AgeDays = Some d }
 
     [<Fact>]
+    let ``#1887 batch never admits a decision-class row, even when its touch-set is disjoint`` () =
+        let decision =
+            { item 1887 [ "src/Decision" ] with
+                Class = Some Decision
+                BoardClass = Some Hardening
+                HumanBlock = None }
+
+        let ordinary = item 1888 [ "src/Ordinary" ] |> classed Hardening
+        let r = run [] [ decision; ordinary ]
+
+        Assert.Equal<int list>([ 1888 ], chosenNumbers r)
+        Assert.Equal(Some(AwaitingHuman AwaitingHumanDecision), verdictOf r 1887)
+
+    [<Fact>]
+    let ``#1887 batch negative control still admits the same row when its body class is hardening`` () =
+        let ordinary =
+            { item 1887 [ "src/Decision" ] with
+                Class = Some Hardening
+                BoardClass = Some Decision
+                HumanBlock = None }
+
+        Assert.Equal<int list>([ 1887 ], chosenNumbers (run [] [ ordinary ]))
+
+    [<Fact>]
     let ``#1598 AC2 THE 2026-07-27 CASE — a P0 defect and a hardening item on one path: the P0 wins`` () =
         // The fixture the acceptance criterion asks for, reproduced exactly: one contended path, a
         // structural P0 item and a lower-value one, and the P0 carries the LARGER issue number — which is

@@ -71,11 +71,13 @@ module Schedulability =
         /// Blockers still hold it. Resolved means CLOSED **or MERGED** (#476).
         | BlockedBy of Blocker list
 
-        /// A `Blocked on: human/...` sentinel refuses it: a HUMAN must act first (#1103 leg 2). This
-        /// governs REGARDLESS of the touch-set, so a decision item may keep the real `Paths:` that records
-        /// where its fix will land (#918) and still be refused. The distinction the empty-`Blocked by`
-        /// park flattened — a DECISION nobody can start until a human chooses, versus an ACTION that makes
-        /// it startable the moment it lands — rides on the `HumanBlock`, not lost to a bare column.
+        /// The item's own `Class: decision` declaration or a `Blocked on: human/...` sentinel refuses it:
+        /// a HUMAN must choose or act first (#1103/#1887). This governs REGARDLESS of the touch-set, so a
+        /// decision item may keep the real `Paths:` that records where its eventual fix will land (#918)
+        /// and still be refused. The distinction the empty-`Blocked by` park flattened — a DECISION nobody
+        /// can start until a human chooses, versus an ACTION that makes it startable the moment it lands —
+        /// rides on the `HumanBlock`; `Class: decision` maps to the decision case from the item's own text,
+        /// never from the lag-prone board `Class` projection.
         | AwaitingHuman of HumanBlock
 
         /// Another worker holds it, and the lock is live.
