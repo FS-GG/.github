@@ -34,15 +34,15 @@ name: release-coord-engine
 # nothing; and Renovate — which does carry these releases — is the hosted Mend App, not a self-hosted
 # runner, so a dispatch cannot make it re-scan in the first place.
 #
-# THAT IS A VERDICT ON THE MECHANISM, NOT ON THE GAP. The push half #1776 was filed about is real and
-# still missing: on 2026-07-29 FS.GG.Net sat behind an unticked `unlimit-branch=renovate/
+# THAT IS A VERDICT ON THE MECHANISM, NOT ON THE GAP. The push half #1776 was filed about was real
+# and missing: on 2026-07-29 FS.GG.Net sat behind an unticked `unlimit-branch=renovate/
 # fs.gg.coord.cli-0.x` box on its own Dependency Dashboard while v0.15.0 was published. The mechanism
-# that reaches it is that dashboard, not a dispatch, and it is .github#1923.
+# that reaches it is that dashboard, not a dispatch, it is .github#1923, and the job below IS it.
 #
-# THE FULL RECORD — the measurement, both halves, what it cannot see (including that #1776 AC4 is
-# DEFERRED to #1923, not met), and the credential question — is in `release-kit.yml`'s header, stated
-# ONCE there rather than copied here. Deciding differently means changing both files; nothing
-# re-checks the listener premise, which is filed as .github#1919.
+# THE FULL RECORD — the measurement, both halves, what this can and cannot see, and the credential
+# question — is in `release-kit.yml`'s header, stated ONCE there rather than copied here. Deciding
+# differently means changing both files; nothing re-checks the listener premise, which is filed as
+# .github#1919.
 
 on:
   push:
@@ -219,6 +219,41 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
+
+      # ─────────────────────────────────────────────────────────────────────────────────────────
+      # THE PUSH HALF (.github#1923). The mechanism, the refusal of `repository_dispatch`, and what
+      # this can and cannot see are recorded ONCE, in release-kit.yml's header. This is the same job
+      # over a different package id, and it is deliberately not `continue-on-error`: a release that
+      # reaches zero receivers must go RED (#1923 AC4, from #1776 AC4).
+      - name: Mint the cross-repo token the push half writes with
+        id: tick-token
+        if: steps.v.outputs.push == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          # No `repositories:` — the subject set is the ROSTER, read by the script. See
+          # dashboard-tick-selftest.yml for why a list here could only be a drifting second copy.
+          owner: FS-GG
+          permission-issues: write
+
+      - name: Tell every kit receiver the release exists
+        if: steps.v.outputs.push == 'true'
+        env:
+          DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
+        run: |
+          set +e
+          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "${{ steps.v.outputs.version }}"
+          rc=$?
+          set -e
+          # By EXIT CODE, never by prose (#335). 2 is a NO VERDICT and is still red: "I could not
+          # tell them" must never wear the same green as "I told them" (#266).
+          case "$rc" in
+            0) echo "delivery: every engine receiver was reached." >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "::error title=release-coord-engine: delivery not verified::At least one receiver could not be graded. The engine IS published; some receivers may not have been told. See the job log." ; exit 1 ;;
+            *) echo "::error title=release-coord-engine: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The engine IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
+          esac
+      # ─────────────────────────────────────────────────────────────────────────────────────────
 
       - name: Summary
         run: |
