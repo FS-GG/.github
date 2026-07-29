@@ -154,6 +154,61 @@ The right use of "yes, it can be pointed" is *to not need it*.
 > expected path is the thing this clause's own last two sentences **prefer**. ADR-0070 §4 answers the
 > obvious objection (that a restore looks like a bootstrap) rather than sidestepping it.
 
+> **THE THIRD COST NOW HAS A NUMBER FOR CODEX — [#1860](https://github.com/FS-GG/.github/issues/1860)'s
+> AC1, MEASURED 2026-07-29. This clause is NOT amended; the measurement CONFIRMS its pricing and names
+> which side of it each runtime falls on.** `#1860` proposes delivering the coordination skills as a
+> declared **plugin** instead of as bytes, and its own AC1 marked *"whether Codex has an equivalent
+> declared-package mechanism"* **NOT MEASURED**. The operator's decision of 2026-07-29 made that
+> measurement the whole of the startable work — *"No adoption, and no decline, until that number
+> exists."* Measured on a **running Codex CLI 0.145.0** against an isolated `CODEX_HOME`, in three legs,
+> because this clause prices *"a per-machine bootstrap (the local directory marketplace)"* and nobody
+> had checked whether Codex even had one.
+>
+> 1. **The mechanism EXISTS, and the manifest is literally shared.** `codex plugin`
+>    (`add`/`list`/`marketplace`/`remove`) is a first-class subcommand group. Codex accepts
+>    **`.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json` unmodified** — its supported
+>    manifest set is `.claude-plugin/`, `.codex-plugin/` and `.cursor-plugin/`. A local-directory
+>    marketplace added with `codex plugin marketplace add <path>` and installed with
+>    `codex plugin add <plugin>@<marketplace>` puts the plugin's skill in the model-visible catalog
+>    (`codex debug prompt-input`) **with no `.agents/skills` anywhere in the tree** — observed as
+>    `- fsgg-coord:pnext-demo: …`, resolved out of `$CODEX_HOME/plugins/cache/…`. Codex's own injected
+>    `<plugins_instructions>` states it in terms: *"A plugin is a local bundle of skills, MCP servers,
+>    and apps."*
+> 2. **The DECLARATION is per-machine, and there is NO repo-declared route.** The install is recorded in
+>    `$CODEX_HOME/config.toml` as `[marketplaces.<name>]` + `[plugins."<plugin>@<marketplace>"]`. A
+>    **project-level `.codex/config.toml` carrying the identical two stanzas installs nothing**:
+>    `codex plugin marketplace list` answers *"No plugin marketplaces in scope."*, `codex plugin list`
+>    reports zero installed, and the catalog carries zero matching entries. Codex has **no equivalent of
+>    Claude Code's `.claude/settings.json` repo-declared plugins that install at session start.**
+> 3. **CONTROL — so leg 2's zero is a real negative and not a broken harness ([#266](https://github.com/FS-GG/.github/issues/266)).**
+>    The incumbent route measured in the same harness — `.agents/skills` on disk, **empty** `CODEX_HOME`,
+>    no plugin, no configuration — puts the skill in the catalog as `- pnext-demo: …`, **un-namespaced**.
+>    §5's *"discovers `.agents/skills` with no configuration at all"* re-measured on 0.145.0 and holding.
+>
+> **What that settles.** The operator's load-bearing sub-question was whether **one declaration** can
+> serve both runtimes — *"the only version of this proposal that makes the detect-divergence-between-copies
+> question lose its subject rather than shrink."* Measured answer: **no.** The **package** can be one
+> artifact, since both runtimes read the same `.claude-plugin/` tree; the **declaration** cannot be one
+> act, because Claude's lives in the repo and Codex's is a per-machine act that in-repo configuration
+> cannot reach. A receiver therefore gets the plugin on a developer machine or a CI runner only by
+> bootstrapping each one — **exactly the cost this clause already prices**, now measured for Codex
+> rather than inferred, and against a clause whose own conclusion is that producing the view at each
+> runtime's expected path is *strictly cheaper than all of them*.
+>
+> **Two things this measurement changes about `#1860` that the row could not know.** Its "what it does
+> NOT solve" item 1 — *"Codex is unaffected… a Claude plugin does not feed it"* — is **refuted as
+> stated**: a Claude-shaped plugin **does** feed Codex, so the proposal is not "removes one of two
+> consumers" and must not be decided as if it were. And its cost 3, the invocation-namespace change, is
+> **worse than the row states**: Codex prefixes plugin skills `plugin_name:skill-name` too, so the
+> rename is fleet-wide across **both** runtimes rather than Claude's alone.
+>
+> **No adoption and no decline is recorded here, by operator decision** — this note records the
+> measurement and nothing else. The adoption question returns as
+> [#1927](https://github.com/FS-GG/.github/issues/1927), which opens on the proposition the number
+> actually supports: a per-machine (and on CI, per-*run*) bootstrap for the Codex half plus a
+> both-runtime rename, traded against both roots ceasing to be generated content. Adopting it would
+> **overturn this clause for that subject**, and `#1927` is where that must be argued.
+
 **§8 — The rewrite MUST ship a loud absence check; it is not optional and it is not deferrable.**
 Today a materialization bug turns a gate red. Under resolution, **every** failure mode measured in
 phase 1 — absent directory, dangling symlink, Windows text-file symlink — is exit 0, no diagnostic,
