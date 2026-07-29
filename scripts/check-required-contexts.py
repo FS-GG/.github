@@ -71,16 +71,10 @@ or stop requiring the context. This gate reports the combination; it does not ch
   is reported as fine. Coverage by any OTHER combination of filters is not computable here, and is a
   no-verdict rather than a guess in either direction.
 
-WHICH PULL-REQUEST TRIGGER FILTERS THIS MODELS — AND WHICH IT DOES NOT (yet)
-  Modelled: `paths:` and `paths-ignore:`, on `pull_request` and `pull_request_target`.
-
-  NOT modelled: `branches:`/`branches-ignore:` (a producer filtered to a branch that is not the
-  audited one reports on no PR into it at all) and `types:` (a producer declaring only, say,
-  `[labeled]` never fires on an ordinary PR). Both starve a required context exactly as a path filter
-  does, and both still score green here. Filed as .github#1519 — named out loud because a gate whose
-  stated assertion is wider than its implementation is the overclaim this file's whole exit contract
-  exists to prevent. Read "reported on every pull request" as "not withheld by a PATH filter" until
-  that lands.
+WHICH PULL-REQUEST TRIGGER FILTERS THIS MODELS
+  `paths:`/`paths-ignore:`, `branches:`/`branches-ignore:` against the audited base branch, and
+  `types:`. A type set must contain at least one normal PR event (`opened`, `synchronize`,
+  `reopened`); a superset is wider and remains producible.
 
 HOW A CONTEXT IS DERIVED (this is GitHub's naming, and getting it wrong would make the gate lie)
   normal job        -> the job's `name:` if it has one, else its job id
@@ -144,6 +138,7 @@ cannot be enumerated.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import glob
 import itertools
 import json
@@ -279,6 +274,7 @@ def triggers(doc: dict) -> dict:
 # The pull-request events. Either one puts a check run on a PR, so either one, unfiltered, is enough
 # to make a context report on every PR.
 PR_EVENTS = ("pull_request", "pull_request_target")
+DEFAULT_PR_TYPES = frozenset({"opened", "synchronize", "reopened"})
 
 # A `paths:` entry matching EVERY changed file, so a filter naming it excludes no pull request and is
 # not the #1508 defect. Reporting one would be the gate crying wolf about a repo that is fine.
@@ -321,10 +317,14 @@ class PathFilter:
         """
         if self.key == "paths":
             return "a pull request that touches none of those paths"
-        return "a pull request that touches only those paths"
+        if self.key == "paths-ignore":
+            return "a pull request that touches only those paths"
+        if self.key.startswith("branches"):
+            return "a pull request targeting the audited branch"
+        return "an ordinary pull request open, push, or reopen"
 
 
-def _event_path_filter(cfg: object, event: str, workflow: str) -> PathFilter | None:
+def _event_path_filter(cfg: object, event: str, workflow: str, branch: str) -> PathFilter | None:
     """The path filter on ONE pull-request event, or None if it excludes no pull request."""
     if not isinstance(cfg, dict):
         return None  # `pull_request:` bare, or listed in `on: [pull_request]` — no filter at all
@@ -349,10 +349,30 @@ def _event_path_filter(cfg: object, event: str, workflow: str) -> PathFilter | N
         ):
             return None
         return PathFilter(workflow, event, key, entries)
+
+    for key in ("branches", "branches-ignore"):
+        if key not in cfg:
+            continue
+        raw = cfg[key]
+        if isinstance(raw, str): raw = [raw]
+        if not isinstance(raw, list) or not raw or not all(isinstance(p, str) for p in raw):
+            return PathFilter(workflow, event, key, None)
+        matches = any(fnmatch.fnmatchcase(branch, p) for p in raw)
+        if (key == "branches" and matches) or (key == "branches-ignore" and not matches):
+            continue
+        return PathFilter(workflow, event, key, tuple(raw))
+
+    if "types" in cfg:
+        raw = cfg["types"]
+        if isinstance(raw, str): raw = [raw]
+        if not isinstance(raw, list) or not raw or not all(isinstance(p, str) for p in raw):
+            return PathFilter(workflow, event, "types", None)
+        if not DEFAULT_PR_TYPES.intersection(raw):
+            return PathFilter(workflow, event, "types", tuple(raw))
     return None
 
 
-def pr_path_filters(doc: dict, workflow: str) -> list[PathFilter] | None:
+def pr_path_filters(doc: dict, workflow: str, branch: str) -> list[PathFilter] | None:
     """The filters withholding this workflow from some pull requests; None if it runs on every one.
 
     THE DEFECT THIS MODELS (.github#1508). "Triggers on `pull_request`" is a strictly WIDER claim than
@@ -371,7 +391,7 @@ def pr_path_filters(doc: dict, workflow: str) -> list[PathFilter] | None:
     for event in PR_EVENTS:
         if event not in trig:
             continue
-        got = _event_path_filter(trig[event], event, workflow)
+        got = _event_path_filter(trig[event], event, workflow, branch)
         if got is None:
             return None
         out.append(got)
@@ -583,7 +603,7 @@ def unsound_crossings(uses_strings: set[str]) -> list[str]:
 
 
 def producible_contexts(
-    root: str, repo: str
+    root: str, repo: str, branch: str
 ) -> tuple[set[str], dict[str, list[str]], list[str], dict[str, set[str]]]:
     """Every context the repo reports on an ARBITRARY pull request, and the two ways of falling short.
 
@@ -624,7 +644,7 @@ def producible_contexts(
             # A path filter must not cost us the DERIVATION: the finding names the context, so it has
             # to be derived exactly here, and an unparsable filtered workflow is still exit 3.
             produced = contexts_of(doc, rel, wf, crossings=crossings)
-            path_filters = pr_path_filters(doc, rel)
+            path_filters = pr_path_filters(doc, rel, branch)
             if path_filters is None:
                 pr_contexts |= produced
             else:
@@ -847,7 +867,7 @@ def main(argv: list[str]) -> int:
         )
         return OK
 
-    pr_contexts, filtered, non_pr, crossings = producible_contexts(args.root, args.repo)
+    pr_contexts, filtered, non_pr, crossings = producible_contexts(args.root, args.repo, args.branch)
 
     findings: list[str] = []
     ref_findings: list[str] = []

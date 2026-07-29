@@ -539,6 +539,32 @@ YML
 expect "the REPAIRED caller — \`pull_request\` unfiltered — is green, and a \`push\` filter is irrelevant to a PR" \
   0 "ok: every required context is producible" "$WFP" "$RFU" FS-GG/R
 
+# #1519 — base-branch and event-type filters are just as capable of preventing GitHub from creating
+# a required check as paths are. The audited branch is main; `ma*` is the glob-matching green control.
+RFBRA="$WORK/r-branch-filter"; RFBRI="$WORK/r-branch-ignore"; RFT="$WORK/r-types"; RFTOK="$WORK/r-types-ok"
+for root in "$RFBRA" "$RFBRI" "$RFT" "$RFTOK"; do mkdir -p "$root/.github/workflows"; done
+mkwf "$RFBRA/.github/workflows/gate.yml" <<'YML'
+on: { pull_request: { branches: [develop] } }
+jobs: { gate: { runs-on: ubuntu-latest, steps: [{run: 'true'}] } }
+YML
+mkwf "$RFBRI/.github/workflows/gate.yml" <<'YML'
+on: { pull_request: { branches-ignore: [main] } }
+jobs: { gate: { runs-on: ubuntu-latest, steps: [{run: 'true'}] } }
+YML
+mkwf "$RFT/.github/workflows/gate.yml" <<'YML'
+on: { pull_request: { types: [labeled] } }
+jobs: { gate: { runs-on: ubuntu-latest, steps: [{run: 'true'}] } }
+YML
+mkwf "$RFTOK/.github/workflows/gate.yml" <<'YML'
+on: { pull_request: { branches: ['ma*'], types: [opened, synchronize, reopened, ready_for_review] } }
+jobs: { gate: { runs-on: ubuntu-latest, steps: [{run: 'true'}] } }
+YML
+protect "$WFP" FS-GG/Branch main gate
+expect "#1519 branches excluding the audited base branch is a finding" 1 "branches:" "$WFP" "$RFBRA" FS-GG/Branch
+expect "#1519 branches-ignore matching the audited base branch is a finding" 1 "branches-ignore:" "$WFP" "$RFBRI" FS-GG/Branch
+expect "#1519 types excluding every normal PR event is a finding" 1 "types:" "$WFP" "$RFT" FS-GG/Branch
+expect "#1519 matching branch glob plus a superset of default PR types stays green" 0 "ok: every required context is producible" "$WFP" "$RFTOK" FS-GG/Branch
+
 # `paths-ignore:` is the same defect wearing the other key. A PR touching only ignored paths gets no
 # check run, so the context still cannot be required.
 RFI="$WORK/r-paths-ignore"
