@@ -150,17 +150,26 @@ module Chore =
     /// on; asking it the same question is what makes "the chore never writes a column the scheduler refuses
     /// on" structural instead of remembered.
     ///
-    /// **THE `None` COLLAPSE IS #651's, INHERITED AND NOT INTRODUCED, AND IT IS STATED RATHER THAN HIDDEN.**
-    /// `ItemPr = None` means both "no such PR" and "the probe could not be made" — `Scan` writes nothing on
-    /// an unreadable probe, deliberately, because #651 closed a false NEGATIVE and declined to open a new
-    /// fail-closed surface. This gate therefore cannot be more fail-closed than the scheduler it agrees with,
-    /// and pretending otherwise would be a `HumanBlock`-shaped claim with no `TouchSet.Unreadable` behind it.
+    /// **IT DOES NOT FAIL CLOSED ON A PROBE THAT FAILED, AND THAT IS A KNOWN RESIDUAL — .github#1924.**
+    /// This gate is NOT the fail-closed shape `humanBlockAllowsFlip` is, and saying it were would be the
+    /// fail-open wearing the fix's clothes. `Reads.prAlive` answers FOUR ways; `Item.ItemPr` is an
+    /// `int option` and carries ONE, so `LivenessUnknown` (we could not ask) and `LeaseExpiredBranchPushed`
+    /// (#1055's pushed branch, work in flight before its PR exists) both arrive here as `None` = "no PR".
+    /// #651 chose that collapse deliberately, and it was sound while the only consumer was step 5b: that
+    /// consumer fails open into OFFERING a row — read-only, and re-decided by the next scan. THIS consumer
+    /// fails open into a board WRITE on somebody else's item, which `choresFor`'s own header names as the
+    /// asymmetry that makes this mechanism safe to run unattended. Closing it needs a receipt `int option`
+    /// cannot carry, which is a change to a shared wire fact and its four readers — filed as .github#1924
+    /// rather than bodged in here. Until it lands, a rate-limited scan can still promote a cleared row.
+    ///
     /// What #1738 DID change is the population the probe covers: `Scan` probed only the columns a scheduler
     /// offers TODAY (`Ready`/`Backlog`), and this rule writes the column that makes a row offerable TOMORROW —
     /// so a `Blocked` row, the only population this rule acts on, was never probed and this gate would have
-    /// been dead on arrival. `Scan` now probes exactly the `BLOCKER-CLEARED` candidate set as well.
+    /// been dead on arrival. `Scan` now probes the `BLOCKER-CLEARED` candidate set as well, keyed on the
+    /// shared `Blockers.cleared` so the probed population cannot drift narrower than the firing one.
     ///
-    /// `true` — the flip may proceed — in exactly one case: no open `item/<n>-*` PR was found for this row.
+    /// `true` — the flip may proceed — in exactly one case: no open `item/<n>-*` PR was RECORDED for this
+    /// row. Which, per the paragraph above, is not yet the same sentence as "none was found".
     let private itemPrAllowsFlip (item: Item) : bool = item.ItemPr.IsNone
 
     [<Sealed>]
@@ -343,8 +352,10 @@ module Chore =
               if
                   item.State = Open
                   && item.Status = Blocked
-                  && not item.Blockers.IsEmpty
-                  && item.Blockers |> List.forall Blockers.isResolved
+                  // `Blockers.cleared`, not a `not IsEmpty && forall` spelled here: `Scan` must probe
+                  // exactly this population for `Item.ItemPr`, so the two projects ask ONE function
+                  // rather than agreeing by inspection (.github#1738, #1012).
+                  && Blockers.cleared item.Blockers
                   && humanBlockAllowsFlip item
                   && itemPrAllowsFlip item
                   && predicateAllowsFlip item

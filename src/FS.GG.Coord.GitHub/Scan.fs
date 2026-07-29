@@ -898,21 +898,37 @@ module Scan =
                 // 2026-07-29 — `#1689` is `Blocked` with PR #1911 open on `item/1689-*`, and the snapshot
                 // reported `itemPr: null` for it.
                 //
-                // SO THE PROBE COVERS EXACTLY THE `BLOCKER-CLEARED` CANDIDATE SET AS WELL, AND NOT ONE ROW
-                // MORE. Not every `Blocked` row: only one with at least one blocker and EVERY blocker
-                // resolved, which is `Chore`'s own firing condition and is already in hand here — `blockers`
-                // is resolved above, so this costs no read to decide. That precision is not tidiness. This
-                // is a REST request per row, on the budget the claim lock lives on (ADR-0034 §3, #418), and
-                // a blanket `| Open, _ ->` would spend one on every parked, in-progress and blocked row on
-                // the board, every scan. Bounded this way, the extra cost is one request per row that is
-                // ABOUT TO BE PROMOTED — measured at ZERO additional requests on `.github`'s live board,
-                // whose one blocker-carrying `Blocked` row still has an open blocker.
+                // SO THE PROBE ALSO COVERS THE `BLOCKER-CLEARED` CANDIDATE SET — bounded by the blocker
+                // precondition, and asking `Blockers.cleared` rather than spelling it. Not every `Blocked`
+                // row: only one with at least one blocker and EVERY blocker resolved. `blockers` is already
+                // resolved above, so deciding this costs no read.
+                //
+                // IT IS A SUPERSET OF THE FIRING SET, NOT AN EQUAL — and that direction is the safe one.
+                // `BLOCKER-CLEARED` also requires `humanBlockAllowsFlip` and `predicateAllowsFlip`, so a
+                // human-parked row is probed and will never fire. Narrowing to match all three would make
+                // this population depend on THREE of `Chore`'s gates and drift three ways — and a probe
+                // NARROWER than the rule is the failure this change exists to end (a gate that cannot see
+                // its subject), while a probe wider than the rule costs only requests. One gate, the cheap
+                // and stable one, shared as a `val`.
+                //
+                // THE BOUND IS THE BUDGET ARGUMENT, NOT TIDINESS. This is a REST request per row, on the
+                // budget the claim lock lives on (ADR-0034 §3, #418), and a blanket `| Open, _ ->` would
+                // spend one on every parked, in-progress and blocked row on the board, every scan. Bounded
+                // this way the extra cost is at most one request per row whose blockers have just cleared —
+                // measured at ZERO additional requests on `.github`'s live board, whose one
+                // blocker-carrying `Blocked` row still has an open blocker.
+                //
+                // AND THE `| _ -> ()` BELOW IS A KNOWN FAIL-OPEN WITH A NEW CONSUMER — .github#1924.
+                // `Reads.prAlive` answers four ways and this field carries ONE of them: `LivenessUnknown`
+                // (the probe failed) and `LeaseExpiredBranchPushed` (#1055's pushed branch) both collapse to
+                // "no PR". That was #651's deliberate choice while the only consumer was step 5b, which
+                // fails open into OFFERING — read-only, and corrected by the next scan. `BLOCKER-CLEARED`
+                // fails open into a board WRITE, which `choresFor`'s header calls the asymmetry that makes
+                // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot
+                // carry, so it is filed rather than bodged: see .github#1924.
                 match holder with
                 | Some _ -> ()
                 | None ->
-                    let blockerClearedCandidate =
-                        not blockers.IsEmpty && blockers |> List.forall Blockers.isResolved
-
                     let probe () =
                         match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                         | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
@@ -920,7 +936,7 @@ module Scan =
 
                     match row.State, row.Status with
                     | Open, (Ready | Backlog) -> probe ()
-                    | Open, Blocked when blockerClearedCandidate -> probe ()
+                    | Open, Blocked when Blockers.cleared blockers -> probe ()
                     | _ -> ()
 
                 w.WriteEndObject()

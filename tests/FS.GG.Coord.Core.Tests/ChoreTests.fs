@@ -587,6 +587,12 @@ module ChoreTests =
         // `Write` is the one source for the field/value pair (`Chore.fsi`), and `columnStartability` is the
         // one source for which columns are startable (`Schedulability`, #1057). This joins them; it re-decides
         // neither.
+        //
+        // EVERY ARM IS CLASSIFIED, AND THE TWO `failwith`s ARE THE POINT. A `| _ -> false` here would exempt
+        // exactly the cases nobody thought about: a kind whose `Write` is `None` (its remedy is DELEGATED —
+        // `STALE-CLAIM`'s is `reap`, which restores `PreviousStatus`, and that can be `Ready`), and a
+        // `Status` string no `BoardStatus` renders (a hand-written literal instead of `statusWireName`).
+        // Both would answer "harmless" by DEFAULT, which is the fail-open this whole item is about.
         let kinds =
             everyCaseOf<ChoreKind> (fun t ->
                 if t = typeof<WorkerId> then box (WorkerId "wren-0001")
@@ -600,15 +606,52 @@ module ChoreTests =
         let writesStartableColumn (k: ChoreKind) =
             match k.Write with
             | Some("Status", wire) ->
-                everyStatus
-                |> List.exists (fun s ->
-                    statusWireName s = wire
-                    && Schedulability.columnStartability s <> Schedulability.NeverStartable)
-            | _ -> false
+                match everyStatus |> List.tryFind (fun s -> statusWireName s = wire) with
+                | Some s -> Schedulability.columnStartability s <> Schedulability.NeverStartable
+                | None ->
+                    failwith
+                        $"%s{k.RuleId} writes Status=%s{wire}, which no BoardStatus renders — this test cannot classify it, and answering `not startable` by default is the fail-open it exists to catch"
+            | Some(field, _) ->
+                // Not a scheduling column at all (`CLASS-PROJECTION-LAG` writes `Class`). Named, not defaulted.
+                Assert.Equal("Class", field)
+                false
+            | None ->
+                // A DELEGATED remedy. `STALE-CLAIM` is the only one, and `reap` restoring `PreviousStatus`
+                // really can write `Ready` — so this arm may not simply answer `false`. It cannot contradict
+                // step 5b for a reason of its own: STALE-CLAIM fires ONLY on `LeaseExpiredNoPr`, a probe that
+                // SUCCEEDED and found no PR (pinned by the first test in this file). A SECOND delegating kind
+                // would need that argument made for it, so it fails here instead.
+                Assert.Equal("STALE-CLAIM", k.RuleId)
+                false
 
         let offenders = kinds |> List.filter writesStartableColumn |> List.map (fun k -> k.RuleId)
 
         Assert.Equal<string list>([ "BLOCKER-CLEARED" ], offenders)
+
+    [<Fact>]
+    let ``#1738 BLOCKER-CLEARED fires exactly where Blockers.cleared says — the predicate Scan probes on`` () =
+        // THE SEAM, PINNED FROM THE CORE SIDE. `Scan` must probe for `Item.ItemPr` on exactly the rows this
+        // rule can fire on; if its population ever drifts NARROWER, the #1738 gate stops seeing its subject
+        // and goes green over the promotion it exists to refuse. Both sides now ask `Blockers.cleared`, and
+        // this asserts the rule really is keyed on it rather than on a `forall` that merely agrees today —
+        // the #1012 shape (two spellings pointing opposite ways, 775 tests green over the disagreement).
+        //
+        // Swept over every `BlockerState`, derived from the union, plus the EMPTY list — which is the case a
+        // bare `forall` gets wrong, and the one `.github#1689`/`#1737` actually sit in.
+        Assert.NotEmpty(everyBlockerState)
+
+        let fires (blockers: Blocker list) =
+            rules [ { item 1 with Status = Blocked; Blockers = blockers } ] = [ "BLOCKER-CLEARED" ]
+
+        Assert.Equal(Blockers.cleared [], fires [])
+
+        for st in everyBlockerState do
+            let bs = [ blocker 2 st ]
+            Assert.Equal(Blockers.cleared bs, fires bs)
+
+            // ...and over a PAIR, so "every" is asserted rather than "the first".
+            let mixed = [ blocker 2 BlockerClosed; blocker 3 st ]
+            Assert.Equal(Blockers.cleared mixed, fires mixed)
 
     // ---- STATUS-NOT-BLOCKED: do not advertise work that cannot start ---------------------------------
 

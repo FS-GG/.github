@@ -21,6 +21,14 @@ module Blockers =
     let unresolved (blockers: Blocker list) : Blocker list =
         blockers |> List.filter (isResolved >> not)
 
+    // THE `BLOCKER-CLEARED` PRECONDITION, SPELLED ONCE (.github#1738). `List.forall` over `[]` is TRUE, so
+    // the emptiness guard is the whole content of this function: a row that never recorded a blocker has
+    // not had one CLEAR. Two callers in two projects must agree about this exactly — `Chore.choresFor`
+    // FIRES on it and `Scan` must PROBE the same population for the fact that gate reads — and a copy in
+    // each is the shape #1012 measured (two copies pointing opposite ways, 775 tests green).
+    let cleared (blockers: Blocker list) : bool =
+        not blockers.IsEmpty && blockers |> List.forall isResolved
+
     let cycles (nodes: (Ref * Blocker list) list) : Ref list list =
         // First occurrence wins. A duplicated ref is a caller's accident, not a second node, and letting it
         // through would let one item hold two different blocker lists in the same graph.
