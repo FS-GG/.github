@@ -5,9 +5,9 @@ name: project-field-options
 #   * Options.fs — the Repo Scope check scrapes `Options.resolveRepo` on EVERY run, including the
 #     offline `--schema` one, so before this was listed an Options.fs edit could red this workflow
 #     without ever triggering it (.github#1588).
-#   * Types.fs — the `Class` check compares board-schema.md against a three-value vocabulary
-#     transcribed from the `ItemClass` union.  A transcription has no compiler behind it, so the
-#     trigger is what puts this gate in front of whoever edits the union.
+#   * Types.fs — the `Phase` check reads the engine's closed union and its wire renderer directly,
+#     while the `Class` check compares a three-value transcription from `ItemClass`.  This trigger
+#     puts both gates in front of whoever edits either vocabulary.
 on:
   pull_request:
     paths:
@@ -56,3 +56,5 @@ jobs:
         run: scripts/project-field-options check --field Class --schema docs/coordination/board-schema.md
       - name: Check documented Severity schema against the closed ordered vocabulary
         run: scripts/project-field-options check --field Severity --schema docs/coordination/board-schema.md
+      - name: Check documented Phase schema against the engine Phase vocabulary
+        run: scripts/project-field-options check --field Phase --schema docs/coordination/board-schema.md

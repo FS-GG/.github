@@ -33,6 +33,7 @@ SCHEMA_MARKERS = {
     "Repo Scope": "repo-scope-options",
     "Class": "class-options",
     "Severity": "severity-options",
+    "Phase": "phase-options",
 }
 
 # The `Class` vocabulary, CLOSED at exactly three values (.github#1588).  Unlike Repo Scope there
@@ -49,6 +50,13 @@ SCHEMA_MARKERS = {
 # be the gate-that-reports-more-than-it-checked shape (#266) inside a gate.
 CLASS_VOCABULARY = ("defect", "hardening", "decision")
 SEVERITY_VOCABULARY = ("Critical", "High", "Medium", "Low", "Unset")
+
+# `Phase` is different from Class and Severity: the engine already owns both the closed union and
+# the wire spelling that Projects reads.  Do not transcribe its nine strings here — that would add
+# a fourth hand-maintained copy precisely where this check is meant to remove one.  The source is
+# deliberately read from the checkout containing this tool, so the offline CI form gates the exact
+# `Types.fs` change which can add, remove, or rename a phase.
+PHASE_SOURCE = Path(__file__).resolve().parents[1] / "src/FS.GG.Coord.Core/Types.fs"
 
 FIELD_QUERY = r"""
 query ProjectFieldOptionsField($owner:String!,$number:Int!){
@@ -346,6 +354,37 @@ def documented_options(path: Path, marker: str) -> list[dict[str, str]]:
     return [{"name": name} for name in names]
 
 
+def phase_vocabulary() -> set[str]:
+    """Read the engine-owned `Phase` union and its total wire renderer.
+
+    `phaseWireName` is the spelling the engine actually compares with the live Projects field.
+    Checking only its rendered rows would allow an obsolete or omitted union case to hide in the
+    source; checking only the union would make this tool invent a second spelling table.  Require
+    one renderer row for every union case, then return those engine wire names.
+    """
+    try:
+        source = PHASE_SOURCE.read_text()
+    except OSError as exc:
+        raise Refused(f"cannot read engine Phase source {PHASE_SOURCE}: {exc}") from exc
+    union = re.search(r"^[ \t]*type Phase =[ \t]*\n((?:[ \t]*\|[ \t]*\w+[ \t]*\n)+)", source, re.MULTILINE)
+    renderer = re.search(
+        r"^[ \t]*let phaseWireName \(p: Phase\) =[ \t]*\n[ \t]*match p with[ \t]*\n((?:[ \t]*\|[ \t]*\w+[ \t]*->[ \t]*\"[^\"]+\"[ \t]*\n)+)",
+        source,
+        re.MULTILINE,
+    )
+    if not union or not renderer:
+        raise Refused("engine Phase union or phaseWireName renderer was not readable")
+    cases = re.findall(r"^[ \t]*\|[ \t]*(\w+)[ \t]*$", union.group(1), re.MULTILINE)
+    rows = re.findall(r"^[ \t]*\|[ \t]*(\w+)[ \t]*->[ \t]*\"([^\"]+)\"[ \t]*$", renderer.group(1), re.MULTILINE)
+    names_by_case = dict(rows)
+    if len(cases) != len(set(cases)) or len(rows) != len(names_by_case) or set(cases) != set(names_by_case):
+        raise Refused("engine Phase union and phaseWireName renderer are not a one-to-one vocabulary")
+    names = list(names_by_case.values())
+    if not names or len(names) != len(set(names)):
+        raise Refused("engine phaseWireName renderer has absent or duplicate wire names")
+    return set(names)
+
+
 def compare_roster(options: list[dict[str, Any]], roster: Path, allowed_extra: set[str]) -> None:
     expected = set(roster_ids(roster))
     actual = {o["name"] for o in options}
@@ -476,6 +515,18 @@ def check_severity(args: argparse.Namespace) -> None:
     print(f"Severity matches the closed ordered vocabulary ({' > '.join(SEVERITY_VOCABULARY)})")
 
 
+def check_phase(args: argparse.Namespace) -> None:
+    """Gate the documented and live `Phase` vocabulary against the engine (.github#1629)."""
+    options = check_options(args, SCHEMA_MARKERS["Phase"])
+    actual = {o["name"] for o in options}
+    expected = phase_vocabulary()
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise Refused(f"Phase drift: missing={missing}; unexpected={unexpected}")
+    print(f"Phase matches the engine Phase vocabulary ({', '.join(sorted(expected))})")
+
+
 def cmd_check(args: argparse.Namespace) -> None:
     # Dispatch on --field, and REFUSE anything unrecognised (.github#1588).  Falling through to the
     # Repo Scope leg would be the worst outcome this tool can produce: `check --field Severity
@@ -488,6 +539,8 @@ def cmd_check(args: argparse.Namespace) -> None:
         check_class(args)
     elif args.field == "Severity":
         check_severity(args)
+    elif args.field == "Phase":
+        check_phase(args)
     else:
         raise Refused(
             f"no check is defined for field {args.field!r}; known fields: "
@@ -559,12 +612,12 @@ def parse_args() -> argparse.Namespace:
     verify.set_defaults(func=cmd_verify_snapshot)
     check = subs.add_parser("check", help="gate a field's options against its authority (--field)")
     common(check)
-    check.add_argument("--roster", default="registry/repos.yml", help="Repo Scope authority; unused by --field Class")
-    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs", help="Repo Scope only; unused by --field Class")
+    check.add_argument("--roster", default="registry/repos.yml", help="Repo Scope authority; unused by closed-vocabulary fields")
+    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs", help="Repo Scope only; unused by closed-vocabulary fields")
     source = check.add_mutually_exclusive_group()
     source.add_argument("--snapshot", help="check an integrity-verified captured field instead of live GitHub")
     source.add_argument("--schema", help="check the bounded options table in board-schema.md (CI/offline)")
-    check.add_argument("--allow-extra", action="append", default=["cross-repo"], help="Repo Scope only; Class is a closed vocabulary")
+    check.add_argument("--allow-extra", action="append", default=["cross-repo"], help="Repo Scope only; closed-vocabulary fields reject extras")
     check.set_defaults(func=cmd_check)
     recovery = subs.add_parser("restore", help="restore and verify all snapshotted assignments")
     common(recovery)
