@@ -126,6 +126,7 @@ REG="$SRC_ROOT/registry/repos.yml"
 # It is corrected anyway, because a fallback that encodes the pre-stage-2 world is a wrong answer
 # waiting for the one run that reaches it.
 DEFAULT_ROOTS=".claude/skills"   # ADR-0065 (as amended by ADR-0067 §5 and §9 stage 2).
+DEFAULT_LABEL="default (ADR-0065's one materialized root, as amended by ADR-0067 §5 and §9 stage 2)"
 # `resolve_roots` (lib/roots.sh) also sets ROOTS_SRC and ROOTS_FROM_DEFAULT. This lane reads neither —
 # it materializes the kit rather than reporting on which rule chose the roots — so they are not
 # pre-declared here. skill-union-assert.sh, which does read both, declares both. (#648)
@@ -176,7 +177,7 @@ target="$(cd "$target" && pwd)"
 # structurally unreachable: the file could not be consulted because the tree holding it had not been
 # identified yet. So the writer hardcoded a root set while the gate read a declared one, and the two
 # agreed only by coincidence of defaults (#525). Same precedence, same parser, same file — lib/roots.sh.
-resolve_roots "$target" "$DEFAULT_ROOTS" "default (ADR-0065's universal three)"
+resolve_roots "$target" "$DEFAULT_ROOTS" "$DEFAULT_LABEL"
 # Attribution is a property of the CHECK. In apply mode there is no branch to attribute drift to, and a
 # caller passing --base-ref to a writer has misunderstood the flag — say so rather than ignoring it.
 [ -z "$base_ref" ] || [ "$mode" = "check" ] || die "--base-ref is only meaningful with --check."
