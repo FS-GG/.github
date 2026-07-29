@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.16.0</Version>
+    <Version>0.17.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +96,23 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.16.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+    <PackageReleaseNotes>0.17.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+
+TWO merged engine commits since 0.16.0.
+
+REFUSAL SPELLINGS (#1573): refusal text is now derived from the command-contract flag spelling table,
+including the non-long `-n` limit spelling. Contract output and a refusal can no longer silently name
+different flags.
+
+SAFE ROTATED-SESSION RECOVERY (#1857): a live claim carrying this worker id but a different session
+still refuses — the #419 twin guard is not weakened — but its diagnostic now names the marker session
+and the `CLAUDE_CODE_SESSION_ID`/`FSGG_WORKER` pin needed for a worker whose harness rotated sessions.
+It explicitly warns not to mint a new id and strand the live claim.
+
+Patch is not defensible: both changes alter caller-visible diagnostic/recovery behavior on a 0.x tool.
+No Protocol.fs wire-surface change is included.
+
+PREVIOUS RELEASE NOTES (0.16.0):
 
 EIGHT merged engine commits since 0.15.0 across 32 source/project files. The #1900 squash commit
 consolidates four reviewed input commits, making eleven pre-merge inputs in total. Protocol.fs moved,
