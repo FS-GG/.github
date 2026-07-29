@@ -23,9 +23,9 @@
 # WHAT IT WILL AND WON'T RECONCILE. `--write` is self-limiting to the MECHANICAL cases — it rewrites
 # a stale `sha256:` / `materializes-when:` verbatim from the manifest, and adds a missing row
 # only when exactly one manifest derives its `source:`. It then RE-CHECKS and refuses to touch the
-# JUDGEMENT cases: a vanished source, a frozen-mirror divergence (#295 — two repos disagree on who
-# owns a body), contradictory predicates, or a row two manifests declare (#298 — needs an owner
-# call). Those it leaves as findings and exits non-zero. Auto-resolving either would re-introduce
+# JUDGEMENT cases: a vanished source, contradictory predicates, or a row two manifests declare
+# (#295/#298 — needs an owner call). Those it leaves as findings and exits non-zero. Auto-resolving
+# one would re-introduce
 # the fail-open shape of #266 INSIDE the fix for it — so this workflow carries them into the PR body
 # as "still needs a human", never silently resolves them.
 #
@@ -571,8 +571,8 @@ jobs:
       # fail-open, inside the fix for it. So the retire demands POSITIVE evidence. It always did.
       #
       # IT DEMANDED THE WRONG EVIDENCE (#537). The old gate required FULL COHERENCE — the check exits
-      # 0, i.e. zero findings. But `--write` deliberately REFUSES judgement cases (a frozen-mirror
-      # divergence, a row two manifests declare, a vanished source), and must keep refusing them for
+      # 0, i.e. zero findings. But `--write` deliberately REFUSES judgement cases (a row two manifests
+      # declare or a vanished source), and must keep refusing them for
       # the same #266 reason. So while any judgement case is outstanding the registry can never be
       # fully coherent, `coherent` can never be true, and the retire can NEVER FIRE — however obsolete
       # the standing PR has become. The two are not independent: a judgement case is exactly the state

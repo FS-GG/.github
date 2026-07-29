@@ -122,8 +122,8 @@ jobs:
       # THE MERGE BASE'S registry — and ONLY on a pull request (#422).
       #
       # A PR is judged on what IT did; `main` and the schedule are judged on the world. Those are
-      # different questions, and collapsing them jammed the fabric shut: a `frozen-mirror` divergence
-      # cannot be fixed from this repo (the mirror lives in FS.GG.Rendering), so once one exists it
+      # different questions, and collapsing them jammed the fabric shut: a judgement finding
+      # cannot be fixed mechanically, so once one exists it
       # stands until a human lands a multi-repo change — and with one all-or-nothing verdict it sat on
       # the autofix bot's own PR, failing it for the very findings the bot had correctly refused to
       # touch. The bot ran daily, reconciled the digests, opened its PR, and the PR could never be
@@ -164,7 +164,7 @@ jobs:
           fi
 
       # On `main` and on the schedule, BASELINE is empty and the verdict is ABSOLUTE: any finding is
-      # red. That is what keeps a standing frozen-mirror visible instead of forgiven.
+      # red. That is what keeps a standing judgement finding visible instead of forgiven.
       #
       # The path travels through `env:`, never `${{ }}` interpolated into the shell — the fixture next
       # door already asserts that of the autofix workflow's stamp, and a value spliced into a `run:`
@@ -188,7 +188,7 @@ jobs:
           fi
 
   # The tool's own fixture — offline, temp registry + temp producer trees. Proves it catches a stale
-  # digest, a missing source, a diverged frozen mirror, and a malformed digest, and that `--write`
+  # digest, a missing source, a diverged predicate, and a malformed digest, and that `--write`
   # rewrites only the stale sha256. Mirrors surface-impact-selftest.yml.
   fixture:
     runs-on: ubuntu-latest

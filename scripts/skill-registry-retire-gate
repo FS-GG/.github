@@ -13,8 +13,8 @@ commenting that all is well — the epic-#266 fail-open, inside the fix for it.
 
 The gate was right to demand positive evidence. It demanded the WRONG evidence.
 
-`--write` **deliberately refuses judgement cases** — a frozen-mirror divergence, a row two manifests
-declare, a vanished source — because auto-resolving one would be that same fail-open. It must keep
+`--write` **deliberately refuses judgement cases** — a row two manifests declare or a vanished
+source — because auto-resolving one would be that same fail-open. It must keep
 refusing them. But that means: while any judgement case is outstanding, the registry can NEVER be
 fully coherent, `coherent` can NEVER be true, and the retire step can NEVER fire — *no matter how
 obsolete the standing PR has become*.
