@@ -658,20 +658,18 @@ module OptionsTests =
         // long: `widen --json --paths ...` was always fine. Both orders must now mean the same thing.
         for verb in pathsVerbs do
             let after =
-                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--worker"; "w-1"; "--lease"; "30" ]
+                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--worker"; "w-1" ]
                 |> ok
 
             Assert.Equal<string list>([ "src/A.fs" ], after.Paths)
             Assert.Equal(Some "w-1", after.Worker)
-            Assert.Equal(30, after.LeaseMinutes)
 
             let before =
-                parse [ verb; ".github#1507"; "--worker"; "w-1"; "--lease"; "30"; "--paths"; "src/A.fs" ]
+                parse [ verb; ".github#1507"; "--worker"; "w-1"; "--paths"; "src/A.fs" ]
                 |> ok
 
             Assert.Equal<string list>(after.Paths, before.Paths)
             Assert.Equal(after.Worker, before.Worker)
-            Assert.Equal(after.LeaseMinutes, before.LeaseMinutes)
 
     [<Fact>]
     let ``#1507 the positional ref survives a --paths that no longer eats the rest of argv`` () =

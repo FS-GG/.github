@@ -97,6 +97,7 @@ module Options =
           AllowBacklog: bool
           Limit: int option
           LeaseMinutes: int
+          LeaseGiven: bool
           Args: string list
           Worker: string option
           Force: bool
@@ -599,6 +600,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// — but it is an answer somebody gives, not the silence a missing row used to be.
     type private Flag =
         | FSnapshot
+        | FLease
         | FRepo
         | FWorker
         | FEvidence
@@ -669,6 +671,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FText -> Only textReaders
 
         | FSnapshot -> Only [ Decide; LanesView ]
+        | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
         //
@@ -762,6 +765,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     let private spellingsOf (f: Flag) : string * string list =
         match f with
         | FSnapshot -> "--snapshot", []
+        | FLease -> "--lease", []
         | FRepo -> "--repo", []
         | FWorker -> "--worker", []
         | FEvidence -> "--evidence", []
@@ -1029,6 +1033,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if not (List.isEmpty o.Over) then FOver
           if o.Limit.IsSome then FLimit
           if o.Explain then FExplain
+          if o.LeaseGiven then FLease
 
           // LAST, deliberately. `validate` reports the FIRST residue it finds, and putting these at the
           // head changed the message for inputs that were already wrong for another reason:
@@ -1121,17 +1126,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             writer.WriteStartArray("flags")
 
             let flags =
-                // `--lease` is still spliced in for every command: it lands in `LeaseMinutes`, which has a
-                // non-optional default and no `RenderGiven`-style record of the act, so it remains `Global`
-                // and unguardable for the reason `--json` no longer is. Filed as a follow-up, not fixed here.
-                [ "--lease" ]
-                @
-                (scopedFlags
+                // Every emitted flag is derived from `scopeOf`; `LeaseGiven` makes `--lease` observable,
+                // so it needs no special-case injection (#1544).
+                scopedFlags
                  |> List.collect (fun (flag, spellings) ->
                      match scopeOf flag with
                      | Global -> spellings
                      | Only readers when List.contains command readers -> spellings
-                     | Only _ -> []))
+                     | Only _ -> [])
                 |> List.distinct
                 |> List.sort
 
@@ -1609,7 +1611,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--lease" :: value :: _ when value.StartsWith "-" -> Error $"--lease needs a value (got flag '%s{value}')"
             | "--lease" :: value :: t ->
                 match System.Int32.TryParse value with
-                | true, n when n > 0 -> flags { acc with LeaseMinutes = n } t
+                | true, n when n > 0 -> flags { acc with LeaseMinutes = n; LeaseGiven = true } t
                 | true, n -> Error $"--lease must be a positive number of minutes (got %d{n})"
                 | _ -> Error $"--lease needs a number of minutes (got '%s{value}')"
             | [ "--lease" ] -> Error "--lease needs a value"
@@ -1645,6 +1647,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               AllowBacklog = false
               Limit = None
               LeaseMinutes = DefaultLeaseMinutes
+              LeaseGiven = false
               Args = []
               Worker = None
               Force = false
