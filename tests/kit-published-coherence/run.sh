@@ -360,11 +360,6 @@ roster_run() { # $1 roster path
 roster_run "$HERE/../../registry/repos.yml"
 must_fail "the real registry/repos.yml yields scripts/fsgg-coord as a kit source" "0.8.1 > 0.8.1 is false"
 
-REAL_KIT_ROWS=$(python3 - "$HERE/../../registry/repos.yml" <<'PY'
-import sys, yaml
-print(len(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["kit"]))
-PY
-)
 REAL_PACKED_INPUTS=$(python3 - "$HERE/../../registry/repos.yml" "$HERE/../../src/FS.GG.Kit/FS.GG.Kit.csproj" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
