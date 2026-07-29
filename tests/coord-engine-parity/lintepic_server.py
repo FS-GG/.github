@@ -39,7 +39,7 @@ GAME = "FS-GG/FS.GG.Game"
 
 
 def bnode(n, status, repo, state, title):
-    return {"status": {"name": status}, "blockedBy": None,
+    return {"status": {"name": status}, "severity": {"name": "Low"}, "blockedBy": None,
             "content": {"__typename": "Issue", "number": n, "title": title,
                         "state": state, "repository": {"nameWithOwner": repo}}}
 

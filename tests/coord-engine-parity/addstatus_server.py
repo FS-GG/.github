@@ -125,6 +125,7 @@ def _scan_nodes():
         {
             # A row with no column has `status: null` — `NoStatus`, a case and never a default (#437).
             "status": {"name": s["status"]} if s["status"] else None,
+            "severity": {"name": "Low"},
             "blockedBy": None,
             "content": {
                 "__typename": "Issue",

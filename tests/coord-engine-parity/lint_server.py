@@ -54,7 +54,7 @@ GAME = "FS-GG/FS.GG.Game"
 
 
 def node(n, status, repo, state="OPEN", title=""):
-    return {"status": {"name": status}, "blockedBy": None,
+    return {"status": {"name": status}, "severity": {"name": "Low"}, "blockedBy": None,
             "content": {"__typename": "Issue", "number": n, "title": title or f"item {n}",
                         "state": state, "repository": {"nameWithOwner": repo}}}
 
