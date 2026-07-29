@@ -222,12 +222,10 @@ let private scan (opts: Options) =
         GitHub.Errors.exitCode e
 
     | Ok(document, receipt) ->
-        match opts.Render with
-        | Json -> printfn "%s" document
-        | Text ->
-            // The DOCUMENT still goes to stdout — it is the contract, and `scan --text | decide` must keep
-            // working. The receipt is commentary, and commentary goes to stderr.
-            printfn "%s" document
+        // The snapshot document is `scan`'s only projection. `scan` is JsonOnly, so `--text` is
+        // refused before this handler; keeping a second Render branch here advertised a pipeline the
+        // parser no longer permits. Stdout stays the machine document and receipts stay on stderr.
+        printfn "%s" document
 
         // WHAT THE SCAN COULD NOT DO IS SAID, NOT IMPLIED. A number that only ever reports what it looked at
         // is how "we agreed" and "we never checked" come to print the same sentence — which is the sentence
