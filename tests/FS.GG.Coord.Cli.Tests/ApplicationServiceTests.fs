@@ -1852,3 +1852,239 @@ module ApplicationServiceTests =
             """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"converged":true}""",
             Render.renderClaimReceiptJson receipt
         )
+
+    // ---- .github#1688 — THE SIBLING SWEEP: no `Json`-admitting verb leaks prose onto stdout ----------
+    //
+    // WHAT THIS ITEM ASKED FOR, AND WHAT WAS ALREADY TRUE WHEN IT WAS FILED. #1688's ACs 1-3 and 5 are
+    // about `take --json`'s exit-5 arm: a parseable document naming the outcome and the reason, prose kept
+    // off stdout, and a fixture pinning both projections. All four had landed SEVENTEEN HOURS EARLIER as
+    // `.github#1525` (PR #1563, `f7deb05`) — the receipt is `Render.renderNoItemJson` and the fixture is
+    // the block directly above this one. The prose the issue records was measured against a STALE ENGINE
+    // BINARY, which is `.github#1549`'s hazard rather than a second instance of `.github#1562`'s.
+    //
+    // AC 4 IS THE ONE THAT WAS REAL, and it is the only one of the five that is about a POPULATION rather
+    // than about `take`: "the other `Json`-admitting verbs' empty and refusal arms are audited in the same
+    // change". #1562 fixed `next`, #1525 fixed `take`, and NOTHING SWEPT — so a third instance would have
+    // been found the way the first two were, by a worker hitting it on a live board.
+    //
+    // A STATED AUDIT ROTS; THIS ONE RUNS. The answer today is "no others leak", and a sentence saying so
+    // is true only of the engine it was written against — the defect class is created by ADDING a verb or
+    // by promoting one out of `TextOnly`, which is exactly the moment a sentence in a PR body is not
+    // re-read. So the audit is a fixture over the population, and the population is DERIVED from
+    // `renderSupport` rather than restated: the coverage leg below goes red on a verb this file has never
+    // heard of, and names it.
+    //
+    // THE INVARIANT, AND WHY SILENCE PASSES. Under `--json`, stdout is either ONE parseable document or
+    // EMPTY. A refusal that prints nothing on stdout is correct — the diagnostic belongs to `eprint` and
+    // the verdict to the exit code — so what is refused here is prose, never silence. That is exactly the
+    // property `.github#266` needs kept: "I found nothing" and "I could not look" stay distinguishable
+    // because the first is a document and the second is an empty stream at a non-zero code.
+
+    /// Every command whose declared `renderSupport` admits `Json` — AC 4's population, read off the DU.
+    ///
+    /// DERIVED, NOT LISTED, for `CommandSurfaceTests`' reason: `renderSupport` is the single hand-written
+    /// fact about the renderers, and a second copy of the honouring set here would be free to drift from
+    /// it exactly as the three copies #1523 found had drifted from each other.
+    let private jsonAdmitting: Options.Command list =
+        Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Options.Command>
+        |> Array.toList
+        |> List.choose (fun case ->
+            if case.GetFields().Length <> 0 then
+                None
+            else
+                Some(Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Options.Command))
+        |> List.filter (fun c -> Options.renderSupport c <> Options.TextOnly)
+
+    /// The verbs the sweep DRIVES, with the argv that reaches an empty or refusing arm.
+    ///
+    /// The board every one of them meets is `emptyQueue ()` — no rows at all — so the read verbs land on
+    /// their EMPTY arm by construction. The four lock verbs are pointed at `#999`, an issue the fixture
+    /// does not serve, so they land on a REFUSAL arm instead: those verbs have no empty outcome to reach,
+    /// and AC 4 names both kinds.
+    let private sweptArms: (Options.Command * string list) list =
+        [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+          Options.BatchCmd, [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+          Options.Ready, [ "ready"; "--repo"; "FS.GG.SDD"; "--json" ]
+          Options.Reconcile, [ "reconcile"; "--repo"; "FS.GG.SDD"; "--json" ]
+          Options.LintCmd, [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ]
+          Options.BoardCmd, [ "board"; "--json" ]
+          Options.Who, [ "who"; "--repo"; "FS.GG.SDD"; "--json" ]
+          Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+          Options.Budget, [ "budget"; "--json" ]
+          Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ]
+          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ]
+          Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ]
+          Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ]
+          Options.SetPaths, [ "set-paths"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ] ]
+
+    /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
+    /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
+    /// this block: the coverage leg quotes it, so moving a verb between the two lists costs a line in a
+    /// diff instead of costing nothing.
+    let private notDriven: (Options.Command * string) list =
+        [ Options.Decide,
+          "`Program.fs` `decide` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.render` document, and its Red/NoVerdict arms are `eprint` at a non-zero code"
+          Options.LanesView,
+          "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"
+          Options.Facts,
+          "`Program.fs` `facts` is private to the entry point; audited by reading — it reads nothing and cannot be empty, and `| Json -> printfn` emits one `Snapshot.renderFacts` document"
+          Options.Scan,
+          "`Program.fs` `scan` is private to the entry point; `JsonOnly`, and audited by reading — BOTH arms print the same snapshot document, and every failure is an `Error` on stderr at a non-zero code (never an empty snapshot, #344/#421/#461)"
+          Options.CommandContractCmd,
+          "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
+          Options.Issues,
+          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues) and its one failure arm is `fail`, which is stderr at the error's own code" ]
+
+    /// Drive ONE verb's empty or refusing arm under `--json`, capturing stdout and stderr APART.
+    ///
+    /// The split IS the assertion, on `runQueue`'s argument above: the "why nothing" diagnostics belong on
+    /// stderr in both projections, and only separate streams can show that the document on stdout is alone
+    /// there. Identity is scrubbed for `runIn`'s reason (#1646) — these legs name their worker with
+    /// `--worker`, and a harness-derived session id would have every lock verb refuse for the wrong reason.
+    let private runJsonArm (transport: Fake.Recorder) (args: string list) : int * string * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1688-" + Guid.NewGuid().ToString "n")
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let previousRegistry = Environment.GetEnvironmentVariable "FSGG_REGISTRY"
+
+        let identityVars =
+            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+
+        let previousIdentity =
+            identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
+        let stdout = Console.Out
+        let stderr = Console.Error
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+
+            for v, _ in previousIdentity do
+                Environment.SetEnvironmentVariable(v, null)
+
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            // `predicate`'s oracle is authority-scoped and fails closed where the registry is absent, so a
+            // path that does not exist IS its deterministic refusal arm — and pointing it at the throwaway
+            // directory keeps the leg off the developer's real `registry/skills.yml`, which would make the
+            // verdict depend on the checkout rather than on the renderer.
+            Environment.SetEnvironmentVariable("FSGG_REGISTRY", Path.Combine(dir, "no-registry.yml"))
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+
+            let opts = options args
+            let ctx = context transport
+
+            let code =
+                match opts.Command with
+                | Options.Take -> Client.take ctx opts
+                | Options.BatchCmd -> Client.batch ctx opts
+                | Options.Ready -> Client.ready ctx opts
+                | Options.Reconcile -> Client.reconcile ctx opts
+                | Options.LintCmd -> Client.lint ctx opts
+                | Options.BoardCmd -> Client.boardCmd ctx
+                | Options.Who -> Client.who ctx opts
+                | Options.Inbox -> Client.inbox ctx opts
+                | Options.Budget -> Client.budget ctx opts
+                | Options.Predicate -> Client.predicate opts
+                | Options.Claim -> Client.claim ctx opts
+                | Options.Adopt -> Client.adopt ctx opts
+                | Options.Widen -> Client.widen ctx opts
+                | Options.SetPaths -> Client.setPaths ctx opts
+                | other ->
+                    failwithf
+                        "the .github#1688 sweep has no dispatch for %A — add one to `runJsonArm`, or give the verb a reason in `notDriven`"
+                        other
+
+            Console.Out.Flush()
+            Console.Error.Flush()
+            code, capturedOut.ToString(), capturedErr.ToString()
+        finally
+            Console.SetOut stdout
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+            Environment.SetEnvironmentVariable("FSGG_REGISTRY", previousRegistry)
+
+            for v, previous in previousIdentity do
+                Environment.SetEnvironmentVariable(v, previous)
+
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =
+        let failures =
+            sweptArms
+            |> List.collect (fun (_, argv) ->
+                let verb = List.head argv
+                let _, out, _ = runJsonArm (emptyQueue ()) argv
+                let trimmed = out.Trim()
+
+                if trimmed = "" then
+                    []
+                else
+                    try
+                        (JsonDocument.Parse trimmed).Dispose()
+                        []
+                    with e ->
+                        [ $"%s{verb}: stdout under --json is not one JSON document (%s{e.Message}); stdout was:\n%s{out}" ])
+
+        Assert.True(
+            List.isEmpty failures,
+            "a `--json` verb put prose on stdout — this is `.github#1562`/`.github#1688`'s defect, and the "
+            + "stream a driver parses:\n  "
+            + String.concat "\n  " failures
+        )
+
+    [<Fact>]
+    let ``.github#1688 AC4 the sweep covers every Json-admitting verb — a new one cannot slip past it`` () =
+        // THE LEG THAT MAKES THE ONE ABOVE AN AUDIT RATHER THAN A SAMPLE. `sweptArms` and `notDriven` are
+        // hand-written, so on their own they describe whichever engine their author was looking at. This
+        // binds them to the DECLARATION: a verb added to `Command`, or promoted out of `TextOnly`, is in
+        // `jsonAdmitting` the moment `renderSupport` says so, and lands here as a named failure.
+        let classified =
+            ((sweptArms |> List.map fst) @ (notDriven |> List.map fst)) |> Set.ofList
+
+        let population = jsonAdmitting |> Set.ofList
+
+        let unaudited =
+            Set.difference population classified |> Set.toList |> List.map (sprintf "%A")
+
+        let stale =
+            Set.difference classified population |> Set.toList |> List.map (sprintf "%A")
+
+        Assert.True(
+            List.isEmpty unaudited,
+            "these verbs admit `--json` and NOTHING here audits their empty/refusal arms. Drive them in "
+            + "`runJsonArm`, or state in `notDriven` why they cannot be driven and what reading their arms "
+            + "found (`.github#1688` AC 4):\n  "
+            + String.concat "\n  " unaudited
+        )
+
+        Assert.True(
+            List.isEmpty stale,
+            "these verbs are audited here but no longer admit `--json` — drop the row rather than leaving a "
+            + "fixture that describes a projection the engine does not have:\n  "
+            + String.concat "\n  " stale
+        )
+
+    [<Fact>]
+    let ``.github#1688 the take receipt survives its own sweep — kind:none, and no prose`` () =
+        // NOT A DUPLICATE of the #1525 legs above, and deliberately kept: those pin the DOCUMENT'S KEYS,
+        // this one runs `take` through the SAME fixture the other thirteen verbs go through, so the arm
+        // #1688 was filed about is held to the identical invariant rather than to a bespoke one. If the
+        // sweep's notion of "one document" ever weakened, this is the leg that would keep the original
+        // defect visible.
+        let code, out, _ =
+            runJsonArm (emptyQueue ()) [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+
+        let receipt = parsed out
+
+        Assert.Equal("none", str "kind" receipt)
+        Assert.DoesNotContain("nothing schedulable", out)
+        Assert.Equal(5, code)
