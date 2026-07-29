@@ -111,6 +111,8 @@
 
 set -euo pipefail
 
+# shellcheck source-path=SCRIPTDIR
+
 PRODUCT="."
 DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 as amended by ADR-0067 §5 (#1636): TWO roots
 DEFAULT_LABEL="default (ADR-0065's two, as amended by ADR-0067 §5)"
