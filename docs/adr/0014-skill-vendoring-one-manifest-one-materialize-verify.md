@@ -104,7 +104,7 @@ one shared algorithm across every lane.**
    what P9 promised; ADR-0014 makes it real. `doctor` reports divergence; `upgrade`
    re-materializes to repair it; the **composition gate asserts it end-to-end**.
 
-   > **Amendment (2026-07-27, [.github#1589](https://github.com/FS-GG/.github/issues/1589)) — the
+   > **Amendment (2026-07-29, [.github#1656](https://github.com/FS-GG/.github/issues/1656)) — the
    > canonical digest is defined over DECODED TEXT, and a body that does not decode is REFUSED, not
    > hashed.**
    >
@@ -122,7 +122,7 @@ one shared algorithm across every lane.**
    > special-case only the UTF-8 BOM `EF BB BF` — so there the library is the permissive side and the
    > file decodes rather than mangling. Refusal does not fire on it; it is not the fail-open above.
    >
-   > **Decided: refuse.** A skill body whose bytes are not valid UTF-8 is rejected with its own
+   > **Implemented decision: refuse.** A skill body whose bytes are not valid UTF-8 is rejected with its own
    > diagnostic and its own exit code — an unreadable body is **not** a digest mismatch and must not be
    > reported as one. The alternative considered and rejected was redefining the digest over **raw
    > bytes**: arguably the more principled definition for a content address, but it changes the digest
@@ -135,7 +135,9 @@ one shared algorithm across every lane.**
    > seam rather than each growing their own check. `sha256` itself cannot host it: by the time it is
    > called the bytes are already gone, so the refusal belongs at the **read seam** that decodes the
    > file, reached additively (a byte-level entry point) rather than by breaking
-   > `val sha256: body: string -> string`.
+   > `val sha256: body: string -> string`. FS.GG.Contracts implements that additive byte-level seam;
+   > the raw-byte shells therefore remain intentionally different on invalid input, which is refused
+   > before a library digest could silently collide.
    >
    > **Measured before deciding, not after:** across all 756 tracked files in `.github` — including all
    > 39 `SKILL.md` — **zero** contain invalid UTF-8, zero carry a BOM and zero contain a CR. So the

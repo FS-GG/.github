@@ -677,24 +677,18 @@ Inputs are stored as `bytesBase64` because these vectors turn on a BOM, on lone 
 on exact trailing bytes — the things a JSON string literal or a stray reformat silently normalizes
 away.
 
-**The scope of the agreement claim: valid UTF-8.** The four canonical implementations agree for every
-body that decodes cleanly. They do **not** agree on bytes that are *not* valid UTF-8, and #1547 did not
-change that in either direction — the three in-repo copies hash the raw bytes, while the library hashes
-text that a decoder has already replaced invalid sequences in with `U+FFFD`. Measured, not assumed: a
-file of `0xFF` and a file of `0xFE` are different files that the **library gives the same digest**,
-while all three in-repo copies tell them apart. So on invalid UTF-8 the in-repo copies are the
-*stricter* set and the library holds a latent collision (#1585 does not change this: the driver-manifest
-producer already hashed bytes, and adopting the CRLF fold left the decode boundary exactly where it
-was). It is out of this repo's hands — the lossy decode is `FS.GG.Contracts` behaviour —
-and it is filed rather than implied: [#1589](https://github.com/FS-GG/.github/issues/1589). The
-`digestVectors` table is deliberately all valid UTF-8, so it pins what is actually agreed rather than
-freezing a disagreement into an expectation.
+**The scope of the agreement claim: valid UTF-8.** The digest is defined over decoded text, while the
+three in-repo copies hash raw bytes. They are compared only for a body that decodes cleanly. A body with
+invalid UTF-8 is now refused by `FS.GG.Contracts` at its read seam, with its own diagnostic, before it
+reaches `SkillMirror.sha256`; it is not a digest mismatch and has no expected digest. The shells still
+hash raw bytes, so this is a refusal boundary, not a claim that the implementations converge over
+invalid input. `digestVectors` deliberately records exactly one expected digest only for valid UTF-8
+(.github#1656), rather than freezing a disagreement into an expectation.
 
 The same boundary covers a **UTF-16/UTF-32 BOM**: `File.ReadAllText` detects those and decodes
 accordingly, while every in-repo copy special-cases only the UTF-8 BOM `EF BB BF`, so a UTF-16LE
-`SKILL.md` gets a different answer from the library. Also pre-existing, also fails closed, and tracked with the invalid-UTF-8
-case in [#1589](https://github.com/FS-GG/.github/issues/1589) — a `SKILL.md` that is not UTF-8 is the
-single underlying condition.
+`SKILL.md` gets a different answer from the library. A body outside the canonical UTF-8 domain is
+refused at the library read seam, rather than being assigned an expected digest.
 
 **One implementation detail worth knowing before you edit `skill_digest`.** It streams the body
 through `sed -z` rather than slurping it into a shell variable, and all three reasons are fail-open
