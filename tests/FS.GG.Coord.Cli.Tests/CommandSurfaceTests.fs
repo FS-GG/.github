@@ -193,6 +193,58 @@ module CommandSurfaceTests =
             (row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq))
         |> Map.ofSeq
 
+    /// The render flags named on a command's anchored usage line. This intentionally reads the human
+    /// surface rather than `scopeOf`: the emitted contract is the typed source of truth, and this test is
+    /// the boundary that makes its promises visible to someone running `--help`.
+    let private usageRenderFlags (verb: string) =
+        let line =
+            Regex.Match(usage, $@"^  {Regex.Escape verb}(?:\s|$)[^\r\n]*", RegexOptions.Multiline)
+
+        Assert.True(line.Success, $"%s{verb}: no anchored usage line to compare with its contract")
+
+        Regex.Matches(line.Value, @"--(?:json|text)")
+        |> Seq.map _.Value
+        |> Set.ofSeq
+
+    /// Render-capable commands whose established usage form intentionally does not spell every projection.
+    /// This is an explicit migration boundary, not a second contract: the assertion below requires this
+    /// list to equal the observed residue, so a new omission cannot hide here and documenting one makes
+    /// the exemption itself fail until it is removed. #1548's four commands are deliberately absent.
+    let private renderUsageExemptions =
+        set
+            [ "scan"
+              "whoami"
+              "budget"
+              "next"
+              "reconcile"
+              "who"
+              "reap"
+              "claim"
+              "landable"
+              "take"
+              "release"
+              "heartbeat"
+              "add"
+              "set-field"
+              "child"
+              "widen"
+              "set-paths"
+              "overlap"
+              "say"
+              "inbox"
+              "done"
+              "verify-paths"
+              "flush"
+              "bootstrap"
+              "board"
+              "field-id"
+              "option-id"
+              "item-id"
+              "lint"
+              "issues"
+              "followup"
+              "room open" ]
+
     /// Every command the contract is emitted for, paired with its declared render support.
     let private contractCommands =
         surface |> List.map (fun (verb, command) -> verb, command, renderSupport command)
@@ -258,6 +310,40 @@ module CommandSurfaceTests =
             List.isEmpty wrong,
             "the emitted surface and the renderers disagree about `--text` (#1523):\n  "
             + String.concat "\n  " wrong
+        )
+
+    [<Fact>]
+    let ``#1548 usage names exactly the render flags emitted in the command contract`` () =
+        // The contract is deliberately derived from the parser/render declaration, not from this prose.
+        // Comparing both directions catches the two real failure modes: a flag callers can use but cannot
+        // discover, and a help promise that the engine does not honour. No command needs an exemption:
+        // each emitted row has an anchored usage line, including the one multi-word verb.
+        let emitted = emittedFlags ()
+
+        let disagreements =
+            contractCommands
+            |> List.choose (fun (verb, _, _) ->
+                let expected = emitted.[verb] |> Set.filter (fun flag -> flag = "--json" || flag = "--text")
+                let actual = usageRenderFlags verb
+
+                if actual = expected then
+                    None
+                else
+                    Some(verb, $"%s{verb}: usage has %A{Set.toList actual}; contract emits %A{Set.toList expected}"))
+
+        let exempted = disagreements |> List.map fst |> Set.ofList
+
+        Assert.Equal<Set<string>>(renderUsageExemptions, exempted)
+
+        let unexpected =
+            disagreements
+            |> List.filter (fst >> renderUsageExemptions.Contains >> not)
+            |> List.map snd
+
+        Assert.True(
+            List.isEmpty unexpected,
+            "usage and the emitted render contract disagree outside explicit exemptions (#1548):\n  "
+            + String.concat "\n  " unexpected
         )
 
     [<Fact>]
