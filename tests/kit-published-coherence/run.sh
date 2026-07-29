@@ -223,7 +223,7 @@ fi
 } > "$CHANGED"
 csproj 0.8.1
 prarm 0.8.1
-must_pass "a non-kit PR is not evaluated" "none of them a \`kit:\` source"
+must_pass "a non-kit PR is not evaluated" "none of them a staging-owned package input"
 
 # The bump-is-landed-release-is-pending window: legitimately ahead of the feed, and a second
 # kit-touching PR rides into the pending release rather than owing a second bump.
@@ -242,7 +242,7 @@ must_fail "a kit edit BEHIND the published version is red" "0.7.0 > 0.8.1 is fal
 printf '.claude/skills/check-board-notes/README.md\n' > "$CHANGED"
 csproj 0.8.1
 prarm 0.8.1
-must_pass "a sibling path sharing a kit source's prefix is not a kit edit" "none of them a \`kit:\` source"
+must_pass "a sibling path sharing a kit source's prefix is not a kit edit" "none of them a staging-owned package input"
 
 # A `kind: config` kit row is a FILE, and an exact match on it counts.
 printf 'dist/dotnet/.config/dotnet-tools.json\n' > "$CHANGED"
@@ -328,7 +328,7 @@ out="$(python3 "$MUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
   --published-version 0.8.1 2>&1)"; rc=$?
 set -e
 must_pass "a docs-only PR stays green after the base advances with a kit commit" \
-  "none of them a \`kit:\` source"
+  "none of them a staging-owned package input"
 
 git -C "$MUT_REPO" switch -q pr-head
 printf 'PR-owned kit change\n' >> "$MUT_REPO/.claude/skills/check-board/SKILL.md"
@@ -360,17 +360,42 @@ roster_run() { # $1 roster path
 roster_run "$HERE/../../registry/repos.yml"
 must_fail "the real registry/repos.yml yields scripts/fsgg-coord as a kit source" "0.8.1 > 0.8.1 is false"
 
-REAL_KIT_ROWS=$(python3 - "$HERE/../../registry/repos.yml" <<'PY'
-import sys, yaml
-print(len(yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["kit"]))
+REAL_PACKED_INPUTS=$(python3 - "$HERE/../../registry/repos.yml" "$HERE/../../src/FS.GG.Kit/FS.GG.Kit.csproj" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+import yaml
+roster, csproj = sys.argv[1:]
+inputs = {row["source"].rstrip("/") for row in yaml.safe_load(open(roster))["kit"]}
+project_dir = csproj.rsplit("/", 1)[0]
+for item in ET.parse(csproj).getroot().iter():
+    if item.tag.rsplit("}", 1)[-1] == "None" and item.attrib.get("Pack", "").lower() == "true":
+        inputs.add(project_dir + "/" + item.attrib["Include"])
+inputs.update({csproj, "src/FS.GG.Kit/stage-kit.sh"})
+print(len(inputs))
 PY
 )
-if grep -q "($REAL_KIT_ROWS source(s) considered)" <<<"$(python3 "$GATE" --pr-arm --csproj "$CSPROJ" \
+if grep -q "($REAL_PACKED_INPUTS input(s) considered)" <<<"$(python3 "$GATE" --pr-arm --csproj "$HERE/../../src/FS.GG.Kit/FS.GG.Kit.csproj" \
      --roster "$HERE/../../registry/repos.yml" --changed-files /dev/null --published-version 0.8.1 2>&1)"; then
-  ok "every kit: row in the real roster is considered ($REAL_KIT_ROWS)"
+  ok "every staging-owned input is derived from the real roster and pack project ($REAL_PACKED_INPUTS)"
 else
-  bad "every kit: row in the real roster is considered ($REAL_KIT_ROWS)"
+  bad "every staging-owned input is derived from the real roster and pack project ($REAL_PACKED_INPUTS)"
 fi
+
+# #1692: these bytes are packed by the project but were invisible when the arm considered only
+# `kit:` rows. A build-logic edit owes a republish; a nearby gate implementation does not.
+printf 'src/FS.GG.Kit/build/FS.GG.Kit.targets\n' > "$CHANGED"
+set +e
+out="$(python3 "$GATE" --pr-arm --csproj "$HERE/../../src/FS.GG.Kit/FS.GG.Kit.csproj" \
+  --roster "$HERE/../../registry/repos.yml" --changed-files "$CHANGED" --published-version 999.0.0 2>&1)"; rc=$?
+set -e
+must_fail "a packaged build-logic byte owes a republish" "FS.GG.Kit.targets"
+
+printf 'scripts/check-kit-published-coherence.py\n' > "$CHANGED"
+set +e
+out="$(python3 "$GATE" --pr-arm --csproj "$HERE/../../src/FS.GG.Kit/FS.GG.Kit.csproj" \
+  --roster "$HERE/../../registry/repos.yml" --changed-files "$CHANGED" --published-version 999.0.0 2>&1)"; rc=$?
+set -e
+must_pass "a non-input checker edit owes no republish" "none of them a staging-owned package input"
 
 # A roster the arm cannot establish its subject from is a no-verdict — never an empty kit-source set,
 # which would silently switch the whole arm off.
@@ -1288,7 +1313,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=102
+EXPECTED_LEGS=104
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \

@@ -285,6 +285,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1290,6 +1291,34 @@ def kit_sources(roster_path: str) -> list[str]:
     return sources
 
 
+def staging_owned_inputs(roster_path: str, csproj_path: str) -> list[str]:
+    """Read every exact source whose bytes (or staging recipe) can change FS.GG.Kit.
+
+    The registry owns staged coordination content; the pack project owns its explicit packed
+    members.  Reading both owners makes additions and removals visible to this arm without a
+    second hand-maintained source list (#1692).
+    """
+    inputs = set(kit_sources(roster_path))
+    try:
+        project = ET.parse(csproj_path).getroot()
+    except (OSError, ET.ParseError) as e:
+        raise GateError(f"cannot read the kit pack project {csproj_path!r}: {e}") from e
+    project_dir = os.path.dirname(os.path.abspath(csproj_path))
+    for element in project.iter():
+        if element.tag.rsplit("}", 1)[-1] != "None" or element.attrib.get("Pack", "").lower() != "true":
+            continue
+        include = element.attrib.get("Include", "").strip()
+        if not include or any(token in include for token in ("*", "?")):
+            raise GateError(
+                f"{csproj_path} has a packed None item with no exact Include path ({include!r}); "
+                "the PR arm cannot enumerate an approximate package subject."
+            )
+        inputs.add(os.path.relpath(os.path.normpath(os.path.join(project_dir, include)), REPO_ROOT).replace(os.sep, "/"))
+    inputs.add(os.path.relpath(os.path.abspath(csproj_path), REPO_ROOT).replace(os.sep, "/"))
+    inputs.add("src/FS.GG.Kit/stage-kit.sh")
+    return sorted(inputs)
+
+
 def changed_paths(base: str) -> list[str]:
     """Repo-relative paths this PR changes, resolved from HEAD and the current base ref.
 
@@ -1459,7 +1488,7 @@ def run_pr_arm(
     sources = (
         canned_lines(canned_sources, "kit-source list")
         if canned_sources
-        else kit_sources(roster_path)
+        else staging_owned_inputs(roster_path, csproj_path)
     )
     changed = (
         canned_lines(canned_changed, "changed-file list")
@@ -1470,8 +1499,8 @@ def run_pr_arm(
     hits = touched_kit_sources(changed, sources)
     if not hits:
         print(
-            f"ok: this PR changes {len(changed)} file(s), none of them a `kit:` source declared in "
-            f"{roster_path} ({len(sources)} source(s) considered). No republish obligation, and the "
+            f"ok: this PR changes {len(changed)} file(s), none of them a staging-owned package input "
+            f"declared by {roster_path} and {csproj_path} ({len(sources)} input(s) considered). No republish obligation, and the "
             f"feed was not read."
         )
         return 0
@@ -1490,7 +1519,7 @@ def run_pr_arm(
     )
     if parse_version(declared) > parse_version(published):
         print(
-            f"ok: this PR touches {len(hits)} `kit:` source file(s), and "
+            f"ok: this PR touches {len(hits)} staging-owned package input file(s), and "
             f"{csproj_path} <Version> {declared} is ahead of the newest published {PACKAGE} "
             f"({published}) — merging it rides into a release that has not happened yet.\n"
             f"{touched_list}"
