@@ -812,13 +812,19 @@ fi
 # TRIPWIRE FIRED AS DESIGNED — this leg went red on that PR's first CI run after the declaration
 # landed, the EIGHTH time it has caught a surface changing, and it caught it before the workflow
 # reached `main`.
+# 13 -> 14 on 2026-07-29 (#1750): `scripts/check-retirement-order-coherence.py` declares a
+# PATHS_SUBJECT of `(ORDER, ROSTER, ROOTS)` — the retirement order it grades, the roster it reads the
+# receiver set from, and `scripts/skill-view`, whose `DEFAULT_ROOTS` decides which roots every receiver
+# is graded against — so rule (c) attaches to `retirement-order-coherence.yml` and the census counts it.
+# THE TRIPWIRE FIRED AS DESIGNED — this leg went red on that PR's first CI run, the NINTH time it has
+# caught a surface changing, and again before the workflow reached `main`.
 # The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
 # that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "13" ]; then
+if [ "${s:-0}" = "14" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 13 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 14 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

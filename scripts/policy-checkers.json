@@ -68,6 +68,12 @@
       "workflow": ".github/workflows/gate-finding-history-selftest.yml"
     },
     {
+      "source": "scripts/check-retirement-order-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/retirement-order-coherence/run.sh",
+      "workflow": ".github/workflows/retirement-order-coherence.yml"
+    },
+    {
       "source": "scripts/check-adr-coherence.py",
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/adr-coherence/run.sh",
