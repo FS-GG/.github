@@ -38,6 +38,16 @@ file (ADR-0014). A silently missing skill — the one failure mode worse than a 
 happen. For the coordination kit the digest is the same one that writes `registry/repos.lock`, so the
 package and the byte-copy fabric cannot diverge.
 
+## `kit/kit-manifest.tsv` receiver contract (v1)
+
+Receivers may read the packed manifest as UTF-8, one TAB-separated row per file. Version 1 has exactly
+five columns: `kind`, package-relative path, destination, lowercase SHA-256, and `true|false`
+executable. `kind` is exactly one of `skill`, `client`, `config`, or `build-config`. The destination is
+receiver-relative for `client`, `config`, and `build-config`; a `skill` destination is relative to a
+configured skill root. Consumers must not infer a skill root from that field, nor rely on row order or
+package-relative layout beyond these columns. A new kind or column layout is a contract change and is
+guarded before publication.
+
 ## The build-config capability (opt-in)
 
 The package also carries the `build-config` capability — the byte-identity set `scripts/sync-build-config.sh`
