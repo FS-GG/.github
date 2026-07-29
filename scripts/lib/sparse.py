@@ -123,10 +123,12 @@ PATTERNS_KEY = "sparse-checkout"
 # published name rather than a policy choice.
 CHECKOUT_ACTION = "actions/checkout"
 
-# `core.getBooleanInput`'s vocabulary, as the two callers between them already accepted it. Kept as
-# data rather than an `in ("true", ...)` so the two directions cannot drift apart.
-TRUE_SPELLINGS = {"true", "1"}
-FALSE_SPELLINGS = {"false", "0"}
+# `core.getBooleanInput`'s vocabulary.  It is a CASE-SENSITIVE six-spelling set: accepting `1`/`0`,
+# or case-folding a spelling beyond these values, would make this reader report a mode that the real
+# checkout action rejects before it can materialise anything.  Keep the directions as data so they
+# cannot drift apart.
+TRUE_SPELLINGS = {"true", "True", "TRUE"}
+FALSE_SPELLINGS = {"false", "False", "FALSE"}
 
 
 class SparseRefusal(Exception):
@@ -263,17 +265,19 @@ def cone_mode_of(params: dict, where: str) -> bool:
     MEAN, so an unreadable one is a no-verdict rather than a guess.
 
     A QUOTED boolean is not unreadable. Every ``with:`` value reaches an action as a string and the
-    action reads this one with ``core.getBooleanInput``, so ``false`` and ``"false"`` are the same
-    input; refusing the quoted spelling would red a workflow that works, which is what ``sparse_set``
-    did before the hoist. An unevaluated ``${{ }}`` expression IS refused: its value is decided at
-    run time, and nothing here can grade a mode it cannot know.
+    action reads this one with ``core.getBooleanInput``, so its six textual YAML 1.2 core-schema
+    spellings are accepted exactly; refusing the quoted spelling would red a workflow that works,
+    which is what ``sparse_set`` did before the hoist. ``1`` and ``0`` are NOT boolean spellings for
+    that action, whether PyYAML handed us strings or numbers, and are refused. An unevaluated
+    ``${{ }}`` expression IS refused: its value is decided at run time, and nothing here can grade a
+    mode it cannot know.
     """
     if CONE_KEY not in params:
         return True
     raw = params.get(CONE_KEY)
     if isinstance(raw, bool):
         return raw
-    spelling = str(raw).strip().casefold()
+    spelling = str(raw).strip()
     if spelling in TRUE_SPELLINGS:
         return True
     if spelling in FALSE_SPELLINGS:
