@@ -458,6 +458,18 @@ class Handler(BaseHTTPRequestHandler):
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
 
+        # #1569: `reap --apply` must see a genuinely expired marker.  Claims use the real wall
+        # clock so all normal CAS legs remain live; this narrow test-only route ages the existing
+        # marker after it has been created through the real command.
+        m = re.match(r"^/_fixture/expire-claim/(\d+)$", path)
+        if m:
+            n = int(m.group(1))
+            with LOCK:
+                for comment in COMMENTS.get(n, []):
+                    if "fsgg:claim" in comment.get("body", ""):
+                        comment["updated_at"] = "2000-01-01T00:00:00Z"
+            return self._send(200, {"expired": n})
+
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             with LOCK:

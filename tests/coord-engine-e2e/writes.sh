@@ -804,8 +804,6 @@ valid_driver() {
     bad "#1569: $name must not be a parser refusal" "rc=$rc"
   fi
 }
-valid_driver "reap --apply" run reap --repo FS.GG.SDD --apply
-valid_driver "reconcile --apply" run reconcile --repo FS.GG.SDD --apply
 
 # `next` is the one conditional row whose mutation cannot be inferred from argv.  The exemption
 # is taken from the emitted field, so a renamed/new argvCannotSay row is not silently omitted.
@@ -855,6 +853,22 @@ must_mutate "take" "$ENGINE" take --repo FS.GG.SDD --worker ledger-take
 # A room is a net-new REST issue POST followed by body PATCHes on every member.  The fixture returns
 # the created issue number, letting the real command finish rather than treating the POST as enough.
 must_mutate "room open" "$ENGINE" room open --over FS.GG.SDD#42,FS.GG.SDD#43 --worker ledger-room
+
+# CONDITIONAL, BOTH POLARITIES.  These controls are intentionally adjacent: the bare form must
+# inspect the SAME actionable state without a wire mutation; `--apply` then changes that state.
+# A parser refusal cannot satisfy either half because both commands have to return green.
+
+# A real claim first creates the marker; only then does the fixture age it.  This keeps every
+# ordinary CAS leg on real time while giving reap an unambiguously stale lock to report and collect.
+"$ENGINE" claim FS.GG.SDD#42 --worker stale-reap >/dev/null 2>&1
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/expire-claim/42" >/dev/null
+no_mutation "reap (bare, expired claim)" "$ENGINE" reap --repo FS.GG.SDD --worker stale-reap
+must_mutate "reap --apply (expired claim)" "$ENGINE" reap --repo FS.GG.SDD --apply --worker stale-reap
+
+# #45 is CLOSED while its board projection is still Ready: the typed CLOSED-ISSUE-NOT-DONE
+# chore is mechanically safe.  Bare reconcile reports it; --apply writes Status=Done.
+no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --worker reconcile-probe
+must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
 
 # ---- report ----------------------------------------------------------------------------------------
 echo
