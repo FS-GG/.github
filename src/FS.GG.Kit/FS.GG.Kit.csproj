@@ -322,7 +322,14 @@
          so exactly one lock row advances (`.claude/skills/pnext-item`) and BOTH gates see it —
          `repos-registry-selftest` through the lock, `kit-published-coherence` through the per-file
          kit manifest. -->
-    <Version>0.21.0</Version>
+    <!-- 0.21.0 -> 0.21.1, a PATCH: two kit-delivered reference files corrected stale rationale
+         about the now-landed engine-currency ownership (#1883). `pnext-item` still requires every
+         worker to check before its first board write; it now names `drive-board` as the landed host
+         repair owner. The matching `drive-board` reference also states that `stale_guard` now prints
+         the same merge-with-ff-only remedy (#1664). No member, destination, mode, or required worker
+         action moves, so this is prose correction under the 0.19.1 precedent. `repos.lock` stays
+         current because no SKILL.md changes; the per-file kit manifest moves and is republished. -->
+    <Version>0.21.1</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

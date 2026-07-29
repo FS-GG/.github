@@ -297,8 +297,8 @@ have one subject, and so must the check and the repair. Three clauses are worth 
   **detached HEAD** — measured mid-run — where `git pull --ff-only` exits 1 with *"You are not currently
   on a branch"* and moves nothing, leaving the refusal exactly where it was while looking like a repair.
   `merge --ff-only` fast-forwards a detached HEAD and a branch alike, and still refuses loudly if the
-  tree has diverged, which is the case you want escalated rather than merged. `stale_guard`'s own
-  printed remedy still says `pull --ff-only`; that is `.github#1664`, and it is why this does not.
+  tree has diverged, which is the case you want escalated rather than merged. `stale_guard` now prints
+  the same `merge --ff-only` remedy (`.github#1664`).
 - **The rebuild names `$SHARED` explicitly.** A bare `dotnet build src/FS.GG.Coord.Cli -c Release`
   rebuilds whatever tree you are standing in — never the stale one — and changes nothing.
 - **Scoped to the engine's three source trees, not `main` as a whole.** A docs commit, a workflow edit
