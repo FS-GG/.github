@@ -980,5 +980,17 @@ sel_fail "a workflow whose ONLY repository: FS-GG/.github step is not a checkout
   "found 0" "$WORK/selectors/decoy-only.yml"
 
 echo
+python3 - "$HERE/../../.github/workflows" <<'PY'
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+for name in ('coordination-coherence.yml', 'contract-coherence.yml', 'lock-range-coherence.yml'):
+    text = (root / name).read_text()
+    assert 'default: ""' in text, f'{name}: implicit main default remains'
+    assert 'ref: ${{ inputs.github-ref || github.job_workflow_sha }}' in text, f'{name}: coherent fallback missing'
+    assert 'ref: ${{ inputs.github-ref }}' not in text, f'{name}: override-only checkout remains'
+print('ok: all reusable callees use workflow-sha fallback; explicit github-ref still wins')
+PY
+ok "all three reusable callees reject implicit main and preserve explicit github-ref override"
+
 echo "lock-range-coherence fixture: $pass passed, $failcount failed."
 [ "$failcount" -eq 0 ] || exit 1
