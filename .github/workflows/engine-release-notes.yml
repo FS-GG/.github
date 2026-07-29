@@ -1,0 +1,40 @@
+name: engine-release-notes
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "scripts/check-engine-release-notes.py"
+      - "tests/engine-release-notes/**"
+      - ".github/workflows/engine-release-notes.yml"
+      - ".github/workflows/release-coord-engine.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+      - "scripts/check-engine-release-notes.py"
+      - "tests/engine-release-notes/**"
+      - ".github/workflows/engine-release-notes.yml"
+      - ".github/workflows/release-coord-engine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-release-notes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Prove the checker rejects stale and unreadable notes
+        run: bash tests/engine-release-notes/run.sh
+      - name: Require this package's notes to announce this version
+        run: python3 scripts/check-engine-release-notes.py
