@@ -932,9 +932,12 @@ for command in adopt child claim "done" heartbeat release say set-field set-path
   mark_contract "$command" "dedicated-write-driver"
 done
 
-# THE COMPLETENESS GATE.  Compare names from this process's freshly-built contract, not a copy in
-# bash.  Every advertised row must appear once; every conditional row must have both executable
-# polarities (or its typed argvCannotSay exemption) recorded.
+# THE COMPLETENESS GATE (#1569). Compare names from this process's freshly-built contract, not a
+# copy in bash.  The count is deliberately derived rather than frozen: command-contract is total
+# over the Command union, so a newly advertised verb changes the subject this test must drive.
+# Every advertised row must appear once; every conditional row must have both executable polarities
+# (or its typed argvCannotSay exemption) recorded.  On a mismatch, print both sets so the missing
+# driver is actionable rather than a bare cardinality failure.
 mapfile -t advertised < <(run command-contract --json | jq -r '.commands[].name' | sort)
 mapfile -t driven < <(printf '%s\n' "${!CONTRACT_DRIVEN[@]}" | sort)
 if [ "${#advertised[@]}" -gt 0 ] && [ "$(printf '%s\n' "${advertised[@]}")" = "$(printf '%s\n' "${driven[@]}")" ]; then
