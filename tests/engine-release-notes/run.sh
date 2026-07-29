@@ -65,8 +65,10 @@ expect 1 "empty release notes are red" "PackageReleaseNotes is empty"
 run "$WORK/missing/NoSuch.fsproj"
 expect 2 "an unevaluable project is no verdict, never coherent" "could not evaluate"
 
-run "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
-expect 0 "the shipped engine project is coherent" "Version 0.16.0 agrees"
+shipped="$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+shipped_version="$(dotnet msbuild "$shipped" -getProperty:Version -nologo)"
+run "$shipped"
+expect 0 "the shipped engine project is coherent" "Version $shipped_version agrees"
 
 release_workflow="$ROOT/.github/workflows/release-coord-engine.yml"
 checker_line="$(grep -n 'python3 scripts/check-engine-release-notes.py' "$release_workflow" | head -1 | cut -d: -f1 || true)"
