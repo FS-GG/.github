@@ -75,6 +75,7 @@ let private item n status state blockers claim =
       Blockers = blockers
       Claim = claim
       ItemPr = None
+      ItemPrUnreadable = false
       HumanBlock = None
       Predicate = None
       Class = None

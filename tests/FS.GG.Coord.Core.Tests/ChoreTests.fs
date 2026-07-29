@@ -49,6 +49,7 @@ module ChoreTests =
           Blockers = []
           Claim = None
           ItemPr = None
+          ItemPrUnreadable = false
           HumanBlock = None
           Predicate = None
           Class = None
@@ -542,6 +543,17 @@ module ChoreTests =
                 Status = Blocked
                 Blockers = [ blocker 2 BlockerClosed ]
                 ItemPr = Some 1911 }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``#1924 BLOCKER-CLEARED does NOT promote a row whose markerless PR probe was unreadable`` () =
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                ItemPr = None
+                ItemPrUnreadable = true }
 
         Assert.Empty(derive [ i ])
 

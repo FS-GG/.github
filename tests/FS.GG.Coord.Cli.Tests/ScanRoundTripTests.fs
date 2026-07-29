@@ -789,6 +789,7 @@ let ``#1738 a BLOCKED row whose blockers ALL resolved IS probed - its open item 
 
     // THE FIELD IS POPULATED — the half that did not exist before #1738.
     Assert.Equal(Some 1911, item.ItemPr)
+    Assert.False(item.ItemPrUnreadable)
 
     // AND THE GATE THEREFORE FIRES, over an item the REAL writer produced. "The rule holds" and "the rule
     // can see its subject" are different claims, and only this file can make the second one.

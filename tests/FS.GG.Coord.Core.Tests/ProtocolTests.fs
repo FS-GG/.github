@@ -570,6 +570,7 @@ module ProtocolTests =
           Blockers = []
           Claim = None
           ItemPr = None
+          ItemPrUnreadable = false
           HumanBlock = None
           Predicate = None
           Class = None

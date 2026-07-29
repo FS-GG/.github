@@ -967,6 +967,8 @@ module Scan =
                     let probe () =
                         match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                         | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
+                        | Ok LivenessUnknown
+                        | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
                         | _ -> ()
 
                     match row.State, row.Status with

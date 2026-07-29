@@ -296,6 +296,9 @@ module Types =
           /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
           /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
           ItemPr: int option
+          /// `true` when the markerless item-PR probe could not be completed. `ItemPr = None` alone
+          /// never carries that fact; the mutation path therefore reads this receipt and fails closed.
+          ItemPrUnreadable: bool
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
           /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
           ///
