@@ -248,7 +248,10 @@ module Client =
         eprint
             $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{workerId}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). %s{verb} would act on your TWIN's lock, not yours."
 
-        mintRemedy ()
+        // A different session can also be a long-lived worker whose harness rotated its ambient
+        // session id (#1857). We cannot prove that here, so preserve #419's refusal; but minting
+        // would strand that worker's live claim. Name the safe recovery which pins the marker fact.
+        eprint $"  This may be a rotated session, not a twin. If this is your existing claim, retry with CLAUDE_CODE_SESSION_ID=%s{theirs.Value} FSGG_WORKER=%s{workerId}; do NOT mint a new id for this live claim."
         ExitRed
 
     /// THE IMPERSONATION REFUSAL (#1646), shared by the verbs that REFUSE over a worker we are not — `claim`,
