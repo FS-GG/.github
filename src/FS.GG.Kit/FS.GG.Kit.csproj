@@ -277,8 +277,9 @@
          is a GENERATED projection of `Protocol.landableExitCodes`, and that table now carries **10** —
          the PR is not open: `merged`, or `closed` without merging. Before this, `landable` answered a
          MERGED PR with `pending`/exit 7, the one code the same table defines as worth retrying, so
-         `--wait` spent its full 600s budget on a settled fact and the recovery path was told to wait
-         forever on landed work.
+         the waiting form of the command spent its full 600s budget on a settled fact and the recovery
+         path was told to wait forever on landed work. (The flag is spelled with two hyphens, which an
+         XML comment may not contain — hence the circumlocution.)
          MINOR AND NOT PATCH, against the 0.19.1 precedent directly above rather than against a doc.
          That bump argued PATCH because "NO RUNTIME BEHAVIOUR MOVES — the only bytes that change are
          prose". Both halves of that are false here. The bytes are a new TABLE ROW, not corrected
