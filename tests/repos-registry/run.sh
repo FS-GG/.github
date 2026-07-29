@@ -126,6 +126,19 @@ relock "$BASE"   # the roster's digests live in its sibling lock now (#527)
 # --- happy path ---
 expect_pass "valid roster passes" "$BASE"
 
+# repository_dispatch contracts are a top-level graph, not an optional bag of strings.  Each endpoint
+# must be rostered and every triple unique; otherwise repos-audit has no finite subject to compare to
+# the sender/listener workflows.
+dispatch_variant() { local n="$1" body="$2" f; f="$WORK/$n.yml"; cp "$BASE" "$f"; printf '\ndispatches:\n%s\n' "$body" >> "$f"; relock "$f"; printf '%s' "$f"; }
+expect_pass "a rostered dispatch triple passes" "$(dispatch_variant dispatchok '  - { producer: FS-GG/FS.GG.SDD, target: FS-GG/FS.GG.SDD, event-type: fixture-event }')"
+expect_fail "dispatch row refuses an empty object" 1 "each dispatch" "$(dispatch_variant dispatchempty '  - {}')"
+expect_fail "dispatch row refuses a missing producer" 1 "each dispatch" "$(dispatch_variant dispatchmissing '  - { target: FS-GG/FS.GG.SDD, event-type: fixture-event }')"
+expect_fail "dispatch row refuses wrong-typed values" 1 "each dispatch" "$(dispatch_variant dispatchtyped '  - { producer: 7, target: FS-GG/FS.GG.SDD, event-type: fixture-event }')"
+expect_fail "dispatch producer must be rostered" 1 "producer 'FS-GG/FS.GG.Ghost' is not rostered" "$(dispatch_variant dispatchproducer '  - { producer: FS-GG/FS.GG.Ghost, target: FS-GG/FS.GG.SDD, event-type: fixture-event }')"
+expect_fail "dispatch target must be rostered" 1 "target 'FS-GG/FS.GG.Ghost' is not rostered" "$(dispatch_variant dispatchtarget '  - { producer: FS-GG/FS.GG.SDD, target: FS-GG/FS.GG.Ghost, event-type: fixture-event }')"
+expect_fail "dispatch event-type must be non-empty" 1 "each dispatch" "$(dispatch_variant dispatchemptyevent '  - { producer: FS-GG/FS.GG.SDD, target: FS-GG/FS.GG.SDD, event-type: "" }')"
+expect_fail "duplicate dispatch triple is refused" 1 "duplicate dispatch" "$(dispatch_variant dispatchdup $'  - { producer: FS-GG/FS.GG.SDD, target: FS-GG/FS.GG.SDD, event-type: fixture-event }\n  - { producer: FS-GG/FS.GG.SDD, target: FS-GG/FS.GG.SDD, event-type: fixture-event }')"
+
 # --- violation classes (all exit 1) ---
 expect_fail "unknown receives capability"     1 "unknown capability" "$(variant unknowncap  's/coordination-kit\]/bogus-cap]/')"
 expect_fail "duplicate repo id"               1 "duplicate"          "$(variant dupid       's/id: sdd,/id: .github,/')"

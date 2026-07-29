@@ -292,7 +292,8 @@ ABSENTOK_FILE="$(mktemp)"
 # can ask "which jobs reach the kit's view-root assertion" without a second fetch of bytes this
 # script already held. Same ride-the-existing-pass economy as the view-root generate sweep (#1759).
 ABSENTOK_DIR="$(mktemp -d)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR" "$ABSENTOK_FILE" "$ABSENTOK_DIR"' EXIT
+DISPATCH_FILE="$(mktemp)"
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR" "$ABSENTOK_FILE" "$ABSENTOK_DIR" "$DISPATCH_FILE"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -2958,6 +2959,103 @@ while IFS= read -r repo; do
   done
 done <<< "$all_repos"
 
+# --- repository_dispatch graph (#1919) -----------------------------------------------------------
+# `POST /dispatches` answers 204 even when no workflow consumes the event.  Unlike a capability,
+# this fabric is a three-place contract: producer, target and event-type.  Read the workflows already
+# staged above; a second API pass would create a race and would make an unread receiver look absent.
+dispatch_registry="${REGISTRY:-$HERE/../registry/repos.yml}"
+dispatch_json="$(yaml_text2json < "$dispatch_registry")" \
+  || die "cannot parse registry/repos.yml while enumerating dispatch contracts."
+dispatches="$(echo "$dispatch_json" | jq -r '
+  if (.dispatches // []) | type != "array" then error("dispatches is not an array") else
+    (.dispatches // [])[]
+    | if type != "object" or (.producer | type != "string" or length == 0)
+         or (.target | type != "string" or length == 0)
+         or (."event-type" | type != "string" or length == 0)
+      then error("dispatch row has no producer/target/event-type strings")
+      else [.producer,.target,."event-type"] | @tsv end
+  end' 2>/dev/null)" || die "cannot enumerate dispatch contracts — registry/repos.yml has an invalid dispatches shape."
+
+dispatch_extract() { # <repo> <workflow-file>
+  local repo="$1" file="$2" text parsed rc=0
+  text="$(cat "$ABSENTOK_DIR/${repo//\//__}/$file")"
+  parsed="$(printf '%s' "$text" | yaml_text2json)" || return 1
+  printf '%s' "$parsed" | python3 -c '
+import json, sys
+repo = sys.argv[1]
+wf = json.load(sys.stdin)
+def on_block(x):
+    if not isinstance(x, dict): return None
+    return x.get("on", x.get("true", x.get("True")))
+on = on_block(wf)
+if isinstance(on, dict):
+    rd = on.get("repository_dispatch")
+    if isinstance(rd, dict):
+        ts = rd.get("types")
+        if isinstance(ts, list):
+            for t in ts:
+                if isinstance(t, str) and t: print("L\t%s\t%s" % (repo, t))
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+if isinstance(jobs, dict):
+    for job in jobs.values():
+        if not isinstance(job, dict): continue
+        uses = job.get("uses")
+        with_ = job.get("with")
+        if not isinstance(uses, str) or not isinstance(with_, dict): continue
+        if not uses.strip().startswith("FS-GG/.github/.github/workflows/dispatch-sender.yml@") : continue
+        target, event = with_.get("target-repo"), with_.get("event-type")
+        if isinstance(target, str) and target and isinstance(event, str) and event:
+            print("S\t%s\t%s\t%s" % (repo, target, event))
+' "$repo"
+}
+
+dispatch_findings=0; dispatch_refusals=0; dispatch_declared=0
+if [ -n "$dispatches" ]; then
+  while IFS=$'\t' read -r dp dt de; do
+    [ -n "$dp" ] || continue
+    dispatch_declared=$((dispatch_declared + 1))
+  done <<< "$dispatches"
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    ddir="$ABSENTOK_DIR/${repo//\//__}"
+    [ -d "$ddir" ] || continue
+    while IFS= read -r wf; do
+      [ -n "$wf" ] || continue
+      if ! dispatch_extract "$repo" "$wf" >> "$DISPATCH_FILE"; then
+        echo "::error::repos-audit: $repo workflow '$wf' will not parse while extracting repository_dispatch contracts; the graph has no verdict for it."
+        dispatch_refusals=$((dispatch_refusals + 1))
+      fi
+    done < <(find "$ddir" -maxdepth 1 -type f -printf '%f\n')
+  done <<< "$all_repos"
+
+  # Forward: every declared edge has BOTH a real sender and a target listener for the same string.
+  while IFS=$'\t' read -r dp dt de; do
+    [ -n "$dp" ] || continue
+    if ! grep -qxF $'S\t'"$dp"$'\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
+      echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching dispatch-sender.yml caller."
+      dispatch_findings=$((dispatch_findings + 1))
+    fi
+    if ! grep -qxF $'L\t'"$dt"$'\t'"$de" "$DISPATCH_FILE"; then
+      echo "::error::repos-audit: declared dispatch $dp -> $dt ($de) has no matching repository_dispatch listener."
+      dispatch_findings=$((dispatch_findings + 1))
+    fi
+  done <<< "$dispatches"
+
+  # Reverse: a sender or listener missing from the roster is drift.  Keep the two halves separate:
+  # a live listener is evidence even if its producer was deleted, and vice versa.
+  while IFS=$'\t' read -r kind a b c; do
+    case "$kind" in
+      S) if ! grep -qxF "$a"$'\t'"$b"$'\t'"$c" <<< "$dispatches"; then
+           echo "::error::repos-audit: live dispatch sender $a -> $b ($c) is not declared in registry/repos.yml."
+           dispatch_findings=$((dispatch_findings + 1)); fi ;;
+      L) if ! awk -F '\t' -v target="$a" -v event="$b" '$2 == target && $3 == event { found=1 } END { exit !found }' <<< "$dispatches"; then
+           echo "::error::repos-audit: live repository_dispatch listener $a ($b) is not declared in registry/repos.yml."
+           dispatch_findings=$((dispatch_findings + 1)); fi ;;
+    esac
+  done < "$DISPATCH_FILE"
+  echo "repos-audit: repository_dispatch graph — $dispatch_declared declared edge(s), $dispatch_findings finding(s), $dispatch_refusals refusal(s)."
+fi
+
 # Per-capability, so a green audit is green FOR A NAMED REASON. The old summary was one aggregate
 # line, which is precisely how auditing a third of the mandate looked identical to auditing all of it.
 for cap in $CAPS_ORDER; do
@@ -3569,6 +3667,11 @@ if [ "$engman_refusals" -ne 0 ]; then
   exit 3
 fi
 
+if [ "$dispatch_refusals" -ne 0 ]; then
+  echo "::error::repos-audit: $dispatch_refusals workflow(s) could not be structurally read for the repository_dispatch graph. Nothing was proven about their sender/listener contracts; a re-run will not repair YAML." >&2
+  exit 3
+fi
+
 # A receiver whose path requirement this sweep REFUSES joins the permanent no-verdicts on the same
 # argument once more, and the dominant cause is a credential rather than a commit: reading required
 # checks needs `administration: read`, which no workflow GITHUB_TOKEN can hold, so an audit run
@@ -3625,7 +3728,7 @@ fi
 offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
    || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
-   || [ "$absentok_findings" -ne 0 ]; then
+   || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
@@ -3633,6 +3736,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
   [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
+  [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   exit 1
 fi
