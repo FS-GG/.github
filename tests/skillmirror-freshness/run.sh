@@ -149,6 +149,7 @@ json.dump(
             "path": path,
             "commit": commit,
             "skillMirrorFsSha256": digest,
+            "libraryFiles": {path: digest},
             "howToRedrive": redrive,
         },
         "fixtures": [],
@@ -408,7 +409,7 @@ open(sys.argv[2] + "/repo", "w", encoding="utf-8").write(block["repo"])
 open(sys.argv[2] + "/path", "w", encoding="utf-8").write(block["path"])
 PY
 expect "the SHIPPED conformance table is gradeable (its derivedFrom validates)" 2 \
-  "404 for the repository ITSELF" "$w" "$TABLE"
+  "Schemas.fs" "$w" "$TABLE"
 
 # ...and its remedy really is the command #1546 criterion 1 requires, spelled out. The gate prints
 # whatever the table says, so pinning the criterion means pinning the table's string.
