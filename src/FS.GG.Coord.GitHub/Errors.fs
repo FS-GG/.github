@@ -102,9 +102,19 @@ module Errors =
             // sent every operator to `gh api rate_limit`'s top-level `core` figure, which was untouched, and
             // from that they concluded the tool was lying about a counter of its own (#1666). It was not: a
             // different bucket refused the call. Name it, and that reading is available to them.
+            //
+            // SANITISED, because this is header-sourced text going straight into operator output. A bucket
+            // name is a short identifier (`core`, `code_search`); anything else is not a name we should be
+            // quoting back. Unfiltered, a backtick in the header breaks out of the code span it is rendered
+            // in — a small thing, but this is the sentence people read when nothing else works.
             let onResource (r: string option) =
                 match r with
-                | Some name when not (String.IsNullOrWhiteSpace name) -> $" GitHub named the resource `%s{name}`."
+                | Some name when
+                    not (String.IsNullOrWhiteSpace name)
+                    && name.Length <= 40
+                    && name |> Seq.forall (fun c -> Char.IsAsciiLetterOrDigit c || c = '_' || c = '-')
+                    ->
+                    $" GitHub named the resource `%s{name}`."
                 | _ -> ""
 
             match resource with
@@ -141,12 +151,16 @@ module Errors =
                 $"GitHub SECONDARY rate limit (abuse detection) — NOT the primary budget.%s{onResource r}%s{wait} This is not a protocol error and it is not a lost race. It is triggered by CONCURRENT REQUEST BURSTS, so the remedy is to REDUCE CONCURRENCY and retry with backoff; the primary budget may look almost untouched and does not appear in `/rate_limit`, which is not evidence that this refusal was false."
 
             | UnknownBudget ->
-                // GitHub named no resource AND the wording did not say which MECHANISM fired. Do NOT guess:
-                // a guessed name is the exact failure this change exists to end. FAIL CLOSED (#266) — an
-                // unclassifiable 403 is not a safe one to resume from, so this arm gives the CONSERVATIVE
-                // remedy (the union of both) rather than silently defaulting to the primary one. Waiting
-                // alone is wrong if this was in fact a secondary limit, and it would re-trigger it.
-                $"A GitHub rate limit is EXHAUSTED — UNCLASSIFIED (GitHub named no resource, and the wording did not say whether this was the primary budget or a secondary/abuse limit).%s{waitFor} This is not a protocol error and it is not a lost race. Because a secondary limit cannot be ruled out, REDUCE CONCURRENCY as well as backing off — waiting alone would re-trigger it."
+                // WHAT THIS ARM ACTUALLY KNOWS, stated exactly. It is reached when the body matched a
+                // PRIMARY wording and GitHub named no resource — so the mechanism reads as primary and it
+                // is the BUCKET that is unknown. An earlier draft of this sentence also claimed "the
+                // wording did not say whether this was primary or secondary", which was false in every
+                // reachable case: over-claiming uncertainty is the same defect as over-claiming certainty,
+                // and this change is not entitled to either.
+                //
+                // Which budget is still not guessed (#266) — `core` and `graphql` are waited out the same
+                // way, so the missing name costs advice, not correctness.
+                $"A GitHub rate limit is EXHAUSTED — the wording reads as the PRIMARY budget, but GitHub named no resource, so WHICH bucket is unknown.%s{waitFor} This is not a protocol error and it is not a lost race. Wait it out; if it recurs immediately on resuming, suspect a secondary limit instead and reduce concurrency."
 
         | NotFound subject -> $"not found: %s{subject}. The server said so — this is an absence, not a failed read."
 

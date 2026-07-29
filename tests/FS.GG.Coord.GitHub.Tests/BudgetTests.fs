@@ -178,7 +178,17 @@ let ``#1666 a HOSTILE Retry-After is NO reading - never 'retry now', never a fab
     // Same discipline as `X-RateLimit-Reset` below: a header we cannot read is not a delay of zero, and a
     // value we do not believe is not a figure to hand a worker as fact. Zero and negatives would render as
     // "retry now" on a limit that just fired — straight back into the detector.
-    for hostile in [ "0"; "-30"; "not-a-number"; "999999999"; "" ] do
+    // "23:59" IS THE ONE THAT GOT THROUGH, and it is here because review caught it, not the suite. The
+    // first draft used a loose `DateTimeOffset.TryParse` for the HTTP-date form, which accepts far more
+    // than an HTTP-date: "23:59" parsed as *today at 23:59* and was rendered as
+    // "GitHub sent `Retry-After: 72213s`" — a fabricated ~20-hour delay attributed to GitHub, one branch
+    // after the numeric arm had rejected "999999999" for being unbelievable. The original list held only
+    // strings that fail BOTH parsers, so it could not have caught it. `TryParseExact` over RFC 9110's three
+    // formats is the fix; these are the inputs that pin it.
+    // "2026" is deliberately NOT in this list, though it looks like a bare year: `Retry-After` is
+    // delta-SECONDS first, and 2026 seconds (~34m) is a perfectly legitimate value. Rejecting it because
+    // it also parses as a date would lose a real delay. The numeric reading wins, and that is correct.
+    for hostile in [ "0"; "-30"; "not-a-number"; "999999999"; ""; "23:59"; "Oct 21" ] do
         let error =
             Budget.classify
                 "FS-GG/.github#1666"
@@ -189,6 +199,61 @@ let ``#1666 a HOSTILE Retry-After is NO reading - never 'retry now', never a fab
         match error with
         | RateLimited(SecondaryLimit(_, None), _) -> ()
         | other -> failwith $"a hostile Retry-After (%s{hostile}) must read as NO delay — got %A{other}"
+
+[<Fact>]
+let ``#1666 a legitimate HTTP-date Retry-After IS still read - exactness is not blanket refusal`` () =
+    // The mirror of the hostile case: tightening to `TryParseExact` must not silently stop reading the
+    // form RFC 9110 actually permits, or the repair would be a second way to lose the header.
+    let at = System.DateTimeOffset.UtcNow.AddMinutes 3.0
+
+    let error =
+        Budget.classify
+            "s"
+            403
+            """{"message":"You have exceeded a secondary rate limit."}"""
+            (headers [ "Retry-After", at.ToString("r", System.Globalization.CultureInfo.InvariantCulture) ])
+
+    match error with
+    | RateLimited(SecondaryLimit(_, Some after), _) -> Assert.InRange(after.TotalSeconds, 60.0, 200.0)
+    | other -> failwith $"an RFC 9110 HTTP-date Retry-After must still be read — got %A{other}"
+
+// ---- #1666: the GraphQL `errors` paths must make the SAME distinction --------------------------------
+//
+// Found in review, not by the suite. `Board.fs`, `Scan.fs` and `Done.fs` each open a GraphQL `errors`
+// array and each wrote the same line — `if messages |> List.exists Budget.isRateLimited then
+// Error(RateLimited(GraphQlBudget, None))`. `isRateLimited` matches the SECONDARY wordings too, so a
+// secondary limit arriving on any of those three rendered as
+//
+//     GraphQL budget EXHAUSTED. The reset time could not be read. ... REST-only work may still run.
+//
+// which is worse than the REST case it was filed for: a secondary limit is account-wide and burst-
+// triggered, so "REST-only work may still run" sends the fan-out straight back into the detector that
+// just fired. And these are the Projects-v2 MUTATION paths — the fan-out that causes secondary limits.
+//
+// The decision now lives in ONE function so a fourth site cannot omit it.
+
+[<Fact>]
+let ``#1666 a SECONDARY limit inside a GraphQL errors array is not the GraphQL budget`` () =
+    match Budget.ofGraphQlErrors [ "You have exceeded a secondary rate limit." ] with
+    | Some(RateLimited(SecondaryLimit(None, None), None) as error) ->
+        let sentence = explain error
+        Assert.Contains("SECONDARY rate limit", sentence)
+        // THE REGRESSION, PINNED — the advice that would re-trigger the limit.
+        Assert.DoesNotContain("REST-only work may still run", sentence)
+        Assert.DoesNotContain("GraphQL budget EXHAUSTED", sentence)
+    | other -> failwith $"a secondary limit in a GraphQL errors array must classify as one — got %A{other}"
+
+[<Fact>]
+let ``#1666 a PRIMARY limit inside a GraphQL errors array is still the GraphQL budget`` () =
+    match Budget.ofGraphQlErrors [ "API rate limit exceeded" ] with
+    | Some(RateLimited(GraphQlBudget, None)) -> ()
+    | other -> failwith $"a primary limit on the GraphQL path is the GraphQL budget — got %A{other}"
+
+[<Fact>]
+let ``#1666 a GraphQL errors array with NO rate limit is not a rate limit`` () =
+    // `None` is the caller's cue to report `GraphQlErrors`. Answering `Some` here would turn every
+    // ordinary GraphQL failure into a back-off signal.
+    Assert.True((Budget.ofGraphQlErrors [ "Field 'foo' doesn't exist"; "(no message)" ]).IsNone)
 
 [<Fact>]
 let ``#1666 the three fixture cases the item asked for, as one table`` () =
@@ -220,7 +285,7 @@ let ``#1666 the three fixture cases the item asked for, as one table`` () =
     // ...and all three say something DIFFERENT about what to do.
     Assert.Contains("SECONDARY rate limit", explain secondaryHealthyPrimary)
     Assert.Contains("REST budget EXHAUSTED", explain primaryExhausted)
-    Assert.Contains("UNCLASSIFIED", explain unclassifiable)
+    Assert.Contains("WHICH bucket is unknown", explain unclassifiable)
 
 [<Fact>]
 let ``#1666 an UNCLASSIFIED limit fails closed - it advises the conservative union, not the primary`` () =
@@ -235,8 +300,12 @@ let ``#1666 an UNCLASSIFIED limit fails closed - it advises the conservative uni
     | other -> failwith $"an unnamed limit must not be attributed to a budget — got %A{other}"
 
     let sentence = explain error
-    Assert.Contains("UNCLASSIFIED", sentence)
-    Assert.Contains("REDUCE CONCURRENCY", sentence)
+    // It states exactly what it knows: the WORDING reads as primary, the BUCKET is unnamed. An earlier
+    // draft claimed the wording was ambiguous too — false in every reachable case, and over-claiming
+    // uncertainty is the same defect as over-claiming certainty.
+    Assert.Contains("reads as the PRIMARY budget", sentence)
+    Assert.Contains("WHICH bucket is unknown", sentence)
+    Assert.DoesNotContain("REST budget EXHAUSTED", sentence)
 
 [<Fact>]
 let ``#1666 the classifier does NOT consult /rate_limit to override a real 403`` () =

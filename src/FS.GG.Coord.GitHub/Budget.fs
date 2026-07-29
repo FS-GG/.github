@@ -70,6 +70,19 @@ module Budget =
     let isSecondaryLimit (body: string) =
         not (String.IsNullOrEmpty body) && secondaryPattern.IsMatch body
 
+    let ofGraphQlErrors (messages: string list) =
+        if messages |> List.exists isSecondaryLimit then
+            // NO RESOURCE IS NAMED, and that is honest rather than lossy: this arm has no headers to read,
+            // and a secondary limit is account-wide anyway — it is not a property of the `graphql` bucket.
+            Some(RateLimited(SecondaryLimit(None, None), None))
+        elif messages |> List.exists isRateLimited then
+            // `GraphQlBudget` is asserted, not read, and here that is sound: this arm parses a GraphQL
+            // `errors` array, so the response IS a GraphQL response. The reset stays `None` — GitHub
+            // reports this shape as HTTP 200 with no rate-limit headers, and the body carries no `resetAt`.
+            Some(RateLimited(GraphQlBudget, None))
+        else
+            None
+
     let readMeter (body: string) =
         if String.IsNullOrWhiteSpace body then
             None
@@ -184,8 +197,25 @@ module Budget =
             | true, secs when secs > 0L && secs <= 86400L -> Some(TimeSpan.FromSeconds(float secs))
             | true, _ -> None
             | _ ->
-                // The HTTP-date form. Converted to a delta against now, and subject to the same bounds.
-                match DateTimeOffset.TryParse raw with
+                // The HTTP-date form — and EXACT formats only, never a loose `TryParse`.
+                //
+                // `DateTimeOffset.TryParse` accepts far more than an HTTP-date: `"23:59"` parses as *today
+                // at 23:59* and would be handed to the worker as a ~20-hour delay attributed to GitHub —
+                // fabricating precisely the confident wrong number this whole change exists to stop, in the
+                // new code, one branch after the numeric arm rejects `999999999` for being unbelievable.
+                // These are the three forms RFC 9110 §5.6.7 permits.
+                let httpDateFormats =
+                    [| "r"; "dddd, dd-MMM-yy HH:mm:ss 'GMT'"; "ddd MMM d HH:mm:ss yyyy" |]
+
+                match
+                    DateTimeOffset.TryParseExact(
+                        raw,
+                        httpDateFormats,
+                        Globalization.CultureInfo.InvariantCulture,
+                        Globalization.DateTimeStyles.AssumeUniversal
+                        ||| Globalization.DateTimeStyles.AdjustToUniversal
+                    )
+                with
                 | true, at ->
                     let delta = at - DateTimeOffset.UtcNow
 

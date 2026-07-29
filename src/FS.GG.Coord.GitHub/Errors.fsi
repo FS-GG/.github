@@ -47,10 +47,17 @@ module Errors =
         /// healthy reading there can never rule it out.
         ///
         /// `retryAfter` is the `Retry-After` header, which is the ONLY reset that describes this limit.
-        /// There is deliberately NO `resetAt` alongside it: `X-RateLimit-Reset` is the PRIMARY window and
-        /// says nothing about a secondary limit, and presenting it as the resume signal is what made
-        /// "resets in ~6m" precede a retry that succeeded in seconds. Structurally absent beats
-        /// documented-as-not-to-be-used.
+        /// `X-RateLimit-Reset` is the PRIMARY window and says nothing about a secondary limit; presenting
+        /// it as the resume signal is what made "resets in ~6m" precede a retry that succeeded in seconds.
+        ///
+        /// THE INVARIANT IS ENFORCED, NOT STRUCTURAL, and the difference is worth stating plainly because
+        /// an earlier draft of this comment claimed the latter. `resetAt` is a field of `RateLimited`, not
+        /// of this case, so `RateLimited(SecondaryLimit _, Some at)` remains CONSTRUCTIBLE — the type does
+        /// not forbid it. What forbids it is `Budget.classify`, which withholds the primary reset on this
+        /// arm, and `ofGraphQlErrors`, which passes `None`. A new construction site inherits no protection
+        /// from the type and must withhold it too. (Making it structural means moving the reset into each
+        /// case; that is a larger change than this defect needed, and pretending it is already done would
+        /// be exactly the confident-wrong-comment failure #1666 is made of.)
         | SecondaryLimit of resource: string option * retryAfter: System.TimeSpan option
 
         /// GitHub named no resource AND the wording did not say which mechanism fired.

@@ -74,6 +74,21 @@ module Budget =
     /// secondary limit is cleared by REDUCING CONCURRENCY, and waiting at full fan-out re-triggers it.
     val isSecondaryLimit: body: string -> bool
 
+    /// Classify a rate limit reported inside a GraphQL `errors` array. `None` when none of the messages is
+    /// a rate limit at all, which is the caller's cue to report `GraphQlErrors`.
+    ///
+    /// THIS EXISTS BECAUSE THE DECISION WAS TRIPLICATED. `Board.fs`, `Scan.fs` and `Done.fs` each wrote
+    /// `if messages |> List.exists Budget.isRateLimited then Error(RateLimited(GraphQlBudget, None))` —
+    /// and `isRateLimited` matches the SECONDARY wordings too. So a secondary limit hitting any of the
+    /// three rendered as "GraphQL budget EXHAUSTED … REST-only work may still run": the precise wrong
+    /// advice #1666 exists to remove, and worse here than on the REST path, because a secondary limit is
+    /// account-wide and burst-triggered, so "REST-only work may still run" sends the fan-out straight back
+    /// into the detector that just fired. These are the Projects-v2 mutation paths — the fan-out that
+    /// CAUSES secondary limits in the first place.
+    ///
+    /// One function, so a fourth call site cannot reintroduce it by omission.
+    val ofGraphQlErrors: messages: string list -> IoError option
+
     /// Read `rateLimit { cost remaining }` off a GraphQL response body.
     ///
     /// `None` when the document did not carry it (a mutation) or the body did not parse. It is NOT an

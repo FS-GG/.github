@@ -394,14 +394,11 @@ module Scan =
                         |> Seq.map (fun e -> str e "message" |> Option.defaultValue "(no message)")
                         |> List.ofSeq
 
-                    if messages |> List.exists Budget.isRateLimited then
-                        // `GraphQlBudget` is asserted, not read, and here that is sound: this arm parses a
-                        // GraphQL `errors` array, so the response IS a GraphQL response. The reset stays
-                        // `None` — GitHub reports this shape as HTTP 200 with no rate-limit headers, and
-                        // the body carries no `resetAt`.
-                        Error(RateLimited(GraphQlBudget, None))
-                    else
-                        Error(GraphQlErrors messages)
+                    // Tells a SECONDARY limit from the primary budget (#1666). This site used to call
+                    // `isRateLimited`, which matches both wordings, and named the GraphQL budget for either.
+                    match Budget.ofGraphQlErrors messages with
+                    | Some limited -> Error limited
+                    | None -> Error(GraphQlErrors messages)
 
                 | _ ->
 
