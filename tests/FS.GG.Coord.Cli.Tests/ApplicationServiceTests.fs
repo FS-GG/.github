@@ -1895,27 +1895,41 @@ module ApplicationServiceTests =
                 Some(Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Options.Command))
         |> List.filter (fun c -> Options.renderSupport c <> Options.TextOnly)
 
-    /// The verbs the sweep DRIVES, with the argv that reaches an empty or refusing arm.
+    /// The verbs the sweep DRIVES: the command the row CLAIMS to cover, the argv, and the exit code that
+    /// says the intended arm was actually reached.
     ///
-    /// The board every one of them meets is `emptyQueue ()` — no rows at all — so the read verbs land on
-    /// their EMPTY arm by construction. The four lock verbs are pointed at `#999`, an issue the fixture
-    /// does not serve, so they land on a REFUSAL arm instead: those verbs have no empty outcome to reach,
-    /// and AC 4 names both kinds.
-    let private sweptArms: (Options.Command * string list) list =
-        [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
-          Options.BatchCmd, [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
-          Options.Ready, [ "ready"; "--repo"; "FS.GG.SDD"; "--json" ]
-          Options.Reconcile, [ "reconcile"; "--repo"; "FS.GG.SDD"; "--json" ]
-          Options.LintCmd, [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ]
-          Options.BoardCmd, [ "board"; "--json" ]
-          Options.Who, [ "who"; "--repo"; "FS.GG.SDD"; "--json" ]
-          Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
-          Options.Budget, [ "budget"; "--json" ]
-          Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ]
-          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ]
-          Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ]
-          Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ]
-          Options.SetPaths, [ "set-paths"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ] ]
+    /// The board every one of them meets is `emptyQueue ()` — no rows at all — so the ten read verbs land
+    /// on their EMPTY arm by construction. The four lock verbs are pointed at `#999`, which the fixture
+    /// has no issue for: those verbs have no empty outcome to reach, so they land on a REFUSAL arm
+    /// instead, and AC 4 names both kinds.
+    ///
+    /// THE EXIT CODE IS PINNED BECAUSE THE FOUR REFUSAL ROWS PRINT NOTHING, and "stdout is not prose" is
+    /// satisfied perfectly by a verb that never ran. That is the vacuity the block above rejects for
+    /// `take` (`#1562`'s "an engine that printed nothing on stdout ever would satisfy the assertion"), and
+    /// it applies to a whole row here. The code is what makes "it reached a refusal" an assertion rather
+    /// than an assumption — and it is a per-row constant rather than `<> 0` because the arms differ and
+    /// are worth naming: `claim` posts its marker and then loses its own CAS re-read against a fixture
+    /// whose `GET …/comments` answers `[]` (3, contended), `adopt` finds no expired claim to collect (3),
+    /// `widen`/`set-paths` refuse a lock the worker does not hold (1, #706), and `predicate`'s oracle
+    /// fails closed with no registry (4, no verdict). `take`'s 5 is EX_NONE, #585's "looked, found
+    /// nothing"; the remaining reads are a green empty answer.
+    let private sweptArms: (Options.Command * string list * int) list =
+        [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 5
+          Options.BatchCmd, [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+          Options.Ready, [ "ready"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+          Options.Reconcile, [ "reconcile"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+          Options.LintCmd, [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+          Options.BoardCmd, [ "board"; "--json" ], 0
+          Options.Who, [ "who"; "--repo"; "FS.GG.SDD"; "--json" ], 0
+          Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 0
+          Options.Budget, [ "budget"; "--json" ], 0
+          Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ], 4
+          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
+          Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
+          Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ], 1
+          Options.SetPaths,
+          [ "set-paths"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ],
+          1 ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
@@ -1923,7 +1937,7 @@ module ApplicationServiceTests =
     /// diff instead of costing nothing.
     let private notDriven: (Options.Command * string) list =
         [ Options.Decide,
-          "`Program.fs` `decide` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.render` document, and its Red/NoVerdict arms are `eprint` at a non-zero code"
+          "`Program.fs` `decide` is private to the entry point; audited by reading — under `Json` the SAME `printfn (Snapshot.render …)` runs for all three verdicts and Red/NoVerdict only pick the exit code, so there is no verdict that swaps the document for prose (the eprint-per-verdict projection is `renderText`, which is the Text arm). Its two refusal arms, empty stdin and an unparseable snapshot, are `eprint` at a non-zero code"
           Options.LanesView,
           "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"
           Options.Facts,
@@ -1933,7 +1947,7 @@ module ApplicationServiceTests =
           Options.CommandContractCmd,
           "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
           Options.Issues,
-          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues) and its one failure arm is `fail`, which is stderr at the error's own code" ]
+          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE" ]
 
     /// Drive ONE verb's empty or refusing arm under `--json`, capturing stdout and stderr APART.
     ///
@@ -2020,19 +2034,45 @@ module ApplicationServiceTests =
     let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =
         let failures =
             sweptArms
-            |> List.collect (fun (_, argv) ->
+            |> List.collect (fun (declared, argv, expectedCode) ->
                 let verb = List.head argv
-                let _, out, _ = runJsonArm (emptyQueue ()) argv
+                let parsedCommand = (options argv).Command
+                let code, out, _ = runJsonArm (emptyQueue ()) argv
                 let trimmed = out.Trim()
 
-                if trimmed = "" then
-                    []
-                else
-                    try
-                        (JsonDocument.Parse trimmed).Dispose()
-                        []
-                    with e ->
-                        [ $"%s{verb}: stdout under --json is not one JSON document (%s{e.Message}); stdout was:\n%s{out}" ])
+                let notOneDocument =
+                    if trimmed = "" then
+                        None
+                    else
+                        try
+                            (JsonDocument.Parse trimmed).Dispose()
+                            None
+                        with e ->
+                            Some e.Message
+
+                [
+                  // THE ROW MUST DRIVE THE VERB IT CLAIMS TO COVER. `runJsonArm` dispatches on the argv's
+                  // OWN parse, so without this the `Command` in the row is read by the coverage leg alone
+                  // — and a mis-paired row (`Options.Claim` beside an `adopt` argv) would mark a verb
+                  // covered that nothing ever ran, with both legs green. That is exactly the hole this
+                  // block claims to close.
+                  if parsedCommand <> declared then
+                      yield
+                          $"%s{verb}: the row declares %A{declared} but its argv parses to %A{parsedCommand} — it marks a verb covered that it never drives"
+
+                  // AND IT MUST REACH THE ARM IT WAS WRITTEN FOR. Four of these rows print NOTHING on
+                  // stdout, and "not prose" is satisfied perfectly by a verb that failed earlier than
+                  // intended — so the code is what stops a fixture change quietly moving a row onto some
+                  // other arm while the assertion below keeps passing.
+                  if code <> expectedCode then
+                      yield
+                          $"%s{verb}: exit %d{code}, expected %d{expectedCode} — this row no longer reaches the arm it pins, so its stdout says nothing about that arm"
+
+                  // THE INVARIANT ITSELF: one parseable document, or nothing at all.
+                  match notOneDocument with
+                  | Some message ->
+                      yield $"%s{verb}: stdout under --json is not one JSON document (%s{message}); stdout was:\n%s{out}"
+                  | None -> () ])
 
         Assert.True(
             List.isEmpty failures,
@@ -2047,10 +2087,34 @@ module ApplicationServiceTests =
         // hand-written, so on their own they describe whichever engine their author was looking at. This
         // binds them to the DECLARATION: a verb added to `Command`, or promoted out of `TextOnly`, is in
         // `jsonAdmitting` the moment `renderSupport` says so, and lands here as a named failure.
-        let classified =
-            ((sweptArms |> List.map fst) @ (notDriven |> List.map fst)) |> Set.ofList
-
+        let sweptCommands = sweptArms |> List.map (fun (c, _, _) -> c)
+        let classifiedList = sweptCommands @ (notDriven |> List.map fst)
+        let classified = classifiedList |> Set.ofList
         let population = jsonAdmitting |> Set.ofList
+
+        // NO VERB IS CLASSIFIED TWICE, on `CommandSurfaceTests`' argument for the same guard: `Set.ofList`
+        // over the concatenation SWALLOWS a duplicate, so a verb listed in both `sweptArms` and
+        // `notDriven` — "we drive it" and "we cannot drive it" at once — would satisfy coverage while
+        // being excused from the sweep, and a botched rebase could grow either list without growing the
+        // audit. The set equality below cannot see that; this can.
+        Assert.Equal<Options.Command list>(List.distinct classifiedList, classifiedList)
+
+        // EVERY `Command` CASE IS NULLARY, which is the assumption `jsonAdmitting` is built on: it drops
+        // any case carrying fields, so a future non-nullary `--json` verb would be silently absent from
+        // the population and this leg could not fire on it. That is the one way a verb could still slip
+        // past, and it is cheaper to refuse the shape than to guess at constructing it.
+        let nonNullary =
+            Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Options.Command>
+            |> Array.filter (fun case -> case.GetFields().Length <> 0)
+            |> Array.map (fun case -> case.Name)
+            |> Array.toList
+
+        Assert.True(
+            List.isEmpty nonNullary,
+            "`Command` grew a case with fields, and `jsonAdmitting` silently drops those — so this audit "
+            + "can no longer see every verb. Teach it to construct them before adding one:\n  "
+            + String.concat "\n  " nonNullary
+        )
 
         let unaudited =
             Set.difference population classified |> Set.toList |> List.map (sprintf "%A")
@@ -2075,11 +2139,15 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``.github#1688 the take receipt survives its own sweep — kind:none, and no prose`` () =
-        // NOT A DUPLICATE of the #1525 legs above, and deliberately kept: those pin the DOCUMENT'S KEYS,
-        // this one runs `take` through the SAME fixture the other thirteen verbs go through, so the arm
-        // #1688 was filed about is held to the identical invariant rather than to a bespoke one. If the
-        // sweep's notion of "one document" ever weakened, this is the leg that would keep the original
-        // defect visible.
+        // WHAT THIS ADDS OVER THE #1525 LEG ABOVE IS SMALL, AND SAYING SO IS THE POINT. That leg already
+        // asserts `kind:"none"` and EX_NONE for this same empty board; the only mechanical difference here
+        // is the fixture, and since this argv names its worker explicitly, even the identity scrub cannot
+        // change the outcome. So this is not independent evidence and is not offered as any.
+        //
+        // It is kept as the ANCHOR: the sweep above treats `take` as one row among fourteen and asserts
+        // only "one document", which is a weaker claim than #1688's own arm deserves. This states the
+        // stronger one in the sweep's own fixture, so a future narrowing of what the sweep calls a
+        // document cannot quietly stop covering the verb the item was filed about.
         let code, out, _ =
             runJsonArm (emptyQueue ()) [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
 
