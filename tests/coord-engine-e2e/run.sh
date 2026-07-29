@@ -48,6 +48,10 @@ export FSGG_COORD_OWNER="FS-GG"
 export FSGG_COORD_PROJECT="Coordination"
 CACHE_DIR="$(mktemp -d)"; export FSGG_COORD_CACHE="$CACHE_DIR"  # isolate the scan cache to this run
 export FSGG_COORD_SCAN_TTL_SEC=0              # no caching — every leg reads the fixture
+# Leg 5 owns this variable; every OTHER leg must be blind to it. Without this a maintainer who has
+# `FSGG_CLAIM_LEASE_MIN` exported runs a different test than CI does — and if it is exported MALFORMED,
+# assertions 1-6 fail with messages about scan and decide, naming neither the variable nor the shell.
+unset FSGG_CLAIM_LEASE_MIN
 
 # ---- 1. scan reaches the fixture and emits a well-formed snapshot ----------------------------------
 # The snapshot is scan's STDOUT (the contract); the receipt is its stderr (commentary). Keep them apart —
@@ -140,6 +144,38 @@ if [ "$bad_lease_rc" -ne 0 ] && printf '%s' "$bad_lease_out" | grep -q 'FSGG_CLA
   ok "a malformed FSGG_CLAIM_LEASE_MIN is REFUSED by name, never silently defaulted"
 else
   bad "a malformed FSGG_CLAIM_LEASE_MIN is refused by name" "rc=$bad_lease_rc: $(printf '%s' "$bad_lease_out" | head -c 200)"
+fi
+
+# A NON-POSITIVE value is refused too, and this leg exists to kill a specific mutant: relaxing the
+# guard from `n > 0` to `n >= 0` keeps every assertion above green. A lease of 0 minutes would make
+# every claim instantly reapable — `Snapshot.fs` refuses exactly that on the wire, and the env channel
+# must not be the way round it.
+zero_lease_out="$(FSGG_CLAIM_LEASE_MIN=0 "$ENGINE" scan --repo FS.GG.SDD 2>&1)"
+zero_lease_rc=$?
+if [ "$zero_lease_rc" -ne 0 ] && printf '%s' "$zero_lease_out" | grep -q 'FSGG_CLAIM_LEASE_MIN'; then
+  ok "FSGG_CLAIM_LEASE_MIN=0 is REFUSED — the env channel cannot mint an instantly-reapable lease"
+else
+  bad "FSGG_CLAIM_LEASE_MIN=0 is refused" "rc=$zero_lease_rc: $(printf '%s' "$zero_lease_out" | head -c 200)"
+fi
+
+# WHITESPACE-ONLY is "not configured", not "malformed" — the value an unset shell variable expands to
+# inside a quoted export. It must take the default, not hard-fail every command.
+blank_lease="$(FSGG_CLAIM_LEASE_MIN='   ' "$ENGINE" scan --repo FS.GG.SDD 2>/dev/null)"
+if printf '%s' "$blank_lease" | grep -qE '"leaseMinutes":[[:space:]]*120'; then
+  ok "a whitespace-only FSGG_CLAIM_LEASE_MIN reads as UNSET, not as malformed"
+else
+  bad "a whitespace-only FSGG_CLAIM_LEASE_MIN reads as unset" "$(printf '%s' "$blank_lease" | head -c 200)"
+fi
+
+# The DIAGNOSTIC verbs answer even when the variable is garbage, because a misconfigured shell is
+# exactly when an operator reaches for them — and `scripts/fsgg-coord` probes `--version` to decide
+# whether the tool is restored, so gating it would turn one typo into a restore on every invocation.
+help_rc=0;  FSGG_CLAIM_LEASE_MIN=abc "$ENGINE" --help    >/dev/null 2>&1 || help_rc=$?
+vers_rc=0;  FSGG_CLAIM_LEASE_MIN=abc "$ENGINE" --version >/dev/null 2>&1 || vers_rc=$?
+if [ "$help_rc" -eq 0 ] && [ "$vers_rc" -eq 0 ]; then
+  ok "--help and --version still answer under a malformed FSGG_CLAIM_LEASE_MIN"
+else
+  bad "--help/--version answer under a malformed FSGG_CLAIM_LEASE_MIN" "help_rc=$help_rc vers_rc=$vers_rc"
 fi
 
 # ---- report ----------------------------------------------------------------------------------------

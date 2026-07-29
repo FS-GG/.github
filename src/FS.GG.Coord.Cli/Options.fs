@@ -239,8 +239,10 @@ module Options =
     /// UNSET and EMPTY are not malformed. They are "I did not configure this", and they take the default.
     let private leaseMinutesFromEnv () : Result<int, string> =
         match System.Environment.GetEnvironmentVariable "FSGG_CLAIM_LEASE_MIN" with
-        | null
-        | "" -> Ok DefaultLeaseMinutes
+        // WHITESPACE-ONLY IS UNSET, NOT MALFORMED, AND THE `Trim` BELOW IS WHY THIS ARM SAYS SO. Matching
+        // only `null | ""` here would refuse `export FSGG_CLAIM_LEASE_MIN="$SOMETHING_UNSET "` — empty in
+        // intent, fatal in effect, and refused by a function whose own contract says empty is fine.
+        | v when System.String.IsNullOrWhiteSpace v -> Ok DefaultLeaseMinutes
         | v ->
             match System.Int32.TryParse(v.Trim()) with
             | true, n when n > 0 -> Ok n
@@ -1628,19 +1630,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 
-        // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
-        // out of WHERE this sits rather than from a rule anybody has to remember — the env only ever
-        // seeds `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
-        // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
-        // non-optional default and no record of having been given), so seeding the default is the ONLY
-        // place an env fallback can go without inventing one.
-        //
-        // The refusal is returned from `parse`, so it reaches the operator through the channel every
-        // other bad argument already uses, and no command runs on a lease nobody could read.
-        match leaseMinutesFromEnv () with
-        | Error e -> Error e
-        | Ok envLeaseMinutes ->
-
         let defaults =
             { Command = Decide
               // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
@@ -1652,7 +1641,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Fresh = false
               AllowBacklog = false
               Limit = None
-              LeaseMinutes = envLeaseMinutes
+              LeaseMinutes = DefaultLeaseMinutes
               Args = []
               Worker = None
               Force = false
@@ -1712,6 +1701,20 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         let start (o: Options) =
             { o with Render = defaultRender o.Command }
 
+        // `--help`, `--version` and a bare invocation answer BEFORE the environment is consulted, and
+        // that exemption is load-bearing rather than tidiness.
+        //
+        // A malformed `FSGG_CLAIM_LEASE_MIN` is a MISCONFIGURED SHELL, and these three are the verbs an
+        // operator reaches for to diagnose one. Gating them would make `--help` unreachable to exactly
+        // the person told to go read it — and `usage` does not name this variable, so the refusal would
+        // point at a page that cannot explain it.
+        //
+        // `--version` is worse, and it is not hypothetical: `scripts/fsgg-coord` probes
+        // `dotnet tool run fsgg-coord-engine -- --version` to decide whether the tool is restored. A
+        // typo'd export in one shell profile would fail that probe on EVERY invocation, forcing a full
+        // `dotnet tool restore` each time and — when that restore failed for any unrelated reason —
+        // handing the worker a manifest/feed misdiagnosis for a problem that is a typo. A lease nobody
+        // reads must not be able to break the command that reports which binary you are running.
         match args with
         | []
         | "--help" :: _
@@ -1719,6 +1722,27 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | "--version" :: _ -> Ok(start { defaults with Command = Version })
 
+        | _ ->
+
+        // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
+        // out of WHERE this sits rather than from a rule anybody has to remember — the env only re-seeds
+        // `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
+        // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
+        // non-optional default and no record of having been given), so seeding the default is the ONLY
+        // place an env fallback can go without inventing one.
+        //
+        // The refusal is returned from `parse`, so it reaches the operator through the channel every
+        // other bad argument already uses, and no command that could ACT on a lease runs on one nobody
+        // could read.
+        match leaseMinutesFromEnv () with
+        | Error e -> Error e
+        | Ok envLeaseMinutes ->
+
+        let defaults =
+            { defaults with
+                LeaseMinutes = envLeaseMinutes }
+
+        match args with
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
@@ -1768,3 +1792,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | [ "room" ] -> Error "room needs a subcommand (open)"
 
         | other :: _ -> Error $"unknown command: %s{other}"
+
+        // UNREACHABLE: a bare invocation is answered above, before the environment is consulted. It is
+        // spelled anyway because F# checks each `match` independently, and it is routed to the SAME
+        // answer as the exemption arm rather than to an error — so if that arm's list is ever edited,
+        // the two cannot come to disagree about what a bare `fsgg-coord-engine` means.
+        | [] -> Ok(start { defaults with Command = Help })
