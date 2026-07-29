@@ -20,8 +20,9 @@
 #     (`fs-gg-collision`/`fs-gg-grids`/`fs-gg-line-drawing`/`fs-gg-visibility`) counted once under
 #     their authoritative Rendering owner: 28 unique product rows. The four
 #     migrated rows — `fs-gg-game-core`/`fs-gg-audio`/`fs-gg-persistence`/`fs-gg-model-swap` — moved
-#     BYTE-IDENTICALLY; FS.GG.Rendering STILL ships frozen copies from `--profile game` (two-copies
-#     cost, ADR-0022 §6, retired at P6). The migration also corrected two digests that had drifted from
+#     BYTE-IDENTICALLY. At P6, .github#1862 / FS.GG.Rendering#1147 retired Rendering's second copies;
+#     FS.GG.Game is now their only producer and FS.GG.Game.Skills their delivery package.
+#     The migration also corrected two digests that had drifted from
 #     Rendering's live manifest (Feature 250 / 0.1.67 body changes): `fs-gg-game-core` 87b9c55c…→16fd32b7…
 #     and `fs-gg-model-swap` 68edbe46…→a48df195…. Registry = manifest = bytes for the current set.
 #     2026-07-23 accepted-removal reconcile (.github#1393, Rendering#951/PR #952): retired
@@ -79,56 +80,14 @@
 # flip the row and update the `skill-mirror-verified` / `fsgg-sdd-orchestrator-axis` cross-refs.
 # The flip must NOT precede a green skill-registry-coherence on main (epic .github#266, fails-open class).
 
-# THE `mirrored:` FIELD (.github#658, epic #266) — ADR-0022 §6's frozen-mirror obligation, DECLARED.
+# ADR-0022 §6 RETIREMENT (.github#1862, FS.GG.Rendering#1147): the catalog no longer carries a
+# mirror classification. Rendering removed the second copies, so the former mirror obligation,
+# twin derivation, and byte-comparison findings have no subject and were removed together. Do not
+# reintroduce a same-name or owner-derived replacement; registry rows name one canonical owner/source.
 #
-# `mirrored: true` means "ADR-0022 §6 REQUIRES FS.GG.Rendering to ship a byte-identical copy of this
-# body". It is an OBLIGATION the OWNER asserts, reconciled verbatim from the producer manifest
-# (FS.GG.Game#280 added it) — never an observation that Rendering happens to hold a same-named file.
-# The distinction is the whole subtlety of the field, and getting it wrong is not hypothetical:
-#
-#   * Classify on the OBLIGATION and there are FOUR — the ADR-0022 P4 migrations (`fs-gg-game-core`,
-#     `fs-gg-audio`, `fs-gg-persistence`, `fs-gg-model-swap`), whose bodies Rendering still ships
-#     frozen from `--profile game`.
-#   * Classify on the NAME COLLISION and there are eight, because `fs-gg-collision`/`fs-gg-grids`/
-#     `fs-gg-line-drawing`/`fs-gg-visibility` also exist in both trees — and are under NO such
-#     obligation: they were rewritten against the `.fsi` and DELIBERATELY diverge.
-#     FS.GG.Rendering#541 is carrying that wrong set.
-#
-# ABSENT IS "NOT CLASSIFIED", NOT `false`. `select(.mirrored == true)` reads an absent field as false
-# (`null == true` is false), so a manifest predating the field answers "not mirrored" for EVERY body,
-# confidently, and every real mirror goes unguarded — the trap FS.GG.Game#282 nearly shipped. So the
-# Rows below that carry no `mirrored:` are not asserting "no obligation"; they are rows for which
-# the question does not arise, because FS.GG.Rendering holds no second copy of them. The moment it
-# does, `fsgg-skill-registry-check`'s `mirror-verdict` arm goes RED until the owner declares one:
-# undeclared is not `not mirrored`. Do NOT "tidy" the file by adding `mirrored: false` everywhere —
-# that would manufacture, by hand, exactly the confident default the gate exists to refuse.
-#
-# `schemaVersion` IS 3. THE 1→2 BUMP WAS PAID (ADR-0054 step 2, .github#1230); 2→3 adds the
-# `operator` skill class (ADR-0057) — a `.github`-authored, never-materialized scope (`materializes-when:
-# "false"`), whose rows are reconciled from `.github`'s OWN driver manifest exactly as `driver`'s are.
-# Same publish-before-flip rail (ADR-0037): FS.GG.SDD taught Fsgg.Registry the `operator` token and
-# PUBLISHED FS.GG.SDD.Cli 0.18.x; .github THEN (this flip) bumps this scalar + `skill-registry.version`
-# 2 → 3 and advances the contract-coherence.yml pin 0.17.0 → 0.18.x. See the DRIVER/OPERATOR blocks below.
-#
-# Two schema growths are behind this scalar, both now covered by a validator that KNOWS them:
-#   * `mirrored:` (.github#658) — .github#686 decided that an OPTIONAL, ADDITIVE, back-compatible field
-#     IS schema growth under ADR-0015: the ADR's motivating defect (M5) was additive growth under
-#     "additive tolerance", so "no reader breaks" is the MECHANISM of that defect, not an exemption
-#     from it. That made `schemaVersion` 1 → 2 OWED.
-#   * `scope: driver` + a non-producer `owner: .github` (ADR-0054) — the third skill class, whose
-#     rows are reconciled from `.github`'s OWN producer manifest. See the DRIVER block below.
-#
-# It was UNPAID until now on purpose: the typed validator (Fsgg.Registry, FS.GG.SDD) did not assert
-# over THIS FILE, so a bump would have versioned a schema no validator read and pinned a CLI carrying
-# nothing (the .github#416 ornament). It is paid publish-before-flip (FR-007, ADR-0037), in order:
-#   1. FS.GG.SDD taught Fsgg.Registry the `mirrored` field AND the driver-class vocabulary and
-#      PUBLISHED a CLI carrying both — FS.GG.SDD.Cli 0.17.0 (SDD#595);
-#   2. .github THEN (this PR) bumped this scalar + `skill-registry.version` 1 → 2 in
-#      registry/dependencies.yml and advanced the contract-coherence.yml FS.GG.SDD.Cli pin 0.13.0 →
-#      0.17.0. Per ADR-0037 §3 the step-1 CLI still ACCEPTS the document as it stood (schemaVersion 1
-#      + `mirrored`), verified before this flip; the new rules bind only against this declared `2`.
-# ADR-0015 §3's "same PR" is unsatisfiable — this document lives in .github and its validator in
-# FS.GG.SDD, no PR spans two repos — which ADR-0037 (.github#689) amends to the two-PR order above.
+# `schemaVersion` remains 3. Version 2 also introduced `scope: driver`; version 3 added `scope:
+# operator`. Removing the optional mirror projection does not change either active vocabulary, and
+# the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
 updated: "2026-07-29"
 
@@ -197,23 +156,21 @@ skills:
   - { id: fs-gg-visibility,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-visibility/SKILL.md, sha256: 53f2657f1463f43aab247691d49e36ce7856d8ef75a8658d82b734f0d65226f4, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-symbol-design — same Rendering-owned game-sim class/predicate as the four above. Reconciled
   # verbatim from FS.GG.Rendering's producer manifest by `--write` (.github#299) and RE-HOMED here from
-  # the appended tail. No `mirrored:` — Rendering OWNS it, so the obligation question does not arise
-  # (the manifest declares none; "absent is not classified", per the `mirrored:` note above).
+  # the appended tail.
   - { id: fs-gg-symbol-design,    scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbol-design/SKILL.md, sha256: 1a28af97d907265344ce65a5458de2f74395c29be347fd16e5404908aa98803e, materializes-when: "profile in [game, sample-pack]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
   # CI-drift-guarded in FS.GG.Game gate.yml) — registry = manifest = bytes. `source` is the in-Game
   # canonical path; `sha256` is byte-equal to `sha256sum FS.GG.Game/template/product-skills/<id>/SKILL.md`.
-  # The bodies are BYTE-IDENTICAL to the copies FS.GG.Rendering STILL ships from its FROZEN
-  # `dotnet new fs-gg-ui --profile game` (the accepted two-copies cost during the extraction, ADR-0022
-  # §6; retired by the P6 provider epic). This reconcile also CORRECTS two digests that had drifted from
+  # Rendering's former frozen copies were retired at P6 (.github#1862, Rendering#1147); these rows now
+  # name the only producer bytes, delivered by FS.GG.Game.Skills. This reconcile also CORRECTS two digests that had drifted from
   # Rendering's live manifest since the 2026-07-05 snapshot (bodies changed in Rendering Feature 250 /
   # 0.1.67, never reconciled): fs-gg-game-core 87b9c55c…→16fd32b7… and fs-gg-model-swap 68edbe46…→a48df195….
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 18 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: de45c8fcfb5510d6afa5ef584516b4938011a8207844b7eb81112119d0d02e45, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: de45c8fcfb5510d6afa5ef584516b4938011a8207844b7eb81112119d0d02e45, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
@@ -223,40 +180,27 @@ skills:
   # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
   # the historical divergence between retained `fs-gg-feedback-report` and retired
   # `fs-gg-feedback-capture`.)
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e9fff88a3be86c2d95829357ffc180e3c53c18f2872b4f84e792de5a24f73bb7, mirrored: false, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration:
-  # they were authored in FS.GG.Game and have NO FS.GG.Rendering counterpart, so no frozen mirror
-  # exists for them and the `frozen-mirror` arm correctly derives none. Verified against Rendering's
-  # live tree (.github#486): none of these four appears in Rendering's current
-  # `template/product-skills/` set. Do NOT "fix" that absence by vendoring them into Rendering — it
-  # would manufacture a two-copies obligation ADR-0022 §6 never imposed. (FS.GG.Rendering#505 asked
-  # for exactly that, for ballistics + effects, and is a no-op; see the note there.) The
-  # `frozen-mirror` arm of `fsgg-skill-registry-check` is the ONLY thing that reads `owner:` to look
-  # for a twin, and it derives none for these four. `skill-union-assert.sh` has no twin concept at all
-  # — it never reads this registry (it asserts the byte-identical union across a scaffold's skill
-  # roots), so it needed no change to tolerate them (.github#486 checked; #311 had asked).
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e9fff88a3be86c2d95829357ffc180e3c53c18f2872b4f84e792de5a24f73bb7, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
+  # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration;
+  # they were authored in FS.GG.Game and have always had one producer.
   #
   # ballistics shipped 2026-07-10 (Game#40, PR #58); ai / effects / physics were declared by FS.GG.Game's
   # manifest and never flipped here at all — the `declared-completeness` arm (.github#289) caught all
   # four. All reconciled verbatim from FS.GG.Game's producer manifest by `--write`, never hand-authored.
-  - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612e642ed57a2ea6857d68236c91219698674e1467a09d22bd00ae0e3abf6098, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612e642ed57a2ea6857d68236c91219698674e1467a09d22bd00ae0e3abf6098, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-playtest — the SAME game-originated class as the four above: authored in FS.GG.Game (WI-2,
-  # FS.GG.Game#421), NO FS.GG.Rendering counterpart, so `mirrored: false` and the `frozen-mirror` arm
-  # derives no twin. Reconciled verbatim from FS.GG.Game's producer manifest by `--write` (.github#299)
-  # and RE-HOMED here from the appended tail. FS.GG.Rendering#923 (cross-repo #1194) requested this row
-  # as `mirrored: true`; that is REFUSED — the owner's manifest declares no obligation, and hand-forging
-  # one is exactly the FS.GG.Rendering#505 trap. If #923 ships a body it must declare it `NoCounterpart`
-  # in scripts/FrozenMirrorVerdict.fs (as it does for ballistics/ai/effects/physics), not flip this byte.
-  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: f070f0719dde93b55d1a41ea8aa881b90e41cd20a20e558771d87ef3fe28f642, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  # FS.GG.Game#421), with one producer. Reconciled verbatim from FS.GG.Game's producer manifest by
+  # `--write` (.github#299) and RE-HOMED here from the appended tail.
+  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: f070f0719dde93b55d1a41ea8aa881b90e41cd20a20e558771d87ef3fe28f642, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-mapcraft supersedes the short-lived fs-gg-mapgen id, which was retired before release.
   # Reconciled verbatim from fs-gg-game's producer manifest by `--write`
-  # (.github#299/.github#1200); `mirrored: false` is the manifest's declared verdict.
-  - { id: fs-gg-mapcraft,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapcraft/SKILL.md, sha256: 73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  # (.github#299/.github#1200).
+  - { id: fs-gg-mapcraft,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapcraft/SKILL.md, sha256: 73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 8e35f29eff51fca7886d4a3bc88cf6d2ab7a2c7108161476d04a54a0d4521510, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack" }
   # `fs-gg-feedback-report` is the retained report-only half of the former feedback pair. Its predicate

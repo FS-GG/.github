@@ -2,8 +2,7 @@
 # Fixture for scripts/fsgg-skill-registry-check — the cross-repo guard on `registry = manifest =
 # bytes` (.github#247, ADR-0017). Proves the tool catches the three drift shapes that actually bit
 # us, off a temp registry + temp producer checkouts: a stale `sha256` (fs-gg-audio, ADR-0024 step 4),
-# a `source:` that no longer exists (a renamed/relocated skill), and a frozen mirror that has
-# diverged from the canonical body (fs-gg-game-core — the mirror was RIGHT and the source stale).
+# a `source:` that no longer exists (a renamed/relocated skill), and a stale predicate.
 # Also proves --write reconciles only the stale digest, leaves the hand-aligned YAML otherwise
 # byte-identical, and refuses to claim success while a non-digest finding remains.
 #
@@ -13,7 +12,7 @@
 # `--write` appends it; that a producer whose manifest VANISHED fails closed rather than silently
 # dropping every skill it declares; that an entry with no `supplied-by` is reported and NOT appended
 # (no invented `source:`); that a producer the registry names nowhere is still read; and that a
-# non-producer checkout (the frozen mirror) is not mistaken for one.
+# non-producer checkout is not mistaken for one.
 # Pure-stdlib + PyYAML; no network. Mirrors tests/surface-impact/run.sh in shape.
 
 set -euo pipefail
@@ -29,14 +28,11 @@ trap 'rm -rf "$WORK"' EXIT
 ROOT="$WORK/repos"
 mkdir -p "$ROOT/Producer.One/skills/good" \
          "$ROOT/Producer.One/skills/stale" \
-         "$ROOT/Producer.Two/skills/owned" \
-         "$ROOT/Mirror.Repo/template/product-skills/owned"
+         "$ROOT/Producer.Two/skills/owned"
 
 printf 'good body\n'   > "$ROOT/Producer.One/skills/good/SKILL.md"
 printf 'stale body\n'  > "$ROOT/Producer.One/skills/stale/SKILL.md"
 printf 'owned body\n'  > "$ROOT/Producer.Two/skills/owned/SKILL.md"
-# The frozen mirror starts byte-identical to its canonical body.
-printf 'owned body\n'  > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
 
 sha() { python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$1"; }
 
@@ -46,9 +42,6 @@ ACTUAL_STALE="$(sha "$ROOT/Producer.One/skills/stale/SKILL.md")"
 WRONG="deadbeef00000000000000000000000000000000000000000000000000000000"
 
 REG="$WORK/skills.yml"
-# `owned` carries `mirrored: true` (.github#658): Mirror.Repo ships a SECOND copy of it, and a body
-# that exists twice is one somebody must classify. The verdict is the ADR-0022 §6 OBLIGATION, declared
-# by the owner and reconciled onto the row — not an observation that a same-named file exists.
 write_registry() {
   cat > "$REG" <<YAML
 schemaVersion: 1
@@ -56,7 +49,7 @@ updated: "2026-07-08"
 skills:
   - { id: good,    scope: process, owner: producer-one, source: Producer.One/skills/good/SKILL.md,    sha256: $GOOD,  materializes-when: always }
   - { id: stale,   scope: process, owner: producer-one, source: Producer.One/skills/stale/SKILL.md,   sha256: $WRONG, materializes-when: always }
-  - { id: owned,   scope: product, owner: fs-gg-game,   source: Producer.Two/skills/owned/SKILL.md,   sha256: $OWNED, mirrored: true, materializes-when: "profile in [game]" }
+  - { id: owned,   scope: product, owner: fs-gg-game,   source: Producer.Two/skills/owned/SKILL.md,   sha256: $OWNED, materializes-when: "profile in [game]" }
 YAML
 }
 write_registry
@@ -76,45 +69,14 @@ write_manifests() {
 JSON
   cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "owned", "scope": "product", "sha256": "$OWNED", "mirrored": true, "supplied-by": "skills/owned/", "materializes-when": "profile in [game]" }${2:+,}
+  { "id": "owned", "scope": "product", "sha256": "$OWNED", "supplied-by": "skills/owned/", "materializes-when": "profile in [game]" }${2:+,}
   ${2:-}
 ] }
 JSON
 }
 write_manifests
 
-# Producer.Two's manifest with a chosen mirror verdict for `owned` — `true`, `false`, a malformed
-# value, or `omit` for a manifest that states none. REPLACES the manifest, because `write_manifests`'s
-# $2 APPENDS: passing an `owned` entry there leaves TWO of them, and the tool would then be answering a
-# duplicate-id contradiction rather than the question under test. (That is not hypothetical — the first
-# draft of cases 44-51 spliced, and the collapse it accidentally exercised was a real bug in the tool.
-# It is now case 52, on purpose.)
-write_two_owned_mirror() {
-  local verdict=""
-  [ "$1" = "omit" ] || verdict="\"mirrored\": $1, "
-  cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
-{ "schemaVersion": 1, "skills": [
-  { "id": "owned", "scope": "product", "sha256": "${2:-$OWNED}", ${verdict}"supplied-by": "skills/owned/", "materializes-when": "profile in [game]" }
-] }
-JSON
-}
-
-# The tool derives the frozen-mirror path from FS.GG.Rendering; point it at our stand-in.
-run() { python3 - "$@" <<'PY'
-import runpy, sys, os
-tool = os.environ["TOOL"]
-sys.argv = [tool] + sys.argv[1:]
-import importlib.util
-spec = importlib.util.spec_from_loader("t", loader=None)
-src = open(tool).read().replace('FROZEN_MIRROR_REPO = "FS.GG.Rendering"', 'FROZEN_MIRROR_REPO = "Mirror.Repo"')
-g = {"__name__": "__main__", "__file__": tool}
-try:
-    exec(compile(src, tool, "exec"), g)
-except SystemExit as e:
-    sys.exit(e.code or 0)
-PY
-}
-export TOOL
+run() { python3 "$TOOL" "$@"; }
 
 echo "== 1. a stale sha256 is reported, exit 1 =="
 out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
@@ -141,42 +103,6 @@ out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
 grep -q "\[source-exists\] good" <<<"$out" || { echo "FAIL: missing source not reported"; echo "$out"; exit 1; }
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write should exit 1 while a source is missing"; exit 1; }
 mv "$ROOT/Producer.One/skills/good/RENAMED.md" "$ROOT/Producer.One/skills/good/SKILL.md"
-echo "   ok"
-
-echo "== 4. a diverged frozen mirror is reported (the fs-gg-game-core shape) =="
-write_registry
-printf 'owned body DRIFTED\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: mirror divergence not reported"; echo "$out"; exit 1; }
-echo "   ok"
-
-echo "== 5. a VANISHED frozen mirror is a finding — retiring it means FLIPPING THE VERDICT (#658) =="
-# THIS CASE USED TO ASSERT THE OPPOSITE, and the opposite was the fail-open. It removed the copy and
-# demanded SILENCE: "a row whose frozen copy has been retired simply has none." But the tool could not
-# tell a RETIRED mirror from a DROPPED one — it compared only `if Rendering holds a file`, so an
-# obligation whose copy had been deleted, renamed, or never vendored matched nothing and reported
-# GREEN. That is a missing subject reporting green (epic #266) inside the arm written to catch it, and
-# it is green on the REAL registry today: delete FS.GG.Rendering's fs-gg-audio copy on `main` and the
-# check still says "coherent".
-#
-# The verdict is what separates the two, which is the whole point of declaring it. A mirror is retired
-# when the OWNER says it is (`mirrored: false`, the ADR-0022 P6 retirement) — not when a file goes
-# missing behind the owner's back.
-# NOTE: the run still exits 1 (the `stale` row is deliberately stale), so assert on the finding, not
-# on the overall exit code.
-rm "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: a live obligation with NO copy reported green — the #658 fail-open"; echo "$out"; exit 1; }
-grep -q "there is NONE" <<<"$out" || { echo "FAIL: the finding does not say the copy is missing"; echo "$out"; exit 1; }
-
-# ...and the RETIREMENT path: the owner flips the verdict, the copy goes, and the gate is quiet.
-write_two_owned_mirror false
-sed -i 's/\(id: owned,.*\) mirrored: true,/\1 mirrored: false,/' "$REG"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\]" <<<"$out" && { echo "FAIL: a properly retired mirror still reported"; echo "$out"; exit 1; }
-grep -q "\[mirror-" <<<"$out" && { echo "FAIL: a retired mirror left a mirror finding behind"; echo "$out"; exit 1; }
-printf 'owned body\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-write_manifests
 echo "   ok"
 
 echo "== 6. a BOM never enters the digest =="
@@ -251,7 +177,7 @@ out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
 grep -q "\[manifest-found\] Producer.One" <<<"$out" || { echo "FAIL: unreadable manifest not reported"; echo "$out"; exit 1; }
 echo "   ok"
 
-echo "== 13. a producer the registry names NOWHERE is still read; the frozen mirror is not a producer =="
+echo "== 13. a producer the registry names NOWHERE is still read; an unrelated checkout is not =="
 write_registry
 write_manifests
 # Producer.Three has no row pointing at it, so a producer set derived from `source:` alone cannot
@@ -264,11 +190,12 @@ cat > "$ROOT/Producer.Three/template/skill-manifest/skill-manifest.json" <<JSON
   { "id": "stranger", "scope": "product", "sha256": "$STRANGER", "supplied-by": "skills/stranger/" }
 ] }
 JSON
+mkdir -p "$ROOT/Unrelated.Repo"
 out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
 grep -q "\[declared-completeness\] stranger" <<<"$out" || { echo "FAIL: unnamed producer not read"; echo "$out"; exit 1; }
-# Mirror.Repo carries no manifest and is named by no `source:` — it is not a producer, so its
+# Unrelated.Repo carries no manifest and is named by no `source:` — it is not a producer, so its
 # absence of a manifest must NOT be reported.
-grep -q "\[manifest-found\] Mirror.Repo" <<<"$out" && { echo "FAIL: frozen mirror mistaken for a producer"; exit 1; }
+grep -q "\[manifest-found\] Unrelated.Repo" <<<"$out" && { echo "FAIL: unrelated checkout mistaken for a producer"; exit 1; }
 # `always` is written as a bare token, never quoted — the ADR-0017 default round-trips.
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append stranger"; exit 1; }
 # Scope the assertion to the APPENDED row: `good`/`stale` already end `materializes-when: always }`,
@@ -280,8 +207,8 @@ echo "   ok"
 
 echo "== 14. a skill declared by TWO producers is reported, never attributed by sort order =="
 write_registry
-# The frozen-mirror shape: the alphabetically FIRST repo is the copy, not the owner. Guessing would
-# write `owner: producer-one` and a `source:` pointing at the mirror.
+# The alphabetically first declarer is not necessarily the owner. Guessing would write
+# `owner: producer-one` and a source pointing at whichever checkout sorts first.
 DUP='{ "id": "dup", "scope": "product", "sha256": "'"$GOOD"'", "supplied-by": "skills/good/" }'
 write_manifests "$DUP" "$DUP"
 out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
@@ -326,7 +253,7 @@ echo "   ok"
 write_two_owned_when() {
   cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "owned", "scope": "product", "sha256": "$OWNED", "mirrored": true, "supplied-by": "skills/owned/", "materializes-when": $1 }
+  { "id": "owned", "scope": "product", "sha256": "$OWNED", "supplied-by": "skills/owned/", "materializes-when": $1 }
 ] }
 JSON
 }
@@ -389,14 +316,14 @@ run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FA
 grep -q 'id: owned.*materializes-when: "profile in \[game\]"' "$REG" || { echo "FAIL: --write changed a row it cannot reconcile"; grep 'id: owned' "$REG"; exit 1; }
 echo "   ok"
 
-echo "== 22. the owning producer's manifest wins over a frozen mirror's re-declaration =="
+echo "== 22. the owning producer's manifest wins over a non-owner's re-declaration =="
 write_registry
 # `good` is owned by producer-one and declared by Producer.One (always). Producer.Two re-declares it
-# with a different predicate — the frozen-mirror shape. `owner:` says Producer.One's word is law, so
-# the mirror's disagreement must NOT be reported against the row.
+# with a different predicate. `owner:` says Producer.One's word is law, so the non-owner's
+# disagreement must NOT be reported against the row.
 write_manifests "" '{ "id": "good", "scope": "process", "sha256": "'"$GOOD"'", "supplied-by": "skills/good/", "materializes-when": "profile in [game]" }'
 out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[predicate-matches\] good" <<<"$out" && { echo "FAIL: a mirror's predicate overrode the owner's"; echo "$out"; exit 1; }
+grep -q "\[predicate-matches\] good" <<<"$out" && { echo "FAIL: a non-owner's predicate overrode the owner's"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 23. normalization never reaches inside a quoted string literal =="
@@ -422,7 +349,7 @@ write_registry
 write_manifests
 # Only `owned` carries a quoted predicate — `good`/`stale` end `materializes-when: always }` — so this
 # strips the field from that row alone. (Anchored on the predicate, not on the whole row: the row's
-# field list grew a `mirrored:` in #658, and a shape-hardcoded sed silently matches nothing.)
+# field list may grow, and a shape-hardcoded sed can silently match nothing.)
 sed -i 's|, materializes-when: "profile in \[game\]" }| }|' "$REG"
 grep -q 'id: owned.*materializes-when' "$REG" && { echo "FAIL: fixture could not strip the field"; grep 'id: owned' "$REG"; exit 1; }
 out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
@@ -806,7 +733,7 @@ grep -q "settled=true" "$WORK/out.txt" || { echo "FAIL: settled!=true on a coher
 # make an obsolete snapshot any less obsolete. The old gate refused here, forever, and that is the bug.
 cat > "$WORK/f.json" <<'JSON'
 {"findings": [
-  {"check": "frozen-mirror", "id": "fs-gg-persistence", "detail": "mirror is not byte-identical to the canonical body"}
+  {"check": "source-exists", "id": "fs-gg-persistence", "detail": "source path does not exist"}
 ]}
 JSON
 gate "$WORK/f.json" > "$WORK/out.txt" || { echo "FAIL: an outstanding judgement case must NOT block the retire (#537)"; cat "$WORK/why.txt"; exit 1; }
@@ -850,7 +777,7 @@ grep -qi "did not take" "$WORK/why.txt" || { echo "FAIL: a failed write was not 
 # (f) A judgement case NEXT TO a mechanical one still refuses — (b) must not be a blanket amnesty.
 cat > "$WORK/f.json" <<'JSON'
 {"findings": [
-  {"check": "frozen-mirror",  "id": "fs-gg-persistence", "detail": "mirror diverged"},
+  {"check": "source-exists",   "id": "fs-gg-persistence", "detail": "source path does not exist"},
   {"check": "digest-matches", "id": "fs-gg-elmish",      "detail": "stale digest"}
 ]}
 JSON
@@ -878,10 +805,9 @@ echo "   ok"
 # THE BASELINE VERDICT (#422) — a PR is judged on what IT did, not on whether the world is perfect.
 # ==================================================================================================
 # The findings fall into two classes, and `--write` already knows the difference: MECHANICAL ones it
-# reconciles (a stale sha256, a diverged predicate) and JUDGEMENT ones it refuses (a vanished source; a
-# frozen mirror the canonical has moved past; two producers contradicting each other, #295). A judgement
-# case CANNOT be fixed from this repo — the mirror lives in another one — so once it exists it stands
-# until a human lands a multi-repo change.
+# reconciles (a stale sha256, a diverged predicate) and JUDGEMENT ones it refuses (a vanished source or
+# two producers contradicting each other, #295). A judgement case cannot be inferred safely, so once it
+# exists it stands until a human supplies the missing fact.
 #
 # With one all-or-nothing verdict, that standing red sat on the autofix bot's OWN PR and failed it for
 # the findings the bot had correctly refused to touch. The bot ran daily, reconciled the digests, opened
@@ -890,17 +816,17 @@ echo "   ok"
 # gate meant to catch that.
 write_registry
 write_manifests
-printf 'owned body DRIFTED\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"   # the judgement case
-cp "$REG" "$WORK/base.yml"          # the merge base: a stale digest AND a diverged mirror
+mv "$ROOT/Producer.One/skills/good/SKILL.md" "$ROOT/Producer.One/skills/good/RENAMED.md"
+cp "$REG" "$WORK/base.yml"          # the merge base: a stale digest AND a vanished source
 
 echo "== 33. WITHOUT a baseline the verdict is ABSOLUTE — main and the schedule stay red =="
 run --registry "$REG" --repos-root "$ROOT" >/dev/null 2>&1 && { echo "FAIL: an absolute run must exit 1"; exit 1; }
 out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: the standing mirror divergence must stay visible"; echo "$out"; exit 1; }
+grep -q "\[source-exists\] good" <<<"$out" || { echo "FAIL: the standing missing source must stay visible"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 34. the bot's PR: it fixed what it could, and the judgement case does NOT fail it =="
-# Exactly the autofix's move: --write reconciles the stale digest and refuses the mirror.
+# Exactly the autofix's move: --write reconciles the stale digest and refuses to invent a source.
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 || true
 grep -q "sha256: $ACTUAL_STALE" "$REG" || { echo "FAIL: --write did not reconcile the stale digest"; exit 1; }
 out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" || true)"
@@ -910,20 +836,20 @@ echo "   ok"
 
 echo "== 35. ...and the pre-existing finding is REPORTED, never hidden =="
 grep -q "PRE-EXISTING" <<<"$out" || { echo "FAIL: the inherited finding must be printed"; echo "$out"; exit 1; }
-grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: it must name the finding it is not failing on"; echo "$out"; exit 1; }
+grep -q "\[source-exists\] good" <<<"$out" || { echo "FAIL: it must name the finding it is not failing on"; echo "$out"; exit 1; }
 grep -qi "main" <<<"$out" || { echo "FAIL: it must say main's own run stays RED on it"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 36. A PRE-EXISTING FINDING MAY NOT LAUNDER A NEW ONE — the fail-open this must not become =="
 # The whole risk of a baseline gate: that it becomes a way to smuggle a fresh break in behind a standing
-# one. A NEW finding on a DIFFERENT row must still fail, with the mirror divergence still inherited.
+# one. A NEW finding on a DIFFERENT row must still fail, with the missing source still inherited.
 write_registry                       # `stale` is wrong again — but it is wrong on the BASE too
-sed -i "s|sha256: $GOOD,|sha256: $WRONG,|" "$REG"   # ...and now `good` is wrong, which the base was NOT
+sed -i "s|sha256: $OWNED,|sha256: $WRONG,|" "$REG"  # ...and now `owned` is wrong, which the base was NOT
 out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" || true)"
 run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" >/dev/null 2>&1 \
   && { echo "FAIL: a NEWLY broken row must fail the PR even behind a standing judgement case"; echo "$out"; exit 1; }
 grep -q "introduced by this change" <<<"$out" || { echo "FAIL: the new finding must be named as introduced"; echo "$out"; exit 1; }
-grep -q "\[digest-matches\] good" <<<"$out" || { echo "FAIL: the newly-broken row must be the one reported"; echo "$out"; exit 1; }
+grep -q "\[digest-matches\] owned" <<<"$out" || { echo "FAIL: the newly-broken row must be the one reported"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 37. an UNREADABLE baseline is refused, never treated as an empty one =="
@@ -942,7 +868,7 @@ import json, sys
 d = json.loads(sys.argv[1])
 inh = {(f["check"], f["id"]) for f in d["inherited"]}
 intro = {(f["check"], f["id"]) for f in d["introduced"]}
-assert ("frozen-mirror", "owned") in inh, f"mirror divergence should be inherited: {d}"
+assert ("source-exists", "good") in inh, f"missing source should be inherited: {d}"
 assert ("digest-matches", "stale") in inh, f"the stale row is stale on the base too: {d}"
 assert not intro, f"this registry introduces nothing new: {intro}"
 PYJSON
@@ -965,6 +891,7 @@ echo "== 40. A BLINDED read VOIDS the baseline — it may not be inherited and f
 # gate that exists to catch it.
 write_registry
 write_manifests
+mv "$ROOT/Producer.One/skills/good/RENAMED.md" "$ROOT/Producer.One/skills/good/SKILL.md"
 cp "$REG" "$WORK/blind-base.yml"
 printf 'not json at all\n' > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json"   # blind us
 out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/blind-base.yml" 2>&1 || true)"
@@ -1034,290 +961,7 @@ echo "== 43. the merge gate lives in the ENGINE, not here (#737) =="
 echo "   ok (the truth table moved to the engine's corpus; the wiring is asserted above)"
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
-# Cases 44-51: THE MIRROR VERDICT (.github#658, epic #266).
-#
-# There were THREE readings of "which skills are frozen mirrors" — FS.GG.Game's manifest (a declared
-# `mirrored` boolean, Game#280), FS.GG.Rendering's `check-frozen-mirrors.fsx` (derived from this
-# registry's `owner:`), and its `check-skill-refs.sh` (a hardcoded list) — and NOTHING asserted they
-# agree. They agreed on four. Nothing MADE them, and the drift is fail-open in all three: a body that
-# becomes a mirror and is declared nowhere reads as "not mirrored" everywhere, so bare `[[refs]]` in
-# it stay legal and it dangles in the mirror with both repos' gates green (Game#273 / Rendering#714).
-#
-# `.github` is the only reader that sees every producer tree, so the readings can only be held
-# together here. These cases pin the two ways that could still have failed open.
-restore_mirror() {
-  write_registry
-  write_manifests
-  printf 'owned body\n' > "$ROOT/Producer.Two/skills/owned/SKILL.md"
-  mkdir -p "$ROOT/Mirror.Repo/template/product-skills/owned"
-  printf 'owned body\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-}
-
-echo "== 44. A TWIN NOBODY CLASSIFIED IS RED — undeclared is not \`not mirrored\` (#658) =="
-# THE headline fail-open. Strip the verdict from BOTH readings: the manifest stops declaring it and
-# the row stops carrying it. A body still exists TWICE — Producer.Two owns it, Mirror.Repo ships a
-# copy — and now nothing anywhere says whether the two are obliged to agree.
-#
-# The pre-#658 tool was structurally unable to notice: it had no concept of a verdict, so "nobody
-# said" and "somebody said no" were the same state, and it simply byte-compared whatever file it
-# found. The body nobody classified is, by construction, the body nobody thought about — which is
-# precisely the body somebody just mirrored.
-restore_mirror
-write_two_owned_mirror omit
-sed -i 's/\(id: owned,.*\) mirrored: true,/\1/' "$REG"
-grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: fixture could not strip the verdict"; exit 1; }
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: an unclassified twin reported green — THE #658 fail-open"; echo "$out"; exit 1; }
-grep -q "UNDECLARED IS NOT" <<<"$out" || { echo "FAIL: the finding does not name the defaulting bug"; echo "$out"; exit 1; }
-# ...and `--write` must NOT resolve it. Classifying a body nobody classified is the guess this whole
-# check exists to refuse — the tool would be inventing the very default it is here to reject.
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while a twin is unclassified"; exit 1; }
-grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: --write GUESSED a mirror verdict"; grep 'id: owned' "$REG"; exit 1; }
-echo "   ok"
-
-echo "== 45. a body with NO twin needs no verdict — the check must not become noise =="
-# The converse, and it is what keeps case 44 meaningful. `good`/`stale` have no copy in Mirror.Repo,
-# so there is no question to answer and demanding `mirrored: false` on them would be pure ceremony —
-# the kind that teaches people to type `false` without reading. Silence is only red where a twin makes
-# it load-bearing.
-restore_mirror
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"   # exits 1 on the `stale` digest
-grep -q "\[mirror-verdict\] good"  <<<"$out" && { echo "FAIL: demanded a verdict from a body with no twin"; echo "$out"; exit 1; }
-grep -q "\[mirror-verdict\] stale" <<<"$out" && { echo "FAIL: demanded a verdict from a body with no twin"; echo "$out"; exit 1; }
-echo "   ok"
-
-echo "== 46. THE PRE-#280 MANIFEST: a silent manifest may not un-say what the registry knows =="
-# `select(.mirrored == true)` reads a row with NO `mirrored` field as false, because `null == true` is
-# false. So a manifest that predates the field — a stale artifact, a bad merge, a hand-edit — answers
-# "not mirrored" for EVERY body, confidently, and every real mirror goes unguarded. That nearly
-# shipped in FS.GG.Game#282.
-#
-# Here the manifest goes silent while the registry still declares the obligation. The tempting read is
-# "the registry drifted, reconcile it down to false". It is the opposite: the PRODUCER regressed, and
-# `--write` reconciling the silence would destroy the last copy of the verdict.
-restore_mirror
-write_two_owned_mirror omit
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: a manifest that went silent was believed"; echo "$out"; exit 1; }
-grep -q "does not SAY does not KNOW" <<<"$out" || { echo "FAIL: the finding does not name the trap"; echo "$out"; exit 1; }
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 on a silent manifest"; exit 1; }
-grep -q 'id: owned.*mirrored: true' "$REG" || { echo "FAIL: --write DROPPED the registry's verdict to match a silence"; grep 'id: owned' "$REG"; exit 1; }
-echo "   ok"
-
-echo "== 47. a FLIPPED verdict is a pure value rewrite — --write reconciles it (the P6 retirement) =="
-# The one mirror finding that IS mechanical: the owner states a verdict, the registry disagrees, and
-# the manifest's word is law (registry = manifest = bytes). This is the shape the ADR-0022 P6 mirror
-# retirement will arrive in, so the bot must be able to land it unattended.
-restore_mirror
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-# Clear the deliberately-stale `stale` digest first (as cases 2 and 18 do), so the verdict is the
-# registry's ONLY defect and the byte-preservation assertion below means what it says.
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null
-write_two_owned_mirror false
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-matches\] owned" <<<"$out" || { echo "FAIL: a flipped verdict not reported"; echo "$out"; exit 1; }
-cp "$REG" "$WORK/before-mirror.yml"
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null
-grep -q 'id: owned.*mirrored: false' "$REG" || { echo "FAIL: --write did not reconcile the verdict"; grep 'id: owned' "$REG"; exit 1; }
-# ONE value, nothing else: the hand-aligned YAML is the file's whole readability budget.
-[ "$(diff "$WORK/before-mirror.yml" "$REG" | grep -c '^[<>]')" -eq 2 ] \
-  || { echo "FAIL: --write touched more than the one verdict"; diff "$WORK/before-mirror.yml" "$REG"; exit 1; }
-run --registry "$REG" --repos-root "$ROOT" >/dev/null || { echo "FAIL: not coherent after --write"; exit 1; }
-echo "   ok"
-
-echo "== 48. --write APPENDS a new row carrying the manifest's verdict, and NEVER defaults it =="
-# A new row is exactly where the undeclared-mirror fail-open would enter. An appended row takes the
-# verdict verbatim when the manifest states one, and arrives with NO `mirrored:` field when it does
-# not — an absent field is the honest encoding of "not classified", and writing `false` there would be
-# the tool inventing the default it exists to refuse.
-restore_mirror
-mkdir -p "$ROOT/Producer.Two/skills/fresh" "$ROOT/Producer.Two/skills/unsaid"
-printf 'fresh body\n'  > "$ROOT/Producer.Two/skills/fresh/SKILL.md"
-printf 'unsaid body\n' > "$ROOT/Producer.Two/skills/unsaid/SKILL.md"
-FRESH="$(sha "$ROOT/Producer.Two/skills/fresh/SKILL.md")"
-UNSAID="$(sha "$ROOT/Producer.Two/skills/unsaid/SKILL.md")"
-write_manifests "" '{ "id": "fresh", "scope": "product", "sha256": "'"$FRESH"'", "mirrored": true, "supplied-by": "skills/fresh/", "materializes-when": "always" },
-  { "id": "unsaid", "scope": "product", "sha256": "'"$UNSAID"'", "supplied-by": "skills/unsaid/", "materializes-when": "always" }'
-# `fresh` declares an obligation, so Mirror.Repo must actually hold the copy — otherwise the appended
-# row is correctly red for a DIFFERENT reason (case 5), and this case would pass by accident.
-mkdir -p "$ROOT/Mirror.Repo/template/product-skills/fresh"
-printf 'fresh body\n' > "$ROOT/Mirror.Repo/template/product-skills/fresh/SKILL.md"
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append both rows"; cat "$REG"; exit 1; }
-grep "id: fresh," "$REG"  | grep -q "mirrored: true,"  || { echo "FAIL: appended row lost the manifest's verdict"; grep "id: fresh" "$REG"; exit 1; }
-grep "id: unsaid," "$REG" | grep -q "mirrored"         && { echo "FAIL: --write INVENTED a verdict for an unclassified skill"; grep "id: unsaid" "$REG"; exit 1; }
-run --registry "$REG" --repos-root "$ROOT" >/dev/null || { echo "FAIL: not coherent after --write appended"; exit 1; }
-rm -rf "$ROOT/Producer.Two/skills/fresh" "$ROOT/Producer.Two/skills/unsaid" "$ROOT/Mirror.Repo/template/product-skills/fresh"
-echo "   ok"
-
-echo "== 49. the verdict, not the FILESYSTEM, decides — a divergent twin declared \`false\` is not a mirror =="
-# THE REGRESSION THE OLD DERIVATION WOULD HAVE CAUSED, and the reason `owner:` had to stop being the
-# classifier. The pre-#658 tool asked "is this owned by fs-gg-game AND does Rendering hold a file by
-# this name?" — the NAME-COLLISION test FS.GG.Game's generator explicitly warns against, and the one
-# FS.GG.Rendering#541 got wrong (eight mirrors, not four).
-#
-# It gave the right answer only by the grace of an `owner:` assignment: the four P6 bodies
-# (collision/grids/line-drawing/visibility) DO have same-named Rendering counterparts, were rewritten
-# against the `.fsi`, and DELIBERATELY diverge — and the registry happens to home them with
-# `owner: fs-gg-rendering`. Re-home one to its real owner and the old tool starts demanding
-# byte-identity of two bodies nobody promises agree. Driven against the real trees, that is exactly
-# what it does.
-restore_mirror
-printf 'a body that DELIBERATELY diverges from the copy\n' > "$ROOT/Producer.Two/skills/owned/SKILL.md"
-DIVERGED="$(sha "$ROOT/Producer.Two/skills/owned/SKILL.md")"
-sed -i "s/sha256: $OWNED, mirrored: true,/sha256: $DIVERGED, mirrored: false,/" "$REG"
-write_two_owned_mirror false "$DIVERGED"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\] owned" <<<"$out" && { echo "FAIL: byte-identity demanded of a body declared NOT mirrored"; echo "$out"; exit 1; }
-grep -q "\[mirror-" <<<"$out" && { echo "FAIL: a correctly-declared divergent twin reported"; echo "$out"; exit 1; }
-echo "   ok"
-
-echo "== 50. a MALFORMED verdict is UNKNOWN, never \`false\` =="
-# `"mirrored": "false"` is a string, and every truthiness test in every language reads it as TRUE
-# while `== true` reads it as false. Neither is an answer. It is not classified, and it says so.
-restore_mirror
-write_two_owned_mirror '"true"'
-out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: a non-boolean manifest verdict was believed"; echo "$out"; exit 1; }
-grep -q "Traceback" <<<"$out" && { echo "FAIL: crashed instead of reporting"; echo "$out"; exit 1; }
-# ...and the same in the REGISTRY, which is the half a hand-edit reaches. `"true"` and not `yes`:
-# YAML 1.1 parses a bare `yes` as the BOOLEAN true, so it is a real verdict, not a malformed one — a
-# quoted scalar is the shape a hand-edit actually leaves behind.
-restore_mirror
-sed -i 's/\(id: owned,.*\) mirrored: true,/\1 mirrored: "true",/' "$REG"
-out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: a non-boolean registry verdict was believed"; echo "$out"; exit 1; }
-grep -q "Traceback" <<<"$out" && { echo "FAIL: crashed instead of reporting"; echo "$out"; exit 1; }
-echo "   ok"
-
-echo "== 51. the mirror family splits along RECONCILABLE vs JUDGEMENT — the bot may not claim a fix =="
-# `skill-registry-autofix-body.classify` decides what the standing PR reports as "reconciled" and what
-# it reports as "still needs a human", and the retire gate reads the same split. A judgement case filed
-# under "what I fixed" is the bot asserting work it did not do (#425) — on the very finding this gate
-# exists to raise. So the split is pinned, structurally, at the definition.
-python3 - <<'PY' || exit 1
-import importlib.util, pathlib, sys
-here = pathlib.Path(__file__).parent if "__file__" in dir() else pathlib.Path(".")
-root = pathlib.Path("tests/skill-registry").resolve().parent.parent
-spec = importlib.util.spec_from_loader("body", loader=None)
-mod = type(sys)("body")
-src = (root / "scripts/skill-registry-autofix-body").read_text()
-exec(compile(src, "skill-registry-autofix-body", "exec"), mod.__dict__)
-
-assert "mirror-matches" in mod.RECONCILED_CHECKS, \
-    "a flipped verdict is a pure value rewrite — the bot must be able to land it unattended"
-assert "mirror-verdict" not in mod.RECONCILED_CHECKS, \
-    "an unclassified twin is a JUDGEMENT case: listing it as 'reconciled' would have the bot report " \
-    "a fix for the one finding no reconcile can ever make"
-
-reconciled, appended, residual = mod.classify([
-    {"id": "a", "check": "mirror-matches", "actual": False},
-    {"id": "b", "check": "mirror-verdict", "detail": "nobody classified a twin"},
-])
-assert [f["id"] for f in reconciled] == ["a"], reconciled
-assert [f["id"] for f in residual] == ["b"], residual
-print("   (mirror-matches reconciles; mirror-verdict needs a human)")
-PY
-echo "   ok"
-
-echo "== 52. ONE manifest declaring an id TWICE with OPPOSITE verdicts is a contradiction, not a vote =="
-# A real bug this fixture caught in its own author's first draft. The verdicts were collected into a
-# dict keyed by REPO — so two entries from the SAME manifest overwrote each other, and the tool
-# resolved a flat contradiction by silently taking whichever row came LAST. Six cases passed while it
-# did, because the shape only arises when one manifest declares an id twice.
-#
-# FS.GG.Game's generator makes this impossible to EMIT ("a contradiction in the catalog resolving
-# itself, quietly, in a file whose entire job since #280 is to state the verdict out loud"). But this
-# reader consumes EVERY producer's manifest, including ones with no such guard, so the collapse had to
-# be impossible to READ as well. Verdicts are now a set over ENTRIES, as `predicates()` already did.
-restore_mirror
-cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
-{ "schemaVersion": 1, "skills": [
-  { "id": "owned", "scope": "product", "sha256": "$OWNED", "mirrored": true,  "supplied-by": "skills/owned/", "materializes-when": "profile in [game]" },
-  { "id": "owned", "scope": "product", "sha256": "$OWNED", "mirrored": false, "supplied-by": "skills/owned/", "materializes-when": "profile in [game]" }
-] }
-JSON
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: a duplicated id with OPPOSITE verdicts silently resolved itself"; echo "$out"; exit 1; }
-grep -q "disagree on \`mirrored\`" <<<"$out" || { echo "FAIL: the contradiction is not named"; echo "$out"; exit 1; }
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while the verdicts contradict"; exit 1; }
-grep -q 'id: owned.*mirrored: true' "$REG" || { echo "FAIL: --write picked a side"; grep 'id: owned' "$REG"; exit 1; }
-echo "   ok"
-
-echo "== 53. a BOM-only difference is NOT a mirror divergence — the finding must not contradict itself =="
-# The frozen-mirror arm compared RAW BYTES while REPORTING canonical digests, which are BOM-free. So a
-# copy differing only by a leading BOM was reported as "not byte-identical (d1833a67… vs d1833a67…)" —
-# the same digest, twice, offered as proof that the two differ. A finding that contradicts its own
-# evidence is one the next reader learns to wave past, which is how a real divergence gets ignored.
-# The comparison now runs on the same canonical body every other reader of these files hashes.
-restore_mirror
-printf '\xef\xbb\xbfowned body\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"   # exits 1 on the `stale` digest
-grep -q "\[frozen-mirror\]" <<<"$out" && { echo "FAIL: a BOM was reported as a mirror divergence"; echo "$out"; exit 1; }
-# ...and a REAL divergence still fires, BOM or no BOM.
-printf '\xef\xbb\xbfowned body DRIFTED\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: a BOM now HIDES a real divergence"; echo "$out"; exit 1; }
-echo "   ok"
-
-echo "== 54. a row with NO \`mirrored:\` whose manifest DECLARES one is a JUDGEMENT case, not a claimed fix =="
-# `--write` rewrites a VALUE in place, and a row that omits the field has none to rewrite (inserting
-# one would re-align the hand-formatted flow map — the rule `predicate-matches` already follows). So
-# this needs a human. It must therefore NOT be filed as `mirror-matches`: that name is in the autofix
-# bot's RECONCILED_CHECKS, and `classify()` splits on the check NAME alone — so a `mirror-matches` the
-# write never touched would appear in the standing PR's "Reconciled (mechanical)" section as a fix the
-# bot did not make (#425), inside the gate that exists to raise exactly that.
-#
-# This is the shape that arrives the day FS.GG.Rendering or SDD starts declaring `mirrored` for rows
-# this registry already carries, so it is not a corner: it is the next migration.
-restore_mirror
-write_two_owned_mirror true
-sed -i 's/\(id: owned,.*\) mirrored: true,/\1/' "$REG"
-grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: fixture could not strip the verdict"; exit 1; }
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-matches\] owned" <<<"$out" && { echo "FAIL: an UNRECONCILABLE finding filed under the bot's 'reconciled' name"; echo "$out"; exit 1; }
-grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: the missing field was not reported at all"; echo "$out"; exit 1; }
-grep -q "add it by hand" <<<"$out" || { echo "FAIL: did not say why --write cannot fix it"; echo "$out"; exit 1; }
-run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while the row cannot be reconciled"; exit 1; }
-grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: --write inserted a field it should not have"; exit 1; }
-# EVERY `mirror-matches` carries an `actual` — RECONCILED_CHECKS is true by CONSTRUCTION, not by
-# convention. This is the assertion that keeps case 51's split honest as the code moves.
-json="$(run --registry "$REG" --repos-root "$ROOT" --json || true)"
-python3 -c "
-import json,sys
-d = json.loads(sys.argv[1])
-bad = [f for f in d['findings'] if f['check'] == 'mirror-matches' and 'actual' not in f]
-assert not bad, f'a mirror-matches with no actual would be reported as reconciled: {bad}'
-print('   (every mirror-matches is reconcilable)')
-" "$json"
-echo "   ok"
-
-echo "== 55. the MIRROR HOLDER cannot be obliged to mirror its own canonical =="
-# The one mirror branch with no coverage until now — and structurally unreachable from the cases
-# above, because the shim renames FROZEN_MIRROR_REPO to Mirror.Repo and no row here is owned by it.
-# A row whose owner IS the mirror repo has its `source:` AT the frozen-mirror path, so the "copy" and
-# the canonical are the same file: `mirrored: true` on it is not an obligation, it is a tautology, and
-# byte-comparing a file with itself would report green forever. Say so instead.
-mkdir -p "$ROOT/Mirror.Repo/template/product-skills/selfmirror" "$ROOT/Mirror.Repo/template/skill-manifest"
-printf 'self body\n' > "$ROOT/Mirror.Repo/template/product-skills/selfmirror/SKILL.md"
-SELF="$(sha "$ROOT/Mirror.Repo/template/product-skills/selfmirror/SKILL.md")"
-cat > "$ROOT/Mirror.Repo/template/skill-manifest/skill-manifest.json" <<JSON
-{ "schemaVersion": 1, "skills": [
-  { "id": "selfmirror", "scope": "product", "sha256": "$SELF", "mirrored": true, "supplied-by": "template/product-skills/selfmirror/", "materializes-when": "always" }
-] }
-JSON
-cat > "$REG" <<YAML
-schemaVersion: 1
-updated: "2026-07-14"
-skills:
-  - { id: selfmirror, scope: product, owner: mirror-repo, source: Mirror.Repo/template/product-skills/selfmirror/SKILL.md, sha256: $SELF, mirrored: true, materializes-when: always }
-YAML
-out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
-grep -q "\[mirror-verdict\] selfmirror" <<<"$out" || { echo "FAIL: the mirror repo was allowed to mirror its own canonical"; echo "$out"; exit 1; }
-grep -q "own canonical" <<<"$out" || { echo "FAIL: the finding does not name the tautology"; echo "$out"; exit 1; }
-grep -q "\[frozen-mirror\] selfmirror" <<<"$out" && { echo "FAIL: byte-compared a file against ITSELF"; echo "$out"; exit 1; }
-rm -rf "$ROOT/Mirror.Repo/template/skill-manifest" "$ROOT/Mirror.Repo/template/product-skills/selfmirror"
-write_registry
-echo "   ok"
+# Mirror-verdict regressions retired with .github#1862 after Rendering removed the second copies.
 
 echo "== 56. supersession is the ENGINE's rule now (#737) =="
 # THE BOT REFUSED TO MERGE THE PR IT HAD JUST PUSHED (#700/#710). It force-pushes the branch (a
