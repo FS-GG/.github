@@ -194,8 +194,58 @@ module Options =
           /// written onto its body. `RoomOpen` is the only reader; `scopeOf FOver` refuses it everywhere else.
           Over: string list }
 
+    /// The CLIENT's lease default, and the value `FSGG_CLAIM_LEASE_MIN` overrides.
+    ///
+    /// **`Snapshot.DefaultLeaseMinutes` IS THE SAME NUMBER AND IS DELIBERATELY NOT THE SAME FACT**
+    /// (`.github#1677` AC5, which proposed reconciling them to one source). They are two different
+    /// defaults that agree today: this one is what THIS process uses when nothing configured it, and
+    /// Snapshot's is the WIRE default — what the engine assumes when a shim too old to send
+    /// `leaseMinutes` omits it from the snapshot (`Snapshot.fs`, `Snapshot.fsi`).
+    ///
+    /// Collapsing them would COUPLE the wire default to this process's configured value, which is
+    /// exactly what Snapshot's own comment forbids: *"It is CONFIGURABLE in the client
+    /// (`FSGG_CLAIM_LEASE_MIN`, default 120), so the engine may not assume it."* Under an
+    /// `FSGG_CLAIM_LEASE_MIN=30` export, a single shared source would make the engine read an old
+    /// shim's silence as "30" when that shim meant 120 — inventing a shortened lease for a client that
+    /// never asked for one, and reaping live claims on the strength of it. The duplication is the
+    /// decoupling, and it is recorded here rather than removed. They are also not reachable from one
+    /// another as a `[<Literal>]`: `Snapshot.fs` compiles BEFORE `Options.fs`.
     [<Literal>]
     let DefaultLeaseMinutes = 120
+
+    /// `FSGG_CLAIM_LEASE_MIN` — the claim lease, in minutes, when no `--lease` is given.
+    ///
+    /// **THIS FUNCTION IS THE WHOLE OF `.github#1677`, AND ITS ABSENCE WAS THE DEFECT.** Seventeen
+    /// places in this repo — ADR-0027, ADR-0038, `docs/coordination/parallel-work.md`, the generated
+    /// `Protocol.fs` region and the KIT-MIRRORED skill copies it emits into every receiver, plus
+    /// `Snapshot.fsi` and `Options.fsi` right here — told every worker in the fleet that this variable
+    /// configures the lease. Nothing read it. An ignored environment variable is INDISTINGUISHABLE from
+    /// an honoured one that happened to match the default, so the claim was unfalsifiable from where a
+    /// worker stands, and it survived for as long as it did precisely because it could not be caught.
+    ///
+    /// The load-bearing copy is `Snapshot.fs`'s: it justifies why the engine keeps its OWN wire default
+    /// rather than assuming 120 — *"a repo that shortened its lease and an engine that hard-coded 120
+    /// would together tell every worker to wait out a window that already closed."* That rationale
+    /// asserts this function exists. Deleting the variable instead would have had to rewrite the reason
+    /// the two defaults are deliberately separate, which is the eighth site the audit did not count.
+    ///
+    /// **A MALFORMED VALUE IS REFUSED, NOT SILENTLY DROPPED, AND THAT IS THE POINT.** This is the same
+    /// input as `--lease` arriving down a different channel, so it gets `--lease`'s contract exactly:
+    /// a positive number of minutes, or an error naming what was read. Falling back to 120 on garbage —
+    /// the soft direction `FSGG_COORD_SCAN_TTL_SEC` takes, correctly, because a cache is optional — would
+    /// rebuild the very unfalsifiability this issue is about: a worker who typos the value would see no
+    /// error and no change, which is the state that already cost the fleet seventeen lying documents.
+    ///
+    /// UNSET and EMPTY are not malformed. They are "I did not configure this", and they take the default.
+    let private leaseMinutesFromEnv () : Result<int, string> =
+        match System.Environment.GetEnvironmentVariable "FSGG_CLAIM_LEASE_MIN" with
+        | null
+        | "" -> Ok DefaultLeaseMinutes
+        | v ->
+            match System.Int32.TryParse(v.Trim()) with
+            | true, n when n > 0 -> Ok n
+            | true, n -> Error $"FSGG_CLAIM_LEASE_MIN must be a positive number of minutes (got %d{n})"
+            | _ -> Error $"FSGG_CLAIM_LEASE_MIN needs a number of minutes (got '%s{v}')"
 
     let usage =
         """fsgg-coord-engine — the typed coordination engine (ADR-0034), and the client it becomes (ADR-0040).
@@ -1578,6 +1628,19 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 
+        // PRECEDENCE: `--lease` beats `FSGG_CLAIM_LEASE_MIN` beats `DefaultLeaseMinutes`, and it falls
+        // out of WHERE this sits rather than from a rule anybody has to remember — the env only ever
+        // seeds `defaults`, and `flags`' `--lease` arm overwrites `LeaseMinutes` afterwards. There is no
+        // givenness record for this field (see the residue rule above: `LeaseMinutes` is the field with a
+        // non-optional default and no record of having been given), so seeding the default is the ONLY
+        // place an env fallback can go without inventing one.
+        //
+        // The refusal is returned from `parse`, so it reaches the operator through the channel every
+        // other bad argument already uses, and no command runs on a lease nobody could read.
+        match leaseMinutesFromEnv () with
+        | Error e -> Error e
+        | Ok envLeaseMinutes ->
+
         let defaults =
             { Command = Decide
               // Overwritten by `start` for every verb — see below. Kept as `Json` only so the record is
@@ -1589,7 +1652,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Fresh = false
               AllowBacklog = false
               Limit = None
-              LeaseMinutes = DefaultLeaseMinutes
+              LeaseMinutes = envLeaseMinutes
               Args = []
               Worker = None
               Force = false
