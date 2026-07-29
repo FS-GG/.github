@@ -1096,13 +1096,22 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             // `tests/coord-engine-parity/shim.sh` §3b (`.commands[].name` via `jq`, and nothing else), and
             // `CommandSurfaceTests` in this repo's own suite.
             //
-            // A BUMP TO `/2` WOULD BE WORSE THAN NOISY, and the reason is worth stating rather than
-            // assuming a clean failure. Two of the three compare the id for equality — but they do not
-            // agree on what to do about a mismatch: `check-skill-quality.py`'s first reader FAILS, while
-            // its second returns bare, which would silently disarm every semantic assertion it makes
-            // (the `--paths`/`--apply` polarity gate) instead of reporting anything. So the cost of the
-            // bump is one loud error plus one gate that quietly stops auditing — bought to describe an
-            // edit that removes nothing. Filed as #1574.
+            // A BUMP TO `/2` IS LOUD ON EVERY READER THAT CHECKS — worth stating because it was not
+            // always. Two of the three compare the id for equality, and since #1574 they agree on what
+            // a mismatch means: `check-skill-quality.py` fails in BOTH of its readers, with distinct
+            // actionable diagnostics — `validate_invocations` reports the unsupported schema, and
+            // `validate_semantics` names the `--paths`/`--apply`/`--dry-run` polarity assertions it did
+            // NOT make — and `CommandSurfaceTests` asserts the id outright. The disarming case is gone:
+            // that second reader used to return BARE, dropping every semantic assertion without
+            // reporting one, and the id is now stated once as `CONTRACT_SCHEMA` rather than twice, so
+            // two readers of one document can no longer disagree about whether it is supported. So the
+            // cost of a bump is now LOUD rather than silent — but it is not one edit, and the third of
+            // the three id literals that move with it is a TRAP. `CONTRACT_SCHEMA` and
+            // `CommandSurfaceTests` are the obvious two. The third is the `/2` MUTANT in
+            // `tests/skill-quality/run.sh`, which `expect_rejection` feeds the gate to prove an
+            // unsupported schema still fails: make `/2` the SUPPORTED id and that mutant becomes a
+            // supported document, the gate exits 0, and the fixture goes red asserting the opposite of
+            // what it means.
             let writes, gate =
                 match writeSurface command with
                 | Writes -> "always", None
