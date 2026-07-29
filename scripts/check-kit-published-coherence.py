@@ -1291,15 +1291,16 @@ def kit_sources(roster_path: str) -> list[str]:
 
 
 def changed_paths(base: str) -> list[str]:
-    """Repo-relative paths this PR changes, as `git diff --name-only <base>...HEAD`.
+    """Repo-relative paths this PR changes, resolved from HEAD and the current base ref.
 
-    Three-dot on purpose: it diffs the merge base against HEAD, so changes that landed on the BASE
-    branch after the PR forked are not attributed to the PR. Two-dot would blame a kit-source commit
-    from someone else's merge on whichever PR happened to be open, and demand a bump from a diff that
-    does not contain one.
+    Resolve the merge base explicitly, then diff that commit against HEAD. The workflow passes the
+    fetched remote-tracking base branch, not `pull_request.base.sha`: GitHub can deliver a stale event
+    SHA while actions/checkout has checked out a merge ref recomputed against a newer base. Mixing
+    those two snapshots attributes the base branch's own commits to the PR (.github#1910).
 
-    Any git failure is a GateError. A PR whose diff cannot be read has an UNKNOWN obligation, and an
-    unknown obligation must not merge (#266) — an empty list here would read as "touched nothing".
+    Any failure to resolve either side or compute the diff is a GateError. A PR whose diff cannot be
+    read has an UNKNOWN obligation, and an unknown obligation must not merge (#266) — an empty list
+    here would read as "touched nothing".
     """
     if not base or not base.strip():
         raise GateError(
@@ -1307,8 +1308,15 @@ def changed_paths(base: str) -> list[str]:
             "without one there is no diff, and no diff is not 'no kit sources touched'."
         )
     try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", f"{base.strip()}...HEAD"],
+        base_commit = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{base.strip()}^{{commit}}"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        merge_base = subprocess.run(
+            ["git", "merge-base", "HEAD", base.strip()],
             cwd=REPO_ROOT,
             text=True,
             capture_output=True,
@@ -1316,13 +1324,84 @@ def changed_paths(base: str) -> list[str]:
         )
     except OSError as e:
         raise GateError(f"cannot run git to read this PR's diff: {e}") from e
+    if base_commit.returncode != 0:
+        detail = (base_commit.stderr or base_commit.stdout).strip()
+        raise GateError(
+            f"cannot resolve base {base!r} to a commit"
+            + (f": {detail}" if detail else "")
+            + " — fetch the current base branch; an unreadable base is a no-verdict, not a green."
+        )
+    if merge_base.returncode != 0:
+        detail = (merge_base.stderr or merge_base.stdout).strip()
+        raise GateError(
+            f"cannot resolve a merge base between HEAD and {base!r}"
+            + (f": {detail}" if detail else "")
+            + " — fetch the current base branch and enough history (actions/checkout "
+            "`fetch-depth: 0`), then rebase if the histories genuinely do not meet. A diff this arm "
+            "cannot compute is a no-verdict, not a green."
+        )
+    resolved = merge_base.stdout.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", resolved):
+        raise GateError(
+            f"git merge-base returned no single 40-hex commit for HEAD and {base!r}: "
+            f"{resolved!r} — the PR's changed-file subject is unresolved, not empty."
+        )
+
+    # On GitHub's pull_request merge ref, HEAD^1 is the base commit used to construct the checked-out
+    # tree. If the caller supplied an older ancestor, mixing it with that newer merge ref is exactly
+    # #1910's false attribution. This is a different remedy from a real PR-owned kit edit: refresh or
+    # rebase; do not bump and publish a package for somebody else's base commit.
+    first_parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD^1"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    second_parent = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD^2"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    supplied = base_commit.stdout.strip()
+    parent = first_parent.stdout.strip()
+    if first_parent.returncode == 0 and second_parent.returncode == 0 and supplied != parent:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", supplied, parent],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if ancestor.returncode == 0:
+            raise GateError(
+                f"base {base!r} resolves to {supplied}, behind the checked-out merge ref's base "
+                f"parent {parent}. Refresh or rebase the PR and rerun this arm; do not bump "
+                f"FS.GG.Kit for commits that belong to the base branch."
+            )
+        if ancestor.returncode not in (0, 1):
+            detail = (ancestor.stderr or ancestor.stdout).strip()
+            raise GateError(
+                f"cannot compare supplied base {supplied} with HEAD's first parent {parent}"
+                + (f": {detail}" if detail else "")
+                + " — base currency is unresolved, not green."
+            )
+
+    result = subprocess.run(
+        ["git", "diff", "--name-only", resolved, "HEAD"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise GateError(
-            f"cannot diff against base {base!r}"
+            f"cannot diff resolved merge base {resolved} against HEAD"
             + (f": {detail}" if detail else "")
-            + " — check out enough history (actions/checkout `fetch-depth: 0`) so the merge base "
-            "resolves; a diff this arm cannot compute is a no-verdict, not a green."
+            + " — this arm has no changed-file verdict, not a green."
         )
     return [line for line in result.stdout.splitlines() if line.strip()]
 

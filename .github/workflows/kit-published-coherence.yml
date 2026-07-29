@@ -120,7 +120,7 @@ jobs:
       - name: Does this PR edit the kit without getting ahead of the published one?
         run: |
           python scripts/check-kit-published-coherence.py --pr-arm \
-            --base "${{ github.event.pull_request.base.sha }}"
+            --base "refs/remotes/origin/${{ github.base_ref }}"
 
   # Online. The actual coherence signal: newest published FS.GG.Kit against main's validated lock +
   # exact pack-time staged manifest (destinations, bytes, modes, and closed set).

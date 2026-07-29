@@ -284,6 +284,61 @@ out="$(env -u GITHUB_BASE_REF python3 "$GATE" --pr-arm --csproj "$CSPROJ" --kit-
 set -e
 must_fail "a missing base ref is a no-verdict, not an empty diff" "no base ref to diff against"
 
+# MUTATION FOR .github#1910. Build the topology GitHub's pull_request checkout presents: the PR
+# itself changes only prose, main advances with a kit-source commit, and the checked-out merge ref
+# contains both. A stale event SHA falsely attributes main's kit commit to the PR; resolving against
+# the fetched current base ref excludes it. Then mutate the PR side to touch the kit and prove the
+# same arm reds for a real obligation.
+csproj 0.8.1
+MUT_REPO="$WORK/pr-base-mutation"
+git init -q -b main "$MUT_REPO"
+git -C "$MUT_REPO" config user.name fixture
+git -C "$MUT_REPO" config user.email fixture@example.invalid
+mkdir -p "$MUT_REPO/scripts" "$MUT_REPO/docs"
+cp "$GATE" "$MUT_REPO/scripts/check-kit-published-coherence.py"
+cp "$HERE/../../scripts/fsgg_feed.py" "$MUT_REPO/scripts/fsgg_feed.py"
+printf 'initial\n' > "$MUT_REPO/scripts/fsgg-coord"
+printf 'initial\n' > "$MUT_REPO/docs/note.md"
+git -C "$MUT_REPO" add .
+git -C "$MUT_REPO" commit -q -m initial
+STALE_BASE="$(git -C "$MUT_REPO" rev-parse HEAD)"
+git -C "$MUT_REPO" branch pr-head
+git -C "$MUT_REPO" switch -q pr-head
+printf 'pr prose\n' >> "$MUT_REPO/docs/note.md"
+git -C "$MUT_REPO" commit -qam "PR changes prose"
+git -C "$MUT_REPO" switch -q main
+printf 'base-owned kit change\n' >> "$MUT_REPO/scripts/fsgg-coord"
+git -C "$MUT_REPO" commit -qam "main changes kit"
+git -C "$MUT_REPO" update-ref refs/remotes/origin/main HEAD
+git -C "$MUT_REPO" switch -q -c merge-ref
+git -C "$MUT_REPO" merge -q --no-edit --no-ff pr-head
+
+set +e
+out="$(python3 "$MUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
+  --base "$STALE_BASE" --csproj "$CSPROJ" --kit-sources "$SRC" \
+  --published-version 0.8.1 2>&1)"; rc=$?
+set -e
+must_fail "mutation control: a stale event base falsely attributes main's kit commit to the PR" \
+  "Refresh or rebase the PR"
+
+set +e
+out="$(python3 "$MUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
+  --base refs/remotes/origin/main --csproj "$CSPROJ" --kit-sources "$SRC" \
+  --published-version 0.8.1 2>&1)"; rc=$?
+set -e
+must_pass "a docs-only PR stays green after the base advances with a kit commit" \
+  "none of them a \`kit:\` source"
+
+printf 'PR-owned kit change\n' >> "$MUT_REPO/scripts/fsgg-coord"
+git -C "$MUT_REPO" commit -qam "PR changes kit"
+set +e
+out="$(python3 "$MUT_REPO/scripts/check-kit-published-coherence.py" --pr-arm \
+  --base refs/remotes/origin/main --csproj "$CSPROJ" --kit-sources "$SRC" \
+  --published-version 0.8.1 2>&1)"; rc=$?
+set -e
+must_fail "the resolved-base arm stays red when the PR itself touches a kit source" \
+  "scripts/fsgg-coord"
+
 # THE ROSTER READER (AC2): the kit-source list is READ from registry/repos.yml, never restated.
 ROSTER="$WORK/repos.yml"
 printf 'scripts/fsgg-coord\n' > "$CHANGED"
@@ -369,6 +424,12 @@ assert match, "pr-arm job missing"
 job = match.group(1)
 assert "--pr-arm" in job, "pr-arm job does not run the checker's PR arm"
 assert "fetch-depth: 0" in job, "pr-arm job cannot resolve a merge base"
+assert 'refs/remotes/origin/${{ github.base_ref }}' in job, (
+    "pr-arm does not derive its base from the fetched current base branch"
+)
+assert "pull_request.base.sha" not in job, (
+    "pr-arm still mixes an event base SHA with actions/checkout's recomputed merge ref"
+)
 assert "uses: ./.github/actions/setup-policy-python" in job, (
     "pr-arm job does not install the pinned YAML policy dependency it needs to read repos.yml"
 )
@@ -1222,7 +1283,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=99
+EXPECTED_LEGS=102
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
