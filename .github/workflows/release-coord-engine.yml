@@ -34,15 +34,15 @@ name: release-coord-engine
 # nothing; and Renovate — which does carry these releases — is the hosted Mend App, not a self-hosted
 # runner, so a dispatch cannot make it re-scan in the first place.
 #
-# THAT IS A VERDICT ON THE MECHANISM, NOT ON THE GAP. The push half #1776 was filed about is real and
-# still missing: on 2026-07-29 FS.GG.Net sat behind an unticked `unlimit-branch=renovate/
+# THAT IS A VERDICT ON THE MECHANISM, NOT ON THE GAP. The push half #1776 was filed about was real
+# and missing: on 2026-07-29 FS.GG.Net sat behind an unticked `unlimit-branch=renovate/
 # fs.gg.coord.cli-0.x` box on its own Dependency Dashboard while v0.15.0 was published. The mechanism
-# that reaches it is that dashboard, not a dispatch, and it is .github#1923.
+# that reaches it is that dashboard, not a dispatch, it is .github#1923, and the job below IS it.
 #
-# THE FULL RECORD — the measurement, both halves, what it cannot see (including that #1776 AC4 is
-# DEFERRED to #1923, not met), and the credential question — is in `release-kit.yml`'s header, stated
-# ONCE there rather than copied here. Deciding differently means changing both files; nothing
-# re-checks the listener premise, which is filed as .github#1919.
+# THE FULL RECORD — the measurement, both halves, what this can and cannot see, and the credential
+# question — is in `release-kit.yml`'s header, stated ONCE there rather than copied here. Deciding
+# differently means changing both files; nothing re-checks the listener premise, which is filed as
+# .github#1919.
 
 on:
   push:
@@ -220,7 +220,51 @@ jobs:
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
 
+      # ─────────────────────────────────────────────────────────────────────────────────────────
+      # THE PUSH HALF (.github#1923). The mechanism, the refusal of `repository_dispatch`, and what
+      # this can and cannot see are recorded ONCE, in release-kit.yml's header. This is the same job
+      # over a different package id, and it is deliberately not `continue-on-error`: a release that
+      # reaches zero receivers must go RED (#1923 AC4, from #1776 AC4).
+      - name: Mint the cross-repo token the push half writes with
+        id: tick-token
+        if: steps.v.outputs.push == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          # No `repositories:` — the subject set is the ROSTER, read by the script. See
+          # dashboard-tick-selftest.yml for why a list here could only be a drifting second copy.
+          owner: FS-GG
+          permission-issues: write
+
+      # The subject set is the SAME seven repos as the kit's, and that is not a copy-paste slip: the
+      # engine reaches receivers through the kit's `.config/dotnet-tools.json`, so `receives:
+      # coordination-kit` + `kit-delivery: package` is exactly who pins `fs.gg.coord.cli`.
+      - name: Tell every engine receiver the release exists
+        if: steps.v.outputs.push == 'true'
+        env:
+          DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set +eu
+          python3 scripts/dashboard-tick.py --package FS.GG.Coord.Cli --version "$VERSION"
+          rc=$?
+          set -eu
+          # By EXIT CODE, never by prose (#335). Every non-zero is red; the arms differ so the
+          # operator reads the right sentence. 2 = a receiver could not be GRADED; 3 = nothing was
+          # ATTEMPTED at all. See release-kit.yml's copy for the full reasoning.
+          case "$rc" in
+            0) echo "delivery: every engine receiver was reached." >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "::error title=release-coord-engine: delivery not verified::At least one receiver could not be graded. The engine IS published; some receivers may not have been told. See the job log." ; exit 1 ;;
+            3) echo "::error title=release-coord-engine: delivery never ran::scripts/dashboard-tick.py exited 3 — a permanent no-verdict (the roster would not read, or the credential was empty). NOTHING was attempted, so no receiver was told. The engine IS published." ; exit 1 ;;
+            *) echo "::error title=release-coord-engine: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The engine IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
+          esac
+      # ─────────────────────────────────────────────────────────────────────────────────────────
+
+      # `always()`: a DELIVERY failure above must not suppress the record that the package reached
+      # the feeds. See release-kit.yml.
       - name: Summary
+        if: always()
         run: |
           {
             echo "### fsgg-coord-engine ${{ steps.v.outputs.version }}"

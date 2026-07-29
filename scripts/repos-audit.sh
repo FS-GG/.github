@@ -2055,13 +2055,44 @@ PY
 # a failure whose symptom is a NON-EVENT. Today they were told apart only because a human opened two
 # dashboards and read them.
 #
-# AND THE THIRD MODE, WHICH IS STRUCTURAL RATHER THAN INCIDENTAL (#1761). Neither
-# `release-coord-engine.yml` nor `release-kit.yml` calls `dispatch-sender.yml`, so CUTTING A RELEASE
-# NOTIFIES NOBODY. The push half of the fabric never fires for these two packages; Renovate's own
-# schedule is the only path. So after a release every receiver simply stays behind until that schedule
-# comes round, and the org's evidence for "the bump is on its way" is nothing at all. This sweep is
-# f(roster, feed, each receiver's PR list) — like the kit-pin sweep it rides, it needs no push from
-# anybody, which is the only reason it can see a mode whose whole nature is that no event occurs.
+# AND THE THIRD MODE, WHICH WAS STRUCTURAL RATHER THAN INCIDENTAL (#1761) AND IS NOW CLOSED (#1923).
+# Neither `release-coord-engine.yml` nor `release-kit.yml` calls `dispatch-sender.yml`, and they still
+# do not — that mechanism was measured and REFUSED in #1776 (no receiver listens; Renovate is the
+# hosted Mend App and a dispatch cannot make it re-scan), and the record is release-kit.yml's header.
+# What was missing was not a dispatch; it was ANY push half at all, so CUTTING A RELEASE NOTIFIED
+# NOBODY and Renovate's own schedule was the only path.
+#
+# Both release workflows now run `scripts/dashboard-tick.py` after a successful publish. It ticks the
+# receiver's Dependency Dashboard box for the package just published — `unlimit-branch=<branch>` when
+# a rate limit holds it, `manual job` when the bot has not re-extracted since — over the roster, and
+# it goes RED when a release reaches zero receivers, when a write is refused, or when a `PATCH`
+# returns 200 and changes nothing.
+#
+# THE BEFORE, SO THE AFTER IS CHECKABLE RATHER THAN ASSERTED (#1923 AC5). Measured 2026-07-29 by
+# `dashboard-tick.py --dry-run`, over all seven `receives: coordination-kit` + `kit-delivery: package`
+# receivers, against the published FS.GG.Kit 0.21.0 and FS.GG.Coord.Cli 0.15.0:
+#
+#     FS.GG.Kit 0.21.0        SDD ok · Templates ok · Game ok · Audio ok
+#                             Rendering#14 HELD  (unlimit-branch=renovate/fs.gg.kit-0.x, unticked)
+#                             Net#36       HELD  (unlimit-branch=renovate/fs.gg.kit-0.x, unticked)
+#                             Governance#21 BLIND (0.21.0 appears nowhere; pinned 0.19.1)
+#     FS.GG.Coord.Cli 0.15.0  SDD ok · Templates ok · Game ok · Audio ok
+#                             Net#36       HELD  (unlimit-branch=renovate/fs.gg.coord.cli-0.x)
+#                             Rendering#14 BLIND · Governance#21 BLIND
+#
+# That is delivery at 4 of 7 for each package, with three receivers per package sitting behind a box
+# nobody was watching — and the two failure SHAPES the #1768 sweep already names (`offer-none` from a
+# repo that never re-extracted, a rate-limited branch that never became a PR) turning out to be
+# exactly the two boxes the ticker knows how to press. What the ticker must show is those columns
+# collapsing to `offer-current` after the NEXT release of each package. It is not shown yet: nothing
+# has been published since it was wired, and asserting the improvement before observing it is the
+# thing this sweep exists to refuse.
+#
+# WHAT THE TICKER STILL CANNOT SEE, so this sweep is not retired by it: a tick that LANDS and a
+# Renovate run that then does NOTHING are different failures, and only this sweep can see the second.
+# This sweep is f(roster, feed, each receiver's PR list) — like the kit-pin sweep it rides, it needs
+# no push from anybody, which is the only reason it can see a mode whose whole nature is that no
+# event occurs.
 #
 # A SUPERSEDED OFFER IS NOT AN OFFER. This is the distinction the sweep would be worthless without,
 # and it is not hypothetical: measured 2026-07-28, FS.GG.SDD#773, FS.GG.Rendering#1123,

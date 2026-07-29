@@ -1,0 +1,143 @@
+# dashboard-tick-selftest — the two things scripts/dashboard-tick.py cannot prove about itself.
+#
+# The kit/engine delivery fabric had a pull half and no push half (.github#1923, from #1776). The
+# push half is NOT `repository_dispatch` — that was refused with measurements, recorded in
+# release-kit.yml's header — it is a `PATCH .../issues/<n>` that ticks a checkbox in a receiver's
+# Renovate Dependency Dashboard. scripts/dashboard-tick.py is that writer, and the release workflows
+# call it after a successful publish.
+#
+# Two independent questions, two jobs, and they fail for different reasons on purpose.
+#
+# 1. `credential` — CAN the org App do this at all? (#1923 AC1.) The `fs-gg-cross-repo-dispatch`
+#    installation demonstrably carries `contents`, `pull-requests` and `administration: read`
+#    (repos-audit.yml:141, required-context-coherence.yml:150, the #574 org grant). Whether it
+#    carries `issues: write` was NOT established when #1923 was filed, and shipping a writer that
+#    403s on every receiver is the no-op-reporting-success shape epic #266 exists to refuse. This
+#    job answers it the way the issue prescribed: `actions/create-github-app-token` FAILS when the
+#    installation lacks a requested scope, so a mint with `permission-issues: write` IS the
+#    assertion. It then reads each receiver's dashboard back through that token, because a scope
+#    granted org-wide and an App that can reach a particular repo are different facts.
+#
+#    IT NEEDS SECRETS, SO IT CANNOT RUN ON A FORK, and it is `continue-on-error: false` on purpose:
+#    if the grant is ever revoked, every release stops telling its receivers, and the release
+#    workflows would go red one at a time with no explanation. This goes red first, here, naming it.
+#
+# 2. `fixture` — is the writer CORRECT? A hermetic truth table against a fake GitHub API on
+#    localhost, no credential, no network. Per epic #266's ratified rule — A GATE THAT CANNOT FAIL
+#    ON ITS SUBJECT IS NOT A GATE — it drives the real script across every leg that must go red:
+#    zero receivers reached, a refused write (403/404), and — the leg this whole area keeps
+#    producing — a `PATCH` that returns 200 and changes nothing. It also pins the two precision
+#    rules (#1923 AC3): the tick names the published package, and `create-all-rate-limited-prs` /
+#    `rebase-all-open-prs` are never ticked.
+name: dashboard-tick-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/dashboard-tick.py"
+      # Declared by dashboard-tick.py's `PATHS_SUBJECT` (#996): the writer shells out to it for the
+      # roster, and the fixture drives it directly. A change here that breaks the subject set must
+      # re-run this gate.
+      - "scripts/repos.sh"
+      - "tests/dashboard-tick/**"
+      - ".github/workflows/dashboard-tick-selftest.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-coord-engine.yml"
+      - "registry/repos.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/dashboard-tick.py"
+      - "scripts/repos.sh"
+      - "tests/dashboard-tick/**"
+      - ".github/workflows/dashboard-tick-selftest.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-coord-engine.yml"
+      - "registry/repos.yml"
+  # The credential is a live org setting that no commit here changes, so it can go false with
+  # nothing to trigger on. Weekly, offset from the coherence gates' morning band.
+  schedule:
+    - cron: "41 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-tick-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    name: The writer's failure legs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the dashboard-tick failure-leg fixture
+        run: bash tests/dashboard-tick/run.sh
+
+  credential:
+    name: The dispatch App carries issues:write on every kit receiver
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A fork PR has no secrets, and a mint step that fails for THAT reason would be indistinguishable
+    # from a revoked grant — the exact confusion this job exists to prevent. Skip it by name instead.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # NO `repositories:` LIST, DELIBERATELY, AND THAT IS THE POINT (#1923 AC2). `create-github-app-
+      # token` resolves its inputs before any step has read a file, so a `repositories:` block can
+      # never be the roster query — repos-audit.yml:130 hit that wall and hand-listed the seven, which
+      # is the shape #1507/#1510/#1515/#1528/#1538 are all about. Omitting it scopes the token to the
+      # WHOLE FS-GG installation instead, and the subject set then comes from the roster where it
+      # belongs: scripts/dashboard-tick.py derives it from `repos.sh list --receives coordination-kit
+      # --kit-delivery package`. A rostered receiver the App is not installed on is NOT a silent pass
+      # — its issues list 404s and the script names it by repo (`the App cannot read <repo>`).
+      - name: Mint an installation token that carries issues:write
+        id: mint
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-issues: write
+
+      # A SCOPE THE INSTALLATION HOLDS AND A REPO THE APP CAN REACH ARE DIFFERENT FACTS, and #1923 AC1
+      # asks about both ("...on the seven receivers"). The mint above proves the first. This proves the
+      # second, and it is READ-ONLY on purpose: a no-op `PATCH` would be a stronger proof of the write
+      # scope and would also edit seven live issues on every scheduled run, which is not a price a
+      # selftest may charge. Per AC6, a receiver with no dashboard is named as UNDETERMINED — it is not
+      # a credential finding, and it is not an ok either.
+      - name: The token reaches every receiver's Dependency Dashboard
+        env:
+          DASHBOARD_TICK_TOKEN: ${{ steps.mint.outputs.token }}
+        run: |
+          set +e
+          python3 scripts/dashboard-tick.py --probe
+          rc=$?
+          set -e
+          # THIS JOB'S SUBJECT IS THE CREDENTIAL, and its arms say so. A receiver with no dashboard
+          # (rc=2) is a real thing to know and is NOT a credential finding — the probe reports it,
+          # and failing a job named "the App carries issues:write" over it would be the same
+          # conflation the fork-skip `if:` above exists to avoid. A refused read (rc=1) IS one.
+          case "$rc" in
+            0) echo "credential: minted with issues:write, and every roster receiver's dashboard read back." >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "::warning title=dashboard-tick: a receiver could not be graded::The credential is fine — at least one receiver has no readable Dependency Dashboard. See the job log." ;;
+            *) echo "::error title=dashboard-tick: the App cannot reach a kit receiver::scripts/dashboard-tick.py --probe exited $rc. #1923 AC1 is not satisfied." ; exit 1 ;;
+          esac
+
+      - name: Record the answer
+        if: always()
+        run: |
+          {
+            echo "### dashboard-tick credential (#1923 AC1)"
+            echo ""
+            echo "\`fs-gg-cross-repo-dispatch\` was asked for \`issues: write\` over the seven"
+            echo "\`receives: coordination-kit\` + \`kit-delivery: package\` receivers."
+            echo "Mint step outcome: **${{ steps.mint.outcome }}**."
+          } >> "$GITHUB_STEP_SUMMARY"

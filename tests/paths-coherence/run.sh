@@ -806,13 +806,19 @@ fi
 # 11 -> 12 on 2026-07-29 (#1802): `scripts/check-pin-coherence.py` declared a PATHS_SUBJECT, so rule
 # (c) attaches to `pin-coherence.yml` and the census counts it. THE TRIPWIRE FIRED AS DESIGNED — this
 # leg went red on that PR's first CI run, which is the seventh time it has caught a surface changing.
+# 12 -> 13 on 2026-07-29 (#1923): `scripts/dashboard-tick.py` — the kit/engine push half — declares
+# a PATHS_SUBJECT of `(ROSTER_SCRIPT,)`, composed from the constant it actually shells out to for the
+# receiver set, so rule (c) attaches to `dashboard-tick-selftest.yml` and the census counts it. THE
+# TRIPWIRE FIRED AS DESIGNED — this leg went red on that PR's first CI run after the declaration
+# landed, the EIGHTH time it has caught a surface changing, and it caught it before the workflow
+# reached `main`.
 # The number is the point: it is a census, not a threshold, so it moves only with a reviewed change
 # that adds or removes a declaration, and a workflow that silently STOPS naming its gate still reds.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "12" ]; then
+if [ "${s:-0}" = "13" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 12 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 13 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

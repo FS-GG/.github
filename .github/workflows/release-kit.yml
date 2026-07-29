@@ -100,13 +100,17 @@ name: release-kit
 # workflow at all — and the hub already performs the READ half of it, in
 # `scripts/check-pin-coherence.py` (which finds each receiver's dashboard by title and parses its
 # body) under `pin-coherence.yml`, which grants `issues: read` for exactly that. That work is
-# .github#1923.
+# .github#1923, and it is BUILT: see "THE PUSH HALF" in the steps below, scripts/dashboard-tick.py,
+# and dashboard-tick-selftest.yml, which asserts the App's `issues: write` grant on its own schedule.
 #
 # WHAT THIS RECORD DOES NOT CLAIM, AND CANNOT SEE (#1776 AC5).
 #
-#   • It does NOT discharge #1776 AC4 (a release that notifies nobody must be REPORTED, mutation-
-#     proven). Nothing here reports it. AC4 moves to .github#1923 with the mechanism it belongs to,
-#     and is deferred rather than met — say so rather than reading this block as coverage.
+#   • #1776 AC4 (a release that notifies nobody must be REPORTED, mutation-proven) is DISCHARGED as
+#     of .github#1923, and by the job below rather than by this block: the push half exits non-zero
+#     when it reaches zero receivers, when a write is refused, and when a `PATCH` returns 200 and
+#     changes nothing, and tests/dashboard-tick/run.sh drives all three legs against a fake API. This
+#     paragraph used to say AC4 was deferred; it is not any more, and the mechanism is the DASHBOARD
+#     TICK described below, never the `repository_dispatch` the paragraph above refuses.
 #   • It CANNOT see whether Renovate ran and chose to do nothing. A push that fires and a Renovate
 #     run that then does nothing are different failures, and only the second is #1768's subject. The
 #     latencies above bound DELIVERY; they say nothing about when the bot woke up.
@@ -116,8 +120,11 @@ name: release-kit
 #
 # THE CREDENTIAL IS NOT WHAT BLOCKS ANY OF THIS (#1776 AC3). The `fs-gg-cross-repo-dispatch` App and
 # its org secrets were provisioned by .github#21, which is closed, and four workflows in this repo
-# mint tokens from them today. Which SCOPES that installation carries is #1923's question, not this
-# file's — recorded there so one paragraph holds it rather than two drifting copies.
+# mint tokens from them today. Which SCOPES that installation carries was #1923's question, and it is
+# ANSWERED there rather than restated here: dashboard-tick-selftest.yml's `credential` job mints with
+# `permission-issues: write` — a mint GitHub REFUSES when the installation lacks the scope — and then
+# reads every roster-derived receiver's dashboard back through that token. One assertion, on a
+# schedule, rather than two drifting paragraphs.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -303,7 +310,72 @@ jobs:
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
 
+      # ─────────────────────────────────────────────────────────────────────────────────────────
+      # THE PUSH HALF (.github#1923). Read the header block above first: this is NOT a
+      # `repository_dispatch`, and the reasons it is not are measured there.
+      #
+      # A publish that nobody hears about has not been delivered. Renovate is the only thing that
+      # moves a receiver's pin, and it holds bumps behind two states that need a HUMAN TO TICK A BOX
+      # in another repo — a rate-limited branch, or a repo it has simply not re-extracted since. Both
+      # were live on 2026-07-29 with FS.GG.Kit four versions ahead of two receivers. The tick is a
+      # `PATCH .../issues/<n>` on the receiver's Dependency Dashboard, and it needs no receiver-side
+      # workflow at all.
+      #
+      # WHY IT IS AFTER THE PUSHES AND NOT `continue-on-error`. Telling the fleet is part of
+      # releasing, not a courtesy after it: #1923 AC4 requires that a release reaching ZERO receivers
+      # go RED, and a step that swallows its own failure is the no-op-reporting-success shape epic
+      # #266 refuses. It is gated on `push == 'true'` so a pack-only dry run tells nobody, which is
+      # correct — nothing was published.
+      #
+      # The token is the org dispatch App, NOT `GITHUB_TOKEN`: this writes to other repositories, and
+      # the run-scoped token's authority stops at this one. `issues: write` on that installation is
+      # asserted independently, and on a schedule, by dashboard-tick-selftest.yml.
+      - name: Mint the cross-repo token the push half writes with
+        id: tick-token
+        if: steps.v.outputs.push == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          # No `repositories:` — see dashboard-tick-selftest.yml. The subject set is the ROSTER, read
+          # by the script; a list here could only be a second, drifting copy of it.
+          owner: FS-GG
+          permission-issues: write
+
+      - name: Tell every kit receiver the release exists
+        if: steps.v.outputs.push == 'true'
+        env:
+          DASHBOARD_TICK_TOKEN: ${{ steps.tick-token.outputs.token }}
+          # Through `env:`, not spliced into the `run:` body — the same discipline the version step
+          # above uses, and the reason is that a `${{ }}` inside shell is substituted before bash
+          # ever parses the line.
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set +eu
+          python3 scripts/dashboard-tick.py --package FS.GG.Kit --version "$VERSION"
+          rc=$?
+          set -eu
+          # Classify by EXIT CODE, never by prose (#335). Every non-zero is red; they are separate
+          # arms so the operator reads the right sentence, which is the whole point of the script
+          # having four codes instead of two.
+          #   2 — a receiver could not be GRADED. "I could not tell them" must never wear the same
+          #       green as "I told them" (#266).
+          #   3 — nothing was ATTEMPTED: the roster would not read, or the credential was empty. Not
+          #       the same event as a refused write, and folding it into that arm names a cause that
+          #       did not happen.
+          case "$rc" in
+            0) echo "delivery: every kit receiver was reached." >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "::error title=release-kit: delivery not verified::At least one receiver could not be graded. The kit IS published; some receivers may not have been told. See the job log." ; exit 1 ;;
+            3) echo "::error title=release-kit: delivery never ran::scripts/dashboard-tick.py exited 3 — a permanent no-verdict (the roster would not read, or the credential was empty). NOTHING was attempted, so no receiver was told. The kit IS published." ; exit 1 ;;
+            *) echo "::error title=release-kit: the release told nobody, or a write was refused::scripts/dashboard-tick.py exited $rc. The kit IS published — this is a DELIVERY failure, not a publish failure." ; exit 1 ;;
+          esac
+      # ─────────────────────────────────────────────────────────────────────────────────────────
+
+      # `always()`: the publish is the thing this summary reports, and a DELIVERY failure above must
+      # not suppress the record that the package went to the feeds. The two facts are separate and
+      # the operator needs both.
       - name: Summary
+        if: always()
         run: |
           {
             echo "### FS.GG.Kit ${{ steps.v.outputs.version }}"
