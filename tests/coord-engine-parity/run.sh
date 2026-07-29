@@ -2625,6 +2625,13 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   ljson="$(lt --json 2>/dev/null)"
   nts() { jq -r "[.[] | select(.code==\"NO-TOUCH-SET\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$ljson"; }
 
+  # SEVERITY-UNSET is accumulated from the scanned board, not just tested as a pure verdict.
+  # It applies to open, non-Done work; Done and closed rows remain outside the gate.
+  sevunset="$(jq -r '[.[] | select(.code=="SEVERITY-UNSET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson")"
+  [ "$sevunset" = "FS.GG.SDD#437" ] \
+    && ok "#1901: SEVERITY-UNSET fires end-to-end on exactly the open, non-Done untriaged row" \
+    || bad "#1901: SEVERITY-UNSET must exclude Done and closed rows" "$sevunset"
+
   # NO-TOUCH-SET fires on EXACTLY the unschedulable items — #420 (no Paths) and #421 (fenced-only, #277).
   [ "$(nts)" = "FS.GG.SDD#420,FS.GG.SDD#421" ] \
     && ok "case14: NO-TOUCH-SET fires on EXACTLY the unschedulable items (#420, #421)" \

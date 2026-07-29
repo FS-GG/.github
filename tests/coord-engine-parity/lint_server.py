@@ -53,8 +53,10 @@ SDD = "FS-GG/FS.GG.SDD"
 GAME = "FS-GG/FS.GG.Game"
 
 
-def node(n, status, repo, state="OPEN", title=""):
-    return {"status": {"name": status}, "severity": {"name": "Low"}, "blockedBy": None,
+def node(n, status, repo, state="OPEN", title="", severity="Low"):
+    return {"status": {"name": status},
+            "severity": {"name": severity} if severity else None,
+            "blockedBy": None,
             "content": {"__typename": "Issue", "number": n, "title": title or f"item {n}",
                         "state": state, "repository": {"nameWithOwner": repo}}}
 
@@ -75,6 +77,9 @@ NODES = [
     node(434, "Ready", SDD, title="Parked on a human decision"),
     node(435, "Ready", SDD, title="Declares a class word nobody speaks"),
     node(436, "Ready", SDD, title="Declares a legal class in the wrong case"),
+    node(437, "Ready", SDD, title="Severity has not been triaged", severity=None),
+    node(438, "Done", SDD, title="Done without severity", severity=None),
+    node(439, "Ready", SDD, state="CLOSED", title="Closed without severity", severity=None),
 ]
 
 # #421's ONLY `Paths:` line is fenced — the scheduler cannot see it, so it declares nothing (#277).
@@ -120,6 +125,7 @@ BODIES = {
     # a legal value is ACCEPTED, because `Types.itemClassOfWireName` is the same normalisation `reconcile`
     # reads the board column back with, and refusing it would report a correctly-triaged row as untriaged.
     436: "Paths: src/Real/**\n\nClass:   Defect  ",
+    437: "Paths: none\n\nClass: hardening",
     # 423 (In progress) and 424 (closed) are NOT candidates, so the engine must never read their bodies.
 }
 
