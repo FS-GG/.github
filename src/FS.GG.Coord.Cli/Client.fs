@@ -168,54 +168,7 @@ module Client =
     /// own owner/repo. `#?` here so `548` and `#548` both parse and the two ref readers in this codebase
     /// stop disagreeing about what a ref is.
     let parseRefIn (owner: string) (defaultRepo: string option) (raw: string) : Result<Ref, string> =
-        let forms = "use a URL, owner/repo#n, repo#n, or a bare n inside the repo's checkout"
-
-        // A ref's digits → an issue number, or a REFUSAL naming the range. The regexes below already
-        // guarantee digits, so the only way this fails is a run too long for an Int32 — where bare `int`
-        // THROWS, and an unhandled throw here is the defect boundary: `heartbeat 99999999999999999999`,
-        // an ordinary typo, exited 2, whose contract reads "the ENGINE broke — report it, do not retry."
-        // A number out of range is a bad ARGUMENT and must be told as one. #611's rule again: a
-        // diagnostic that names the wrong culprit sends the reader somewhere there is nothing to find.
-        let numbered ownr repo (digits: string) =
-            match Int32.TryParse(digits, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture) with
-            | true, n ->
-                Ok
-                    { Owner = ownr
-                      Repo = repo
-                      Number = n }
-            | _ -> Error $"issue number '%s{digits}' is out of range (the largest is %d{Int32.MaxValue})."
-
-        let url =
-            Text.RegularExpressions.Regex.Match(raw, @"github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)")
-
-        if url.Success then
-            numbered url.Groups.[1].Value url.Groups.[2].Value url.Groups.[3].Value
-        else
-            let full = Text.RegularExpressions.Regex.Match(raw, @"^([\w.-]+)/([\w.-]+)#(\d+)$")
-
-            if full.Success then
-                numbered full.Groups.[1].Value full.Groups.[2].Value full.Groups.[3].Value
-            else
-                let short = Text.RegularExpressions.Regex.Match(raw, @"^([\w.-]+)#(\d+)$")
-
-                if short.Success then
-                    numbered owner short.Groups.[1].Value short.Groups.[2].Value
-                else
-                    let bare = Text.RegularExpressions.Regex.Match(raw, @"^#?(\d+)$")
-
-                    if bare.Success then
-                        match defaultRepo with
-                        | Some repo -> numbered owner repo bare.Groups.[1].Value
-                        | None ->
-                            // NAME THE REAL CAUSE. The ref parsed fine — there is simply no repo to resolve
-                            // it against, and that is a different remedy from a misspelling (#611's lesson:
-                            // a diagnostic that points at the wrong thing costs more than no diagnostic).
-                            // The remedy names only the QUALIFIED forms: offering "a bare n" back to
-                            // someone whose bare n just failed is advice they have already taken.
-                            Error
-                                $"cannot resolve the bare issue number '%s{raw}' — no %s{owner} repo to infer it from (no --repo, and this is not a %s{owner} checkout). Name the repo: use a URL, owner/repo#n, or repo#n."
-                    else
-                        Error $"unrecognised issue ref '%s{raw}' (%s{forms})."
+        RefParsing.parse owner defaultRepo raw
 
     /// Parse a `<ref>` against the ambient context. See `parseRefIn` — this only supplies the defaults.
     let private parseRef (ctx: Context) (raw: string) : Result<Ref, string> =
@@ -4797,14 +4750,41 @@ module Client =
                             // looked and found nothing, whereas `Unreadable` means a promise may still exist.
                             // Never pop here: `done` reports the obligation; the worker drains its OWN queue
                             // sequentially after this stamp, one claimed item at a time.
-                            match FollowupAudit.inspect w with
-                            | FollowupAudit.Empty -> ()
-                            | FollowupAudit.Owed count ->
-                                eprint
-                                    $"fsgg-coord-engine: %d{count} follow-up(s) remain for worker %s{w.Id}. After this done stamp, drain only your OWN queue sequentially: `scripts/fsgg-coord followup pop`; claim and complete one item before considering the next."
-                            | FollowupAudit.Unreadable why ->
+                            match Followups.apply w Followups.List with
+                            | Followups.Empty -> ()
+                            | Followups.Listed refs ->
+                                // The queue itself is local and keyed to a worker who may now disappear.
+                                // Before we tell that worker to end, put the deferral on EACH owed issue.
+                                // This is deliberately before any queue rewrite (there is none at this
+                                // boundary): a failed issue mutation leaves the original promise intact,
+                                // visible, and retryable instead of converting it into an untraceable file
+                                // edit. The comment is an observation of the worker's explicit queue, not a
+                                // claim that a driver has scheduled the work.
+                                let mutable recorded = true
+
+                                for owed in refs do
+                                    match
+                                        Writes.followupDisposition
+                                            ctx.Transport
+                                            owed
+                                            (WorkerId w.Id)
+                                            $"deferred after completing %s{ref.Short}: this worker's follow-up queue still contains this open item. Drain it sequentially, or explicitly abandon it with a reason before this worker ends."
+                                    with
+                                    | Ok () -> ()
+                                    | Error e ->
+                                        recorded <- false
+                                        eprint
+                                            $"fsgg-coord-engine: could not durably record the follow-up disposition for %s{owed.Short}: %s{Errors.explain e}. The queue was NOT rewritten; retry `done` or record an explicit disposition before ending worker %s{w.Id}."
+
+                                if recorded then
+                                    eprint
+                                        $"fsgg-coord-engine: %d{List.length refs} follow-up(s) remain for worker %s{w.Id}; each is now durably recorded as deferred on its issue. Drain only your OWN queue sequentially: `scripts/fsgg-coord followup pop`; claim and complete one item before considering the next."
+                            | Followups.Unreadable why
+                            | Followups.Refused why ->
                                 eprint
                                     $"fsgg-coord-engine: %s{why} The done stamp stands, but do not treat this as an empty queue. Retry `scripts/fsgg-coord followup list` before ending this worker."
+                            | other ->
+                                eprint $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
 
                             // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
                             //
@@ -5430,6 +5410,83 @@ module Client =
                   ChoreLocks = parseChoreLocks (env "FSGG_COORD_CHORE_LOCKS" "") },
                 transport :> IDisposable
             )
+
+    /// `followup audit` is intentionally a read-only reconciliation PREVIEW. A queue's mtime is a
+    /// candidate selector, not evidence that its worker died: each queued issue is re-read from GitHub,
+    /// then its marker scan is required to be complete before we say it has no live claim.
+    let followupAudit (opts: Options) : int =
+        match context () with
+        | Error code -> code
+        | Ok(ctx, disposable) ->
+            use _ = disposable
+            let local = Followups.audit DateTimeOffset.UtcNow
+            let mutable failed = not (List.isEmpty local.Unreadable)
+
+            for (worker, why) in local.Unreadable do
+                eprint $"UNREADABLE-QUEUE: worker %s{worker}: %s{why}"
+
+            let repos =
+                (local.Stale @ local.Fresh)
+                |> List.collect (fun q -> q.Refs)
+                |> List.map (fun r -> r.Owner, r.Repo)
+                |> Set.ofList
+
+            let openByRepo =
+                repos
+                |> Seq.map (fun (owner, repo) ->
+                    (owner, repo), Reads.openIssues ctx.Transport owner repo)
+                |> Map.ofSeq
+
+            // `openIssues` is a convenient per-repo candidate read, but absence from it is not a state:
+            // it can also be an off-board row, a PR, or a visibility mismatch. The fresh board scan owns
+            // the issue-state authority, and anything it cannot name remains UNKNOWN.
+            let boardState =
+                Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+                |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
+                |> Result.map (fun rows -> rows |> List.map (fun row -> row.Ref, row.State) |> Map.ofList)
+
+            let reportQueue (label: string) (queue: Followups.AuditedQueue) =
+                for (owed: Ref) in queue.Refs do
+                    match Map.find (owed.Owner, owed.Repo) openByRepo with
+                    | Error e ->
+                        failed <- true
+                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read issue state: %s{Errors.explain e}. Queue retained."
+                    | Ok openIssues ->
+                        match openIssues |> List.tryFind (fun issue -> issue.Number = owed.Number) with
+                        | None ->
+                            match boardState with
+                            | Ok states ->
+                                match Map.tryFind owed states with
+                                | Some IssueState.Closed ->
+                                    eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
+                                | Some IssueState.Open ->
+                                    failed <- true
+                                    eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short} is open on the fresh board but absent from the open-issue read. Queue retained."
+                                | None ->
+                                    failed <- true
+                                    eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short} is not on the fresh board; no closed-state inference was made. Queue retained."
+                            | Error e ->
+                                failed <- true
+                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: fresh board state could not be read: %s{Errors.explain e}. Queue retained."
+                        | Some _ ->
+                            match
+                                Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
+                                |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
+                            with
+                            | Error e ->
+                                failed <- true
+                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
+                            | Ok markers ->
+                                match Reads.winner opts.LeaseMinutes markers with
+                                | Some marker ->
+                                    eprint $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
+                                | None ->
+                                    eprint $"%s{label}: worker %s{queue.Worker}, %s{owed.Short} is open with no live claim; queue retained pending durable disposition."
+
+            for queue in local.Stale do reportQueue "ABANDONED" queue
+            for queue in local.Fresh do reportQueue "ACTIVE" queue
+
+            if failed then ExitRed else ExitGreen
 
     // ---- #480: the repo a WORKER command scopes to — the one you are STANDING IN --------------------
     // `parseGitHubSlug` + `gitRemoteRepo` are defined above verify-paths (its #430 default reads the same

@@ -242,6 +242,8 @@ schema bump using an asymmetry .github#1574 had already removed. No behaviour mo
     <Compile Include="Options.fs" />
     <Compile Include="Identity.fsi" />
     <Compile Include="Identity.fs" />
+    <Compile Include="RefParsing.fsi" />
+    <Compile Include="RefParsing.fs" />
     <Compile Include="FollowupAudit.fsi" />
     <Compile Include="FollowupAudit.fs" />
     <Compile Include="Chores.fsi" />
@@ -254,12 +256,12 @@ schema bump using an asymmetry .github#1574 had already removed. No behaviour mo
     <Compile Include="ReadyApplication.fs" />
     <Compile Include="LintApplication.fsi" />
     <Compile Include="LintApplication.fs" />
-    <Compile Include="Client.fs" />
     <!-- AFTER `Client.fs`, deliberately: the follow-up queue reuses `parseRefIn` and the exit constants
          rather than growing a second answer to "what is a ref?" or "what does an empty look exit?" (#485).
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->
     <Compile Include="Followups.fsi" />
     <Compile Include="Followups.fs" />
+    <Compile Include="Client.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>

@@ -105,6 +105,8 @@ module Followups =
         /// Every entry, in order (`list`). NEVER empty — an empty queue is `Empty`, so a caller cannot read
         /// "nothing owed" out of a successful listing by accident.
         | Listed of Ref list
+        /// A reconciliation rewrote the queue after durable issue dispositions had landed.
+        | Reconciled of removed: int
         /// A LOOK THAT SUCCEEDED and found nothing. `take`'s EX_NONE, for `take`'s reason.
         | Empty
         /// The INPUT was refused — a bare ref, junk, the wrong arity. Never retryable; names its own remedy.
@@ -133,6 +135,10 @@ module Followups =
 
     /// Enumerate every worker-keyed local queue at `now`, without consuming a ref.
     val audit: now: DateTimeOffset -> Audit
+
+    /// Remove named refs under the queue's exclusive lock. Call only after recording their durable issue
+    /// disposition; malformed/unreadable queues refuse without rewriting.
+    val remove: worker: Worker -> refs: Set<Ref> -> Result<int, string>
 
     /// The lines an outcome prints, and where. `fst` is stdout — the ref a caller consumes; `snd` is stderr
     /// — the commentary. Split here rather than in `run` so the projection is testable without capturing a

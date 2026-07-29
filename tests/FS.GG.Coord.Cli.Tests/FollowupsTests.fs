@@ -349,6 +349,23 @@ module FollowupsTests =
             Assert.False(File.Exists file, "a drained queue must cease to exist, not linger zero-byte"))
 
     [<Fact>]
+    let ``reconciliation removes only durably selected refs and preserves a concurrent obligation`` () =
+        withCache (fun _ ->
+            let w = workerNamed "rook-reconcile"
+            let closed = ref' "FS-GG" "FS.GG.Game" 1
+            let open' = ref' "FS-GG" "FS.GG.Audio" 2
+            apply w (Add closed.Short) |> ignore
+            apply w (Add open'.Short) |> ignore
+
+            match remove w (set [ closed ]) with
+            | Error why -> failwith why
+            | Ok _ -> ()
+
+            // A reconciliation may clear only the ref whose issue disposition has landed. The other
+            // promise is still owed; treating a queue rewrite as a truncate would recreate #1900.
+            Assert.Equal(Listed [ open' ], apply w List))
+
+    [<Fact>]
     let ``concurrent pops CONSERVE the queue — no ref handed twice, none lost`` () =
         withCache (fun _ ->
             let w = workerNamed "rook-test"

@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open FS.GG.Coord.Types
+open FS.GG.Coord
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.Cli.Identity
 
@@ -31,6 +32,7 @@ module Followups =
         | Head of Ref
         | Popped of Ref
         | Listed of Ref list
+        | Reconciled of removed: int
         | Empty
         | Refused of why: string
         | Unreadable of why: string
@@ -90,7 +92,7 @@ module Followups =
         // it?", i.e. "is this the bare form?", and the answer never reaches the queue.
         let probe = ".github"
 
-        match Client.parseRefIn ownr None raw, Client.parseRefIn ownr (Some probe) raw with
+        match RefParsing.parse ownr None raw, RefParsing.parse ownr (Some probe) raw with
         | Ok r, _ -> Ok r
         | Error _, Ok _ ->
             Error
@@ -233,6 +235,32 @@ module Followups =
             // whoever invoked it. Keeping the impossible branch explicit makes that boundary total.
             Refused "followup audit reads every worker queue and does not take a worker argument."
 
+    /// Remove only refs whose durable disposition was already written. The queue is re-read under its
+    /// exclusive handle, so a concurrent append survives this reconciliation; an unreadable line aborts
+    /// the rewrite rather than letting a closed-item cleanup discard an unrelated promise.
+    let remove (worker: Worker) (refs: Set<Ref>) : Result<int, string> =
+        match path worker with
+        | Error why -> Error why
+        | Ok file ->
+            match withQueue file (fun lines ->
+                let parsed = lines |> List.map (fun line -> line, parseLine file line)
+
+                match parsed |> List.tryPick (function _, Error why -> Some why | _ -> None) with
+                | Some why -> Unreadable why, None
+                | None ->
+                    let remaining =
+                        parsed
+                        |> List.choose (function
+                            | line, Ok r when not (Set.contains r refs) -> Some line
+                            | _ -> None)
+
+                    let removed = List.length lines - List.length remaining
+                    Reconciled removed, Some remaining) with
+            | Unreadable why
+            | Refused why -> Error why
+            | Reconciled removed -> Ok removed
+            | _ -> Error "the follow-up queue did not return a reconciliation receipt; it was not treated as rewritten."
+
     // ---- fleet audit -------------------------------------------------------------------------------
 
     /// A queue older than one item lease is not evidence that its worker is gone — chunk 2 correlates
@@ -291,6 +319,7 @@ module Followups =
         | Head r -> [ qualified r ], []
         | Popped r -> [ qualified r ], []
         | Listed refs -> refs |> List.map qualified, [ $"%d{List.length refs} follow-up(s) owed." ]
+        | Reconciled removed -> [], [ $"%d{removed} reconciled follow-up(s) removed." ]
         | Audited audit ->
             let queueLines label queues =
                 queues
@@ -309,14 +338,15 @@ module Followups =
         | Added _
         | Head _
         | Popped _
-        | Listed _ -> Client.ExitGreen
-        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) -> Client.ExitRed
-        | Audited _ -> Client.ExitGreen
+        | Listed _ -> ExitCode.toInt ExitCode.Green
+        | Reconciled _ -> ExitCode.toInt ExitCode.Green
+        | Audited audit when not (List.isEmpty audit.Stale) || not (List.isEmpty audit.Unreadable) -> ExitCode.toInt ExitCode.Red
+        | Audited _ -> ExitCode.toInt ExitCode.Green
         // EX_NONE, and `Client`'s own constant rather than a 5 typed here — "I looked and there is nothing"
         // has exactly one meaning across this engine, and `take` already owns it (#585).
-        | Empty -> Client.ExitNone
+        | Empty -> ExitCode.toInt ExitCode.NoneStartable
         | Refused _
-        | Unreadable _ -> Client.ExitError
+        | Unreadable _ -> ExitCode.toInt ExitCode.Error
 
     let run (opts: Options.Options) : int =
         // THE ARGUMENTS FIRST, THEN THE ENVIRONMENT. `parse` is pure and cannot fail for a reason outside
@@ -327,7 +357,7 @@ module Followups =
         match parse opts.Args with
         | Error msg ->
             Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
-            Client.ExitError
+            ExitCode.toInt ExitCode.Error
         | Ok Audit ->
             let outcome = Audited(audit DateTimeOffset.UtcNow)
             let out, err = render outcome
@@ -339,7 +369,7 @@ module Followups =
             match Identity.resolve opts.Worker with
             | Error msg ->
                 Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
-                Client.ExitError
+                ExitCode.toInt ExitCode.Error
             | Ok worker ->
                 let outcome = apply worker action
                 let out, err = render outcome

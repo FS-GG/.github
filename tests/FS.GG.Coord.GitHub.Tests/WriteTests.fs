@@ -1472,6 +1472,14 @@ let ``say does NOT require the lock - the worker who lost the race must still be
     | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
     | Error e -> failwith $"a message needs no lock — got %A{e}"
 
+[<Fact>]
+let ``a follow-up disposition is a durable issue comment, not a worker mailbox message`` () =
+    let transport = Fake.Recorder(fun _ -> ok """{"id":950}""")
+
+    match followupDisposition transport aRef me "deferred: driver will resurface this open item" with
+    | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
+    | Error e -> failwith $"the disposition must be recorded on the owed issue — got %A{e}"
+
 // ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
 
 let private staleMarker =

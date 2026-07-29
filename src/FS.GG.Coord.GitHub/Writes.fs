@@ -849,6 +849,13 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
+    let followupDisposition (transport: IGitHubTransport) (ref: Ref) (worker: WorkerId) (text: string) : IoResult<unit> =
+        let body =
+            $"<!-- fsgg:followup-disposition worker=%s{worker.Value} -->\n"
+            + $"**Follow-up disposition for %s{worker.Value}**\n\n%s{text}"
+
+        postComment transport ref body |> Result.map ignore
+
     let child (transport: IGitHubTransport) (parent: Ref) (childId: int64) : IoResult<unit> =
         // A JSON NUMBER, NOT A STRING. `gh api -f sub_issue_id=1047` sent it as a quoted string and
         // collected a 422; `-F` sent it as a number. `JsonValue.Create` on an int64 emits a number, and the
