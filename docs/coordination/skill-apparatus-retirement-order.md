@@ -974,8 +974,14 @@ sub-resource, never the bare protection endpoint, whose whole-object `PUT` disab
 > |---|---|---|
 > | 0 | unblock (B1–B3) | **complete** |
 > | 1 | per receiver, one at a time | **complete — 7 of 7**, and the count is §4's, not this table's |
-> | 2 | fleet-wide narrowing of kit materialization and `coordination-coherence`'s skill paths | **LANDED 2026-07-29** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871)) |
+> | 2 | fleet-wide narrowing of kit materialization and `coordination-coherence`'s skill paths | **LANDED `2026-07-28T22:40:20Z`** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871), `23:04:26Z`) |
 > | 3 | the kit-pin freshness sweep — **last** | **REACHED and DECLINED** — [#1864](https://github.com/FS-GG/.github/issues/1864) holds the decision |
+>
+> **The stage-2 dates in ADR-0065 say `2026-07-29` for these same merges, and this table is not
+> disagreeing with it.** Those were written from a `+0200` commit date; every timestamp above is the
+> API's `mergedAt`, in **UTC**, which is what §4 and the rest of this document use. `22:40:20Z` on the
+> 28th *is* `00:40:20+0200` on the 29th. Same instant, two clocks — recorded because a reader
+> reconciling the two records otherwise finds a day of drift and no explanation.
 >
 > **"Terminated" is not "everything retired", and the difference is the whole of stage 3.** §9 ordered
 > the sweep last so that the alarm outlived the fire. The order reached it, measured that its subject
@@ -1138,9 +1144,11 @@ had already falsified.
 Narrow (do not delete) kit materialization to one root, and narrow `coordination-coherence`'s skill
 paths. Both keep their non-skill subjects.
 
-> **STAGE 2 LANDED 2026-07-29** — [#1868](https://github.com/FS-GG/.github/pull/1868), released as
-> `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871)). Its precondition was stage
-> 1 at 7 of 7, and that was met before it was opened.
+> **STAGE 2 LANDED `2026-07-28T22:40:20Z`** — [#1868](https://github.com/FS-GG/.github/pull/1868),
+> released as `FS.GG.Kit` 0.19.0 ([#1871](https://github.com/FS-GG/.github/pull/1871),
+> `2026-07-28T23:04:26Z`). All times UTC `mergedAt`; see §6's stage verdict on why ADR-0065 dates the
+> same merges a day later. Its precondition was stage 1 at 7 of 7, and that was met before it was
+> opened.
 >
 > | property, in `src/FS.GG.Kit/build/FS.GG.Kit.props` | before | 0.19.0 |
 > |---|---|---|
@@ -1161,8 +1169,9 @@ paths. Both keep their non-skill subjects.
 > **AC 5 was NOT satisfied by that change, and this record says so rather than smoothing it.**
 > ADR-0065 §A root's three dispositions states those defaults *normatively*, and #1868 flipped them
 > without amending it in the same change. The amendment is
-> [#1874](https://github.com/FS-GG/.github/pull/1874) and it landed **late** — recorded as late, not
-> backdated. #1868 is the counter-example to AC 5's own rule, sitting inside the item that wrote it.
+> [#1874](https://github.com/FS-GG/.github/pull/1874) and it landed **late** — `2026-07-28T23:44:27Z`,
+> 64 minutes after the mechanism — recorded as late, not backdated. #1868 is the counter-example to
+> AC 5's own rule, sitting inside the item that wrote it.
 
 ### Stage 3 — LAST
 
@@ -1171,9 +1180,10 @@ alarm that would say a retirement went wrong. Phase 4's finding (§1) is that it
 staleness — **survives the rewrite**, so on today's evidence stage 3 is reached and then declined.
 Retiring it requires a separate decision that says what replaces *"is receiver R's pin current?"*.
 
-> **STAGE 3 REACHED AND DECLINED 2026-07-29. The decision the paragraph above asks for is filed as
-> [#1864](https://github.com/FS-GG/.github/issues/1864)** — a `decision` row, currently `Blocked`, and
-> it belongs to a human. It is not being routed around and this order does not answer it.
+> **STAGE 3 REACHED AND DECLINED. The decision the paragraph above asks for was filed
+> `2026-07-28T21:41:47Z` as [#1864](https://github.com/FS-GG/.github/issues/1864)** — a `decision` row,
+> `Blocked`, still **OPEN**, and it belongs to a human. It is not being routed around and this order
+> does not answer it. Recorded here 2026-07-29.
 >
 > **Reaching the last step and declining it is how this order ENDS.** The sweep is the only member of
 > §1's list whose subject the rewrite does not dissolve: resolve-don't-copy removes a repo committing
@@ -1385,14 +1395,14 @@ retirement was safe to make.** Those are different questions and §7 only ever a
 - Amending ADR-0011 Decision 1, ADR-0014 Decision 5, or ADR-0065's root set. Those are amended **in
   direction only** and stay in force until a change actually lands a mechanism retirement — ADR-0067 §9,
   and `#1676` AC 5. **This document amends none of them**, and never did.
-  > **The sentence here used to read *"no such change has landed"*, and that stopped being true on
-  > 2026-07-29.** Two did. Neither is a mechanism retirement and neither touched ADR-0011 Decision 1 or
+  > **The sentence here used to read *"no such change has landed"*, and it stopped being true on
+  > 2026-07-28.** Two did. Neither is a mechanism retirement and neither touched ADR-0011 Decision 1 or
   > ADR-0014 Decision 5, so the prohibition above is unchanged — but the *reason* given for it was a
   > fact with a shelf life, and it expired:
   > - **§5's root-set flip** ([#1636](https://github.com/FS-GG/.github/issues/1636)) executed on
   >   2026-07-28; ADR-0065 carries the `EXECUTED` marker and was amended in that same change.
-  > - **Stage 2** ([#1868](https://github.com/FS-GG/.github/pull/1868)) narrowed defaults on
-  >   2026-07-29; ADR-0065 was amended for it by
+  > - **Stage 2** ([#1868](https://github.com/FS-GG/.github/pull/1868)) narrowed defaults at
+  >   `2026-07-28T22:40:20Z`; ADR-0065 was amended for it by
   >   [#1874](https://github.com/FS-GG/.github/pull/1874), **late** rather than in the same change.
   >
   > Cite the prohibition, not the expired premise. What still authorizes an amendment is a change that
