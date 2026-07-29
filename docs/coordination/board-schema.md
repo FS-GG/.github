@@ -126,6 +126,26 @@ The offline schema gate checks both the exact values and their order:
 scripts/project-field-options check --field Severity --schema docs/coordination/board-schema.md
 ```
 
+### Live field creation and population
+
+The live Coordination project gained `Severity` on 2026-07-29 as a new
+`ProjectV2SingleSelectField`, with the five options created in the order above. First-time creation
+used `createProjectV2Field`, not the guarded update path: a field that does not yet exist has no
+assignments to preserve.
+
+Creation and population are deliberately separate operations. Existing rows initially have no
+assignment, which the engine renders as `Unset`; [.github#1918](https://github.com/FS-GG/.github/issues/1918)
+owns the evidence-based triage pass across every open non-`Done` row. That pass must rate rows from
+their own text, report unratable/exempt rows, and write no other board axis. Until it completes,
+`SEVERITY-UNSET` is expected and keeps the unfinished triage visible.
+
+After creation, any option change is a destructive field update and must use the guarded
+snapshot → `add-option` → restore sequence below. Verify the live field at any time with:
+
+```sh
+scripts/project-field-options check --field Severity
+```
+
 ## Guarded single-select migration
 
 `scripts/project-field-options` is field-generic and fail-closed. Its
