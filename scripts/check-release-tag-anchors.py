@@ -7,7 +7,7 @@ never repairs tags.  `--fixture` is an offline TSV: repo, namespace, package,
 version, artifact-commit, peeled-tag-commit (or `-`), one row per version.
 """
 from __future__ import annotations
-import argparse
+import argparse, re, subprocess, urllib.request, xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -50,10 +50,24 @@ def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--fixture"); ap.add_argument("--live", action="store_true")
     args = ap.parse_args()
     if args.live:
-        # The live adapter deliberately shells out only for tags; feed/nuspec reads stay in the
-        # proven single-repo implementation until its parser is promoted as shared infrastructure.
-        # Keeping this entrypoint explicit makes a live invocation read-only and fail closed.
-        ap.error("live sweep adapter is unavailable until SourceLink feed reader is promoted")
+        bad = False
+        for row in FLEET:
+            if row.package is None:
+                print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\t-"); bad = True; continue
+            lid = row.package.lower()
+            try:
+                with urllib.request.urlopen(f"https://api.nuget.org/v3-flatcontainer/{lid}/index.json", timeout=60) as r:
+                    import json; versions = json.load(r)["versions"]
+                tags = subprocess.check_output(["git", "ls-remote", "--tags", f"https://github.com/{row.repo}.git"], text=True, timeout=60)
+                refs = dict((name.removeprefix("refs/tags/"), sha) for sha, name in (line.split("\t", 1) for line in tags.splitlines()))
+                for version in versions:
+                    with urllib.request.urlopen(f"https://api.nuget.org/v3-flatcontainer/{lid}/{version}/{lid}.nuspec", timeout=60) as r:
+                        anchor = ET.fromstring(r.read()).find(".//repository").get("commit", "-")
+                    tag = refs.get(f"{row.namespace}{version}^{{}}", refs.get(f"{row.namespace}{version}", "-"))
+                    verdict = classify(anchor, tag); print(f"{verdict}\t{row.repo}\t{row.namespace}{version}\t{row.package}"); bad |= verdict != "AGREE"
+            except Exception as e:
+                print(f"UNRESOLVED\t{row.repo}\t{row.namespace}*\t{row.package}\t{e}"); bad = True
+        return 1 if bad else 0
     if not args.fixture: ap.error("--fixture or --live is required")
     seen: set[tuple[str,str,str]] = set(); bad = False
     with open(args.fixture, encoding="utf-8") as f:
