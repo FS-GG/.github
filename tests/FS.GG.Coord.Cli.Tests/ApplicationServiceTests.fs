@@ -4,12 +4,29 @@ open System
 open System.IO
 open System.Text.Json
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
 
 module ApplicationServiceTests =
+
+    [<Fact>]
+    let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
+        let existing =
+            Snapshot.parse
+                """{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"items":[{"owner":"FS-GG","repo":"FS.GG.SDD","number":9,"status":"Ready","state":"OPEN","body":"Paths: docs/reports/new-file.md"}]}"""
+            |> Result.defaultWith (fun errors -> failwithf "fixture snapshot did not parse: %A" errors)
+            |> fun request -> request.Candidates |> List.map _.Item
+
+        let broad = { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 10 }
+        let narrow = { broad with Number = 11 }
+        let otherRepo = { broad with Repo = "FS.GG.Game" }
+
+        Assert.Equal<Ref list>([ existing.Head.Ref ], Client.filingLaneOfOne broad (TouchSet.parse "Paths: docs/reports") existing)
+        Assert.Empty(Client.filingLaneOfOne narrow (TouchSet.parse "Paths: docs/reports/new-file.md") existing)
+        Assert.Empty(Client.filingLaneOfOne otherRepo (TouchSet.parse "Paths: docs/reports") existing)
 
     let private row number repo title status state isPullRequest : Scan.Row =
         { Ref =
