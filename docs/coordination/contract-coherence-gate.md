@@ -1,14 +1,18 @@
 # The contract-coherence gate
 
 A single reusable GitHub Actions workflow — [`contract-coherence.yml`](../../.github/workflows/contract-coherence.yml)
-(`workflow_call`) — that every FS-GG repo's CI calls to fail fast on cross-repo drift.
+(`workflow_call`) — that publishes the stable `contract-coherence / coherence` context.
 Delivered by [.github#18](https://github.com/FS-GG/.github/issues/18) (H3, [epic #16](https://github.com/FS-GG/.github/issues/16) Pillar 3).
 
-It is the **enforcement arm** of the coordination layers: ADRs decide *why*, the
-[registry](../../registry/dependencies.yml) declares *what* (contracts), and this gate makes
-a repo's CI go red when reality stops matching the registry.
+The context has two ownership-scoped paths ([#1787](https://github.com/FS-GG/.github/issues/1787)):
 
-## What it checks
+- In a **receiver**, it reports the stable required context and explicitly abstains from grading
+  hub-owned data. There is no caller-owned assertion left here after #1262 retired the copied
+  build-config drift check.
+- In **FS-GG/.github itself**, it is the required authority gate over the registry and shared props.
+  A broken authority subject therefore reds the repository that owns and can fix it.
+
+## What the authority path checks
 
 1. **Registry schema** — the **typed** `Fsgg.Registry` validator (`fsgg-sdd registry validate`,
    shipped in `FS.GG.Contracts` via the `FS.GG.SDD.Cli` tool) validates the org registry's real
@@ -18,16 +22,13 @@ a repo's CI go red when reality stops matching the registry.
    **replaced** the `scripts/validate-registry.py` stand-in once the typed validator reached
    parity ([.github#49](https://github.com/FS-GG/.github/issues/49); 4-segment version grammar
    fixed in [SDD#32](https://github.com/FS-GG/FS.GG.SDD/issues/32), CLI `0.2.1`).
-2. **Build-config drift** — runs [`scripts/sync-build-config.sh --check`](../../scripts/sync-build-config.sh)
-   so a repo that hand-edited or never re-synced a managed `Directory.*.props` / tool manifest goes
-   red (`shared-build-config@1.0.0`). Skipped for non-consumers via `check-build-config: false`.
-3. **Source XML well-formedness** — guards the `.github#29` defect class (a malformed-but-verbatim
+2. **Source XML well-formedness** — guards the `.github#29` defect class (a malformed-but-verbatim
    `.props` that passes the byte-for-byte drift check yet breaks every adopter's restore).
 
-Every one of those is a **pure function of committed files**, and that is the rule this gate now
-lives by ([.github#741](https://github.com/FS-GG/.github/issues/741)): six repos call this workflow,
-so whatever it asserts is a required check on all of their PRs at once. The only safe subject is
-state the caller's own PR can fix.
+Both are pure functions of files committed in `.github`, and both execute only when
+`github.repository == 'FS-GG/.github'`. The receiver arm neither checks out nor grades the hub.
+This closes #1584's defect shape in this gate: a commit to `registry/dependencies.yml` or
+`dist/dotnet/*.props` cannot move the required verdict of a byte-identical Governance or Net PR.
 
 ### What it deliberately no longer checks: `fsgg-contracts` pin drift
 
@@ -64,11 +65,12 @@ with it; no caller passed it.
 beyond this run's own restore.** A NuGet outage must not be able to wedge six repos' PRs — which is
 also why `feed-coherence` reads the feed from `.github` and not from this workflow.
 
-The registry + scripts are sourced from public FS-GG/.github. The typed validator (check 1) is
-restored as a .NET tool from the org GitHub Packages feed, so every caller must grant
-**`packages: read`** (the run-scoped `GITHUB_TOKEN` then authenticates the NuGet restore — the
-package is public, but the feed still requires a token). This became viable once the H4 feed/App-token
-provisioning ([#21](https://github.com/FS-GG/.github/issues/21)) closed.
+On the authority path, the typed validator is restored as a .NET tool from the org GitHub Packages
+feed. `.github` therefore grants **`packages: read`** to its own `coherence.yml` caller (the
+run-scoped `GITHUB_TOKEN` authenticates the restore — the package is public, but that feed still
+requires a token). Receiver paths do not install the tool or read the feed. Existing caller grants
+remain compatible; narrowing them is separate receiver-owned cleanup, not part of changing this
+published context.
 
 > **Resolved** (coherence id `registry-validator-typed`, [.github#49](https://github.com/FS-GG/.github/issues/49)):
 > the schema check is now the typed `Fsgg.Registry` validator, not a Python stand-in. SDD#26 gave
@@ -78,24 +80,19 @@ provisioning ([#21](https://github.com/FS-GG/.github/issues/21)) closed.
 > the gate onto it. (The version-coupling this note also referred to has since moved out of this
 > workflow entirely — see *What it deliberately no longer checks*, [.github#741](https://github.com/FS-GG/.github/issues/741).)
 
-## Adoption — wiring it into a consumer repo's CI
+## Adoption — retaining the stable receiver context
 
-Add a job to the repo's existing CI workflow (the four product repos set `check-build-config: true`).
-Grant **`packages: read`** so the gate can restore the typed validator from the org feed — a called
-workflow's `GITHUB_TOKEN` scopes are capped by the caller, so it must be granted here:
+The published job id remains `coherence`, so callers and branch protection keep the
+`contract-coherence / coherence` context unchanged:
 
 ```yaml
 permissions:
   contents: read
-  packages: read            # required: the gate restores the fsgg-sdd validator from the org feed
 jobs:
   contract-coherence:
     uses: FS-GG/.github/.github/workflows/contract-coherence.yml@main
-    with:
-      check-build-config: true
-      # repo-path: "."          # path to drift-check, if not the repo root
 ```
 
 `.github` gates itself with [`coherence.yml`](../../.github/workflows/coherence.yml) (the local
-`./.github/workflows/contract-coherence.yml@<ref>` form) and `check-build-config: false`, since it
-**owns** the build config rather than consuming it.
+`./.github/workflows/contract-coherence.yml@<ref>` form), grants `packages: read`, and passes
+`github-ref: ${{ github.sha }}`. That is the authority arm: it grades the exact hub commit under test.

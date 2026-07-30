@@ -1,65 +1,39 @@
-# Reusable cross-repo contract-coherence gate (FS-GG/.github#18, epic #16 Pillar 3).
+# Reusable contract-coherence context (FS-GG/.github#18, split by #1787).
 #
-# Every FS-GG repo's CI calls this via `workflow_call`. It enforces three things:
-#   1. The org registry (FS-GG/.github registry/dependencies.yml) is schema-valid — validated by
-#      the TYPED Fsgg.Registry validator (`fsgg-sdd registry validate`) shipped in FS.GG.Contracts
-#      via the FS.GG.SDD.Cli tool (SDD#26; 4-segment version grammar fixed in SDD#32 / CLI 0.2.1).
-#      The pin tracks the newest published CLI (0.9.0) — see the install step.
-#   2. The calling repo's org-shared .NET build config matches the canonical source of truth
-#      (shared-build-config@1.0.0) via scripts/sync-build-config.sh --check.
-#   3. The build-config source .props are well-formed XML (guards the .github#29 defect class).
+# THE JOB ID IS A PUBLISHED REQUIRED CONTEXT. Governance and Net require
+# `contract-coherence / coherence`, so the `coherence` id stays stable.
 #
-# EVERY ASSERTION HERE IS A PURE FUNCTION OF COMMITTED FILES, AND THAT IS THE LOAD-BEARING PROPERTY
-# (.github#741). This workflow is REUSABLE: six repos call it, so anything it asserts, it asserts as
-# a REQUIRED check on every one of their PRs. A failure here is `enforce_admins`-level — not even an
-# admin merges past it. So the only safe subject for this gate is state the caller's own PR can fix.
+# THE SUBJECT IS SPLIT BY OWNERSHIP (#1787, Option A):
 #
-# IT USED TO ASSERT A FOURTH THING, AND THAT ONE COULD NOT BE FIXED BY THE CALLER. It checked out
-# FS-GG/FS.GG.SDD@main, read `FS.GG.Contracts.fsproj <Version>`, and asserted by strict string
-# equality that the registry's `fsgg-contracts` pin equalled it — calling an UNRELEASED BRANCH, in
-# its own error message, "the actual FS.GG.Contracts package version". Two defects, one line:
+#   * A receiver call reports the stable context and explicitly abstains. No receiver PR is graded
+#     against mutable hub data it cannot fix.
+#   * FS-GG/.github's own call validates the two hub-owned subjects: `dist/dotnet/*.props` parses as
+#     XML, and `registry/dependencies.yml` passes the typed Fsgg.Registry validator.
 #
-#   * IT WEDGED THE ORG ON A BUMP. The assertion coupled `FS-GG/.github@main`'s registry to
-#     `FS-GG/FS.GG.SDD@main`'s source, and NO PR SPANS BOTH REPOS. Bump SDD first and every caller
-#     goes red the instant it merges; advance the registry first and every `.github` PR wedges
-#     instead. There was no landing order without a red window, and SDD calls this workflow too —
-#     so a bare source bump wedged SDD's OWN merges (FS.GG.SDD#432).
-#   * IT WAS VACUOUSLY GREEN. `main` is not a release and a source tree is not a package. When
-#     SDD#426 grew the Contracts public surface under an unchanged `2.0.0`, the `.nupkg` on the feed
-#     and the source labelled `2.0.0` became different artifacts — and this gate printed
-#     `ok: ... == actual package version == 2.0.0`. Epic #266's signature: a confident verdict about
-#     a subject the code could not see.
+# This is the same boundary #741 established for registry-vs-SDD source: an authority invariant reds
+# the authority repository. The old receiver-facing shape checked out `.github@main` and graded those
+# two hub files on every receiver PR. A hub transition could therefore move a required receiver
+# verdict on byte-identical receiver content — #1584's defect one gate over.
 #
-# THE COUPLING DID NOT GO AWAY — IT MOVED TO WHERE IT CANNOT WEDGE ANYONE (source-coherence.yml,
-# `.github`-local: path-filtered PR + push + daily schedule, the shape feed-coherence.yml already
-# uses). Registry-vs-reality is asserted there, against the two subjects that are real: SDD's source
-# (source-coherence.yml) and the live feed (feed-coherence.yml). A red there reds `.github@main`,
-# which is the repo that owns the registry and can actually fix it. DO NOT ADD AN ASSERTION BACK
-# HERE THAT DEPENDS ON ANOTHER REPO'S MUTABLE `main`, OR ON THE NETWORK BEYOND THIS RUN'S OWN
-# RESTORE — a NuGet outage must not be able to wedge six repos' PRs.
-#
-# The registry + scripts are sourced from FS-GG/.github (public). The typed validator is restored as
-# a .NET tool from the org GitHub Packages feed, so every caller MUST grant `packages: read` (the
-# run-scoped GITHUB_TOKEN then authenticates the NuGet restore — public package, but the feed still
-# requires a token). This is the .github#49 swap from the scripts/validate-registry.py stand-in to
-# the typed CLI, which flips coherence id `registry-validator-typed` → coherent:true; it is
-# unblocked because the H4 feed/App-token provisioning (#21) is closed. See
-# docs/coordination/README.md and ADR-0001.
+# The former caller build-config check was retired in #1262 (ADR-0062); receivers now validate their
+# committed props against their pinned FS.GG.Kit in their own build-config-drift jobs. There is no
+# remaining caller-owned assertion here to run. The explicit receiver step is therefore an honest
+# boundary marker, not a fabricated green claim about a subject it did not inspect.
 name: contract-coherence
 
 on:
   workflow_call:
     inputs:
       repo-path:
-        description: "Path within the caller's checkout to drift-check (build config)."
+        description: "Compatibility no-op since #1262 retired the caller build-config copy check."
         type: string
         default: "."
       check-build-config:
-        description: "Run the shared-build-config drift gate against the caller. Set false for repos that are not consumers (e.g. .github itself)."
+        description: "Compatibility no-op since #1262; retained so existing callers do not break."
         type: boolean
         default: true
       github-ref:
-        description: "Ref of FS-GG/.github to source the registry + scripts from."
+        description: "Authority-only ref to validate; ignored for receiver calls."
         type: string
         default: ""
       # `contracts-ref` was REMOVED in .github#741 along with the SDD-source assertion it fed. No
@@ -79,12 +53,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout caller
-        uses: actions/checkout@v7
-        with:
-          path: caller
+      # A stable required context is not permission to grade somebody else's tree. There is no
+      # caller-owned assertion left after #1262 retired the build-config copy check, so say exactly
+      # what this receiver run did and did not establish.
+      - name: Receiver boundary — hub authority data is not this PR's subject
+        if: github.repository != 'FS-GG/.github'
+        shell: bash
+        run: |
+          echo "contract-coherence: receiver context reported; hub-owned registry and props are"
+          echo "validated only by FS-GG/.github's own required coherence gate (#1787)."
 
       - name: Checkout FS-GG/.github (registry + scripts authority)
+        if: github.repository == 'FS-GG/.github'
         uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
@@ -92,6 +72,7 @@ jobs:
           path: dotgithub
 
       - name: Set up Python
+        if: github.repository == 'FS-GG/.github'
         uses: actions/setup-python@v7
         with:
           python-version: "3.x"
@@ -101,11 +82,13 @@ jobs:
       # "just in case" — an unused install is a dependency nobody is watching.
 
       - name: Set up .NET (for the typed fsgg-sdd validator)
+        if: github.repository == 'FS-GG/.github'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Install the typed registry validator (fsgg-sdd CLI)
+        if: github.repository == 'FS-GG/.github'
         shell: bash
         env:
           # Public package, but the GitHub Packages NuGet feed still requires a token to restore.
@@ -204,11 +187,12 @@ jobs:
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Assert build-config source .props are well-formed XML
+        if: github.repository == 'FS-GG/.github'
         shell: bash
         run: |
           # Source-of-truth guard (.github#29): a malformed-but-verbatim .props passes the
-          # byte-for-byte drift check yet breaks every adopter's restore (MSB4024). Catch it
-          # at the source on every coherence run, for every caller.
+          # byte-for-byte drift check yet breaks every adopter's restore (MSB4024). Catch it at the
+          # source on this authority repo's own PR/push, never on a receiver PR (#1787).
           set -euo pipefail
           for f in dotgithub/dist/dotnet/*.props; do
             [ -f "$f" ] || continue
@@ -217,6 +201,7 @@ jobs:
           done
 
       - name: Validate registry schema (typed Fsgg.Registry validator)
+        if: github.repository == 'FS-GG/.github'
         shell: bash
         run: |
           # Schema authority: FS.GG.Contracts' typed RegistryDocument.load + validateDocument
