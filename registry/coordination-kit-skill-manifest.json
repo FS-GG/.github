@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "e3a1d4127c54349ce899e14b75c019a04e955c2c18a1020942c8ee07a0f53cdc",
+      "tree-sha256": "ecc48594e21d7d86c2ff8df31342ace69733561d6ee64e6152af1ba5193a3b3e",
       "files": [
         {
           "path": "SKILL.md",
@@ -18,7 +18,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "a48ffd892dc99c26ec85a3806cfca007d2a50725b9ff7897308ae5df7d7710ca",
+          "sha256": "e12bbe877840ab11c3000aa4b9b13174f7c3a6bc27271403a1b0abf056abe804",
           "executable": false
         },
         {
