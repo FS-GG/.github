@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # repos-audit.sh — participation audit for the org repo roster (ADR-0019 follow-up).
 #
 # The org fabrics are OPT-IN: a receiver participates by wiring something in its own CI.

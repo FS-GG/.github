@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # skill-view-parity — run the GENERATED VIEW's check ALONGSIDE the existing copied-tree gate, over
 # ONE tree, and say whether they AGREE.
 #
