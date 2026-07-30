@@ -700,7 +700,7 @@ wire_materializer_and_workflow() {
   wire_materializer "$1" "${3:-true}" "${4:-true}"
   local slug="${1//\//__}"
   printf '%s\n%s\n' "gate.yml" "coord.yml" > "$FIX/$slug.list"
-  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$2" > "$FIX/$slug/coord.yml"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/%s@main\n    with:\n      include-build-config: true\n' "$2" > "$FIX/$slug/coord.yml"
 }
 
 # wire_caller <repo> [mode] — the `caller: skill-union` detector (#1504).
@@ -3757,6 +3757,58 @@ out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
   || bad "malformed JSON offer evidence must be a typed no-verdict" "rc=$rc: $out"
 
 tool_manifest FS-GG/FS.GG.Rendering declared; offer_clear FS-GG/FS.GG.Rendering
+
+# #1844: the receiver project says which build-config files materialize; the structurally parsed
+# coordination caller says which it grades.  Both directions are real mismatches, never a free green.
+wire_materializer_and_workflow FS-GG/FS.GG.SDD coordination-coherence.yml
+wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml
+out="$(run_reg "$MULTIMAT" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 receiver(s) materialize Directory.Build.props; 2 caller(s) grade it; difference 0'; } && ok "build-config coherence: matching materializer opt-in and include-build-config callers are green with equal counts" || bad "matching build-config contract must pass" "rc=$rc: $out"
+sed -i 's/include-build-config: true/include-build-config: false/' "$FIX/FS-GG__FS.GG.Rendering/coord.yml"
+out="$(run_reg "$MULTIMAT" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering materializes build-config' && printf '%s' "$out" | grep -q 'include-build-config: true' && printf '%s' "$out" | grep -q 'difference 1'; } \
+  && ok "build-config coherence: MUTATION-PROVEN — materialized but ungraded receiver reds with remedy" \
+  || bad "ungraded materialized build config must not pass" "rc=$rc: $out"
+wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml
+
+# Reverse direction: a non-build-config receiver may call the reusable workflow, but must not turn
+# on its build-config leg unless its receiver project materializes those members too.
+BCREVERSE="$WORK/build-config-reverse.yml"
+mkreg2 "$BCREVERSE" "labels, build-config, coordination-kit" "labels, coordination-kit" \
+  "$MATCAP" "- { id: coordination-kit, workflow: coordination-coherence.yml }"
+wire_materializer_and_workflow FS-GG/FS.GG.SDD coordination-coherence.yml
+wire FS-GG/FS.GG.Rendering
+out="$(run_reg "$BCREVERSE" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ]; } && ok "build-config coherence: non-build-config receiver with false/absent leg remains green" || bad "unrelated receiver must remain valid" "rc=$rc: $out"
+printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n    with:\n      include-build-config: true\n' > "$FIX/FS-GG__FS.GG.Rendering/coord.yml"
+out="$(run_reg "$BCREVERSE" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS-GG/FS.GG.Rendering grades build-config' && printf '%s' "$out" | grep -q 'does not materialize'; } \
+  && ok "build-config coherence: MUTATION-PROVEN — graded but unmaterialized receiver reds with remedy" \
+  || bad "graded-but-unmaterialized build config must not pass" "rc=$rc: $out"
+wire FS-GG/FS.GG.Rendering
+
+# A YAML document may parse and still not be a workflow shape.  That is unreadable evidence for this
+# structural join, so it is retryable no-verdict, never a traceback or a fabricated mismatch.
+printf 'jobs: []\n' > "$FIX/FS-GG__FS.GG.Rendering/coord.yml"
+out="$(run_reg "$BCREVERSE" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'unsupported document/job/with shape'; } \
+  && ok "build-config coherence: malformed-but-parseable caller shape is typed UNDETERMINED" \
+  || bad "unsupported caller shape must not crash or pass" "rc=$rc: $out"
+wire FS-GG/FS.GG.Rendering
+
+# Source mutant: disable the materialized-side comparison itself.  The ungraded-materialized control
+# must then go green, which proves this fixture detects removal of the durable join.
+MUTATED_AUDIT="$(mktemp "$HERE/../../scripts/.repos-audit-build-config.XXXXXX")"
+sed "0,/if grep -qxF 'build-config-materializes'/s//if false \&\& grep -qxF 'build-config-materializes'/" "$AUDIT" > "$MUTATED_AUDIT"; chmod +x "$MUTATED_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
+wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml
+sed -i 's/include-build-config: true/include-build-config: false/' "$FIX/FS-GG__FS.GG.Rendering/coord.yml"
+out="$(run_reg "$MULTIMAT" 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'materializes build-config'; } \
+  && ok "build-config coherence: SOURCE-MUTANT-PROVEN — removing comparison kills the red control" \
+  || bad "fixture must detect a removed materialized-vs-graded comparison" "rc=$rc: $out"
+wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
