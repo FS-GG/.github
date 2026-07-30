@@ -14,6 +14,7 @@ repos_audit_sparse_report() { # <ledger> <read repos> <rostered repos> <unread r
   sparse_refusals="$(sparse_count refusal)"
   sparse_workflows="$(sparse_count workflow)"
   sparse_unparseable="$(sparse_count unparseable)"
+  # shellcheck disable=SC2034 # consumed by repos-audit.sh after this sourced seam returns.
   sparse_noverdict="$(sparse_count noverdict)"
   local sp_cross sp_graded sp_patterns sp_clones sp_ungraded sp_rule4 sp_rule4_subjects
   IFS=' ' read -r sp_cross sp_graded sp_patterns sp_clones sp_ungraded sp_rule4 sp_rule4_subjects <<< "$(
