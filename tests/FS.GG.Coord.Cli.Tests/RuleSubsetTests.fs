@@ -42,10 +42,17 @@ module RuleSubsetTests =
         Assert.NotEmpty cases
         let ruleId = typeof<Chore.ChoreKind>.GetProperty("RuleId")
         let write = typeof<Chore.ChoreKind>.GetProperty("Write")
+        let rec sample (t: System.Type) : obj =
+            if t = typeof<string> then box "sample"
+            elif FSharpType.IsUnion t then
+                let c = FSharpType.GetUnionCases t |> Array.head
+                FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType))
+            elif t.IsValueType then System.Activator.CreateInstance t
+            else null
         let writing =
             cases
             |> Array.choose (fun c ->
-                let value = FSharpValue.MakeUnion(c, Array.zeroCreate c.GetFields().Length) :?> Chore.ChoreKind
+                let value = FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType)) :?> Chore.ChoreKind
                 match write.GetValue(value) with
                 | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
                 | _ -> None)
