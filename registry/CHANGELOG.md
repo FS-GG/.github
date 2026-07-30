@@ -2,11 +2,12 @@
 
 - **2026-07-29** — **release: `coord-engine` 0.16.0 → 0.17.0 (publish-before-flip step 2)** (owner `github`; refs [#1573](https://github.com/FS-GG/.github/issues/1573), [#1857](https://github.com/FS-GG/.github/issues/1857), [#1979](https://github.com/FS-GG/.github/issues/1979), FR-007). `FS.GG.Coord.Cli` 0.17.0 is already live on GitHub Packages and nuget.org from tag `coord-engine/v0.17.0` at `348533f5170eb6615d656569a297dd9a8defc43d` (release run 30483979786). Both package artifacts were independently opened: the public archive SHA-256 is `1543fc42cd9465f2c2e6e0d491c6b940f1e361f776e7083adb304e15d7d73a7c`; GitHub Packages adds only `.signature.p7s`, and every unsigned payload entry matches byte-for-byte. This flip advances the registry and the fleet tool manifest to 0.17.0; projections were regenerated and all release receiver ticks were recorded by the release workflow. Architecture-map shape is unaffected.
 
-Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml) — the FS-GG
-cross-repo contract & dependency registry. Its human projection is
+Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml), plus FS.GG.Kit
+republishes that change the fleet materialized by [`repos.yml`](repos.yml) without changing a
+dependency row — the FS-GG cross-repo contract & dependency registry. Its human projection is
 [`../docs/registry/compatibility.md`](../docs/registry/compatibility.md).
 
-**Protocol.** Every change to `dependencies.yml` **prepends one dated entry** at the top of
+**Protocol.** Every change to `dependencies.yml`, and every FS.GG.Kit republish, **prepends one dated entry** at the top of
 the Entries list below (newest first) and sets the file's `updated:` date to match. Entries
 follow a loose `HEADER (owner; refs): body` grammar — name the contract/coherence id(s)
 touched, the owner, and the issue/ADR refs. One entry per registry change keeps PR diffs

@@ -16,7 +16,9 @@
 #
 # GOVERNANCE. Schema growth (a new field or a new `receives` capability) is a governed change:
 # bump `schemaVersion` when the SHAPE changes, always set `updated:` to match the newest change,
-# and prepend one dated entry to registry/repos.CHANGELOG.md. Validated by scripts/repos.sh
+# and prepend one dated entry to registry/CHANGELOG.md. Validated by scripts/repos.sh.
+# Kit republishes are fleet events, too: record their release evidence in registry/CHANGELOG.md even
+# when no dependencies.yml row changes; do not reconstruct historical evidence after the fact.
 # (shell + jq; kept self-contained in .github, deliberately not the SDD-owned typed validator).
 # This file is the authoritative form and is read directly — the former docs/registry/repos.md
 # projection was removed as an ungated hand-authored duplicate (D4 of #1158, #1163).
