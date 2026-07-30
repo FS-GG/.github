@@ -208,6 +208,7 @@ Each finding has a code, a ground truth, and a fix — or an explicit refusal to
 | `BLOCKER-UNKNOWN` | a blocker ref `scan` could not resolve | resolve over REST (§3), then board the blocker if it is open |
 | `BLOCKER-UNPARSEABLE` | a `Blocked by` token is not an issue ref | **ask** (§5) — what did the prose mean? `Blocked by` is text, so the answer can be written |
 | `STATUS-NOT-BLOCKED` | **no live claim**, an open blocker, but `status` is `Ready`/`Backlog` | `set-field --batch <i> Status=Blocked` |
+| `CLASS-PROJECTION-LAG` | declared issue class differs from the board projection | `set-field --batch <i> Class=<declared>` |
 | `STALE-CLAIM` | `who` says `state == "stale"` | `reap --repo <r> --apply` |
 | `UNCLAIMED-IN-PROGRESS` | `who` says `state == "unclaimed"` | **ask** (§5) — someone is working outside the protocol; only a human knows who, and whether to park it |
 | `UNDETERMINED-IN-PROGRESS` | `who` says `state == "undetermined"` | **report only** — incomplete read never licenses a write |
