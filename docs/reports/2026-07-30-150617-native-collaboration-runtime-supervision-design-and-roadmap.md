@@ -865,9 +865,12 @@ semantics; operators can explain every automated mutation from retained receipts
 
 - Add read-only adapters for producer manifests, `registry/skills.yml`, package releases, receiver
   pins, materialization receipts, and receiver CI.
-- Treat [`.github#1864`](https://github.com/FS-GG/.github/issues/1864)'s retained kit-pin freshness
-  sweep as an existing distribution-staleness authority: observe its receipts, but do not replace or
+- Treat [ADR-0067's retained kit-pin freshness
+  sweep](../adr/0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md#consequences)
+  as an existing distribution-staleness authority: observe its receipts, but do not replace or
   retire it unless a later ADR names and mutation-proves a replacement.
+  [`.github#1864`](https://github.com/FS-GG/.github/issues/1864) remains the completed decision
+  history.
 - Derive a per-skill/per-capability rollout graph from existing authorities, including catalog-only
   rows and delivery paths that do not use a package pin.
 - Prove restart recovery and partial-rollout reporting in observe mode.
