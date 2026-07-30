@@ -57,6 +57,7 @@ module Client =
         |> List.filter (fun item ->
             item.Ref <> candidate
             && String.Equals(item.Ref.Owner, candidate.Owner, StringComparison.OrdinalIgnoreCase)
+            // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
             && String.Equals(item.Ref.Repo, candidate.Repo, StringComparison.OrdinalIgnoreCase)
             && TouchSet.strictlyContains paths item.TouchSet)
         |> List.map _.Ref
