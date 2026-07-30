@@ -82,7 +82,13 @@ mktree() { cat > "$2" <<JSON
 ]}
 JSON
 }
-mktree false "$FIX/_default.tree"
+ mktree false "$FIX/_default.tree"
+distinct_rendering_tree() { cat > "$FIX/FS-GG__FS.GG.Rendering.tree" <<'JSON'
+{"sha":"1111111111111111111111111111111111111111","truncated":false,"tree":[
+  {"path":"receiver-only/FromRendering.fs","type":"blob","mode":"100644"}
+]}
+JSON
+}
 
 # pin <repo> <version> [local|root]  — this repo pins the kit in a CPM props file, at <version>.
 pin() { local slug="${1//\//__}" file="Directory.Packages.${3:-local}.props"
@@ -2149,6 +2155,7 @@ wire_sparse() {
     # does, so it must be graded the same way. If the roster match were case-sensitive this would
     # silently fall off the roster and lose rule (4) over a capitalisation.
     cone-foreign-case) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: fs-gg/fs.gg.sdd\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    cone-foreign-rendering) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.Rendering\n          sparse-checkout: |\n            receiver-only/FromRendering.fs\n' ;;
     # OFF THE ROSTER. The roster is the boundary of what this audit may claim to know, so this is
     # UNGRADED and says so — not a finding, and not a no-verdict either: nothing FAILED.
     cone-offroster)    printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/Not.On.The.Roster\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
@@ -2199,6 +2206,16 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q '0 finding(s), 0 refusal(s)'; } \
   && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
   || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
+
+# Distinct trees make a wrong repository or cache key observable. SDD fetches Rendering's unique
+# path; serving SDD's default tree instead makes this a fabricated cone-mode finding.
+wire_sparse FS-GG/FS.GG.SDD cone-foreign-rendering; wire FS-GG/FS.GG.Rendering
+distinct_rendering_tree
+out="$(run_logged "$WORK/calls.distinct-tree" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && grep -q '^tree.*FS.GG.Rendering' "$WORK/calls.distinct-tree" \
+    && printf '%s' "$out" | grep -q '1 of 1 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a sibling is graded against its own distinct tree, never another repo's (#1610)" \
+  || bad "a foreign checkout must use the fetched repository's own tree" "rc=$rc: $out"
 
 # A submodule is a `commit` entry, not a directory.  This must grade clean; deleting `commit` from
 # the production entry-type filter turns it into the fabricated cone-mode finding this leg prevents.
