@@ -278,6 +278,10 @@ OFFER_FILE="$(mktemp)"
 # read AT a candidate bump branch's head. Same staging-then-grade split as the kit-pin sweep, for the
 # same reason: the verdict program parses XML and JSON, and bash must not.
 OFFER_DIR="$(mktemp -d)"
+# The engine offer sweep (#1803) uses the same five-state verdict program but its own staging: its
+# subject is every coordination-kit receiver's JSON tool pin, not package receivers' XML kit pin.
+ENGOFFER_FILE="$(mktemp)"
+ENGOFFER_DIR="$(mktemp -d)"
 # The engine-manifest sweep's ledger (#1615), same line-oriented shape: `finding`, `refusal`,
 # `undetermined`, `ok`. This one FETCHES its own subject rather than riding the kit-pin staging: it
 # grades `.config/dotnet-tools.json`, which no other sweep reads, and its receiver set is WIDER than
@@ -294,7 +298,7 @@ ABSENTOK_FILE="$(mktemp)"
 # script already held. Same ride-the-existing-pass economy as the view-root generate sweep (#1759).
 ABSENTOK_DIR="$(mktemp -d)"
 DISPATCH_FILE="$(mktemp)"
-trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR" "$ABSENTOK_FILE" "$ABSENTOK_DIR" "$DISPATCH_FILE"' EXIT
+trap 'rm -rf "$GH_ERR_FILE" "$CALLS_ERR_FILE" "$SPARSE_FILE" "$SPARSE_TREE_DIR" "$KITPIN_FILE" "$KITPIN_DIR" "$VIEWGEN_FILE" "$OFFER_FILE" "$OFFER_DIR" "$ENGOFFER_FILE" "$ENGOFFER_DIR" "$ENGMAN_FILE" "$ENGMAN_DIR" "$ABSENTOK_FILE" "$ABSENTOK_DIR" "$DISPATCH_FILE"' EXIT
 # Tabs are squeezed out along with newlines: this string is interpolated into the tab-separated
 # kit-pin ledger (#1540), and a gh error carrying a tab would shift every field to its right.
 gh_last_err()    { tr -s '\n\t' '  ' < "$GH_ERR_FILE" | sed 's/[[:space:]]*$//'; }
@@ -2050,6 +2054,7 @@ PY
 #
 # Argv: the staging dir and its manifest. Stdout: tab-separated ledger records, one per line.
 OFFER_PY=$(cat <<'PY'
+import json
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -2074,7 +2079,14 @@ def localname(tag):
 # The SAME rule the kit-pin sweep grades `main` with, so the two cannot disagree about what a pin is.
 # Kept identical deliberately: if the manager's shape changes, both must move together or the sweep
 # would compare a version it read one way against a version it read another.
-def versions_in(text):
+def versions_in(text, pinpath):
+    if pinpath == ".config/dotnet-tools.json":
+        doc = json.loads(text)
+        entry = doc.get("tools", {}).get(PACKAGE)
+        if not isinstance(entry, dict):
+            return []
+        version = entry.get("version")
+        return [version.strip()] if isinstance(version, str) and version.strip() else []
     root = ET.fromstring(text)
     found = []
     for el in root.iter():
@@ -2109,7 +2121,8 @@ staging, manifest = sys.argv[1], sys.argv[2]
 with open(manifest, encoding="utf-8") as fh:
     rows = [line.rstrip("\n").split("\t") for line in fh if line.strip()]
 
-for repo, pin, published, pinpath, slug in rows:
+for repo, pin, published, pinpath, slug, package in rows:
+    PACKAGE = package
     base = os.path.join(staging, slug)
 
     # An unread PR list is NOT "no bump was offered". It is a failure to read, and the one thing this
@@ -2151,8 +2164,8 @@ for repo, pin, published, pinpath, slug in rows:
         if not os.path.exists(blob):
             continue
         try:
-            found = versions_in(read(blob))
-        except (ET.ParseError, OSError, UnicodeDecodeError) as e:
+            found = versions_in(read(blob), pinpath)
+        except (ET.ParseError, json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
             unreadable.append(f"#{num} ({type(e).__name__})")
             continue
         if not found:
@@ -2220,8 +2233,8 @@ for repo, pin, published, pinpath, slug in rows:
         if not os.path.exists(blob):
             continue
         try:
-            found = versions_in(read(blob))
-        except (ET.ParseError, OSError, UnicodeDecodeError):
+            found = versions_in(read(blob), pinpath)
+        except (ET.ParseError, json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
         if not found:
             continue
@@ -2298,16 +2311,34 @@ PY
 MANIFEST_PY=$(cat <<'PY'
 import json, os, sys
 
+sys.path.insert(0, os.environ["FSGG_SCRIPTS_DIR"])
+import fsgg_feed  # noqa: E402
+
 STAGE, MANIFEST = sys.argv[1], sys.argv[2]
 TOOL = "fs.gg.coord.cli"
 PATH = ".config/dotnet-tools.json"
 
+_base = os.environ.get("FSGG_NUGET_ORG_BASE", "").strip()
+if _base:
+    fsgg_feed.NUGET_ORG = _base.rstrip("/")
+
 out = []
-def emit(kind, repo, msg):
-    out.append("%s\t%s\t%s" % (kind, repo, msg))
+def emit(kind, *fields):
+    out.append("\t".join([kind, *[str(f).replace("\t", " ").replace("\n", " ") for f in fields]]))
 
 with open(MANIFEST, encoding="utf-8") as fh:
     rows = [ln.rstrip("\n").split("\t") for ln in fh if ln.strip()]
+
+# This declaration sweep deliberately does NOT red merely because a receiver is behind.  It does,
+# however, emit a private row for the offer sweep below: that sweep owns the question whether the
+# owed bump was proposed.  fake-cli is deliberately out of scope: it is not the coordination engine
+# the fsgg-coord shim executes, and no ADR assigns its delivery to this Renovate path.
+try:
+    versions = [v for v in fsgg_feed.nuget_org_versions(TOOL) if not fsgg_feed.is_prerelease(v)]
+    published = fsgg_feed.newest(versions)
+except Exception as exc:
+    published = None
+    emit("undetermined", "*", f"could not resolve published {TOOL}: {type(exc).__name__}: {exc}")
 
 for row in rows:
     repo, rel = row[0], row[1]
@@ -2371,6 +2402,12 @@ for row in rows:
         continue
 
     emit("ok", repo, f"declares {TOOL} {version} in {PATH} — it can restore the engine its shim execs.")
+    if published is not None:
+        try:
+            if fsgg_feed.parse_version(version) < fsgg_feed.parse_version(published):
+                emit("engine-behind", repo, version, published, PATH)
+        except fsgg_feed.GateError:
+            emit("undetermined", repo, f"cannot order engine pin {version!r} against published {published!r}")
 
 print("\n".join(out))
 PY
@@ -3181,7 +3218,7 @@ open(dst, "w", encoding="utf-8").write("\n".join(rows) + ("\n" if rows else ""))
 # content reads to answer one question.
 offer_candidate_ref() {
   case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    *fs.gg.kit*|*fs-gg-kit*|*coordination-kit*|*kit-bump*|*bump-kit*) return 0 ;;
+    *fs.gg.kit*|*fs-gg-kit*|*coordination-kit*|*kit-bump*|*bump-kit*|*fs.gg.coord.cli*|*fs-gg-coord-cli*|*coord-engine*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -3247,7 +3284,7 @@ while IFS=$'\t' read -r _kind repo pin published pinpath; do
     printf '%s' "$offer_err" > "$OFFER_DIR/$slug/err"
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$pin" "$published" "$pinpath" "$slug" \
+  printf '%s\t%s\t%s\t%s\t%s\tFS.GG.Kit\n' "$repo" "$pin" "$published" "$pinpath" "$slug" \
     >> "$OFFER_DIR/manifest.tsv"
 done < <(awk -F'\t' '$1 == "behind"' "$KITPIN_FILE")
 
@@ -3348,7 +3385,7 @@ fi
 # `--kit-delivery package`; this one must not, because a byte-copy receiver gets the same shim and
 # needs the same engine. Using the wrong variable here would carve #1077's two original victims back
 # out of the check written to replace it, and the run would still say OK.
-engman_findings=0; engman_refusals=0; engman_undet=0; engman_ok=0; engman_receivers=0; engman_read=0
+engman_findings=0; engman_refusals=0; engman_undet=0; engman_feed_undet=0; engman_ok=0; engman_receivers=0; engman_read=0
 engman_graded=0
 : > "$ENGMAN_DIR/manifest.tsv"
 if [ "$kit_cap_declared" -eq 1 ]; then
@@ -3381,13 +3418,14 @@ if [ "$kit_cap_declared" -eq 0 ]; then
 elif [ "$engman_receivers" -eq 0 ]; then
   echo "repos-audit: engine-manifest (#1615) — the roster declares '$KIT_CAP' and lists NO receiver for it, so this sweep graded nothing. NOTHING was asserted; that is not a clean bill."
 else
-  python3 -c "$MANIFEST_PY" "$ENGMAN_DIR" "$ENGMAN_DIR/manifest.tsv" >> "$ENGMAN_FILE" \
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$MANIFEST_PY" "$ENGMAN_DIR" "$ENGMAN_DIR/manifest.tsv" >> "$ENGMAN_FILE" \
     || die "the engine-manifest verdict program failed to run. That is not a clean sweep — no receiver's engine declaration was graded."
 
   engman_count() { grep -cE "^$1"$'\t' "$ENGMAN_FILE" 2>/dev/null || true; }
   engman_findings="$(engman_count finding)"
   engman_refusals="$(engman_count refusal)"
   engman_undet="$(engman_count undetermined)"
+  engman_feed_undet="$(awk -F'\t' '$1 == "undetermined" && $2 == "*" { n++ } END { print n+0 }' "$ENGMAN_FILE")"
   engman_ok="$(engman_count ok)"
 
   while IFS=$'\t' read -r kind a b; do
@@ -3407,6 +3445,37 @@ else
   else
     echo "repos-audit: engine-manifest (#1615) — graded $engman_graded of $engman_receivers $KIT_CAP receiver(s): $engman_ok declare fs.gg.coord.cli, $engman_findings do NOT, $engman_refusals refusal(s), $engman_undet undetermined. This is f(roster, receiver tree) and it replaces the repos.sh validate co-fabric rule #1077 used to carry (ADR-0068) — that rule read only THIS repo's roster, so a receiver that deleted its own manifest stayed green. It does NOT grade the engine VERSION; that is the kit-pin sweep's shape, one package over."
   fi
+fi
+
+# --- engine bump-offer (#1803): same verdict vocabulary, JSON tool pins -------------------------
+engoffer_subjects=0; engoffer_fetched=0; : > "$ENGOFFER_DIR/manifest.tsv"
+while IFS=$'\t' read -r _ repo pin published pinpath; do
+  [ -n "$repo" ] || continue
+  engoffer_subjects=$((engoffer_subjects + 1)); slug="${repo//\//__}"; mkdir -p "$ENGOFFER_DIR/$slug/head" "$ENGOFFER_DIR/$slug/branch"; offer_err=""
+  prc=0; prs="$(gh_api "repos/$repo/pulls?state=open&per_page=100" --jq '[.[] | {number, headRefName: .head.ref}]')" || prc=$?
+  if [ "$prc" -ne 0 ]; then offer_err="reading open pull requests failed — $(gh_last_err)"; else
+    printf '%s' "$prs" > "$ENGOFFER_DIR/$slug/prs.json"; brc=0; branches="$(gh_api "repos/$repo/branches?per_page=100" --jq '[.[] | {name}]')" || brc=$?
+    if [ "$brc" -ne 0 ]; then offer_err="reading branches failed — $(gh_last_err)"; else
+      printf '%s' "$branches" > "$ENGOFFER_DIR/$slug/branches.json"
+      offer_normalize prs "$ENGOFFER_DIR/$slug/prs.json" "$ENGOFFER_DIR/$slug/prs.tsv" || offer_err="the open pull-request list was not the shape this sweep reads — $(gh_last_err)"
+      [ -n "$offer_err" ] || offer_normalize branches "$ENGOFFER_DIR/$slug/branches.json" "$ENGOFFER_DIR/$slug/branches.tsv" || offer_err="the branch list was not the shape this sweep reads — $(gh_last_err)"
+    fi
+  fi
+  if [ -z "$offer_err" ]; then
+    engoffer_fetched=$((engoffer_fetched + 1))
+    while IFS=$'\t' read -r key ref refslug; do [ -n "$key" ] && offer_candidate_ref "$ref" || continue; hrc=0; head="$(get_repo_file_ref "$repo" "$pinpath" "$ref")" || hrc=$?; [ "$hrc" -eq 0 ] && printf '%s' "$head" > "$ENGOFFER_DIR/$slug/head/$key"; done < "$ENGOFFER_DIR/$slug/prs.tsv"
+    while IFS=$'\t' read -r key ref refslug; do [ -n "$key" ] && offer_candidate_ref "$ref" || continue; hrc=0; head="$(get_repo_file_ref "$repo" "$pinpath" "$ref")" || hrc=$?; [ "$hrc" -eq 0 ] && printf '%s' "$head" > "$ENGOFFER_DIR/$slug/branch/$refslug"; done < "$ENGOFFER_DIR/$slug/branches.tsv"
+  else printf '%s' "$offer_err" > "$ENGOFFER_DIR/$slug/err"; fi
+  printf '%s\t%s\t%s\t%s\t%s\tfs.gg.coord.cli\n' "$repo" "$pin" "$published" "$pinpath" "$slug" >> "$ENGOFFER_DIR/manifest.tsv"
+done < <(awk -F'\t' '$1 == "engine-behind"' "$ENGMAN_FILE")
+if [ "$engoffer_subjects" -eq 0 ]; then
+  engoffer_none=0; engoffer_current=0; engoffer_superseded=0; engoffer_ratelimited=0; engoffer_undet=0
+  echo "repos-audit: engine bump-offer (#1803) — no coordination-kit receiver is behind fs.gg.coord.cli, so none needed a bump proposed."
+else
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$OFFER_PY" "$ENGOFFER_DIR" "$ENGOFFER_DIR/manifest.tsv" >> "$ENGOFFER_FILE" || die "the engine bump-offer verdict program failed to run."
+  engoffer_count() { grep -cE "^$1"$'\t' "$ENGOFFER_FILE" 2>/dev/null || true; }; engoffer_none="$(engoffer_count offer-none)"; engoffer_current="$(engoffer_count offer-current)"; engoffer_superseded="$(engoffer_count offer-superseded)"; engoffer_ratelimited="$(engoffer_count offer-ratelimited)"; engoffer_undet="$(engoffer_count offer-undetermined)"
+  while IFS=$'\t' read -r kind a b; do case "$kind" in offer-current) echo "  engine bump-offer: $a $b";; *) echo "::error::repos-audit: engine bump-offer — $a: $b";; esac; done < "$ENGOFFER_FILE"
+  echo "repos-audit: engine bump-offer (#1803) — of $engoffer_subjects behind coordination-kit receiver(s), $engoffer_current have a CURRENT bump open, $engoffer_superseded superseded, $engoffer_ratelimited rate-limited, $engoffer_none have NO bump, $engoffer_undet undetermined. fake-cli is deliberately out of scope: this sweep grades only the engine the shim executes."
 fi
 
 # --- the view-root path requirement sweep (historical field: absence-cover; #1785/#1869) ---------
@@ -3524,7 +3593,7 @@ fi
 # failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
 # matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
-   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ] \
+   || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engoffer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ] \
    || [ "$absentok_undet" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
@@ -3558,7 +3627,8 @@ if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdic
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
   # tool manifest is not a wiring question, and it must not be reported as a repo that CANNOT RUN its
   # shim — that is this sweep's loudest finding and the one an operator must be able to trust (#266).
-  [ "$engman_undet" -eq 0 ] || echo "::error::repos-audit: could not read the .config/dotnet-tools.json of $engman_undet coordination-kit receiver(s), so nothing was proven about whether they can run the fsgg-coord shim they receive. This is a failure to READ, not a missing engine declaration — do NOT read it as one." >&2
+  [ "$engoffer_undet" -eq 0 ] || echo "::error::repos-audit: could not determine whether $engoffer_undet behind coordination-kit receiver(s) were offered an fs.gg.coord.cli bump; unread PR, branch, or JSON-head evidence is not 'no offer'." >&2
+  [ "$engman_undet" -eq 0 ] || echo "::error::repos-audit: engine-manifest had $engman_undet no-verdict(s): $engman_feed_undet published fs.gg.coord.cli feed resolution failure(s), plus $(( engman_undet - engman_feed_undet )) unread/unorderable receiver manifest(s). Nothing was proven for those subjects; neither disposition is a missing-engine finding." >&2
   exit 2
 fi
 
@@ -3666,8 +3736,9 @@ fi
 # in that receiver. It is a FINDING and not a no-verdict because the sweep DID reach an answer, from
 # here, by reading that repo's tree — which is exactly the capability the rule it replaces never had.
 offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
+engoffer_actionable=$(( engoffer_none + engoffer_superseded + engoffer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
-   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
+   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engoffer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
    || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
@@ -3678,6 +3749,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
+  [ "$engoffer_actionable" -eq 0 ] || echo "::error::repos-audit: $engoffer_actionable coordination-kit receiver(s) are behind fs.gg.coord.cli and need a proposal-step action — $engoffer_none have NO engine bump, $engoffer_superseded only a superseded one, $engoffer_ratelimited a held branch (#1803)." >&2
   exit 1
 fi
 # The terminal claim is CONDITIONAL on the sweep having graded somebody. A run that graded nobody
