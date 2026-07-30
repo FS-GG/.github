@@ -157,6 +157,14 @@ module LintApplication =
         else
             None
 
+    let humanParkResolvedVerdict state status (blockers: Blocker list) (body: string) : string option =
+        match HumanBlock.parse body with
+        | Some AwaitingHumanDecision when state = IssueState.Open && status = BoardStatus.Blocked && not (List.isEmpty blockers) && (blockers |> List.forall Blockers.isResolved) ->
+            Some "all machine blockers are resolved; only a human decision remains. Keep the row Blocked until a human chooses."
+        | Some AwaitingHumanAction when state = IssueState.Open && status = BoardStatus.Blocked && not (List.isEmpty blockers) && (blockers |> List.forall Blockers.isResolved) ->
+            Some "all machine blockers are resolved; only a human action remains. Keep the row Blocked until that action is complete."
+        | _ -> None
+
     let blockerCycleVerdicts (graph: (Ref * Blocker list) list) : (Ref * string) list =
         let byRef = graph |> Map.ofList
 

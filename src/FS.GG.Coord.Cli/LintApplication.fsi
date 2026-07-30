@@ -71,6 +71,9 @@ module LintApplication =
     val blockedNoReasonVerdict:
         state: IssueState -> status: BoardStatus -> blockedBy: string -> body: string -> string option
 
+    val humanParkResolvedVerdict:
+        state: IssueState -> status: BoardStatus -> blockers: Blocker list -> body: string -> string option
+
     val blockerCycleVerdicts: graph: (Ref * Blocker list) list -> (Ref * string) list
 
     val epicVerdict:
