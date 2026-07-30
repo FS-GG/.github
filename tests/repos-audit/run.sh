@@ -19,6 +19,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 AUDIT="$HERE/../../scripts/repos-audit.sh"
 REPOS_SH="$HERE/../../scripts/repos.sh"
+SPARSE_SEAM="$HERE/../../scripts/lib/repos-audit-sparse.sh"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/repos-audit-fixture.XXXXXX")"
 MUTATED_AUDIT=""
@@ -255,6 +256,12 @@ JSON
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
+
+# #1987 — sparse ledger rendering is a dedicated seam: keep the monolithic audit delegating to it
+# and ensure the extracted file itself remains executable shell, not an untested placeholder.
+bash -n "$SPARSE_SEAM" && grep -qF 'repos_audit_sparse_report "$SPARSE_FILE"' "$AUDIT" \
+  && ok "sparse: audit delegates ledger reporting to the extracted sparse seam" \
+  || bad "sparse audit orchestration seam is missing or not delegated"
 
 # A roster with two coordination-kit receivers; the fixture toggles which are wired via $FIX.
 #
@@ -2724,6 +2731,7 @@ private_enumeration="$(grep -c 'enumeration_checked[[:space:]]*=' "$AUDIT" || tr
 SPARSEBOX="$WORK/sparsebox"; mkdir -p "$SPARSEBOX/scripts/lib"
 cp "$AUDIT" "$SPARSEBOX/scripts/repos-audit.sh"
 cp "$HERE/../../scripts/lib/args.sh" "$SPARSEBOX/scripts/lib/args.sh"
+cp "$SPARSE_SEAM" "$SPARSEBOX/scripts/lib/repos-audit-sparse.sh"
 # The kit-pin sweep borrows fsgg_feed.py by the same mechanism, and asserts it at the same place. The
 # sandbox needs it so THESE legs still fail on the symbol they are about; its own absence gets its
 # own leg below.
