@@ -2151,6 +2151,7 @@ wire_sparse() {
     #     because a fixture that only had the clean one would be green before the feature existed.
     cone-foreign)      printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n' ;;
     cone-foreign-file) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    cone-two-foreign) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            scripts\n' ;;
     # A sibling that spells the repository in a DIFFERENT CASE fetches the same repository GitHub
     # does, so it must be graded the same way. If the roster match were case-sensitive this would
     # silently fall off the roster and lose rule (4) over a capitalisation.
@@ -2206,6 +2207,14 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q '0 finding(s), 0 refusal(s)'; } \
   && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
   || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
+
+# The first pass requests SDD's tree and is discarded; only the second pass may reach the ledger.
+# Both independent buffer gates are necessary to keep this denominator truthful.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-two-foreign
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 of 2 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a two-pass workflow writes its two checkout verdicts exactly once (#1610)" \
+  || bad "discarded sparse first-pass records must not corrupt the fully-graded denominator" "rc=$rc: $out"
 
 # Drive sparse_tree_ensure with the roster deliberately unavailable after the normal roster read.
 # This models a future caller/reordering reaching the helper too early: it is a read failure (exit 2),
