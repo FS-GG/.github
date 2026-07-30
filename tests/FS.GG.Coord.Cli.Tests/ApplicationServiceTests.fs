@@ -2395,7 +2395,7 @@ module ApplicationServiceTests =
 
             for args in
                 [ [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
-                  [ "claim"; "FS.GG.SDD#42"; "--worker"; "otter-9c21"; "--json" ] ] do
+                  [ "claim"; "--json"; "FS.GG.SDD#42"; "--worker"; "otter-9c21" ] ] do
                 let code, stdout, stderr = runJsonArm transport args
                 Assert.Equal(Errors.ExRate, code)
                 Assert.Equal("", stdout)
