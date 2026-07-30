@@ -56,4 +56,6 @@ both the tool and its own selftest — one kit-delivered file that prints its ow
 mutating it and anchoring on that tally has `anchor.produced_by == target` and `load_specs()` refuses
 it. **The refusal is correct** (`#1794`) and must not be worked around with a wrapper that re-emits the
 tool's number under a second filename; that is anchor laundering. `#1830` measured that step by hand
-and labelled it as by-hand; `#1842` AC5 is where it gets settled.
+and labelled it as by-hand. **Decision (`#1842` AC5): it remains NOT MEASURED by this harness.** A
+receiver fixture with independently owned bookkeeping may replace that decision later, but no wrapper
+may relay the guard's own tally and `load_specs()` must retain its producer-independence refusal.
