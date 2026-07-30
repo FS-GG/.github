@@ -463,7 +463,8 @@ let ``#1732 canonical command scope selects a short-id Repo Scope`` () =
     let row = { scopeRow ".github" 1732 with PathRepo = "audio" }
     let scoped = Scan.scope (Some "FS.GG.Audio") [ row ]
 
-    Assert.Equal([ row ], scoped.Rows)
+    Assert.Single(scoped.Rows) |> ignore
+    Assert.Equal(row, List.head scoped.Rows)
     Assert.True(scoped.Advisory.IsNone)
 
 [<Fact>]

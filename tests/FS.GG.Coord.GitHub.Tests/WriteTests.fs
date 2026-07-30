@@ -133,6 +133,43 @@ let ``the chore lock is the item CAS UNCHANGED — an off-board ref, a short lea
     Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 42", "a chore marker was posted to an ITEM")
 
 [<Fact>]
+let ``#1732 a scoped claim records its path repository in the marker`` () =
+    let responses =
+        System.Collections.Generic.Queue<IoResult<Response>>(
+            [ ok "[]"
+              ok """{"id":901}"""
+              ok (comments [ marker 901 "vole-418" " pathRepo=FS.GG.Rendering" ]) ]
+        )
+
+    let bodies = System.Collections.Generic.List<string>()
+
+    let transport =
+        Fake.Recorder(fun req ->
+            match req.Body with
+            | Json body -> bodies.Add body
+            | _ -> ()
+
+            responses.Dequeue())
+
+    match
+        claimScoped
+            transport
+            120
+            RefuseLiveHolder
+            ignore
+            me
+            itsMe
+            None
+            aRef
+            (fun () -> None)
+            (fun () -> Some "FS.GG.Rendering")
+    with
+    | Ok(Won(held, _)) ->
+        Assert.Equal(Some "FS.GG.Rendering", held.PathRepo)
+        Assert.Contains("pathRepo=FS.GG.Rendering", Seq.last bodies)
+    | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
+
+[<Fact>]
 let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` () =
     // CONDITION 1, and the reason the chore queue shipped unwired. If N workers each call `next` and each is
     // handed the same chore, N of them do it — #464 (N workers file one finding N times) and #463 (two
@@ -859,6 +896,21 @@ let ``#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS`` 
     | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
 
 [<Fact>]
+let ``#1732 heartbeat re-emits marker path scope`` () =
+    let transport, bodies =
+        capturing
+            [ ok (comments [ marker 901 "vole-418" " session=S1 pathRepo=FS.GG.Rendering" ])
+              ok "" ]
+
+    let held = holdAs "S1" transport
+
+    match heartbeat transport 120 held with
+    | Ok beaten ->
+        Assert.Equal(Some "FS.GG.Rendering", beaten.PathRepo)
+        Assert.Contains("pathRepo=FS.GG.Rendering", Seq.last bodies)
+    | Error e -> failwith $"the heartbeat should preserve the path scope — got %A{e}"
+
+[<Fact>]
 let ``#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed`` () =
     // The failure scenario, end to end and with the REAL heartbeat output. Worker A (S1) claims and beats
     // once; twin B (S2) — same shared-account id — claims the same item. Before the fix, A's beaten marker
@@ -1488,6 +1540,7 @@ let private staleMarker =
       Reads.Session = None
       Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
       Reads.PreviousStatus = None
+      Reads.PathRepo = None
       Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->" }
 
 [<Fact>]

@@ -84,6 +84,10 @@ module Writes =
         /// restored, so `release` says so instead of inventing one.
         member PreviousStatus: BoardStatus option
 
+        /// The repository in which this claim's path tokens live. New markers record it so active
+        /// collision reads need no board query; `None` is a legacy marker and falls back conservatively.
+        member PathRepo: string option
+
     /// **MAY THIS CLAIM TAKE AN ITEM ANOTHER WORKER IS HOLDING RIGHT NOW?** (#1620)
     ///
     /// A TYPE RATHER THAN A `bool`, because the two answers are not "more" and "less" of one thing — one of
@@ -273,6 +277,20 @@ module Writes =
     /// deleted. Announcing only on `Stolen` would leave that worker uninformed in exactly the cases where it
     /// most needs to stop, and its next `heartbeat` would find the empty item and report an EXPIRED LEASE —
     /// a lock destroyed silently, and then misdescribed.
+    val claimScoped:
+        transport: IGitHubTransport ->
+        leaseMinutes: int ->
+        force: ClaimForce ->
+        onEvict: (WorkerId list -> unit) ->
+        worker: WorkerId ->
+        self: SelfIdentity ->
+        session: SessionId option ->
+        ref: Ref ->
+        readPreviousStatus: (unit -> BoardStatus option) ->
+        readPathRepo: (unit -> string option) ->
+            IoResult<ClaimOutcome>
+
+    /// Backward-compatible claim for subjects with no board path-scope projection.
     val claim:
         transport: IGitHubTransport ->
         leaseMinutes: int ->

@@ -1225,19 +1225,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// Idempotent, so a caller that resolves again for its own reasons gets the same answer: a resolved name
     /// has no slash and is not a short-id, so it maps to itself.
     let resolveRepo (raw: string) : string =
-        match raw.ToLowerInvariant() with
-        | "sdd" -> "FS.GG.SDD"
-        | "rendering" -> "FS.GG.Rendering"
-        | "governance" -> "FS.GG.Governance"
-        | "templates" -> "FS.GG.Templates"
-        | "game" -> "FS.GG.Game"
-        | "audio" -> "FS.GG.Audio"
-        | "net" -> "FS.GG.Net"
-        | _ ->
-            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
-            match raw.IndexOf('/') with
-            | -1 -> raw
-            | i -> raw.Substring(i + 1)
+        FS.GG.Coord.RepoScope.resolve raw
 
     /// An owner + repo → the CLOSED issue whose comments are that repo's CHORE-LOCK CAS subject (ADR-0041).
     /// `None` ⇒ `offer` refuses, which is the whole contract: a chore queue that cannot find its lock must
