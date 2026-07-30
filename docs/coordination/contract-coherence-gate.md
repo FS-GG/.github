@@ -30,6 +30,19 @@ Both are pure functions of files committed in `.github`, and both execute only w
 This closes #1584's defect shape in this gate: a commit to `registry/dependencies.yml` or
 `dist/dotnet/*.props` cannot move the required verdict of a byte-identical Governance or Net PR.
 
+### Live authority evidence
+
+The split was exercised on [.github#2001](https://github.com/FS-GG/.github/pull/2001), not inferred
+from the workflow text. [Run 30501475019](https://github.com/FS-GG/.github/actions/runs/30501475019)
+was green and executed both authority assertions: `Assert build-config source .props are well-formed
+XML` and `Validate registry schema (typed Fsgg.Registry validator)`.
+
+The registry assertion was also mutation-proven in the temporary, unmerged
+[.github#2002](https://github.com/FS-GG/.github/pull/2002). Removing the required `owner` from
+`scaffold-provider` made [run 30501610358](https://github.com/FS-GG/.github/actions/runs/30501610358)
+fail specifically at the typed registry step with `MissingField [scaffold-provider]`. The proof PR
+was then closed and its branch deleted.
+
 ### What it deliberately no longer checks: `fsgg-contracts` pin drift
 
 It used to assert, as check 2, that the registry's declared `fsgg-contracts` `version` equalled the
