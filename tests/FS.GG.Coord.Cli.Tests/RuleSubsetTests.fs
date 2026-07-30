@@ -2,6 +2,8 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System.Reflection
 open System.Text.Json
+open System.IO
+open Microsoft.FSharp.Reflection
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Cli
@@ -33,6 +35,21 @@ open FS.GG.Coord.Cli
 /// property that a wrong judgement cannot ALSO become a contradiction: whatever a subset states, the
 /// canonical doc states identically.
 module RuleSubsetTests =
+
+    [<Fact>]
+    let ``#1623 every writing ChoreKind is named by check-board, with a non-vacuous floor`` () =
+        let cases = FSharpType.GetUnionCases typeof<Chore.ChoreKind>
+        Assert.NotEmpty cases
+        // StaleClaim deliberately has Write=None; every other current case owns a board-field repair.
+        let writing = cases |> Array.map _.Name |> Array.filter ((<>) "StaleClaim")
+        Assert.NotEmpty writing
+        let root = Directory.GetCurrentDirectory()
+        let bodies = [ ".claude/skills/check-board/references/deep-detail.md"; ".agents/skills/check-board/references/deep-detail.md" ]
+        for body in bodies do
+            let text = File.ReadAllText(Path.Combine(root, body))
+            for caseName in writing do
+                let code = System.Text.RegularExpressions.Regex.Replace(caseName, "([a-z])([A-Z])", "$1-$2").ToUpperInvariant()
+                Assert.Contains(code, text)
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
     ///
