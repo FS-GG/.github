@@ -67,7 +67,8 @@ def main() -> int:
                 refs = dict((name.removeprefix("refs/tags/"), sha) for sha, name in (line.split("\t", 1) for line in tags.splitlines()))
                 for version in versions:
                     with urllib.request.urlopen(f"https://api.nuget.org/v3-flatcontainer/{lid}/{version}/{lid}.nuspec", timeout=60) as r:
-                        anchor = ET.fromstring(r.read()).find(".//repository").get("commit", "-")
+                        repository = ET.fromstring(r.read()).find(".//{*}repository")
+                        anchor = repository.get("commit", "-") if repository is not None else "-"
                     tag = refs.get(f"{row.namespace}{version}^{{}}", refs.get(f"{row.namespace}{version}", "-"))
                     verdict = classify(anchor, tag); print(f"{verdict}\t{row.repo}\t{row.namespace}{version}\t{row.package}"); bad |= verdict != "AGREE"
             except Exception as e:
