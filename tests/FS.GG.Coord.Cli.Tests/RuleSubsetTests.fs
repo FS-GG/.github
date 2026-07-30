@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System
 open System.Reflection
 open System.Text.Json
 open System.IO
@@ -57,15 +58,19 @@ module RuleSubsetTests =
                 | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
                 | _ -> None)
         Assert.NotEmpty writing
-        let root = Directory.GetCurrentDirectory()
+        let rec repoRoot (dir: DirectoryInfo) =
+            if File.Exists(Path.Combine(dir.FullName, ".git")) || Directory.Exists(Path.Combine(dir.FullName, ".git")) then dir.FullName
+            else repoRoot dir.Parent
+        let root = repoRoot (DirectoryInfo(AppContext.BaseDirectory))
         let bodies = [ ".claude/skills/check-board/references/deep-detail.md"; ".agents/skills/check-board/references/deep-detail.md" ]
         for body in bodies do
             let text = File.ReadAllText(Path.Combine(root, body))
             for code, (field, value) in writing do
-                let row = text.Split('\n') |> Array.filter (fun line -> line.Contains(code))
+                let row = text.Split('\n') |> Array.filter (fun line -> line.StartsWith("|") && line.Contains($"`{code}`"))
                 Assert.Single row |> ignore
                 Assert.Contains($"{field}=", row[0])
-                Assert.Contains(if field = "Class" then "<declared>" else value, row[0])
+                let expectedValue = if field = "Class" then "<declared>" else value
+                Assert.Contains(expectedValue, row[0])
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
     ///
