@@ -2207,6 +2207,20 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
   || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
 
+# Drive sparse_tree_ensure with the roster deliberately unavailable after the normal roster read.
+# This models a future caller/reordering reaching the helper too early: it is a read failure (exit 2),
+# not the cheap off-roster boundary. Removing that guard changes this leg to an ungraded green.
+EMPTY_SPARSE_AUDIT="$WORK/repos-audit-empty-sparse-roster.sh"
+sed 's/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/SPARSE_ROSTER=""/' \
+  "$AUDIT" > "$EMPTY_SPARSE_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$EMPTY_SPARSE_AUDIT"
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'roster was not available when its git tree was needed'; } \
+  && ok "sparse: an empty internal roster is a no-verdict, never an off-roster boundary (#1610)" \
+  || bad "sparse_tree_ensure must refuse an unavailable roster" "rc=$rc: $out"
+
 # Distinct trees make a wrong repository or cache key observable. SDD fetches Rendering's unique
 # path; serving SDD's default tree instead makes this a fabricated cone-mode finding.
 wire_sparse FS-GG/FS.GG.SDD cone-foreign-rendering; wire FS-GG/FS.GG.Rendering
