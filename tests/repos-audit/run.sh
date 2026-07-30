@@ -2619,9 +2619,22 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "sparse: a roster with no cross-repo checkout reports that it asserted NOTHING" \
   || bad "an empty subject set must not render as a clean sweep" "rc=$rc: $out"
 
+# #1555 — the gate and the roster sweep must share the document-level orchestration, not merely
+# the leaf rules. These are deliberately source-shape assertions: a behavioural fixture can stay
+# green while the sweep quietly grows a second resolver/parse/refusal/enumeration procedure. The
+# gate owns that expression inside `grade_document`; the audit is allowed to render the verdict but
+# must not compute it itself.
+shared_grade="$(grep -c '^def grade_document(' "$HERE/../../scripts/check-sparse-checkout-closure.py")"
+audit_uses_shared="$(grep -c 'rule\.grade_document(document, WHERE, resolver=resolve)' "$AUDIT")"
+private_enumeration="$(grep -c 'enumeration_checked[[:space:]]*=' "$AUDIT" || true)"
+{ [ "$shared_grade" -eq 1 ] && [ "$audit_uses_shared" -eq 1 ] && [ "$private_enumeration" -eq 0 ]; } \
+  && ok "sparse: gate and roster sweep share document grading; the audit owns no enumeration predicate" \
+  || bad "sparse grading orchestration must have one grade_document seam" \
+         "gate=$shared_grade audit-use=$audit_uses_shared private-enumeration=$private_enumeration"
+
 # AND THE BORROWED RULE FAILS CLOSED WHEN IT IS NOT THERE. Importing across a file boundary makes
-# `sparse_steps`/`patterns_of`/`cone_mode_of`/`grade_pattern`/`origin_repository`/`tracked_paths`/
-# `GateError`/`SparseRefusal` an interface, and #1530 HAS SINCE hoisted the parse out of that file —
+# `grade_document`/`repository_matches`/`origin_repository`/`tracked_paths`/`GateError`/
+# `SparseRefusal` an interface, and #1530 HAS SINCE hoisted the parse out of that file —
 # its criterion 2 was that neither caller keeps a private copy. So the interesting question was never
 # whether sharing works today; it is what happens on the day the far side moves.
 #
@@ -2666,11 +2679,11 @@ printf '"""A rule module that no longer exposes the borrowed names (models #1530
   > "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
 out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
         --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-#     `SparseRefusal` is named explicitly alongside `grade_pattern` (#1599 criterion 3): the
+#     `SparseRefusal` is named explicitly alongside `grade_document` (#1599 criterion 3): the
 #     no-verdict type the borrower must catch is part of the borrowed interface, and a leg that only
 #     greps for a GRADING symbol would go on passing if it silently dropped off the list again.
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'no longer exposes' \
-    && printf '%s' "$out" | grep -q 'grade_pattern' \
+    && printf '%s' "$out" | grep -q 'grade_document' \
     && printf '%s' "$out" | grep -q 'SparseRefusal' \
     && printf '%s' "$out" | grep -q 'REFUSED a shape it cannot grade' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \

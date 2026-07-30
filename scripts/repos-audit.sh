@@ -882,12 +882,9 @@ caller_verdict() {
 # `patterns_of`/`cone_mode_of`, and deliberately NOT a subclass so each caller maps it to its own
 # exit-code contract). Both are named in `BORROWED` and both are caught at every call site below.
 #
-# What IS restated is the per-step ORCHESTRATION — roughly fifteen lines deciding `resolvable` and
-# `enumeration_checked` and keeping counts — because the gate applies its rules inline in `main()`,
-# interleaved with argparse, its own tree walk and its own printing, and there is no seam to import.
-# That is a smaller instance of the same disease and it is not pretended otherwise: it is recorded as
-# a follow-up rather than fixed here, because hoisting a seam means editing
-# check-sparse-checkout-closure.py, which #1530 holds. This comment is the marker, not the excuse.
+# The per-step ORCHESTRATION is borrowed too: `grade_document` owns the parse/refusal/full-clone/
+# enumeration decisions. This caller supplies only a resolver for the roster's cached trees, then
+# renders the structured verdict into its ledger and retry protocol (#1555).
 #
 # Stdin: one workflow as JSON. Argv: the rule file, the authority tree, the `where` prefix, and the
 # roster tree cache (#1556).
@@ -930,7 +927,7 @@ spec.loader.exec_module(rule)
 # AttributeError from somewhere in the loop. It fails CLOSED: the caller records a refusal and the
 # audit exits 3, because a rule that cannot be loaded must never round to "no repository enumerates
 # anything" across ten repositories.
-BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern",
+BORROWED = ("grade_document", "repository_matches",
             "origin_repository", "tracked_paths", "GateError", "SparseRefusal")
 missing = [name for name in BORROWED if not hasattr(rule, name)]
 if missing:
@@ -1062,125 +1059,62 @@ cross = graded = pattern_count = clones = ungraded = 0
 # not a refused shape); `rule4_ran` is how many of those had a tracked path set to ask.
 rule4_ran = rule4_subjects = 0
 
-for job_id, params in rule.sparse_steps(document):
-    where = "%s (job `%s`)" % (WHERE, job_id)
-    cross += 1
-    # Refusals are COLLECTED, never raised on sight — the rule file's own discipline: one unreadable
-    # step must not suppress every real finding in the rest of the org.
-    #
-    # BOTH NO-VERDICT TYPES, and `SparseRefusal` is the one that matters here (#1599). Since #1530 the
-    # PARSE lives in scripts/lib/sparse.py, which has no dependency on the gate harness and therefore
-    # cannot raise the gate's `GateError`; it raises `SparseRefusal`, deliberately NOT a subclass, so
-    # that the mapping from "unreadable block" to an exit code is made by each caller where its own
-    # exit-code contract lives. `check-sparse-checkout-closure.py` makes that mapping. This borrower
-    # did not, and the refusal escaped the handler written to catch it — killing the subprocess before
-    # the `counts` line, so the sweep lost `cross` and reported "found NO cross-repo `actions/checkout`
-    # at all" over a roster that demonstrably had one, while the sentence the shared module wrote
-    # reached the operator only as traceback text on stderr. `GateError` is kept because the interface
-    # is what is DECLARED, not what happens to be raised today: a future parse refusal of the gate's
-    # own is caught here too, rather than becoming this bug a second time.
-    try:
-        patterns = rule.patterns_of(params, where)
-        if patterns is None:
-            clones += 1          # a full clone under-fetches nothing, so it is not a subject
-            continue
-        cone = rule.cone_mode_of(params, where)
-    except (rule.GateError, rule.SparseRefusal) as error:
-        emit("refusal", error)
-        continue
-
-    repository = str(params.get("repository") or "").strip()
+def resolve(repository):
+    """Give the shared grader this audit's answer for rule (4)."""
     resolved = tree()
-
-    # WHOSE INDEX ANSWERS RULE (4) FOR THIS STEP. Two sources now, and the LOCAL one is preferred
-    # where it applies: the checkout we are running out of is the authority's working tree, which is
-    # more current than any API read of its default branch and costs nothing.
-    #
-    # `why` is set exactly when rule (4) could NOT run, and carries the kind that decides whether
-    # this is a boundary of the audit (reported, run still green) or a failure to read (the run is
-    # not a verdict). Rule (4) not running is never a pass, in either case (#266).
-    #
-    # ORDER IS THE ASSERTION HERE (#1608). The SHAPE is settled first because it is decidable without
-    # knowing which repository this checkout is — an expression is a permanent boundary on any run.
-    # Only then is "is this us?" asked, and when the ORIGIN WOULD NOT READ that question has no
-    # answer. Falling through to the foreign path in that state would silently assert "this is not
-    # the tree I hold" about a repository that may well BE the tree we hold, and grade rule (4)
-    # against the API's view of some default branch instead of the working tree we are running out
-    # of. An unreadable origin is a failure to READ — the same class as the index that will not
-    # answer, one branch down, and it fails closed for the same reason (#266).
-    tracked = None
-    why = None
     if not is_literal_repository(repository):
-        why = ("ungraded", NOT_LITERAL)
-    elif resolved["ours"] is None:
-        why = ("noverdict", "this audit could not read its own checkout's origin, so whether that is "
-                            "the tree it holds — and therefore whose git index answers rule (4) — "
-                            "could not be decided")
-    elif repository.casefold() == resolved["ours"].casefold():
-        tracked = resolved["tracked"]
-        if tracked is None:
-            why = ("noverdict", "it fetches the tree this audit holds (%s), whose git index would "
-                                "not answer" % resolved["ours"])
-    else:
-        kind, payload = foreign_tracked(repository)
-        if kind == "want":
-            # Not graded on this pass at all — `sparse_grade` will fetch it and run us again, and
-            # everything buffered so far is discarded. Keep scanning, so ONE re-run collects every
-            # tree this workflow needs rather than one per round trip.
-            wants.append(repository)
-            continue
-        if kind == "ok":
-            tracked = payload
-        else:
-            why = (kind, payload)
+        return "ungraded", None, NOT_LITERAL
+    if resolved["ours"] is None:
+        return ("noverdict", None,
+                "this audit could not read its own checkout's origin, so whether that is the tree it "
+                "holds — and therefore whose git index answers rule (4) — could not be decided")
+    if rule.repository_matches(repository, resolved["ours"]):
+        if resolved["tracked"] is None:
+            return ("noverdict", None,
+                    "it fetches the tree this audit holds (%s), whose git index would not answer" % resolved["ours"])
+        return "ok", resolved["tracked"], None
+    kind, payload = foreign_tracked(repository)
+    if kind == "ok":
+        return "ok", payload, None
+    if kind == "want":
+        return "want", None, None
+    return kind, None, payload
 
-    # Identical to the rule file's own reasoning: in non-cone mode the trailing-slash rule decides
-    # enumeration from the pattern alone; in cone mode ONLY rule (4) can, so a cone-mode fetch of a
-    # tree we could not obtain has NOTHING asserted about it.
-    enumeration_checked = (not cone) or tracked is not None
 
-    step_findings = []
-    try:
-        for pattern in patterns:
-            pattern_count += 1
-            step_findings.extend(rule.grade_pattern(
-                pattern, cone=cone, where=where, tracked=tracked))
-    # THE SAME PAIR, FOR THE SAME REASON (#1599). `grade_pattern` raises only `GateError` today, and
-    # "only what it raises today" is precisely the reasoning that produced this bug one branch up: the
-    # parse block was correct on that basis right until #1530 moved the parse and changed the
-    # exception's identity. Catching both here costs nothing and is not symmetry for its own sake —
-    # the grading rules are the ones most likely to follow the parse into scripts/lib/sparse.py, and
-    # that module cannot raise `GateError` at all.
-    #
-    # The stake is higher here than the exit code suggests. The GATE's identical handler sits under
-    # `lib/gate.py`'s `run()`, whose blanket `except Exception` turns any escape into a loud
-    # no-verdict; this embedded program has no such net. Its only backstop is `sparse_grade`'s
-    # fallback, which records a refusal but LOSES the `counts` record — so `cross` reverts to 0 and
-    # the summary prints "found NO cross-repo `actions/checkout` at all" over a roster that has one.
-    # That ledger falsehood is reachable from ANY uncaught exception in this program, not just this
-    # one; closing the two known raisers is what is in scope here.
-    except (rule.GateError, rule.SparseRefusal) as error:
-        emit("refusal", error)
+for verdict in rule.grade_document(document, WHERE, resolver=resolve):
+    cross += 1
+    if verdict.resolution_kind == "want":
+        # A request invalidates this whole pass: `sparse_grade` fetches every wanted tree, then
+        # reruns the shared grader and writes only that complete verdict.
+        wants.append(verdict.repository)
+        continue
+    if verdict.full_clone:
+        clones += 1
+        continue
+    if verdict.refusal:
+        emit("refusal", verdict.refusal)
         continue
 
+    assert verdict.patterns is not None and verdict.cone is not None
+    pattern_count += len(verdict.patterns)
     rule4_subjects += 1
-    if tracked is not None:
+    if verdict.resolvable:
         rule4_ran += 1
-
-    for finding in step_findings:
+    for finding in verdict.findings:
         emit("finding", finding)
-    if enumeration_checked:
+    if verdict.enumeration_checked:
         graded += 1
     else:
         ungraded += 1
         emit("ungraded", "%s: cone mode against %r, whose tracked paths this audit could not obtain "
                          "(%s) — NOTHING was asserted about whether these patterns name files or "
-                         "directories" % (where, repository, why[1]))
-    if why is not None:
+                         "directories" % (verdict.where, verdict.repository, verdict.resolution_reason))
+    if verdict.resolution_reason:
         emit("unresolved", "%s: rule (4), the existence of its directories in %r, was NOT checked — "
-                           "%s" % (where, repository, why[1]))
-        if why[0] == "noverdict":
-            emit("noverdict", "%s: %r — %s" % (where, repository, why[1]))
+                           "%s" % (verdict.where, verdict.repository, verdict.resolution_reason))
+        if verdict.resolution_kind == "noverdict":
+            emit("noverdict", "%s: %r — %s" % (verdict.where, verdict.repository,
+                                                 verdict.resolution_reason))
 
 # APPENDED RAW, never through `emit` — that helper flattens whitespace so a multi-line finding cannot
 # be read as several records, and it would collapse this line's TABS into spaces. The awk that sums

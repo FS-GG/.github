@@ -185,6 +185,7 @@ import os
 from pathlib import PurePosixPath
 import subprocess
 import sys
+from typing import Callable, NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -431,6 +432,65 @@ def grade_pattern(pattern: str, *, cone: bool, where: str, tracked: set[str] | N
     return findings
 
 
+class StepVerdict(NamedTuple):
+    """One cross-repository checkout, graded without rendering or I/O.
+
+    ``resolver`` is deliberately a callback: the gate has one local git index while the roster
+    audit can request and cache a different tree per repository.  Making either caller pre-resolve
+    the index is the orchestration duplication this seam removes.
+    """
+
+    where: str
+    repository: str
+    patterns: list[str] | None
+    cone: bool | None
+    findings: list[str]
+    refusal: str | None
+    full_clone: bool
+    resolvable: bool
+    enumeration_checked: bool
+    resolution_kind: str | None
+    resolution_reason: str | None
+
+
+Resolver = Callable[[str], tuple[str, set[str] | None, str | None]]
+
+
+def grade_document(document: object, where_prefix: str, *, resolver: Resolver) -> list[StepVerdict]:
+    """Grade every cross-repo checkout in ``document`` using the caller's tree resolver.
+
+    The result is structured so callers choose their own rendering and retry policy, while parsing,
+    full-clone handling, refusals, rule-4 applicability and enumeration accounting remain one rule.
+    """
+    verdicts: list[StepVerdict] = []
+    for job_id, repository, params in checkout_steps(document):
+        where = f"{where_prefix} (job `{job_id}`)"
+        try:
+            patterns = patterns_of(params, where)
+            if patterns is None:
+                verdicts.append(StepVerdict(where, repository, None, None, [], None, True, False,
+                                            False, None, None))
+                continue
+            cone = cone_mode_of(params, where)
+        except SparseRefusal as error:
+            verdicts.append(StepVerdict(where, repository, None, None, [], str(error), False, False,
+                                        False, None, None))
+            continue
+
+        kind, tracked, reason = resolver(repository)
+        resolvable = tracked is not None
+        enumeration_checked = (not cone) or resolvable
+        try:
+            findings = [finding for pattern in patterns for finding in grade_pattern(
+                pattern, cone=cone, where=where, tracked=tracked)]
+            refusal = None
+        except GateError as error:
+            findings, refusal = [], str(error)
+        verdicts.append(StepVerdict(where, repository, patterns, cone, findings, refusal, False,
+                                    resolvable, enumeration_checked, kind, reason))
+    return verdicts
+
+
 def main(argv: list[str]) -> int:
     ap = base_parser(__doc__.splitlines()[0])
     args = ap.parse_args(argv)
@@ -463,13 +523,17 @@ def main(argv: list[str]) -> int:
     for path in workflows:
         document = load_yaml(read_text(path, "workflow"), f"workflow {path}")
         relative = os.path.relpath(path, root)
-        # `checkout_steps`, not this file's own `sparse_steps` delegate: it hands back the
-        # `repository:` the qualification actually read, so the string this gate PRINTS and COMPARES
-        # below is the same string that decided the step was a subject. Re-deriving it from `params`
-        # here would be a second reading of the field the shared selector just read — #1553's own
-        # shape, one level down, in the file that closed it.
-        for job_id, repository, params in checkout_steps(document):
-            where = f"{relative} (job `{job_id}`)"
+        def resolve(repository: str) -> tuple[str, set[str] | None, str | None]:
+            if tracked is not None and repository_matches(repository, ours):
+                return "ok", tracked, None
+            return (
+                "unresolved",
+                None,
+                f"fetches {repository!r}, which is not the audited repository "
+                f"({ours or 'origin unreadable'}) — rule (4) did not run",
+            )
+
+        for verdict in grade_document(document, relative, resolver=resolve):
             cross_repo_steps += 1
             # A refusal is COLLECTED rather than raised on sight, so one unreadable step cannot
             # suppress every real finding in the rest of the tree. The exit code is still 3.
@@ -477,65 +541,29 @@ def main(argv: list[str]) -> int:
             # `SparseRefusal` is `lib/sparse.py`'s no-verdict, deliberately NOT a `GateError`: that
             # module has no dependency on this harness, so the mapping from "unreadable block" to
             # "this gate's exit 3" is made HERE, where the exit-code contract lives.
-            try:
-                patterns = patterns_of(params, where)
-                if patterns is None:
-                    full_clones += 1
-                    continue
-                cone = cone_mode_of(params, where)
-            except SparseRefusal as error:
-                refusals.append(str(error))
+            if verdict.full_clone:
+                full_clones += 1
                 continue
-
-            # `repository_matches`, not a second `.casefold()` comparison here: the rule that
-            # `fs-gg/.GitHub` and `FS-GG/.github` are the same repository is `lib/sparse.py`'s, and it
-            # is the rule `sparse_set` got wrong (#1553). It answers False for an unreadable `ours`,
-            # so the `tracked` guard is what remains of "the gate can resolve this tree".
-            resolvable = tracked is not None and repository_matches(repository, ours)
-            if not resolvable:
-                unresolved.append(
-                    f"{where}: fetches {repository!r}, which is not the audited repository "
-                    f"({ours or 'origin unreadable'}) — rule (4) did not run"
-                )
-
-            # CAN THIS STEP'S ENUMERATION BE DETECTED AT ALL? In non-cone mode the trailing-slash
-            # rule decides it from the pattern alone. In CONE mode it cannot be decided from the
-            # pattern — git reads a cone pattern as a rooted directory prefix, so a file name is
-            # simply a directory that turns out to be empty, and ONLY rule (4) can see that. A
-            # cone-mode fetch of a repository this gate cannot resolve therefore has NOTHING
-            # asserted about it, and printing `ok` over it would be #1510's shape one repository
-            # across, reported green — the exact fail-open this gate exists to end (#266).
-            enumeration_checked = (not cone) or resolvable
-
-            step_findings: list[str] = []
-            try:
-                for pattern in patterns:
-                    graded_patterns += 1
-                    step_findings.extend(
-                        grade_pattern(
-                            pattern,
-                            cone=cone,
-                            where=where,
-                            tracked=tracked if resolvable else None,
-                        )
-                    )
-            except GateError as error:
-                refusals.append(str(error))
+            if verdict.resolution_reason:
+                unresolved.append(f"{verdict.where}: {verdict.resolution_reason}")
+            if verdict.refusal:
+                refusals.append(verdict.refusal)
                 continue
-
-            findings.extend(step_findings)
-            if enumeration_checked:
+            assert verdict.patterns is not None and verdict.cone is not None
+            graded_patterns += len(verdict.patterns)
+            findings.extend(verdict.findings)
+            if verdict.enumeration_checked:
                 graded_steps += 1
             else:
                 ungraded.append(
-                    f"{where}: cone mode against {repository!r}, which this gate cannot resolve — "
+                    f"{verdict.where}: cone mode against {verdict.repository!r}, which this gate cannot resolve — "
                     f"NOTHING was asserted about whether these patterns name files or directories"
                 )
             # Per-STEP, never the global accumulator: a clean step after a dirty one must still print
             # its `ok` line, or the reader cannot tell "graded and clean" from "never reached".
-            if not step_findings and enumeration_checked:
-                mode = "cone" if cone else "non-cone"
-                print(f"  ok   {where:<52} {mode:<8} {' '.join(patterns)}")
+            if not verdict.findings and verdict.enumeration_checked:
+                mode = "cone" if verdict.cone else "non-cone"
+                print(f"  ok   {verdict.where:<52} {mode:<8} {' '.join(verdict.patterns)}")
 
     for note in ungraded:
         print(f"  UNGRADED {note}")
