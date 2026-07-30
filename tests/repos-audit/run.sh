@@ -1288,7 +1288,7 @@ rm -f "$FIX/FS-GG__.github.list"; rm -rf "$FIX/FS-GG__.github"
 # run must not go green, and the `if:` predicates that classify rc must themselves be gated — an
 # unenumerated exit code is the same fail-open one layer up.
 shape="$(python3 - "$HERE/../.." <<'PY'
-import sys, pathlib, re, yaml
+import ast, sys, pathlib, re, yaml
 
 root = pathlib.Path(sys.argv[1])
 wf = yaml.safe_load((root / ".github/workflows/repos-audit.yml").read_text())
@@ -1391,6 +1391,61 @@ for trigger in ("pull_request", "push"):
     # re-runs them — reach bought at the price of an unarmed gate, which is #332/#334's shape.
     if "scripts/check-sparse-checkout-closure.py" not in st[True][trigger]["paths"]:
         bad.append(f"repos-audit-selftest {trigger} paths: does not cover scripts/check-sparse-checkout-closure.py, whose rule repos-audit.sh imports — an edit to it would not re-run the legs that pin its verdicts")
+
+    # #1593 — read the audit's actual loader declarations rather than maintaining a second list of
+    # its imports here.  Each named file changes the audit's roster-wide verdict; a path filter that
+    # omits one is a gate that does not run on a change to code it executes.
+    audit_source = (root / "scripts/repos-audit.sh").read_text()
+    loaded = {"scripts/repos-audit.sh"}
+    python_files = {"scripts/" + name for name in re.findall(r'\$HERE/([A-Za-z0-9_.-]+\.py)', audit_source)}
+    # The audit's embedded Python imports fsgg_feed directly.  Resolve any local module it names;
+    # stdlib imports simply have no matching file and are ignored.
+    for name in re.findall(r'\bimport\s+([A-Za-z_][A-Za-z0-9_]*)', audit_source):
+        candidate = "scripts/" + name + ".py"
+        if (root / candidate).is_file():
+            python_files.add(candidate)
+
+    # Follow Python imports recursively from the files the shell actually loads.  This makes a hoist
+    # from sparse.py into gate.py visible to the trigger assertion without copying either file's
+    # import list into this fixture.
+    pending = list(python_files)
+    while pending:
+        relative = pending.pop()
+        path = root / relative
+        if not path.is_file() or relative in loaded:
+            continue
+        loaded.add(relative)
+        tree = ast.parse(path.read_text(), filename=str(path))
+        modules = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules.append(node.module)
+        for module in modules:
+            candidate = root / "scripts" / (module.replace(".", "/") + ".py")
+            if candidate.is_file():
+                child = str(candidate.relative_to(root)).replace("\\\\", "/")
+                if child not in loaded:
+                    pending.append(child)
+                    python_files.add(child)
+
+    # Controls for the resolver itself: a transitive local import must remain visible, while a
+    # standard-library import is never a made-up repository dependency.
+    if "scripts/lib/gate.py" not in loaded:
+        bad.append("the recursive loader did not discover scripts/lib/gate.py through the sparse rule")
+    if any(not (root / relative).is_file() for relative in loaded):
+        bad.append("the recursive loader recorded a non-existent local dependency (for example a stdlib import)")
+    if re.search(r'\.\s+"\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)/lib/args\.sh"', audit_source):
+        loaded.add("scripts/lib/args.sh")
+    if "fsgg_feed.py" in audit_source:
+        loaded.add("scripts/fsgg_feed.py")
+    if "lib/sparse.py" in audit_source:
+        loaded.add("scripts/lib/sparse.py")
+
+    missing = sorted(loaded - set(st[True][trigger]["paths"]))
+    if missing:
+        bad.append(f"repos-audit-selftest {trigger} paths: does not cover audit load-time dependencies: {', '.join(missing)}")
 
 print("\n".join(bad))
 PY

@@ -31,13 +31,16 @@ on:
       # no-verdict as different things (#327). An edit there must re-run it, or that assertion is a
       # gate that never runs.
       - ".github/workflows/repos-audit.yml"
-      # The audit IMPORTS its sparse-checkout closure rule from this file rather than restating it
-      # (#1529, closing #1522's one-repo reach). That is a real load-time dependency: an edit to
-      # `grade_pattern`, `patterns_of`, `cone_mode_of` or `sparse_steps` changes what the roster
-      # sweep asserts about ten repositories, and — the whole reason the rule is shared — it is
-      # SUPPOSED to. So the fixture that pins those verdicts has to re-run on it, or the sharing
-      # buys reach at the price of an unarmed gate. The fixture asserts this entry is here.
+      # These are the audit's load-time dependencies. Their paths, rather than their currently
+      # exported symbols, are the contract: moving a helper changes the audit's verdict for every
+      # rostered repository and must re-run this fixture. `run.sh` derives and asserts the set from
+      # the audit's actual loaders, so this comment cannot become a second declaration.
       - "scripts/check-sparse-checkout-closure.py"
+      - "scripts/check-required-contexts.py"
+      - "scripts/lib/sparse.py"
+      - "scripts/lib/gate.py"
+      - "scripts/fsgg_feed.py"
+      - "scripts/lib/args.sh"
   push:
     branches: [main]
     paths:
@@ -47,6 +50,11 @@ on:
       - ".github/workflows/repos-audit-selftest.yml"
       - ".github/workflows/repos-audit.yml"
       - "scripts/check-sparse-checkout-closure.py"
+      - "scripts/check-required-contexts.py"
+      - "scripts/lib/sparse.py"
+      - "scripts/lib/gate.py"
+      - "scripts/fsgg_feed.py"
+      - "scripts/lib/args.sh"
   workflow_dispatch:
 
 permissions:
