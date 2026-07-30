@@ -8,6 +8,16 @@ fire."** Only mutation separates them — and mutation is the method that found 
 2026-07-27/28, in ten subsystems, none of them by reading. Several were in code written by people who
 were specifically looking for that defect.
 
+THE RE-VERIFICATION DECISION (.github#1838, 2026-07-30): keep this sweep **on demand**, not periodic.
+Its 17 adjudicated legs took about six minutes and deliberately mutate then restore a working tree, so
+making it a required context would either need an isolated scratch checkout or make CI mutate its own
+checkout. Neither cost is justified by the two known decay incidents yet: `skill-union-assert` (#1715)
+became tautological after its view-tree subject changed, and FS.GG.Audio#212's dangling-root alarm
+became unreachable after its subject changed. The trigger is therefore a change to a gate's decisive
+predicate **or to the shape/path semantics of the subject it guards** (views, roots, manifests,
+materializers, or fixture layout): run the affected `--only` leg before merging, and update its spec
+or file a follow-up when there is no leg. A date alone never makes a prior verdict current.
+
 So this driver does not read gates. It breaks their subjects and reports one of three verdicts per
 gate: **JUSTIFIED** (fired), **DECORATIVE** (could not fire), **NOT_MEASURED** (no measurement
 obtained). The third is never collapsed into either of the others — `#266`: "I could not evaluate
