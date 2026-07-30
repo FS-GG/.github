@@ -14,6 +14,9 @@ for row in 'a,b' 'a,-' '-,b'; do
   set +e; out="$(python3 "$DETECTOR" --fixture "$WORK/fleet.tsv" 2>&1)"; rc=$?; set -e
   [ "$rc" -eq 1 ] && grep -Eq 'DISAGREE|MISSING|UNRESOLVED' <<<"$out" && ok "non-agree verdict remains explicit" || bad "four verdicts"
 done
+fixture $'FS-GG/.github\tlegacy/v\t-\t1.0.0\ta\tb'
+set +e; out="$(python3 "$DETECTOR" --fixture "$WORK/fleet.tsv" 2>&1)"; rc=$?; set -e
+[ "$rc" -eq 1 ] && grep -q 'UNCOVERED' <<<"$out" && ok "fixture accepts an explicit package=None uncovered mapping input" || bad "explicit uncovered"
 grep -q 'FS.GG.Rendering.*fs-gg-ui-template' "$DETECTOR" && grep -q 'FS.GG.SDD.*FS.GG.Contracts' "$DETECTOR" && ok "Rendering mappings and full SDD sweep are tabled" || bad "fleet table"
 grep -q '94b044b1e575fc9da0105c32bd063b0f387a5eef' "$DETECTOR" && grep -q '775a11eec882e2184ea9a18a5f759bb54a9ba143' "$DETECTOR" && ok "historical dual-publish commits are retained, never normalized" || bad "historical disagreements"
 echo "release-tag-anchors fixture — $pass passed, $fail failed"; [ "$fail" -eq 0 ]

@@ -47,8 +47,13 @@ def classify(anchor: str, tag: str) -> str:
     return "AGREE" if anchor == tag else "DISAGREE"
 
 def main() -> int:
-    ap = argparse.ArgumentParser(); ap.add_argument("--fixture"); ap.add_argument("--live", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("--fixture"); ap.add_argument("--live", action="store_true"); ap.add_argument("--roster", default="registry/repos.yml")
     args = ap.parse_args()
+    # `full:` is the roster's canonical repository identity. Refuse a table that names a producer
+    # absent from it; a mapping may be uncovered, but it may never silently invent a publisher.
+    roster = set(re.findall(r"\bfull:\s*(FS-GG/[A-Za-z0-9_.-]+)", open(args.roster, encoding="utf-8").read()))
+    unknown = sorted({m.repo for m in FLEET} - roster - {"FS-GG/.github"})
+    if unknown: ap.error("FLEET names producers absent from authoritative roster: " + ", ".join(unknown))
     if args.live:
         bad = False
         for row in FLEET:
@@ -74,6 +79,8 @@ def main() -> int:
         for raw in f:
             if not raw.strip() or raw.startswith("#"): continue
             repo, ns, package, version, anchor, tag = raw.rstrip("\n").split("\t")
+            if package == "-":
+                print(f"UNCOVERED\t{repo}\t{ns}{version}\t-"); bad = True; continue
             seen.add((repo, ns, package)); verdict = classify(anchor, tag)
             print(f"{verdict}\t{repo}\t{ns}{version}\t{package}")
             bad |= verdict in {"DISAGREE", "MISSING", "UNRESOLVED"}
