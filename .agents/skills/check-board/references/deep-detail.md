@@ -197,6 +197,10 @@ cannot resolve stays `unknown`, which **holds** — see the table.
 
 ## 2. The findings
 
+The rows below split two authorities: chore kinds that carry a `Write` are engine-owned repair
+facts; diagnostic-only findings are this skill's own procedure. Keep the former synchronized with
+`Chore.ChoreKind.Write`; do not turn the latter into invented engine protocol.
+
 Each finding has a code, a ground truth, and a fix — or an explicit refusal to fix.
 
 | Code | Condition | Fix (`--apply`) |
