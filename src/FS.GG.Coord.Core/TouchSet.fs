@@ -233,6 +233,21 @@ module TouchSet =
             let s = stem t
             file = s || file.StartsWith(s + "/", System.StringComparison.Ordinal)
 
+    let strictlyContains (outer: TouchSet) (inner: TouchSet) : bool =
+        let liveTokens =
+            function
+            | Declared tokens -> tokens |> List.choose (function Matchable t -> Some(Matchable t) | Unmatchable _ -> None)
+            | _ -> []
+
+        let outside = liveTokens outer
+        let inside = liveTokens inner
+        let tokenStem = function Matchable t -> stem t | Unmatchable _ -> ""
+        let coveredBy tokens token = tokens |> List.exists (fun covering -> covers covering (tokenStem token))
+
+        not (List.isEmpty inside)
+        && (inside |> List.forall (coveredBy outside))
+        && (outside |> List.exists (fun token -> not (coveredBy inside token)))
+
     let conflicts (a: TouchSet) (b: TouchSet) : (string * string) list =
         let tokensOf =
             function

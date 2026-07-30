@@ -169,6 +169,12 @@ module TouchSet =
     /// cannot vouch for one either. This is the same asymmetry the scheduler relies on, in one place.
     val covers: token: PathToken -> file: string -> bool
 
+    /// Does `outer` reserve every path `inner` reserves, plus at least one more?
+    ///
+    /// This is the filing-time "lane of one" predicate (#1843). It compares declared subtree shapes,
+    /// never the files that happen to exist today.
+    val strictlyContains: outer: TouchSet -> inner: TouchSet -> bool
+
     /// The tokens two touch-sets share. Empty = they may run in parallel.
     ///
     /// CONTRACT: both token lists must come from the SAME repo. Tokens are repo-relative, so handing

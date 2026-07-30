@@ -239,6 +239,14 @@ module TouchSetTests =
         Assert.NotEmpty(TouchSet.conflicts parent child)
 
     [<Fact>]
+    let ``#1843 directory reservation strictly contains a sibling's future file`` () =
+        let wide = TouchSet.parse "Paths: docs/reports"
+        let narrow = TouchSet.parse "Paths: docs/reports/new-file.md"
+
+        Assert.True(TouchSet.strictlyContains wide narrow)
+        Assert.False(TouchSet.strictlyContains narrow wide)
+
+    [<Fact>]
     let ``disjoint touch-sets may run in parallel`` () =
         let a = Declared [ Matchable "src/Scene/**" ]
         let b = Declared [ Matchable "src/Audio/**" ]
