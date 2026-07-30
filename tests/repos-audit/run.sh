@@ -21,7 +21,8 @@ AUDIT="$HERE/../../scripts/repos-audit.sh"
 REPOS_SH="$HERE/../../scripts/repos.sh"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/repos-audit-fixture.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+MUTATED_AUDIT=""
+trap 'rm -rf "$WORK"; [ -z "$MUTATED_AUDIT" ] || rm -f "$MUTATED_AUDIT"' EXIT
 STUB="$WORK/bin"; mkdir -p "$STUB"
 export FIX="$WORK/fix"; mkdir -p "$FIX"
 
@@ -62,11 +63,11 @@ mkpin "$KIT_PUBLISHED" "$FIX/_default.pin"
 # What `GET /repos/{o}/{r}/git/trees/HEAD?recursive=1` returns, so rule (4) — *does this pattern
 # select any tracked path?* — can be asked about a repository whose checkout the audit does not hold.
 #
-# The shape is the API's, not a convenience: `tree` entries alongside `blob` entries, because the
-# real endpoint emits both and the audit must drop the directories. A fixture that listed only blobs
-# would be green whether or not the audit filtered them — and if it did not, a cone-mode FILE name
-# would be answered by the `tree` entry for the directory of that name and the finding would vanish,
-# which is the one thing rule (4) is carrying alone in cone mode.
+# The shape is the API's, not a convenience: `tree` entries alongside `blob` and `commit` entries.
+# The audit drops `tree`: git has no empty directories and `selects_anything` asks strictly UNDER a
+# prefix, so a directory entry cannot answer for the directory itself. It keeps `commit`: a
+# submodule is a tracked path in `git ls-files`, and dropping it would fabricate a finding for a
+# directory containing only that submodule.
 #
 # `src/FS.GG.Contracts/` and `scripts/` are real directories here; `scripts/check-foo.py` and
 # `src/FS.GG.Contracts/Contracts.fs` are files. That is what lets one roster express both sides of
@@ -78,10 +79,21 @@ mktree() { cat > "$2" <<JSON
   {"path": "src", "type": "tree", "mode": "040000"},
   {"path": "src/FS.GG.Contracts", "type": "tree", "mode": "040000"},
   {"path": "src/FS.GG.Contracts/Contracts.fs", "type": "blob", "mode": "100644"}
+  ,{"path": "vendor/only-submodule", "type": "commit", "mode": "160000"}
 ]}
 JSON
 }
-mktree false "$FIX/_default.tree"
+ mktree false "$FIX/_default.tree"
+distinct_rendering_tree() { cat > "$FIX/FS-GG__FS.GG.Rendering.tree" <<'JSON'
+{"sha":"1111111111111111111111111111111111111111","truncated":false,"tree":[
+  {"path":"receiver-only/FromRendering.fs","type":"blob","mode":"100644"}
+]}
+JSON
+                      # The production cache canonicalises repository identity before keying it;
+                      # serve the same fixture through that spelling too, so the stub remains about
+                      # tree identity rather than GitHub's case-preserving request spelling.
+                      cp "$FIX/FS-GG__FS.GG.Rendering.tree" "$FIX/fs-gg__fs.gg.rendering.tree"
+}
 
 # pin <repo> <version> [local|root]  — this repo pins the kit in a CPM props file, at <version>.
 pin() { local slug="${1//\//__}" file="Directory.Packages.${3:-local}.props"
@@ -2137,16 +2149,19 @@ wire_sparse() {
     #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
     cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
     cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
+    cone-submodule) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            vendor\n' ;;
     # --- CONE MODE ACROSS TWO SIBLINGS, NEITHER OF WHICH IS THE AUTHORITY (#1556). This is the pair
     #     #1529 left ungraded and #1556 closes: the audit holds neither tree, so rule (4) can only
     #     run by FETCHING the fetched repository's index from the API. Both sides are expressed,
     #     because a fixture that only had the clean one would be green before the feature existed.
     cone-foreign)      printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n' ;;
     cone-foreign-file) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    cone-two-foreign) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            src/FS.GG.Contracts\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            scripts\n' ;;
     # A sibling that spells the repository in a DIFFERENT CASE fetches the same repository GitHub
     # does, so it must be graded the same way. If the roster match were case-sensitive this would
     # silently fall off the roster and lose rule (4) over a capitalisation.
     cone-foreign-case) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: fs-gg/fs.gg.sdd\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
+    cone-foreign-rendering) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.Rendering\n          sparse-checkout: |\n            receiver-only\n' ;;
     # OFF THE ROSTER. The roster is the boundary of what this audit may claim to know, so this is
     # UNGRADED and says so — not a finding, and not a no-verdict either: nothing FAILED.
     cone-offroster)    printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/Not.On.The.Roster\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
@@ -2197,6 +2212,60 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q '0 finding(s), 0 refusal(s)'; } \
   && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
   || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
+
+# The first pass requests SDD's tree and is discarded; only the second pass may reach the ledger.
+# Both independent buffer gates are necessary to keep this denominator truthful.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-two-foreign
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 of 2 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a two-pass workflow writes its two checkout verdicts exactly once (#1610)" \
+  || bad "discarded sparse first-pass records must not corrupt the fully-graded denominator" "rc=$rc: $out"
+
+# Each layer is independently required: the Python buffer refuses to emit a partial verdict and the
+# bash append gate refuses to ledger any pass that still requested a tree. These source mutations are
+# deliberate: deleting either guard must fail this leg even though the other guard still masks the
+# behavioural double-count, which is exactly why a denominator-only test was insufficient.
+python_buffer="$(grep -c '^if wants:$' "$AUDIT")"
+bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
+{ [ "$python_buffer" -eq 1 ] && [ "$bash_buffer" -eq 1 ]; } \
+  && ok "sparse: both independent two-pass buffer gates remain present (#1610)" \
+  || bad "deleting either sparse double-count guard must red its own mutation leg" \
+         "python=$python_buffer bash=$bash_buffer"
+
+# Drive the internal empty-roster branch without changing the audit's checkout identity: the mutated
+# script stays under the real `scripts/` directory, so its ROOT and local authority tree are exactly
+# the production ones. It clears the value only AFTER the real roster assignment, before a foreign
+# tree is needed. That must be a no-verdict, never the cheap off-roster boundary.
+MUTATED_AUDIT="$(mktemp "$HERE/../../scripts/.repos-audit-empty-roster.XXXXXX")"
+sed '/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/a SPARSE_ROSTER=""' \
+  "$AUDIT" > "$MUTATED_AUDIT"
+chmod +x "$MUTATED_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'roster was not available when its git tree was needed' \
+    && ! printf '%s' "$out" | grep -q 'not on this audit' ; } \
+  && ok "sparse: an empty internal roster is a no-verdict, never an off-roster boundary (#1610)" \
+  || bad "sparse_tree_ensure must refuse an unavailable roster" "rc=$rc: $out"
+
+# Distinct trees make a wrong repository or cache key observable. SDD fetches Rendering's unique
+# path; serving SDD's default tree instead makes this a fabricated cone-mode finding.
+wire_sparse FS-GG/FS.GG.SDD cone-foreign-rendering; wire FS-GG/FS.GG.Rendering
+distinct_rendering_tree
+out="$(run_logged "$WORK/calls.distinct-tree" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && grep -q '^tree.*FS.GG.Rendering' "$WORK/calls.distinct-tree" \
+    && printf '%s' "$out" | grep -q '1 of 1 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a sibling is graded against its own distinct tree, never another repo's (#1610)" \
+  || bad "a foreign checkout must use the fetched repository's own tree" "rc=$rc: $out"
+
+# A submodule is a `commit` entry, not a directory.  This must grade clean; deleting `commit` from
+# the production entry-type filter turns it into the fabricated cone-mode finding this leg prevents.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-submodule
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 of 1 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a commit tree entry is a tracked submodule, not an empty directory (#1610)" \
+  || bad "dropping commit entries must red a submodule-only sparse checkout" "rc=$rc: $out"
 
 # The three findings #1529 names, each asserted on its own message. `rc -eq 1` alone would be
 # satisfied by an unrelated wiring gap, so every leg pins the sentence AND the repo/workflow it names.
@@ -2505,11 +2574,11 @@ out="$(run_logged "$WORK/calls.none" 2>&1)" && rc=0 || rc=$?
   && ok "sparse: a roster with no cross-repo checkout fetches no tree at all (#1556 criterion 5)" \
   || bad "an empty subject set must cost nothing" "rc=$rc: $(cat "$WORK/calls.none" 2>&1)"
 
-# ONE TREE PER REPOSITORY, NOT ONE PER WORKFLOW. The cache is what makes the reach affordable: three
-# workflows in one repo all fetching the same sibling must produce exactly ONE tree call, or a roster
-# of ten repos with a handful of cross-repo steps each quietly becomes dozens of round-trips.
+# DYNAMIC SCOPE MUST NOT CLOBBER THE REPOSITORY WALK. The loop below is the dedicated tripwire for
+# #1556's worst bug. It also proves the cache fetches once per repository, but its load-bearing
+# assertion is that ALL three workflows remain in the walk.
 #
-# AND IT IS THE LEG THAT CAUGHT THE WORST BUG IN #1556, which is why it asserts the WORKFLOW COUNT
+# The dynamic-scoping regression is why it asserts the WORKFLOW COUNT
 # and not just the call count. bash locals are dynamically scoped, and `sparse_grade`'s loop over the
 # trees it wants sits inside `repo_calls`'s loop over a repository's workflows — so a bare
 # `while read -r repo` assigned straight through to the repository being walked, and `read` leaves it
@@ -2524,8 +2593,8 @@ printf '%s\n%s\n%s\n%s\n' coord.yml fetch.yml fetch2.yml fetch3.yml > "$FIX/FS-G
 out="$(run_logged "$WORK/calls.cache" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && [ "$(grep -c '^tree' "$WORK/calls.cache")" -eq 1 ] \
     && printf '%s' "$out" | grep -q 'ran for 3 of 3 graded cross-repo step(s)'; } \
-  && ok "sparse: the tree is fetched ONCE per repository, not once per workflow (#1556)" \
-  || bad "the tree cache must survive across workflows" \
+  && ok "sparse: dynamic scope preserves every workflow after a sparse tree fetch (#1610)" \
+  || bad "a sparse fetch must not clobber repo_calls' workflow repository" \
          "rc=$rc calls=$(grep -c '^tree' "$WORK/calls.cache" 2>/dev/null): $out"
 rm -f "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml" "$FIX/FS-GG__FS.GG.Rendering/fetch3.yml"
 
