@@ -98,6 +98,19 @@ verdict checked after the concrete blockers and before the touch-set.
 > `Blocked on: human/decision` in the body — a comment is not a park.** A hand-written column is not one
 > either: nothing verifies it, and on #1613 neither hand-written column was ever on the board.
 
+> **Amendment (2026-07-30, [.github#1737](https://github.com/FS-GG/.github/issues/1737)) — the
+> comment thread is a human park's provenance trail; the body line stays a pure machine sentinel.**
+>
+> `Blocked on:` answers exactly one question the engine can act on: whether a human decision or action is
+> still required. The person who parked a row, when they did so, and why are prose facts a later human must
+> read, and belong in an issue comment on that row. Keeping them out of the body grammar preserves the
+> sentinel as a small, parser-verified input instead of turning it into a second audit surface.
+>
+> This is advisory rather than enforced. `lint` cannot establish that a comment's author or rationale is
+> sufficient, and a missing comment must not become a red machine verdict. A filer should record the
+> parking rationale in the thread; a human retiring the park reads that thread, while a mechanical writer
+> consults only the sentinel. The two concerns are deliberately separate.
+
 ## Consequences
 
 - A decision item is now **refused by construction**: it declares `Blocked on: human/decision` and keeps
@@ -122,6 +135,9 @@ verdict checked after the concrete blockers and before the touch-set.
   checks the column (step 2) before the sentinel (step 3b), so such a row is refused with *"Status is
   Blocked"* rather than *"a human must DECIDE"*. That ordering is this record's and is unchanged; the
   reporting gap is filed as its own item rather than settled by re-ordering the scheduler here.
+- **Human-park provenance is comment-borne (2026-07-30, [#1737](https://github.com/FS-GG/.github/issues/1737)).**
+  Filers record who/when/why in the issue thread; the body remains only `Blocked on: human/decision` or
+  `human/action`. There is no grammar extension, board field, or lint requirement for prose provenance.
 
 ## Alternatives considered
 
