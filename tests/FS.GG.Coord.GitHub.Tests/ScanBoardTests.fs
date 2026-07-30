@@ -459,6 +459,14 @@ let ``#979 a --repo that MATCHES is silent — the advisory is not noise on the 
     Assert.True(scoped.Advisory.IsNone, "a --repo that names a real row must say nothing")
 
 [<Fact>]
+let ``#1732 canonical command scope selects a short-id Repo Scope`` () =
+    let row = { scopeRow ".github" 1732 with PathRepo = "audio" }
+    let scoped = Scan.scope (Some "FS.GG.Audio") [ row ]
+
+    Assert.Equal([ row ], scoped.Rows)
+    Assert.True(scoped.Advisory.IsNone)
+
+[<Fact>]
 let ``#979 no --repo is the identity, and says nothing`` () =
     let scoped = Scan.scope None scopeBoard
 

@@ -54,6 +54,20 @@ module Scan =
         { Rows: Row list
           Advisory: string option }
 
+    // Repo Scope is a board vocabulary (`audio`); command scope is canonical (`FS.GG.Audio`).
+    // Keep the normalization at the board boundary, before filtering, so a row cannot disappear before
+    // the Client has an opportunity to enrich its path scope (#1732).
+    let private canonicalPathRepo (raw: string) =
+        match raw.ToLowerInvariant() with
+        | "sdd" -> "FS.GG.SDD"
+        | "rendering" -> "FS.GG.Rendering"
+        | "governance" -> "FS.GG.Governance"
+        | "templates" -> "FS.GG.Templates"
+        | "game" -> "FS.GG.Game"
+        | "audio" -> "FS.GG.Audio"
+        | "net" -> "FS.GG.Net"
+        | _ -> raw
+
     // THE `--repo` FILTER, ONCE. Hand-rolled per verb it was a silent fail-open five times over (#979);
     // `scripts/check-repo-filter-monopoly.py` is what keeps it one. See `Scan.fsi` for the full argument.
     let scope (repo: string option) (rows: Row list) : Scoped =
@@ -62,7 +76,7 @@ module Scan =
         | Some name ->
             let kept =
                 rows
-                |> List.filter (fun r -> String.Equals(r.PathRepo, name, StringComparison.OrdinalIgnoreCase))
+                |> List.filter (fun r -> String.Equals(canonicalPathRepo r.PathRepo, name, StringComparison.OrdinalIgnoreCase))
 
             let advisory =
                 // A row matched, so the request named something real: nothing to say.
@@ -78,7 +92,7 @@ module Scan =
                 else
                     let known =
                         rows
-                        |> List.map (fun r -> r.PathRepo)
+                        |> List.map (fun r -> canonicalPathRepo r.PathRepo)
                         |> List.distinctBy (fun r -> r.ToLowerInvariant())
                         |> List.sort
 
