@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Fleet release-tag anchor detector (.github#2033).
+
+The immutable `<repository commit>` from every served nuspec is compared to the
+peeled release tag.  This intentionally reports historical disagreement; it
+never repairs tags.  `--fixture` is an offline TSV: repo, namespace, package,
+version, artifact-commit, peeled-tag-commit (or `-`), one row per version.
+"""
+from __future__ import annotations
+import argparse, re, subprocess, urllib.request, xml.etree.ElementTree as ET
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Mapping:
+    repo: str; namespace: str; package: str | None; grammar: str
+
+# Authoritative roster publishers, including the two Rendering namespaces and
+# both SDD packages.  A missing package is emitted UNCOVERED, never omitted.
+FLEET: tuple[Mapping, ...] = (
+    Mapping("FS-GG/.github", "kit/v", "FS.GG.Kit", "semver"),
+    Mapping("FS-GG/.github", "coord-engine/v", "FS.GG.Coord.Cli", "semver"),
+    Mapping("FS-GG/FS.GG.Game", "v", "FS.GG.Game.Core", "semver"),
+    Mapping("FS-GG/FS.GG.Game", "skills/v", "FS.GG.Game.Skills", "semver"),
+    Mapping("FS-GG/FS.GG.Governance", "v", "FS.GG.Governance.ReferenceGateSet", "semver"),
+    Mapping("FS-GG/FS.GG.Rendering", "v", "FS.GG.UI", "semver"),
+    Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui/v", "FS.GG.UI", "semver"),
+    Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui-template/v", None, "semver"),
+    Mapping("FS-GG/FS.GG.Audio", "v", "FS.GG.Audio.Core", "semver"),
+    Mapping("FS-GG/FS.GG.Templates", "fs-gg-templates/v", "FS.GG.Templates", "semver"),
+    Mapping("FS-GG/FS.GG.Net", "v", "FS.GG.Net.Core", "semver"),
+    Mapping("FS-GG/FS.GG.SDD", "v", "FS.GG.SDD.Cli", "semver"),
+    Mapping("FS-GG/FS.GG.SDD", "v", "FS.GG.Contracts", "semver"),
+)
+
+# Historical dual-publish disagreements are evidence, not exemptions: these two commits must remain
+# visible in any fleet report and no detector may "fix" them by moving the cited tags.
+HISTORICAL_DUAL_PUBLISH = {
+    ("FS-GG/.github", "coord-engine/v", "0.1.0"):
+        ("94b044b1e575fc9da0105c32bd063b0f387a5eef", "78c3b5492263a33016e9e3bcac7816a14e9bb237"),
+    ("FS-GG/.github", "new-sdd-fullstack/v", "0.1.1-preview.1"):
+        ("2e73e5a02099947108663a1edace1214c56647a6", "775a11eec882e2184ea9a18a5f759bb54a9ba143"),
+}
+
+def classify(anchor: str, tag: str) -> str:
+    if anchor == "-": return "UNRESOLVED"
+    if tag == "-": return "MISSING"
+    return "AGREE" if anchor == tag else "DISAGREE"
+
+def main() -> int:
+    ap = argparse.ArgumentParser(); ap.add_argument("--fixture"); ap.add_argument("--live", action="store_true"); ap.add_argument("--roster", default="registry/repos.yml")
+    args = ap.parse_args()
+    # `full:` is the roster's canonical repository identity. Refuse a table that names a producer
+    # absent from it; a mapping may be uncovered, but it may never silently invent a publisher.
+    roster = set(re.findall(r"\bfull:\s*(FS-GG/[A-Za-z0-9_.-]+)", open(args.roster, encoding="utf-8").read()))
+    unknown = sorted({m.repo for m in FLEET} - roster - {"FS-GG/.github"})
+    if unknown: ap.error("FLEET names producers absent from authoritative roster: " + ", ".join(unknown))
+    if args.live:
+        bad = False
+        for row in FLEET:
+            if row.package is None:
+                print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\t-"); bad = True; continue
+            lid = row.package.lower()
+            try:
+                with urllib.request.urlopen(f"https://api.nuget.org/v3-flatcontainer/{lid}/index.json", timeout=60) as r:
+                    import json; versions = json.load(r)["versions"]
+                tags = subprocess.check_output(["git", "ls-remote", "--tags", f"https://github.com/{row.repo}.git"], text=True, timeout=60)
+                refs = dict((name.removeprefix("refs/tags/"), sha) for sha, name in (line.split("\t", 1) for line in tags.splitlines()))
+                for version in versions:
+                    with urllib.request.urlopen(f"https://api.nuget.org/v3-flatcontainer/{lid}/{version}/{lid}.nuspec", timeout=60) as r:
+                        repository = ET.fromstring(r.read()).find(".//{*}repository")
+                        anchor = repository.get("commit", "-") if repository is not None else "-"
+                    tag = refs.get(f"{row.namespace}{version}^{{}}", refs.get(f"{row.namespace}{version}", "-"))
+                    verdict = classify(anchor, tag); print(f"{verdict}\t{row.repo}\t{row.namespace}{version}\t{row.package}"); bad |= verdict != "AGREE"
+            except Exception as e:
+                print(f"UNRESOLVED\t{row.repo}\t{row.namespace}*\t{row.package}\t{e}"); bad = True
+        return 1 if bad else 0
+    if not args.fixture: ap.error("--fixture or --live is required")
+    seen: set[tuple[str,str,str]] = set(); bad = False
+    with open(args.fixture, encoding="utf-8") as f:
+        for raw in f:
+            if not raw.strip() or raw.startswith("#"): continue
+            repo, ns, package, version, anchor, tag = raw.rstrip("\n").split("\t")
+            if package == "-":
+                print(f"UNCOVERED\t{repo}\t{ns}{version}\t-"); bad = True; continue
+            seen.add((repo, ns, package)); verdict = classify(anchor, tag)
+            print(f"{verdict}\t{repo}\t{ns}{version}\t{package}")
+            bad |= verdict in {"DISAGREE", "MISSING", "UNRESOLVED"}
+    for row in FLEET:
+        if row.package is None:
+            print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\tNone"); bad = True; continue
+        if row.package and (row.repo, row.namespace, row.package) not in seen:
+            print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\t{row.package}"); bad = True
+    return 1 if bad else 0
+if __name__ == "__main__": raise SystemExit(main())
