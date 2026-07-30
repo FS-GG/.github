@@ -1,0 +1,7 @@
+interface:
+  display_name: "Drive Board Normal"
+  short_description: "Drive the org board at normal worker cost"
+  default_prompt: "Use $drive-board-normal to burn down the FS-GG Coordination board."
+
+policy:
+  allow_implicit_invocation: true

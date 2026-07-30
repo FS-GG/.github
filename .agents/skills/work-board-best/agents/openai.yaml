@@ -1,0 +1,7 @@
+interface:
+  display_name: "Work Board Best"
+  short_description: "Drive a product board at best worker quality"
+  default_prompt: "Use $work-board-best to burn down this wired product board."
+
+policy:
+  allow_implicit_invocation: true
