@@ -237,12 +237,11 @@ because ignoring one means a typo (`--namespace drviers/v`) quietly measures few
 exits 0, which is indistinguishable from a full run — the shape of the gap #1790 closed. The live
 workflow runs unscoped, and the fixture asserts that it does.
 
-`--remote` IS NOT LOCKED EITHER, AND THAT IS THE WEAKEST POINT IN THIS ARM. Unlike `--base`,
-`--roster` and `--csproj`, which redirect a read so that a wrong one still fails, `--remote`
-SUBSTITUTES half the subject: a local repository carrying tags that match the feed's nuspecs greens
-the arm. It is inherited from #1784 and left as it is because the arm must be runnable against a
-mirror, and because the live workflow passes no `--remote` at all — but it is a canned input in
-everything but name, and anyone tightening this file should start there.
+`--remote` is an explicit spelling of the same repository, not a substitute for its tag subject.
+Before reading refs, the tag arm normalizes its host and repository path and refuses any remote that
+is not this repository on GitHub. That accepts the normal HTTPS and SSH spellings while preventing a
+canned or foreign repository from making matching tags look like evidence. The live workflow leaves
+it unset, so its default remains the repository that invoked the gate.
 
 RECORDED DISAGREEMENTS (`RECORDED_DISAGREEMENTS`, .github#1790), and why this is not the maintained
 list the arm refuses to have. Two tags are wrong TODAY and were wrong before anyone looked. Moving
@@ -1577,7 +1576,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--remote",
         default="",
-        help="the git remote whose release tags are the anchor (default: this repository on github.com)",
+        help="this repository's git remote whose release tags are the anchor (default: its GitHub HTTPS URL)",
     )
     ap.add_argument(
         "--namespace",
@@ -1670,8 +1669,13 @@ def main(argv: list[str]) -> int:
             return 1
         repository = _repository_slug()
         try:
+            remote = args.remote.strip() or f"https://github.com/{repository}.git"
+            if _repository_origin(remote) != (FORGE_HOST, repository.lower()):
+                raise GateError(
+                    f"--remote {remote!r} is not {FORGE_HOST}/{repository}; refusing tags from a different repository"
+                )
             return run_tag_arm(
-                remote=args.remote.strip() or f"https://github.com/{repository}.git",
+                remote=remote,
                 repository=repository,
                 only=args.namespace,
                 canned_published=_canned_by_namespace(
