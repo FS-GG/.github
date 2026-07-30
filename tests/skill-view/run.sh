@@ -547,13 +547,19 @@ H_NOTOOL="$WORK/hook-no-tool"; make_hook_tree "$H_NOTOOL"; rm -f "$H_NOTOOL/scri
 expect_silent "14h a tree without the tool is not a tree with a finding" \
   -- env CLAUDE_PROJECT_DIR="$H_NOTOOL" bash "$HOOK"
 
-# Neither root readable: the checker refuses BEFORE classifying anything, so no class can honestly be
-# named. The hook says that, loudly, and does not invent one (.github#1858).
+# Root classification no longer needs a readable expected source, so both dangling roots are named
+# accurately instead of being collapsed into an unreadable-source error.
 H_BOTHBAD="$WORK/hook-both-dangling"; make_hook_tree "$H_BOTHBAD"
 rm -rf "$H_BOTHBAD/.claude/skills" "$H_BOTHBAD/.agents/skills"
 ln -s ../nowhere "$H_BOTHBAD/.claude/skills"; ln -s ../nowhere "$H_BOTHBAD/.agents/skills"
-expect "14i neither root readable is LOUD, and names that rather than guessing a class" 2 "it names no class for them" \
+expect "14i neither root readable is LOUD, and names their dangling class" 1 "[dangling-root] .agents/skills" \
   -- env CLAUDE_PROJECT_DIR="$H_BOTHBAD" bash "$HOOK"
+
+H_THIRD="$WORK/hook-third-dangling"; make_hook_tree "$H_THIRD"
+printf '.claude/skills\n.agents/skills\n.third/skills\n' > "$H_THIRD/.agent-skill-roots"
+mkdir -p "$H_THIRD/.third"; ln -s ../nowhere "$H_THIRD/.third/skills"
+expect "14m a declared third dangling root is LOUD without hook changes" 1 "[dangling-root] .third/skills" \
+  -- env CLAUDE_PROJECT_DIR="$H_THIRD" bash "$HOOK"
 
 # ANTI-VACUITY FOR 14c: the deleted guard, reconstructed, over 14c's own tree.
 cat > "$WORK/legacy-skill-view-check.sh" <<'LEGACY'
@@ -606,7 +612,7 @@ fi
 # =============================================================================================
 # Summary — and the leg count, so a suite that ran three of these cannot print "0 failed".
 # =============================================================================================
-EXPECTED_LEGS=57
+EXPECTED_LEGS=58
 printf '\nskill-view fixture: %d passed, %d failed, %d skipped, %d leg(s) run\n' \
   "$pass" "$failcount" "$skipped" "$legs"
 
