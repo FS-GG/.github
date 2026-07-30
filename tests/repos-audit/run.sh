@@ -47,7 +47,6 @@ export FSGG_NUGET_ORG_BASE="file://$KITFEED"
 # 0.8.0 is the newest STABLE above — 0.10.0-preview.1 sorts higher numerically and must be excluded
 # as a prerelease, which is the second thing this feed shape pins.
 KIT_PUBLISHED="0.8.0"
-ENGINE_PUBLISHED="0.15.0"
 
 # The pin every repo is served unless a leg says otherwise, so the legs that predate this sweep and
 # have nothing to do with pins stay green. See the `pinlocal` arm of the gh stub.
