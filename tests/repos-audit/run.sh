@@ -2532,11 +2532,11 @@ out="$(run_logged "$WORK/calls.none" 2>&1)" && rc=0 || rc=$?
   && ok "sparse: a roster with no cross-repo checkout fetches no tree at all (#1556 criterion 5)" \
   || bad "an empty subject set must cost nothing" "rc=$rc: $(cat "$WORK/calls.none" 2>&1)"
 
-# ONE TREE PER REPOSITORY, NOT ONE PER WORKFLOW. The cache is what makes the reach affordable: three
-# workflows in one repo all fetching the same sibling must produce exactly ONE tree call, or a roster
-# of ten repos with a handful of cross-repo steps each quietly becomes dozens of round-trips.
+# DYNAMIC SCOPE MUST NOT CLOBBER THE REPOSITORY WALK. The loop below is the dedicated tripwire for
+# #1556's worst bug. It also proves the cache fetches once per repository, but its load-bearing
+# assertion is that ALL three workflows remain in the walk.
 #
-# AND IT IS THE LEG THAT CAUGHT THE WORST BUG IN #1556, which is why it asserts the WORKFLOW COUNT
+# The dynamic-scoping regression is why it asserts the WORKFLOW COUNT
 # and not just the call count. bash locals are dynamically scoped, and `sparse_grade`'s loop over the
 # trees it wants sits inside `repo_calls`'s loop over a repository's workflows — so a bare
 # `while read -r repo` assigned straight through to the repository being walked, and `read` leaves it
@@ -2551,8 +2551,8 @@ printf '%s\n%s\n%s\n%s\n' coord.yml fetch.yml fetch2.yml fetch3.yml > "$FIX/FS-G
 out="$(run_logged "$WORK/calls.cache" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && [ "$(grep -c '^tree' "$WORK/calls.cache")" -eq 1 ] \
     && printf '%s' "$out" | grep -q 'ran for 3 of 3 graded cross-repo step(s)'; } \
-  && ok "sparse: the tree is fetched ONCE per repository, not once per workflow (#1556)" \
-  || bad "the tree cache must survive across workflows" \
+  && ok "sparse: dynamic scope preserves every workflow after a sparse tree fetch (#1610)" \
+  || bad "a sparse fetch must not clobber repo_calls' workflow repository" \
          "rc=$rc calls=$(grep -c '^tree' "$WORK/calls.cache" 2>/dev/null): $out"
 rm -f "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml" "$FIX/FS-GG__FS.GG.Rendering/fetch3.yml"
 
