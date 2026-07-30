@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # Reusable skill-union assertion — FS-GG/.github#111 (ADR-0014 P3.G3.1, epic #110).
 #
 # The one shared check that the agent-skill roots of a scaffolded product hold the SAME,
@@ -94,7 +95,6 @@
 
 set -euo pipefail
 
-# shellcheck source-path=SCRIPTDIR
 
 PRODUCT="."
 DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 as amended by ADR-0067 §5 (#1636): TWO roots
