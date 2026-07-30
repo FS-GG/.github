@@ -2,7 +2,7 @@
 # The machine-readable source of truth for who depends on whom and which contract
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
-schemaVersion: 999   # Deliberately invalid mutation for .github#1787 gate evidence.
+schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
 updated: "2026-07-29"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
@@ -79,7 +79,7 @@ repos:
 contracts:
   - id: scaffold-provider
     version: "1.1.0"   # 1.1.0 (2026-07-05, additive): optional identifierParameter sink (SDD feature 080; Fsgg.Provider.ProviderDescriptor.IdentifierParameter). Backward-compatible — a descriptor that omits it parses to None and behaves as 1.0.0. PRIOR 1.0.0.
-    owner: sdd
+    # Deliberately remove required owner for .github#1787 gate evidence.
     surface: ".fsgg/providers.yml + provider invocation protocol (dotnet new wrapper)"
     consumers: [templates, rendering]   # rendering authors a provider descriptor; templates registers one
     # ADR-0005: the canonical product-name parameter is `name` (was `productName`); invocation passes --param name=<product>.
