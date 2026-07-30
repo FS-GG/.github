@@ -508,16 +508,8 @@ module Client =
     /// `blockerGraph` marks an off-board ref `BlockerUnknown` and prose gets no `Ref` at all, and
     /// `Rank.blockingCountsOf` credits only edges that carry a ref. An off-board ref that IS credited
     /// names a node no candidate can be, so its entry is never read.
-    let boardBlockingCounts (rows: Scan.Row list) : Map<Ref, int> =
-        let counted =
-            rows
-            |> List.filter (fun r -> not r.IsPullRequest && r.State = Open)
-            |> List.map (fun r -> r.Ref)
-            |> Set.ofList
-
-        Scan.blockerGraph rows
-        |> List.filter (fun (source, _) -> Set.contains source counted)
-        |> Rank.blockingCountsOf
+    /// Compatibility forward for existing callers; the board-fact seam lives in BoardFactsApplication.
+    let boardBlockingCounts = BoardFactsApplication.blockingCounts
 
     /// THE OFFER PATH'S DECISION — and as of .github#1598 it ENRICHES before it schedules.
     ///

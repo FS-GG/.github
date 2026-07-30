@@ -177,6 +177,7 @@ the worker's own heartbeat/release/done operations. Neither behavior is claimed 
     <Compile Include="ReadyApplication.fs" />
     <Compile Include="LintApplication.fsi" />
     <Compile Include="LintApplication.fs" />
+    <Compile Include="BoardFactsApplication.fs" />
     <!-- AFTER `Client.fs`, deliberately: the follow-up queue reuses `parseRefIn` and the exit constants
          rather than growing a second answer to "what is a ref?" or "what does an empty look exit?" (#485).
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->

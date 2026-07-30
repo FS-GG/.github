@@ -263,6 +263,10 @@ let ``#1628 prose in a dependency field draws no edge at all`` () =
     // No node to credit, so the map is exactly what it was — never a guess with a scheduler behind it.
     Assert.Equal<Map<Ref, int>>(Client.boardBlockingCounts board, counts)
 
+[<Fact>]
+let ``#1986 board-fact application owns the scheduler blocking-count seam`` () =
+    Assert.Equal<Map<Ref, int>>(Client.boardBlockingCounts board, BoardFactsApplication.blockingCounts board)
+
 // ---- AC5 ---------------------------------------------------------------------------------------------
 
 [<Fact>]
