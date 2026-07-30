@@ -27,6 +27,20 @@
     "negative": "Complete this single repository's local project board.",
     "boundary": "Reconcile and classify the org backlog for a proposed wave, but do not claim any item."
   },
+  "drive-board-normal": {
+    "positive": "Use $drive-board-normal to burn down the whole Coordination board with ordinary-cost routed workers.",
+    "indirect": "Drive every FS-GG repository board lane with the normal worker quality tier.",
+    "incomplete": "Run the normal org board driver",
+    "negative": "Complete this one workspace board with its product-local driver.",
+    "boundary": "Plan the normal org-board wave, but do not dispatch a worker."
+  },
+  "drive-board-best": {
+    "positive": "Use $drive-board-best to burn down the whole Coordination board with best-quality routed workers.",
+    "indirect": "Drive every FS-GG repository board lane using the highest quality worker tier.",
+    "incomplete": "Run the best org board driver",
+    "negative": "Complete this one workspace board with its product-local driver.",
+    "boundary": "Plan the best org-board wave, but do not dispatch a worker."
+  },
   "intra-repo-parallel-work": {
     "positive": "Coordinate three workers on separate issues in this repository.",
     "indirect": "Give each concurrent agent an isolated worktree and prevent overlapping touch-sets.",
@@ -82,6 +96,20 @@
     "incomplete": "Drive this workspace board",
     "negative": "Burn down the org-wide FS-GG Coordination board across all repositories.",
     "boundary": "Reconcile and classify this workspace's backlog for a proposed disjoint wave, but do not claim items."
+  },
+  "work-board-normal": {
+    "positive": "Use $work-board-normal to burn down this workspace board with ordinary-cost routed workers.",
+    "indirect": "Drive the local product board using the normal worker quality tier.",
+    "incomplete": "Run the normal workspace board driver",
+    "negative": "Burn down every FS-GG repository's Coordination board.",
+    "boundary": "Plan the normal workspace wave, but do not dispatch a worker."
+  },
+  "work-board-best": {
+    "positive": "Use $work-board-best to burn down this workspace board with best-quality routed workers.",
+    "indirect": "Drive the local product board using the highest quality worker tier.",
+    "incomplete": "Run the best workspace board driver",
+    "negative": "Burn down every FS-GG repository's Coordination board.",
+    "boundary": "Plan the best workspace wave, but do not dispatch a worker."
   },
   "work-roadmap": {
     "positive": "Complete this markdown roadmap milestone by milestone.",

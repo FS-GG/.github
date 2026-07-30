@@ -1,0 +1,7 @@
+interface:
+  display_name: "Work Board Normal"
+  short_description: "Drive a product board at normal worker cost"
+  default_prompt: "Use $work-board-normal to burn down this wired product board."
+
+policy:
+  allow_implicit_invocation: true

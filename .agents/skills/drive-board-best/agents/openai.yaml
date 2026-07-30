@@ -1,0 +1,7 @@
+interface:
+  display_name: "Drive Board Best"
+  short_description: "Drive the org board at best worker quality"
+  default_prompt: "Use $drive-board-best to burn down the FS-GG Coordination board."
+
+policy:
+  allow_implicit_invocation: true

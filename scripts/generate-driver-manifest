@@ -91,8 +91,10 @@ SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SKILL_NAME_MAX = 64
 DESCRIPTION_MIN = 120
 DESCRIPTION_MAX = 220
-DESCRIPTION_CEILING = 2700
-ROOT_CATALOG_CEILING = 3200
+# Four explicit normal/best board-driver routes add the minimum useful runtime-selection metadata.
+# Keep headroom small but real: this remains a prompt-budget guard, not a frozen historical count.
+DESCRIPTION_CEILING = 3400
+ROOT_CATALOG_CEILING = 4100
 # DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
 # actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
 # now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
@@ -142,6 +144,18 @@ DRIVERS = [
         "materializes-when": "always",
     },
     {
+        "id": "work-board-normal",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/work-board-normal",
+        "materializes-when": "always",
+    },
+    {
+        "id": "work-board-best",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/work-board-best",
+        "materializes-when": "always",
+    },
+    {
         "id": "padd-item",
         "scope": "driver",
         "supplied-by": ".claude/skills/padd-item",
@@ -151,6 +165,18 @@ DRIVERS = [
         "id": "drive-board",
         "scope": "operator",
         "supplied-by": ".claude/skills/drive-board",
+        "materializes-when": "false",
+    },
+    {
+        "id": "drive-board-normal",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/drive-board-normal",
+        "materializes-when": "false",
+    },
+    {
+        "id": "drive-board-best",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/drive-board-best",
         "materializes-when": "false",
     },
     {
@@ -178,6 +204,16 @@ DRIVERS = [
         "materializes-when": "false",
     },
 ]
+
+# The routed variants are deliberately data, not four nearly-identical untested prose claims. The
+# catalog validation below reads the shipped skill bodies and fails if a route, explicit effort, or
+# fail-closed dispatch rule drifts.
+ROUTED_VARIANTS = {
+    "drive-board-normal": ("gpt-5.6-terra", "medium", "sonnet", "high", "operator", "false"),
+    "drive-board-best": ("gpt-5.6-sol", "medium", "opus", "high", "operator", "false"),
+    "work-board-normal": ("gpt-5.6-terra", "medium", "sonnet", "high", "driver", "always"),
+    "work-board-best": ("gpt-5.6-sol", "medium", "opus", "high", "driver", "always"),
+}
 
 # Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
 # appear in DRIVERS or in the coordination-kit manifest.
@@ -314,6 +350,27 @@ def validate_catalog(catalog_root: str) -> tuple[dict[str, object], list[str]]:
                 pass
         if len(copies) == len(SKILL_ROOTS) and any(files != copies[0][1] for _, files in copies[1:]):
             errors.append(f"{name}: directory files, bytes, or executable modes differ across roots")
+
+    drivers_by_id = {str(driver["id"]): driver for driver in DRIVERS}
+    for skill, (codex_model, codex_effort, claude_model, claude_effort, scope, predicate) in ROUTED_VARIANTS.items():
+        # Unit fixtures intentionally model a one-skill catalog; only validate a routed variant
+        # when that catalog actually declares it.
+        if skill not in canonical_names:
+            continue
+        driver = drivers_by_id.get(skill)
+        if not driver or driver["scope"] != scope or driver["materializes-when"] != predicate:
+            errors.append(f"{skill}: driver scope/predicate routing drifted")
+            continue
+        path = os.path.join(catalog_root, SKILL_ROOTS[0], skill, "SKILL.md")
+        try:
+            text = open(path, encoding="utf-8").read()
+        except OSError as exc:
+            errors.append(f"{skill}: cannot read routed skill: {exc}")
+            continue
+        required = (codex_model, codex_effort, claude_model, claude_effort, "explicitly to every", "do not downgrade", "fall back")
+        missing = [fragment for fragment in required if fragment not in text]
+        if missing:
+            errors.append(f"{skill}: runtime/tier routing contract missing {missing}")
 
     # The two manifests have different authorship, but together they must classify the complete
     # `.github` skill tree. An omitted directory otherwise stays invisible to both emitters and their

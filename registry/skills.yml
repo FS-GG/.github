@@ -252,6 +252,14 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: padd-item,              scope: driver,  owner: .github,         source: .github/.claude/skills/padd-item/SKILL.md, sha256: f77540a387627a13ed88133e259eee6fc8d956213a23b18097977bcc07520aca, materializes-when: always }
+  # work-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: work-board-best,        scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-best/SKILL.md, sha256: 2b0577726f7cab6aa27169888c0f47370ad26ddadbcb6fda300acf1a00e754e3, materializes-when: always }
+  # work-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: 4649b17f1e05e2302626927b77462eee91ba41ceb3eb7b72df8d933fbd5863db, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -278,3 +286,11 @@ skills:
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d, materializes-when: "false" }
+  # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: drive-board-best,       scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-best/SKILL.md, sha256: ca0b74257274b66b84ecf3ef21afef45f128c2f924606cd828ad73b9e8ceb4fa, materializes-when: "false" }
+  # drive-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: 615bf16ba0a9f4c05cc5819e62a677a6d5c2d087bbfb4e715f5ee32d85121e75, materializes-when: "false" }

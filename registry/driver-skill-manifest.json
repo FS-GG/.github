@@ -97,6 +97,46 @@
       "materializes-when": "always"
     },
     {
+      "id": "work-board-normal",
+      "scope": "driver",
+      "sha256": "4649b17f1e05e2302626927b77462eee91ba41ceb3eb7b72df8d933fbd5863db",
+      "tree-sha256": "f7b4e92f97eeb0d595ac4db689633a23c7ea195186e7efe00e6f098fa33b0051",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "4649b17f1e05e2302626927b77462eee91ba41ceb3eb7b72df8d933fbd5863db",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "2058fafb85ceaf1b6bed448a4cb4f6b51bfdbee05c9eb062af0647cb27dc1ec0",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/work-board-normal",
+      "materializes-when": "always"
+    },
+    {
+      "id": "work-board-best",
+      "scope": "driver",
+      "sha256": "2b0577726f7cab6aa27169888c0f47370ad26ddadbcb6fda300acf1a00e754e3",
+      "tree-sha256": "9fcbb16347457760f92aaa8251559d12968309febf0cdce6a76e949ecc935aa5",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "2b0577726f7cab6aa27169888c0f47370ad26ddadbcb6fda300acf1a00e754e3",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "9d85ffa0636c28f3d4a6713217640b3572bb003ec5759ac5a00a3851a10ff548",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/work-board-best",
+      "materializes-when": "always"
+    },
+    {
       "id": "padd-item",
       "scope": "driver",
       "sha256": "f77540a387627a13ed88133e259eee6fc8d956213a23b18097977bcc07520aca",
@@ -154,6 +194,46 @@
         }
       ],
       "supplied-by": ".claude/skills/drive-board",
+      "materializes-when": "false"
+    },
+    {
+      "id": "drive-board-normal",
+      "scope": "operator",
+      "sha256": "615bf16ba0a9f4c05cc5819e62a677a6d5c2d087bbfb4e715f5ee32d85121e75",
+      "tree-sha256": "fefde10e36017194c82255d1fa35ed3d13cdd46a5e8970b9106ec963ca3e316a",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "615bf16ba0a9f4c05cc5819e62a677a6d5c2d087bbfb4e715f5ee32d85121e75",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "a8f387ef6f765581a0b3e7b96edcc804ed4316d831f321411f913be37e265148",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/drive-board-normal",
+      "materializes-when": "false"
+    },
+    {
+      "id": "drive-board-best",
+      "scope": "operator",
+      "sha256": "ca0b74257274b66b84ecf3ef21afef45f128c2f924606cd828ad73b9e8ceb4fa",
+      "tree-sha256": "8d6845c7287328774397c2a8c5842a92d3794b1e22c5cc0d69593cb29bda54b7",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "ca0b74257274b66b84ecf3ef21afef45f128c2f924606cd828ad73b9e8ceb4fa",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "ef0c772045d0289521a0460e11491ecacb241dc7ee7443f6de1013b5ef0df434",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/drive-board-best",
       "materializes-when": "false"
     },
     {
