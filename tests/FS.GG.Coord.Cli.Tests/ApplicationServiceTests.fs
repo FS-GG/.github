@@ -2384,19 +2384,27 @@ module ApplicationServiceTests =
         Assert.Contains("human decision", output)
 
     [<Fact>]
-    let ``#1892 take json writes a secondary limit envelope to stderr`` () =
-        let transport =
-            Fake.Recorder(fun _ -> Error(Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)))
+    let ``#1892 json worker failures classify rate limits without using stdout`` () =
+        let cases =
+            [ "primary", Errors.RateLimited(Errors.RestBudget(Some "core"), None)
+              "secondary", Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)
+              "unknown", Errors.RateLimited(Errors.UnknownBudget, None) ]
 
-        let code, stdout, stderr =
-            runJsonArm transport [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+        for expectedKind, error in cases do
+            let transport = Fake.Recorder(fun _ -> Error error)
 
-        Assert.Equal(Errors.ExRate, code)
-        Assert.Equal("", stdout)
-        use document = JsonDocument.Parse(stderr)
-        let root = document.RootElement
-        Assert.Equal("error", root.GetProperty("kind").GetString())
-        Assert.Equal("secondary", root.GetProperty("rateLimit").GetString())
+            for args in
+                [ [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+                  [ "claim"; "FS.GG.SDD#42"; "--worker"; "otter-9c21"; "--json" ] ] do
+                let code, stdout, stderr = runJsonArm transport args
+                Assert.Equal(Errors.ExRate, code)
+                Assert.Equal("", stdout)
+                use document = JsonDocument.Parse(stderr)
+                let root = document.RootElement
+                Assert.Equal("error", root.GetProperty("kind").GetString())
+                Assert.Equal(75, root.GetProperty("exitCode").GetInt32())
+                Assert.Equal(expectedKind, root.GetProperty("rateLimit").GetString())
+                Assert.False(System.String.IsNullOrWhiteSpace(root.GetProperty("message").GetString()))
 
     [<Fact>]
     let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =

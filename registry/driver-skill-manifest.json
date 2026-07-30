@@ -160,7 +160,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "9d6fcbfc3069c47fd9fa8d900fb11a88f61d9e35977b6888b018aebfd23c11c1",
-      "tree-sha256": "16a0c48f850f7ed1acd397b92088d4136565ae98fe34942f251da7aec6875d40",
+      "tree-sha256": "beadd3f63d755fbc6448b286bf85d126b91d64c3b2455607937afe0aa28f9bd5",
       "files": [
         {
           "path": "SKILL.md",
@@ -179,7 +179,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "1aec2583e0b5fdb668f0137c95b2e36caccc9419853d959738654021add92483",
+          "sha256": "32c1e4d1be55a4b8b857bb6d325f9ef658efaf34ef3fb396bd4d427217124466",
           "executable": false
         },
         {
