@@ -24,7 +24,7 @@ FLEET: tuple[Mapping, ...] = (
     Mapping("FS-GG/FS.GG.Governance", "v", "FS.GG.Governance.ReferenceGateSet", "semver"),
     Mapping("FS-GG/FS.GG.Rendering", "v", "FS.GG.UI", "semver"),
     Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui/v", "FS.GG.UI", "semver"),
-    Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui-template/v", "FS.GG.UI.Template", "semver"),
+    Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui-template/v", None, "semver"),
     Mapping("FS-GG/FS.GG.Audio", "v", "FS.GG.Audio.Core", "semver"),
     Mapping("FS-GG/FS.GG.Templates", "fs-gg-templates/v", "FS.GG.Templates", "semver"),
     Mapping("FS-GG/FS.GG.Net", "v", "FS.GG.Net.Core", "semver"),
@@ -86,6 +86,8 @@ def main() -> int:
             print(f"{verdict}\t{repo}\t{ns}{version}\t{package}")
             bad |= verdict in {"DISAGREE", "MISSING", "UNRESOLVED"}
     for row in FLEET:
+        if row.package is None:
+            print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\tNone"); bad = True; continue
         if row.package and (row.repo, row.namespace, row.package) not in seen:
             print(f"UNCOVERED\t{row.repo}\t{row.namespace}*\t{row.package}"); bad = True
     return 1 if bad else 0
