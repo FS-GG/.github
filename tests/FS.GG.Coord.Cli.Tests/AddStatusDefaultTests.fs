@@ -145,7 +145,7 @@ module AddStatusDefaultTests =
     /// different rule and a refusal there would stop these legs before they reached the board at all.
     let private IssueBody = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
 
-    let private world (column: Column) =
+    let private worldWithBody (column: Column) issueBody =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -154,11 +154,18 @@ module AddStatusDefaultTests =
             match req.Method, path with
             | "POST", "graphql" ->
                 match req.Body with
+                | Query(document, _) when document.Contains "items(first: 100" ->
+                    ok """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"Ready"},"blockedBy":null,"class":null,"severity":null,"phase":null,"repoScope":null,"content":{"__typename":"Issue","number":9,"title":"narrow sibling","state":"OPEN","createdAt":"2026-07-30T00:00:00Z","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 | Query(document, _) -> graphqlAnswer board document
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
-            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok IssueBody
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok issueBody
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/9" -> ok """{"number":9,"body":"Paths: docs/reports/new-file.md"}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/9/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private world (column: Column) = worldWithBody column IssueBody
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -174,13 +181,15 @@ module AddStatusDefaultTests =
     let private sessionVars =
         [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
 
-    let private runAdd (transport: Fake.Recorder) (args: string list) : int * string =
+    let private runAddWithStderr (transport: Fake.Recorder) (args: string list) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1823-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
         let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
         let stdout = Console.Out
+        let stderr = Console.Error
         use captured = new StringWriter()
+        use capturedErr = new StringWriter()
 
         try
             Directory.CreateDirectory dir |> ignore
@@ -191,6 +200,7 @@ module AddStatusDefaultTests =
             Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
             Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
             Console.SetOut captured
+            Console.SetError capturedErr
 
             let opts =
                 match Options.parse args with
@@ -199,9 +209,11 @@ module AddStatusDefaultTests =
 
             let code = Client.addCmd (context transport) opts
             Console.Out.Flush()
-            code, captured.ToString()
+            Console.Error.Flush()
+            code, captured.ToString(), capturedErr.ToString()
         finally
             Console.SetOut stdout
+            Console.SetError stderr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
 
@@ -212,6 +224,10 @@ module AddStatusDefaultTests =
                 Directory.Delete(dir, true)
             with _ ->
                 ()
+
+    let private runAdd transport args =
+        let code, stdout, _ = runAddWithStderr transport args
+        code, stdout
 
     /// The board write, as the transport saw it. THIS is the anchor — the bytes that reach GitHub, not
     /// the sentence the CLI prints about them.
@@ -235,6 +251,20 @@ module AddStatusDefaultTests =
             transport.Logged(statusWrite NewItemId "opt_backlog"),
             $"the #1823 default must WRITE Backlog on a newly boarded row — log: %A{transport.Log}"
         )
+
+    [<Fact>]
+    let ``#1843 add scans a narrow sibling, warns, and still boards the broad declaration`` () =
+        let transport = worldWithBody NotOnBoard """{"number":42,"body":"Paths: docs/reports\n\nClass: defect"}"""
+
+        let code, out, err = runAddWithStderr transport [ "add"; "FS.GG.SDD#42" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged("item-add"), $"advisory must not suppress the board mutation: %A{transport.Log}")
+        Assert.True(transport.Logged("issue-get FS-GG/FS.GG.SDD 9"), $"the real sibling body must be scanned: %A{transport.Log}")
+        Assert.True(err.Contains("FS.GG.SDD#9"), err)
+        Assert.Contains("lane of one", err)
+        Assert.Contains("holding declaration", err)
 
     [<Fact>]
     let ``#1823 add REPAIRS a row that is already on the board with NO Status`` () =

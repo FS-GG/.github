@@ -96,6 +96,11 @@ earned done-stamp and epic roll-up.
   globs as subtrees (file-existence-independent, conservative — it errs toward reporting
   overlap); it does not prevent a worker from editing outside its declared paths. A worker
   that must widen its touch-set re-declares and re-checks overlap before continuing.
+- **A directory reservation includes future children.** A file-level declaration never escapes a
+  sibling's parent-directory token merely because the file is not in the tree yet. That remains a
+  conservative overlap and is sequenced; the filing path now warns when a proposed declaration
+  strictly contains a sibling's, so the holding row can be narrowed or the work explicitly ordered
+  before a worker spends a lease discovering the lane of one (#1843).
 - **This does not change the shape of the system** (no new repos, boundaries, coherent-set
   axes, or contracts), so `docs/architecture.md` needs no reconcile — the
   `architecture-map: unaffected` opt-out applies.

@@ -48,6 +48,20 @@ module Client =
     /// The out-of-vocabulary-`Class:` refusal `add` renders before it boards a row (.github#1651 AC1).
     let outOfVocabularyClass = LintApplication.outOfVocabularyClass
 
+    /// Existing same-tree rows that the new declaration strictly contains.  This is advisory at the
+    /// filing boundary: the issue is already real, and refusing to board it would make the warning hide
+    /// work from every later board view.  It instead names the lane-of-one while the filer can still
+    /// narrow or sequence the pair (#1843).
+    let filingLaneOfOne (candidate: Ref) (paths: TouchSet) (items: Item list) : Ref list =
+        items
+        |> List.filter (fun item ->
+            item.Ref <> candidate
+            && String.Equals(item.Ref.Owner, candidate.Owner, StringComparison.OrdinalIgnoreCase)
+            // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
+            && String.Equals(item.Ref.Repo, candidate.Repo, StringComparison.OrdinalIgnoreCase)
+            && TouchSet.strictlyContains paths item.TouchSet)
+        |> List.map _.Ref
+
     [<Literal>]
     let ExitGreen = 0
 
@@ -5947,6 +5961,29 @@ module Client =
                     eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
                     ExitError
                 | None ->
+
+                let laneOfOneWarning =
+                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                    | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                    | Ok board ->
+                        match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                        | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                        | Ok rows ->
+                            match Scan.snapshot ctx.Transport rows (Some ref.Repo) true None opts.LeaseMinutes with
+                            | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                            | Ok(doc, _) ->
+                                match Snapshot.parse doc with
+                                | Error errors ->
+                                    let detail = sprintf "%A" errors
+                                    Some($"could not inspect sibling declarations ({detail})")
+                                | Ok request ->
+                                    let siblings = filingLaneOfOne ref (TouchSet.parse body) (request.Candidates |> List.map _.Item)
+                                    if List.isEmpty siblings then None
+                                    else
+                                        let names = siblings |> List.map _.Short |> String.concat ", "
+                                        Some($"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work.")
+
+                laneOfOneWarning |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
 
                 match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
