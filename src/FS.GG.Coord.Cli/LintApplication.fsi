@@ -68,6 +68,11 @@ module LintApplication =
     /// `Some detail` for every open, non-`Done` row whose Severity is `Unset`; `None` once triaged.
     val severityVerdict: state: IssueState -> status: BoardStatus -> severity: Severity -> string option
 
+    val blockedNoReasonVerdict:
+        state: IssueState -> status: BoardStatus -> blockedBy: string -> body: string -> string option
+
+    val blockerCycleVerdicts: graph: (Ref * Blocker list) list -> (Ref * string) list
+
     val epicVerdict:
         state: IssueState ->
         status: BoardStatus ->

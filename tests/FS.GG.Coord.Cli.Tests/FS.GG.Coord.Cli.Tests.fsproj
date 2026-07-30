@@ -25,6 +25,7 @@
     <Compile Include="TouchSetLintTests.fs" />
     <Compile Include="EpicVerdictTests.fs" />
     <Compile Include="ClassLintTests.fs" />
+    <Compile Include="BlockerLintTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />

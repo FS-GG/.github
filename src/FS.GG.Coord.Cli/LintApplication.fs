@@ -151,6 +151,24 @@ module LintApplication =
         else
             None
 
+    let blockedNoReasonVerdict state status (blockedBy: string) (body: string) : string option =
+        if state = IssueState.Open && status = BoardStatus.Blocked && System.String.IsNullOrWhiteSpace blockedBy && (HumanBlock.parse body).IsNone then
+            Some "Status is Blocked with an empty Blocked by field and no human-block sentinel; record the machine blocker or the human reason."
+        else
+            None
+
+    let blockerCycleVerdicts (graph: (Ref * Blocker list) list) : (Ref * string) list =
+        let byRef = graph |> Map.ofList
+
+        Blockers.cycles graph
+        |> List.collect (fun ring ->
+            let members = ring |> List.map (fun r -> r.Short) |> String.concat ", "
+            ring
+            |> List.choose (fun r ->
+                Map.tryFind r byRef
+                |> Option.map (fun _ ->
+                    r, $"on a blocked-by cycle that can never become startable; a human must break one edge. The ring: %s{members}")))
+
     let private shortRef (ref: string) =
         match ref.IndexOf '/' with
         | i when i >= 0 -> ref.Substring(i + 1)
