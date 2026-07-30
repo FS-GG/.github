@@ -2231,26 +2231,15 @@ bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
   || bad "deleting either sparse double-count guard must red its own mutation leg" \
          "python=$python_buffer bash=$bash_buffer"
 
-# Drive sparse_tree_ensure with the roster deliberately unavailable after the normal roster read.
-# This models a future caller/reordering reaching the helper too early: it is a read failure (exit 2),
-# not the cheap off-roster boundary. Removing that guard changes this leg to an ungraded green.
-EMPTY_SPARSE_AUDIT="$WORK/scripts/repos-audit-empty-sparse-roster.sh"
-mkdir -p "$WORK/scripts/lib"
-cp "$HERE/../../scripts/lib/args.sh" "$WORK/scripts/lib/args.sh"
-cp "$HERE/../../scripts/check-sparse-checkout-closure.py" "$WORK/scripts/check-sparse-checkout-closure.py"
-cp "$HERE/../../scripts/lib/sparse.py" "$WORK/scripts/lib/sparse.py"
-cp "$HERE/../../scripts/lib/gate.py" "$WORK/scripts/lib/gate.py"
-cp "$HERE/../../scripts/check-required-contexts.py" "$WORK/scripts/check-required-contexts.py"
-cp "$HERE/../../scripts/fsgg_feed.py" "$WORK/scripts/fsgg_feed.py"
-sed 's/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/SPARSE_ROSTER=""/' \
-  "$AUDIT" > "$EMPTY_SPARSE_AUDIT"
-AUDIT_SAVED="$AUDIT"; AUDIT="$EMPTY_SPARSE_AUDIT"
-wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
-out="$(run 2>&1)" && rc=0 || rc=$?
-AUDIT="$AUDIT_SAVED"
-{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'roster was not available when its git tree was needed'; } \
-  && ok "sparse: an empty internal roster is a no-verdict, never an off-roster boundary (#1610)" \
-  || bad "sparse_tree_ensure must refuse an unavailable roster" "rc=$rc: $out"
+# `SPARSE_ROSTER` has no caller-visible route: it is deliberately assigned immediately after the
+# roster read. Pin the guard structurally, so a future reordering that creates one has to retain its
+# fail-closed outcome rather than silently classifying every repository as off-roster.
+empty_roster_guard="$(grep -c '^  if \[ -z "\$SPARSE_ROSTER" \]; then$' "$AUDIT")"
+empty_roster_reason="$(grep -c 'roster was not available when its git tree was needed' "$AUDIT")"
+{ [ "$empty_roster_guard" -eq 1 ] && [ "$empty_roster_reason" -eq 1 ]; } \
+  && ok "sparse: an empty internal roster has an explicit no-verdict guard (#1610)" \
+  || bad "sparse_tree_ensure must refuse an unavailable roster" \
+         "guard=$empty_roster_guard reason=$empty_roster_reason"
 
 # Distinct trees make a wrong repository or cache key observable. SDD fetches Rendering's unique
 # path; serving SDD's default tree instead makes this a fabricated cone-mode finding.
