@@ -126,8 +126,8 @@ module Lanes =
                 // independent lanes into one, halving the parallelism the board actually has.
                 // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks "do these
                 // two rows share a repo?", a question `--repo` has no part in.
-                if a.Ref.Owner = b.Ref.Owner && a.Ref.Repo = b.Ref.Repo then
-                    if not (List.isEmpty (TouchSet.conflicts a.TouchSet b.TouchSet)) then
+                if a.Ref.Owner = b.Ref.Owner && a.PathRepo = b.PathRepo then
+                    if not (List.isEmpty (TouchSet.scopedConflicts a.Ref.Owner a.PathRepo b.Ref.Owner b.PathRepo a.TouchSet b.TouchSet)) then
                         union i j
 
         let lanes =
@@ -140,7 +140,7 @@ module Lanes =
 
                 { Id = head.Ref
                   Owner = head.Ref.Owner
-                  Repo = head.Ref.Repo
+                  Repo = head.PathRepo
                   Items = members
                   Tokens = members |> List.collect (fun it -> matchable it.TouchSet) |> List.distinct |> List.sort
                   HeldBy = members |> List.choose holder |> List.distinct })

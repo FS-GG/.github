@@ -28,6 +28,7 @@ module LanesTests =
 
     let private itemAt r paths : Item =
         { Ref = r
+          PathRepo = r.Repo
           Status = Ready
           State = Open
           TouchSet = Declared(paths |> List.map Matchable)
@@ -116,6 +117,16 @@ module LanesTests =
         for lane in p.Lanes do
             let repos = lane.Items |> List.map (fun i -> (i.Ref.Owner, i.Ref.Repo)) |> List.distinct
             Assert.Equal(1, List.length repos)
+
+    [<Fact>]
+    let ``#1732 paths use their declared repo scope, not the issue host repo`` () =
+        let host = refIn "FS-GG" ".github" 0
+        let audio = { itemAt { host with Number = 1 } [ "scripts/skill-view" ] with PathRepo = "FS.GG.Audio" }
+        let github = { itemAt { host with Number = 2 } [ "scripts/skill-view" ] with PathRepo = ".github" }
+
+        let p = partition [ audio; github ]
+
+        Assert.Equal(2, List.length p.Lanes)
 
     // ---- occupancy and the ceiling ---------------------------------------------------------------
 

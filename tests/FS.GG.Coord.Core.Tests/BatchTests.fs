@@ -23,6 +23,7 @@ module BatchTests =
 
     let private item n paths =
         { Ref = ref n
+          PathRepo = (ref n).Repo
           Status = Ready
           State = Open
           TouchSet = Declared(paths |> List.map Matchable)
@@ -196,7 +197,8 @@ module BatchTests =
 
         let rendering =
             { item 2 [ "scripts/build.sh" ] with
-                Ref = refIn "FS-GG" "FS.GG.Rendering" 2 }
+                Ref = refIn "FS-GG" "FS.GG.Rendering" 2
+                PathRepo = "FS.GG.Rendering" }
 
         let r = run [] [ sdd; rendering ]
 
@@ -548,6 +550,7 @@ module BatchTests =
         let other n paths =
             { item n paths with
                 Ref = refIn "FS-GG" "FS.GG.Game" n
+                PathRepo = "FS.GG.Game"
                 Status = Backlog }
 
         let r = run [] [ backlogItem 1 [ "src/A.fs" ]; other 2 [ "src/B.fs" ] ]
@@ -567,7 +570,8 @@ module BatchTests =
 
         let cand repo n =
             { item n [ $"src/Dead%d{n}/Sub" ] with
-                Ref = refIn "FS-GG" repo n }
+                Ref = refIn "FS-GG" repo n
+                PathRepo = repo }
 
         let r = run [ deadIn "FS.GG.SDD" 1; deadIn "FS.GG.Game" 2 ] [ cand "FS.GG.SDD" 1; cand "FS.GG.Game" 2 ]
         Assert.Empty(r.Chosen)

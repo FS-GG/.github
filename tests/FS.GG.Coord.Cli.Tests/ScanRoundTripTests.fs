@@ -37,6 +37,7 @@ let private aRow: Scan.Row =
       BlockedByRaw = ""
       State = Open
       IsPullRequest = false
+      PathRepo = "FS.GG.SDD"
       BoardClass = None
       Severity = Unset
       Phase = None

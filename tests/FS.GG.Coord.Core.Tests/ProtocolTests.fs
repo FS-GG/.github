@@ -564,6 +564,7 @@ module ProtocolTests =
             { Owner = "FS-GG"
               Repo = "FS.GG.SDD"
               Number = 1 }
+          PathRepo = "FS.GG.SDD"
           Status = status
           State = Open
           TouchSet = Declared [ Matchable "src/Scene/**" ]

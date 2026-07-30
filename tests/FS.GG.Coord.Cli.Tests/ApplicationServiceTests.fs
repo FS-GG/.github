@@ -21,6 +21,7 @@ module ApplicationServiceTests =
           BlockedByRaw = ""
           State = state
           IsPullRequest = isPullRequest
+          PathRepo = repo
           BoardClass = None
           Severity = Unset
           Phase = None

@@ -25,6 +25,7 @@ module BlockerGraphTests =
           BlockedByRaw = blockedBy
           State = state
           IsPullRequest = false
+          PathRepo = repo
           BoardClass = None
           Severity = Unset
           Phase = None

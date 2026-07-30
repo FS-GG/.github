@@ -471,7 +471,7 @@ module Batch =
             reserved <-
                 reserved
                 @ [ { Owner = item.Ref.Owner
-                      Repo = item.Ref.Repo
+                      Repo = item.PathRepo
                       Paths = item.TouchSet
                       Holder = holder } ]
 
@@ -481,7 +481,7 @@ module Batch =
             | None -> 0
 
         let step (item: Item, rank: Rank.Rank) =
-            let owner, repo = item.Ref.Owner, item.Ref.Repo
+            let owner, repo = item.Ref.Owner, item.PathRepo
 
             // Only this repo's reservations. The ORDER is part of the contract: `inFlight` precedes
             // the batch members appended below, so a candidate colliding with both reports the LIVE

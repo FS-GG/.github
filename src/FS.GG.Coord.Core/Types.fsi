@@ -285,6 +285,9 @@ module Types =
     /// An item, as the scheduler must see it.
     type Item =
         { Ref: Ref
+          /// The repository whose tree the item's `Paths:` tokens name.  `Ref` remains the issue to
+          /// claim and close; `PathRepo` is the independent reservation scope (#1732).
+          PathRepo: string
           Status: BoardStatus
           /// The ISSUE's state. Separate from Status on purpose — see IssueState.
           State: IssueState

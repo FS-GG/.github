@@ -252,3 +252,23 @@ module TouchSet =
               for y in tokensOf b do
                   if tokensOverlap x y then
                       yield (x, y) ]
+
+    /// Compare two touch-sets only when their declared paths live in the same repository.
+    ///
+    /// An issue's host repository and the repository its `Paths:` name are separate facts for a
+    /// cross-repository board item (#1732).  Keeping the scope test beside `conflicts` makes the safe
+    /// composition explicit: callers that have a repo scope must not first discard it and then compare
+    /// two otherwise-identical token lists as though they named one worktree.
+    let scopedConflicts
+        (leftOwner: string)
+        (leftRepo: string)
+        (rightOwner: string)
+        (rightRepo: string)
+        (left: TouchSet)
+        (right: TouchSet)
+        : (string * string) list =
+        if String.Equals(leftOwner, rightOwner, StringComparison.OrdinalIgnoreCase)
+           && String.Equals(leftRepo, rightRepo, StringComparison.OrdinalIgnoreCase) then
+            conflicts left right
+        else
+            []

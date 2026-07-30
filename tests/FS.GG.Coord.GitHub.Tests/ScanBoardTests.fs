@@ -68,6 +68,12 @@ let private issueNode (number: int) (status: string) (blockedBy: string) (state:
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
                       "state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
+let private scopedIssueNode (number: int) (pathRepo: string) =
+    $"""{{"status":{{"name":"Ready"}},
+          "repoScope":{{"name":"%s{pathRepo}"}},
+          "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
+                      "state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+
 /// One page of a USER-owned board — the same shape as `page`, but nested under `data.user` instead of
 /// `data.organization`, exactly as GitHub answers a `user(login:)` query (#1344).
 let private userPage (nodes: string) (hasNext: bool) (cursor: string) =
@@ -408,6 +414,7 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       BlockedByRaw = ""
       State = IssueState.Open
       IsPullRequest = false
+      PathRepo = repo
       BoardClass = None
       Severity = Unset
       Phase = None
@@ -415,6 +422,17 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
 
 let private scopeBoard =
     [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
+
+[<Fact>]
+let ``#1732 Repo Scope supplies the path repository while Ref remains the issue repository`` () =
+    use sandbox = new Sandbox()
+    let transport = scripted [ ok (page (scopedIssueNode 1732 "audio") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] ->
+        Assert.Equal(".github", row.Ref.Repo)
+        Assert.Equal("audio", row.PathRepo)
+    | other -> failwithf "expected one scoped row, got %A" other
 
 [<Fact>]
 let ``#979 a --repo naming no board row REPORTS, and does not merely return empty`` () =

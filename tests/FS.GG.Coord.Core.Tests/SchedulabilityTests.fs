@@ -18,6 +18,7 @@ module SchedulabilityTests =
 
     let private item n =
         { Ref = ref n
+          PathRepo = (ref n).Repo
           Status = Ready
           State = Open
           TouchSet = Declared [ Matchable "src/Scene/**" ]

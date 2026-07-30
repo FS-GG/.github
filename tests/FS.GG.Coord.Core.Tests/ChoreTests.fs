@@ -43,6 +43,7 @@ module ChoreTests =
     /// An item with nothing wrong with it. Each test breaks exactly one thing.
     let private item n : Item =
         { Ref = ref n
+          PathRepo = (ref n).Repo
           Status = Ready
           State = Open
           TouchSet = Declared [ Matchable "src/" ]

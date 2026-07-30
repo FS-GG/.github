@@ -18,6 +18,11 @@ module Scan =
           BlockedByRaw: string
           State: IssueState
           IsPullRequest: bool
+          /// The repository whose tree this item's `Paths:` tokens name.  This normally equals
+          /// `Ref.Repo`; a cross-repository coordination item may instead select `Repo Scope` (#1732).
+          /// It is deliberately separate from `Ref`, which continues to identify the issue to read,
+          /// claim, and close.
+          PathRepo: string
           /// The `Class` column as OBSERVED (.github#1588). `None` covers three facts the board itself
           /// does not tell apart — the row is unclassed, the value is a word this engine does not speak,
           /// or the project has no `Class` field at all — and all three mean the same thing to the only
@@ -57,7 +62,7 @@ module Scan =
         | Some name ->
             let kept =
                 rows
-                |> List.filter (fun r -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase))
+                |> List.filter (fun r -> String.Equals(r.PathRepo, name, StringComparison.OrdinalIgnoreCase))
 
             let advisory =
                 // A row matched, so the request named something real: nothing to say.
@@ -73,7 +78,7 @@ module Scan =
                 else
                     let known =
                         rows
-                        |> List.map (fun r -> r.Ref.Repo)
+                        |> List.map (fun r -> r.PathRepo)
                         |> List.distinctBy (fun r -> r.ToLowerInvariant())
                         |> List.sort
 
@@ -124,6 +129,7 @@ module Scan =
                  class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
                    ... on Issue { number title state createdAt repository { nameWithOwner } } \
@@ -215,6 +221,11 @@ module Scan =
                       BlockedByRaw = nested node "blockedBy" "text" |> Option.defaultValue ""
                       State = state
                       IsPullRequest = isPr
+                      // A missing field preserves the historic meaning: paths belong to the issue's
+                      // repository.  The client resolves a present roster short-id before it becomes a
+                      // scheduling scope; retaining the raw field here keeps this GraphQL reader free of
+                      // the CLI's resolver table.
+                      PathRepo = nested node "repoScope" "name" |> Option.defaultValue parts.[1]
                       // COSTS NOTHING TO ADD. `fieldValueByName` is a RESOLVER field — one value per
                       // item, no node multiplication — so this is the same 7 points over the live board
                       // that the query's own comment measures. `Option.bind` on the resolved name, so a
@@ -294,6 +305,7 @@ module Scan =
             )
 
             w.WriteBoolean("isPullRequest", r.IsPullRequest)
+            w.WriteString("pathRepo", r.PathRepo)
             w.WriteEndObject()
 
         w.WriteEndArray()
@@ -332,6 +344,9 @@ module Scan =
                                 match e.TryGetProperty "isPullRequest" with
                                 | true, v -> v.ValueKind = JsonValueKind.True
                                 | _ -> false
+                              // Older cache rows predate #1732's independent path scope.  Their only
+                              // truthful interpretation is the historic one: the issue repository.
+                              PathRepo = s "pathRepo" |> Option.defaultValue rp
                               // Absent on every cache entry written before .github#1588, and that reads
                               // as `None` — the fail-closed direction. A stale entry then derives a
                               // projection chore that rewrites the column it already holds, which costs

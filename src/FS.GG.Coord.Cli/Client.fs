@@ -429,6 +429,10 @@ module Client =
                 { c with
                     Item =
                         { c.Item with
+                            // `Repo Scope` is the authority for WHERE `Paths:` live; `Ref` remains the
+                            // issue identity for every GitHub mutation.  The resolver is shared with
+                            // `--repo`, so roster short-ids and canonical names cannot split a lane.
+                            PathRepo = Options.resolveRepo row.PathRepo
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
@@ -6440,7 +6444,11 @@ module Client =
                                 let touchSets =
                                     if isTouchSetCandidate then
                                         { LintApplication.ConsolidationRow.Ref = r.Ref.Short
-                                          LintApplication.ConsolidationRow.Repo = r.Ref.Repo
+                                          // The board issue may live in `.github` while its declaration
+                                          // reserves a receiver worktree. Consolidation is evidence about
+                                          // overlapping files, so it partitions on `Repo Scope`, not the
+                                          // repository that happens to host the coordination issue (#1732).
+                                          LintApplication.ConsolidationRow.Repo = Options.resolveRepo r.PathRepo
                                           LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
                                         :: touchSets
                                     else

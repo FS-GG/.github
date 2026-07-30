@@ -324,6 +324,7 @@ module Snapshot =
             Ok
                 { Item =
                     { Ref = r
+                      PathRepo = r.Repo
                       Status = st
                       State = state
                       TouchSet = ts
