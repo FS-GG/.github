@@ -2216,6 +2216,17 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "sparse: a two-pass workflow writes its two checkout verdicts exactly once (#1610)" \
   || bad "discarded sparse first-pass records must not corrupt the fully-graded denominator" "rc=$rc: $out"
 
+# Each layer is independently required: the Python buffer refuses to emit a partial verdict and the
+# bash append gate refuses to ledger any pass that still requested a tree. These source mutations are
+# deliberate: deleting either guard must fail this leg even though the other guard still masks the
+# behavioural double-count, which is exactly why a denominator-only test was insufficient.
+python_buffer="$(grep -c '^if wants:$' "$AUDIT")"
+bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
+{ [ "$python_buffer" -eq 1 ] && [ "$bash_buffer" -eq 1 ]; } \
+  && ok "sparse: both independent two-pass buffer gates remain present (#1610)" \
+  || bad "deleting either sparse double-count guard must red its own mutation leg" \
+         "python=$python_buffer bash=$bash_buffer"
+
 # Drive sparse_tree_ensure with the roster deliberately unavailable after the normal roster read.
 # This models a future caller/reordering reaching the helper too early: it is a read failure (exit 2),
 # not the cheap off-roster boundary. Removing that guard changes this leg to an ungraded green.
