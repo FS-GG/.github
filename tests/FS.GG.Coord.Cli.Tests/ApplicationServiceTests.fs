@@ -151,10 +151,11 @@ module ApplicationServiceTests =
     /// the difference between a queue that schedules something and one that does not: `Ready` is the only
     /// startable column, so every fixture built on the `In progress` default below is — by construction —
     /// a queue whose empty arm is under test (.github#1562 needed the OTHER arm as well).
-    let private boardItemIn (status: string) (number: int) (title: string) =
-        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+    let private boardItemIn (status: string) (number: int) (title: string) (blockedBy: string option) (state: string) =
+        let blocked = blockedBy |> Option.map (fun value -> $"{{\"text\":\"%s{value}\"}}") |> Option.defaultValue "null"
+        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"%s{title}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
-    let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title
+    let private boardItem (number: int) (title: string) = boardItemIn "In progress" number title None "OPEN"
 
     /// One claim marker, `ageMinutes` old. Sessionless, exactly as `kit_server.py` serves it: a marker
     /// carrying no session is indistinguishable from ours, which is `verifyHeld`'s documented behaviour and
@@ -223,7 +224,10 @@ module ApplicationServiceTests =
             bodies
             |> Map.toList
             |> List.filter (fun (n, _) -> not (offBoard.Contains n))
-            |> List.map (fun (n, _) -> boardItemIn (statusFor n) n $"item %d{n}")
+            |> List.map (fun (n, body) ->
+                let blocker = body.Split('\n') |> Array.tryPick (fun line -> if line.StartsWith("Blocked by: ") then Some(line.Substring("Blocked by: ".Length)) else None)
+                let state = if body.Contains("<!-- fixture:closed -->") then "CLOSED" else "OPEN"
+                boardItemIn (statusFor n) n $"item %d{n}" blocker state)
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -2361,6 +2365,23 @@ module ApplicationServiceTests =
                 Directory.Delete(dir, true)
             with _ ->
                 ()
+
+    [<Fact>]
+    let ``#1739 lint reports a human park only after its machine blocker resolves`` () =
+        let transport =
+            worldWith
+                (fun number -> if number = 42 then "Blocked" else "Done")
+                (Map.ofList
+                    [ 42, "Blocked by: FS-GG/FS.GG.SDD#2\nBlocked on: human/decision\nPaths: src/A.fs"
+                      2, "<!-- fixture:closed -->\nPaths: src/B.fs" ])
+                Map.empty
+                false
+        let code, output, _ = runJsonArm transport [ "lint"; "--repo"; "FS.GG.SDD"; "--json" ]
+        // The deliberately minimal fixture also trips unrelated board hygiene errors; the note is
+        // nevertheless emitted in the same lint result.
+        Assert.Equal(1, code)
+        Assert.Contains("HUMAN-PARK-MACHINE-CLEARED", output)
+        Assert.Contains("human decision", output)
 
     [<Fact>]
     let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =
