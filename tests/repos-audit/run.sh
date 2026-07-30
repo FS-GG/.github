@@ -21,7 +21,8 @@ AUDIT="$HERE/../../scripts/repos-audit.sh"
 REPOS_SH="$HERE/../../scripts/repos.sh"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/repos-audit-fixture.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+MUTATED_AUDIT=""
+trap 'rm -rf "$WORK"; [ -z "$MUTATED_AUDIT" ] || rm -f "$MUTATED_AUDIT"' EXIT
 STUB="$WORK/bin"; mkdir -p "$STUB"
 export FIX="$WORK/fix"; mkdir -p "$FIX"
 
@@ -2231,15 +2232,22 @@ bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
   || bad "deleting either sparse double-count guard must red its own mutation leg" \
          "python=$python_buffer bash=$bash_buffer"
 
-# `SPARSE_ROSTER` has no caller-visible route: it is deliberately assigned immediately after the
-# roster read. Pin the guard structurally, so a future reordering that creates one has to retain its
-# fail-closed outcome rather than silently classifying every repository as off-roster.
-empty_roster_guard="$(grep -c '^  if \[ -z "\$SPARSE_ROSTER" \]; then$' "$AUDIT")"
-empty_roster_reason="$(grep -c 'roster was not available when its git tree was needed' "$AUDIT")"
-{ [ "$empty_roster_guard" -eq 1 ] && [ "$empty_roster_reason" -eq 1 ]; } \
-  && ok "sparse: an empty internal roster has an explicit no-verdict guard (#1610)" \
-  || bad "sparse_tree_ensure must refuse an unavailable roster" \
-         "guard=$empty_roster_guard reason=$empty_roster_reason"
+# Drive the internal empty-roster branch without changing the audit's checkout identity: the mutated
+# script stays under the real `scripts/` directory, so its ROOT and local authority tree are exactly
+# the production ones. It clears the value only AFTER the real roster assignment, before a foreign
+# tree is needed. That must be a no-verdict, never the cheap off-roster boundary.
+MUTATED_AUDIT="$(mktemp "$HERE/../../scripts/.repos-audit-empty-roster.XXXXXX")"
+sed '/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/a SPARSE_ROSTER=""' \
+  "$AUDIT" > "$MUTATED_AUDIT"
+chmod +x "$MUTATED_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
+out="$(run 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'roster was not available when its git tree was needed' \
+    && ! printf '%s' "$out" | grep -q 'not on this audit' ; } \
+  && ok "sparse: an empty internal roster is a no-verdict, never an off-roster boundary (#1610)" \
+  || bad "sparse_tree_ensure must refuse an unavailable roster" "rc=$rc: $out"
 
 # Distinct trees make a wrong repository or cache key observable. SDD fetches Rendering's unique
 # path; serving SDD's default tree instead makes this a fabricated cone-mode finding.
