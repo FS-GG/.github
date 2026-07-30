@@ -62,11 +62,11 @@ mkpin "$KIT_PUBLISHED" "$FIX/_default.pin"
 # What `GET /repos/{o}/{r}/git/trees/HEAD?recursive=1` returns, so rule (4) — *does this pattern
 # select any tracked path?* — can be asked about a repository whose checkout the audit does not hold.
 #
-# The shape is the API's, not a convenience: `tree` entries alongside `blob` entries, because the
-# real endpoint emits both and the audit must drop the directories. A fixture that listed only blobs
-# would be green whether or not the audit filtered them — and if it did not, a cone-mode FILE name
-# would be answered by the `tree` entry for the directory of that name and the finding would vanish,
-# which is the one thing rule (4) is carrying alone in cone mode.
+# The shape is the API's, not a convenience: `tree` entries alongside `blob` and `commit` entries.
+# The audit drops `tree`: git has no empty directories and `selects_anything` asks strictly UNDER a
+# prefix, so a directory entry cannot answer for the directory itself. It keeps `commit`: a
+# submodule is a tracked path in `git ls-files`, and dropping it would fabricate a finding for a
+# directory containing only that submodule.
 #
 # `src/FS.GG.Contracts/` and `scripts/` are real directories here; `scripts/check-foo.py` and
 # `src/FS.GG.Contracts/Contracts.fs` are files. That is what lets one roster express both sides of
@@ -78,6 +78,7 @@ mktree() { cat > "$2" <<JSON
   {"path": "src", "type": "tree", "mode": "040000"},
   {"path": "src/FS.GG.Contracts", "type": "tree", "mode": "040000"},
   {"path": "src/FS.GG.Contracts/Contracts.fs", "type": "blob", "mode": "100644"}
+  ,{"path": "vendor/only-submodule", "type": "commit", "mode": "160000"}
 ]}
 JSON
 }
@@ -2137,6 +2138,7 @@ wire_sparse() {
     #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
     cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
     cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
+    cone-submodule) printf '%s          sparse-checkout: |\n            vendor/only-submodule\n' "$head" ;;
     # --- CONE MODE ACROSS TWO SIBLINGS, NEITHER OF WHICH IS THE AUTHORITY (#1556). This is the pair
     #     #1529 left ungraded and #1556 closes: the audit holds neither tree, so rule (4) can only
     #     run by FETCHING the fetched repository's index from the API. Both sides are expressed,
@@ -2197,6 +2199,14 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q '0 finding(s), 0 refusal(s)'; } \
   && ok "sparse: an anchored literal directory passes, and the sweep reports how many repos it read" \
   || bad "a clean cross-repo sparse-checkout must pass and be legible" "rc=$rc: $out"
+
+# A submodule is a `commit` entry, not a directory.  This must grade clean; deleting `commit` from
+# the production entry-type filter turns it into the fabricated cone-mode finding this leg prevents.
+wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-submodule
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 of 1 cross-repo checkout(s) fully graded'; } \
+  && ok "sparse: a commit tree entry is a tracked submodule, not an empty directory (#1610)" \
+  || bad "dropping commit entries must red a submodule-only sparse checkout" "rc=$rc: $out"
 
 # The three findings #1529 names, each asserted on its own message. `rc -eq 1` alone would be
 # satisfied by an unrelated wiring gap, so every leg pins the sentence AND the repo/workflow it names.
