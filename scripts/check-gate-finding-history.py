@@ -85,7 +85,7 @@ from lib.gate import ExitCode, GateError, Unreachable, run  # noqa: E402
 
 NAME = "check-gate-finding-history"
 
-CORPUS_SCHEMA = 2
+CORPUS_SCHEMA = 3
 """Bumped when the corpus SHAPE changes. `classify` refuses an unknown schema rather than guessing at
 fields it does not recognise — a corpus it half-understands is a measurement of nothing."""
 
@@ -244,19 +244,22 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
         return row
 
     total = wf.get("totalRuns")
+    evaluated = wf.get("evaluatedRuns")
     red_count = wf.get("redRunCount")
     red_runs = wf.get("redRuns")
-    if not isinstance(total, int) or not isinstance(red_count, int) or total < 0 or red_count < 0:
+    if (not isinstance(total, int) or not isinstance(evaluated, int) or not isinstance(red_count, int)
+            or total < 0 or evaluated < 0 or red_count < 0 or evaluated > total):
         # A corpus row that claims to be read but carries no counts is NOT a clean gate — it is a row
         # this cannot judge. Degrading it to UNREAD keeps it out of the green column (#266).
         row.update(
             verdict="UNREAD",
-            detail=f"corpus row has no usable run counts (totalRuns={total!r}, redRunCount={red_count!r})",
+            detail=(f"corpus row has no usable run counts (totalRuns={total!r}, "
+                    f"evaluatedRuns={evaluated!r}, redRunCount={red_count!r})"),
         )
         return row
-    if red_count > total:
+    if red_count > evaluated:
         raise GateError(
-            f"{what}: redRunCount={red_count} exceeds totalRuns={total}. That is an incoherent corpus, "
+            f"{what}: redRunCount={red_count} exceeds evaluatedRuns={evaluated}. That is an incoherent corpus, "
             f"not a gate with a lot of findings — refusing to classify it."
         )
     if not isinstance(red_runs, list):
@@ -269,6 +272,7 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
         )
 
     row["totalRuns"] = total
+    row["evaluatedRuns"] = evaluated
     row["redRunCount"] = red_count
     evidence_counts = {"finding": 0, "fallover": 0, "ambiguous": 0, "unread": 0, "expired": 0}
     normalised_evidence: list[dict[str, Any]] = []
@@ -379,16 +383,17 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
         return row
 
     if red_count == 0:
-        if total < min_runs:
+        if evaluated < min_runs:
             row.update(
                 verdict="LOW-SAMPLE",
-                detail=f"{total} retained run(s), none red — below the {min_runs}-run floor, so "
-                f"'never fired' is not evidence. NOT a clean verdict: this is unmeasured.",
+                detail=(f"{evaluated} evaluated run(s) out of {total} retained, none red — below the "
+                        f"{min_runs}-run floor, so ")
+                + "'never fired' is not evidence. NOT a clean verdict: this is unmeasured.",
             )
             return row
         row.update(
             verdict="NEVER-FOUND",
-            detail=f"{total} retained run(s) and NOT ONE red — either it guards something that never "
+            detail=f"{evaluated} evaluated run(s) out of {total} retained and NOT ONE red — either it guards something that never "
             f"breaks, or it cannot fail. From outside those are indistinguishable.",
         )
         return row
@@ -396,7 +401,7 @@ def classify_workflow(wf: dict, *, repo: str, now: _dt.datetime, min_runs: int, 
     row.update(
         verdict="EXERCISED",
         detail=(
-            f"{evidence_counts['finding']} of {total} retained run(s) carried a gate finding marker"
+            f"{evidence_counts['finding']} of {evaluated} evaluated run(s) ({total} retained) carried a gate finding marker"
             + (
                 f"; {evidence_counts['fallover']} other red run(s) were fallovers"
                 if evidence_counts["fallover"]
@@ -781,6 +786,8 @@ def fetch_repo(repo: str, *, window: int) -> dict:
             total = _count(repo, wf_id, {}, what=f"{repo} {row['path']}: total runs")
             row["totalRuns"] = total
             red_rows = _red_runs(repo, wf_id, "failure") + _red_runs(repo, wf_id, "timed_out")
+            successful = _count(repo, wf_id, {"status": "success"}, what=f"{repo} {row['path']}: successful runs")
+            row["evaluatedRuns"] = successful + len(red_rows)
             # The two conclusion queries are disjoint by contract. Refuse duplicate ids rather than
             # counting one run twice if the API ever contradicts that contract.
             ids = [r.get("id") for r in red_rows]

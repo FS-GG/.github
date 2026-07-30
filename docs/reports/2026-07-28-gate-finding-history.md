@@ -9,6 +9,10 @@ scripts/check-gate-finding-history.py --fetch --repo FS-GG/.github … --out cor
 scripts/check-gate-finding-history.py --corpus corpus.json --markdown
 ```
 
+> Superseded for sample-size terminology by `.github#1840`: `totalRuns` included non-verdict
+> conclusions. The ledger's retained totals remain historical observations, but only evaluated
+> (`success`/red) runs may satisfy the `MIN_RUNS` floor or support a NEVER-FOUND verdict.
+
 **Verdict: exit 1 — findings.** 134 workflows classified; 30 findings; 20 unmeasured; **0 unread**.
 
 ---
@@ -384,4 +388,3 @@ _none_
 ## UNREAD — 0
 
 _none_
-
