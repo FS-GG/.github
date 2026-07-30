@@ -102,6 +102,20 @@ per-repo precondition, it belongs to step 3 alongside `diff -r` and the director
 (ADR-0067 §9, Rendering's finding), and it is stated here rather than discovered per receiver.
 [`#1855`](https://github.com/FS-GG/.github/issues/1855) owns it.
 
+**§1.1 decision and measurement (2026-07-30, #1855).** The seven receiver `main` tips were read
+directly; an unreadable tree would have been recorded **NOT MEASURED**, never as an empty root. After
+excluding the four kit directories (`check-board`, `cross-repo-coordination`,
+`intra-repo-parallel-work`, `pnext-item`), Templates and Net have zero receiver-owned directories.
+SDD has 28 receiver-owned directories plus `skill-manifest.json`; Rendering 45, Governance 11, Game
+17, and Audio 16. The affected five take **shape 1**: rehome their receiver-owned producer/product
+content before that receiver adopts §1. The content already has a receiver/producer authority and
+must not be silently absorbed by the kit generator. **SDD takes shape 2** for its
+producer-authoritative manifest: its required gate names that manifest at the runtime-root location,
+so the SDD root must union the restored kit with SDD's declared producer set. Consequently the
+structural claim is only about the kit-derived subset, as §1 says; the all-root union is not one
+restored package and needs the receiver-owned source declaration to remain checkable. This decision
+changes no receiver today and does not make any measured receiver eligible to untrack a root.
+
 **§2 — The guarantee is that a receiver checkout without a restore is not a working tree.** This is
 stated as the contract rather than mitigated by a mechanism. It was chosen over the three alternatives
 because it is the only one whose guarantee does not depend on somebody having installed a hook or

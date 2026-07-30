@@ -1097,6 +1097,18 @@ dissolved.
 
 #### The two cheap predictors — run BOTH, because the first cannot see what the second finds
 
+**0. Receiver-owned runtime content — run this before either predictor.** A green `diff -r` and an
+absent generated view do not prove that the surviving runtime root is kit-only. On the receiver's
+fetched `main`, list every tracked directory under `.claude/skills` and `.agents/skills`, subtract the
+kit manifest's declared directories, and report the remainder. A tree/API read failure is **NOT
+MEASURED**, never an empty remainder. #1855 measured: Templates = 0, Net = 0; SDD = 28 directories plus
+`skill-manifest.json`; Rendering = 45; Governance = 11; Game = 17; Audio = 16. Rendering,
+Governance, Game, and Audio are not eligible for ADR-0070 §1 until their owner rehomes that content;
+SDD's required,
+producer-authoritative manifest is the explicitly recorded **shape 2** exception and requires a
+checkable receiver-owned source declaration. This is a
+report-only precondition: do not delete, untrack, or generate over receiver-owned content.
+
 **1. `diff -r <source> <second-root>` — necessary, and it is DIRECTIONAL.** A non-empty
 `Only in <second-root>:` is a file with no home in the view: the retirement deletes it and
 `git status` reports **nothing**. It fired exactly once in seven receivers — `FS.GG.SDD`'s
