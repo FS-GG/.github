@@ -657,6 +657,42 @@ expect "a COMPOSED PATHS_SUBJECT is folded — names and \`+\`, not just literal
 expect "...and the fix it names for a FILE is the file, not a bogus \`/**\`" \
   1 "Add a pattern covering '.roots'." "$RC3"
 
+# PATHS_SUBJECT's filesystem disposition decides the probe, not whether an entry happens to exist
+# as a file. Each leg starts green with the one correct filter shape, then removes that entry from
+# both filters and requires the resulting finding. That is a mutation check of all three states:
+# existing directory, existing file, and a file that may appear later (#1873).
+RC3a="$(root "$WORK/subject-existing-directory-mutation")"
+gate "$RC3a" "scripts/check-x.py" '("docs",)'
+mkdir -p "$RC3a/docs"
+wf "$RC3a/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "scripts/check-x.py"'
+expect "an existing DIRECTORY subject is covered by a recursive filter" 0 "ok:" "$RC3a"
+sed -i '/"docs\/\*\*"/d' "$RC3a/.github/workflows/w.yml"
+expect "MUTATION: removing an existing DIRECTORY subject reds" \
+  1 "nothing in the filter selects 'docs'" "$RC3a"
+
+RC3b="$(root "$WORK/subject-existing-file-mutation")"
+gate "$RC3b" "scripts/check-x.py" '(".roots",)'
+touch "$RC3b/.roots"
+wf "$RC3b/.github/workflows/w.yml" '      - ".roots"
+      - "scripts/check-x.py"' '      - ".roots"
+      - "scripts/check-x.py"'
+expect "an existing FILE subject is covered by its exact filter" 0 "ok:" "$RC3b"
+sed -i '/"\.roots"/d' "$RC3b/.github/workflows/w.yml"
+expect "MUTATION: removing an existing FILE subject reds" \
+  1 "nothing in the filter selects '.roots'" "$RC3b"
+
+RC3c="$(root "$WORK/subject-may-not-exist-mutation")"
+gate "$RC3c" "scripts/check-x.py" '("future-config.json",)'
+wf "$RC3c/.github/workflows/w.yml" '      - "future-config.json"
+      - "scripts/check-x.py"' '      - "future-config.json"
+      - "scripts/check-x.py"'
+expect "a MAY-NOT-EXIST subject is covered by its exact future-file filter" 0 "ok:" "$RC3c"
+sed -i '/"future-config.json"/d' "$RC3c/.github/workflows/w.yml"
+expect "MUTATION: removing a MAY-NOT-EXIST subject reds" \
+  1 "nothing in the filter selects 'future-config.json'" "$RC3c"
+
 # OPT-IN: a script declaring nothing is out of scope and SILENT. A rule that red every unmigrated
 # workflow would be a rule everyone turns off on day one (#698).
 RC4="$(root "$WORK/subject-none")"

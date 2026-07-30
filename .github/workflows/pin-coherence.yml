@@ -30,24 +30,6 @@
 name: pin-coherence
 
 
-# THE RENOVATE CONFIG NAMES THAT DO NOT EXIST HERE, EXCUSED WITH THEIR REASON (#1802).
-#
-# `check-pin-coherence.py`'s PATHS_SUBJECT names every one of `RENOVATE_CONFIG_NAMES`, because a
-# token-bearing config under ANY of them decides this gate's verdict — that is the #266 shape its own
-# header describes. Only `renovate.json` exists in this repo, and `check-paths-coherence.py` probes a
-# PATHS_SUBJECT entry that is not an existing FILE as a DIRECTORY (`entry/x`), so it cannot express
-# "a file that does not exist yet, but whose appearance must re-run me".
-#
-# The `paths:` lists above DO name each one, so the trigger is correct and a `.renovaterc` appearing
-# tomorrow re-runs this gate. What is excused is only rule (b)'s coverage assertion over paths that
-# are absent today. Filed as the modelling gap it is; these come off when it can express them.
-# paths-coherence: allow-uncovered renovate.json5 — a RENOVATE_CONFIG_NAME absent from this repo; the paths: lists name it, so its appearance re-runs the gate (#1802)
-# paths-coherence: allow-uncovered .github/renovate.json — as above
-# paths-coherence: allow-uncovered .github/renovate.json5 — as above
-# paths-coherence: allow-uncovered .renovaterc — as above
-# paths-coherence: allow-uncovered .renovaterc.json — as above
-# paths-coherence: allow-uncovered .renovaterc.json5 — as above
-
 on:
   pull_request:
     paths:
