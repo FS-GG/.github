@@ -46,6 +46,11 @@ The run is complete only when:
 - every owed coherent set has passed its producer gates and been released from merged `main`;
 - every expected package/version resolves from both GitHub Packages and nuget.org;
 - the two feeds received the same workflow-produced package bytes, never separately repacked bytes;
+- every dynamically staged manifest row intended for product materialization exists in the published
+  package, the current consumer pins that package version, and a fresh consumer workspace contains the
+  expected bytes;
+- every packaged tool/shim manifest names a published runtime version containing the source changes its
+  guidance expects;
 - dispatch/Renovate propagation has been observed or its failure reported;
 - `registry/dependencies.yml` and its generated projections record the published truth on merged
   `.github/main`.
@@ -68,6 +73,14 @@ registry says the old version is coherent.
    retain the exact versions returned as audit evidence.
 5. Find the latest **successful published version/tag for each coherent set**, then inspect every commit
    from that release point through current `main`.
+6. Follow every derived package-content edge. For packages whose `Pack` target runs a stager or reads a
+   generated manifest, compare the released tag's manifest and staged file closure with `main`; do not
+   limit the diff to the package project directory. Classify a new materialized row, changed digest,
+   changed executable bit, or changed staged relative path as package-affecting even when the package
+   project and version property are unchanged.
+7. Audit runtime distribution separately from guidance distribution. Compare the latest published tool
+   tag with current runtime sources, then inspect every checked-in tool manifest/shim that receivers
+   obtain. A current skill/kit beside a stale runtime manifest is a release gap, not a current producer.
 
 The fifth step is mandatory. A project version equal to the feed, a stale registry row, or a recent
 release date does **not** prove currency. Rendering and Game have both accumulated package-affecting
@@ -87,6 +100,17 @@ Classify changes by their effect on the packed artifact, not by commit subject a
 Inspect `git diff <release>..main`, project `Pack`/`Content` items, and the release workflow. Never infer
 "docs-only" from filenames without checking whether documentation, skills, templates, or readmes are
 packed.
+
+For dynamically staged content packages, inspect all three states explicitly:
+
+1. **authored source:** current skill/template/content trees and their generated manifest;
+2. **published package:** the latest feed version's manifest and complete staged file set;
+3. **consumer embedding:** the package version pinned by the current CLI/template that materializes it.
+
+If any state is behind the preceding one, the release train includes that producer or consumer. A
+published package is not live in product workspaces until the materializing consumer embeds it.
+Conversely, fetching current guidance from a moving source does not make an older packaged runtime
+current.
 
 Choose the smallest valid SemVer bump under the producer's own policy:
 
@@ -129,6 +153,12 @@ For each owed producer, in dependency order:
 7. Wait for the complete publish job, including producer gates, org-feed push, nuget.org OIDC login and
    push, and downstream dispatch. Stop the train on a failed or partial coherent-set publication and
    repair it before releasing dependants.
+8. For packages that materialize tools, skills, templates, or build assets into another workspace, run
+   a real fresh-consumer acceptance after the consumer release. Assert the expected IDs, versions,
+   file closure, digests/modes where applicable, and executable runtime version from the created
+   workspace. Also exercise the documented update/retrofit path on an existing workspace; if no
+   supported path can bring it current, classify and file that as a propagation blocker rather than
+   claiming the release is live.
 
 Never publish local packages manually to get around a failed workflow. The workflow-produced,
 gate-verified `.nupkg` is the release artifact for both feeds.
@@ -177,6 +207,7 @@ Report:
 - package count per set and confirmation of both feeds;
 - producer PRs, tags, and successful workflow runs;
 - the merged registry PR and final canonical versions;
+- fresh-workspace and existing-workspace propagation evidence for materialized package/tool content;
 - repositories classified current/no-release and why;
 - blockers or verification limits, if any.
 
