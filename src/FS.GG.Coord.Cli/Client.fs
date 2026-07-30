@@ -3700,6 +3700,21 @@ module Client =
 
     let private sharedTokenText (tokens: string list) = String.Join(", ", tokens)
 
+    /// Resolve the repository a board item's paths name without changing the issue ref used for reads
+    /// and mutations.  Off-board items have no `Repo Scope` projection and therefore retain their own
+    /// repository as the only truthful scope.
+    let private boardPathScopes (ctx: Context) : Errors.IoResult<Map<Ref, string>> =
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> Error e
+        | Ok board ->
+            match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
+            | Error e -> Error e
+            | Ok rows ->
+                rows
+                |> List.map (fun r -> r.Ref, Options.resolveRepo r.PathRepo)
+                |> Map.ofList
+                |> Ok
+
     /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
     /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
     /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
@@ -3807,9 +3822,12 @@ module Client =
         // owner/repo, so a token in another repo is never even read — where the old scan pulled the whole
         // board and filtered with `sameRepo`, one edit away from the phantom collisions #353 removed.
         // PRs are dropped inside `openIssues` (#641), so `IsPullRequest` needs no analogue here.
-        match Reads.openIssues ctx.Transport ref.Owner ref.Repo with
-        | Error e -> Error e
-        | Ok issues ->
+        match boardPathScopes ctx, Reads.openIssues ctx.Transport ref.Owner ref.Repo with
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        | Ok scopes, Ok issues ->
+            let pathRepoOf (r: Ref) = Map.tryFind r scopes |> Option.defaultValue r.Repo
+            let targetPathRepo = pathRepoOf ref
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -3839,7 +3857,7 @@ module Client =
                         // why that distinction is what keeps the cost where #1779 measured it.
                         | Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)
                         | Reads.BodyRead body ->
-                            match TouchSet.conflicts ts (TouchSet.parse body) with
+                            match TouchSet.scopedConflicts ref.Owner targetPathRepo other.Owner (pathRepoOf other) ts (TouchSet.parse body) with
                             | [] -> None
                             | pairs -> Some(other, Choice1Of2 pairs))
 
@@ -4277,29 +4295,36 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{m}"
                 ExitError
             | Ok ra, Ok rb ->
-                if not (sameRepo ra rb) then
-                    // #353 — DISJOINT BY CONSTRUCTION. Repo-relative tokens in two different repos can never
-                    // name the same file, so this needs no body read at all.
-                    printfn
-                        "DISJOINT — %s and %s are in different repos; repo-relative touch-sets can never name the same file (#353)."
-                        ra.Short
-                        rb.Short
+                match boardPathScopes ctx with
+                | Error e -> fail e
+                | Ok scopes ->
+                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> Option.defaultValue r.Repo
+                    let samePathRepo =
+                        String.Equals(pathRepoOf ra, pathRepoOf rb, StringComparison.OrdinalIgnoreCase)
 
-                    ExitGreen
-                else
-                    match touchSetOf ra with
-                    | Error e -> failSchedule ra e
-                    | Ok tsa ->
-                        match touchSetOf rb with
-                        | Error e -> failSchedule rb e
-                        | Ok tsb ->
-                            match TouchSet.conflicts tsa tsb with
-                            | [] ->
-                                printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
-                                ExitGreen
-                            | pairs ->
-                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
-                                ExitContended
+                    if not samePathRepo then
+                        // #353 — DISJOINT BY CONSTRUCTION. Repo-relative tokens in two different repos can never
+                        // name the same file, so this needs no body read at all.
+                        printfn
+                            "DISJOINT — %s and %s are in different repos; repo-relative touch-sets can never name the same file (#353)."
+                            ra.Short
+                            rb.Short
+
+                        ExitGreen
+                    else
+                        match touchSetOf ra with
+                        | Error e -> failSchedule ra e
+                        | Ok tsa ->
+                            match touchSetOf rb with
+                            | Error e -> failSchedule rb e
+                            | Ok tsb ->
+                                match TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb with
+                                | [] ->
+                                    printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
+                                    ExitGreen
+                                | pairs ->
+                                    printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
+                                    ExitContended
 
         | _ ->
             eprint "fsgg-coord-engine: overlap needs <ref> --active, or two refs: overlap <ref-a> <ref-b>."
