@@ -88,6 +88,10 @@ distinct_rendering_tree() { cat > "$FIX/FS-GG__FS.GG.Rendering.tree" <<'JSON'
   {"path":"receiver-only/FromRendering.fs","type":"blob","mode":"100644"}
 ]}
 JSON
+                      # The production cache canonicalises repository identity before keying it;
+                      # serve the same fixture through that spelling too, so the stub remains about
+                      # tree identity rather than GitHub's case-preserving request spelling.
+                      cp "$FIX/FS-GG__FS.GG.Rendering.tree" "$FIX/fs-gg__fs.gg.rendering.tree"
 }
 
 # pin <repo> <version> [local|root]  — this repo pins the kit in a CPM props file, at <version>.
