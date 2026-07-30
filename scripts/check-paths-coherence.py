@@ -762,12 +762,15 @@ def main(argv: list[str]) -> int:
                     continue
                 scripts_seen.add((where, script))
                 for entry in subject:
-                    # A DIRECTORY IS COVERED WHEN ITS CONTENTS ARE, not when its own name matches.
-                    # `docs` names a directory the script WALKS, and a filter earns it with
-                    # `docs/**` — so the question is whether a push UNDER it triggers the workflow.
-                    # Asking `selects("docs", …)` instead would demand a bare `docs` pattern that
-                    # triggers on nothing, and red every workflow that had it right.
-                    probe = entry if os.path.isfile(os.path.join(args.root, entry)) else f"{entry}/x"
+                    # PATHS_SUBJECT has THREE filesystem dispositions, not two. An existing file is
+                    # selected by its exact name; an existing directory is selected by a change
+                    # under it; and a path that MAY NOT EXIST YET is still a file-shaped subject.
+                    # The last case matters for config discovery: `renovate.json5` does not exist
+                    # today, but its appearance changes check-pin-coherence's verdict and must run
+                    # that gate. Treating every non-file as a directory probes `entry/x`, which
+                    # makes a correct exact filter look uncovered (#1873).
+                    path = os.path.join(args.root, entry)
+                    probe = f"{entry}/x" if os.path.isdir(path) else entry
                     if not selects(probe, pats):
                         note(entry, script, trigger, "reads")
 
@@ -788,10 +791,11 @@ def main(argv: list[str]) -> int:
             scope = "both filters" if len(trigs) > 1 else f"the `{next(iter(trigs))}` filter"
             # `builds` and `reads` can both reach one absent path; say so rather than picking.
             verb = " and ".join(sorted(verbs))
-            # A FILE IS NOT A DIRECTORY. `.agent-skill-roots` is a file, and telling somebody to add
-            # `.agent-skill-roots/**` is advice that matches nothing — the gate would keep reding
-            # after they did exactly as told, which is worse than saying nothing.
-            fix = entry if os.path.isfile(os.path.join(args.root, entry)) else entry + "/**"
+            # A FILE (including one that may appear later) IS NOT A DIRECTORY. `.agent-skill-roots`
+            # is a file, and telling somebody to add `.agent-skill-roots/**` is advice that matches
+            # nothing — the gate would keep reding after they did exactly as told. Only a directory
+            # earns the recursive remedy (#1873).
+            fix = entry + "/**" if os.path.isdir(os.path.join(args.root, entry)) else entry
             findings.append(
                 f"{where}: {scope} name{'' if len(trigs) > 1 else 's'} {named}, which "
                 f"{verb if plural else verb.rstrip('s') + 's'} {entry!r} — and nothing in the filter "
