@@ -36,14 +36,18 @@ export FIX="$WORK/fix"; mkdir -p "$FIX"
 #
 # The version list is deliberately NOT sorted: nuget.org returns creation order, and `newest()`
 # exists because of that. A fixture that pre-sorted its feed would let a broken comparand pass.
-KITFEED="$WORK/feed"; mkdir -p "$KITFEED/fs.gg.kit"
+KITFEED="$WORK/feed"; mkdir -p "$KITFEED/fs.gg.kit" "$KITFEED/fs.gg.coord.cli"
 cat > "$KITFEED/fs.gg.kit/index.json" <<'JSON'
 {"versions": ["0.1.0", "0.2.0", "0.10.0-preview.1", "0.8.0", "0.6.0", "0.7.0"]}
+JSON
+cat > "$KITFEED/fs.gg.coord.cli/index.json" <<'JSON'
+{"versions": ["0.14.0", "0.15.0"]}
 JSON
 export FSGG_NUGET_ORG_BASE="file://$KITFEED"
 # 0.8.0 is the newest STABLE above — 0.10.0-preview.1 sorts higher numerically and must be excluded
 # as a prerelease, which is the second thing this feed shape pins.
 KIT_PUBLISHED="0.8.0"
+ENGINE_PUBLISHED="0.15.0"
 
 # The pin every repo is served unless a leg says otherwise, so the legs that predate this sweep and
 # have nothing to do with pins stay green. See the `pinlocal` arm of the gh stub.
@@ -226,7 +230,7 @@ tool_manifest() { local slug="${1//\//__}" shape="$2"
   mkdir -p "$FIX/$slug"; rm -f "$FIX/$slug.notools"
   case "$shape" in
     declared)  cat > "$FIX/$slug/dotnet-tools.json" <<'JSON'
-{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]}}}
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.15.0","commands":["fsgg-coord-engine"]}}}
 JSON
                ;;
     missing)   cat > "$FIX/$slug/dotnet-tools.json" <<'JSON'
@@ -246,7 +250,7 @@ JSON
 # The manifest every repo is served unless a leg says otherwise, so the legs that predate this sweep
 # stay green. See the `toolman` arm of the gh stub.
 cat > "$FIX/_default.tools" <<'JSON'
-{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]}}}
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.15.0","commands":["fsgg-coord-engine"]}}}
 JSON
 
 pass=0; failcount=0
@@ -3604,8 +3608,8 @@ tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering decl
 out="$(run 2>&1)" && rc=0 || rc=$?
 rm -f "$FIX/FS-GG__FS.GG.Rendering.failtools"
 { [ "$rc" -eq 2 ] \
-    && printf '%s' "$out" | grep -q 'could not read the .config/dotnet-tools.json of 1' \
-    && printf '%s' "$out" | grep -q 'This is a failure to READ, not a missing engine declaration' \
+    && printf '%s' "$out" | grep -q 'engine-manifest had 1 no-verdict(s): 0 published fs.gg.coord.cli feed resolution failure(s), plus 1 unread/unorderable receiver manifest(s)' \
+    && printf '%s' "$out" | grep -q 'neither disposition is a missing-engine finding' \
     && ! printf '%s' "$out" | grep -q 'hold the fsgg-coord shim and declare NO'; } \
   && ok "engine-manifest: an unreadable manifest is UNDETERMINED (exit 2), never the finding" \
   || bad "a failed read must not be reported as a receiver that cannot run its shim" "rc=$rc: $out"
@@ -3693,6 +3697,67 @@ out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
 
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 tool_manifest FS-GG/FS.GG.SDD declared; tool_manifest FS-GG/FS.GG.Rendering declared
+
+# --- engine bump-offer (#1803) --------------------------------------------------------------------
+# The engine is a JSON tool pin and is deliberately broader than kit-delivery: Rendering has no
+# package-delivery word below, yet an owed engine bump with no offer is still the finding.
+tool_manifest FS-GG/FS.GG.SDD declared
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"
+cat > "$FIX/FS-GG__FS.GG.Rendering/dotnet-tools.json" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.14.0","commands":["fsgg-coord-engine"]},"fake-cli":{"version":"6.1.4","commands":["fake"]}}}
+JSON
+offer_clear FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'engine bump-offer.*FS-GG/FS.GG.Rendering' \
+    && printf '%s' "$out" | grep -q 'NO bump has been offered at all' \
+    && printf '%s' "$out" | grep -q 'fake-cli is deliberately out of scope'; } \
+  && ok "engine bump-offer: a behind byte-copy receiver with NO engine proposal reds; fake-cli is explicit out-of-scope" \
+  || bad "engine no-offer must be a finding, not engine freshness alone" "rc=$rc: $out"
+
+# Mutation 1: force the verdict program's no-offer arm to green.  The same owed receiver must then
+# cease to red, proving this leg is driven by the offer verdict rather than a copied freshness alarm.
+MUTATED_AUDIT="$(mktemp "$HERE/../../scripts/.repos-audit-engine-offer.XXXXXX")"
+sed '0,/emit("offer-none", repo,/s//emit("offer-current", repo,/' "$AUDIT" > "$MUTATED_AUDIT"; chmod +x "$MUTATED_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
+out="$(run 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q '::error::repos-audit: engine bump-offer'; } \
+  && ok "engine bump-offer: MUTATION-PROVEN — forcing offer-none to current kills the engine leg" \
+  || bad "engine offer verdict mutation must change this leg" "rc=$rc: $out"
+
+# Mutation 2: narrow the real engine receiver enumeration to package-delivery rows. Rendering is
+# byte-copy and behind, so this false green proves the baseline's subject came from every
+# coordination-kit receiver, not the kit freshness sweep's narrower roster.
+MUTATED_AUDIT="$(mktemp "$HERE/../../scripts/.repos-audit-engine-subject.XXXXXX")"
+sed '0,/done <<< "\$kit_all_receivers"/s//done <<< "\$kit_roster"/' "$AUDIT" > "$MUTATED_AUDIT"; chmod +x "$MUTATED_AUDIT"
+AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
+out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
+AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'engine bump-offer.*FS-GG/FS.GG.Rendering'; } \
+  && ok "engine bump-offer: MUTATION-PROVEN — narrowing to package-delivery silently loses the byte-copy receiver" \
+  || bad "engine offer subject must be every coordination-kit receiver" "rc=$rc: $out"
+
+# Mutation 3: the offered JSON at the PR head is the published engine, so the same behind receiver
+# becomes offer-current (green) without changing its main pin.  This proves the separate feed and
+# JSON-head parser rather than the kit XML parser are what decide the state.
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering/ref"
+printf '[{"number": 1803, "headRefName": "renovate/fs.gg.coord.cli-0.x"}]' > "$FIX/FS-GG__FS.GG.Rendering/prs.json"
+cat > "$FIX/FS-GG__FS.GG.Rendering/ref/renovate__fs.gg.coord.cli-0.x" <<'JSON'
+{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.15.0","commands":["fsgg-coord-engine"]}}}
+JSON
+out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'PR #1803 offers fs.gg.coord.cli 0.15.0, which is the published version'; } \
+  && ok "engine bump-offer: JSON tool-pin PR at the separate feed version is offer-current" \
+  || bad "engine offer must parse a JSON tool pin at the PR head" "rc=$rc: $out"
+
+# A malformed candidate head is unread evidence, never a process crash or a fabricated no-offer.
+printf '{not JSON\n' > "$FIX/FS-GG__FS.GG.Rendering/ref/renovate__fs.gg.coord.cli-0.x"
+out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'engine bump-offer.*JSONDecodeError'; } \
+  && ok "engine bump-offer: malformed JSON candidate head is receiver-local UNDETERMINED (exit 2), never a crash" \
+  || bad "malformed JSON offer evidence must be a typed no-verdict" "rc=$rc: $out"
+
+tool_manifest FS-GG/FS.GG.Rendering declared; offer_clear FS-GG/FS.GG.Rendering
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
