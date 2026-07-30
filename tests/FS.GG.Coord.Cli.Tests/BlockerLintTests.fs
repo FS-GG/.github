@@ -21,6 +21,19 @@ module BlockerLintTests =
         Assert.True((Client.blockedNoReasonVerdict IssueState.Closed BoardStatus.Blocked "" "").IsNone)
 
     [<Fact>]
+    let ``#1739 human park is noted only after every machine blocker resolves`` () =
+        let blocker state = { Ref = Some(ref' 2); Raw = ".github#2"; State = state }
+        let verdict body blockers =
+            Client.humanParkResolvedVerdict IssueState.Open BoardStatus.Blocked blockers body
+
+        Assert.Contains("human decision", verdict "Blocked on: human/decision" [ blocker BlockerClosed ] |> Option.defaultValue "")
+        Assert.Contains("human action", verdict "Blocked on: human/action" [ blocker BlockerMerged ] |> Option.defaultValue "")
+        Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerOpen ]).IsNone)
+        Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnknown ]).IsNone)
+        Assert.True((verdict "Blocked on: human/decision" [ blocker BlockerUnparseable ]).IsNone)
+        Assert.True((verdict "Blocked on: human/decision" []).IsNone)
+
+    [<Fact>]
     let ``BLOCKER-CYCLE reports each member of a genuine ring and ignores a chain`` () =
         let a, b, c = ref' 1, ref' 2, ref' 3
         let openBlocker target = { Ref = Some target; Raw = target.Short; State = BlockerOpen }

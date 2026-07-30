@@ -39,6 +39,8 @@ module Client =
 
     let blockedNoReasonVerdict = LintApplication.blockedNoReasonVerdict
 
+    let humanParkResolvedVerdict = LintApplication.humanParkResolvedVerdict
+
     let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
 
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
@@ -6323,6 +6325,7 @@ module Client =
                 scoped.Advisory |> Option.iter eprint
 
                 let items = scoped.Rows
+                let blockersByRef = Scan.blockerGraph rows |> Map.ofList
 
                 // "A WORKER COULD BE HANDED THIS ROW" — the population two rules share, spelled once.
                 //
@@ -6386,6 +6389,12 @@ module Client =
                 let humanBlockFindings (r: Scan.Row) (body: string) : LintFinding list =
                     blockedNoReasonVerdict r.State r.Status r.BlockedByRaw body
                     |> Option.map (mk "BLOCKED-NO-REASON" "error" r)
+                    |> Option.toList
+
+                let humanParkFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    Map.tryFind r.Ref blockersByRef
+                    |> Option.bind (fun blockers -> humanParkResolvedVerdict r.State r.Status blockers body)
+                    |> Option.map (mk "HUMAN-PARK-MACHINE-CLEARED" "note" r)
                     |> Option.toList
 
                 // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
@@ -6478,7 +6487,7 @@ module Client =
                         let isHumanBlockCandidate =
                             r.State = IssueState.Open
                             && r.Status = BoardStatus.Blocked
-                            && System.String.IsNullOrWhiteSpace r.BlockedByRaw
+                            && r.Status = BoardStatus.Blocked
 
                         let doneOpenNote =
                             if r.Status = BoardStatus.Done && r.State = IssueState.Open then
@@ -6520,6 +6529,7 @@ module Client =
                             let tsFindings = touchSetFindings r body
 
                             let hbFindings = humanBlockFindings r body
+                            let humanPark = humanParkFindings r body
 
                             let clsFindings = classFindings r body
 
@@ -6557,6 +6567,7 @@ module Client =
                                     (acc
                                      @ tsFindings
                                      @ hbFindings
+                                     @ humanPark
                                      @ clsFindings
                                      @ statusUnsetFindings
                                      @ severityUnsetFindings
