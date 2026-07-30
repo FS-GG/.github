@@ -62,9 +62,10 @@ module RuleSubsetTests =
         for body in bodies do
             let text = File.ReadAllText(Path.Combine(root, body))
             for code, (field, value) in writing do
-                Assert.Contains(code, text)
-                Assert.Contains($"{field}=", text)
-                Assert.Contains(value, text)
+                let row = text.Split('\n') |> Array.filter (fun line -> line.Contains(code))
+                Assert.Single row |> ignore
+                Assert.Contains($"{field}=", row[0])
+                Assert.Contains(if field = "Class" then "<declared>" else value, row[0])
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
     ///

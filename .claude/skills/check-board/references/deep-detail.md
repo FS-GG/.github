@@ -208,7 +208,7 @@ Each finding has a code, a ground truth, and a fix — or an explicit refusal to
 | `CLOSED-ISSUE-NOT-DONE` | **no live claim**, `state == CLOSED`, and `status != Done` | `set-field --batch <i> Status=Done` |
 | `DONE-STATUS-OPEN-ISSUE` | `status == Done` and `state == OPEN` | **ask** (§5) — is the work done, or was the flip premature? |
 | `OFF-BOARD-ISSUE` | open, **non-bot**, not `board:unlisted` issue in a rostered repo with no board item — see the note below, and §1's fourth read, which is the only read that can see it | `fsgg-coord add <i>` — idempotent; see the note below |
-| `BLOCKER-CLEARED` | **no live claim**, every blocker `closed` **or `merged`**, registry predicate `Agree`, no `Blocked on: human/...` sentinel, but `status == Blocked` | **report only** — promotion does not apply while either additional gate holds |
+| `BLOCKER-CLEARED` | **no live claim**, every blocker `closed` **or `merged`**, registry predicate `Agree`, no `Blocked on: human/...` sentinel, but `status == Blocked` | `set-field --batch <i> Status=Ready` |
 | `BLOCKER-UNKNOWN` | a blocker ref `scan` could not resolve | resolve over REST (§3), then board the blocker if it is open |
 | `BLOCKER-UNPARSEABLE` | a `Blocked by` token is not an issue ref | **ask** (§5) — what did the prose mean? `Blocked by` is text, so the answer can be written |
 | `STATUS-NOT-BLOCKED` | **no live claim**, an open blocker, but `status` is `Ready`/`Backlog` | `set-field --batch <i> Status=Blocked` |
