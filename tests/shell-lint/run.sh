@@ -143,6 +143,24 @@ OUT="$(cd "$d" && SHELLCHECK=/nonexistent/shellcheck bash "$GATE" 2>&1)"; RC=$?
   || bad "#266: a missing shellcheck must exit 2" "rc=$RC
 $OUT"
 
+# ---- 6b. FOLLOWING IS EVIDENCE, NOT AN INFO-LEVEL FINDING (#1719). -------------------------------
+d="$(newrepo sc1091)"; mkdir -p "$d/scripts/lib"
+printf '#!/usr/bin/env bash\n# shellcheck source-path=SCRIPTDIR\nsource lib/ok.sh\n' > "$d/scripts/uses.sh"
+printf '#!/usr/bin/env bash\nok() { :; }\n' > "$d/scripts/lib/ok.sh"
+git -C "$d" add -A
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#1719: a real source-path pragma follows its source and greens" \
+  || bad "#1719: source-path control must start green" "rc=$RC\n$OUT"
+sed -i '/^# shellcheck source-path=SCRIPTDIR$/d' "$d/scripts/uses.sh"
+run_gate "$d"
+[ "$RC" = 4 ] && printf '%s' "$OUT" | grep -q 'source-path=SCRIPTDIR' \
+  && ok "#1719: an unfollowed source is rc=4 with its source-path remedy at warning floor" \
+  || bad "#1719: SC1091 must red independently of SEVERITY=warning" "rc=$RC\n$OUT"
+sed -i '2i# shellcheck source-path=SCRIPTDIR' "$d/scripts/uses.sh"
+run_gate "$d"
+[ "$RC" = 0 ] && ok "#1719: restoring the pragma greens the same checkout again" \
+  || bad "#1719: restored source-path must green" "rc=$RC\n$OUT"
+
 # ---- 7. THE REAL TREE. Without this, every leg above is synthetic. --------------------------------
 run_gate "$REPO_ROOT"
 [ "$RC" = 0 ] \

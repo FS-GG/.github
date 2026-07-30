@@ -16,6 +16,7 @@
 # Consumers reaching the assertion through the reusable skill-union-assert.yml workflow do NOT need
 # this file — that path checks out the repo and runs scripts/skill-union-assert.sh directly.
 # ============================================================================================
+# shellcheck source-path=SCRIPTDIR
 # Reusable skill-union assertion — FS-GG/.github#111 (ADR-0014 P3.G3.1, epic #110).
 #
 # The one shared check that the agent-skill roots of a scaffolded product hold the SAME,

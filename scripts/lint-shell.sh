@@ -31,7 +31,10 @@
 # whose entire job is reading shell does not get to conflate them (#266):
 #
 #   0  every discovered file is clean
-#   1  shellcheck reported at least one finding
+#   1  shellcheck reported at least one warning/error finding
+#   4  shellcheck could not follow a sourced file (SC1091). Add a file-scoped
+#      `source-path=SCRIPTDIR` pragma to the sourcing script; this is distinct
+#      from a finding because part of the subject was not read.
 #   2  the gate could NOT RUN — no shellcheck, no git checkout. Not a verdict about the tree.
 #   3  the gate discovered ZERO shell files. Not a clean tree: a broken discovery. This repo
 #      demonstrably contains shell, so an empty subject means `is_shell` broke, and reporting green
@@ -135,6 +138,13 @@ echo "shell-lint: shellcheck $("$SHELLCHECK" --version | awk '/^version:/{print 
 # One invocation over the whole subject, NOT one per file: shellcheck's `source` resolution and its
 # exit code are both cleaner that way, and a parse failure is REPORTED (SC1009/SC1073 are `error`
 # severity, which any floor at or below `warning` includes) rather than swallowed as a clean file.
+log="$(mktemp)" || exit 2
+trap 'rm -f "$log"' EXIT
+"$SHELLCHECK" -x -S info -f gcc "${subject[@]}" >"$log" 2>&1 || true
+if grep -q 'SC1091' "$log"; then
+  echo "::error::shellcheck could not follow a sourced file (SC1091). Add # shellcheck source-path=SCRIPTDIR to the sourcing script."
+  exit 4
+fi
 rc=0
 "$SHELLCHECK" -x -S "$SEVERITY" -f gcc "${subject[@]}" || rc=$?
 
