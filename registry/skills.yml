@@ -89,7 +89,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-07-29"
+updated: "2026-07-30"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -273,7 +273,7 @@ skills:
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
   - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 9d6fcbfc3069c47fd9fa8d900fb11a88f61d9e35977b6888b018aebfd23c11c1, materializes-when: "false" }
-  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: fd639d56393465bef55b837aee6c861f96f980671dc3998895c7e95edde12259, materializes-when: "false" }
+  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 9f33de197a91ba0541e7277e6a5a39c7ff335f1729bcd47b939b69cf4b8cdcc9, materializes-when: "false" }
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-30** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-29** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-07-29** — RETIRE ADR-0022 §6 frozen-mirror classification (owner `.github`; [.github#1862](https://github.com/FS-GG/.github/issues/1862), [Rendering#1147](https://github.com/FS-GG/FS.GG.Rendering/issues/1147)): Rendering removed the four second copies, so the registry and Game producer rows no longer carry `mirrored`; the checker, autofix classification, workflows, tests, and live documentation no longer maintain a mirror-verdict or byte-comparison finding family. The Game bodies retain their existing authoritative owner, source, digest, and predicate. Removing the optional field does not change schema version 3 or its active scope vocabulary. registry = manifest = bytes.
