@@ -2148,7 +2148,7 @@ wire_sparse() {
     #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
     cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
     cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
-    cone-submodule) printf '%s          sparse-checkout: |\n            vendor/only-submodule\n' "$head" ;;
+    cone-submodule) printf '%s          sparse-checkout: |\n            vendor\n' "$head" ;;
     # --- CONE MODE ACROSS TWO SIBLINGS, NEITHER OF WHICH IS THE AUTHORITY (#1556). This is the pair
     #     #1529 left ungraded and #1556 closes: the audit holds neither tree, so rule (4) can only
     #     run by FETCHING the fetched repository's index from the API. Both sides are expressed,
@@ -2160,7 +2160,7 @@ wire_sparse() {
     # does, so it must be graded the same way. If the roster match were case-sensitive this would
     # silently fall off the roster and lose rule (4) over a capitalisation.
     cone-foreign-case) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: fs-gg/fs.gg.sdd\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
-    cone-foreign-rendering) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.Rendering\n          sparse-checkout: |\n            receiver-only/FromRendering.fs\n' ;;
+    cone-foreign-rendering) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.Rendering\n          sparse-checkout: |\n            receiver-only\n' ;;
     # OFF THE ROSTER. The roster is the boundary of what this audit may claim to know, so this is
     # UNGRADED and says so — not a finding, and not a no-verdict either: nothing FAILED.
     cone-offroster)    printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/Not.On.The.Roster\n          sparse-checkout: |\n            src/FS.GG.Contracts/Contracts.fs\n' ;;
@@ -2234,7 +2234,9 @@ bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
 # Drive sparse_tree_ensure with the roster deliberately unavailable after the normal roster read.
 # This models a future caller/reordering reaching the helper too early: it is a read failure (exit 2),
 # not the cheap off-roster boundary. Removing that guard changes this leg to an ungraded green.
-EMPTY_SPARSE_AUDIT="$WORK/repos-audit-empty-sparse-roster.sh"
+EMPTY_SPARSE_AUDIT="$WORK/scripts/repos-audit-empty-sparse-roster.sh"
+mkdir -p "$WORK/scripts/lib"
+cp "$HERE/../../scripts/lib/args.sh" "$WORK/scripts/lib/args.sh"
 sed 's/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/SPARSE_ROSTER=""/' \
   "$AUDIT" > "$EMPTY_SPARSE_AUDIT"
 AUDIT_SAVED="$AUDIT"; AUDIT="$EMPTY_SPARSE_AUDIT"
