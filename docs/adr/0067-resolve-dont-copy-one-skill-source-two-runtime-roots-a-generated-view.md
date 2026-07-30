@@ -974,10 +974,10 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
 > dissolve: resolve-don't-copy removes a repo committing the same skill twice; it does not remove
 > `.github` shipping a versioned package to seven receivers, so *"is receiver R's pin current?"* still
 > has to be asked by something. Retiring the sweep because a sequence ran out would remove the alarm
-> for the reason §9 put it last. The replacement question is
-> [`#1864`](https://github.com/FS-GG/.github/issues/1864), a decision for a human; **until it is
-> answered the sweep keeps running and keeps being repaired**, exactly as this record has said since it
-> was accepted.
+> for the reason §9 put it last. The keep decision was ratified on 2026-07-29 in
+> [`#1864`](https://github.com/FS-GG/.github/issues/1864): no replacement is commissioned, and **the
+> sweep keeps running and keeps being repaired**. A later retirement requires a new ADR that names a
+> replacement and mutation-proves that it detects a deliberately stale receiver pin.
 >
 > **What is NOT closed by the sequence ending.** `#1676` AC 6 — closing the board rows whose subject
 > retired — is [`#1875`](https://github.com/FS-GG/.github/issues/1875), split out because it is a sweep
@@ -993,6 +993,13 @@ re-derive them; retire the old apparatus **per repo**, with the freshness sweep 
   prediction: phase 4 sorted it (§9's phase-4 note) and only `skill-union-assert` and the second
   committed root actually retire — two narrow, three are untouched by this record entirely. Every one
   of them is still running today.**
+- The kit-pin freshness sweep is retained. Resolve-don't-copy removes duplicate committed skill
+  roots; it does not remove versioned package distribution, receiver pins, or the possibility that a
+  receiver silently stops advancing. The sweep therefore remains the authority for *"is receiver R's
+  pin current?"* No replacement is commissioned. Retiring it requires a later ADR with a named
+  replacement and a mutation demonstration that the replacement fires on a deliberately stale pin.
+  [Issue #1864](https://github.com/FS-GG/.github/issues/1864) is the completed decision history, not a
+  standing implementation tracker.
 - `skill-union-assert` needs **no code change** to run alongside the resolved layout: its existing
   `--roots` / `.agent-skill-roots` override — which ADR-0065 already provides for as a reviewed
   exception — accepts a two-root tree, measured green on phase 1's demonstration.
