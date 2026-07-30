@@ -543,6 +543,13 @@ tagarm() { # extra args appended
   printf '%s\trefs/tags/kit/v0.17.0\n' "$C2"
 } > "$TAGREFS"
 tagarm
+must_pass "the declared repository's https remote is accepted" "every tag resolves (peeled) to its artifact's commit"
+
+tagarm --remote "https://evil.example/FS-GG/.github.git"
+must_fail "a foreign --remote is refused before matching canned tags" "is not github.com/FS-GG/.github"
+
+tagarm --remote "git@github.com:FS-GG/.github.git"
+must_pass "the declared repository's ssh remote is accepted" "every tag resolves (peeled) to its artifact's commit"
 must_pass "every published version's tag resolves to its artifact's commit" \
   "every tag resolves (peeled) to its artifact's commit"
 
@@ -1292,6 +1299,10 @@ assert not any("continue-on-error" in ln for ln in directives), (
 # independent remedies, and a stale kit is the state most likely to coincide with tag surgery.
 tag_step = re.search(r"(?ms)^      - name: Do the release tags still resolve.*?\n(.*?)(?=^      - |\Z)", job)
 assert tag_step, "the tag-arm step is not where this assertion expects it"
+assert "--remote" not in tag_step.group(1), (
+    "the live tag arm supplies --remote, so it can substitute another repository's tags for this "
+    "repository's release evidence:\n" + tag_step.group(1)
+)
 assert "!cancelled()" in tag_step.group(1), (
     "the tag-arm step is not conditioned on !cancelled(), so a red from the staleness step above it "
     "masks a moved tag for as long as the staleness stands"
@@ -1313,7 +1324,7 @@ echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 # not cover a leg silently skipped because a variable it needed was empty, or an `if` whose python
 # heredoc exited 0 without asserting. So the count is asserted, and it must be updated deliberately
 # when legs are added — a fixture whose leg count nobody states is one that can quietly shrink.
-EXPECTED_LEGS=104
+EXPECTED_LEGS=107
 if [ "$pass" -ne "$EXPECTED_LEGS" ]; then
   echo "FAIL  expected $EXPECTED_LEGS passing legs, counted $pass — the fixture ran a different set" \
        "of legs than it was written to run. If you added or removed legs, update EXPECTED_LEGS in" \
