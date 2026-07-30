@@ -996,6 +996,39 @@ module BatchTests =
         Assert.Contains("no priority evidence: sorts last", refused)
 
     [<Fact>]
+    let ``#1985 explainRanking names the actual overlap holder category without inventing one`` () =
+        let refused (lines: string list) = lines |> List.find (fun l -> l.Contains "refused")
+
+        let live =
+            run
+                [ resv "FS.GG.SDD" [ "src/Live" ] (LiveClaim(WorkerId "wren-1985", ref 90, 60, None)) ]
+                [ item 1 [ "src/Live/File.fs" ] ]
+            |> explainRanking
+            |> refused
+
+        let batch =
+            run [] [ item 2 [ "src/Batch" ]; item 3 [ "src/Batch/File.fs" ] ]
+            |> explainRanking
+            |> refused
+
+        let unowned =
+            run [ resv "FS.GG.SDD" [ "src/Unowned" ] (Unowned(ref 91)) ] [ item 4 [ "src/Unowned/File.fs" ] ]
+            |> explainRanking
+            |> refused
+
+        let unknown =
+            run [ resv "FS.GG.SDD" [ "src/Unknown" ] UnknownHolder ] [ item 5 [ "src/Unknown/File.fs" ] ]
+            |> explainRanking
+            |> refused
+
+        Assert.Contains("held by wren-1985 on FS.GG.SDD#90", live)
+        Assert.Contains("blocked by batch member FS.GG.SDD#2", batch)
+        Assert.Contains("reserved by markerless In-progress item FS.GG.SDD#91", unowned)
+        Assert.Contains("holder unknown", unknown)
+        Assert.DoesNotContain("held by", unowned)
+        Assert.DoesNotContain("held by", unknown)
+
+    [<Fact>]
     let ``#1598 explainRanking is SILENT over an empty candidate set`` () =
         Assert.Empty(explainRanking (run [] []))
 

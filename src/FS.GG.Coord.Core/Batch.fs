@@ -613,16 +613,35 @@ module Batch =
                 let id = d.Item.Ref.Short
                 let inputs = Rank.explain d.Rank
 
+                // `OverlapsInFlight` tells the reader THAT a lane was unavailable; `CollidedWith`
+                // tells them WHO made it unavailable. Keep those facts together here rather than
+                // asking the operator to reconstruct the reservation from a rank-only refusal.
+                // `UnknownHolder` and an absent join remain explicit absences: inventing a worker or
+                // item would turn a conservative scheduler answer into a false instruction.
+                let overlapHolder =
+                    match d.Result, d.CollidedWith with
+                    | OverlapsInFlight _, Some(LiveClaim(WorkerId worker, holder, _, _)) ->
+                        $"held by %s{worker} on %s{holder.Short}"
+                    | OverlapsInFlight _, Some(BatchMember holder) -> $"blocked by batch member %s{holder.Short}"
+                    | OverlapsInFlight _, Some(Unowned holder) ->
+                        $"reserved by markerless In-progress item %s{holder.Short}"
+                    | OverlapsInFlight _, Some UnknownHolder -> "holder unknown"
+                    | OverlapsInFlight _, None -> "holder unavailable"
+                    | _ -> ""
+
                 match d.Result with
                 | Startable ->
                     match displacedBy result d.Item.Ref with
                     | 0 -> $"  ADMITTED %s{id} — %s{inputs}"
                     | n -> $"  ADMITTED %s{id} — %s{inputs}; displaced %d{n} lower-ranked candidate(s) from a lane"
-                | _ when Rank.isUnranked d.Rank ->
+                | OverlapsInFlight _ when Rank.isUnranked d.Rank ->
                     // SAID OUT LOUD, because it is the safety property AC1 turns on: an item with no
                     // priority evidence is not being punished, it simply has nothing to sort on, and a
                     // board of such items schedules exactly as it did before this existed.
+                    $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last); %s{overlapHolder}"
+                | _ when Rank.isUnranked d.Rank ->
                     $"  refused  %s{id} — %s{inputs} (no priority evidence: sorts last)"
+                | OverlapsInFlight _ -> $"  refused  %s{id} — %s{inputs}; %s{overlapHolder}"
                 | _ -> $"  refused  %s{id} — %s{inputs}")
 
         // Silent on an empty candidate set rather than printing a header over nothing.
