@@ -69,6 +69,15 @@ after Rendering removed the second copies (Rendering#1147). This checker now ans
 digest, and materialization-predicate questions. It deliberately ignores legacy producer-manifest
 fields until each producer removes them; it does not preserve another mirror classification.
 
+VERSIONED PACKAGE DELIVERY DOES NOT MAKE THIS DIGEST REDUNDANT. A package version proves that
+receivers installing that version receive its contents; it cannot prove that this central catalog's
+snapshot still names the current producer body. The producer's own drift guard detects a manifest
+that disagrees with its body. This check's distinct `digest-matches` finding detects the remaining
+class: a producer and its manifest have advanced consistently while `registry/skills.yml` remains at
+the earlier digest. That is catalog freshness, not a second receiver-byte comparison. The #1861
+measurement exercised it by mutating one declared digest against fresh producer checkouts: one
+`digest-matches` finding resulted, and `--write` restored the exact current snapshot.
+
 Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (which MUST carry a
 manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
 whose rows are ALL missing is still read, rather than being invisible for want of a row to name it.
