@@ -20,6 +20,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-07-30** — **publish-before-flip step 2: `fsgg-contracts` 7.5.0 → 7.5.1** (owner `sdd`; ref [.github#2004](https://github.com/FS-GG/.github/issues/2004)). `FS.GG.Contracts` source on `FS.GG.SDD@main` and both published feeds already serve 7.5.1. The GitHub Packages and nuget.org artifacts were independently compared after excluding only nuget.org's appended `.signature.p7s`; their normalized payloads are byte-identical. This registry-only flip advances `version` and `package-version` together, then regenerates the compatibility and architecture projections.
+
 - **2026-07-29** — **Known evidence gap: #1603's 2026-07-27 registry flip was not logged.** Deliberately not reconstructed after the fact: the original transaction did not record measured entry evidence. This note records the gap without inventing that evidence; [.github#1672](https://github.com/FS-GG/.github/issues/1672) now gates entry presence and dates for future changes.
 
 - **2026-07-29** — **`fsgg-contracts` 7.4.0 → 7.5.0 source and package flip** (owner `sdd`; refs [FS.GG.SDD#760](https://github.com/FS-GG/FS.GG.SDD/issues/760), [SDD PR #795](https://github.com/FS-GG/FS.GG.SDD/pull/795), [.github#1925](https://github.com/FS-GG/.github/issues/1925), FR-007). Records the additive `UnobservedSkillFiles` observation boundary and its two new verification entry points. The source and package versions move together only after release run `30435584376` published 7.5.0 to both feeds; no consumer migration or digest change is owed.
