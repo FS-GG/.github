@@ -5,7 +5,8 @@
 - **Status:** design proposal and gated roadmap; not implementation authorization
 - **Scope:** correlate Codex agent lifecycles with durable `fsgg-coord` claims, recover abandoned
   work safely, and reuse the same event/reconciliation substrate for heartbeat, CI, and dispatch
-- **Incident basis:** `.github#1843` / `.github#1863` during the 2026-07-30 drive-board run
+- **Incident basis:** `.github#1843` / `.github#1863` and `.github#1858` during the
+  2026-07-30 drive-board run
 - **Research basis:** current Codex documentation, Kubernetes controller and lease patterns,
   OpenTelemetry lifecycle modeling, GitHub Actions events, and the local coordination engine,
   protocol, tests, ADRs, and mutation evidence
@@ -740,6 +741,20 @@ Encode the `.github#1843` sequence as a regression scenario:
 7. under later recover policy, prove exact-generation release;
 8. prove the overlapping `.github#1863` wakeup occurs only after provider postcondition.
 
+Encode [`.github#1858`](https://github.com/FS-GG/.github/issues/1858) as a second regression
+scenario:
+
+1. start one runtime session and dispatch an executor that obtains a live claim;
+2. clear or replace the visible context while leaving the original executor alive;
+3. resume from prose that lacks the durable executor, claim-generation, and receiver-lease state;
+4. attempt direct branch, pull-request, and merge mutations from the resumed executor;
+5. prove the supervisor rejects those mutations before any receiver repository changes;
+6. prove the audit trail preserves both executor identities even when they share one worker id;
+7. prove receiver-scoped dispatch leases suppress duplicate side effects while the first executor is
+   live;
+8. require an explicit reattach or generation-changing handoff before the resumed context can
+   mutate.
+
 ## 16. Roadmap
 
 ### M0 — Contract, threat model, and incident fixture
@@ -799,9 +814,16 @@ polling; no expired claim is revived.
 duplicate merge, head-substitution, or false Done; no test treats successful adoption as proof of
 merge or successful merge as proof of Done.
 
-### M4 — CAS-fenced orphan release
+### M4 — CAS-fenced mutation and orphan release
 
 - Add provider claim-generation and expected-generation mutation support.
+- Close the `.github#1858` control-plane gap: persist executor identity across context replacement,
+  require explicit reattachment or a generation-changing handoff, and deny mutation authority to a
+  resumed executor that cannot prove the current executor, claim generation, and receiver lease.
+- Broker or otherwise fence branch, pull-request, merge, release, and finalization mutations so a
+  context cannot bypass supervision by invoking direct GitHub or Git operations.
+- Record executor identity separately from worker id and add receiver-scoped side-effect leases so
+  duplicate dispatch is visible and suppressed.
 - Implement observe-first policy for live but ownerless claims.
 - Permit automatic release only for runtime-owned, no-work-evidence claims under explicit policy.
 - Restrict mutation to one active supervisor and one authoritative registry domain; defer
@@ -809,9 +831,11 @@ merge or successful merge as proof of Done.
 - Re-read provider postconditions before waking overlapping work.
 - Add rollback switch to return instantly to observe-only mode.
 
-**Exit gate:** race, ABA, outage, and restart suites are green; canary evidence shows no false release;
-security review approves enabling mutation for a bounded repository cohort; topology enforcement
-refuses a second mutating supervisor.
+**Exit gate:** race, ABA, outage, restart, and `.github#1858` context-replacement suites are green;
+the second executor in the incident replay cannot create a branch, open or merge a pull request,
+release a claim, or finalize an item before explicit reattachment or handoff; canary evidence shows
+no false release; security review approves enabling mutation for a bounded repository cohort;
+topology enforcement refuses a second mutating supervisor.
 
 ### M5 — Budget-aware staggered dispatch
 
@@ -841,6 +865,9 @@ semantics; operators can explain every automated mutation from retained receipts
 
 - Add read-only adapters for producer manifests, `registry/skills.yml`, package releases, receiver
   pins, materialization receipts, and receiver CI.
+- Treat [`.github#1864`](https://github.com/FS-GG/.github/issues/1864)'s retained kit-pin freshness
+  sweep as an existing distribution-staleness authority: observe its receipts, but do not replace or
+  retire it unless a later ADR names and mutation-proves a replacement.
 - Derive a per-skill/per-capability rollout graph from existing authorities, including catalog-only
   rows and delivery paths that do not use a package pin.
 - Prove restart recovery and partial-rollout reporting in observe mode.
