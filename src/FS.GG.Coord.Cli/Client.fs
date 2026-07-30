@@ -37,6 +37,10 @@ module Client =
     /// test can drive every case the core can produce.
     let badTouchSetDetail = LintApplication.badTouchSetDetail
 
+    let blockedNoReasonVerdict = LintApplication.blockedNoReasonVerdict
+
+    let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
+
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
     let classVerdict = LintApplication.classVerdict
@@ -6277,19 +6281,9 @@ module Client =
                 // who had a machine-readable way to say what they meant and used neither. An item with a
                 // real `Blocked by` ref, or one carrying the sentinel, is silent here.
                 let humanBlockFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if
-                        r.State = IssueState.Open
-                        && r.Status = BoardStatus.Blocked
-                        && System.String.IsNullOrWhiteSpace r.BlockedByRaw
-                        && (HumanBlock.parse body).IsNone
-                    then
-                        [ mk
-                              "BLOCKED-NO-REASON"
-                              "error"
-                              r
-                              "Status is Blocked with an EMPTY `Blocked by` and no `Blocked on: human/...` sentinel — nothing records what holds it, so a deliberate human park reads identically to a filing error (#1103). Name the blocker (`set-field <issue> 'Blocked by' <ref>`), or declare the human-block sentinel in the body: `Blocked on: human/decision` (unstartable until a human chooses) or `Blocked on: human/action` (startable once a human action lands)." ]
-                    else
-                        []
+                    blockedNoReasonVerdict r.State r.Status r.BlockedByRaw body
+                    |> Option.map (mk "BLOCKED-NO-REASON" "error" r)
+                    |> Option.toList
 
                 // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
                 // own text does not class it — either because it says nothing about HOW BAD it is (no
@@ -6474,22 +6468,12 @@ module Client =
                 // rows already scanned, with no extra read. Error severity: a ring can NEVER clear on its
                 // own — no lease, no merge frees it — so it is not a note a human might adjudicate but a
                 // deadlock a human must break.
-                let byRef = items |> List.map (fun r -> r.Ref, r) |> Map.ofList
-
                 let cycleFindings =
-                    Blockers.cycles (Scan.blockerGraph items)
-                    |> List.collect (fun ring ->
-                        let members = ring |> List.map (fun r -> r.Short) |> String.concat ", "
-
-                        ring
-                        |> List.choose (fun r ->
-                            Map.tryFind r byRef
-                            |> Option.map (fun row ->
-                                mk
-                                    "BLOCKER-CYCLE"
-                                    "error"
-                                    row
-                                    $"on a `Blocked by` CYCLE that can NEVER become startable — no lease, no merge and no waiting frees it; a human must break one edge. The ring: %s{members}")))
+                    let byRef = items |> List.map (fun row -> row.Ref, row) |> Map.ofList
+                    Scan.blockerGraph items
+                    |> blockerCycleVerdicts
+                    |> List.choose (fun (ref, detail) ->
+                        Map.tryFind ref byRef |> Option.map (fun row -> mk "BLOCKER-CYCLE" "error" row detail))
 
                 match classify [] [] items with
                 | Error e -> fail e
