@@ -544,6 +544,8 @@ def main(argv: list[str]) -> int:
             if verdict.full_clone:
                 full_clones += 1
                 continue
+            if verdict.resolution_reason:
+                unresolved.append(f"{verdict.where}: {verdict.resolution_reason}")
             if verdict.refusal:
                 refusals.append(verdict.refusal)
                 continue
@@ -559,8 +561,6 @@ def main(argv: list[str]) -> int:
                 )
             # Per-STEP, never the global accumulator: a clean step after a dirty one must still print
             # its `ok` line, or the reader cannot tell "graded and clean" from "never reached".
-            if verdict.resolution_reason:
-                unresolved.append(f"{verdict.where}: {verdict.resolution_reason}")
             if not verdict.findings and verdict.enumeration_checked:
                 mode = "cone" if verdict.cone else "non-cone"
                 print(f"  ok   {verdict.where:<52} {mode:<8} {' '.join(verdict.patterns)}")

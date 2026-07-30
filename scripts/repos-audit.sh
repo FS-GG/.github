@@ -930,7 +930,7 @@ spec.loader.exec_module(rule)
 # AttributeError from somewhere in the loop. It fails CLOSED: the caller records a refusal and the
 # audit exits 3, because a rule that cannot be loaded must never round to "no repository enumerates
 # anything" across ten repositories.
-BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern",
+BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern", "grade_document",
             "origin_repository", "tracked_paths", "GateError", "SparseRefusal")
 missing = [name for name in BORROWED if not hasattr(rule, name)]
 if missing:
