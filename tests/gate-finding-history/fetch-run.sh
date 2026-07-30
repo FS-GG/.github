@@ -6,9 +6,9 @@ python3 "$ROOT/tests/gate-finding-history/fetch-transcript-server.py" "$ROOT/tes
 sleep 0.2
 GITHUB_API_URL="http://127.0.0.1:$PORT" GITHUB_TOKEN=fixture python3 "$ROOT/scripts/check-gate-finding-history.py" --fetch --repo FS-GG/fixture --out "$WORK/corpus.json"
 jq -e '.repos[0].workflows[0] |
-  .totalRuns == 12 and .redRunCount == 3 and
+  .totalRuns == 12 and .evaluatedRuns == 12 and .redRunCount == 3 and
   ([.redRuns[].evidence] | sort) == ["ambiguous", "fallover", "finding"]' "$WORK/corpus.json" >/dev/null
-grep -Fq 'status=failure' "$WORK/queries"; grep -Fq 'status=timed_out' "$WORK/queries"
+grep -Fq 'status=failure' "$WORK/queries"; grep -Fq 'status=timed_out' "$WORK/queries"; grep -Fq 'status=success' "$WORK/queries"
 echo 'ok - recorded transcript drives red-run evidence through jobs and annotations'
 kill "$PID"; wait "$PID" 2>/dev/null || true
 GFH_EXPIRED=1 python3 "$ROOT/tests/gate-finding-history/fetch-transcript-server.py" "$ROOT/tests/gate-finding-history/fetch-transcript.json" "$PORT" >"$WORK/expired-queries" 2>&1 & PID=$!

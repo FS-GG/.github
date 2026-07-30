@@ -25,6 +25,7 @@ class Handler(BaseHTTPRequestHandler):
             params = parse_qs(query)
             status = params.get('status', [''])[0]
             reply = dict(doc['failureRuns'] if status == 'failure' else
+                         {'total_count': doc['runs']['total_count'] - doc['failureRuns']['total_count'], 'workflow_runs': []} if status == 'success' else
                          {'total_count': 0, 'workflow_runs': []} if status == 'timed_out' else
                          doc['runs'])
             if os.environ.get('GFH_ZERO_RUNS'):
