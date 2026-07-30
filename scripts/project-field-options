@@ -312,9 +312,9 @@ def compare_resolver(roster: Path, resolver: Path) -> None:
         text = resolver.read_text()
     except OSError as exc:
         raise Refused(f"cannot read embedded repo resolver {resolver}: {exc}") from exc
-    match = re.search(r"let resolveRepo \(raw: string\).*?=\s*(.*?)\n\s*/// An owner \+ repo", text, re.DOTALL)
+    match = re.search(r"let resolve \(raw: string\).*?=\s*(.*?)\n\s*$", text, re.DOTALL)
     if not match:
-        raise Refused("could not isolate Options.resolveRepo; refusing a partial resolver check")
+        raise Refused("could not isolate RepoScope.resolve; refusing a partial resolver check")
     actual = dict(re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*"([^"]+)"', match.group(1), re.MULTILINE))
     expected = {
         repo_id: full.split("/", 1)[1]
@@ -613,7 +613,7 @@ def parse_args() -> argparse.Namespace:
     check = subs.add_parser("check", help="gate a field's options against its authority (--field)")
     common(check)
     check.add_argument("--roster", default="registry/repos.yml", help="Repo Scope authority; unused by closed-vocabulary fields")
-    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs", help="Repo Scope only; unused by closed-vocabulary fields")
+    check.add_argument("--resolver", default="src/FS.GG.Coord.Core/RepoScope.fs", help="Repo Scope only; unused by closed-vocabulary fields")
     source = check.add_mutually_exclusive_group()
     source.add_argument("--snapshot", help="check an integrity-verified captured field instead of live GitHub")
     source.add_argument("--schema", help="check the bounded options table in board-schema.md (CI/offline)")
