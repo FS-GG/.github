@@ -535,6 +535,13 @@ own item, and **no run of an on-demand materialize has been observed on any rece
 > accepted state, not an omission; pinning was considered and DECLINED. `@main` is the only moving
 > ref accepted — any other is a finding.**
 
+> **DECISION ([#1787](https://github.com/FS-GG/.github/issues/1787), 2026-07-30). Hub-owned data is
+> not a receiver PR's subject. `contract-coherence.yml` keeps its published `coherence` job id and
+> required receiver context, but its receiver arm explicitly abstains. The two remaining assertions
+> — registry schema and shared-props XML well-formedness — execute only in `.github`'s own required
+> `coherence.yml` call. A hub mutation reds the owning hub PR; it cannot move a byte-identical
+> Governance or Net verdict.**
+
 The alternative was live and unowned for as long as this page has existed, and #1772 filed #1783 to
 end that. What follows is what was measured, and what the acceptance does and does not buy.
 
@@ -609,28 +616,24 @@ and `@main` is not a pinned ref. What is true instead, and it is weaker:
 Two things hold that up, and both are mechanical rather than cultural:
 
 * **`FS-GG/.github@main` is protected**, and requires `contract-coherence / coherence`, `projection`,
-  `roster-closure`, `drift` and `reconcile`. The hub data these three callees read at `main` is what
-  the hub's own required gate validates: `contract-coherence.yml` grades `registry/dependencies.yml`
-  and `dist/dotnet/*.props` out of the hub checkout, and both are subjects of the hub's own
-  `contract-coherence / coherence`.
+  `roster-closure`, `drift` and `reconcile`. Hub-owned registry and props data is graded only by that
+  hub-local `contract-coherence / coherence` run (#1787); the receiver arm does not consume it.
 * **The context names cannot move silently.** `reusable-job-id-coherence.yml` makes renaming or
   deleting a published context a loud, opt-out-able breaking change on the PR that would cause the
   outage — the deadlock half of this page.
 
 ### The residual, which is real
 
-A hub commit that passes the hub's own gates can still change a receiver's verdict on byte-identical
-content. That is #1584's shape and it is not closed by this decision; it is *bounded* by it. Per
-callee:
+A hub commit that passes the hub's own gates can still change the **program** a receiver executes on
+byte-identical content. That is the accepted #1783 residual. It must not also move a foreign
+**comparand** the receiver cannot fix. Per callee:
 
 * `coordination-coherence.yml` — the **comparand** is no longer the hub: #1584 moved it to the
   receiver's own pinned `FS.GG.Kit` package. What still moves is the *verifier program* and the
   roster. Smallest residual of the three, and the one that already paid for its lesson.
-* `contract-coherence.yml` — the largest. It reads hub **data** at `main` and grades it, so a hub
-  commit to `registry/dependencies.yml` or `dist/dotnet/*.props` moves the required
-  `contract-coherence / coherence` verdict in FS.GG.Governance and FS.GG.Net directly. This is
-  #1584's shape, unmigrated, on a required context, in two repos —
-  [#1787](https://github.com/FS-GG/.github/issues/1787).
+* `contract-coherence.yml` — **program/context only on receivers**. #1787 removed hub data from the
+  receiver path while preserving the published `coherence` job id. Registry schema and shared-props
+  XML assertions remain required on `.github`'s own PRs and pushes, where their subject is owned.
 * `lock-range-coherence.yml` — program only (`sparse-checkout: /scripts/`); the comparand is the
   caller's own tree.
 
