@@ -2413,10 +2413,30 @@ print("\n".join(out))
 PY
 )
 
+coord_build_config_grade() {
+  local json
+  json="$(yaml_text2json)" || return 1
+  python3 -c '
+import json, sys
+authority = sys.argv[1]
+d = json.load(sys.stdin)
+if not isinstance(d, dict) or not isinstance(d.get("jobs"), dict):
+    raise SystemExit(2)
+for job in d["jobs"].values():
+    if not isinstance(job, dict): raise SystemExit(2)
+    uses = str(job.get("uses", ""))
+    with_ = job.get("with") or {}
+    if not isinstance(with_, dict): raise SystemExit(2)
+    if uses.split("@", 1)[0] == authority + "/.github/workflows/coordination-coherence.yml" and with_.get("include-build-config") is True:
+        raise SystemExit(0)
+raise SystemExit(1)
+' "$AUTHORITY" <<< "$json"
+}
+
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
-  local su_verdict su_any_call=0 su_both=0
+  local su_verdict su_any_call=0 su_both=0 build_config_graded=0
   : > "$CALLS_ERR_FILE"
 
   files="$(list_workflows "$repo")" || rc=$?
@@ -2469,6 +2489,12 @@ repo_calls() {
     # protection reads per receiver: the workflow bytes are already in hand.
     mkdir -p "$ABSENTOK_DIR/${repo//\//__}"
     printf '%s' "$text" > "$ABSENTOK_DIR/${repo//\//__}/$f"
+    grade_rc=0; coord_build_config_grade <<< "$text" || grade_rc=$?
+    if [ "$grade_rc" -eq 0 ]; then build_config_graded=1
+    elif [ "$grade_rc" -gt 1 ]; then
+      printf 'could not determine: coordination-coherence caller YAML has an unsupported document/job/with shape' > "$CALLS_ERR_FILE"
+      return 2
+    fi
     # Only a call to the AUTHORITY's copy counts. A repo's own local `uses: ./.github/workflows/x.yml`
     # is deliberately NOT matched: .github runs contract-coherence.yml on itself exactly that way, and
     # running your own workflow is not participating in somebody else's fabric. Matching it would make
@@ -2616,6 +2642,8 @@ repo_calls() {
 
     [ "$build_config_opted_in" -eq 0 ] || echo "materializer-opt-in:build-config"
     [ "$build_config_enforced" -eq 0 ] || echo "materializer-enforcement:build-config"
+    [ "$build_config_opted_in" -eq 0 ] || echo "build-config-materializes"
+    [ "$build_config_graded" -eq 0 ] || echo "build-config-graded"
     if [ "$build_config_opted_in" -eq 1 ] && [ "$build_config_enforced" -eq 1 ]; then
       echo "materializer:build-config"
     fi
@@ -2812,6 +2840,8 @@ done <<< "$received"
 # --- what the repos ACTUALLY adopt ---------------------------------------------------------------
 all_repos="$(all_repos_list)" \
   || die "cannot enumerate the roster — repos.sh list --all failed. The roster is unreadable, which is not the same as empty."
+BC_COORD_RECEIVERS="$(roster_list "$KIT_CAP")" \
+  || die "cannot enumerate $KIT_CAP receivers for the build-config coherence sweep."
 # THE TREE FETCHER'S BOUNDARY (#1556), assigned here because this is where the roster is first read
 # and nowhere else knows it. Lowercased once, so the membership test matches GitHub's own
 # case-insensitive resolution of `owner/name` — a receiver that writes `FS-GG/fs.gg.sdd` fetches the
@@ -2819,7 +2849,7 @@ all_repos="$(all_repos_list)" \
 # give up rule (4) over a capitalisation.
 SPARSE_ROSTER="$(printf '%s\n' "$all_repos" | tr '[:upper:]' '[:lower:]')"
 
-audited=0; wired=0; gaps=0; drift=0; undetermined=0
+audited=0; wired=0; gaps=0; drift=0; undetermined=0; build_config_materialized=0; build_config_graded=0
 # The sparse sweep's own denominators (#1529, criterion 5). They are counted HERE, in the parent,
 # because "did this repo's workflow walk complete?" is the parent's answer — repo_calls runs in a
 # subshell and its rc is the only thing that crosses back. `rostered` is what the sweep was asked to
@@ -2850,6 +2880,17 @@ while IFS= read -r repo; do
       fi
     done
     continue
+  fi
+  if grep -qxF "$repo" <<< "$BC_COORD_RECEIVERS"; then
+  grep -qxF 'build-config-materializes' <<< "$calls" && build_config_materialized=$((build_config_materialized + 1 ))
+  grep -qxF 'build-config-graded' <<< "$calls" && build_config_graded=$((build_config_graded + 1 ))
+  if grep -qxF 'build-config-materializes' <<< "$calls" && ! grep -qxF 'build-config-graded' <<< "$calls"; then
+    echo "::error::repos-audit: $repo materializes build-config but its coordination-coherence caller does not set include-build-config: true — Directory.Build.props is written and ungraded (#1844)."
+    gaps=$((gaps + 1))
+  elif grep -qxF 'build-config-graded' <<< "$calls" && ! grep -qxF 'build-config-materializes' <<< "$calls"; then
+    echo "::error::repos-audit: $repo grades build-config in coordination-coherence but does not materialize it — the caller and receiver project disagree (#1844)."
+    gaps=$((gaps + 1))
+  fi
   fi
   sparse_repos=$((sparse_repos + 1))
 
@@ -2930,6 +2971,8 @@ while IFS= read -r repo; do
     fi
   done
 done <<< "$all_repos"
+
+echo "repos-audit: build-config coherence (#1844) — $build_config_materialized receiver(s) materialize Directory.Build.props; $build_config_graded caller(s) grade it; difference $(( build_config_materialized - build_config_graded ))."
 
 # --- repository_dispatch graph (#1919) -----------------------------------------------------------
 # `POST /dispatches` answers 204 even when no workflow consumes the event.  Unlike a capability,
