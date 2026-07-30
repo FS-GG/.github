@@ -2237,6 +2237,8 @@ bash_buffer="$(grep -c '^    if \[ -z "\$wanted" \]; then$' "$AUDIT")"
 EMPTY_SPARSE_AUDIT="$WORK/scripts/repos-audit-empty-sparse-roster.sh"
 mkdir -p "$WORK/scripts/lib"
 cp "$HERE/../../scripts/lib/args.sh" "$WORK/scripts/lib/args.sh"
+cp "$HERE/../../scripts/check-sparse-checkout-closure.py" "$WORK/scripts/check-sparse-checkout-closure.py"
+cp "$HERE/../../scripts/lib/sparse.py" "$WORK/scripts/lib/sparse.py"
 sed 's/^SPARSE_ROSTER="$(printf '\''%s\\n'\'' "\$all_repos" | tr '\''\[:upper:\]'\'' '\''\[:lower:\]'\'')"$/SPARSE_ROSTER=""/' \
   "$AUDIT" > "$EMPTY_SPARSE_AUDIT"
 AUDIT_SAVED="$AUDIT"; AUDIT="$EMPTY_SPARSE_AUDIT"
