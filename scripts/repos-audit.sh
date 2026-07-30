@@ -173,6 +173,8 @@ die() { echo "::error::repos-audit: $*" >&2; exit 3; }
 # die, which it uses.
 # shellcheck source=lib/args.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/args.sh"
+# shellcheck source=lib/repos-audit-sparse.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/repos-audit-sparse.sh"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -3586,48 +3588,7 @@ fi
 # Read back from the ledger, because the grading happened inside a subshell. `grep -c` exits 1 on no
 # match, which `set -e` would take as fatal, so every count is guarded — and the guard must not
 # swallow the number, which is why it is `|| true` on the pipeline rather than a conditional.
-sparse_count() { grep -cE "^$1"$'\t' "$SPARSE_FILE" 2>/dev/null || true; }
-sparse_findings="$(sparse_count finding)"
-sparse_refusals="$(sparse_count refusal)"
-sparse_workflows="$(sparse_count workflow)"
-sparse_unparseable="$(sparse_count unparseable)"
-sparse_noverdict="$(sparse_count noverdict)"
-IFS=' ' read -r sp_cross sp_graded sp_patterns sp_clones sp_ungraded sp_rule4 sp_rule4_subjects <<< "$(
-  awk -F'\t' '$1 == "counts" { c += $2; g += $3; p += $4; f += $5; u += $6; r += $7; s += $8 }
-              END { printf "%d %d %d %d %d %d %d", c, g, p, f, u, r, s }' "$SPARSE_FILE")"
-
-# Findings and refusals are ::error:: annotations — the operator reads the annotation list, not the
-# log. The UNGRADED and note lines are not: they say what was NOT asserted, which is information, not
-# a defect in anyone's tree.
-while IFS=$'\t' read -r kind message; do
-  case "$kind" in
-    finding)     echo "::error::repos-audit: sparse-checkout closure — $message" ;;
-    refusal)     echo "::error::repos-audit: sparse-checkout closure REFUSED a shape it cannot grade — $message" ;;
-    # An ::error:: because it drives the run to exit 2, exactly as an unreadable receiver does. It is
-    # NOT a finding about anyone's workflow — the annotation says so — but a read that failed and was
-    # counted as one must be as visible as the thing it prevented us from seeing (#266).
-    noverdict)   echo "::error::repos-audit: sparse-checkout closure could NOT read a rostered repository's git tree, so rule (4) did not run — $message" ;;
-    ungraded)    echo "  UNGRADED $message" ;;
-    unresolved)  echo "  note $message" ;;
-    unparseable) echo "  note $message: this workflow would not parse, so GitHub cannot run it and it cannot fetch anything — not graded" ;;
-  esac
-done < "$SPARSE_FILE"
-
-# The sweep NEVER claims a green it did not earn. When it found no cross-repo checkout at all it says
-# that it asserted nothing, rather than reporting the same "clean" a real audit would print — the
-# distinction #1522's own gate draws, and the one criterion (3) of #1529 asks for. The repository
-# count is in both spellings, so a roster that silently collapsed is legible either way.
-if [ "$sp_cross" -eq 0 ]; then
-  echo "repos-audit: sparse-checkout closure (#1529) — read $sparse_workflows workflow(s) across $sparse_repos of $rostered rostered repo(s) ($sparse_unread NOT audited, $sparse_unparseable unparseable) and found NO cross-repo \`actions/checkout\` at all. NOTHING was asserted about this class; that is not a clean bill."
-else
-  echo "repos-audit: sparse-checkout closure (#1529) — $sp_patterns sparse pattern(s) over $sp_graded of $sp_cross cross-repo checkout(s) fully graded, in $sparse_workflows workflow(s) across $sparse_repos of $rostered rostered repo(s) ($sparse_unread NOT audited, $sparse_unparseable unparseable); $sp_clones full clone(s) not graded; $sp_ungraded step(s) UNGRADED; $sparse_findings finding(s), $sparse_refusals refusal(s)."
-  # #1556 criterion 3. The old sentence here made a BLANKET claim — "ran only for checkouts of the ONE
-  # tree this audit holds" — which is no longer true and, more to the point, was never checkable: it
-  # said what the audit could reach in principle, not what it reached on THIS run. A fraction is,
-  # and it moves when the reach does. `sp_rule4_subjects` is every graded cross-repo step; a run
-  # where the two numbers differ has the difference named above, one line per step, with its reason.
-  echo "repos-audit: sparse-checkout closure — rule (4), do the named directories exist?, ran for $sp_rule4 of $sp_rule4_subjects graded cross-repo step(s): the tree this audit holds, plus every ROSTERED repository whose git tree the API served (#1556). Every step it could not run for is named above with the reason; in cone mode that leaves the step UNGRADED, never ok."
-fi
+repos_audit_sparse_report "$SPARSE_FILE" "$sparse_repos" "$rostered" "$sparse_unread"
 
 # Undetermined outranks a gap: this run is not a verdict, so it must not be read as one. Any genuine
 # gap found alongside it was still printed above as its own ::error::, and survives the next run.
