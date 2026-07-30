@@ -1,7 +1,10 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System
 open System.Reflection
 open System.Text.Json
+open System.IO
+open Microsoft.FSharp.Reflection
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Cli
@@ -33,6 +36,41 @@ open FS.GG.Coord.Cli
 /// property that a wrong judgement cannot ALSO become a contradiction: whatever a subset states, the
 /// canonical doc states identically.
 module RuleSubsetTests =
+
+    [<Fact>]
+    let ``#1623 every writing ChoreKind is named by check-board, with a non-vacuous floor`` () =
+        let cases = FSharpType.GetUnionCases typeof<Chore.ChoreKind>
+        Assert.NotEmpty cases
+        let ruleId = typeof<Chore.ChoreKind>.GetProperty("RuleId")
+        let write = typeof<Chore.ChoreKind>.GetProperty("Write")
+        let rec sample (t: System.Type) : obj =
+            if t = typeof<string> then box "sample"
+            elif FSharpType.IsUnion t then
+                let c = FSharpType.GetUnionCases t |> Array.head
+                FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType))
+            elif t.IsValueType then System.Activator.CreateInstance t
+            else null
+        let writing =
+            cases
+            |> Array.choose (fun c ->
+                let value = FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType)) :?> Chore.ChoreKind
+                match write.GetValue(value) with
+                | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
+                | _ -> None)
+        Assert.NotEmpty writing
+        let rec repoRoot (dir: DirectoryInfo) =
+            if File.Exists(Path.Combine(dir.FullName, ".git")) || Directory.Exists(Path.Combine(dir.FullName, ".git")) then dir.FullName
+            else repoRoot dir.Parent
+        let root = repoRoot (DirectoryInfo(AppContext.BaseDirectory))
+        let bodies = [ ".claude/skills/check-board/references/deep-detail.md"; ".agents/skills/check-board/references/deep-detail.md" ]
+        for body in bodies do
+            let text = File.ReadAllText(Path.Combine(root, body))
+            for code, (field, value) in writing do
+                let row = text.Split('\n') |> Array.filter (fun line -> line.StartsWith("|") && line.Contains($"`{code}`"))
+                Assert.Single row |> ignore
+                Assert.Contains($"{field}=", row[0])
+                let expectedValue = if field = "Class" then "<declared>" else value
+                Assert.Contains(expectedValue, row[0])
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
     ///

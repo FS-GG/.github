@@ -345,7 +345,7 @@
          (#1886). Its columns and kind vocabulary are consumed by receiver CI, so contract changes
          must be deliberate and published before any receiver pin advances. -->
     <!-- 0.23.0 -> 0.23.1: corrected operator guidance; no manifest contract or runtime behavior changes. -->
-    <Version>0.23.2</Version>
+    <Version>0.23.3</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
