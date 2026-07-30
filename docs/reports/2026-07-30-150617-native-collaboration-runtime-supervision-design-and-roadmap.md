@@ -521,6 +521,68 @@ Periodic drift audits reconcile runtime registry records against provider claims
 Scheduled tasks can invoke audits, but the durable registry and provider CAS remain the source of
 recovery safety.
 
+### 10.6 Skill propagation and synchronization
+
+A permanent runtime is also a good coordinator for skill propagation, provided it supervises the
+existing delivery fabric instead of becoming another source of skill bytes.
+
+The current system already separates several authoritative fabrics. They are not one universal
+pipeline:
+
+- producer skill manifests and canonical `SKILL.md` bodies feed the
+  [`registry/skills.yml`](../../registry/skills.yml) catalog, reconciled by the detection/response
+  pair `skill-registry-coherence` and `skill-registry-autofix`;
+- some skills are catalog/gate surfaces and require no receiver delivery;
+- product/process skills can flow through their owning producer, scaffold, or generated-view
+  machinery;
+- driver skills can flow through their driver package and consumers;
+- coordination-kit content flows through `FS.GG.Kit`, receiver pins, `kit-materialize` /
+  `coordination-sync`, and receiver gates.
+
+The runtime must derive an applicable delivery graph per skill, capability, and receiver from the
+live registries and manifests. It must not force every skill through a package pin or coordination-kit
+materialization stage.
+
+The permanent runtime can add a durable rollout record across those stages:
+
+| Rollout state | Runtime responsibility | Existing authority |
+|---|---|---|
+| Source changed | Correlate producer commit and affected skill ids | Producer manifest/body |
+| Registry pending | Observe or request the existing reconciliation path | `registry/skills.yml` validators/autofix |
+| Delivery graph derived | Select only applicable producer/package/scaffold/view/kit edges | Skill registry, producer manifests, capability roster |
+| Artifact owed, if applicable | Track publish prerequisite and immutable digest/version | Owning release workflow and package registry |
+| Receiver pending, if applicable | Build the intended receiver set for that delivery edge | Applicable roster, manifest, scaffold, or consumer declaration |
+| Receiver in flight | Stagger the authorized workflow for that edge | Existing producer, Renovate, materialize, sync, or scaffold workflow |
+| Receiver verifying | Track the edge's required head, checks, and supersession | That receiver/delivery contract |
+| Edge current | Retain the authority-specific postcondition receipt | Applicable digest, package, pin, generated view, committed bytes, and/or CI |
+| Blocked/unknown | Stop that branch, preserve the reason, and escalate | Typed workflow/provider verdict |
+
+This turns a cross-repository propagation into a resumable state machine. After a runtime restart it
+can answer which receivers are current, pending, in flight, blocked, superseded, or unverifiable,
+without re-copying files or guessing from the age of a pull request. It can also stagger dispatch to
+respect API budgets and avoid updating every receiver simultaneously.
+
+The safety boundary is strict:
+
+- the runtime never hand-copies a skill or synthesizes a registry digest;
+- publish-before-flip remains mandatory on edges that publish an artifact;
+- artifacts are addressed by immutable version and digest, not “latest”;
+- an edge is current only when its applicable authority's required postconditions agree; a
+  coordination-kit receiver needs its pin/materialized bytes/gates, while a catalog-only row does not;
+- workflow dispatch, pull-request creation, merge, or rollback requires the same explicit authority
+  it requires today;
+- an existing workflow that already reconciles or merges keeps that ownership—the runtime observes
+  its receipt rather than racing it with a second implementation;
+- partial rollout is a first-class state, not automatically “fixed” by rolling every receiver
+  forward or backward;
+- producer, registry, package, pin, materialization, and CI unknowns all fail closed.
+
+This reuse should begin after the core supervision registry and reconciliation semantics are proven.
+It can share the event journal, queue, idempotency keys, capability discovery, budget backpressure,
+and telemetry, but it needs separate skill-delivery provider adapters and rollout policy. Claim
+cleanup and skill propagation should not share mutation enablement merely because they share a
+runtime.
+
 ## 11. Safety invariants
 
 1. **A timer never proves abandonment.**
@@ -775,6 +837,28 @@ claim-attempt budget; “no work” and “could not read work” remain distinc
 **Exit gate:** multi-instance chaos testing converges; upgrades preserve registry and generation
 semantics; operators can explain every automated mutation from retained receipts.
 
+### M7 — Optional skill-propagation supervision
+
+- Add read-only adapters for producer manifests, `registry/skills.yml`, package releases, receiver
+  pins, materialization receipts, and receiver CI.
+- Derive a per-skill/per-capability rollout graph from existing authorities, including catalog-only
+  rows and delivery paths that do not use a package pin.
+- Prove restart recovery and partial-rollout reporting in observe mode.
+- Add event-driven wakeups with periodic audit fallback.
+- Stagger only already-authorized registry, release, pin, materialize, and receiver-PR workflows;
+  never replace their validation or merge gates.
+- Record immutable source commit, registry digest, artifact version/digest, receiver head, and final
+  CI/postcondition for every leg.
+- Add per-stage and per-receiver kill switches so claim supervision can remain enabled while skill
+  propagation returns to observe-only.
+
+**Entry gate:** M6 registry durability, provider capability negotiation, leadership, and audit
+retention are proven; the skill-delivery owners approve each adapter's authority boundary.
+
+**Exit gate:** a canary skill change can be followed from producer through a bounded receiver cohort,
+survives runtime restarts and superseded heads, never copies bytes outside an existing authoritative
+path, and stops with a typed explanation on any unknown stage.
+
 ## 17. Rollout and rollback
 
 Roll out in increasing authority:
@@ -786,6 +870,7 @@ shadow observation
                 └─► recovery/finalization dispatch
                       └─► bounded CAS release
                             └─► staggered dispatch integration
+                                  └─► optional skill-propagation observation/coordination
 ```
 
 Each stage requires:
@@ -822,6 +907,12 @@ resources intact. It must not “clean up” uncertain state as part of disablin
   Use event wakeups, backpressure, and typed unschedulable reasons.
 - **Roadmap scope drift:** turning the report directly into many issues can pull the board away from
   current commitments. Require the extraction gate below.
+- **Propagation blast radius:** a permanent runtime can fan one bad source or policy decision across
+  every receiver. Keep source, registry, artifact, pin, materialization, and CI authorities separate;
+  canary cohorts, staggered rollout, immutable receipts, and per-stage kill switches are mandatory.
+- **Duplicate rollout controllers:** existing autofix, Renovate, release, and materialize workflows
+  already mutate state. Observe and dispatch their supported entry points; never create a parallel
+  copy/merge path.
 
 ## 19. Alternatives considered
 
