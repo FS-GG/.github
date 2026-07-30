@@ -451,8 +451,8 @@ PY
     "#1784's shape exactly — 'ok: all 0 …' at exit 0"
 
   survive "min-runs-ignored" \
-    'if total < min_runs:' \
-    'if total < 0:' \
+    'if evaluated < min_runs:' \
+    'if evaluated < 0:' \
     "a 1-run gate reported as proven never to fire"
 
   survive "empty-workflow-list-passes" \
@@ -465,7 +465,7 @@ PY
     "a repo whose workflow list failed to load reported as a repo with no workflows"
 
   survive "incoherent-corpus-accepted" \
-    'if red_count > total:' \
+    'if red_count > evaluated:' \
     'if red_count > 1e18:' \
     "a corpus that cannot be true, classified anyway"
 
