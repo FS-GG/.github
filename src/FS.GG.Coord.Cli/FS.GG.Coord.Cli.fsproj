@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.17.0</Version>
+    <Version>0.18.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +96,30 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.17.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+    <PackageReleaseNotes>0.18.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+
+Runtime changes merged after 0.17.0 make the packaged engine match the coordination and product-board
+guidance already carried by Kit 0.24.0 and the driver manifest.
+
+REPOSITORY-SCOPED TOUCH SETS (#2011): path declarations are interpreted in their declared Repo Scope,
+so identical relative paths in different repositories no longer contend accidentally.
+
+BOARD FACTS AND DIAGNOSTICS (#2040/#2042): scheduler facts are extracted behind a typed application
+boundary, overlap refusals name the reserving holder, and board drivers receive structured rate-limit
+classes instead of parsing prose (#2041).
+
+SAFE RECONCILIATION (#1984/#2000/#2037): blocker-cleared repairs fail closed when the live PR probe
+cannot be read, lint covers blocked verdicts, and deliberate human parks are distinguished from stale
+blockers.
+
+COMMAND AND SCHEDULER CORRECTIONS (#1991/#1992/#1993/#2031): option ownership and rendered flag
+spellings agree with the command contract, dead scan rendering is removed, and filing a single-item
+parallel lane is diagnosed rather than silently presented as fan-out.
+
+Patch is not defensible: the 0.x tool gains result vocabulary, repository-scoped scheduling semantics,
+and caller-visible refusal/diagnostic behavior.
+
+PREVIOUS RELEASE NOTES (0.17.0):
 
 TWO merged engine commits since 0.16.0.
 
