@@ -40,16 +40,24 @@ module RuleSubsetTests =
     let ``#1623 every writing ChoreKind is named by check-board, with a non-vacuous floor`` () =
         let cases = FSharpType.GetUnionCases typeof<Chore.ChoreKind>
         Assert.NotEmpty cases
-        // StaleClaim deliberately has Write=None; every other current case owns a board-field repair.
-        let writing = cases |> Array.map _.Name |> Array.filter ((<>) "StaleClaim")
+        let ruleId = typeof<Chore.ChoreKind>.GetProperty("RuleId")
+        let write = typeof<Chore.ChoreKind>.GetProperty("Write")
+        let writing =
+            cases
+            |> Array.choose (fun c ->
+                let value = FSharpValue.MakeUnion(c, Array.zeroCreate c.GetFields().Length) :?> Chore.ChoreKind
+                match write.GetValue(value) with
+                | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
+                | _ -> None)
         Assert.NotEmpty writing
         let root = Directory.GetCurrentDirectory()
         let bodies = [ ".claude/skills/check-board/references/deep-detail.md"; ".agents/skills/check-board/references/deep-detail.md" ]
         for body in bodies do
             let text = File.ReadAllText(Path.Combine(root, body))
-            for caseName in writing do
-                let code = System.Text.RegularExpressions.Regex.Replace(caseName, "([a-z])([A-Z])", "$1-$2").ToUpperInvariant()
+            for code, (field, value) in writing do
                 Assert.Contains(code, text)
+                Assert.Contains($"{field}=", text)
+                Assert.Contains(value, text)
 
     /// Every `Rule list` the protocol declares, EXCEPT the canonical `rules` itself.
     ///
