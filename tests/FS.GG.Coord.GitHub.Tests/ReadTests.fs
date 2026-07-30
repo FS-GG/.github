@@ -145,6 +145,22 @@ let ``the marker's prev= column is decoded, and %% comes out LAST`` () =
     | Ok { Markers = [ m ]; Unreadable = [] } -> Assert.Equal(Some InProgress, m.PreviousStatus)
     | other -> failwith $"the previous column must be recovered — got %A{other}"
 
+[<Fact>]
+let ``#1732 a marker carries path scope while legacy markers remain readable`` () =
+    let scoped =
+        "<!-- fsgg:claim worker=vole-418 lease=120 pathRepo=FS.GG.Rendering -->"
+
+    let legacy =
+        "<!-- fsgg:claim worker=kite-461 lease=120 -->"
+
+    let recorder = serving $"[{comment 901 scoped now},{comment 902 legacy now}]"
+
+    match Reads.markerScan recorder "FS-GG" ".github" 1732 with
+    | Ok { Markers = [ first; second ]; Unreadable = [] } ->
+        Assert.Equal(Some "FS.GG.Rendering", first.PathRepo)
+        Assert.Equal(None, second.PathRepo)
+    | other -> failwith $"both new and legacy markers must parse — got %A{other}"
+
 // ---- the CAS's total order -------------------------------------------------------------------------
 
 [<Fact>]
@@ -158,12 +174,14 @@ let ``the CAS winner is the LOWEST LIVE comment id`` () =
             Reads.Session = None
             Reads.AgeSeconds = 10
             Reads.PreviousStatus = None
+            Reads.PathRepo = None
             Reads.Raw = "" }
           { Reads.Id = 901L
             Reads.Worker = WorkerId "first"
             Reads.Session = None
             Reads.AgeSeconds = 10
             Reads.PreviousStatus = None
+            Reads.PathRepo = None
             Reads.Raw = "" } ]
 
     match Reads.winner 120 markers with
@@ -181,6 +199,7 @@ let ``a STALE marker does not win - but an unreadable AGE is not stale`` () =
           Reads.Session = None
           Reads.AgeSeconds = 99999
           Reads.PreviousStatus = None
+          Reads.PathRepo = None
           Reads.Raw = "" }
 
     let ageUnknown =

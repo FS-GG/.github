@@ -21,6 +21,7 @@ module ApplicationServiceTests =
           BlockedByRaw = ""
           State = state
           IsPullRequest = isPullRequest
+          PathRepo = repo
           BoardClass = None
           Severity = Unset
           Phase = None
@@ -146,14 +147,27 @@ module ApplicationServiceTests =
     /// the lease, so "a marker exists" and "a live claim reserves" are two different facts — and a fixture
     /// that can only build the first cannot tell a scan that reads the lease from one that returns `Some`
     /// for any marker at all. 0 is NOW, which is what every pre-#1779 caller means.
-    let private commentsAged (holders: Map<int, string>) (ageMinutes: Map<int, int>) (number: int) =
+    let private commentsAgedScoped
+        (holders: Map<int, string>)
+        (ageMinutes: Map<int, int>)
+        (pathRepos: Map<int, string>)
+        (number: int)
+        =
         let age = Map.tryFind number ageMinutes |> Option.defaultValue 0
         let ts = DateTime.UtcNow.AddMinutes(float -age).ToString "yyyy-MM-ddTHH:mm:ssZ"
 
         match Map.tryFind number holders with
         | None -> "[]"
         | Some worker ->
-            $"""[{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}]"""
+            let pathRepo =
+                Map.tryFind number pathRepos
+                |> Option.map (fun repo -> $" pathRepo=%s{repo}")
+                |> Option.defaultValue ""
+
+            $"""[{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}]"""
+
+    let private commentsAged holders ageMinutes number =
+        commentsAgedScoped holders ageMinutes Map.empty number
 
     let private commentsFor (holders: Map<int, string>) (number: int) = commentsAged holders Map.empty number
 
@@ -174,11 +188,12 @@ module ApplicationServiceTests =
     /// `bodies` was both — every issue the fixture knew about was necessarily on the board, so the state
     /// `claim` reports as `statusWrite:"not-on-board"` was unrepresentable, and a test could not have
     /// failed for the reason #1779 is about even in principle.
-    let private worldOfWithIncomplete
+    let private worldOfWithScopesAndIncomplete
         (statusFor: int -> string)
         (bodies: Map<int, string>)
         (holders: Map<int, string>)
         (markerAge: Map<int, int>)
+        (pathRepos: Map<int, string>)
         (offBoard: Set<int>)
         (incomplete: Set<int>)
         (sayFails: bool)
@@ -240,7 +255,7 @@ module ApplicationServiceTests =
                 Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
             | "GET", _ when (issueNumber "/comments").IsSome ->
                 let n = (issueNumber "/comments").Value
-                let readable = commentsAged holders markerAge n
+                let readable = commentsAgedScoped holders markerAge pathRepos n
 
                 let body =
                     if incomplete.Contains n then
@@ -270,6 +285,17 @@ module ApplicationServiceTests =
                 | None -> Error(Errors.NotFound $"no issue %d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private worldOfWithIncomplete statusFor bodies holders markerAge offBoard incomplete sayFails =
+        worldOfWithScopesAndIncomplete
+            statusFor
+            bodies
+            holders
+            markerAge
+            Map.empty
+            offBoard
+            incomplete
+            sayFails
+
     let private worldOf statusFor bodies holders markerAge offBoard sayFails =
         worldOfWithIncomplete statusFor bodies holders markerAge offBoard Set.empty sayFails
 
@@ -282,6 +308,17 @@ module ApplicationServiceTests =
 
     let private world (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
         worldIn "In progress" bodies holders sayFails
+
+    let private worldWithPathRepos bodies holders pathRepos =
+        worldOfWithScopesAndIncomplete
+            (fun _ -> "In progress")
+            bodies
+            holders
+            Map.empty
+            pathRepos
+            Set.empty
+            Set.empty
+            false
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -628,6 +665,46 @@ module ApplicationServiceTests =
 
         // ExitContended (6) — UNCHANGED, and the same in both projections.
         Assert.Equal(6, code)
+
+    [<Fact>]
+    let ``#1732 active claims with equal tokens in different marker path scopes are disjoint`` () =
+        let bodies =
+            Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ]
+
+        let holders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
+
+        let world =
+            worldWithPathRepos
+                bodies
+                holders
+                (Map.ofList [ 74, "FS.GG.Audio"; 75, "FS.GG.Rendering" ])
+
+        let code, out =
+            run world [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal("disjoint", str "verdict" (parsed out))
+        Assert.Equal(0, world.GraphQlCalls)
+
+    [<Fact>]
+    let ``#1732 active claims with equal tokens in one marker path scope still collide`` () =
+        let bodies =
+            Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ]
+
+        let holders = Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ]
+
+        let world =
+            worldWithPathRepos
+                bodies
+                holders
+                (Map.ofList [ 74, "FS.GG.Rendering"; 75, "FS.GG.Rendering" ])
+
+        let code, out =
+            run world [ "widen"; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal(6, code)
+        Assert.Equal("overlap", str "verdict" (parsed out))
+        Assert.Equal(0, world.GraphQlCalls)
 
     [<Theory>]
     [<InlineData "widen">]

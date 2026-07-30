@@ -45,6 +45,10 @@ module Scan =
           /// A PR on the board is not an item of WORK. #641: they were listed as issues, so a duplicate
           /// check read a PR as "already filed" and suppressed a real finding.
           IsPullRequest: bool
+          /// The repository whose tree the item's `Paths:` declaration names.  Usually `Ref.Repo`, but
+          /// separately observed from the board's `Repo Scope` field for cross-repository items (#1732).
+          /// `Ref` remains the repository that owns the issue itself.
+          PathRepo: string
           /// The `Class` column as OBSERVED — the PROJECTION `reconcile` writes, read back so that
           /// `CLASS-PROJECTION-LAG` can fire on disagreement and RETIRE on agreement (.github#1588).
           ///

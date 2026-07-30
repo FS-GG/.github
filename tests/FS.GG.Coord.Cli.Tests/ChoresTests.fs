@@ -69,6 +69,7 @@ let private lockRef = ref' 1033
 
 let private item n status state blockers claim =
     { Ref = ref' n
+      PathRepo = ".github"
       Status = status
       State = state
       TouchSet = Declared [ Matchable "src/" ]
@@ -299,6 +300,7 @@ let private classRow (boardClass: ItemClass option) : Scan.Row =
       BlockedByRaw = ""
       State = Open
       IsPullRequest = false
+      PathRepo = ".github"
       BoardClass = boardClass
       Severity = Unset
       Phase = None

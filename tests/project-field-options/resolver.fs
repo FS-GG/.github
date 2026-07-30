@@ -1,7 +1,9 @@
-let resolveRepo (raw: string) : string =
-    match raw.ToLowerInvariant() with
-    | "sdd" -> "FS.GG.SDD"
-    | "net" -> "FS.GG.Net"
-    | _ -> raw
+namespace FS.GG.Coord
 
-/// An owner + repo fixture boundary.
+module RepoScope =
+
+    let resolve (raw: string) : string =
+        match raw.ToLowerInvariant() with
+        | "sdd" -> "FS.GG.SDD"
+        | "net" -> "FS.GG.Net"
+        | _ -> raw

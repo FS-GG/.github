@@ -2,7 +2,7 @@ name: project-field-options
 
 # The two path lists below are duplicated verbatim; keep them identical.  Both include the two F#
 # sources this job actually reads, not just the tool and its docs:
-#   * Options.fs — the Repo Scope check scrapes `Options.resolveRepo` on EVERY run, including the
+#   * RepoScope.fs — the Repo Scope check scrapes `RepoScope.resolve` on EVERY run, including the
 #     offline `--schema` one, so before this was listed an Options.fs edit could red this workflow
 #     without ever triggering it (.github#1588).
 #   * Types.fs — the `Phase` check reads the engine's closed union and its wire renderer directly,
@@ -17,7 +17,7 @@ on:
       - "docs/coordination/board-schema-snapshots/**"
       - ".claude/skills/cross-repo-coordination/SKILL.md"
       - ".agents/skills/cross-repo-coordination/SKILL.md"
-      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Core/RepoScope.fs"
       - "src/FS.GG.Coord.Core/Types.fs"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
@@ -30,7 +30,7 @@ on:
       - "docs/coordination/board-schema-snapshots/**"
       - ".claude/skills/cross-repo-coordination/SKILL.md"
       - ".agents/skills/cross-repo-coordination/SKILL.md"
-      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Core/RepoScope.fs"
       - "src/FS.GG.Coord.Core/Types.fs"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"

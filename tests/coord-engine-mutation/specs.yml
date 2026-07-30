@@ -142,12 +142,12 @@ mutations:
     target: src/FS.GG.Coord.Cli/Client.fs
     find: |-
       | Choice2Of2 reason ->
-                                      Error(
-                                          Errors.Malformed(
-                                              $"%s{ref.Short}'s collision scan",
-                                              $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                          Error(
+                                              Errors.Malformed(
+                                                  $"%s{ref.Short}'s collision scan",
+                                                  $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                              )
                                           )
-                                      )
     replace: '| Choice2Of2 _ -> scan acc rest'
     breaks: >-
       a row that IS held, whose touch-set could not be read, is skipped instead of refusing — so the

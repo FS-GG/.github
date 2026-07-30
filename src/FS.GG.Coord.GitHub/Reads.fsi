@@ -41,6 +41,7 @@ module Reads =
           /// The board column this claim overwrote, so releasing it can put that column back rather than
           /// guessing `Ready` (#481). A value nobody recorded cannot be restored.
           PreviousStatus: BoardStatus option
+          PathRepo: string option
           /// The raw comment body — kept so that a heartbeat can rewrite the WHOLE marker without
           /// forgetting a field it never parsed (#550).
           Raw: string }

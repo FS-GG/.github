@@ -429,6 +429,10 @@ module Client =
                 { c with
                     Item =
                         { c.Item with
+                            // `Repo Scope` is the authority for WHERE `Paths:` live; `Ref` remains the
+                            // issue identity for every GitHub mutation.  The resolver is shared with
+                            // `--repo`, so roster short-ids and canonical names cannot split a lane.
+                            PathRepo = Options.resolveRepo row.PathRepo
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
@@ -2449,6 +2453,21 @@ module Client =
 
                 scan [] inFlight
 
+    /// Resolve the repository a board item's paths name without changing the issue ref used for reads
+    /// and mutations. Off-board items have no `Repo Scope` projection and therefore retain their own
+    /// repository as the only truthful scope.
+    let private boardPathScopes (ctx: Context) : Errors.IoResult<Map<Ref, string>> =
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> Error e
+        | Ok board ->
+            match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
+            | Error e -> Error e
+            | Ok rows ->
+                rows
+                |> List.map (fun r -> r.Ref, Options.resolveRepo r.PathRepo)
+                |> Map.ofList
+                |> Ok
+
     let claim (ctx: Context) (opts: Options) : int =
         match oneArg opts "claim: an issue ref", worker opts with
         | Error c, _
@@ -2511,6 +2530,14 @@ module Client =
                             match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
                             | Ok s -> s
                             | Error _ -> None
+                        | Error _ -> None
+
+                    // Marker-carried scope keeps active collision checks on REST. This is best-effort
+                    // for the same reason as `prev`: failure to read a projection must not prevent the
+                    // lock, and an absent field has a conservative legacy fallback to the issue repo.
+                    let readPathRepo () =
+                        match boardPathScopes ctx with
+                        | Ok scopes -> Map.tryFind ref scopes
                         | Error _ -> None
 
                     // A CLAIM IS TWO FACTS, NOT ONE: the REST marker is the lock; the Projects Status is
@@ -2674,7 +2701,7 @@ module Client =
                             |> ignore
 
                     match
-                        Writes.claim
+                        Writes.claimScoped
                             ctx.Transport
                             opts.LeaseMinutes
                             force
@@ -2684,6 +2711,7 @@ module Client =
                             session
                             ref
                             readPreviousStatus
+                            readPathRepo
                     with
                     | Error e -> fail e
                     | Ok(Writes.Won(held, collected)) ->
@@ -3797,15 +3825,28 @@ module Client =
         (ctx: Context)
         (opts: Options)
         (ref: Ref)
+        (knownTargetPathRepo: string option)
         (ts: TouchSet)
         : Errors.IoResult<(Ref * string * string list) list> =
         // THE REPO SCOPE IS STRUCTURAL NOW, NOT A FILTER (#353). `openIssues` is keyed on this item's own
         // owner/repo, so a token in another repo is never even read — where the old scan pulled the whole
         // board and filtered with `sameRepo`, one edit away from the phantom collisions #353 removed.
         // PRs are dropped inside `openIssues` (#641), so `IsPullRequest` needs no analogue here.
-        match Reads.openIssues ctx.Transport ref.Owner ref.Repo with
-        | Error e -> Error e
-        | Ok issues ->
+        let targetPathRepo =
+            match knownTargetPathRepo with
+            | Some pathRepo -> Ok pathRepo
+            | None ->
+                Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                |> Result.map (fun markers ->
+                    Reads.reserver opts.LeaseMinutes markers
+                    |> Option.bind (fun marker -> marker.PathRepo)
+                    |> Option.defaultValue ref.Repo)
+
+        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo with
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        | Ok targetPathRepo, Ok issues ->
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -3835,6 +3876,9 @@ module Client =
                         // why that distinction is what keeps the cost where #1779 measured it.
                         | Reads.BodyUnread reason -> Some(other, Choice2Of2 reason)
                         | Reads.BodyRead body ->
+                            // Scope is carried by the reservation marker, which is deliberately read only
+                            // after this cheap token shortlist. The unscoped comparison cannot create a
+                            // collision by itself; the marker-backed scope check below is authoritative.
                             match TouchSet.conflicts ts (TouchSet.parse body) with
                             | [] -> None
                             | pairs -> Some(other, Choice1Of2 pairs))
@@ -3938,15 +3982,23 @@ module Client =
                         match Reads.reserver opts.LeaseMinutes markers with
                         | None -> scan acc rest
                         | Some m ->
-                            match verdict with
-                            | Choice1Of2 pairs -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
-                            | Choice2Of2 reason ->
-                                Error(
-                                    Errors.Malformed(
-                                        $"%s{ref.Short}'s collision scan",
-                                        $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                            let otherPathRepo = m.PathRepo |> Option.defaultValue other.Repo
+                            let samePathRepo =
+                                String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
+                                && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
+
+                            if not samePathRepo then
+                                scan acc rest
+                            else
+                                match verdict with
+                                | Choice1Of2 pairs -> scan ((other, m.Worker.Value, sharedTokens pairs) :: acc) rest
+                                | Choice2Of2 reason ->
+                                    Error(
+                                        Errors.Malformed(
+                                            $"%s{ref.Short}'s collision scan",
+                                            $"%s{other.Short} is held by %s{m.Worker.Value} and its touch-set could not be read (%s{reason}) — refusing to report DISJOINT over a live reservation whose surface is unknown (#1794/#266)"
+                                        )
                                     )
-                                )
 
             scan [] colliding
 
@@ -4080,7 +4132,14 @@ module Client =
                                     // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the update
                                     // and then notifies each colliding worker on their own issue; only an unreadable
                                     // scan refuses. Same-repo scope: a cross-repo namesake is a phantom (#353).
-                                    match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
+                                    match
+                                        activeCollisions
+                                            ctx
+                                            opts
+                                            ref
+                                            (Some(held.PathRepo |> Option.defaultValue ref.Repo))
+                                            (TouchSet.parse rewritten.Body)
+                                    with
                                     | Error e -> fail e
                                     | Ok collisions ->
                                         match Writes.widen ctx.Transport held rewritten with
@@ -4255,7 +4314,7 @@ module Client =
                 match touchSetOf ref with
                 | Error e -> failSchedule ref e
                 | Ok ts ->
-                    match activeCollisions ctx opts ref ts with
+                    match activeCollisions ctx opts ref None ts with
                     | Error e -> fail e
                     | Ok [] ->
                         printfn "DISJOINT — %s overlaps no live claim in %s/%s (#353)." ref.Short ref.Owner ref.Repo
@@ -4273,29 +4332,36 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{m}"
                 ExitError
             | Ok ra, Ok rb ->
-                if not (sameRepo ra rb) then
-                    // #353 — DISJOINT BY CONSTRUCTION. Repo-relative tokens in two different repos can never
-                    // name the same file, so this needs no body read at all.
-                    printfn
-                        "DISJOINT — %s and %s are in different repos; repo-relative touch-sets can never name the same file (#353)."
-                        ra.Short
-                        rb.Short
+                match boardPathScopes ctx with
+                | Error e -> fail e
+                | Ok scopes ->
+                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> Option.defaultValue r.Repo
+                    let samePathRepo =
+                        String.Equals(pathRepoOf ra, pathRepoOf rb, StringComparison.OrdinalIgnoreCase)
 
-                    ExitGreen
-                else
-                    match touchSetOf ra with
-                    | Error e -> failSchedule ra e
-                    | Ok tsa ->
-                        match touchSetOf rb with
-                        | Error e -> failSchedule rb e
-                        | Ok tsb ->
-                            match TouchSet.conflicts tsa tsb with
-                            | [] ->
-                                printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
-                                ExitGreen
-                            | pairs ->
-                                printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
-                                ExitContended
+                    if not samePathRepo then
+                        // #353 — DISJOINT BY CONSTRUCTION. Repo-relative tokens in two different repos can never
+                        // name the same file, so this needs no body read at all.
+                        printfn
+                            "DISJOINT — %s and %s are in different repos; repo-relative touch-sets can never name the same file (#353)."
+                            ra.Short
+                            rb.Short
+
+                        ExitGreen
+                    else
+                        match touchSetOf ra with
+                        | Error e -> failSchedule ra e
+                        | Ok tsa ->
+                            match touchSetOf rb with
+                            | Error e -> failSchedule rb e
+                            | Ok tsb ->
+                                match TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb with
+                                | [] ->
+                                    printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
+                                    ExitGreen
+                                | pairs ->
+                                    printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
+                                    ExitContended
 
         | _ ->
             eprint "fsgg-coord-engine: overlap needs <ref> --active, or two refs: overlap <ref-a> <ref-b>."
@@ -6440,7 +6506,11 @@ module Client =
                                 let touchSets =
                                     if isTouchSetCandidate then
                                         { LintApplication.ConsolidationRow.Ref = r.Ref.Short
-                                          LintApplication.ConsolidationRow.Repo = r.Ref.Repo
+                                          // The board issue may live in `.github` while its declaration
+                                          // reserves a receiver worktree. Consolidation is evidence about
+                                          // overlapping files, so it partitions on `Repo Scope`, not the
+                                          // repository that happens to host the coordination issue (#1732).
+                                          LintApplication.ConsolidationRow.Repo = Options.resolveRepo r.PathRepo
                                           LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
                                         :: touchSets
                                     else

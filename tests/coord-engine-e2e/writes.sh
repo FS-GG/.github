@@ -694,11 +694,11 @@ noise="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("/(42|99)/comment
 
 # The repo has FIVE open issues. Two of them declare `src/Verify/**` — #43 (whose marker was released
 # above, so it reserves nothing) and #46 (held by heron-822) — and #44 is the subject. So: ONE issue list,
-# TWO marker reads, one per COLLIDING row rather than one per open row or one per `In progress` row, and
+# THREE marker reads: the target verification plus one per shortlisted row rather than one per open row or
 # ZERO GraphQL board reads. The old scan read a marker AND a body for every `In progress` row whether or
 # not its tokens could ever collide, and paid a board query on top.
-[ "$lists" = "1" ] && [ "$markers" = "2" ] && [ "$noise" = "0" ] && [ "$br_before" = "$br_after" ] \
-  && ok "#1779 AC2: overlap --active spent $rest_n REST calls (1 issue list + 1 marker per COLLIDING row, 2 of 5 open) and 0 GraphQL board reads" \
+[ "$lists" = "1" ] && [ "$markers" = "3" ] && [ "$noise" = "0" ] && [ "$br_before" = "$br_after" ] \
+  && ok "#1779 AC2: overlap --active spent $rest_n REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 0 GraphQL board reads" \
   || bad "#1779 AC2: the measured cost is not the claimed cost" "rest=$rest_n lists=$lists markers=$markers noise=$noise boardReads $br_before -> $br_after: $meter"
 
 "$ENGINE" release FS.GG.SDD#46 --worker heron-822 >/dev/null 2>&1

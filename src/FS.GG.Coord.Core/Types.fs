@@ -156,6 +156,10 @@ module Types =
 
     type Item =
         { Ref: Ref
+          /// The repository whose worktree the item's `Paths:` tokens describe.  It normally equals
+          /// `Ref.Repo`, but cross-repository board items keep their issue in `.github` while reserving
+          /// a receiver tree (#1732).
+          PathRepo: string
           Status: BoardStatus
           State: IssueState
           TouchSet: TouchSet

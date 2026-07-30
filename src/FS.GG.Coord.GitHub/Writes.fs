@@ -18,13 +18,15 @@ module Writes =
             worker: WorkerId,
             markerId: int64,
             session: SessionId option,
-            previousStatus: BoardStatus option
+            previousStatus: BoardStatus option,
+            pathRepo: string option
         ) =
         member _.Ref = ref
         member _.Worker = worker
         member _.MarkerId = markerId
         member _.Session = session
         member _.PreviousStatus = previousStatus
+        member _.PathRepo = pathRepo
 
     type ClaimForce =
         | RefuseLiveHolder
@@ -93,6 +95,7 @@ module Writes =
         (session: SessionId option)
         (leaseMinutes: int)
         (previousStatus: BoardStatus option)
+        (pathRepo: string option)
         =
         let sessionPart =
             match session with
@@ -107,7 +110,9 @@ module Writes =
             // no observation at all.
             | None -> ""
 
-        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart} -->"
+        let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
+
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
 
     /// IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
     ///
@@ -239,7 +244,7 @@ module Writes =
 
     // ---- THE CAS ---------------------------------------------------------------------------------
 
-    let claim
+    let claimScoped
         (transport: IGitHubTransport)
         (leaseMinutes: int)
         (force: ClaimForce)
@@ -249,6 +254,7 @@ module Writes =
         (session: SessionId option)
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
+        (readPathRepo: unit -> string option)
         : IoResult<ClaimOutcome> =
 
         // 0. ARE WE THE WORKER WE SAY WE ARE? (#1646) — BEFORE THE READ, AND BEFORE ANY ARM.
@@ -328,7 +334,8 @@ module Writes =
             // the board will say `In progress` and the answer will be gone. A lost race or a re-claim
             // never reaches here, so neither pays the read.
             let previousStatus = readPreviousStatus ()
-            let body = markerBody worker session leaseMinutes previousStatus
+            let pathRepo = readPathRepo ()
+            let body = markerBody worker session leaseMinutes previousStatus pathRepo
 
             match postComment transport ref body with
             | Error e -> Error e
@@ -369,7 +376,7 @@ module Writes =
                 // including our OWN just-superseded stale marker, so a renew ends with exactly one marker,
                 // not two. `session` is what we posted into the marker (`body`, above), so the `Held`
                 // re-emits it on every heartbeat and twin-detection survives the lease (#1149).
-                let held = Held(ref, worker, myId, session, previousStatus)
+                let held = Held(ref, worker, myId, session, previousStatus, pathRepo)
                 let collected = collectStale myId after
 
                 match evicted with
@@ -527,7 +534,7 @@ module Writes =
                 // Collect the stale debris first (as the fresh-CAS win does), then renew — a stale OTHER
                 // marker on this item is still what `heartbeat` would resurrect underneath us.
                 let collected = collectStale m.Id before
-                let renewed = markerBody worker session leaseMinutes m.PreviousStatus
+                let renewed = markerBody worker session leaseMinutes m.PreviousStatus m.PathRepo
 
                 // THE RENEWAL IS BEST-EFFORT, and it must be: we ALREADY hold this lock — our marker is the
                 // live CAS winner — so a failed renewal PATCH does not un-hold us, and failing the command
@@ -539,10 +546,25 @@ module Writes =
                 // `session` (our own) is what `renewed` just wrote into the marker (line above), so that is
                 // what the `Held` carries forward — a re-claim UPGRADES a sessionless marker to bear our
                 // session, exactly as it refreshes the lease.
-                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus), collected))
+                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo), collected))
 
         // Nobody holds it. Post and race, evicting nothing.
         | None -> postAndResolve []
+
+    /// Compatibility entry point for callers that do not have a board path scope (notably chore
+    /// locks and focused CAS tests). Its marker is intentionally legacy-shaped.
+    let claim
+        (transport: IGitHubTransport)
+        (leaseMinutes: int)
+        (force: ClaimForce)
+        (onEvict: WorkerId list -> unit)
+        (worker: WorkerId)
+        (self: SelfIdentity)
+        (session: SessionId option)
+        (ref: Ref)
+        (readPreviousStatus: unit -> BoardStatus option)
+        : IoResult<ClaimOutcome> =
+        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None)
 
     let verifyHeld
         (transport: IGitHubTransport)
@@ -589,7 +611,7 @@ module Writes =
                 // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later
                 // `heartbeat` re-emits it rather than stripping it (#1149). verifyHeld does not write, so the
                 // marker's own value is the truth here.
-                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus)))
+                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus, m.PathRepo)))
             | _ -> Ok DoesNotHold
 
     // ---- the touch-set -----------------------------------------------------------------------------
@@ -759,7 +781,7 @@ module Writes =
         // item — the double-hold the CAS exists to prevent (#1149). The capability now HOLDS the session, so
         // the rewrite can re-emit it.
         let body =
-            markerBody held.Worker held.Session leaseMinutes held.PreviousStatus
+            markerBody held.Worker held.Session leaseMinutes held.PreviousStatus held.PathRepo
 
         match patchComment transport held.Ref held.MarkerId body with
         | Error e -> Error e

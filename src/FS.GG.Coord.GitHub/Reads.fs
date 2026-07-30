@@ -16,6 +16,7 @@ module Reads =
           Session: SessionId option
           AgeSeconds: int
           PreviousStatus: BoardStatus option
+          PathRepo: string option
           Raw: string }
 
     /// THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
@@ -227,6 +228,7 @@ module Reads =
     let private prevRe = Regex(@"^<!--[^>]*\sprev=(?<p>[^\s>]*)", RegexOptions.Compiled)
 
     let private sessionRe = Regex(@"^<!--[^>]*\ssession=(?<s>[^\s>]+)", RegexOptions.Compiled)
+    let private pathRepoRe = Regex(@"^<!--[^>]*\spathRepo=(?<r>[^\s>]+)", RegexOptions.Compiled)
 
     /// Undo `enc_status`. `%` was encoded FIRST, so it must be decoded LAST — otherwise a status
     /// containing a literal `%20` decodes into a space that was never there.
@@ -321,6 +323,10 @@ module Reads =
             else
                 None
 
+        let pathRepo =
+            let p = pathRepoRe.Match body
+            if p.Success then Some p.Groups.["r"].Value else None
+
         // AGE IS MEASURED AGAINST THE SERVER'S CLOCK (`updated_at`), not ours. A marker with no readable
         // timestamp gets a NEGATIVE age, which `Schedulability.leaseWindow` renders as "lease unknown" —
         // because inventing "frees in ~120m" out of a missing field is a confident sentence with nothing
@@ -339,6 +345,7 @@ module Reads =
               Session = session
               AgeSeconds = ageSeconds
               PreviousStatus = previousStatus
+              PathRepo = pathRepo
               Raw = body }
 
     /// Has this marker's lease lapsed?

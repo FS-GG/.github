@@ -174,3 +174,15 @@ module TouchSet =
     /// CONTRACT: both token lists must come from the SAME repo. Tokens are repo-relative, so handing
     /// this cross-repo lists invents collisions that do not exist (#353). The caller owns that.
     val conflicts: a: TouchSet -> b: TouchSet -> (string * string) list
+
+    /// The repository-scoped form of `conflicts`. An item's host repository and the repository whose
+    /// tree its `Paths:` declaration names may differ for a cross-repository board item (#1732); only
+    /// equal owner/repo scopes are comparable. Different scopes are disjoint by construction.
+    val scopedConflicts:
+        leftOwner: string ->
+        leftRepo: string ->
+        rightOwner: string ->
+        rightRepo: string ->
+        left: TouchSet ->
+        right: TouchSet ->
+            (string * string) list

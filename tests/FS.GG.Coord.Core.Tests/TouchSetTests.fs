@@ -244,6 +244,24 @@ module TouchSetTests =
         let b = Declared [ Matchable "src/Audio/**" ]
         Assert.Empty(TouchSet.conflicts a b)
 
+    [<Fact>]
+    let ``#1732 equal tokens in different declared repo scopes are disjoint by construction`` () =
+        let a = Declared [ Matchable "scripts/skill-view" ]
+        let b = Declared [ Matchable "scripts/skill-view" ]
+
+        Assert.Empty(
+            TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" ".github" a b
+        )
+
+    [<Fact>]
+    let ``#1732 equal tokens in the same declared repo scope still collide`` () =
+        let a = Declared [ Matchable "scripts/skill-view" ]
+        let b = Declared [ Matchable "scripts/skill-view" ]
+
+        Assert.NotEmpty(
+            TouchSet.scopedConflicts "FS-GG" "FS.GG.Audio" "FS-GG" "FS.GG.Audio" a b
+        )
+
     // ---- properties ---------------------------------------------------------------------------------
 
     [<Property>]
