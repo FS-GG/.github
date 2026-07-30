@@ -68,6 +68,12 @@ module Errors =
         /// out, the advice it renders is the conservative union — reduce concurrency *and* back off.
         | UnknownBudget
 
+    /// The machine-readable remedy class for a rate-limit refusal (#1892).
+    type RateLimitKind =
+        | Primary
+        | Secondary
+        | Unknown
+
     /// Why a read or a write did not produce an answer.
     ///
     /// Each case is a distinct fact the caller acts on DIFFERENTLY, and the bugs came from collapsing
@@ -142,6 +148,9 @@ module Errors =
     /// because an exhausted budget is not a lost race and three more attempts just spend REST calls
     /// confirming the same 403.
     val exitCode: error: IoError -> int
+
+    /// The rate-limit remedy class carried by an error, when the error is a rate limit.
+    val rateLimitKind: error: IoError -> RateLimitKind option
 
     // These three derive from `FS.GG.Coord.ExitCode.toInt` now (#918, ADR-0046) — one number space,
     // one declaration site — so they are plain `val`s, not `[<Literal>]`s pinning a digit here.

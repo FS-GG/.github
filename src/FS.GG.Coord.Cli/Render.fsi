@@ -218,6 +218,9 @@ module Render =
     /// A real JSON writer, so a governing note carrying a quote cannot forge the object.
     val renderPredicateJson: result: PredicateResult -> string
 
+    /// JSON-mode failures, written to stderr so stdout stays a success-only document channel.
+    val renderFailureJson: exitCode: int -> message: string -> rateLimit: Errors.RateLimitKind option -> string
+
     /// `reconcile --json` / `reconcile --apply --json` — the findings array, and under `--apply` how each
     /// repair went (.github#1524), so a mutating verb's outcome is IN its document rather than printed
     /// past it.

@@ -11,6 +11,14 @@ module Errors =
         | SecondaryLimit of resource: string option * retryAfter: TimeSpan option
         | UnknownBudget
 
+    /// The machine-readable remedy class for a rate-limit refusal (#1892).  It is deliberately
+    /// independent of the exit code: both cases remain EX_RATE while a driver chooses whether to
+    /// drain the fleet or reduce its fan-out.
+    type RateLimitKind =
+        | Primary
+        | Secondary
+        | Unknown
+
     type IoError =
         | RateLimited of resource: RateLimitResource * resetAt: DateTimeOffset option
         | NotFound of subject: string
@@ -50,6 +58,14 @@ module Errors =
         | GraphQlErrors _
         | Transport _
         | Http _ -> 1
+
+    /// The rate-limit remedy class carried by an error, when the error is a rate limit.
+    let rateLimitKind (error: IoError) : RateLimitKind option =
+        match error with
+        | RateLimited(SecondaryLimit _, _) -> Some Secondary
+        | RateLimited(UnknownBudget, _) -> Some Unknown
+        | RateLimited _ -> Some Primary
+        | _ -> None
 
     let isQueueable (error: IoError) =
         match error with

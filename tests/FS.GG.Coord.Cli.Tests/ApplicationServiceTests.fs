@@ -2384,6 +2384,21 @@ module ApplicationServiceTests =
         Assert.Contains("human decision", output)
 
     [<Fact>]
+    let ``#1892 take json writes a secondary limit envelope to stderr`` () =
+        let transport =
+            Fake.Recorder(fun _ -> Error(Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)))
+
+        let code, stdout, stderr =
+            runJsonArm transport [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+
+        Assert.Equal(Errors.ExRate, code)
+        Assert.Equal("", stdout)
+        use document = JsonDocument.Parse(stderr)
+        let root = document.RootElement
+        Assert.Equal("error", root.GetProperty("kind").GetString())
+        Assert.Equal("secondary", root.GetProperty("rateLimit").GetString())
+
+    [<Fact>]
     let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =
         let failures =
             sweptArms
