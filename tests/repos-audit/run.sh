@@ -2148,7 +2148,7 @@ wire_sparse() {
     #     these as rooted directory prefixes, not gitignore patterns — so ONLY rule (4) is left.
     cone-file)   printf '%s          sparse-checkout: |\n            scripts/check-foo.py\n' "$head" ;;
     cone-dir)    printf '%s          sparse-checkout: |\n            scripts\n' "$head" ;;
-    cone-submodule) printf '%s          sparse-checkout: |\n            vendor\n' "$head" ;;
+    cone-submodule) printf 'jobs:\n  fetch:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/FS.GG.SDD\n          sparse-checkout: |\n            vendor\n' ;;
     # --- CONE MODE ACROSS TWO SIBLINGS, NEITHER OF WHICH IS THE AUTHORITY (#1556). This is the pair
     #     #1529 left ungraded and #1556 closes: the audit holds neither tree, so rule (4) can only
     #     run by FETCHING the fetched repository's index from the API. Both sides are expressed,
