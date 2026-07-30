@@ -146,7 +146,7 @@ $OUT"
 # ---- 6b. FOLLOWING IS EVIDENCE, NOT AN INFO-LEVEL FINDING (#1719). -------------------------------
 d="$(newrepo sc1091)"; mkdir -p "$d/lib"
 printf '#!/usr/bin/env bash\n# shellcheck source-path=SCRIPTDIR\n# shellcheck source=lib/ok.sh\nsource lib/ok.sh\n' > "$d/uses.sh"
-printf 'ok() { :; }\n' > "$d/lib/ok.sh"
+printf '#!/usr/bin/env bash\nok() { :; }\n' > "$d/lib/ok.sh"
 git -C "$d" add -A
 run_gate "$d"
 [ "$RC" = 0 ] && ok "#1719: a real source-path pragma follows its source and greens" \
