@@ -117,6 +117,24 @@ skill catalog — mirroring the [registry-schema governance][ADR-0015] precedent
   in. Rollout is sequenced on the Coordination board (Rendering/SDD manifests → registry + gate →
   Templates wiring → flip `skill-mirror-verified` enforcing), not a flag day.
 
+### 2026-07-30 measurement — retain conditional materialization
+
+The `.github#1863` review retains `materializes-when`. Of the 28 current product rows, 27 are
+conditional. Using each row's canonical producer `SKILL.md` discovery metadata (`id`, source path,
+and front-matter description), the conditional catalog versus the full product catalog measures:
+
+| Profile | Conditional | Full | Saved |
+| --- | ---: | ---: | ---: |
+| `app` | 3,275 | 7,311 | 4,036 |
+| `headless-scene` | 1,119 | 7,311 | 6,192 |
+| `governed` | 1,119 | 7,311 | 6,192 |
+| `sample-pack` | 6,213 | 7,311 | 1,098 |
+| `game` | 7,186 | 7,311 | 125 |
+
+The unused bodies remain progressively disclosed. The measured cost is catalog context, not a
+demonstrated wrong-skill selection; nevertheless, the savings are material for the `app`,
+`headless-scene`, and `governed` profiles. Conditional materialization therefore remains justified.
+
 <!-- This decision adds a contract (`skill-registry`) + a registry node surface, so
 docs/architecture.md is reconciled as part of resolution — after the registry update. See
 docs/coordination/README.md#system-overview--the-architecture-map. -->
