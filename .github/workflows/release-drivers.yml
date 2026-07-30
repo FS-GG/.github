@@ -161,6 +161,8 @@ jobs:
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-roadmap/references/feedback-contract.md')" Text="restored package has no work-roadmap feedback contract at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board/references/feedback-contract.md')" Text="restored package has no work-board feedback contract at $(FsggDriversContentDir)" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board/scripts/validate-feedback-state.py')" Text="restored package has no work-board feedback validator at $(FsggDriversContentDir)" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-normal/SKILL.md')" Text="restored package has no work-board-normal SKILL.md at $(FsggDriversContentDir)" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-board-best/SKILL.md')" Text="restored package has no work-board-best SKILL.md at $(FsggDriversContentDir)" />
               <Message Importance="high" Text="FS.GG.Drivers: driver bytes reachable at $(FsggDriversContentDir)" />
             </Target>
           </Project>
