@@ -473,6 +473,24 @@ module Render =
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
+    /// A JSON-mode failure goes to stderr, preserving stdout as the successful document channel.  The
+    /// rate-limit class is data rather than a phrase a board driver must parse (#1892).
+    let renderFailureJson (exitCode: int) (message: string) (rateLimit: Errors.RateLimitKind option) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+        w.WriteStartObject()
+        w.WriteString("kind", "error")
+        w.WriteNumber("exitCode", exitCode)
+        w.WriteString("message", message)
+        match rateLimit with
+        | Some Errors.Primary -> w.WriteString("rateLimit", "primary")
+        | Some Errors.Secondary -> w.WriteString("rateLimit", "secondary")
+        | Some Errors.Unknown -> w.WriteString("rateLimit", "unknown")
+        | None -> w.WriteNull("rateLimit")
+        w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
     /// `reconcile --json` / `reconcile --apply --json` (.github#1524) — the array of mechanical findings,
     /// and under `--apply` how each repair went.
     ///

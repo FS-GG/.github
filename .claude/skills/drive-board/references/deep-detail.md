@@ -122,7 +122,10 @@ Three rules the host holds so a fan-out scales instead of taking the board down:
 - **Let workers share the 90s scan cache.** The host's own planning reads (`check-board`, `batch`)
   scan **fresh** — a reconciler on a stale board invents drift (check-board §1) — but the *workers'*
   `take`/`next` reads must **not** add `--fresh`, or N workers cost N board reads instead of one.
-- **Treat a worker's `EX_RATE` (exit 75) as a fleet-wide stop signal, not that worker's problem.**
+- **Read a JSON failure envelope's `rateLimit` field; never parse its message.** `primary` means the
+  account budget is exhausted: treat `EX_RATE` (75) as a fleet-wide stop. `secondary` means abuse
+  detection: stop spawning briefly, reduce concurrency before retrying, and do not wait for a primary
+  reset. `unknown` is fail-closed: use the primary stop path until a later refusal classifies it.
   One worker hitting the REST cap means the *account* hit it, so every other worker is about to too.
   When a returning worker reports 75, **stop spawning, let the in-flight ones drain, and back off until
   the reset it names** — then `scripts/fsgg-coord flush --dry-run`, because a board write made on an

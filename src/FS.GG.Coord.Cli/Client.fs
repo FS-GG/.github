@@ -118,9 +118,16 @@ module Client =
 
     /// An IO failure → its exit code and a printed reason. `RateLimited` becomes EX_RATE (75), the back-off
     /// signal; a caller that saw a generic 1 would treat a temporary condition as permanent.
-    let private fail (e: Errors.IoError) : int =
-        eprint $"fsgg-coord-engine: %s{Errors.explain e}"
+    let private failWith (render: Options.Render) (e: Errors.IoError) : int =
+        let message = Errors.explain e
+
+        match render with
+        | Json -> eprint (Render.renderFailureJson (Errors.exitCode e) message (Errors.rateLimitKind e))
+        | Text -> eprint $"fsgg-coord-engine: %s{message}"
+
         Errors.exitCode e
+
+    let private fail (e: Errors.IoError) : int = failWith Text e
 
     /// #1151: a NON-fatal board write's outcome, turned into the stderr note it warrants — SURFACING what
     /// `|> ignore` used to swallow. A `Written` is silent; the other three each say what did NOT land and
@@ -2503,7 +2510,7 @@ module Client =
                     if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
 
                 match heldCheck with
-                | Error e -> fail e
+                | Error e -> failWith opts.Render e
                 | Ok(_ :: _ as heldRefs) ->
                     let names = String.Join(", ", heldRefs)
 
@@ -2729,7 +2736,7 @@ module Client =
                             readPreviousStatus
                             readPathRepo
                     with
-                    | Error e -> fail e
+                    | Error e -> failWith opts.Render e
                     | Ok(Writes.Won(held, collected)) ->
                         announceCollected collected
                         emitClaimReceipt "claimed" held (setInProgress ())
@@ -3423,7 +3430,7 @@ module Client =
             // and it is never EX_NONE, so "I could not look" and "I looked, and it is empty" keep
             // different codes (#266). bash's hard board-read failure exits the same way (#344's fatal
             // die), so the two engines agree.
-            | Error e -> fail e
+            | Error e -> failWith opts.Render e
             | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 

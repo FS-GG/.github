@@ -2384,6 +2384,29 @@ module ApplicationServiceTests =
         Assert.Contains("human decision", output)
 
     [<Fact>]
+    let ``#1892 json worker failures classify rate limits without using stdout`` () =
+        let cases =
+            [ "primary", Errors.RateLimited(Errors.RestBudget(Some "core"), None)
+              "secondary", Errors.RateLimited(Errors.SecondaryLimit(Some "core", None), None)
+              "unknown", Errors.RateLimited(Errors.UnknownBudget, None) ]
+
+        for expectedKind, error in cases do
+            let transport = Fake.Recorder(fun _ -> Error error)
+
+            for args in
+                [ [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+                  [ "claim"; "--json"; "FS.GG.SDD#42"; "--worker"; "otter-9c21" ] ] do
+                let code, stdout, stderr = runJsonArm transport args
+                Assert.Equal(Errors.ExRate, code)
+                Assert.Equal("", stdout)
+                use document = JsonDocument.Parse(stderr)
+                let root = document.RootElement
+                Assert.Equal("error", root.GetProperty("kind").GetString())
+                Assert.Equal(75, root.GetProperty("exitCode").GetInt32())
+                Assert.Equal(expectedKind, root.GetProperty("rateLimit").GetString())
+                Assert.False(System.String.IsNullOrWhiteSpace(root.GetProperty("message").GetString()))
+
+    [<Fact>]
     let ``.github#1688 AC4 every driven Json verb's empty or refusing arm is ONE document, never prose`` () =
         let failures =
             sweptArms
