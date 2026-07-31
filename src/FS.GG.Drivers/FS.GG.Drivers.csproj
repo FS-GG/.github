@@ -44,7 +44,10 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Drivers</PackageId>
-    <Version>0.10.0</Version>
+    <!-- 0.10.0 -> 0.11.0, a MINOR: work-board now reserves and verifies an independent critic for
+         every item, routes repairs back to the live implementer, and refuses nonmaterial issue/board
+         growth. The driver contract is additive; existing skill identities and package layout hold. -->
+    <Version>0.11.0</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>

@@ -9,6 +9,8 @@ Every wave starts from fresh ground truth. For `work-board`, the ordered plannin
 the complete four-part `check-board` result, classify the current workspace Backlog through
 [backlog-triage](backlog-triage.md), then size the Ready wave with `batch`. Never size before triage.
 Allocate only schedulable touch-set-disjoint lanes and never exceed the host's available worker slots.
+Reserve at least one available slot for an independent critic instead of filling the cap with
+implementers.
 Every worker must mint its own `FSGG_WORKER` identity and hold its own claim: a host session, account,
 or parent identity is not a substitute. Give it one bounded item, a stable feedback cycle id, and the
 complete item-driver contract, including the simple-versus-complex SDD lifecycle branch and schema-v2
@@ -32,8 +34,19 @@ Invoke skills through the selector supported by the current host: for example, `
 or the host's skill picker. A literal `/skill` is documentation only unless that host explicitly
 supports slash-based skill selection.
 
-Verify PR state/head/checks/review, merge reachability, post-merge obligations, done stamp, issue/board
-state, claim release, pending writes, feedback, and newly filed work. Apply the exact fail-closed
+At each worker's review handoff, spawn a fresh critic under the `independent-review` contract loaded
+by `$pnext-item`, route
+bounded repairs back to the still-live worker, and require the same critic's confirmation when a
+repair occurs. Before merge, verify PR state/head/checks, the durable review marker, any required
+confirmation SHA, critic independence, each material finding's disposition, and newly filed work.
+A critic may file review-discovered work only when
+materiality, distinct root cause, dedupe, and actionability are evidenced; nonmaterial observations
+must not create issues, board rows, blocker edges, or follow-up entries. Post the exact-SHA
+`fsgg:review-accepted:v1` marker only after these pre-merge checks pass; the worker may not merge
+before it observes that marker.
+
+After merge and obligations, verify merge reachability, post-merge obligations, done stamp,
+issue/board state, claim release, pending writes, and feedback. Apply the exact fail-closed
 commands in [feedback-contract](feedback-contract.md) to merged paths before accepting an item; worker
 prose is not verification. Reconcile and re-triage after every wave because completion can clear
 blockers or create Backlog follow-ups; a snapshot taken before worker dispatch cannot plan the next

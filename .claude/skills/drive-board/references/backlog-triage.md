@@ -77,7 +77,9 @@ mechanical-versus-human boundary.
 
 ## Wave-to-wave behavior
 
-After workers finish, discard the old inventory. Verify their results, run the complete reconcile pass
+After workers finish, discard the old inventory. Verify their results and independent-review evidence,
+including that every new review-discovered row is material and no nonmaterial observation was filed.
+Run the complete reconcile pass
 again, and re-read Backlog before sizing another wave. A follow-up filed by the preceding wave is
 therefore classified immediately: actionable work is promoted and becomes eligible for the next
 repo-directed `batch`/`take`; parked or ambiguous work is reported.

@@ -11,8 +11,9 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 2. Run [backlog-triage](references/backlog-triage.md), classifying every relevant parked row without
    guessing human judgement and promoting only evidenced actionable work to `Ready`.
 3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
-4. Spawn one fresh disposable worker per lane; give each a stable feedback cycle id. Each owns one item
-   through claim, implementation, review, green merge, obligations, verified feedback, and done. During
+4. Spawn one fresh disposable worker per lane; give each a stable feedback cycle id, and reserve
+   capacity for a fresh independent critic at the review boundary. Each owns one item through claim,
+   implementation, critique and bounded repair, green merge, obligations, verified feedback, and done. During
    worker setup, interactive/game work
    must explicitly invoke the `pnext-item` performance-first planning gate before implementation
    begins.
@@ -24,8 +25,11 @@ Burn down one coordination-wired workspace's board. The local board is both plan
      current activity or gate.
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
    item remains active, continue the host loop, and report each transition when it occurs.
-6. Run the exact checkpoint, schema-v2 report, and activation-envelope validators against merged paths.
-   Missing, invalid, unreadable, or wrong-cycle feedback fails closed; then discard the worker.
+6. Verify the independent-review marker and exact SHAs, critic independence, and every material finding
+   disposition; reject any critic-filed item without evidence-backed materiality. Then run the exact
+   checkpoint, schema-v2 report, and activation-envelope validators against merged paths. Missing,
+   invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
+   owner until validation passes, then discard the worker and critic.
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
    plan while the simple-versus-complex SDD lifecycle branch remains inside each item worker.
 8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and

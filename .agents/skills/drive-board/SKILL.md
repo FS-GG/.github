@@ -27,7 +27,8 @@ cross-repo allocation, not item implementation.
    whose resulting acceptance criteria are their explicit union. Keep merely adjacent work separate and
    record why; a shared chokepoint alone is not a shared story.
 4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
-   [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo.
+   [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo. Reserve capacity for a fresh critic
+   per item at the review boundary; do not consume every slot with implementers.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:
@@ -36,8 +37,10 @@ cross-repo allocation, not item implementation.
      current activity or gate.
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
    item remains active, continue the host loop, and report each transition when it occurs.
-6. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
-   and follow-up items against GitHub—not its narrative.
+6. Verify each worker's PR, independent-review marker and exact SHAs, critic independence, material
+   finding dispositions, merge, publication/registry obligations, exact done stamp, released claim,
+   and newly filed items against GitHub—not its narrative. Reject any new item whose review evidence
+   does not establish materiality.
 7. **Once this wave's merges into `.github` are verified, and before the next wave is dispatched, bring
    the shared checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
    checkout, so merging a worker's PR can leave the binary the whole fleet execs behind `origin/main` —

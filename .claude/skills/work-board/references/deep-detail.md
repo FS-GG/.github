@@ -148,9 +148,11 @@ Repeat until §5 says the board is genuinely done:
    shared rate budget (§6). Do **not** pass the item numbers to the workers — `batch` is the host's
    *sizing* read and `take` is the worker's *claiming* read, and keeping them separate is what preserves
    `take`'s lost-race guarantee (drive-board §2).
-4. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), one per slot, each running
+4. **Spawn fresh implementers within the cap** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), each running
    the worker brief (§3). One subagent, one `take`-loop-of-one: it takes an item, works it to done-stamp,
-   and returns. Concurrency is bounded — one repo, one shared account (§6).
+   and returns. Reserve critic capacity instead of filling the cap with implementers. At each review
+   handoff, spawn a fresh critic, keep the implementer alive for bounded repairs, and require the same
+   critic to confirm the exact head. Concurrency is bounded — one repo, one shared account (§6).
 5. **Collect each worker as it returns, and verify — do not trust (§4).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is gone,
    which is deliberate.
@@ -167,7 +169,8 @@ no touch-set reservation, in the one tree every worker shares.
 
 The invariant per-item harness is **`pnext-item`** (already materialized): mint a
 distinct worker id, `take` (gate on exit code 0), read the item's comments, worktree from `origin/main`,
-implement within the declared `Paths:`, open a PR, review, merge on green, `done --flip`. Inside that one
+implement within the declared `Paths:`, open a PR, obtain independent critique, merge on green,
+`done --flip`. Inside that one
 claim/merge/done-stamp envelope, **the depth of the implementation scales with the item's complexity** —
 this is the decision ADR-0064 records:
 
@@ -197,7 +200,8 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name, implement **inside your declared `Paths:`** (in
 >    a shared tree, a path you did not declare is one another worker may be editing). Pause before
->    opening the PR for steps 3–4, then resume pnext-item: open, review, merge on green, and
+>    opening the PR for steps 3–4, then resume pnext-item: push and open the candidate, pause for the host's
+>    independent critic, implement bounded repairs, merge only after the same critic confirms, and
 >    `done --flip` to earn the stamp.
 > 3. **Scale the implementation to the item.** A simple item (Effort `S`/`M`) you implement directly. A
 >    **complex** one (Effort `L`/`XL`, or a `needs-sdd` signal) you take through the full `fs-gg-sdd-*`
@@ -213,8 +217,10 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    lands, file that work at its **root cause** (pnext-item §4), set `Blocked by` on this item to the
 >    blocker, and `release --status Blocked` so the board tells the truth. Report the blocker you filed —
 >    the host schedules around it next wave.
-> 6. **Findings you make, you FIX in the same PR when that keeps it reviewable**, or file at the root cause
->    — pnext-item §4 is the authority. Do **not** recurse into a second item yourself: you are one worker
+> 6. **Implementation findings you make, you FIX in the same PR when that keeps it reviewable**, or file
+>    at the root cause — pnext-item §4 is the authority. Once independent review begins, the critic
+>    exclusively owns review-discovered root-cause search, dedupe, and direct filing, and may file only
+>    material unresolved work. Do **not** recurse into a second item yourself: you are one worker
 >    in a wave, and the host owns what comes next. Report what you filed; the host pops it.
 > 7. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
 >    exit code and stop — 5 means the repo is dry for now, 75 means the shared budget is gone and the host
@@ -247,6 +253,10 @@ scripts/fsgg-coord ready --repo <this-repo> --all --json   # the always-fresh TR
 - The **rate budget** did not silently strand a write. If any worker returned 75, run
   `scripts/fsgg-coord flush --dry-run` before the next wave — a queued board write that nothing replays
   reads later as drift you will "find" and duplicate.
+- The PR carries `<!-- fsgg:independent-review:v1 -->` for the exact reviewed/confirmed head, the
+  critic is not the implementer, every material finding has a terminal disposition, and every filed
+  issue is directly verified. No nonmaterial observation created an issue, board row, blocker edge, or
+  follow-up entry.
 
 Do not take a merge you can check on the worker's say-so. Read `ready`, not the report.
 
