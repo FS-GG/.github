@@ -15,7 +15,8 @@ CYCLE_RE = re.compile(r"^roadmap-[a-z0-9]+(?:-[a-z0-9]+)*-m[a-z0-9]+(?:-[a-z0-9]
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 REQUIRED_SCOPE = {"requirements", "diff", "tests", "architecture", "roadmap-evidence"}
 SEVERITIES = {"blocker", "major", "minor"}
-DISPOSITIONS = {"resolved", "follow-up"}
+DISPOSITIONS = {"resolved", "follow-up", "unresolved"}
+MAX_REPAIR_ROUNDS = 10
 
 
 def nonempty_string(value: Any) -> bool:
@@ -31,8 +32,8 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
     if not isinstance(data, dict):
         return ["artifact root must be a JSON object"]
 
-    if data.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
+    if data.get("schema_version") != 2:
+        errors.append("schema_version must be 2")
     if data.get("cycle_id") != expected_cycle:
         errors.append(f"cycle_id must equal {expected_cycle!r}")
     for field in ("milestone", "critic"):
@@ -48,20 +49,62 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
         errors.append("initial_verdict must be pass or changes-required")
 
     repair_rounds = data.get("repair_rounds")
-    if not isinstance(repair_rounds, int) or isinstance(repair_rounds, bool) or not 0 <= repair_rounds <= 2:
-        errors.append("repair_rounds must be an integer from 0 through 2")
-    if "second_round_reason" not in data:
-        errors.append("second_round_reason must be present")
-    second_round_reason = data.get("second_round_reason")
-    allowed_second_round_reasons = {"original-blocker-unresolved", "repair-created-blocker"}
-    if repair_rounds == 2 and second_round_reason not in allowed_second_round_reasons:
-        errors.append("second_round_reason must justify the permitted second repair round")
-    if repair_rounds != 2 and second_round_reason is not None:
-        errors.append("second_round_reason must be null unless repair_rounds is 2")
+    if (
+        not isinstance(repair_rounds, int)
+        or isinstance(repair_rounds, bool)
+        or not 0 <= repair_rounds <= MAX_REPAIR_ROUNDS
+    ):
+        errors.append(f"repair_rounds must be an integer from 0 through {MAX_REPAIR_ROUNDS}")
+
+    reviewed_commits = data.get("reviewed_commits")
+    valid_reviewed_commits = (
+        isinstance(reviewed_commits, list)
+        and isinstance(repair_rounds, int)
+        and not isinstance(repair_rounds, bool)
+        and 0 <= repair_rounds <= MAX_REPAIR_ROUNDS
+        and len(reviewed_commits) == repair_rounds + 1
+        and all(COMMIT_RE.fullmatch(str(commit)) for commit in reviewed_commits)
+        and len(set(reviewed_commits)) == len(reviewed_commits)
+        and reviewed_commits[0] == data.get("initial_reviewed_commit")
+    )
+    if not valid_reviewed_commits:
+        errors.append(
+            "reviewed_commits must be a unique ordered lowercase-SHA chain containing the initial "
+            "review plus exactly one commit per repair round"
+        )
+
+    confirmation = data.get("confirmation")
+    human_escalation = data.get("human_escalation")
+    terminal_failure = (
+        repair_rounds == MAX_REPAIR_ROUNDS
+        and isinstance(confirmation, dict)
+        and (
+            confirmation.get("verdict") != "pass"
+            or confirmation.get("unresolved_blocker_major") != []
+        )
+    )
+    confirmation_unresolved = (
+        confirmation.get("unresolved_blocker_major")
+        if isinstance(confirmation, dict)
+        else None
+    )
+    escalation_unresolved = (
+        human_escalation.get("unresolved_blocker_major")
+        if isinstance(human_escalation, dict)
+        else None
+    )
+    terminal_unresolved_ids = (
+        set(confirmation_unresolved)
+        if repair_rounds == MAX_REPAIR_ROUNDS
+        and nonempty_strings(confirmation_unresolved)
+        and confirmation_unresolved == escalation_unresolved
+        else set()
+    )
 
     findings = data.get("findings")
     finding_ids: set[str] = set()
     blocker_major_ids: set[str] = set()
+    unresolved_finding_ids: set[str] = set()
     if not isinstance(findings, list):
         errors.append("findings must be an array")
         findings = []
@@ -88,9 +131,18 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
             errors.append(f"{prefix}.evidence must be a non-empty string array")
         disposition = finding.get("disposition")
         if disposition not in DISPOSITIONS:
-            errors.append(f"{prefix}.disposition must be resolved or follow-up")
-        if severity in {"blocker", "major"} and disposition != "resolved":
-            errors.append(f"{prefix} blocker/major finding must be resolved")
+            errors.append(f"{prefix}.disposition must be resolved, follow-up, or terminal unresolved")
+        if disposition == "unresolved":
+            if (
+                severity not in {"blocker", "major"}
+                or not nonempty_string(finding_id)
+                or finding_id not in terminal_unresolved_ids
+            ):
+                errors.append(f"{prefix}.unresolved is allowed only for a matched terminal escalation")
+            elif nonempty_string(finding_id):
+                unresolved_finding_ids.add(finding_id)
+        elif severity in {"blocker", "major"} and disposition != "resolved":
+            errors.append(f"{prefix} blocker/major finding must be resolved or terminally escalated")
         if not nonempty_strings(finding.get("resolution_evidence")):
             errors.append(f"{prefix}.resolution_evidence must be a non-empty string array")
 
@@ -99,7 +151,7 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
     if repair_rounds and data.get("initial_verdict") != "changes-required":
         errors.append("initial_verdict must be changes-required when repair_rounds is non-zero")
     if data.get("initial_verdict") == "changes-required" and not any(
-        isinstance(item, dict) and item.get("disposition") == "resolved" for item in findings
+        isinstance(item, dict) and item.get("disposition") in {"resolved", "unresolved"} for item in findings
     ):
         errors.append("changes-required must have at least one resolved finding")
     if repair_rounds == 0 and any(
@@ -107,20 +159,37 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
     ):
         errors.append("repair_rounds cannot be 0 when a finding was resolved")
 
-    confirmation = data.get("confirmation")
     if not isinstance(confirmation, dict):
         errors.append("confirmation must be an object")
     else:
         if not COMMIT_RE.fullmatch(str(confirmation.get("reviewed_commit", ""))):
             errors.append("confirmation.reviewed_commit must be a lowercase 40-character git SHA")
-        elif repair_rounds == 0 and confirmation.get("reviewed_commit") != data.get("initial_reviewed_commit"):
-            errors.append("confirmation commit must equal the initial commit when no repair occurred")
-        elif repair_rounds and confirmation.get("reviewed_commit") == data.get("initial_reviewed_commit"):
-            errors.append("confirmation commit must differ from the initial commit after repair")
+        elif valid_reviewed_commits and confirmation.get("reviewed_commit") != reviewed_commits[-1]:
+            errors.append("confirmation.reviewed_commit must equal the latest reviewed_commits entry")
         if confirmation.get("verdict") != "pass":
             errors.append("confirmation.verdict must be pass")
         if confirmation.get("unresolved_blocker_major") != []:
             errors.append("confirmation.unresolved_blocker_major must be an empty array")
+
+    if terminal_failure and human_escalation is None:
+        errors.append(f"human_escalation is required after a failed round {MAX_REPAIR_ROUNDS}")
+    if human_escalation is not None:
+        if repair_rounds != MAX_REPAIR_ROUNDS:
+            errors.append(f"human_escalation is allowed only after repair round {MAX_REPAIR_ROUNDS}")
+        if not isinstance(human_escalation, dict):
+            errors.append("human_escalation must be null or an object")
+        else:
+            if valid_reviewed_commits and human_escalation.get("reviewed_commit") != reviewed_commits[-1]:
+                errors.append("human_escalation.reviewed_commit must equal the latest reviewed commit")
+            if not nonempty_strings(human_escalation.get("unresolved_blocker_major")):
+                errors.append("human_escalation.unresolved_blocker_major must be a non-empty string array")
+            if not nonempty_string(human_escalation.get("action_required")):
+                errors.append("human_escalation.action_required must be a non-empty string")
+        if confirmation_unresolved != escalation_unresolved:
+            errors.append("confirmation and human_escalation unresolved IDs must match exactly")
+        if terminal_unresolved_ids != unresolved_finding_ids:
+            errors.append("terminal unresolved IDs must match unresolved blocker/major findings exactly")
+        errors.append("human escalation is terminal and cannot satisfy milestone acceptance")
 
     return errors
 

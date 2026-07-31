@@ -13,7 +13,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
 4. Spawn one fresh disposable worker per lane; give each a stable feedback cycle id, and reserve
    capacity for a fresh independent critic at the review boundary. Each owns one item through claim,
-   implementation, critique and bounded repair, green merge, obligations, verified feedback, and done. During
+   implementation, critique and up to three repair/review rounds, green merge, obligations, verified
+   feedback, and done—or human escalation after an exhausted third round. During
    worker setup, interactive/game work
    must explicitly invoke the `pnext-item` performance-first planning gate before implementation
    begins.
@@ -25,8 +26,10 @@ Burn down one coordination-wired workspace's board. The local board is both plan
      current activity or gate.
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
    item remains active, continue the host loop, and report each transition when it occurs.
-6. Verify the independent-review marker and exact SHAs, critic independence, and every material finding
-   disposition; reject any critic-filed item without evidence-backed materiality. Then run the exact
+6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
+   material finding disposition; reject any critic-filed item without evidence-backed materiality.
+   Refuse a fourth round or merge after an exhausted third round, and verify the human-action park,
+   released claim, and escalation marker instead. Then run the exact
    checkpoint, schema-v2 report, and activation-envelope validators against merged paths. Missing,
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.

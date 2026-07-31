@@ -121,7 +121,9 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 >    start one fresh critic and follow
 >    `.agents/skills/work-roadmap/references/critique-contract.md`. Repair blocker/major findings,
 >    route minor follow-ups, obtain confirmation from the same critic, and validate the committed
->    `reviews/roadmap/<cycle-id>.json` artifact. The critic never edits implementation.
+>    `reviews/roadmap/<cycle-id>.json` artifact. Permit at most ten repair/confirmation rounds; a
+>    failed tenth round records human escalation and stops without roadmap completion, merge, or an
+>    eleventh round. The critic never edits implementation.
 > 5. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
 >    append the one-line progress note (PR number filled in at step 7, merge date, one-clause
 >    outcome, critique pointer, feedback pointer). Commit it on your branch as part of the milestone.

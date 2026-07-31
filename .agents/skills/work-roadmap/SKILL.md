@@ -16,7 +16,9 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 4. After the first green implementation/test/evidence loop, have the worker start one fresh independent
    critic. The critic reviews requirements, diff, tests, architecture, and roadmap evidence without
    editing the implementation. The worker repairs blocker/major findings, and the same critic confirms
-   them before the worker updates the roadmap and lands the milestone.
+   them before the worker updates the roadmap and lands the milestone. Permit at most ten numbered
+   repair/confirmation rounds. If round ten remains red, record the terminal human escalation, stop
+   the milestone, and never start round eleven or merge.
 5. Verify the merge, tests, roadmap checkbox/evidence, release obligations, critique artifact,
    checkpoint state, and schema-v2 report externally. Missing, invalid, or unreadable critique or
    feedback state fails closed.

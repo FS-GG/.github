@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Fail closed when the shared board review bound or its escalation contract drifts."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+RUNTIMES = (".agents", ".claude")
+MAX_ROUNDS = 3
+
+
+def read(runtime: str, relative: str) -> str:
+    return (ROOT / runtime / "skills" / relative).read_text(encoding="utf-8")
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def main() -> None:
+    relative = "pnext-item/references/independent-review.md"
+    texts = [read(runtime, relative) for runtime in RUNTIMES]
+    require(texts[0] == texts[1], "independent-review contract differs between authored roots")
+
+    contract = texts[0]
+    match = re.search(r"`max-automated-repair-rounds: (\d+)`", contract)
+    require(match is not None, "review contract has no machine-readable repair-round limit")
+    require(int(match.group(1)) == MAX_ROUNDS, f"repair-round limit is not {MAX_ROUNDS}")
+
+    normalized = " ".join(contract.split())
+    for literal in (
+        "`round-numbering: 1-based`",
+        "`round-four-action: human-escalation`",
+        "`human-escalation-sentinel: Blocked on: human/action`",
+        "<!-- fsgg:independent-review-escalation:v1 -->",
+        "all three ordered confirmation URLs",
+        "count-before-routing gate",
+        "stops without merging",
+        "Only a human may retire that sentinel",
+        "exhausted PR cannot reset its counter",
+    ):
+        require(literal in normalized, f"review contract is missing escalation invariant: {literal}")
+
+    for runtime in RUNTIMES:
+        for relative in (
+            "pnext-item/SKILL.md",
+            "work-board/SKILL.md",
+            "work-board/references/host-loop.md",
+            "drive-board/SKILL.md",
+            "drive-board/references/host-loop.md",
+        ):
+            text = read(runtime, relative)
+            require("round three" in text or "third round" in text, f"{runtime}/{relative} omits round three")
+            require("round four" in text or "fourth round" in text, f"{runtime}/{relative} omits round-four refusal")
+
+    print("review-round-contract: three rounds, ordered evidence, and human escalation hold")
+
+
+if __name__ == "__main__":
+    main()

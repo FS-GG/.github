@@ -157,8 +157,9 @@ says the board is genuinely done:
    per-worker brief below with `<REPO>` substituted. One subagent, one `take`-loop-of-one — it takes an
    item and works it to review handoff. Spawn the wave **concurrently** across repos (separate
    checkouts cannot collide), but reserve critic capacity rather than filling the cap with implementers.
-   At each handoff, spawn a fresh critic, keep the implementer alive for bounded repairs, and merge only
-   after the same critic confirms the exact head.
+   At each handoff, spawn a fresh critic, keep the implementer alive for up to three numbered
+   repair/review rounds, and merge only after the same critic confirms the exact head. An exhausted
+   third round parks for human action instead of merging.
 5. **Collect each worker as it returns, and verify — do not trust (§5).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is
    gone, which is deliberate.

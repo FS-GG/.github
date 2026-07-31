@@ -37,10 +37,11 @@ cross-repo allocation, not item implementation.
      current activity or gate.
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
    item remains active, continue the host loop, and report each transition when it occurs.
-6. Verify each worker's PR, independent-review marker and exact SHAs, critic independence, material
-   finding dispositions, merge, publication/registry obligations, exact done stamp, released claim,
-   and newly filed items against GitHub—not its narrative. Reject any new item whose review evidence
-   does not establish materiality.
+6. Verify each worker's PR, independent-review marker and ordered round/URL/SHA chain, critic
+   independence, material finding dispositions, merge, publication/registry obligations, exact done
+   stamp, released claim, and newly filed items against GitHub—not its narrative. Reject any new item
+   whose review evidence does not establish materiality. After an exhausted third round, refuse a
+   fourth round or merge and verify the human-action park, released claim, and escalation marker instead.
 7. **Once this wave's merges into `.github` are verified, and before the next wave is dispatched, bring
    the shared checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
    checkout, so merging a worker's PR can leave the binary the whole fleet execs behind `origin/main` —
