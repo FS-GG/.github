@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Fail-closed validation for a work-roadmap milestone critique artifact."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+
+CYCLE_RE = re.compile(r"^roadmap-[a-z0-9]+(?:-[a-z0-9]+)*-m[a-z0-9]+(?:-[a-z0-9]+)*$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+REQUIRED_SCOPE = {"requirements", "diff", "tests", "architecture", "roadmap-evidence"}
+SEVERITIES = {"blocker", "major", "minor"}
+DISPOSITIONS = {"resolved", "follow-up"}
+
+
+def nonempty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def nonempty_strings(value: Any) -> bool:
+    return isinstance(value, list) and bool(value) and all(nonempty_string(item) for item in value)
+
+
+def validate(data: Any, expected_cycle: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ["artifact root must be a JSON object"]
+
+    if data.get("schema_version") != 1:
+        errors.append("schema_version must be 1")
+    if data.get("cycle_id") != expected_cycle:
+        errors.append(f"cycle_id must equal {expected_cycle!r}")
+    for field in ("milestone", "critic"):
+        if not nonempty_string(data.get(field)):
+            errors.append(f"{field} must be a non-empty string")
+    if not COMMIT_RE.fullmatch(str(data.get("initial_reviewed_commit", ""))):
+        errors.append("initial_reviewed_commit must be a lowercase 40-character git SHA")
+
+    scope = data.get("scope")
+    if not isinstance(scope, list) or set(scope) != REQUIRED_SCOPE or len(scope) != len(REQUIRED_SCOPE):
+        errors.append("scope must contain each required review area exactly once")
+    if data.get("initial_verdict") not in {"pass", "changes-required"}:
+        errors.append("initial_verdict must be pass or changes-required")
+
+    repair_rounds = data.get("repair_rounds")
+    if not isinstance(repair_rounds, int) or isinstance(repair_rounds, bool) or not 0 <= repair_rounds <= 2:
+        errors.append("repair_rounds must be an integer from 0 through 2")
+    if "second_round_reason" not in data:
+        errors.append("second_round_reason must be present")
+    second_round_reason = data.get("second_round_reason")
+    allowed_second_round_reasons = {"original-blocker-unresolved", "repair-created-blocker"}
+    if repair_rounds == 2 and second_round_reason not in allowed_second_round_reasons:
+        errors.append("second_round_reason must justify the permitted second repair round")
+    if repair_rounds != 2 and second_round_reason is not None:
+        errors.append("second_round_reason must be null unless repair_rounds is 2")
+
+    findings = data.get("findings")
+    finding_ids: set[str] = set()
+    blocker_major_ids: set[str] = set()
+    if not isinstance(findings, list):
+        errors.append("findings must be an array")
+        findings = []
+    for index, finding in enumerate(findings):
+        prefix = f"findings[{index}]"
+        if not isinstance(finding, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        finding_id = finding.get("id")
+        if not nonempty_string(finding_id):
+            errors.append(f"{prefix}.id must be a non-empty string")
+        elif finding_id in finding_ids:
+            errors.append(f"{prefix}.id must be unique")
+        else:
+            finding_ids.add(finding_id)
+        severity = finding.get("severity")
+        if severity not in SEVERITIES:
+            errors.append(f"{prefix}.severity must be blocker, major, or minor")
+        elif severity in {"blocker", "major"} and nonempty_string(finding_id):
+            blocker_major_ids.add(finding_id)
+        if not nonempty_string(finding.get("summary")):
+            errors.append(f"{prefix}.summary must be a non-empty string")
+        if not nonempty_strings(finding.get("evidence")):
+            errors.append(f"{prefix}.evidence must be a non-empty string array")
+        disposition = finding.get("disposition")
+        if disposition not in DISPOSITIONS:
+            errors.append(f"{prefix}.disposition must be resolved or follow-up")
+        if severity in {"blocker", "major"} and disposition != "resolved":
+            errors.append(f"{prefix} blocker/major finding must be resolved")
+        if not nonempty_strings(finding.get("resolution_evidence")):
+            errors.append(f"{prefix}.resolution_evidence must be a non-empty string array")
+
+    if blocker_major_ids and data.get("initial_verdict") != "changes-required":
+        errors.append("initial_verdict must be changes-required when blocker/major findings exist")
+    if repair_rounds and data.get("initial_verdict") != "changes-required":
+        errors.append("initial_verdict must be changes-required when repair_rounds is non-zero")
+    if data.get("initial_verdict") == "changes-required" and not any(
+        isinstance(item, dict) and item.get("disposition") == "resolved" for item in findings
+    ):
+        errors.append("changes-required must have at least one resolved finding")
+    if repair_rounds == 0 and any(
+        isinstance(item, dict) and item.get("disposition") == "resolved" for item in findings
+    ):
+        errors.append("repair_rounds cannot be 0 when a finding was resolved")
+
+    confirmation = data.get("confirmation")
+    if not isinstance(confirmation, dict):
+        errors.append("confirmation must be an object")
+    else:
+        if not COMMIT_RE.fullmatch(str(confirmation.get("reviewed_commit", ""))):
+            errors.append("confirmation.reviewed_commit must be a lowercase 40-character git SHA")
+        elif repair_rounds == 0 and confirmation.get("reviewed_commit") != data.get("initial_reviewed_commit"):
+            errors.append("confirmation commit must equal the initial commit when no repair occurred")
+        elif repair_rounds and confirmation.get("reviewed_commit") == data.get("initial_reviewed_commit"):
+            errors.append("confirmation commit must differ from the initial commit after repair")
+        if confirmation.get("verdict") != "pass":
+            errors.append("confirmation.verdict must be pass")
+        if confirmation.get("unresolved_blocker_major") != []:
+            errors.append("confirmation.unresolved_blocker_major must be an empty array")
+
+    return errors
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--cycle", required=True)
+    parser.add_argument("--artifact", required=True, type=Path)
+    args = parser.parse_args()
+
+    if not CYCLE_RE.fullmatch(args.cycle):
+        print("invalid cycle id", file=sys.stderr)
+        return 2
+
+    expected_artifact = Path("reviews") / "roadmap" / f"{args.cycle}.json"
+    if args.artifact != expected_artifact:
+        print(f"artifact must be {expected_artifact}", file=sys.stderr)
+        return 2
+
+    root = args.root.resolve()
+    artifact = (root / args.artifact).resolve()
+    try:
+        artifact.relative_to(root)
+    except ValueError:
+        print("artifact must resolve beneath --root", file=sys.stderr)
+        return 2
+
+    try:
+        data = json.loads(artifact.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        print(f"cannot read critique artifact {artifact}: {exc}", file=sys.stderr)
+        return 2
+
+    errors = validate(data, args.cycle)
+    if errors:
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1
+    print(f"valid critique state: {artifact}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

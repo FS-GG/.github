@@ -8,7 +8,10 @@ At onboarding/first build, lifecycle authoring, the first implementation-test-ev
 verify/ship/PR orchestration, invoke the feedback skill and decide whether a material checkpoint
 qualifies. Append qualifying friction, rework, capability gaps, documentation defects, orchestration
 failures, and unexpectedly effective patterns with its documented `checkpoint` command. Routine green
-commands are not findings.
+commands are not findings. Keep implementation critique in the critique artifact: feedback captures
+development-system observations, not product/code review findings. If the critique cycle itself exposes
+material workflow friction or an unexpectedly effective pattern, checkpoint that process observation
+without duplicating the critic's implementation finding.
 
 Before handoff, finalize one schema-v2 report for the cycle. In §1 include this activation envelope:
 

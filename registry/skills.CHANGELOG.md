@@ -34,6 +34,10 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-31** — ADD bounded independent critique to `work-roadmap` + stage `FS.GG.Drivers` 0.10.0 (owner `.github`; `drivers/v0.10.0`): every roadmap milestone now receives one fresh artifact-only critic after its first green implementation/test/evidence loop. The implementation worker must resolve blocker/major findings, route minor follow-ups durably, and obtain same-critic confirmation; repair is capped at one normal round and one blocker-only recovery round. A schema-v1 JSON artifact binds scope, findings, dispositions, repair count, and reviewed commits, and the new `validate-critique-state.py` makes worker and host acceptance fail closed on missing, malformed, wrong-cycle, unevidenced, over-repaired, or unresolved state. Feedback remains a separate development-system channel. Both authored roots are byte-identical, the complete driver tree is re-digested in `registry/driver-skill-manifest.json`, and the additive driver release advances the stable package 0.9.0 → 0.10.0 for dual-feed publication and subsequent SDD pin adoption. registry = manifest = bytes.
+
+- **2026-07-31** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-30** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-07-29** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
