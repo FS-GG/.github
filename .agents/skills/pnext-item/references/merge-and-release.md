@@ -1,6 +1,6 @@
 # Merge and release obligations
 
-Verify the independent-review marker and confirmation against the current head, then review the complete
+Verify the independent-review marker and ordered confirmation chain against the current head, then review the complete
 diff and changed paths against the issue. Ensure required checks reported on that head; green from an
 earlier SHA is not evidence. Address all actionable review threads and re-run affected gates before
 merging.

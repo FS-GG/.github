@@ -34,6 +34,10 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-31** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
+- **2026-07-31** — BOUND board review at three rounds and roadmap critique at ten; stage `FS.GG.Kit` 0.26.0 + `FS.GG.Drivers` 0.12.0 (owner `.github`; tags `kit/v0.26.0`, `drivers/v0.12.0`): `pnext-item`, `work-board`, and `drive-board` permit at most three numbered same-critic repair-and-confirmation rounds with an ordered URL/SHA chain. A third confirmation that still carries material findings produces a durable escalation marker, adds the machine-readable `Blocked on: human/action` sentinel plus provenance, parks the item `Blocked`, releases the claim, and forbids a fourth automated round or merge until a human explicitly retires the park. `work-roadmap` separately permits ten exact-SHA milestone repair/confirmation rounds; a failed tenth records terminal human escalation, leaves the milestone unchecked and unmerged, and forbids round eleven. Its critique artifact advances to schema v2 with an ordered reviewed-commit chain. The normal/best routing variants inherit the complete canonical board workflows unchanged. Both authored roots and producer manifests are re-digested; registry = manifest = bytes.
+
 - **2026-07-31** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-07-31** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.

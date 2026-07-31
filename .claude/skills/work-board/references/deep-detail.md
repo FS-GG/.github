@@ -151,8 +151,9 @@ Repeat until §5 says the board is genuinely done:
 4. **Spawn fresh implementers within the cap** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), each running
    the worker brief (§3). One subagent, one `take`-loop-of-one: it takes an item, works it to done-stamp,
    and returns. Reserve critic capacity instead of filling the cap with implementers. At each review
-   handoff, spawn a fresh critic, keep the implementer alive for bounded repairs, and require the same
-   critic to confirm the exact head. Concurrency is bounded — one repo, one shared account (§6).
+   handoff, spawn a fresh critic, keep the implementer alive for up to three numbered repair/review
+   rounds, and require the same critic to confirm each exact head. An exhausted third round parks for
+   human action instead of merging. Concurrency is bounded — one repo, one shared account (§6).
 5. **Collect each worker as it returns, and verify — do not trust (§4).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is gone,
    which is deliberate.
@@ -201,8 +202,9 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    `git fetch` then worktree from `origin/main` by name, implement **inside your declared `Paths:`** (in
 >    a shared tree, a path you did not declare is one another worker may be editing). Pause before
 >    opening the PR for steps 3–4, then resume pnext-item: push and open the candidate, pause for the host's
->    independent critic, implement bounded repairs, merge only after the same critic confirms, and
->    `done --flip` to earn the stamp.
+>    independent critic, implement up to three numbered repairs, merge only after the same critic
+>    confirms the current head, and `done --flip` to earn the stamp. If round three still fails, park
+>    for human action and release the claim; never start round four.
 > 3. **Scale the implementation to the item.** A simple item (Effort `S`/`M`) you implement directly. A
 >    **complex** one (Effort `L`/`XL`, or a `needs-sdd` signal) you take through the full `fs-gg-sdd-*`
 >    lifecycle — still inside this one claim → PR → merge → done-stamp envelope. Both skill sets are here.

@@ -11,6 +11,10 @@ completion. After its first green implementation/test/evidence loop, the worker 
 independent critic and follows [critique-contract](critique-contract.md). The critic may write only
 the critique artifact, never implementation, tests, lifecycle artifacts, or roadmap state. Reuse the
 same critic for confirmation so it can verify dispositions against its original findings.
+Route no more than ten numbered repairs. Validate the ordered commit chain and confirm its latest
+round is less than ten before routing each one. A failed tenth confirmation must leave the milestone
+unchecked and unmerged with a terminal human escalation in its critique artifact; never start round
+eleven or accept that artifact as passing.
 
 A host session, account, or parent identity is not a substitute for the worker identity. Check the
 worker's PR, merge, tests, release obligations, critique, feedback, and ledger update against

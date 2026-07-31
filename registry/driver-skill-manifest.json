@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "04d5a7766b1b58a6236863766489633396614a9114a5e5157c7fd0caec79ae9e",
-      "tree-sha256": "ca5d10504c41c3b6c1fd4e3faa9efb513de400580e6ed74f6ccd40ad87dacace",
+      "sha256": "5ffa310b055c62cc443c5891a03c410017431d4867469ea064be27d3263928e0",
+      "tree-sha256": "c8897fa5e2ea52e6a3173f14413d7aefc40f68765e5b9b069a5e2a190864536c",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "04d5a7766b1b58a6236863766489633396614a9114a5e5157c7fd0caec79ae9e",
+          "sha256": "5ffa310b055c62cc443c5891a03c410017431d4867469ea064be27d3263928e0",
           "executable": false
         },
         {
@@ -19,12 +19,12 @@
         },
         {
           "path": "references/critique-contract.md",
-          "sha256": "59a68169c1515412d5c80e3ce85254bb97647fe8457b522a46fd7f05d8a169f6",
+          "sha256": "d59f9b14cfb8c1b02ede19430af06fa4bd99365c9f9ffdbb441fa020ea7d9510",
           "executable": false
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "857fd02875a4efdb58cf2a68d0bc14a7272d688dbc1cc1db3a894f49854fe913",
+          "sha256": "24e5f2acd6a16309b9fbd7bd3395364cef842aab2beaf6cd6a00fbb862134a66",
           "executable": false
         },
         {
@@ -34,7 +34,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "cfd335cd9c8a40db440a2a315e220542425982d341cd1d11ed113993e6d4266f",
+          "sha256": "6a589d23dfd9ad31c10e4e8cbcc10e26630ef5a3bd04aa2620423b80d37e9314",
           "executable": false
         },
         {
@@ -44,7 +44,7 @@
         },
         {
           "path": "scripts/validate-critique-state.py",
-          "sha256": "7c0dea5bd85662c3b0668452ad9fb5e8da7042932dc0b843ffea5f43479ff45a",
+          "sha256": "8a9464b50e6790948f761b52caf18fef4f24e8998511a19731d73ba1eb6fe577",
           "executable": false
         },
         {
@@ -59,12 +59,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "5d1b73db10beb2093cbcd626337b86adaeacf4273308275a27e1f2d743fdae44",
-      "tree-sha256": "9b576dd5facb438b760ac0496edf3eb6acdf9dcbc133f93d60d4284f2e97d11f",
+      "sha256": "dd15d51b49e66d2c7f3fdc7af5f3432c3b55ee5e79c2a3994e82a41668b2a484",
+      "tree-sha256": "3b31eddd31315454b8fd38f420cb91e8e29b334af07682fe764d95b3e096e742",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "5d1b73db10beb2093cbcd626337b86adaeacf4273308275a27e1f2d743fdae44",
+          "sha256": "dd15d51b49e66d2c7f3fdc7af5f3432c3b55ee5e79c2a3994e82a41668b2a484",
           "executable": false
         },
         {
@@ -79,7 +79,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "f57df56505da9ad18cdac339855ae192b76ba18ae082da4f8e324eb1b6d01432",
+          "sha256": "9ca9217c2305aa5321fe0c3197d75713b082f7f7cb748d79328f230c61ce5d6b",
           "executable": false
         },
         {
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "a4301f1c230408706692603710a90003fc060aa52d9ee9b568afa14a6d7103cc",
+          "sha256": "8cdedf1ba9e1c74e69e4524566c44c7581679ed1643a7cb634117d0099584d36",
           "executable": false
         },
         {
@@ -169,12 +169,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "41a272a74e64d0a216c6103c82cd18e451febbc2ccca7d13b4aecc100545ce17",
-      "tree-sha256": "55fdd7f8f1cfb458d7f52f53050781f5d536195fbc4718b48237fd64369aee82",
+      "sha256": "4fd9329264e0cb2762e9162c10af4d79ceaa4f0d7a4012d3649b73082b90aa88",
+      "tree-sha256": "e455447a46c223450a456afb4b7fe5576ed1f073914bf76898c8aed3d463b628",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "41a272a74e64d0a216c6103c82cd18e451febbc2ccca7d13b4aecc100545ce17",
+          "sha256": "4fd9329264e0cb2762e9162c10af4d79ceaa4f0d7a4012d3649b73082b90aa88",
           "executable": false
         },
         {
@@ -189,12 +189,12 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "80c87f005ce3b6fceb902ada97e004817a8d952baac58e26db7c58f4b713c3d9",
+          "sha256": "7dd66b01ffd303ca11af65858ea37a0920b02fa0a3b615ed644388a1692047f6",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "5e96c786bf8b48827c14cb1e4c9128d859f3466242de365481ae6ae41d102196",
+          "sha256": "d9c7e5ea64254dfdfc024d5018ebdbad2cb5d68bbf3697547b962e42e002b413",
           "executable": false
         },
         {

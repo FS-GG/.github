@@ -34,13 +34,16 @@ supports slash-based skill selection.
 
 At each worker's review handoff, spawn a fresh critic under the `independent-review` contract loaded
 by `$pnext-item`, route
-bounded repairs back to the still-live worker, and require the same critic's confirmation when a
-repair occurs. Before merge, verify PR state/head/checks, the durable review marker, any required
-confirmation SHA, critic independence, each material finding's disposition, and newly filed work.
+up to three numbered repairs back to the still-live worker, and require the same critic's confirmation
+after each repair. Before merge, verify PR state/head/checks, the durable review marker, the ordered
+round/URL/SHA chain, critic independence, each material finding's disposition, and newly filed work.
+Validate the chain and confirm its latest round is less than three before routing each repair.
 The critic may file review-discovered work only when materiality, distinct root cause, dedupe, and
 actionability are all evidenced; nonmaterial observations must not create issues, board rows, blocker
 edges, or follow-up entries. Only after these pre-merge checks pass, post the exact-SHA
-`fsgg:review-accepted:v1` marker; the worker may not merge before it observes that marker.
+`fsgg:review-accepted:v1` marker; the worker may not merge before it observes that marker. If material
+findings remain after round three, verify the escalation marker, `Blocked on: human/action` sentinel,
+`Blocked` status, and released claim; do not post acceptance, merge, or permit round four.
 
 After merge and obligations, worker completion is evidence to check, not truth: verify merge
 reachability, post-merge obligations, done stamp, issue/board state, claim release, and pending writes.

@@ -100,8 +100,9 @@ claim alive, set the item to `In review`, and freshly verify that row while the 
 reviews the exact head SHA. The critic does not edit the
 implementation: it checks requirements, diff, tests, architecture, release obligations, and `Paths:`;
 searches code/history and existing work for each candidate root cause; and files only unresolved,
-distinct **material** work. The same critic confirms repairs, with one normal repair round and a second
-only for a remaining or repair-created blocker.
+distinct **material** work. The same critic reviews up to three numbered repair rounds. If material
+findings remain after round three, park the item on `Blocked on: human/action`, release the claim, and
+escalate to a human; never start round four or merge.
 
 [independent-review](references/independent-review.md) is the binding contract for materiality, critic
 ownership, the durable PR marker, direct filing, confirmation, and host verification. Do not merge
