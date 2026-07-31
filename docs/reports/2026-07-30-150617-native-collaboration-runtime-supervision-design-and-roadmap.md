@@ -2,7 +2,7 @@
 
 - **Created:** 2026-07-30 15:06:17 CEST (13:06:17 UTC)
 - **Owner:** Codex collaboration runtime and `FS-GG/.github` coordination maintainers
-- **Status:** design proposal and gated roadmap; not implementation authorization
+- **Status:** on hold as of 2026-07-31; retained as design history, not implementation authorization
 - **Scope:** correlate Codex agent lifecycles with durable `fsgg-coord` claims, recover abandoned
   work safely, and reuse the same event/reconciliation substrate for heartbeat, CI, and dispatch
 - **Incident basis:** `.github#1843` / `.github#1863` and `.github#1858` during the
@@ -12,6 +12,54 @@
   protocol, tests, ADRs, and mutation evidence
 
 ---
+
+## Hold decision — preserve GitHub-native, multi-host coordination
+
+This proposal is **on hold**. Do not extract, schedule, or implement M0–M7 until a replacement design
+preserves the current distributed operating model: several independent users and agent runtimes may
+work in the same repositories from different machines without sharing a local database or electing a
+machine-local authority. Today the durable coordination state and claim CAS live on GitHub, while
+`fsgg-coord` is effectively stateless between invocations. That location independence is an invariant,
+not an incidental property to trade away.
+
+The proposed lifecycle journal and runtime claim registry would add useful provenance, but the roadmap
+does not yet prove how independently installed registries compose. In particular, “one active
+supervisor per registry domain” leaves the domain and its authority underspecified: a per-installation
+registry cannot establish repository-wide exclusivity, while a repository- or organization-wide
+supervisor would centralize coordination that is currently GitHub-native. Deferring multi-instance
+leadership to M6 means the mutating M4 design would cross this boundary before the distributed case is
+settled.
+
+The safety clauses that keep GitHub authoritative are necessary but do not remove that architectural
+change. A local registry would still decide which runtime lifecycle facts exist, which claims receive
+heartbeats, and which orphan/recovery work is attempted. Different users could therefore receive
+different supervision depending on which machine remained online, and no installation could safely
+infer another installation's agent lifecycle from absence in its own registry.
+
+Consequences of the hold:
+
+1. The incident fixtures, responsibility analysis, safety invariants, and milestone text remain useful
+   research, but every milestone below is frozen planning history.
+2. No local runtime registry, mutating supervisor, leader lease, automatic orphan release, or runtime
+   authority is authorized by this report.
+3. GitHub remains the only global durable coordination and claim substrate. Local state may be used as
+   a disposable cache or advisory provenance only; it must not become necessary for correctness or
+   ordinary multi-user operation.
+4. [`.github#1858`](https://github.com/FS-GG/.github/issues/1858) is **not solved or routed by M4**.
+   It returns to an open design question and remains the final board item until a different solution has
+   evidence and an authoritative implementation boundary.
+
+The replacement investigation should start from stateless/GitHub-visible enforcement points. Candidate
+directions include a GitHub-visible executor or operation-generation marker, guarded PR/merge/dispatch
+entry points that verify the current claim immediately before their external effect, and receiver-scoped
+side-effect fencing stored on GitHub. These are questions to test, not a decision: a remedy must cover the
+measured bypass in #1858, where the duplicate executor used direct `git`/`gh` operations and never called
+a claim verb, without requiring all users to share a daemon or local registry.
+
+Lifting the hold requires a reviewed amendment that demonstrates multi-PC behavior, offline-machine and
+restart behavior, partition/split-brain safety, and migration/rollback while retaining GitHub as the
+final CAS authority. The amendment must also re-route #1858 explicitly; merely shortening leases,
+periodically reaping, or reviving this roadmap under a different component name is insufficient.
 
 ## 1. Executive summary
 
@@ -48,11 +96,14 @@ cleanup remain prohibited.
 
 ## 2. Decision requested
 
-Approve the responsibility boundary and milestone order in this report. Approval should authorize
-design refinement and milestone extraction only; it should not silently authorize implementation,
-enable automatic cleanup, or create a new scheduler.
+**Superseded by the hold decision above.** There is no implementation or issue-extraction decision
+requested while the hold remains. The original request is retained below as design history only.
 
-The recommended decision is:
+The original request was to approve the responsibility boundary and milestone order in this report.
+Approval would have authorized design refinement and milestone extraction only; it would not silently
+have authorized implementation, enabled automatic cleanup, or created a new scheduler.
+
+The original recommendation was:
 
 - build native runtime supervision around Codex lifecycle events;
 - integrate through typed `fsgg-coord` provider operations;
@@ -1001,8 +1052,9 @@ These are deliberately retained for M0, in recommended order:
 
 ## 21. Issue-extraction gate
 
-This report is intentionally a design artifact rather than a new issue fleet. Implementation issues
-may be extracted only when all of the following are true:
+This gate is **closed by the hold decision**. The conditions below are retained as historical minimums,
+but satisfying them does not lift the hold. Implementation issues may be extracted only after the hold
+is lifted by the reviewed multi-host amendment described above, and all of the following are true:
 
 1. the responsibility boundary is approved;
 2. M0 open decisions are resolved;
@@ -1012,8 +1064,9 @@ may be extracted only when all of the following are true:
 6. the current board owner confirms that extraction will not displace higher-priority commitments;
 7. automatic mutation remains disabled until its milestone's evidence is reviewed.
 
-The roadmap can then be worked from the document in order. Until that gate is crossed, the unchecked
-milestones are planning records, not queued work.
+Only then can the roadmap be worked from the document in order. While the hold remains, the unchecked
+milestones are frozen planning records, not queued work, and M4 is not the implementation owner for
+#1858.
 
 ## 22. Definition of done
 
