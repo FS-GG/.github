@@ -8,7 +8,8 @@ milestone gets a **fresh subagent with fresh context**; when it has shipped and 
 subagent **dies**, and the parent spawns the next one against updated `main`. The loop ends when the
 roadmap has no unchecked milestone left, and then the parent writes the report and lands it.
 
-This skill is the **loop and its contract**. It does not re-teach the SDD lifecycle — that is
+This skill is the **loop and its contract**. It inserts one bounded independent critique after the
+first green implementation/evidence loop. It does not re-teach the SDD lifecycle — that is
 [fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md)'s, and each subagent runs it. It does not
 re-teach PR-to-merge discipline — that is `pnext-item` §5–6's, and each
 subagent follows it. It owns the thing neither of those does: **the sequencing of many milestones
@@ -61,10 +62,11 @@ obvious which is live, **ask** rather than guess.
 item and appends a compact progress note on the same line or just beneath it:
 
 ```markdown
-- [x] M2 — inbox widening — PR #219, merged 2026-07-19; feedback: 2 findings filed (#221, #222)
+- [x] M2 — inbox widening — PR #219, merged 2026-07-19; critique: roadmap-x-m2-inbox; feedback: 2 findings filed (#221, #222)
 ```
 
-Keep it one line and deterministic: **PR number, merge date, one-clause outcome, feedback pointer.**
+Keep it one line and deterministic: **PR number, merge date, one-clause outcome, critique pointer,
+feedback pointer.**
 The tick is what the parent reads next round; the note is the audit trail the final report rolls up.
 
 ## The loop (what the PARENT does)
@@ -80,8 +82,9 @@ Repeat until the roadmap has no unchecked milestone:
    break to the report step.
 2. **`git fetch` and confirm `main` is current** (the previous PR merged into it). Each milestone
    branches from up-to-date `main`.
-3. **Spawn a fresh subagent** (using the host's available worker/subagent mechanism) and hand it the per-milestone brief below, filled in with
-   this milestone's heading text and the roadmap path. One subagent, one milestone.
+3. **Spawn a fresh implementation worker** using the host's available worker/subagent mechanism and
+   hand it the per-milestone brief below, filled in with this milestone's heading text and the roadmap
+   path. One implementation worker, one milestone.
 4. **Wait for it to return.** On success it reports the merged PR number and the roadmap edit. The
    subagent is now dead; its context does not carry forward — that is deliberate.
 5. **Verify the world matches the report** before trusting it: the PR is merged, `main` moved, and
@@ -114,21 +117,26 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 >    implementation/test/evidence loop; and verify/ship/PR orchestration. Also checkpoint any
 >    misleading guidance, avoidable retry, workaround, capability gap, or unexpectedly effective
 >    composition when it occurs. Commit `feedback/checkpoints/<cycle-id>.jsonl`.
-> 4. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
->    append the one-line progress note (PR number filled in at step 6, merge date, one-clause
->    outcome, feedback pointer). Commit it on your branch as part of the milestone.
-> 5. **Finalize and validate `fs-gg-feedback-report`.** Synthesize the checkpoints and repository
+> 4. **Run the independent critique gate.** After the first green implementation/test/evidence loop,
+>    start one fresh critic and follow
+>    `.agents/skills/work-roadmap/references/critique-contract.md`. Repair blocker/major findings,
+>    route minor follow-ups, obtain confirmation from the same critic, and validate the committed
+>    `reviews/roadmap/<cycle-id>.json` artifact. The critic never edits implementation.
+> 5. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
+>    append the one-line progress note (PR number filled in at step 7, merge date, one-clause
+>    outcome, critique pointer, feedback pointer). Commit it on your branch as part of the milestone.
+> 6. **Finalize and validate `fs-gg-feedback-report`.** Synthesize the checkpoints and repository
 >    evidence into one schema-v2 cycle report. Search prior reports and open/closed issues before
 >    filing; add recurrence evidence to an existing issue instead of duplicating it. Run the bundled
 >    report validator and fix every error. File new actionable findings at their root owner and put
 >    issue numbers in the roadmap progress note.
-> 6. **Open a PR, review it, merge on green** — the `pnext-item` §5–6 way:
->    open the PR, give it a real review, wait for required checks, and merge once green. A problem you
->    find on the way you FIX in this PR when that keeps it reviewable, or file at its root cause when
->    it does not belong here. Backfill the PR number into the roadmap note before you merge (or in an
->    immediate follow-up commit if the number only exists after open).
-> 7. **Report back** to the parent: the milestone, the merged PR number, the roadmap line you wrote,
->    and any findings you filed. Then you are done — exit.
+> 7. **Open a PR and merge on green** — the `pnext-item` §5–6 way:
+>    open the PR, cite the independent critique artifact, satisfy required PR review and checks, and
+>    merge once green. A problem you find on the way you FIX in this PR when that keeps it reviewable,
+>    or file at its root cause when it does not belong here. Backfill the PR number into the roadmap
+>    note before you merge (or in an immediate follow-up commit if the number only exists after open).
+> 8. **Report back** to the parent: the milestone, the merged PR number, the roadmap line you wrote,
+>    critique artifact, and any findings you filed. Then you are done — exit.
 >
 > If the milestone genuinely cannot land from here — it needs a human decision, or it is blocked on
 > another repo — do NOT tick it and do NOT fake a merge. Report the blocker to the parent and stop.
@@ -141,7 +149,8 @@ a detailed report and lands it:
 1. **Write** `docs/reports/<YYYY-MM-DD>-<roadmap-slug>-completion.md`, timestamped for today. It
    should be a real report, not a changelog line — cover, per milestone: what shipped, the merged PR,
    the merge timestamp, what the SDD lifecycle produced (spec/plan/evidence pointers), the feedback
-   findings and where they were filed, and any deviations from the original roadmap. Close with a
+   findings and where they were filed, the critique artifact and resolved/outstanding critique
+   counts, and any deviations from the original roadmap. Close with a
    roll-up: total milestones, total PRs, open follow-ups, recurring root causes by owner, aggregate
    avoidable cost, positive patterns worth promoting, development-surface coverage gaps, and
    anything a human should look at. Aggregate the schema-v2 reports; do not concatenate them.

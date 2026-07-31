@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "7eb9f056104bdbcfdcbd6a73cc82199f481b46864f762a8f0f041d6757529c4f",
-      "tree-sha256": "1af0e118aaabd0757fa3d96ffe5f24656f60f19d4df8943bbb413519e7588577",
+      "sha256": "04d5a7766b1b58a6236863766489633396614a9114a5e5157c7fd0caec79ae9e",
+      "tree-sha256": "ca5d10504c41c3b6c1fd4e3faa9efb513de400580e6ed74f6ccd40ad87dacace",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "7eb9f056104bdbcfdcbd6a73cc82199f481b46864f762a8f0f041d6757529c4f",
+          "sha256": "04d5a7766b1b58a6236863766489633396614a9114a5e5157c7fd0caec79ae9e",
           "executable": false
         },
         {
@@ -18,23 +18,33 @@
           "executable": false
         },
         {
+          "path": "references/critique-contract.md",
+          "sha256": "59a68169c1515412d5c80e3ce85254bb97647fe8457b522a46fd7f05d8a169f6",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "b0d8ebf3ae0a3209b4879f88396f17871a6b3dd702b87e2df82659a835565b11",
+          "sha256": "857fd02875a4efdb58cf2a68d0bc14a7272d688dbc1cc1db3a894f49854fe913",
           "executable": false
         },
         {
           "path": "references/feedback-contract.md",
-          "sha256": "2baee136dbcad2e40a51d28b8389feb7dfe7e1f7c85774c04ad78b0230012f02",
+          "sha256": "a975f8d1994fe57b48f5c05d45bfdee4fd959cd698c71027f702b297d0a378ae",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "daac46a07bc1eece70cf60c89d8739ec9c9c0899ddff26b25ed9afd163a04b44",
+          "sha256": "cfd335cd9c8a40db440a2a315e220542425982d341cd1d11ed113993e6d4266f",
           "executable": false
         },
         {
           "path": "references/roadmap-ledger.md",
-          "sha256": "1c06635c0a51dc5d1decae33231b93157647672d2c5c3ae791fb6b750682981f",
+          "sha256": "fd7b535511327319467da7c4082afdf4b5bd7ca46c258a7129eba14c3fe6c679",
+          "executable": false
+        },
+        {
+          "path": "scripts/validate-critique-state.py",
+          "sha256": "7c0dea5bd85662c3b0668452ad9fb5e8da7042932dc0b843ffea5f43479ff45a",
           "executable": false
         },
         {
