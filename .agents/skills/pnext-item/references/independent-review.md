@@ -42,9 +42,10 @@ confirms the repaired head in a reply beginning with
 `<!-- fsgg:independent-review-confirmation:v1 -->` and naming the initial review comment URL and
 confirmation SHA. There is exactly one initial marker and at most one confirmation marker for a given
 critic and head; duplicates or competing markers fail closed until the critic supersedes them
-explicitly in one final confirmation. Allow one normal repair round. A second round is allowed only
-for an unresolved blocker or a blocker introduced by the first repair. Do not iterate on minor
-observations.
+explicitly in one final confirmation. When no repair is required, an initial `pass` whose reviewed SHA
+equals the candidate head is itself the confirmation; no second marker is required. Allow one normal
+repair round. A second round is allowed only for an unresolved blocker or a blocker introduced by the
+first repair. Do not iterate on minor observations.
 
 The critic may file new work only when all of these are true:
 
@@ -70,5 +71,6 @@ the real `Blocked by` edge, parks the item `Blocked`, releases the claim, and st
 critic returns `pass` only after every material finding is repaired, deduplicated, or filed. The host
 verifies the marker, reviewed and confirmation SHAs, critic independence, dispositions, and every
 filed issue against GitHub before merge or terminal acceptance. After verification, the host posts
-`<!-- fsgg:review-accepted:v1 -->` with the accepted head SHA and initial/confirmation comment URLs.
+`<!-- fsgg:review-accepted:v1 -->` with the accepted head SHA, initial review URL, and confirmation URL
+when a repair occurred.
 The worker must observe that exact-SHA host marker before calling `landable` or merging.

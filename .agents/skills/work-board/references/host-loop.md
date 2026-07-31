@@ -36,14 +36,17 @@ supports slash-based skill selection.
 
 At each worker's review handoff, spawn a fresh critic under the `independent-review` contract loaded
 by `$pnext-item`, route
-bounded repairs back to the still-live worker, and require the same critic's confirmation. Verify PR
-state/head/checks, the durable review marker and SHAs, critic independence, each material finding's
-disposition, merge reachability, post-merge obligations, done stamp, issue/board state, claim release,
-pending writes, feedback, and newly filed work. A critic may file review-discovered work only when
+bounded repairs back to the still-live worker, and require the same critic's confirmation when a
+repair occurs. Before merge, verify PR state/head/checks, the durable review marker, any required
+confirmation SHA, critic independence, each material finding's disposition, and newly filed work.
+A critic may file review-discovered work only when
 materiality, distinct root cause, dedupe, and actionability are evidenced; nonmaterial observations
 must not create issues, board rows, blocker edges, or follow-up entries. Post the exact-SHA
-`fsgg:review-accepted:v1` marker only after those checks pass; the worker may not merge before it
-observes that marker. Apply the exact fail-closed
+`fsgg:review-accepted:v1` marker only after these pre-merge checks pass; the worker may not merge
+before it observes that marker.
+
+After merge and obligations, verify merge reachability, post-merge obligations, done stamp,
+issue/board state, claim release, pending writes, and feedback. Apply the exact fail-closed
 commands in [feedback-contract](feedback-contract.md) to merged paths before accepting an item; worker
 prose is not verification. Reconcile and re-triage after every wave because completion can clear
 blockers or create Backlog follow-ups; a snapshot taken before worker dispatch cannot plan the next
