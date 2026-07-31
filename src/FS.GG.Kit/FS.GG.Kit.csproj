@@ -350,7 +350,11 @@
          "stop and report". That changes the required action a materialized worker takes when the
          shared checkout is unavailable; it is receiver-visible behaviour, not a prose-only repair.
          The packed member set and destinations are unchanged, so it is not a major. -->
-    <Version>0.24.0</Version>
+    <!-- 0.24.0 -> 0.25.0, a MINOR: the packed pnext-item state machine gains a mandatory independent
+         critic before merge, same-critic bounded repair confirmation, root-cause/dedupe ownership,
+         and a material-only filing boundary. These are new receiver-visible required actions, while
+         the member set and destinations remain compatible. -->
+    <Version>0.25.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

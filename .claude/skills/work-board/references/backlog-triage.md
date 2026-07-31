@@ -63,7 +63,8 @@ does not answer. Carry the exact question and source evidence into the wave repo
 
 ## Fresh follow-ups and termination
 
-After workers finish, verify their PR, done stamp, claim release, pending writes, and schema-v2 feedback,
+After workers finish, verify their PR, independent-review evidence and material-only filing, done stamp,
+claim release, pending writes, and schema-v2 feedback,
 then discard the old inventory. Run the complete workspace reconcile pass again and re-read Backlog
 before sizing another wave. A follow-up filed by the preceding wave is classified immediately:
 actionable work is promoted and becomes eligible for the next disjoint `batch`/`take`; parked or

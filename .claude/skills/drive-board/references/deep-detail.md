@@ -153,10 +153,12 @@ says the board is genuinely done:
 3. **Size the wave.** For each repo with `Ready` work, `batch --repo <r> -n <cap> --json` to learn how
    many workers it can absorb. Sum against the concurrency cap (§3) to get a per-repo worker count for
    this wave.
-4. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), handing each the
+4. **Spawn fresh implementers within the cap** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), handing each the
    per-worker brief below with `<REPO>` substituted. One subagent, one `take`-loop-of-one — it takes an
-   item, works it to done-stamp, and returns. Spawn the wave **concurrently** across repos (separate
-   checkouts cannot collide) up to the cap.
+   item and works it to review handoff. Spawn the wave **concurrently** across repos (separate
+   checkouts cannot collide), but reserve critic capacity rather than filling the cap with implementers.
+   At each handoff, spawn a fresh critic, keep the implementer alive for bounded repairs, and merge only
+   after the same critic confirms the exact head.
 5. **Collect each worker as it returns, and verify — do not trust (§5).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is
    gone, which is deliberate.
@@ -191,7 +193,9 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 >    and do not announce or implement before marker + `Status=In progress` are both observed; read the item's **comments**
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name (#622), implement inside your declared
->    `Paths:`, open a PR, review it, merge on green, and `done --flip` to earn the stamp.
+>    `Paths:`, push and open the candidate PR, and pause for the host's independent critic. You implement repairs;
+>    you do not review your own work. Merge only after that critic confirms the exact head, then
+>    `done --flip` to earn the stamp.
 >    Before merge, name any post-merge release/publication/dispatch/deployment obligations. If any
 >    remain after merge, immediately reopen the auto-closed issue, set and freshly verify `In review`,
 >    keep the claim live, finish and verify those obligations, then close and earn `FSGG-DONE`.
@@ -199,8 +203,10 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 >    work lands, file that work at its **root cause** (pnext-item §4), set `Blocked by` on this item to
 >    the blocker, and `release --status Blocked` so the board tells the truth. Report the blocker you
 >    filed — the host schedules around it next wave.
-> 4. **Findings you make, you FIX in the same PR when that keeps it reviewable**, or file at the root
->    cause and (for your own case-2 follow-ups) queue them — pnext-item §4 is the authority. Do **not**
+> 4. **Implementation findings you make, you FIX in the same PR when that keeps it reviewable**, or file
+>    at the root cause and (for your own case-2 follow-ups) queue them — pnext-item §4 is the authority.
+>    Once independent review begins, the critic exclusively owns review-discovered root-cause search,
+>    dedupe, and direct filing, and may file only material unresolved work. Do **not**
 >    recurse into a second item yourself: you are one worker in a wave, and the host owns what comes
 >    next. Report what you filed; the host pops it.
 > 5. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
@@ -251,6 +257,10 @@ instead of narrating the intended state as current.
 - The **rate budget** did not silently strand a write. If any worker returned 75, run
   `scripts/fsgg-coord flush --dry-run` before the next wave — a queued board write that nothing
   replays reads later as drift you will "find" and duplicate.
+- The PR carries `<!-- fsgg:independent-review:v1 -->` for the exact reviewed/confirmed head, the
+  critic is not the implementer, every material finding has a terminal disposition, and every filed
+  issue is directly verified. No nonmaterial observation created an issue, board row, blocker edge, or
+  follow-up entry.
 
 Do not take a merge you can check on the worker's say-so. Pull and look.
 

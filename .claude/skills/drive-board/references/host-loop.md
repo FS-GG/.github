@@ -9,7 +9,8 @@ Every wave starts from fresh ground truth. For `drive-board`, the ordered planni
 consume the complete four-part `check-board` result, classify the current Backlog through
 [backlog-triage](backlog-triage.md), then size repo lanes with `batch`. Never size a Ready-only wave
 before that triage stage. Allocate only schedulable disjoint lanes and never exceed the host's
-available worker slots. Every worker must mint its own `FSGG_WORKER` identity and hold its own claim:
+available worker slots. Reserve at least one available slot for an independent critic instead of
+filling the entire cap with implementers. Every worker must mint its own `FSGG_WORKER` identity and hold its own claim:
 a host session, account, or parent identity is not a substitute. Give it one bounded item and the
 complete item-driver contract. Do not hand it a second item. It MAY, after its done stamp, drain its
 OWN follow-up queue sequentially — one claim at a time, never interleaved.
@@ -31,9 +32,16 @@ Invoke skills through the selector supported by the current host: for example, `
 Codex or the host's skill picker. A literal `/skill` is documentation only unless that host explicitly
 supports slash-based skill selection.
 
-Worker completion is evidence to check, not truth: verify PR state/head/checks/review, merge reachability,
-post-merge obligations, done stamp, issue/board state, claim release, pending writes, and newly filed
-work. Reconcile and re-triage after every wave because completion can clear blockers or create
+At each worker's review handoff, spawn a fresh critic under the `independent-review` contract loaded
+by `$pnext-item`, route
+bounded repairs back to the still-live worker, and require the same critic's confirmation. Worker
+completion is evidence to check, not truth: verify PR state/head/checks, the durable review marker and
+SHAs, critic independence, each material finding's disposition, merge reachability, post-merge
+obligations, done stamp, issue/board state, claim release, pending writes, and newly filed work.
+The critic may file review-discovered work only when materiality, distinct root cause, dedupe, and
+actionability are all evidenced; nonmaterial observations must not create issues, board rows, blocker
+edges, or follow-up entries. Post the exact-SHA `fsgg:review-accepted:v1` marker only after those
+checks pass; the worker may not merge before it observes that marker. Reconcile and re-triage after every wave because completion can clear blockers or create
 Backlog follow-ups; a snapshot taken before worker dispatch cannot plan the next wave.
 
 **"I am refused the shared checkout, and the engine is N commits behind" is an escalation, and this loop
