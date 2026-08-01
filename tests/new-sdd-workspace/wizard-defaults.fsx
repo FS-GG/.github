@@ -11,6 +11,7 @@ let defaults =
         (Some "game")
         None
         None
+        None
         "FS-GG/Pong"
         "FS-GG"
         "Coordination"
@@ -37,6 +38,7 @@ let nonDefaultWiring =
         false
         true
         (Some "app")
+        None
         None
         None
         "acme/Product.X"

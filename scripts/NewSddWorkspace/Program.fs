@@ -68,6 +68,7 @@ type Options =
       /// for that provider and meaningless for every other provider.
       NpmPackage: string option
       NpmVersion: string option
+      BindingTarget: string option
       /// Wire the workspace to a coordination board (default ON): vendor the coordination kit and
       /// write the `FSGG_COORD_*` env so `/pnext-item` and `/check-board` work out of the box.
       /// `--no-coordination` skips the whole step. (Opens ADR-0019's deferred product-mirror slice.)
@@ -98,6 +99,7 @@ let assembleWizardOptions
     (profile: string option)
     (npmPackage: string option)
     (npmVersion: string option)
+    (bindingTarget: string option)
     (workspaceRepo: string)
     (boardOwner: string)
     (boardTitle: string)
@@ -113,6 +115,7 @@ let assembleWizardOptions
       Profile = profile
       NpmPackage = npmPackage
       NpmVersion = npmVersion
+      BindingTarget = bindingTarget
       Coordinate = true
       WorkspaceRepo = Some workspaceRepo
       BoardOwner = boardOwner
@@ -298,8 +301,12 @@ let private onPath (cmd: string) =
 /// string (a non-2xx response mirrors curl's `-f` failure — fatal to the run).
 let private fetchDescriptor (template: string) (gitRef: string) (dest: string) : Result<string option, string> =
     try
+        let baseUrl =
+            match Environment.GetEnvironmentVariable "FSGG_TEMPLATES_RAW_BASE" with
+            | null | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
+            | value -> value.TrimEnd('/')
         let url =
-            sprintf "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/%s/providers/%s.providers.yml" gitRef template
+            sprintf "%s/%s/providers/%s.providers.yml" baseUrl gitRef template
         use client = new HttpClient()
         client.Timeout <- TimeSpan.FromSeconds 30.0
         use resp = client.GetAsync(url).GetAwaiter().GetResult()
@@ -743,6 +750,9 @@ let private header (opts: Options) =
     match opts.NpmPackage, opts.NpmVersion with
     | Some packageName, Some version -> grid.AddRow("[grey]npm[/]", Markup.Escape(sprintf "%s@%s" packageName version)) |> ignore
     | _ -> ()
+    match opts.BindingTarget with
+    | Some bindingTarget -> grid.AddRow("[grey]binding target[/]", Markup.Escape bindingTarget) |> ignore
+    | None -> ()
     grid.AddRow("[grey]descriptor ref[/]", Markup.Escape opts.Ref) |> ignore
     grid.AddRow(
         "[grey]currency[/]",
@@ -818,7 +828,7 @@ let private templates =
       "console", "minimal F# executable"
       "web", "ASP.NET Core + TypeScript/Vite workspace"
       "fable-game", "Fable/Elmish game workspace"
-      "fable-bindings", "Fable interop library (requires an exact npm package/version)" ]
+      "fable-bindings", "Fable interop library (requires an exact npm package/version and target)" ]
 
 let private supportsProfile template = template = "rendering"
 let private requiresNpmClosure template = template = "fable-bindings"
@@ -855,6 +865,7 @@ let private usage () =
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--npm-package[/] <name>  fable-bindings package name (requires --npm-version)"
     AnsiConsole.MarkupLine "  [green]--npm-version[/] <exact> fable-bindings exact package version (requires --npm-package)"
+    AnsiConsole.MarkupLine "  [green]--binding-target[/] <target> fable-bindings runtime target: browser, node, or universal"
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
     AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
     AnsiConsole.MarkupLine "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
@@ -878,6 +889,7 @@ type private Draft =
       Profile: string option
       NpmPackage: string option
       NpmVersion: string option
+      BindingTarget: string option
       Governance: bool option
       Ref: string option
       Pinned: bool option
@@ -893,6 +905,7 @@ let private emptyDraft =
       Profile = None
       NpmPackage = None
       NpmVersion = None
+      BindingTarget = None
       Governance = None
       Ref = None
       Pinned = None
@@ -923,6 +936,10 @@ let private paramsPanel (d: Draft) =
     match d.Template, d.NpmPackage, d.NpmVersion with
     | Some "fable-bindings", Some packageName, Some version -> row "npm" (sprintf "[magenta]%s@%s[/]" (Markup.Escape packageName) (Markup.Escape version))
     | Some "fable-bindings", _, _ -> row "npm" pendingCell
+    | _ -> ()
+    match d.Template, d.BindingTarget with
+    | Some "fable-bindings", Some bindingTarget -> row "binding target" (Markup.Escape bindingTarget)
+    | Some "fable-bindings", None -> row "binding target" pendingCell
     | _ -> ()
     row "governance"
         (match d.Governance with
@@ -984,7 +1001,7 @@ let private previewPanel (d: Draft) =
         | Some "console" -> "F# console executable", "[grey](no npm lane)[/]"
         | Some "web" -> "web workspace", "[grey](ASP.NET Core + TypeScript/Vite)[/]"
         | Some "fable-game" -> "Fable game workspace", "[grey](Elmish + game provider)[/]"
-        | Some "fable-bindings" -> "Fable bindings library", d.NpmPackage |> Option.map (fun p -> sprintf "[grey](npm [/][magenta]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
+        | Some "fable-bindings" -> "Fable bindings library", d.BindingTarget |> Option.map (fun target -> sprintf "[grey](%s target)[/]" (Markup.Escape target)) |> Option.defaultValue pendingCell
         | _ -> "generated workspace", pendingCell
     let app = tree.AddNode(sprintf "%s  %s" appLabel profileAnno)
     app.AddNode "[grey37]dotnet build && dotnet run[/]" |> ignore
@@ -1028,6 +1045,7 @@ let private equivalentCommand (d: Draft) =
     (match d.Template with Some t when t <> "rendering" -> parts.Add(sprintf "--template %s" t) | _ -> ())
     (match d.Template, d.Profile with Some "rendering", Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
     (match d.NpmPackage, d.NpmVersion with Some packageName, Some version -> parts.Add(sprintf "--npm-package %s --npm-version %s" packageName version) | _ -> ())
+    (match d.BindingTarget with Some bindingTarget -> parts.Add(sprintf "--binding-target %s" bindingTarget) | _ -> ())
     (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
     let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
     let title = d.BoardTitle |> Option.defaultValue "Coordination"
@@ -1101,7 +1119,7 @@ let private interactive () : Options option =
         else
             ""
 
-    let npmPackage, npmVersion =
+    let npmPackage, npmVersion, bindingTarget =
         if requiresNpmClosure template then
             draftView draft
             let packageName = AnsiConsole.Prompt(TextPrompt<string>("npm [green]package[/]?").Validate(fun s -> required "npm package" s)).Trim()
@@ -1109,8 +1127,15 @@ let private interactive () : Options option =
             draftView draft
             let version = AnsiConsole.Prompt(TextPrompt<string>("exact npm [green]version[/]?").Validate(fun s -> required "npm version" s)).Trim()
             draft <- { draft with NpmVersion = Some version }
-            Some packageName, Some version
-        else None, None
+            draftView draft
+            let target =
+                AnsiConsole.Prompt(
+                    SelectionPrompt<string>()
+                        .Title("Bindings runtime [magenta]target[/]?")
+                        .AddChoices([| "browser"; "node"; "universal" |]))
+            draft <- { draft with BindingTarget = Some target }
+            Some packageName, Some version, Some target
+        else None, None, None
 
     draftView draft
     let governance =
@@ -1184,7 +1209,7 @@ let private interactive () : Options option =
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some(assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion workspaceRepo boardOwner boardTitle choreLocks)
+        Some(assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks)
     else
         None
 
@@ -1199,8 +1224,14 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--profile is only supported by the rendering template (selected: %s)" template)
         | _, template when requiresNpmClosure template && (opts.NpmPackage.IsNone || opts.NpmVersion.IsNone) ->
             Error "--template fable-bindings requires both --npm-package and --npm-version"
+        | _, template when requiresNpmClosure template && opts.BindingTarget.IsNone ->
+            Error "--template fable-bindings requires --binding-target (browser, node, or universal)"
         | _, template when (opts.NpmPackage.IsSome || opts.NpmVersion.IsSome) && not (requiresNpmClosure template) ->
             Error(sprintf "--npm-package/--npm-version are only supported by the fable-bindings template (selected: %s)" template)
+        | _, template when opts.BindingTarget.IsSome && not (requiresNpmClosure template) ->
+            Error(sprintf "--binding-target is only supported by the fable-bindings template (selected: %s)" template)
+        | _, _ when opts.BindingTarget |> Option.exists (fun target -> not (List.contains target [ "browser"; "node"; "universal" ])) ->
+            Error "--binding-target must be browser, node, or universal"
         | _, template when requiresNpmClosure template && (opts.NpmVersion |> Option.exists (fun version -> String.IsNullOrWhiteSpace version || version.Equals("latest", StringComparison.OrdinalIgnoreCase) || version.IndexOfAny([| '*'; '^'; '~'; '>'; '<'; '|'; ' ' |]) >= 0)) ->
             Error "--npm-version must be an exact version (not latest or a range)"
         | _ -> Ok opts
@@ -1235,6 +1266,10 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--npm-version needs a value (got flag '%s')" value)
         | "--npm-version" :: value :: t -> flags { acc with NpmVersion = Some value } t
         | [ "--npm-version" ] -> Error "--npm-version needs a value"
+        | "--binding-target" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--binding-target needs a value (got flag '%s')" value)
+        | "--binding-target" :: value :: t -> flags { acc with BindingTarget = Some value } t
+        | [ "--binding-target" ] -> Error "--binding-target needs a value"
         | "--ref" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
@@ -1271,6 +1306,7 @@ let private parse (argv: string list) : Result<Options, string> =
               Profile = None
               NpmPackage = None
               NpmVersion = None
+              BindingTarget = None
               Coordinate = true
               WorkspaceRepo = None
               BoardOwner = "FS-GG"
@@ -1388,11 +1424,14 @@ let private run (opts: Options) : int =
                 match opts.NpmPackage, opts.NpmVersion with
                 | Some packageName, Some version -> [ "--param"; sprintf "npmPackage=%s" packageName; "--param"; sprintf "npmVersion=%s" version ]
                 | _ -> []
+            let bindingTargetParam =
+                opts.BindingTarget |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ]) |> Option.defaultValue []
             let code, _ =
                 runProcess true "fsgg-sdd"
                     ([ "scaffold"; "--root"; opts.Target; "--provider"; opts.Template ]
                      @ profileParam
                      @ npmParams
+                     @ bindingTargetParam
                      @ [ "--param"; sprintf "productName=%s" opts.Product ])
             if code = 0 then
                 AnsiConsole.MarkupLine(sprintf "  [green]✓[/] SDD skeleton + %s workspace scaffolded" (Markup.Escape opts.Template))
