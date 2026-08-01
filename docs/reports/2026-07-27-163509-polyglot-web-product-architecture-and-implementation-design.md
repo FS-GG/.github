@@ -844,8 +844,8 @@ assume that arbitrary product content is a scene.
 Continue using `dotnet new` as the template transport. A dotnet template can contain arbitrary
 TypeScript and configuration files; introducing a second scaffold engine is unnecessary.
 
-ADR-0071 makes the durable identities more precise: this lane produces the `fs-gg-web` identity in
-the `FS.GG.Web.Template` package and the `web` provider. `new-sdd-workspace --template web` selects
+ADR-0071/0072 make the durable identities more precise: this lane produces the `fs-gg-web` identity in
+the `FS.GG.Workspace.Template` package and the `web` provider. `new-sdd-workspace --template web` selects
 it; `--profile` does not select between providers.
 
 Exit: generation is deterministic; the arbitrary-content reference site builds and runs; generated
@@ -862,7 +862,7 @@ generates an F# ASP.NET Core server, an Elmish client, a deliberately bounded sh
 HTTP RPC through Fable.Remoting, and real-time connection/session traffic through SignalR. Exact
 shared game logic is limited to Game's `fs-gg-game-core-fable-lockstep-v1` profile; generic Fable
 skills come from Templates and the lockstep skill from Game's independently versioned
-`FS.GG.Game.Skills` package. The Game package and `FS.GG.Web.Template` are separate release lanes:
+`FS.GG.Game.Skills` package. The Game package and `FS.GG.Workspace.Template` are separate release lanes:
 each is dual-published and independently restored from its public read paths before S.I.R. adoption.
 After Game publishes, SDD—not Templates—pins that exact Skills version and proves the production
 scaffold materializer emits the lockstep skill bytes, digest, owner/source, version, and provenance.
@@ -875,6 +875,11 @@ Exit: a clean generated workspace restores, builds, starts in a browser, perform
 survives a SignalR reconnect/resync scenario, executes Game's published canonical lockstep vectors,
 imports server and browser evidence into one SDD lifecycle, and supports one S.I.R. vertical
 gameplay slice without moving S.I.R.-specific domain logic into the template.
+
+ADR-0072 also places `console` and `fable-bindings` beside these web identities in the shared
+workspace-template package. They do not change this report's web architecture: console has no npm
+lane, while bindings produces a curated Fable interop library over a pinned npm/declaration closure
+rather than a server/client application.
 
 ### Milestone 3 — Execute the browser feasibility proof
 
