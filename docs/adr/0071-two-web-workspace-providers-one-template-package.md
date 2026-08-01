@@ -67,9 +67,10 @@ new default and not an extension layered onto generated `web` source.
 
 FS.GG.Templates owns both provider descriptors and generic web/Fable workspace
 skills. FS.GG.Game owns the skill that teaches use of its Fable lockstep
-profile. Under ADR-0063, the scaffold materializer obtains a skill from the
-declared owner package/source; neither Templates nor the generated workspace
-copies Game's skill body.
+profile and publishes it through the independently versioned
+`FS.GG.Game.Skills` package. Under ADR-0063, the scaffold materializer obtains
+a skill from the declared owner package/source; neither Templates nor the
+generated workspace copies Game's skill body.
 
 ### 2. Wizard and provider semantics
 
@@ -167,15 +168,23 @@ Rollout is publish-before-flip:
 1. SDD proves the mixed F#/TypeScript lifecycle and evidence contract.
 2. Templates and Game qualify the browser toolchain and the published Game
    lockstep artifact from clean consumers.
-3. Templates implements and proves both template identities and owner-sourced
-   skills.
-4. Templates publishes the exact `FS.GG.Web.Template` package to both feeds;
+3. Templates implements and proves both template identities and its generic
+   owner-sourced skills; Game implements and proves its lockstep skill.
+4. Game versions and publishes the exact `FS.GG.Game.Skills` package to both
+   feeds, then an independent consumer restores and materializes that version
+   from every required public read path.
+5. Templates publishes the exact `FS.GG.Web.Template` package to both feeds;
    an independent consumer installs and instantiates it from the public read
    path.
-5. S.I.R. incorporates the public scaffold/package and passes its real
+6. S.I.R. incorporates the public scaffold/packages and passes its real
    browser/gameplay acceptance slice without sibling-checkout dependencies.
-6. `.github` activates provider/pin registry entries and releases the wizard
+7. `.github` activates provider/pin registry entries and releases the wizard
    support.
+
+Both producer handoffs record the exact package version, tag, commit, and
+artifact hashes. Required-feed artifacts are byte-identical except for a
+documented feed signature, and restore/materialization evidence comes from the
+public read paths rather than either producer checkout.
 
 The package and providers are not live merely because this ADR names them.
 Registry activation records a proven published artifact; it does not predict
@@ -198,6 +207,9 @@ one.
 - S.I.R. supplies the first non-toy integration evidence without becoming a
   hidden framework source or causing its application-specific rules to leak
   into every generated game.
+- The coherent release has two independently versioned producer artifacts.
+  Changing a Game-owned skill requires a Game Skills release even when the web
+  template package itself is unchanged.
 - Framework/view-library selection remains replaceable behind the stable
   `fable-game` identity, but changing generated source materially still needs
   normal template SemVer, upgrade notes, and drift evidence.
