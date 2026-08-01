@@ -4,10 +4,13 @@ let defaults =
     assembleWizardOptions
         "./Pong"
         "Pong"
+        "rendering"
         "main"
         true
         false
-        "game"
+        (Some "game")
+        None
+        None
         "FS-GG/Pong"
         "FS-GG"
         "Coordination"
@@ -29,10 +32,13 @@ let nonDefaultWiring =
     assembleWizardOptions
         "./Product.X"
         "Product.X"
+        "rendering"
         "release/v1"
         false
         true
-        "app"
+        (Some "app")
+        None
+        None
         "acme/Product.X"
         "acme"
         "Roadmap"

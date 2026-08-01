@@ -23,11 +23,14 @@ Requires the `fsgg-sdd` CLI on PATH (`dotnet tool install --global FS.GG.SDD.Cli
 ## Use
 
 ```sh
-new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
+new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>; compatibility default = rendering
+new-sdd-workspace ./Tool Tool --template console
+new-sdd-workspace ./Portal Portal --template web
+new-sdd-workspace ./Interop Interop --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the meaningful
-parameters with prompts (product → target → profile → governance → descriptor ref → currency →
+parameters with prompts (product → target → application type → provider-specific parameters → governance → descriptor ref → currency →
 this workspace's repo / coordination org / board / chore-locks, defaulting to FS-GG).
 The wizard follows the established defaults without asking redundant confirmations: coordination is
 on and an immediate post-scaffold `fsgg-sdd upgrade` is off. Scripted callers can still opt out with
@@ -39,7 +42,9 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 
 | Option | Effect |
 |---|---|
-| `--profile <name>` | `fs-gg-ui` render profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the scaffold-provider default (`game`). |
+| `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
+| `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
+| `--npm-package <name>` / `--npm-version <exact>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure. They are rejected for other templates. |
 | `--ref <git-ref>` | `FS.GG.Templates` ref to fetch the provider descriptor from (default: `main` = newest coherent set). Pass a tag to pin a reproducible version. |
 | `--pinned` | **skip** the pre-scaffold `fsgg-sdd` self-update and scaffold with the CLI you already have. The default is to update first (see below); pair `--pinned` with `--ref <tag>` for a fully reproducible, pinned scaffold. |
 | `--upgrade` | after scaffolding, also run `fsgg-sdd upgrade` to reconcile an existing project (self-update + re-pin + re-seed). Largely redundant on a fresh scaffold now that the CLI is updated *before* scaffolding — kept for the reconcile-an-existing-project case. |

@@ -99,6 +99,18 @@ expect_err "an unknown --profile value is rejected against the known set (#388)"
   "unknown profile 'bogus'" -- "$TGT" P --profile bogus
 expect_err "--profile with no following token needs a value" \
   "--profile needs a value" -- "$TGT" P --profile
+expect_err "--template with no following token needs a value" \
+  "--template needs a value" -- "$TGT" P --template
+expect_err "an unknown --template is rejected before any scaffold" \
+  "unknown template 'bogus'" -- "$TGT" P --template bogus
+expect_err "a rendering profile is rejected for a non-rendering template" \
+  "--profile is only supported by the rendering template" -- "$TGT" P --template console --profile game
+expect_err "fable-bindings requires its package closure" \
+  "requires both --npm-package and --npm-version" -- "$TGT" P --template fable-bindings
+expect_err "fable-bindings rejects a non-exact npm version" \
+  "--npm-version must be an exact version" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version latest
+expect_err "npm parameters are rejected outside fable-bindings" \
+  "only supported by the fable-bindings" -- "$TGT" P --template console --npm-package @babylonjs/core --npm-version 8.0.0
 expect_err "--ref with no following token needs a value" \
   "--ref needs a value" -- "$TGT" P --ref
 expect_err "an unknown flag is named, not silently ignored" \
@@ -121,6 +133,11 @@ expect_err "--repo with no following token needs a value" \
 
 expect_ok "the bare two-positional form parses (Profile defaults to the provider default)" \
   -- "$TGT" P
+for template in rendering console web fable-game; do
+  expect_ok "--template $template parses" -- "$TGT" P --template "$template"
+done
+expect_ok "fable-bindings parses with its exact npm package closure" \
+  -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0
 # Each id in `profiles` (Program.fs) must parse. Kept in lockstep with that list by hand; a removed
 # profile red-flags here, and the unknown-profile assertion above pins the closed set.
 for prof in game app headless-scene governed sample-pack; do
