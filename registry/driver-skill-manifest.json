@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "5ffa310b055c62cc443c5891a03c410017431d4867469ea064be27d3263928e0",
-      "tree-sha256": "c8897fa5e2ea52e6a3173f14413d7aefc40f68765e5b9b069a5e2a190864536c",
+      "sha256": "2b29f114c105b2aa7cedff1c251759dea20acfedbdd7cb569ba113aca403cfe0",
+      "tree-sha256": "07588d81c1c9a052fae912322f7873136af657bf77713810a5ea24927c39afe0",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "5ffa310b055c62cc443c5891a03c410017431d4867469ea064be27d3263928e0",
+          "sha256": "2b29f114c105b2aa7cedff1c251759dea20acfedbdd7cb569ba113aca403cfe0",
           "executable": false
         },
         {
@@ -19,7 +19,7 @@
         },
         {
           "path": "references/critique-contract.md",
-          "sha256": "d59f9b14cfb8c1b02ede19430af06fa4bd99365c9f9ffdbb441fa020ea7d9510",
+          "sha256": "08c61a09cb356b7d92320c2e4b1dd4eeea66686f5e3e6d998ad3d712e6c1bd99",
           "executable": false
         },
         {
