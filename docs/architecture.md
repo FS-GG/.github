@@ -97,7 +97,7 @@ published *at*:
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Scene, layout, input, viewer/host, controls, themes; Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. In addition to the live rendering/governance composition, ADR-0071 defines the not-yet-published `web` and `fable-game` providers. | the `rendering` scaffold provider + `fs-gg-governance` overlay; planned `FS.GG.Web.Template` package (`fs-gg-web`, `fs-gg-fable-game`) |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
@@ -379,6 +379,22 @@ README must name the same version), and proves the governance matrix end-to-end 
 **strict + failing → exit 2, strict + satisfied → exit 0, light + failing → exit
 0** — with independent SKIP probes so it never passes by omission.
 
+**The web provider contract** ([ADR-0071](adr/0071-two-web-workspace-providers-one-template-package.md))
+adds a top-level distinction that the current rendering-only path does not need:
+`new-sdd-workspace --template` selects a provider, while `--profile` is interpreted only by that
+provider. Omission preserves the current rendering behaviour during the compatibility window.
+FS.GG.Templates owns one planned `FS.GG.Web.Template` package with two independent identities:
+`fs-gg-web` is an F# ASP.NET Core plus plain TypeScript/Vite baseline; `fs-gg-fable-game` is a
+bounded Fable/Elmish game workspace. The game shape uses Fable.Remoting for typed HTTP RPC and
+SignalR for real-time session traffic, and consumes Game's producer-owned
+`fs-gg-game-core-fable-lockstep-v1` profile. Templates owns generic Fable workspace skills; Game
+owns the lockstep skill, materialized from its declared owner under ADR-0063. None of these planned
+identities is registry-active until the package is published to both feeds and independently
+installed from the public read path. The sibling `EHotwagner/S.I.R.` repository is the first
+forcing consumer: its application is incorporated into this workspace shape for real acceptance,
+but the resulting build may not depend on a sibling checkout and S.I.R.-specific rules remain
+consumer-owned.
+
 ### 4.5 FS.GG.Game — the simulation core *(extracted + published P5, ADR-0022)*
 
 The platform's simulation core, extracted from Rendering and published under
@@ -508,6 +524,7 @@ The contracts that hold the system together:
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
+| `fs-gg-web-template` *(planned; not registry-active)* | Templates | `FS.GG.Web.Template` package with `dotnet new fs-gg-web` and `dotnet new fs-gg-fable-game` identities | SDD, `.github` wizard |
 | `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`) |
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |

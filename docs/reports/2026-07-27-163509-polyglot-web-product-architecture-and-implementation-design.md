@@ -1,10 +1,10 @@
 # Polyglot Web Product Architecture and Implementation Design
 
 **Date:** 2026-07-27 16:35:09 +02:00
-**Amended:** 2026-07-27 — general-purpose TypeScript website profile made the base web product
+**Amended:** 2026-08-01 — ADR-0071 preserves the TypeScript base and adds a bounded Fable-game sibling
 **Status:** Proposed architecture and implementation programme
 **Scope:** FS-GG framework development and generated/product development
-**Decision posture:** Plain TypeScript browser client; F# ASP.NET Core server; no Blazor; no Fable in the first implementation
+**Decision posture:** Plain TypeScript remains the neutral browser baseline; ADR-0071 adds Fable only for the independently selected game workspace
 
 ## Executive summary
 
@@ -29,6 +29,17 @@ adding it would introduce a second compilation model before it has demonstrated 
 server-authoritative rendered product, the F# server produces `FS.GG.UI.Scene` values; the browser
 consumes the existing deterministic portable Scene package, renders it through CanvasKit, and
 returns normalized input events. The rest of the website remains normal DOM content.
+
+**Amendment (2026-08-01):** [ADR-0071](../adr/0071-two-web-workspace-providers-one-template-package.md)
+accepts the bounded reason this report left open. Alongside—not inside—the neutral `web` shape,
+FS.GG.Templates will provide a separate `fable-game` provider for an F# ASP.NET Core game server and
+Fable/Elmish client. It shares only qualified F# application logic, uses Fable.Remoting for typed
+HTTP request/response and SignalR for real-time sessions, and consumes Game's published
+`fs-gg-game-core-fable-lockstep-v1` exactness contract. This does not make Fable a prerequisite for
+ordinary websites, Scene conformance, or the TypeScript/CanvasKit rendering work described here.
+The sibling `EHotwagner/S.I.R.` repository is the first real integration: its application is
+incorporated into the scaffolded workspace shape, while the completed workspace remains
+self-contained and consumes published artifacts rather than a live sibling checkout.
 
 The main discovery is that much of the hard architectural seam already exists:
 
@@ -149,6 +160,11 @@ Fable should be reconsidered only for a bounded, measured reason, such as:
 - profiling shows no unacceptable bundle, startup, debugging, or interop cost.
 
 It should not be introduced merely to make the repository look more uniformly F#.
+
+The measured-reason threshold is now met for the separate game workspace: Game publishes a bounded
+Fable lockstep profile and the proposed client needs shared application transitions. ADR-0071
+therefore adds `fable-game` as a sibling template identity while leaving this section's choice in
+force for `web`, `web-rendering`, and the independent browser Scene proof.
 
 ### D3 — Make a general TypeScript website the base profile
 
@@ -828,9 +844,33 @@ assume that arbitrary product content is a scene.
 Continue using `dotnet new` as the template transport. A dotnet template can contain arbitrary
 TypeScript and configuration files; introducing a second scaffold engine is unnecessary.
 
+ADR-0071 makes the durable identities more precise: this lane produces the `fs-gg-web` identity in
+the `FS.GG.Web.Template` package and the `web` provider. `new-sdd-workspace --template web` selects
+it; `--profile` does not select between providers.
+
 Exit: generation is deterministic; the arbitrary-content reference site builds and runs; generated
 output builds offline under the supported cache conditions; both language lanes are drift-checked;
 and the product lifecycle imports real TRX and JUnit evidence.
+
+### Milestone 2b — Add the bounded Fable-game sibling
+
+**Owners:** `FS.GG.Templates`, with qualified inputs from `FS.GG.Game`
+
+After the current Fable/Elmish, Fable.Remoting, and official SignalR npm-client combination passes a
+clean-consumer spike, add the separate `fs-gg-fable-game` identity and `fable-game` provider. It
+generates an F# ASP.NET Core server, an Elmish client, a deliberately bounded shared F# lane, typed
+HTTP RPC through Fable.Remoting, and real-time connection/session traffic through SignalR. Exact
+shared game logic is limited to Game's `fs-gg-game-core-fable-lockstep-v1` profile; generic Fable
+skills come from Templates and the lockstep skill from Game.
+
+Use S.I.R. as the first non-toy acceptance workspace. Applying the scaffold to S.I.R., or migrating
+S.I.R.'s application source into a freshly generated workspace, are both valid implementation
+routes; the committed outcome must have the generated contract and no sibling-checkout build edge.
+
+Exit: a clean generated workspace restores, builds, starts in a browser, performs one typed RPC,
+survives a SignalR reconnect/resync scenario, executes Game's published canonical lockstep vectors,
+imports server and browser evidence into one SDD lifecycle, and supports one S.I.R. vertical
+gameplay slice without moving S.I.R.-specific domain logic into the template.
 
 ### Milestone 3 — Execute the browser feasibility proof
 
@@ -1087,12 +1127,15 @@ integration laboratory.
 
 ## Final recommendation
 
-Proceed with the plain TypeScript design.
+Proceed with plain TypeScript as the neutral design, plus the bounded Fable-game sibling accepted by
+ADR-0071.
 
 The architecture is not “an F# repository with an awkward JavaScript folder.” It is:
 
 - a general-purpose F#/TypeScript website profile with arbitrary native web content and no
   Rendering dependency;
+- a separately selected F#/Fable game workspace for qualified shared application logic, with
+  Fable.Remoting and SignalR assigned distinct responsibilities;
 - a language-neutral portable Scene contract owned by Rendering;
 - an optional, independently conforming TypeScript/CanvasKit renderer owned by a browser framework
   component and embeddable inside that ordinary website;
@@ -1104,9 +1147,9 @@ The architecture is not “an F# repository with an awkward JavaScript folder.�
 
 This arrangement uses the strengths of the existing FS-GG machinery without forcing TypeScript
 through F#-specific surfaces or making Scene rendering the definition of a web product. It also
-preserves a credible path to Fable later: Fable can be added for proven shared application logic
-without being made a prerequisite for a normal website, browser rendering, protocol conformance, or
-product governance.
+uses the credible Fable path only where shared application logic has been qualified, without making
+it a prerequisite for a normal website, browser rendering, protocol conformance, or product
+governance.
 
 The immediate next action is to create the Coordination epic and prove the mixed SDD workspace.
 That unblocks the general `web` profile independently. In parallel, the rendering lane can convert
