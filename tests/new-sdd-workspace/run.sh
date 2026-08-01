@@ -99,6 +99,22 @@ expect_err "an unknown --profile value is rejected against the known set (#388)"
   "unknown profile 'bogus'" -- "$TGT" P --profile bogus
 expect_err "--profile with no following token needs a value" \
   "--profile needs a value" -- "$TGT" P --profile
+expect_err "--template with no following token needs a value" \
+  "--template needs a value" -- "$TGT" P --template
+expect_err "an unknown --template is rejected before any scaffold" \
+  "unknown template 'bogus'" -- "$TGT" P --template bogus
+expect_err "a rendering profile is rejected for a non-rendering template" \
+  "--profile is only supported by the rendering template" -- "$TGT" P --template console --profile game
+expect_err "fable-bindings requires its package closure" \
+  "requires both --npm-package and --npm-version" -- "$TGT" P --template fable-bindings
+expect_err "fable-bindings requires its target" \
+  "requires --binding-target" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0
+expect_err "fable-bindings validates its target" \
+  "--binding-target must be browser, node, or universal" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target wasm
+expect_err "fable-bindings rejects a non-exact npm version" \
+  "--npm-version must be an exact version" -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version latest --binding-target browser
+expect_err "npm parameters are rejected outside fable-bindings" \
+  "only supported by the fable-bindings" -- "$TGT" P --template console --npm-package @babylonjs/core --npm-version 8.0.0
 expect_err "--ref with no following token needs a value" \
   "--ref needs a value" -- "$TGT" P --ref
 expect_err "an unknown flag is named, not silently ignored" \
@@ -121,6 +137,11 @@ expect_err "--repo with no following token needs a value" \
 
 expect_ok "the bare two-positional form parses (Profile defaults to the provider default)" \
   -- "$TGT" P
+for template in rendering console web fable-game; do
+  expect_ok "--template $template parses" -- "$TGT" P --template "$template"
+done
+expect_ok "fable-bindings parses with its exact npm package closure" \
+  -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
 # Each id in `profiles` (Program.fs) must parse. Kept in lockstep with that list by hand; a removed
 # profile red-flags here, and the unknown-profile assertion above pins the closed set.
 for prof in game app headless-scene governed sample-pack; do
@@ -134,6 +155,60 @@ expect_ok "--board accepts an owner-only value (defaults the title)" -- "$TGT" P
 expect_ok "--repo takes an owner/repo value" -- "$TGT" P --repo acme/Product.X
 expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
+
+# ── Execution leg: a local descriptor server + stub fsgg-sdd prove real provider routing ─────────
+# Parser acceptance alone is insufficient: each invocation below fetches the selected descriptor,
+# runs the actual orchestrator, and records the scaffold/doctor argv in the stub. The local HTTP
+# server makes descriptor selection deterministic and avoids depending on unpublished providers.
+HTTP_ROOT="$WORK/templates"
+mkdir -p "$HTTP_ROOT/main/providers"
+for template in rendering console web fable-game fable-bindings; do
+  printf 'source: fixture/%s\nprovider: %s\n' "$template" "$template" > "$HTTP_ROOT/main/providers/$template.providers.yml"
+done
+PORT_FILE="$WORK/http-port"
+python3 - "$HTTP_ROOT" "$PORT_FILE" <<'PY' &
+import functools
+import http.server
+import pathlib
+import sys
+
+root, port_file = sys.argv[1:]
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=root))
+pathlib.Path(port_file).write_text(str(server.server_port))
+server.serve_forever()
+PY
+HTTP_PID=$!
+trap 'kill "$HTTP_PID" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+while [ ! -s "$PORT_FILE" ]; do sleep 0.05; done
+RAW_BASE="http://127.0.0.1:$(cat "$PORT_FILE")"
+STUB_DIR="$WORK/stub-bin"
+mkdir -p "$STUB_DIR"
+printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$*" >> "$FSGG_SDD_LOG"' > "$STUB_DIR/fsgg-sdd"
+chmod +x "$STUB_DIR/fsgg-sdd"
+
+expect_execution() {
+  local desc="$1" template="$2" expected_params="$3"; shift 3
+  local target="$WORK/real-$template"
+  local log="$WORK/$template.log"
+  local rc=0
+  OUT="$(PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --pinned --no-governance --no-coordination "$@" 2>&1)" || rc=$?
+  local params_ok=1
+  grep -qF "$expected_params" "$log" || params_ok=0
+  if [ "$template" = "fable-bindings" ]; then
+    grep -qF "npmPackage=@babylonjs/core" "$log" && grep -qF "npmVersion=8.0.0" "$log" || params_ok=0
+  fi
+  if [ "$rc" -ne 0 ] || ! grep -qF "source: fixture/$template" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ]; then
+    bad "$desc" "want successful real route, selected descriptor, provider '$template', and params '$expected_params'; got rc=$rc"$'\n'"--- output ---"$'\n'"$OUT"$'\n'"--- fsgg-sdd ---"$'\n'"$(cat "$log" 2>/dev/null || true)"
+  else
+    ok "$desc"
+  fi
+}
+
+expect_execution "omitted --template keeps the rendering compatibility route" rendering "profile=game" --profile game
+expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
+expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
+expect_execution "fable-game routes to its provider and descriptor" fable-game "productName=Product" --template fable-game
+expect_execution "fable-bindings forwards its scoped closure and target" fable-bindings "target=universal" --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target universal
 
 # ── retrofit subcommand: its own parser, then a clean no-network refusal (#1343) ──────────────────
 # `retrofit <target> …` wires coordination onto an EXISTING workspace. Its parser is separate from the
