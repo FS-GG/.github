@@ -864,6 +864,8 @@ shared game logic is limited to Game's `fs-gg-game-core-fable-lockstep-v1` profi
 skills come from Templates and the lockstep skill from Game's independently versioned
 `FS.GG.Game.Skills` package. The Game package and `FS.GG.Web.Template` are separate release lanes:
 each is dual-published and independently restored from its public read paths before S.I.R. adoption.
+After Game publishes, SDD—not Templates—pins that exact Skills version and proves the production
+scaffold materializer emits the lockstep skill bytes, digest, owner/source, version, and provenance.
 
 Use S.I.R. as the first non-toy acceptance workspace. Applying the scaffold to S.I.R., or migrating
 S.I.R.'s application source into a freshly generated workspace, are both valid implementation

@@ -173,12 +173,15 @@ Rollout is publish-before-flip:
 4. Game versions and publishes the exact `FS.GG.Game.Skills` package to both
    feeds, then an independent consumer restores and materializes that version
    from every required public read path.
-5. Templates publishes the exact `FS.GG.Web.Template` package to both feeds;
+5. SDD pins that exact Game Skills version and proves the production scaffold
+   materializer emits the lockstep skill bytes, digest, owner/source, package
+   version, and provenance under locked restore from the public read path.
+6. Templates publishes the exact `FS.GG.Web.Template` package to both feeds;
    an independent consumer installs and instantiates it from the public read
    path.
-6. S.I.R. incorporates the public scaffold/packages and passes its real
+7. S.I.R. incorporates the public scaffold/packages and passes its real
    browser/gameplay acceptance slice without sibling-checkout dependencies.
-7. `.github` activates provider/pin registry entries and releases the wizard
+8. `.github` activates provider/pin registry entries and releases the wizard
    support.
 
 Both producer handoffs record the exact package version, tag, commit, and
@@ -210,6 +213,9 @@ one.
 - The coherent release has two independently versioned producer artifacts.
   Changing a Game-owned skill requires a Game Skills release even when the web
   template package itself is unchanged.
+- Publishing the Game package is necessary but insufficient: the new skill is
+  scaffold-reachable only after SDD adopts the exact version and proves its
+  production materializer path.
 - Framework/view-library selection remains replaceable behind the stable
   `fable-game` identity, but changing generated source materially still needs
   normal template SemVer, upgrade notes, and drift evidence.

@@ -391,12 +391,14 @@ SignalR for real-time session traffic, and consumes Game's producer-owned
 owns the lockstep skill and publishes it in the independently versioned `FS.GG.Game.Skills`
 package, materialized from its declared owner under ADR-0063. The Game Skills version must be
 dual-published and independently restored/materialized from every required public read path; it is
-not part of `FS.GG.Web.Template` merely because the two compose in one workspace. None of these
-planned identities is registry-active until both producer artifacts are published to both feeds
-and independently installed from the public read path. The sibling `EHotwagner/S.I.R.` repository
-is the first forcing consumer: its application is incorporated into this workspace shape for real
-acceptance, but the resulting build may not depend on a sibling checkout and S.I.R.-specific rules
-remain consumer-owned.
+not part of `FS.GG.Web.Template` merely because the two compose in one workspace. SDD owns the
+production scaffold materializer and must pin and prove the newly published Game Skills version
+before any downstream template/public-consumer activation. None of these planned identities is
+registry-active until both producer artifacts are published to both feeds and independently
+installed from the public read path. The sibling `EHotwagner/S.I.R.` repository is the first
+forcing consumer: its application is incorporated into this workspace shape for real acceptance,
+but the resulting build may not depend on a sibling checkout and S.I.R.-specific rules remain
+consumer-owned.
 
 ### 4.5 FS.GG.Game — the simulation core *(extracted + published P5, ADR-0022)*
 
@@ -528,7 +530,7 @@ The contracts that hold the system together:
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 | `fs-gg-web-template` *(planned; not registry-active)* | Templates | `FS.GG.Web.Template` package with `dotnet new fs-gg-web` and `dotnet new fs-gg-fable-game` identities | SDD, `.github` wizard |
-| `fs-gg-game-skills` | Game | independently versioned `FS.GG.Game.Skills` owner package, including the planned Fable-lockstep product skill | Templates scaffold materializer, generated game workspaces |
+| `fs-gg-game-skills` | Game | independently versioned `FS.GG.Game.Skills` owner package, including the planned Fable-lockstep product skill | SDD scaffold materializer, generated game workspaces |
 | `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`) |
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
