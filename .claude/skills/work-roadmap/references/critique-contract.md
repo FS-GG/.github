@@ -22,6 +22,11 @@ protection, or architecture materially fails, and `minor` for bounded non-accept
 must resolve every blocker/major finding in the milestone branch. A minor finding may be resolved or
 routed to a durable issue or unchecked roadmap item; never bury it in prose.
 
+For work-roadmap milestones, this critique contract owns the review/repair count and supersedes
+`$pnext-item`'s normal three-round cap. The exception is limited to that count: all other applicable
+`$pnext-item` planning, review-evidence, exact-SHA, merge, release, and escalation discipline remains
+in force.
+
 Allow at most ten numbered worker repair rounds, each followed by confirmation of the exact repaired
 head by the same critic. Before routing a repair, validate the ordered commit chain and permit the
 repair only when the latest round is less than ten. This count-before-routing gate prevents a failed

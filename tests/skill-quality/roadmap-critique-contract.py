@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIMES = (".agents", ".claude")
 CYCLE = "roadmap-example-m1-example"
 SHA = [f"{index:040x}" for index in range(1, 13)]
+PRECEDENCE = "owns the review/repair count and supersedes `$pnext-item`'s normal three-round cap"
+PRESERVED_DISCIPLINE = "all other applicable `$pnext-item` planning, review-evidence, exact-SHA, merge,"
 sys.dont_write_bytecode = True
 
 
@@ -60,6 +62,14 @@ def artifact(rounds: int, *, escalation: bool = False) -> dict:
 def main() -> None:
     validators = []
     for runtime in RUNTIMES:
+        skill = " ".join((ROOT / runtime / "skills/work-roadmap/SKILL.md").read_text().split())
+        critique_contract = " ".join(
+            (ROOT / runtime / "skills/work-roadmap/references/critique-contract.md").read_text().split()
+        )
+        assert PRECEDENCE in skill, f"{runtime}: main contract omits pnext-item precedence"
+        assert PRECEDENCE in critique_contract, f"{runtime}: critique contract omits pnext-item precedence"
+        assert PRESERVED_DISCIPLINE in skill, f"{runtime}: main contract narrows inherited discipline"
+        assert PRESERVED_DISCIPLINE in critique_contract, f"{runtime}: critique contract narrows inherited discipline"
         path = ROOT / runtime / "skills/work-roadmap/scripts/validate-critique-state.py"
         validators.append((runtime, path.read_bytes(), load_validator(path)))
     assert validators[0][1] == validators[1][1], "critique validators differ between authored roots"
