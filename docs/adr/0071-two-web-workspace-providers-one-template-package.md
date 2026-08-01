@@ -2,6 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-01
+- **Amended by:** [ADR-0072](0072-console-and-fable-bindings-are-separate-workspace-providers.md)
+  §1 and §6 widen the unpublished package and wizard selector to include the
+  independent `console` and `fable-bindings` providers. All web/game-specific
+  decisions in this record remain in force.
 - **Affects:** FS.GG.Templates (producer), FS.GG.SDD (provider contract and
   lifecycle), FS.GG.Game (shared lockstep contract and game skills),
   EHotwagner/S.I.R. (first consumer), FS-GG/.github (`new-sdd-workspace`,
