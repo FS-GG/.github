@@ -12,7 +12,7 @@ before that triage stage. Allocate only schedulable disjoint lanes within the fi
 never exceed it. Every worker must mint its own `FSGG_WORKER` identity and hold its own claim:
 a host session, account, or parent identity is not a substitute. Give it one bounded item and the
 complete item-driver contract, including the shared
-[control-plane provenance guidance](../../pnext-item/references/control-plane-provenance.md). Do not hand it a second item. It MAY, after its done stamp, drain its
+control-plane provenance guidance in the `pnext-item` contract. Do not hand it a second item. It MAY, after its done stamp, drain its
 OWN follow-up queue sequentially — one claim at a time, never interleaved.
 
 <!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->

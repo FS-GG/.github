@@ -60,7 +60,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "de4a9638b90f2c2c5ca0041865fa2ab881429d31da92022d84f4a4f2de3eeb69",
-      "tree-sha256": "8e17f83b99bd483d775f210f08a913216abb6c3746bed693e763c49576f94a26",
+      "tree-sha256": "5651ee7c205dd5e507178f63530932306dd35a0b8d7da75e9042d2b8a639361e",
       "files": [
         {
           "path": "SKILL.md",
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "940c5e08bf112187c7096650ae81ce4b25c78b250336a67ce8a75a94af7fef21",
+          "sha256": "1165b4dd6812e88aca3ca0e594991c6643e565425b47158105b191f4cb5631d2",
           "executable": false
         },
         {
@@ -170,7 +170,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "1fa7aa8eb5130f594f5d57507aa5fa50224c6c2ddab57bdb12bbf833421ecef5",
-      "tree-sha256": "cdf098dbf5eee041b18c3f0a0fc55433d481f9ba1110c88a4554e8fa714adf6e",
+      "tree-sha256": "3c282c3fd29021cb7a007e79105dd278dde179daff9b91fa7067ccf0f55109a0",
       "files": [
         {
           "path": "SKILL.md",
@@ -194,7 +194,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "c1f424255e64d3fa4033be8a9e78d0243493cbc149e0069c069e318284b443b9",
+          "sha256": "f51161ce3ab5a1d4896358cc2c4ee4043cde3c04cd238b48d0a50e42ef78d0a8",
           "executable": false
         },
         {
