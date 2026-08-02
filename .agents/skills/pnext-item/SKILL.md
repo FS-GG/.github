@@ -104,6 +104,8 @@ protocol/example text was intended. Capture the live item body and pass it to `d
 the audit mandatory. Caller environment variables are not declarations. An unresolved, stale, empty,
 or live-inventory-mismatched receipt blocks host acceptance. For the initial item-declared inventory,
 use the receipt placeholder form `diff-audit BASE HEAD OLD NEW - item-body.md --paths ...`.
+The host re-derives requiredness from live item, immutable commit, and threshold facts; a review marker
+cannot opt out by writing `diff-audit-required: false`.
 
 ## 5. Independent critique
 

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "efd4172aa06f77433c00a1a56e48d37bd57dc51b568a86f7d520979ef4ae49fa"
+        "value": "30a0a2546d77bbdd7833f0464f16f9832ed0245a4861318fe5ab6b2de64517a7"
       }
     },
     {
@@ -466,7 +466,7 @@
           "path": "work/2144-quoted-diff-inventory/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "efd4172aa06f77433c00a1a56e48d37bd57dc51b568a86f7d520979ef4ae49fa"
+            "value": "30a0a2546d77bbdd7833f0464f16f9832ed0245a4861318fe5ab6b2de64517a7"
           },
           "schemaVersion": 1
         },
@@ -497,7 +497,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "8a1a068e0a223ef1adf48c5e0efc1f610df9b1e317eb83094a8ccc98a3b60e9d"
+        "value": "fdab527dad7fc2668abc10b98befb45747d1434bd8aefa841e753353b0e5d938"
       },
       "currency": "current"
     }

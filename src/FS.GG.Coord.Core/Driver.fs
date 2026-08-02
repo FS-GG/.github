@@ -36,7 +36,10 @@ module Driver =
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
 
-    let private parseReviewCommentsCore (trustedAudit: SemanticDiff.Receipt option) (comments: ReviewComment list) =
+    let private parseReviewCommentsCore
+        (trustedFacts: (bool * SemanticDiff.Receipt option) option)
+        (comments: ReviewComment list)
+        =
         let markerText name = $"<!-- fsgg:%s{name}:v1 -->"
         // A protocol marker is the first complete line of the comment.  `Contains` made quoted examples,
         // critic prose and a second embedded marker executable evidence.  Preserve the bytes which make
@@ -224,14 +227,21 @@ module Driver =
                         errors.Add "diff-audit-required must be true or false"
                         false
 
+                let mechanicallyRequired = trustedFacts |> Option.exists fst
+
+                if mechanicallyRequired && not auditRequired then
+                    errors.Add "diff-audit-required:false contradicts trusted live delivery facts"
+
+                let effectiveAuditRequired = auditRequired || mechanicallyRequired
+
                 let auditHead =
-                    if auditRequired then
+                    if effectiveAuditRequired then
                         match field "diff-audit-receipt-v1" accepted.Body with
                         | Ok encoded ->
                             match SemanticDiff.ofBase64 encoded with
                             | Ok receipt when
                                 receipt.Required
-                                && (match trustedAudit with
+                                && (match trustedFacts |> Option.bind snd with
                                     | Some expected -> SemanticDiff.validateAgainst expected receipt |> List.isEmpty
                                     | None -> false)
                                 ->
@@ -276,7 +286,7 @@ module Driver =
                           ChecksGreen = false
                           HostAccepted = true
                           RuntimeRouteEvidence = latestRouteEvidence
-                          DiffAuditRequired = auditRequired
+                          DiffAuditRequired = effectiveAuditRequired
                           DiffAuditHead = auditHead }
                 else
                     Error(List.ofSeq errors)
@@ -286,7 +296,10 @@ module Driver =
     let parseReviewComments comments = parseReviewCommentsCore None comments
 
     let parseReviewCommentsWithAudit trustedAudit comments =
-        parseReviewCommentsCore (Some trustedAudit) comments
+        parseReviewCommentsCore (Some(true, Some trustedAudit)) comments
+
+    let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
+        parseReviewCommentsCore (Some(mechanicallyRequired, trustedAudit)) comments
 
     type Receipt =
         { ObservedAt: int64

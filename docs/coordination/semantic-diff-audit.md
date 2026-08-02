@@ -23,3 +23,5 @@ duplicate, malformed, path-mismatched, or old-head receipt is refused.
 Host acceptance carries that concrete JSON as base64 in `diff-audit-receipt-v1`, not independently
 typed summary claims. The host reads the live PR base/head blobs, recomputes the inventory, and the typed
 review-chain parser requires exact paths, tokens, stable occurrence identities, and every disposition.
+The live driver independently reads the item body, immutable head commit, and changed-file/occurrence
+threshold facts; `diff-audit-required: false` is rejected when any of those facts requires the audit.

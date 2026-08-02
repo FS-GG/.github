@@ -1261,6 +1261,30 @@ module Reads =
                         Error(Malformed(subject, $"invalid base64 content: %s{ex.Message}"))
                 | _ -> Error(Malformed(subject, "the contents response carried no base64 content"))
 
+    let commitMessage (transport: IGitHubTransport) (owner: string) (repo: string) (sha: string) : IoResult<string> =
+        let subject = $"%s{owner}/%s{repo} commit %s{sha}"
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                match doc.RootElement.TryGetProperty "commit" with
+                | true, commit when commit.ValueKind = JsonValueKind.Object ->
+                    match str commit "message" with
+                    | Some message -> Ok message
+                    | None -> Error(Malformed(subject, "the commit response carried no commit.message"))
+                | _ -> Error(Malformed(subject, "the commit response carried no `commit`"))
+
     let prFiles (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string list> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} files"

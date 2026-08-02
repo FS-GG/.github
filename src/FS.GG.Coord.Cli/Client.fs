@@ -956,41 +956,71 @@ module Client =
                                                Body = c.Body }
                                             : Driver.ReviewComment))
 
-                                    match auditReceipt comments with
-                                    | Some submitted ->
-                                        match
-                                            Reads.prBaseSha
-                                                ctx.Transport
-                                                candidate.Item.Ref.Owner
-                                                candidate.Item.Ref.Repo
-                                                pr
-                                        with
-                                        | Ok baseSha ->
+                                    let threshold =
+                                        match Environment.GetEnvironmentVariable "FSGG_DIFF_AUDIT_THRESHOLD" with
+                                        | null | "" -> Some 5
+                                        | value ->
+                                            match Int32.TryParse value with
+                                            | true, number when number >= 0 -> Some number
+                                            | _ -> None
+
+                                    match
+                                        threshold,
+                                        Reads.issueBody
+                                            ctx.Transport
+                                            candidate.Item.Ref.Owner
+                                            candidate.Item.Ref.Repo
+                                            candidate.Item.Ref.Number,
+                                        Reads.commitMessage ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo head,
+                                        Reads.prFiles ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr
+                                    with
+                                    | Some threshold, Ok itemBody, Ok commitMessage, Ok changedPaths ->
+                                        let finish required trusted =
+                                            match Driver.parseReviewCommentsWithFacts required trusted comments with
+                                            | Ok review when review.HeadSha = Some head ->
+                                                Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
+                                            | _ -> None
+
+                                        match auditReceipt comments with
+                                        | Some submitted ->
                                             match
-                                                recomputeAudit
+                                                Reads.prBaseSha
+                                                    ctx.Transport
                                                     candidate.Item.Ref.Owner
                                                     candidate.Item.Ref.Repo
-                                                    baseSha
-                                                    head
-                                                    submitted
+                                                    pr
                                             with
-                                            | Ok trusted ->
-                                                match Driver.parseReviewCommentsWithAudit trusted comments with
-                                                | Ok review when review.HeadSha = Some head ->
-                                                    Some(
-                                                        pr,
-                                                        head,
-                                                        { review with ChecksGreen = true },
-                                                        scan.Markers.Length
-                                                    )
-                                                | _ -> None
+                                            | Ok baseSha ->
+                                                match
+                                                    recomputeAudit
+                                                        candidate.Item.Ref.Owner
+                                                        candidate.Item.Ref.Repo
+                                                        baseSha
+                                                        head
+                                                        submitted
+                                                with
+                                                | Ok trusted ->
+                                                    let required =
+                                                        SemanticDiff.activationRequired
+                                                            threshold
+                                                            trusted.Occurrences.Length
+                                                            commitMessage
+                                                            (Some itemBody)
+                                                    finish required (Some trusted)
+                                                | Error _ -> None
                                             | Error _ -> None
-                                        | Error _ -> None
-                                    | None ->
-                                        match Driver.parseReviewComments comments with
-                                        | Ok review when review.HeadSha = Some head ->
-                                            Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
-                                        | _ -> None
+                                        | None ->
+                                            // Without token metadata there is no occurrence inventory to replay.
+                                            // The live changed-file count is still a trusted lower-bound activation
+                                            // fact, while item/commit declarations remain exact.
+                                            let required =
+                                                SemanticDiff.activationRequired
+                                                    threshold
+                                                    changedPaths.Length
+                                                    commitMessage
+                                                    (Some itemBody)
+                                            finish required None
+                                    | _ -> None
                                 | _ -> None
                             | None -> None)
 

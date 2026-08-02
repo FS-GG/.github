@@ -30,6 +30,21 @@ module OptionsTests =
         Assert.Equal(Some "tmp/fixture", parsed.Repo)
         Assert.Equal<string list>([ "Fixture.fs" ], parsed.Paths)
 
+        let itemDeclared =
+            parse
+                [ "diff-audit"
+                  "base"
+                  "head"
+                  "oldName"
+                  "newName"
+                  "-"
+                  "item-body.md"
+                  "--paths"
+                  "Fixture.fs" ]
+            |> ok
+
+        Assert.Equal<string list>([ "base"; "head"; "oldName"; "newName"; "-"; "item-body.md" ], itemDeclared.Args)
+
     [<Fact>]
     let ``an unknown flag is NAMED and refused, never shrugged off`` () =
         let e = parse [ "decide"; "--engine=fs" ] |> rejected

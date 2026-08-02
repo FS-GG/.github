@@ -45,6 +45,12 @@ module Driver =
     val parseReviewCommentsWithAudit:
         trustedAudit: SemanticDiff.Receipt -> comments: ReviewComment list -> Result<ReviewChain, string list>
 
+    val parseReviewCommentsWithFacts:
+        mechanicallyRequired: bool ->
+        trustedAudit: SemanticDiff.Receipt option ->
+        comments: ReviewComment list ->
+            Result<ReviewChain, string list>
+
     type Receipt =
         { ObservedAt: int64
           SourceSha: string

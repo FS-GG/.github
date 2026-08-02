@@ -382,6 +382,9 @@ module ApplicationServiceTests =
                     if claimed then ok (commentsFor (Map.ofList [ 2127, "worker-2127" ]) 2127) else ok "[]"
                 | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
                 | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
+                | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
+                | "GET", path when path = $"repos/FS-GG/.github/commits/%s{head}" ->
+                    ok """{"commit":{"message":"ordinary driver change"}}"""
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
                 | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->

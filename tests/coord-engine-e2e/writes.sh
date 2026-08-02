@@ -838,9 +838,11 @@ printf '%s\n' '{"skills":[{"id":"contract-probe","mirrored":false}]}' \
   >"$PREDICATE_FIX/.repos/FS.GG.Game/template/skill-manifest/skill-manifest.json"
 no_mutation_verdict "predicate" 4 env FSGG_REGISTRY="$PREDICATE_FIX/registry/skills.yml" FSGG_REPOS_ROOT="$PREDICATE_FIX/.repos" "$ENGINE" predicate contract-probe mirrored false --worker vole-418
 
-# `diff-audit` reads two immutable objects and declared paths from this checkout.  HEAD/HEAD is the
-# executable zero-occurrence control; its dedicated CLI tests cover a planted rename and bad revision.
-no_mutation "diff-audit" "$ENGINE" diff-audit HEAD HEAD oldName newName --repo "$REPO_ROOT" --paths src/FS.GG.Coord.Core/SemanticDiff.fs
+# `diff-audit` reads two immutable objects and declared paths from this checkout.  This drives the real
+# parser's item-body declaration shape: `-` means no prior receipt, and the standalone declaration makes
+# the zero-occurrence receipt mandatory (typed red, never a parser refusal).
+printf '%s\n' 'Bulk rename: true' >"$PREDICATE_FIX/item-body.md"
+no_mutation_verdict "diff-audit" 3 "$ENGINE" diff-audit HEAD HEAD oldName newName - "$PREDICATE_FIX/item-body.md" --repo "$REPO_ROOT" --paths src/FS.GG.Coord.Core/SemanticDiff.fs
 
 # `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
 # Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their

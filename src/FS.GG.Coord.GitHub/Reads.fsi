@@ -267,6 +267,9 @@ module Reads =
         gitRef: string ->
             IoResult<string>
 
+    /// Commit message at an immutable SHA, used as a trusted delivery declaration fact.
+    val commitMessage: transport: IGitHubTransport -> owner: string -> repo: string -> sha: string -> IoResult<string>
+
     type CommentBody =
         { Id: int64; Url: string; Body: string }
 

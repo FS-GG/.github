@@ -1661,6 +1661,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                         RenderGiven = acc.RenderGiven.Add Text }
                     t
 
+            | "-" :: t when acc.Command = DiffAudit -> flags { acc with Args = "-" :: acc.Args } t
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 

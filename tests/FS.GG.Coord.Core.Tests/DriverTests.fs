@@ -499,3 +499,11 @@ module DriverTests =
 
         Assert.True(Result.isError (parseReviewComments [ review; valid ]))
         Assert.True(Result.isError (parseReviewComments [ review; acceptance "diff-audit-receipt-v1: malformed" ]))
+
+        let optedOut =
+            { review with
+                Body = review.Body.Replace("diff-audit-required: true", "diff-audit-required: false") }
+
+        let callerCanDisable = Result.isOk(parseReviewCommentsWithFacts true (Some trusted) [ optedOut; valid ])
+        Assert.False(callerCanDisable)
+        Assert.True(Result.isError(parseReviewCommentsWithFacts true None [ optedOut; acceptance "" ]))
