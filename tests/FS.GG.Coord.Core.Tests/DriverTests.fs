@@ -52,7 +52,7 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 latest confirmation round binds the accepted sha`` () =
-        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old"; "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: new"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
+        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old"; "<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: shrike\nround: 1\npreceding-review: old\nreviewed-head: new\nverdict: pass"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
         match parseReviewComments comments with
         | Ok chain -> Assert.Equal(Some "new", chain.HeadSha)
         | Error errors -> failwithf "%A" errors
