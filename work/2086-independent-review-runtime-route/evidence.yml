@@ -1,0 +1,182 @@
+schemaVersion: 1
+workId: 2086-independent-review-runtime-route
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2086-independent-review-runtime-route/spec.md
+sourceClarifications: work/2086-independent-review-runtime-route/clarifications.md
+sourceChecklist: work/2086-independent-review-runtime-route/checklist.md
+sourcePlan: work/2086-independent-review-runtime-route/plan.md
+sourceTasks: work/2086-independent-review-runtime-route/tasks.yml
+sourceAnalysis: readiness/2086-independent-review-runtime-route/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2086-independent-review-runtime-route/analysis.json
+    digest: d4d7304de2037aa7b8b62b57b3e05581ee6a1c05cbd48d7bc12a61a0bf5e3948
+    schemaVersion: 1
+  - label: checklist
+    path: work/2086-independent-review-runtime-route/checklist.md
+    digest: c3168148bc840d099dcd02bac354570ac63ac244fbfe5279876ab903fedc5fa5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2086-independent-review-runtime-route/clarifications.md
+    digest: 412024357517f8a6a82b4748fcb5328770d043e992b27cf7b86eb7d7b3ae3fd2
+    schemaVersion: 1
+  - label: plan
+    path: work/2086-independent-review-runtime-route/plan.md
+    digest: 7a6bedd157418032f5703e9499277fa227c15a66fceb9b2b1acaf8dc66de3036
+    schemaVersion: 1
+  - label: spec
+    path: work/2086-independent-review-runtime-route/spec.md
+    digest: cb3c18d5182da42f9eb24f5a5b74bd3f104424c347c0ee1d8eb601eb9abe83f9
+    schemaVersion: 1
+  - label: tasks
+    path: work/2086-independent-review-runtime-route/tasks.yml
+    digest: 414eb004ac2ae5071dc94d5e3a27ab583cb9c11530d30f625465343abf5ecadb
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Core/Driver.fs, src/FS.GG.Coord.Core/Driver.fsi, tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: ["Runtime-route contract fixture passed; source-only review evidence is rejected."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [.agents/skills/pnext-item/references/independent-review.md, .claude/skills/pnext-item/references/independent-review.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: ["Runtime-route contract fixture passed; source-only review evidence is rejected."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: ["Positive meaningful and not-meaningful cases passed; source-only and malformed evidence shapes were rejected."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV004]
+    artifacts: [tests/skill-quality/review-round-contract.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: ["Skill-quality, projection, registry, and kit verification passed."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Kit/FS.GG.Kit.csproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: [Kit minor version records the additive receiver-visible obligation.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [registry/coordination-kit-skill-manifest.json, registry/repos.lock]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: TestResults/2086-runtime-route.trx
+      digest: "sha256:4b2bc3ed2b4d736e0f8b3be88668dfb1c613a7508b122c2f7e7e36a0e394fdfe"
+      outcome: passed
+      passed: 573
+      failed: 0
+      skipped: 0
+    notes: [Generated kit manifest and roster lock were regenerated from canonical payloads.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

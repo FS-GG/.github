@@ -385,7 +385,7 @@ module ApplicationServiceTests =
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
                 | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
-                    let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass"
+                    let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: driver planning has no runtime-route comparison subject"
                     let accepted = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
                     ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
                 | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))

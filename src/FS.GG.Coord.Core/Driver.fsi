@@ -9,9 +9,15 @@ module Driver =
           ReconcileDryRunFresh: bool; ReconcileApplied: bool; ReconcileFresh: bool
           TriageFresh: bool; CurrencyScoped: bool }
 
+    /// Machine-validated evidence decision carried by the latest passing independent-review marker.
+    type RuntimeRouteEvidence =
+        | Meaningful of builtArtifact: string * executedCommand: string * comparedRoutes: string * observedResult: string
+        | NotMeaningful of reason: string
+
     type ReviewChain =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
-          Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
+          Rounds: int list; ChecksGreen: bool; HostAccepted: bool
+          RuntimeRouteEvidence: RuntimeRouteEvidence option }
 
     type ReviewComment = { Id: int64; Url: string; Body: string }
 
