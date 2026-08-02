@@ -49,6 +49,16 @@ module TouchSetTests =
     let ``#435 backticks are stripped — a backticked declaration is a declaration`` () =
         Assert.Equal(Declared [ Matchable "src/Scene/**" ], TouchSet.parse "Paths: `src/Scene/**`")
 
+    [<Fact>]
+    let ``#2104 a declaration is one physical line — later lines are not silently path tokens`` () =
+        // `TouchSet.parse` intentionally reads issue-body declarations one physical line at a time. This
+        // pins that boundary so argv callers must split embedded newlines before constructing their
+        // synthetic `Paths:` body rather than assuming the parser will reinterpret ordinary body lines.
+        Assert.Equal(
+            Declared [ Matchable "src/A.fs" ],
+            TouchSet.parse "Paths: src/A.fs\nsrc/B.fs\nsrc/C.fs"
+        )
+
     // ---- #496: `Paths: none` is a DECISION; a missing line is an OMISSION ---------------------------
     // Before they were told apart they rendered identically, so no gate could be written at all: nine
     // items of real work went invisible to every worker who asked for work, and the one surface whose
