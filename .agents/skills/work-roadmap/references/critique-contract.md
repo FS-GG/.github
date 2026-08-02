@@ -27,6 +27,35 @@ For work-roadmap milestones, this critique contract owns the review/repair count
 `$pnext-item` planning, review-evidence, exact-SHA, merge, release, and escalation discipline remains
 in force.
 
+## Game functionality — the bot-driven player journey gate
+
+This gate is **blocking**, not advisory (`.github#2087`). Every milestone declares
+`game_functionality: true` or `false`. When `true`, the milestone cannot reach a passing verdict —
+initial or confirmation — without at least one recorded `player_journeys` entry, and the critic
+reviews the journeys themselves, not only their result: whether the messages used are genuinely
+player-emittable and whether the start point is genuinely the product's entry. `false` is for
+non-game milestones and every non-game repository; this gate never applies there.
+
+A journey is evidence only when it was driven **through the product's real input surface** — the
+same control messages a player emits. Direct `Msg` injection, a test-only API, or any seam that
+exists solely for tests is **not evidence** and is a blocker/major finding, never a note. A journey
+must **boot at the product's real entry point** and reach its functionality by navigating as a
+player would; seeding a mid-game model is a gate failure, including when the seeded run reports the
+functionality reached — reachability claimed from an unreachable start is exactly the eleven false
+`shipReady` verdicts this gate exists to stop (`2026-08-02-Rogue3.md` §4.3). The milestone also
+declares `uncovered_functionality`: game functionality named by the milestone that no journey
+reached is reported there, never silently absent — this is what closes the `FS.GG.Game#563`
+blind spot rather than inheriting it. Where the product's entry point is not yet test-ownable, the
+milestone sets `entry_point_not_test_ownable: true` with a concrete
+`entry_point_not_test_ownable_reason` and the gate **fails closed**: `game_functionality: true`
+with empty `player_journeys` is otherwise always a validation error, never a silent pass.
+
+One advisory input is explicitly **not** consumed as blocking here: `FS.GG.Game#563`'s
+`DegenerateVocabulary` check fires unconditionally on declared-vocabulary cardinality alone, so it
+flags a legitimately single-inhabitant slot with zero `Unbound` arms. A `DegenerateVocabulary`-only
+finding, with no accompanying `Unbound`-arm evidence, must not by itself block this gate or a
+milestone verdict.
+
 Allow at most ten numbered worker repair rounds, each followed by confirmation of the exact repaired
 head by the same critic. Before routing a repair, validate the ordered commit chain and permit the
 repair only when the latest round is less than ten. This count-before-routing gate prevents a failed
@@ -36,11 +65,11 @@ check its roadmap box, merge it, or start round eleven. A human must decide the 
 change the acceptance boundary before work resumes. Self-approval by the implementation worker is
 invalid. A no-finding review is valid when the critic records the reviewed scope and both verdicts.
 
-The JSON artifact uses schema version 2:
+The JSON artifact uses schema version 3:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "cycle_id": "roadmap-example-m1-example",
   "milestone": "M1 — example",
   "critic": "fresh critic identity",
@@ -55,9 +84,42 @@ The JSON artifact uses schema version 2:
     "verdict": "pass",
     "unresolved_blocker_major": []
   },
-  "human_escalation": null
+  "human_escalation": null,
+  "game_functionality": false,
+  "player_journeys": [],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
 }
 ```
+
+A game milestone (`game_functionality: true`) with a test-ownable entry point instead carries at
+least one journey:
+
+```json
+{
+  "game_functionality": true,
+  "player_journeys": [
+    {
+      "functionality": "rogue3 starting-room descent",
+      "entry_point": "product-boot",
+      "input_surface": "player-control-messages",
+      "reached": true,
+      "evidence": ["headless run 2026-08-02T09:12Z: reached starting room, descended one level"]
+    }
+  ],
+  "uncovered_functionality": [],
+  "entry_point_not_test_ownable": false,
+  "entry_point_not_test_ownable_reason": null
+}
+```
+
+`entry_point` accepts only `"product-boot"` — anything else (a seeded mid-game model, a screen the
+player did not navigate to) is rejected. `input_surface` accepts only `"player-control-messages"` —
+`"direct-msg-injection"`, `"test-only-api"`, and every other value are rejected; this is AC2's
+falsifiable leg. A journey that claims `"reached": true` from a non-`"product-boot"` entry point is
+rejected even though the functionality was technically exercised, because the start point was not
+the player's — this is AC6's Rogue3-shape falsifiable leg.
 
 Each finding has a unique `id`, `severity`, `summary`, non-empty `evidence` array, `disposition`, and
 non-empty `resolution_evidence` array. `disposition` is normally `resolved` or `follow-up`.

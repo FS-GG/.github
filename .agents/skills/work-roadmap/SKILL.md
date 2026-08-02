@@ -10,7 +10,11 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 1. Read the complete roadmap and select the next unchecked, dependency-ready milestone.
 2. Spawn one fresh disposable worker from current default branch and give it only that milestone.
    During worker setup, interactive/game work must explicitly invoke the `pnext-item` performance-first
-   planning gate before implementation begins.
+   planning gate before implementation begins. A milestone that ships or claims reachable game
+   functionality must record `game_functionality: true` and a passing bot-driven headless player
+   journey (`.github#2087`) — a bot driving the product through the same control messages a real
+   player emits, booted at the product's real entry point, not seeded into a mid-game state. No such
+   milestone may reach a `shipReady`-equivalent verdict without it.
 3. Give the worker a stable feedback cycle id. It follows the repository's SDD lifecycle and item/PR
    merge discipline and invokes `fs-gg-feedback-report` at every required checkpoint boundary.
 4. After the first green implementation/test/evidence loop, have the worker start one fresh independent

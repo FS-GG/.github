@@ -45,6 +45,20 @@ def main() -> None:
     ):
         require(literal in normalized, f"review contract is missing escalation invariant: {literal}")
 
+    # .github#2087 — the bot-driven player journey gate is blocking, not advisory, and is falsifiable
+    # here: delete any one of these literals and this test reds, exactly like the escalation invariants
+    # above.
+    for literal in (
+        "This gate is **blocking**, not advisory",
+        "Direct `Msg` injection, a test-only API, or any seam that exists solely for tests is **not "
+        "evidence**",
+        "boot at the product's real entry point",
+        "reported as uncovered, never silently absent",
+        "the critic returns `changes-required` and records that the gate cannot run and why",
+        "not by itself material under this gate",
+    ):
+        require(literal in normalized, f"review contract is missing player-journey-gate invariant: {literal}")
+
     for runtime in RUNTIMES:
         for relative in (
             "pnext-item/SKILL.md",

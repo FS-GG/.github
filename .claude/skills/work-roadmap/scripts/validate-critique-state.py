@@ -18,6 +18,11 @@ SEVERITIES = {"blocker", "major", "minor"}
 DISPOSITIONS = {"resolved", "follow-up", "unresolved"}
 MAX_REPAIR_ROUNDS = 10
 
+# .github#2087 — the bot-driven player journey gate. A journey is evidence only when it was driven
+# through the product's real input surface, from the product's real entry point.
+ALLOWED_ENTRY_POINTS = {"product-boot"}
+ALLOWED_INPUT_SURFACES = {"player-control-messages"}
+
 
 def nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
@@ -27,13 +32,88 @@ def nonempty_strings(value: Any) -> bool:
     return isinstance(value, list) and bool(value) and all(nonempty_string(item) for item in value)
 
 
+def validate_player_journeys(data: dict) -> list[str]:
+    """.github#2087 — the bot-driven player journey gate is blocking, never advisory.
+
+    A journey is evidence only when driven through the product's real input surface
+    (`input_surface: "player-control-messages"`) starting at the product's real entry point
+    (`entry_point: "product-boot"`). Direct `Msg` injection, a test-only API, or a seeded
+    mid-game start are rejected even when the journey reports the functionality reached —
+    reachability claimed from an unreachable start is the failure mode this gate exists to stop.
+    """
+    errors: list[str] = []
+
+    game_functionality = data.get("game_functionality")
+    if not isinstance(game_functionality, bool):
+        errors.append("game_functionality must be a boolean")
+
+    not_ownable = data.get("entry_point_not_test_ownable")
+    if not isinstance(not_ownable, bool):
+        errors.append("entry_point_not_test_ownable must be a boolean")
+
+    reason = data.get("entry_point_not_test_ownable_reason")
+    if not_ownable is True:
+        if not nonempty_string(reason):
+            errors.append(
+                "entry_point_not_test_ownable_reason must be a non-empty string when "
+                "entry_point_not_test_ownable is true"
+            )
+    elif reason is not None:
+        errors.append("entry_point_not_test_ownable_reason must be null unless the entry point is not test-ownable")
+
+    uncovered = data.get("uncovered_functionality")
+    if not isinstance(uncovered, list) or not all(nonempty_string(item) for item in uncovered):
+        errors.append("uncovered_functionality must be a string array (may be empty)")
+
+    journeys = data.get("player_journeys")
+    if not isinstance(journeys, list):
+        errors.append("player_journeys must be an array")
+        journeys = []
+
+    for index, journey in enumerate(journeys):
+        prefix = f"player_journeys[{index}]"
+        if not isinstance(journey, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        if not nonempty_string(journey.get("functionality")):
+            errors.append(f"{prefix}.functionality must be a non-empty string")
+        if journey.get("entry_point") not in ALLOWED_ENTRY_POINTS:
+            errors.append(
+                f"{prefix}.entry_point must be one of {sorted(ALLOWED_ENTRY_POINTS)} — a seeded or "
+                "mid-game start is not the product's real entry point"
+            )
+        if journey.get("input_surface") not in ALLOWED_INPUT_SURFACES:
+            errors.append(
+                f"{prefix}.input_surface must be one of {sorted(ALLOWED_INPUT_SURFACES)} — direct Msg "
+                "injection and test-only APIs are not evidence a player can produce"
+            )
+        if not isinstance(journey.get("reached"), bool):
+            errors.append(f"{prefix}.reached must be a boolean")
+        if not nonempty_strings(journey.get("evidence")):
+            errors.append(f"{prefix}.evidence must be a non-empty string array")
+
+    if game_functionality is True:
+        if not_ownable is not True and len(journeys) == 0:
+            errors.append(
+                "player_journeys must contain at least one entry when game_functionality is true, "
+                "unless entry_point_not_test_ownable is true (fail closed, not a silent pass)"
+            )
+    elif game_functionality is False:
+        if len(journeys) != 0:
+            errors.append("player_journeys must be empty when game_functionality is false")
+        if not_ownable is True:
+            errors.append("entry_point_not_test_ownable is only meaningful when game_functionality is true")
+
+    return errors
+
+
 def validate(data: Any, expected_cycle: str) -> list[str]:
     errors: list[str] = []
     if not isinstance(data, dict):
         return ["artifact root must be a JSON object"]
 
-    if data.get("schema_version") != 2:
-        errors.append("schema_version must be 2")
+    if data.get("schema_version") != 3:
+        errors.append("schema_version must be 3")
     if data.get("cycle_id") != expected_cycle:
         errors.append(f"cycle_id must equal {expected_cycle!r}")
     for field in ("milestone", "critic"):
@@ -47,6 +127,8 @@ def validate(data: Any, expected_cycle: str) -> list[str]:
         errors.append("scope must contain each required review area exactly once")
     if data.get("initial_verdict") not in {"pass", "changes-required"}:
         errors.append("initial_verdict must be pass or changes-required")
+
+    errors.extend(validate_player_journeys(data))
 
     repair_rounds = data.get("repair_rounds")
     if (

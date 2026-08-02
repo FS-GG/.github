@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "2b29f114c105b2aa7cedff1c251759dea20acfedbdd7cb569ba113aca403cfe0",
-      "tree-sha256": "07588d81c1c9a052fae912322f7873136af657bf77713810a5ea24927c39afe0",
+      "sha256": "31be8937f49f6b4656f3e2adfb75f23d9b24814595b0ad8eca2fe83c4787138c",
+      "tree-sha256": "f1df4278c164e3a850b3459cc81d17a93799f16f481527cbea50b8fd35167ac0",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "2b29f114c105b2aa7cedff1c251759dea20acfedbdd7cb569ba113aca403cfe0",
+          "sha256": "31be8937f49f6b4656f3e2adfb75f23d9b24814595b0ad8eca2fe83c4787138c",
           "executable": false
         },
         {
@@ -19,7 +19,7 @@
         },
         {
           "path": "references/critique-contract.md",
-          "sha256": "08c61a09cb356b7d92320c2e4b1dd4eeea66686f5e3e6d998ad3d712e6c1bd99",
+          "sha256": "cd4210fa83e5a3ead5300b1944c14b2aac81cfba392d4c91bc1304d873013249",
           "executable": false
         },
         {
@@ -34,7 +34,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "6a589d23dfd9ad31c10e4e8cbcc10e26630ef5a3bd04aa2620423b80d37e9314",
+          "sha256": "bfcaa0a7d76551c30440b1e0a917412090fa9d95690cc1e23902bd61e158ed04",
           "executable": false
         },
         {
@@ -44,7 +44,7 @@
         },
         {
           "path": "scripts/validate-critique-state.py",
-          "sha256": "8a9464b50e6790948f761b52caf18fef4f24e8998511a19731d73ba1eb6fe577",
+          "sha256": "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9",
           "executable": false
         },
         {
