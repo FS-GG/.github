@@ -147,11 +147,9 @@ import re
 import subprocess
 import sys
 import time
-import traceback
 
-import yaml
-
-OK, FINDING, NO_VERDICT_RETRYABLE, NO_VERDICT_PERMANENT = 0, 1, 2, 3
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib.gate import ExitCode, GateError, Unreachable, load_yaml, run, triggers  # noqa: E402
 
 AUTHORITY = "FS-GG/.github"
 
@@ -197,14 +195,6 @@ GH_TIMEOUT = float(os.environ.get("FSGG_CONTEXT_TIMEOUT", "30"))
 MAX_DEPTH = 8
 
 
-class GateError(Exception):
-    """A condition under which the gate must fail rather than skip. Maps to exit 3."""
-
-
-class Unreachable(Exception):
-    """We do not know what is there. Maps to exit 2 — never to green, never to a finding."""
-
-
 class Missing(Exception):
     """A 404. That is a real answer from the API, not a failure to reach it."""
 
@@ -243,32 +233,6 @@ def gh_api(*args: str) -> str:
         time.sleep(delay)
         delay *= 2
     raise Unreachable("unreachable")  # pragma: no cover
-
-
-def load_yaml(text: str, what: str) -> dict:
-    try:
-        doc = yaml.safe_load(text)
-    except yaml.YAMLError as e:
-        raise GateError(f"{what}: not parsable as YAML — {e}") from e
-    if not isinstance(doc, dict):
-        raise GateError(f"{what}: not a YAML mapping")
-    return doc
-
-
-def triggers(doc: dict) -> dict:
-    """The `on:` block. PyYAML resolves the bare key `on` to the boolean True (YAML 1.1), so a plain
-    doc["on"] misses it and EVERY workflow would look like it does not trigger on pull_request —
-    deriving an empty producible set and reporting every required context as a finding."""
-    for key in ("on", True):
-        if key in doc:
-            got = doc[key]
-            if isinstance(got, dict):
-                return got
-            if isinstance(got, list):
-                return {k: None for k in got}
-            if isinstance(got, str):
-                return {got: None}
-    return {}
 
 
 # The pull-request events. Either one puts a check run on a PR, so either one, unfiltered, is enough
@@ -926,7 +890,7 @@ def main(argv: list[str]) -> int:
             f"rulesets. This is not a statement that the repo's gates are green; it is a statement "
             f"that none of them are required.)"
         )
-        return OK
+        return ExitCode.OK
 
     pr_contexts, filtered, conditional, non_pr, crossings = producible_contexts(
         args.root, args.repo, args.branch
@@ -1090,7 +1054,7 @@ def main(argv: list[str]) -> int:
                 f"of the tree under test"
             )
         print(f"\n{'; '.join(summary)}. Of {audited} audited.", file=sys.stderr)
-        return FINDING
+        return ExitCode.FINDING
 
     print(
         f"ok: every required context is producible, and every cross-repo `uses:` its producers "
@@ -1105,34 +1069,8 @@ def main(argv: list[str]) -> int:
         )
         + "."
     )
-    return OK
-
-
-def cli(argv: list[str]) -> int:
-    """Guarantee the exit code is a VERDICT, never an accident.
-
-    Python exits 1 on any uncaught exception — and 1 is this gate's "a required context can never
-    report", i.e. "this repo is deadlocked". A crash would therefore be reported as a specific,
-    confident, WRONG claim that somebody's branch protection is broken. "I could not check" must
-    never share a code with "I checked, and it's broken" (#266, #320).
-    """
-    try:
-        return main(argv)
-    except Unreachable as e:
-        print(f"::error::check-required-contexts: no verdict — {e}", file=sys.stderr)
-        return NO_VERDICT_RETRYABLE
-    except GateError as e:
-        print(f"::error::check-required-contexts: no verdict — {e}", file=sys.stderr)
-        return NO_VERDICT_PERMANENT
-    except Exception:  # noqa: BLE001 — deliberately broad; see the docstring
-        traceback.print_exc()
-        print(
-            "::error::check-required-contexts: the gate crashed, so it has NO VERDICT. This is not "
-            "a finding about any required context — it is a bug in the gate. See the traceback.",
-            file=sys.stderr,
-        )
-        return NO_VERDICT_PERMANENT
+    return ExitCode.OK
 
 
 if __name__ == "__main__":
-    sys.exit(cli(sys.argv[1:]))
+    sys.exit(run(main, sys.argv[1:], name="check-required-contexts"))
