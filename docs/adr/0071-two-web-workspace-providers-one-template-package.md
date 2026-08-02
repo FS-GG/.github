@@ -1,11 +1,24 @@
 # ADR-0071: Two web workspace providers, one template package
 
-- **Status:** Accepted
+- **Status:** Accepted — §5's Fable.Remoting clause and §6's Fable.Remoting pin
+  entry are **superseded by [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md)**;
+  §242's rejection of "Use only Fable.Remoting" and every other decision in
+  this record remain in force.
 - **Date:** 2026-08-01
 - **Amended by:** [ADR-0072](0072-console-and-fable-bindings-are-separate-workspace-providers.md)
   §1 and §6 widen the unpublished package and wizard selector to include the
   independent `console` and `fable-bindings` providers. All web/game-specific
   decisions in this record remain in force.
+- **Amended by:** [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md)
+  (2026-08-02, [.github#2082](https://github.com/FS-GG/.github/issues/2082)) —
+  §5's Fable.Remoting bullet and §6's Fable.Remoting pin entry are superseded:
+  the upstream `Fable.Remoting.MsgPack` defect that blocks `fable-game`'s Fable
+  compiler pin (`FS.GG.Templates#370`) is unfixed and unacknowledged, so plain
+  HTTP endpoints with explicit versioned DTOs now own typed request/response
+  instead. SignalR's ownership of connection-oriented traffic, the narrow
+  `@microsoft/signalr` binding, the rejection of `Fable.SignalR`, §242's
+  rejection of "Use only Fable.Remoting", and every other clause of §5/§6
+  stand unchanged — see ADR-0073 §1 for the precise cut.
 - **Affects:** FS.GG.Templates (producer), FS.GG.SDD (provider contract and
   lifecycle), FS.GG.Game (shared lockstep contract and game skills),
   EHotwagner/S.I.R. (first consumer), FS-GG/.github (`new-sdd-workspace`,
@@ -140,10 +153,21 @@ not describe it as lockstep-exact.
 
 ### 5. Communication boundaries
 
+*(Amended by [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md),
+2026-08-02: the Fable.Remoting bullet below is **superseded** — plain HTTP
+endpoints with explicit versioned DTOs now own typed request/response,
+because the upstream `Fable.Remoting.MsgPack` compile defect blocking
+`fable-game`'s pinned Fable compiler is unfixed. The SignalR bullet, and
+everything below this list, are unchanged.)*
+
 The game template uses two deliberately separate adapters:
 
-- **Fable.Remoting** owns typed HTTP request/response operations such as initial
-  data, commands that return one result, and ordinary application queries.
+- ~~**Fable.Remoting** owns typed HTTP request/response operations such as
+  initial data, commands that return one result, and ordinary application
+  queries.~~ Superseded by [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md):
+  **plain ASP.NET Core HTTP endpoints with explicit, versioned request/response
+  DTOs** (hand-written codecs on both sides, no RPC-proxy generation) now own
+  this role.
 - **ASP.NET Core SignalR** owns connection/session-oriented traffic such as
   input, snapshots, presence, acknowledgement, reconnect, and resync.
 
@@ -161,9 +185,13 @@ surface.
 
 ### 6. Toolchain, release, and activation
 
+*(Amended by [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md),
+2026-08-02: the coherent set below no longer pins Fable.Remoting — see ADR-0073
+§1. The rest of this section is unchanged.)*
+
 The qualification spike records and tests a coherent set: .NET SDK, Fable,
 FSharp.Core, Node, npm package manager/lockfile format, Elmish/view binding,
-Fable.Remoting, and `@microsoft/signalr`. Generated workspaces pin the selected
+~~Fable.Remoting,~~ and `@microsoft/signalr`. Generated workspaces pin the selected
 set through the normal lock/config files and expose one documented upgrade
 path; unconstrained “latest” dependencies are not template output.
 
