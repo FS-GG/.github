@@ -68,6 +68,26 @@ before it observes that marker. If material findings remain after round three, v
 marker, `Blocked on: human/action` sentinel, `Blocked` status, and released claim; do not post
 acceptance, merge, or permit round four.
 
+**Repair phase.** An exhausted three-round chain is not automatically a human park: when the operator
+has explicitly authorized repair-phase entry for that item — a declared parameter of the invocation,
+never inferred from a passing check, a new commit, or this host's own judgement — dispatch it exactly
+like a fresh item: a new worktree, a fresh implementing worker and a fresh critic, both at the escalated
+route the active variant's own routing table names (`drive-board-best`/`-normal`,
+`work-board-best`/`-normal`); a bare canonical invocation with no routing table of its own has no
+escalated route to supply and cannot authorize entry. Reserve the same two review slots for its critic
+that every wave already reserves; an implementer may never fill one, in the repair phase either. Verify
+the repair-phase chain under the identical rules — durable markers, ordered round/URL/SHA chain, critic
+independence — but against `repair-phase-max-rounds: 10`, not `max-automated-repair-rounds: 3`, and
+require the `fsgg:independent-review-repair-phase:v1` marker naming the exhausted PR and its escalation
+marker before treating any repair-phase pass as landable. Absent explicit authorization, or once the
+repair phase itself exhausts its own round ceiling, verify the escalation marker, `Blocked on:
+human/action` sentinel, `Blocked` status, and released claim exactly as an unauthorized exhaustion; do
+not post acceptance, merge, start a second repair phase, or permit a round beyond either ceiling. A
+`Done` transition that landed via the repair phase names it explicitly — `<item> — Done (repair phase):
+<PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one. See
+`pnext-item`'s independent-review contract (its "Repair phase" section) for the full contract this
+paragraph summarizes; the bounds live there once and are not restated per variant.
+
 After merge and obligations, verify merge reachability, post-merge obligations, done stamp,
 issue/board state, claim release, pending writes, and feedback. Apply the exact fail-closed
 commands in [feedback-contract](feedback-contract.md) to merged paths before accepting an item; worker
