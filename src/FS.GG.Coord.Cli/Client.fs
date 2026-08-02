@@ -4129,7 +4129,7 @@ module Client =
                             Errors.ExPartial
                         | Error e -> fail e
                         | Ok Board.Written ->
-                            printfn "set %d field(s) on %s in one aliased mutation:" (List.length writes) ref.Short
+                            printfn "set %d field(s) on %s in one aliased mutation:" (List.length writes) ref.Canonical
 
                             for field, write in writes do
                                 printfn "  %s = %s" field (match write with | Board.Set v -> v | Board.Clear -> "<cleared>")
@@ -4138,12 +4138,12 @@ module Client =
                         | Ok Board.Deferred ->
                             printfn
                                 "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
-                                ref.Short
+                                ref.Canonical
                                 (List.length writes)
 
                             Errors.ExRate
                         | Ok Board.NotOnBoard ->
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
+                            eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
                             ExitError
         | _ ->
             eprint "fsgg-coord-engine: set-field --batch takes <ref> followed by one or more Field=Value pairs."
@@ -4185,7 +4185,7 @@ module Client =
                     | Ok Board.Written ->
                         printfn
                             "set %s %s = %s"
-                            ref.Short
+                            ref.Canonical
                             field
                             (match write with
                              | Board.Set v -> v
@@ -4194,7 +4194,7 @@ module Client =
                     | Ok Board.Deferred ->
                         printfn
                             "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
-                            ref.Short
+                            ref.Canonical
                             field
                             (match write with
                              | Board.Set v -> v
@@ -4202,7 +4202,7 @@ module Client =
 
                         Errors.ExRate
                     | Ok Board.NotOnBoard ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
+                        eprint $"fsgg-coord-engine: %s{ref.Canonical} is not an item on this board — nothing written."
                         ExitError
         | _ ->
             eprint "fsgg-coord-engine: set-field takes <ref> <field> <value> (an empty value clears)."

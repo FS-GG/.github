@@ -46,19 +46,19 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: [src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.GitHub.Tests/BoardTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Core/Types.fs, src/FS.GG.Coord.Core/Types.fsi, src/FS.GG.Coord.GitHub/Board.fs, tests/FS.GG.Coord.Cli.Tests/BlockerLintTests.fs, tests/FS.GG.Coord.GitHub.Tests/BoardTests.fs]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
-      source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      source: tests/FS.GG.Coord.Cli.Tests/TestResults/coord-cli-2143.trx
+      digest: "sha256:93f0cfe0c7fc5756c50b811a9f75ef83fca00616fb4091d4ba889764bd4e1661"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 442
+      passed: 564
       failed: 0
       skipped: 0
-    notes: [Single and batch external-owner cached-item regression tests passed.]
+    notes: [Single and batch default/external owner-twin mutation and canonical receipt regressions passed.]
   - id: EV002
     kind: verification
     subject:
@@ -77,7 +77,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digest: "sha256:f01f35937e51dfd2d741fa5db321c839d4f434ae29a711db63a233178ccbc8e1"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
@@ -102,7 +102,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digest: "sha256:f01f35937e51dfd2d741fa5db321c839d4f434ae29a711db63a233178ccbc8e1"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
@@ -127,7 +127,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digest: "sha256:f01f35937e51dfd2d741fa5db321c839d4f434ae29a711db63a233178ccbc8e1"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
@@ -152,7 +152,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digest: "sha256:f01f35937e51dfd2d741fa5db321c839d4f434ae29a711db63a233178ccbc8e1"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 442

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b6439a85cddfb497b464cd4e402a7b335be25b36101b1f3ee16f2477a9c2ce7a"
+        "value": "9479060da650c8d6ee44fa7f85f480d685f99e60b0dd564e32f4689fca8919c7"
       }
     },
     {
@@ -298,7 +298,11 @@
         "FR-001"
       ],
       "artifactRefs": [
+        "src/FS.GG.Coord.Cli/Client.fs",
+        "src/FS.GG.Coord.Core/Types.fs",
+        "src/FS.GG.Coord.Core/Types.fsi",
         "src/FS.GG.Coord.GitHub/Board.fs",
+        "tests/FS.GG.Coord.Cli.Tests/BlockerLintTests.fs",
         "tests/FS.GG.Coord.GitHub.Tests/BoardTests.fs"
       ],
       "result": "pass",
@@ -465,7 +469,7 @@
           "path": "work/2143-external-owner-refs/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "b6439a85cddfb497b464cd4e402a7b335be25b36101b1f3ee16f2477a9c2ce7a"
+            "value": "9479060da650c8d6ee44fa7f85f480d685f99e60b0dd564e32f4689fca8919c7"
           },
           "schemaVersion": 1
         },
@@ -496,7 +500,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "95b9710174e858ebf0d70043a79df02065ddbec8556f456fb7e6fddb7d625135"
+        "value": "a20c7f9bb8381dc2672de92df7c518a3b2a254acf14a02a807db9a9b2fe7298b"
       },
       "currency": "current"
     }

@@ -182,7 +182,7 @@ run release FS.GG.SDD#42 >/dev/null 2>&1
 
 # ---- set-field writes a board column ---------------------------------------------------------------
 sf="$(run set-field FS.GG.SDD#43 Status 'In progress' 2>&1)"; sfrc=$?
-if [ "$sfrc" -eq 0 ] && printf '%s' "$sf" | grep -q 'set FS.GG.SDD#43 Status = In progress'; then
+if [ "$sfrc" -eq 0 ] && printf '%s' "$sf" | grep -q 'set FS-GG/FS.GG.SDD#43 Status = In progress'; then
   ok "set-field writes a board column"
 else
   bad "set-field writes a board column" "rc=$sfrc: $sf"
