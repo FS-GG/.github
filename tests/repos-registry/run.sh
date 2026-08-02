@@ -55,6 +55,14 @@ CLIENT_SHA="$(sha256sum "$ROOT/scripts/democlient" | cut -d' ' -f1)"
 # without a reason.
 LABELS_CAP='  - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }'
 
+# `skill-union` is in CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS (#1806): its capability row is now mandatory
+# in EVERY roster this fixture builds, regardless of whether any repo receives it — the same way
+# `labels` has been mandatory since #628, just for a narrower, explicitly-named reason (the reverse
+# sweep, not the forward one). This is the ordinary, uninteresting default row a roster carries when it
+# is not the thing a given leg is testing; legs that DO exercise the `caller:` detector pass their own
+# `id: skill-union` row instead, and `capreg` below detects that and skips this one so ids never collide.
+SKILL_UNION_CAP='  - { id: skill-union, caller: skill-union, receivers: none, reason: retired shape kept for the reverse sweep; this is the fixture default }'
+
 BASE="$WORK/base.yml"
 cat > "$BASE" <<YAML
 schemaVersion: 5
@@ -65,6 +73,7 @@ repos:
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
+$SKILL_UNION_CAP
 $LABELS_CAP
 kit:
   - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }
@@ -76,6 +85,12 @@ YAML
 capreg() {
   local n="$1" recv="$2"; shift 2
   local f="$WORK/$n.yml"
+  # A leg exercising the `caller:` detector passes its OWN `id: skill-union` row; appending the
+  # default on top of that would be a duplicate capability id, not a closure fix.
+  local has_su=0 row
+  for row in "$@"; do
+    case "$row" in *"id: skill-union"*) has_su=1 ;; esac
+  done
   { printf 'schemaVersion: 5\nupdated: 2026-07-13\nauthority: FS-GG/.github\nrepos:\n'
     printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }\n'
     printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [%s] }\n' "$recv"
@@ -85,7 +100,9 @@ capreg() {
     printf 'capabilities:\n'
     printf '  %s\n' "$@"
     # Every roster here rosters `labels`, so every roster here must say how `labels` is DETECTED, or
-    # the #628 closure rejects it — correctly, and for a reason no leg below is trying to test.
+    # the #628 closure rejects it — correctly, and for a reason no leg below is trying to test. Same
+    # rule, same reasoning, now applies to `skill-union` via CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS (#1806).
+    [ "$has_su" -eq 1 ] || printf '%s\n' "$SKILL_UNION_CAP"
     printf '%s\n' "$LABELS_CAP"; } > "$f"
   relock "$f"
   printf '%s' "$f"
@@ -434,21 +451,24 @@ expect_fail "'receivers:' with a value other than none" 1 "is invalid" \
       "- { id: coordination-kit, workflow: coordination-coherence.yml, receivers: some }")"
 
 # --- caps query (repos-audit.sh reads its mandate through this) ---
+# BASE now carries THREE rows, not two: skill-union's is mandatory here regardless of receivers
+# (#1806, CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS) and sits between coordination-kit and labels in file
+# order, which is the order `caps` preserves.
 caps_tsv="$(bash "$REPOS_SH" caps --registry "$BASE")"
-[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\t\t\nlabels\t\t\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
+[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\t\t\nskill-union\t\t\t\tskill-union\t\tnone\tretired shape kept for the reverse sweep; this is the fixture default\nlabels\t\t\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
   && ok "caps -> a TSV row per capability: id, workflow, script, materializer, caller, push, receivers, reason" \
-  || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -2)"
-[ -z "$(bash "$REPOS_SH" caps --field caller --registry "$BASE")" ] \
-  && ok "caps --field caller -> empty for non-caller rows" \
+  || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -3)"
+[ "$(bash "$REPOS_SH" caps --field caller --registry "$BASE")" = "$(printf '\nskill-union')" ] \
+  && ok "caps --field caller -> 'skill-union' for its caller row, empty for the other two" \
   || bad "caps --field caller" "got: $(bash "$REPOS_SH" caps --field caller --registry "$BASE")"
 caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
-[ "$caps_ids" = "$(printf 'coordination-kit\nlabels')" ] && ok "caps --field id -> the capability ids" \
+[ "$caps_ids" = "$(printf 'coordination-kit\nskill-union\nlabels')" ] && ok "caps --field id -> the capability ids" \
   || bad "caps --field id" "got: $caps_ids"
 
 # `push` is a YAML BOOLEAN, and `.push // ""` cannot blank it — `false // ""` is `false`, not "". A
 # `push: false` row would therefore reach repos-audit.sh as the five characters "false" and be read as
 # a live push detector, muting the capability's entire sweep. Normalized to "true"/"" at the seam.
-[ "$(bash "$REPOS_SH" caps --field push --registry "$BASE")" = "$(printf '\ntrue')" ] \
+[ "$(bash "$REPOS_SH" caps --field push --registry "$BASE")" = "$(printf '\n\ntrue')" ] \
   && ok "caps --field push -> 'true' or empty, never the string 'false'" \
   || bad "caps --field push" "got: $(bash "$REPOS_SH" caps --field push --registry "$BASE")"
 [ -z "$(bash "$REPOS_SH" caps --field materializer --registry "$BASE")" ] \
@@ -841,6 +861,34 @@ scanning for a real caller entirely, so a repo wiring the shape #1715 retired wo
 both directions. #1742 declined exactly this (shape 2) on the record. Restore the row with
 'receivers: none' and a reason, or re-open that decision first."
 fi
+
+# #1806: THE ABOVE ASSERTS THE REAL FILE'S ROW SURVIVES. IT DOES NOT PROVE THAT DELETING IT WOULD BE
+# CAUGHT — `validate`'s roster-keyed closure (#628) is vacuous once a word's receiver set is empty,
+# which is precisely what let the row above be silently deletable before this change (measured on
+# #1742's branch, 2026-07-28). Mutation-prove `validate` in BOTH directions, on the fixture rather than
+# the real file, so a bad edit here cannot pass by leaving the real registry untouched.
+expect_fail "deleting the skill-union capability row reds, even though its receiver set stays empty (#1806)" 1 \
+  "retired-with-no-receiver" \
+  "$(variant su_row_deleted '/id: skill-union,/d')"
+
+# ...AND THE OTHER DIRECTION, so this closure cannot regress into an eleventh check-that-cannot-fail
+# (#1806 AC2) by reding on any edit anywhere NEAR the capabilities: block. A plain roster growth that
+# never touches `capabilities:` — adding a repo that only receives an already-detected word — must
+# stay green.
+su_untouched="$WORK/su_untouched.yml"
+{ printf 'schemaVersion: 5\nupdated: 2026-07-13\nauthority: FS-GG/.github\nrepos:\n'
+  printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }\n'
+  printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }\n'
+  printf '  - { id: extra,   full: FS-GG/FS.GG.Extra, role: framework, receives: [labels] }\n'
+  printf 'capabilities:\n'
+  printf '  - { id: coordination-kit, workflow: coordination-coherence.yml }\n'
+  printf '%s\n' "$SKILL_UNION_CAP"
+  printf '%s\n' "$LABELS_CAP"
+  printf 'kit:\n'
+  printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }\n'
+  printf '  - { id: democlient, kind: client, source: scripts/democlient }\n'; } > "$su_untouched"
+relock "$su_untouched"
+expect_pass "a roster edit that adds a repo but touches no capability row stays green (#1806)" "$su_untouched"
 
 # The byte-copy PUSH arm (build-config-propagate.yml) was RETIRED in #1262 (ADR-0062): build config now
 # ships as the FS.GG.Kit package, so there is no propagate workflow whose shape (roster-driven, non-empty,

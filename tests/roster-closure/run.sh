@@ -43,6 +43,7 @@ repos:
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
+  - { id: skill-union, caller: skill-union, receivers: none, reason: retired shape kept for the reverse sweep; this is the fixture default }
   - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }
 outside-fabric: []
 YAML
