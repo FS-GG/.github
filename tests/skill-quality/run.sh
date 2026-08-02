@@ -150,6 +150,66 @@ mutate_workboard_phrase "Do not spin" "Poll the same rows until they change"
 expect_rejection "work-board reports parked and human backlog without spinning" \
   "work-board: backlog planning contract lost 'Do not spin'"
 
+# .github#2088: two concurrent waves, three implementer slots each, two RESERVED review slots (never
+# filled by implementers), a testable three-or-fewer consolidation threshold, and an explicit
+# fleet-wide EX_RATE stop. These legs are the point, not the passing case: a driver that let a wave
+# fill all eight slots with implementers, or scoped EX_RATE to one wave, or let the two host-loop
+# copies drift, or let a routed variant restate the numbers instead of inheriting them, must be
+# rejected — each leg below breaks exactly one of those and checks the gate catches it.
+mutate_hostloop_phrase() {
+  python3 - "$WORK/tree" "$1" "$2" "$3" <<'PY'
+import sys
+from pathlib import Path
+
+root, driver, old, new = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+for runtime in (".claude", ".agents"):
+    path = root / runtime / "skills" / driver / "references/host-loop.md"
+    text = path.read_text()
+    if old not in text:
+        raise SystemExit(f"fixture phrase missing: {old}")
+    path.write_text(text.replace(old, new))
+PY
+}
+
+seed
+mutate_hostloop_phrase drive-board "Three or fewer consolidates" "Two or fewer consolidates"
+expect_rejection "drive-board cannot vary the two-wave consolidation threshold" \
+  "drive-board: host-loop lost two-wave contract statement 'Three or fewer consolidates'"
+
+seed
+mutate_hostloop_phrase work-board "filling all eight slots with" "filling every implementer slot with"
+expect_rejection "work-board's review slots stay reserved rather than fillable by implementers" \
+  "work-board: host-loop lost two-wave contract statement 'filling all eight slots with'"
+
+seed
+mutate_hostloop_phrase work-board "fleet-wide stop for BOTH waves" "a stop for the reporting wave only"
+expect_rejection "work-board cannot scope an EX_RATE stop to a single wave" \
+  "work-board: host-loop lost two-wave contract statement 'fleet-wide stop for BOTH waves'"
+
+seed
+mutate_hostloop_phrase work-board "Three or fewer consolidates" "Two or fewer consolidates"
+expect_rejection "the two host-loop copies cannot state the wave model differently" \
+  "two-wave contract: drive-board and work-board host-loop copies state the wave model differently"
+
+seed
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for runtime in (".claude", ".agents"):
+    path = root / runtime / "skills/drive-board-best/SKILL.md"
+    text = path.read_text()
+    path.write_text(
+        text.replace(
+            "Never let a host default",
+            "Run three implementer slots per wave. Never let a host default",
+        )
+    )
+PY
+expect_rejection "a routed variant cannot restate the two-wave contract instead of inheriting it" \
+  "drive-board-best: restates the two-wave contract"
+
 # .github#1574: a schema id the semantic gate does not support must be an ERROR from the semantic
 # gate itself. Its sibling validate_invocations already shouts, and that shout is repairable by
 # editing one literal — which is exactly how the polarity assertions got switched off unnoticed.

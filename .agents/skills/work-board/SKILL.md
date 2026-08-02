@@ -11,13 +11,13 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 2. Run [backlog-triage](references/backlog-triage.md), classifying every relevant parked row without
    guessing human judgement and promoting only evidenced actionable work to `Ready`.
 3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
-4. Spawn one fresh disposable worker per lane; give each a stable feedback cycle id, and reserve
-   capacity for a fresh independent critic at the review boundary. Each owns one item through claim,
-   implementation, critique and up to three repair/review rounds, green merge, obligations, verified
-   feedback, and done—or human escalation after an exhausted third round. During
-   worker setup, interactive/game work
-   must explicitly invoke the `pnext-item` performance-first planning gate before implementation
-   begins.
+4. Spawn workers under [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and
+   consolidation rule — do not restate or vary those numbers here; its two review slots are reserved for
+   independent critics and an implementer may never fill one. Give each worker a stable feedback cycle
+   id. Each owns one item through claim, implementation, critique and up to three repair/review rounds,
+   green merge, obligations, verified feedback, and done—or human escalation after an exhausted third
+   round. During worker setup, interactive/game work must explicitly invoke the `pnext-item`
+   performance-first planning gate before implementation begins.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

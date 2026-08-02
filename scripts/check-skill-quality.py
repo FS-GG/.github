@@ -350,6 +350,61 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in work_triage:
             fail(errors, f"work-board: backlog planning contract lost {required!r}")
 
+    # .github#2088: two concurrent waves, three implementer slots each, two RESERVED review slots,
+    # a testable consolidation threshold, and an explicit fleet-wide EX_RATE stop. Stated once per
+    # driver family in host-loop.md; #916 is why a hand-restated copy elsewhere is the failure mode,
+    # not a convenience — so this also asserts the two host-loop copies say it identically and that
+    # the routed variants inherit rather than restate it.
+    wave_model_required = (
+        "Run two waves in parallel, not sequentially",
+        "six implementer slots total across both waves",
+        "RESERVED, not advisory",
+        "filling all eight slots with",
+        "a contract violation, not an efficiency gain",
+        "Three or fewer consolidates",
+        "Four or more runs two full waves as designed",
+        "fresh reconcile/triage, not a re-slice of the",
+        "fleet-wide stop for BOTH waves",
+        "flush --dry-run` before resuming either",
+    )
+    for driver_name, contract_text in (("drive-board", host_loop), ("work-board", work_host_loop)):
+        for required in wave_model_required:
+            if required not in contract_text:
+                fail(errors, f"{driver_name}: host-loop lost two-wave contract statement {required!r}")
+
+    def _wave_model_block(text: str) -> str:
+        marker = "**Two concurrent waves, a fixed eight-slot cap.**"
+        sentinel = "wave.\n"
+        start = text.find(marker)
+        if start < 0:
+            return ""
+        end = text.find(sentinel, start)
+        if end < 0:
+            return ""
+        return text[start:end + len(sentinel)]
+
+    drive_wave_block = _wave_model_block(host_loop)
+    work_wave_block = _wave_model_block(work_host_loop)
+    if not drive_wave_block or not work_wave_block:
+        fail(errors, "two-wave contract: could not locate the wave-model block in one or both host-loop copies")
+    elif drive_wave_block != work_wave_block:
+        fail(
+            errors,
+            "two-wave contract: drive-board and work-board host-loop copies state the wave model "
+            "differently — the #916 near-duplicate-drift failure this gate exists to catch",
+        )
+
+    variant_wave_terms = ("implementer slot", "review slot", "consolidat", "eight-slot", "EX_RATE")
+    for variant in ("drive-board-best", "drive-board-normal", "work-board-best", "work-board-normal"):
+        variant_body = (root / ROOTS[0] / variant / "SKILL.md").read_text(encoding="utf-8")
+        for term in variant_wave_terms:
+            if term.lower() in variant_body.lower():
+                fail(
+                    errors,
+                    f"{variant}: restates the two-wave contract ({term!r}) instead of inheriting it "
+                    "from the canonical driver",
+                )
+
     feedback_contracts = {
         "work-board": (
             "item-<issue-number>-<slug>",
