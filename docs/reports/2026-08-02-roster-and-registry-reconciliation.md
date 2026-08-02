@@ -51,26 +51,30 @@ unmodified closed-world fixture remains the clean control.
 
 ## Leg 12: registry ↔ producer-manifest reconciliation
 
-The skill inventory has three producer facts that must agree: `registry/skills.yml`,
-the driver manifest, and the union of the permitted skill roots. This is a
-producer-manifest comparison, not a textual similarity check: it must establish that a
-registered row corresponds to a real producer body and that every producer surfaced by
-the declared roots has the intended registry and driver representation.
+The active registry check is **registry = manifest = bytes**: every
+`registry/skills.yml` row must resolve to its one authoritative producer manifest and
+to canonical source-body bytes. The driver manifest and the consumer union are related
+inventory boundaries, but they do not authorize a second producer or a second copy of
+a body. The consumer boundary is the declared two-root set, `.claude/skills` and
+`.agents/skills`.
 
-The existing `scripts/fsgg-skill-registry-check` owns this reconciliation. It checks
-registry rows against producer bodies and preserves the byte-identical frozen-copy
-invariant where the registry declares one; `skill-union-assert` supplies the
-three-root union boundary. Scheduled `skill-registry-coherence` is necessary because
-a producer can change without a `.github` commit, leaving a locally green authority
-checkout with a stale catalogue.
+The existing `scripts/fsgg-skill-registry-check` owns the registry = manifest = bytes
+comparison: source existence, canonical digest, declared completeness, predicate, and
+source ownership. `skill-union-assert` applies the two-root consumer-union boundary;
+the driver-manifest generator supplies the corresponding driver inventory. ADR-0022
+§6's frozen-mirror classification and cross-tree byte comparison were retired by
+`#1862`; this leg must not reintroduce them. Scheduled
+`skill-registry-coherence` is necessary because a producer can change without a
+`.github` commit, leaving a locally green authority checkout with a stale catalogue.
 
 The leg must distinguish a confirmed disagreement from an ungradable producer. A
 missing required root, unreadable manifest or registry, malformed row, or ambiguous
 producer identity is **exit 3** through `GateError`: there is no complete population to
 compare. A row that is readable but has no matching producer, a producer omitted from
-the required inventory, or a declared frozen copy with different bytes is an
-exit-`1` finding. The report must name the source artifact and the missing or divergent
-counterpart; a count without both sides is not evidence of reconciliation.
+the required inventory, or a registry digest that differs from its authoritative
+manifest/body is an exit-`1` finding. The report must name the source artifact and the
+missing or divergent counterpart; a count without both sides is not evidence of
+reconciliation.
 
 ### Negative control
 
