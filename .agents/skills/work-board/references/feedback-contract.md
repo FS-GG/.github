@@ -39,7 +39,22 @@ python3 .agents/skills/work-board/scripts/validate-feedback-state.py \
 ```
 
 The host repeats all applicable commands against the worker's exact merged paths before accepting the
-item. An `incomplete` or `unsupported` audit finding is unresolved and blocks actionable handoff.
+item. A command passes only when the validator itself exits `0`; capture its output, then capture and
+test that exit status immediately. For example:
+
+```sh
+validation_output="$(python3 .agents/skills/work-board/scripts/validate-feedback-state.py \
+  --root . --cycle <cycle-id> --report feedback/<report>.md \
+  --audit feedback/audits/<report-stem>.audit.json \
+  --phases onboarding-first-build,lifecycle-authoring-or-not-used,implementation-test-evidence,verify-ship-pr)"
+validation_status=$?
+printf '%s\n' "$validation_output"
+[ "$validation_status" -eq 0 ] || exit "$validation_status"
+```
+
+Never pipe a validator through `tail`, `tee`, or another command when deciding whether it passed: a
+pipeline reports the last element's status, so a validator exit `1` can be replaced by exit `0` and turn
+a failed validation into a false pass. An `incomplete` or `unsupported` audit finding is unresolved and blocks actionable handoff.
 Missing, unreadable, malformed, wrong-cycle, count-mismatched, unbound-audit, or unvalidated state fails
 closed and the host reports the exact path plus the command above that repairs or verifies it.
 
