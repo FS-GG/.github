@@ -21,7 +21,11 @@ module SemanticDiffApplication =
     let run (opts: Options.Options) =
         match opts.Args with
         | [ baseSha; headSha; oldToken; newToken ] when not (List.isEmpty opts.Paths) ->
-            let root = opts.Repo |> Option.defaultValue "."
+            // `--repo` is shared with board commands and normalizes a leading slash as a repository
+            // spelling. Restore it only when that exact absolute directory exists; otherwise retain
+            // the normal relative repository root.
+            let requestedRoot = opts.Repo |> Option.defaultValue "."
+            let root = if IO.Directory.Exists("/" + requestedRoot) then "/" + requestedRoot else requestedRoot
             let occurrences =
                 opts.Paths
                 |> List.map (fun path ->
