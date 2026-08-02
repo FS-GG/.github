@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6ac93e32b33a1b55c793690370b66cb69746d248826bf9f62f6c2e253abf5cd3"
+      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
       outcome: passed
       passed: 441
       failed: 0
@@ -74,6 +74,13 @@ evidence:
     sourceRefs: []
     result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
+      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      outcome: passed
+      passed: 441
+      failed: 0
+      skipped: 0
     notes: [Owner-qualified scan-cache fold preserves same-name repository isolation.]
   - id: EV003
     kind: verification
@@ -91,6 +98,13 @@ evidence:
     sourceRefs: []
     result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
+      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      outcome: passed
+      passed: 441
+      failed: 0
+      skipped: 0
     notes: [Focused GitHub board and cache suite passed 126 tests.]
   - id: EV004
     kind: verification
@@ -108,6 +122,13 @@ evidence:
     sourceRefs: []
     result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
+      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      outcome: passed
+      passed: 441
+      failed: 0
+      skipped: 0
     notes: [Legacy ownerless cache records retain their prior compatible fold behavior.]
   - id: EV005
     kind: verification
@@ -125,6 +146,13 @@ evidence:
     sourceRefs: []
     result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
+      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      outcome: passed
+      passed: 441
+      failed: 0
+      skipped: 0
     notes: [Generated analysis and readiness views refreshed from authored lifecycle inputs.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
