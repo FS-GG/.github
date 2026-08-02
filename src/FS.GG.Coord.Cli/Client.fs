@@ -807,6 +807,19 @@ module Client =
             match activeItemRefs doc with
             | Error e -> eprint e; ExitError
             | Ok active ->
+                let reviewEvidence =
+                    match Snapshot.parse doc with
+                    | Error _ -> []
+                    | Ok snapshot ->
+                        snapshot.Candidates
+                        |> List.choose (fun candidate ->
+                            match candidate.Item.ItemPr with
+                            | Some pr ->
+                                match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
+                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                | Ok scan, PrGreen when List.isEmpty scan.Unreadable -> Some(pr, scan.Markers.Length)
+                                | _ -> None
+                            | None -> None)
                 let action =
                     // A live board scan proves occupancy only.  It does NOT prove the multi-step
                     // housekeeping chain, so missing durable receipts fail closed to reconciliation.
@@ -815,7 +828,7 @@ module Client =
                           ReconcileDryRunFresh = false; ReconcileApplied = false; ReconcileFresh = false
                           TriageFresh = false; CurrencyScoped = false } []
                 match opts.Render with
-                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"action\":\"%A\"}" (List.length active) model.ReviewSlots action
+                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" (List.length active) model.ReviewSlots (List.length reviewEvidence) action
                 | Text -> printfn "%A" action
                 ExitGreen
 
