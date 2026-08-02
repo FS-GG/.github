@@ -180,7 +180,7 @@ skills:
   # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
   # the historical divergence between retained `fs-gg-feedback-report` and retired
   # `fs-gg-feedback-capture`.)
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e86842e3ad5bad67f8aa64eca58007c224bbca9d77674375a71c270e1262ea73, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 2302c8d834e2228675c5bf03986d212a5235ad1ead58fd7337c85191d9a5e6eb, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
   # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration;
@@ -213,7 +213,7 @@ skills:
   # catalog; do not recreate it to make the old pair visually symmetric. Predicate is the current
   # manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality).
   # Vendored Rendering#248 (PR #251); reconciled .github#298.
-  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 2d7127addbab83625a31d0d9defe7c9322845209a93b6e02b00f5d7cad11e4f8, materializes-when: "always" }
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: d150342ca2d72f441962c9a5ca497aa895de05e0fed800c2d96b220ca2cfbdcf, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
