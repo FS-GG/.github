@@ -36,6 +36,8 @@ advances the pin to that CLI.
 
 - **2026-08-02** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
+- **2026-08-02** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-08-02** — RECONCILE (manual; owner `.github`; .github#2080, repair round 1): rebased onto
   `main` post-`2bc14fe` (`.github#2078`/`#2095`'s landed reconcile, which brought
   `skill-registry-coherence` to 0 findings) and **regenerated** — not text-merged — the six rows this
