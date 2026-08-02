@@ -27,8 +27,10 @@ cross-repo allocation, not item implementation.
    whose resulting acceptance criteria are their explicit union. Keep merely adjacent work separate and
    record why; a shared chokepoint alone is not a shared story.
 4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
-   [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo. Reserve capacity for a fresh critic
-   per item at the review boundary; do not consume every slot with implementers.
+   [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo, one item only. Dispatch under
+   [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and consolidation rule — do not
+   restate or vary those numbers here; its two review slots are reserved for independent critics and an
+   implementer may never fill one.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

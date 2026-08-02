@@ -59,12 +59,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "dd15d51b49e66d2c7f3fdc7af5f3432c3b55ee5e79c2a3994e82a41668b2a484",
-      "tree-sha256": "3b31eddd31315454b8fd38f420cb91e8e29b334af07682fe764d95b3e096e742",
+      "sha256": "0082fdb6b891227415707cb0d4cc4938e3c8eeb1ef9cb305097e890ebd744274",
+      "tree-sha256": "5ee672e0d421fb384f2347f4f39fab02dac7df5e059d8ed687ef3bb594970a19",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "dd15d51b49e66d2c7f3fdc7af5f3432c3b55ee5e79c2a3994e82a41668b2a484",
+          "sha256": "0082fdb6b891227415707cb0d4cc4938e3c8eeb1ef9cb305097e890ebd744274",
           "executable": false
         },
         {
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "8cdedf1ba9e1c74e69e4524566c44c7581679ed1643a7cb634117d0099584d36",
+          "sha256": "cd72016a539cbe3142d54bae715fc8dc89ba0d45881f692856b2d1028acbd388",
           "executable": false
         },
         {
@@ -169,12 +169,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "4fd9329264e0cb2762e9162c10af4d79ceaa4f0d7a4012d3649b73082b90aa88",
-      "tree-sha256": "e455447a46c223450a456afb4b7fe5576ed1f073914bf76898c8aed3d463b628",
+      "sha256": "6356cb759528c0d157040f647600a56b7074611670100cb3b5af1b8943345365",
+      "tree-sha256": "c7134f43f9dcaf37053c3611f28eebe20c701b3042a91badbf8ce0e677dd461f",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "4fd9329264e0cb2762e9162c10af4d79ceaa4f0d7a4012d3649b73082b90aa88",
+          "sha256": "6356cb759528c0d157040f647600a56b7074611670100cb3b5af1b8943345365",
           "executable": false
         },
         {
@@ -194,7 +194,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "d9c7e5ea64254dfdfc024d5018ebdbad2cb5d68bbf3697547b962e42e002b413",
+          "sha256": "9a65106b63316c65ca9d95c33d027d394a1cf04793ddf0af9dbe81fe51b12194",
           "executable": false
         },
         {

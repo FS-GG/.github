@@ -78,6 +78,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/adr-coherence/run.sh",
       "workflow": ".github/workflows/adr-coherence.yml"
+    },
+    {
+      "source": "scripts/check-skill-quality.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/skill-quality/run.sh",
+      "workflow": ".github/workflows/skill-quality.yml"
     }
   ]
 }

@@ -8,14 +8,34 @@ sequentially in fresh worktrees. Never invent another host's tool name or syntax
 Every wave starts from fresh ground truth. For `work-board`, the ordered planning boundary is: consume
 the complete four-part `check-board` result, classify the current workspace Backlog through
 [backlog-triage](backlog-triage.md), then size the Ready wave with `batch`. Never size before triage.
-Allocate only schedulable touch-set-disjoint lanes and never exceed the host's available worker slots.
-Reserve at least one available slot for an independent critic instead of filling the cap with
-implementers.
+Allocate only schedulable touch-set-disjoint lanes within the fixed slot cap below; never exceed it.
 Every worker must mint its own `FSGG_WORKER` identity and hold its own claim: a host session, account,
 or parent identity is not a substitute. Give it one bounded item, a stable feedback cycle id, and the
 complete item-driver contract, including the simple-versus-complex SDD lifecycle branch and schema-v2
 feedback envelope. Do not hand it a second item. It MAY, after its done stamp, drain its OWN follow-up
 queue sequentially — one claim at a time, never interleaved.
+
+**Two concurrent waves, a fixed eight-slot cap.** Run two waves in parallel, not sequentially: each
+wave holds three implementer slots, six implementer slots total across both waves. Two additional
+subagent slots are reserved fleet-wide for independent critics at each wave's review boundary —
+RESERVED, not advisory. An implementer may never occupy a review slot, and filling all eight slots with
+implementers is a contract violation, not an efficiency gain. Dispatch does not wait on one wave's
+verification boundary before the other wave's implementers start; that overlap is the whole point of
+running two waves instead of one.
+
+**Consolidation.** Count the items being worked across both waves combined — claimed, in review, or
+newly dispatched; not yet-verified follow-ups. Three or fewer consolidates: fold every active item into
+one wave and immediately start a second wave from a fresh reconcile/triage, not a re-slice of the
+current plan. Four or more runs two full waves as designed. Re-check this count at every re-plan, not
+once at loop start.
+
+**Rate limit under two waves.** Every worker still authenticates as the one account whose REST budget
+holds the claim lock — unbatchable, and its remaining budget is not queryable. Six implementers plus two
+critics is a real increase over a single conservative wave, and the shared budget does not split by
+wave: an `EX_RATE` (75) from ANY worker in EITHER wave is a fleet-wide stop for BOTH waves, not only the
+wave that reported it. Stop spawning into both waves, let every in-flight worker in both drain or
+report, back off to the reset the failure envelope names, then `flush --dry-run` before resuming either
+wave.
 
 **That permission is a trade, and it is deliberate.** Disposal is the feature, not an accident of
 implementation: ADR-0053 rejected the long-lived worker because context degrades across units, and a
