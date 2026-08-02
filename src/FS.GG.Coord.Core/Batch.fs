@@ -2,6 +2,8 @@ namespace FS.GG.Coord
 
 module Batch =
 
+    open System
+    open System.Text.RegularExpressions
     open Types
     open Schedulability
 
@@ -30,6 +32,62 @@ module Batch =
         { Chosen: Item list
           Decisions: Decision list
           Truncated: bool }
+
+    type WaveModel =
+        { Waves: int
+          ImplementerSlotsPerWave: int
+          ReviewSlots: int
+          ConsolidationThreshold: int }
+
+    type WaveOccupancy =
+        { ActiveItems: int
+          WaveCapacity: int
+          OpenSlots: int }
+
+    let private waveModelPattern =
+        Regex(
+            @"<!--\s*fsgg:wave-model:v1\s+waves=(\d+)\s+implementer-slots-per-wave=(\d+)\s+review-slots=(\d+)\s+consolidation-threshold=(\d+)\s*-->",
+            RegexOptions.CultureInvariant
+        )
+
+    let parseWaveModel (document: string) : Result<WaveModel, string> =
+        let matches = waveModelPattern.Matches(document)
+
+        if matches.Count <> 1 then
+            Error $"expected exactly one fsgg:wave-model:v1 declaration, found %d{matches.Count}"
+        else
+            let m = matches[0]
+
+            let values =
+                [ for i in 1..4 -> Int32.TryParse(m.Groups[i].Value) ]
+
+            match values with
+            | [ (true, waves); (true, implementers); (true, reviewers); (true, consolidation) ]
+                when waves > 0 && implementers > 0 && reviewers > 0 && consolidation > 0 ->
+                Ok
+                    { Waves = waves
+                      ImplementerSlotsPerWave = implementers
+                      ReviewSlots = reviewers
+                      ConsolidationThreshold = consolidation }
+            | _ -> Error "fsgg:wave-model:v1 values must be positive integers"
+
+    let waveOccupancy (model: WaveModel) (activeItems: Ref list) : WaveOccupancy =
+        let active = activeItems |> List.distinct |> List.length
+        let capacity = model.Waves * model.ImplementerSlotsPerWave
+
+        { ActiveItems = active
+          WaveCapacity = capacity
+          OpenSlots = max 0 (capacity - active) }
+
+    let renderWaveOccupancy (occupancy: WaveOccupancy) : string =
+        $"wave occupancy: {{\"activeItems\":%d{occupancy.ActiveItems},\"waveCapacity\":%d{occupancy.WaveCapacity},\"openSlots\":%d{occupancy.OpenSlots}}}"
+
+    let waveShortfallHeadline (schedulableItems: int) (occupancy: WaveOccupancy) : string option =
+        if occupancy.OpenSlots > 0 && schedulableItems > 0 then
+            Some
+                $"WAVE SHORTFALL — %d{occupancy.OpenSlots} implementer slot(s) are open while %d{schedulableItems} schedulable item(s) exist; dispatch the next wave now."
+        else
+            None
 
     /// THE DECISION'S OWN WORDS — the only place a passed-over item is put into English.
     ///

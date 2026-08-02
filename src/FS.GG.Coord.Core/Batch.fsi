@@ -96,6 +96,33 @@ module Batch =
           /// and this says so.
           Truncated: bool }
 
+    /// The host's concurrency model, read from the machine-readable declaration in `host-loop.md`.
+    /// The engine deliberately does not own these numbers: the document that governs dispatch does.
+    type WaveModel =
+        { Waves: int
+          ImplementerSlotsPerWave: int
+          ReviewSlots: int
+          ConsolidationThreshold: int }
+
+    /// Fleet occupancy at the instant `batch` made its scheduling decision.
+    type WaveOccupancy =
+        { ActiveItems: int
+          WaveCapacity: int
+          OpenSlots: int }
+
+    /// Parse `<!-- fsgg:wave-model:v1 ... -->` from a host-loop document. Missing, duplicate,
+    /// malformed, or non-positive declarations are refused rather than defaulted.
+    val parseWaveModel: document: string -> Result<WaveModel, string>
+
+    /// Derive capacity and deficit from the governing model and the distinct live item refs observed.
+    val waveOccupancy: model: WaveModel -> activeItems: Ref list -> WaveOccupancy
+
+    /// Stable typed projection emitted beside `batch`'s unchanged stdout answer.
+    val renderWaveOccupancy: occupancy: WaveOccupancy -> string
+
+    /// The explicit advisory emitted only when capacity and schedulable work coexist.
+    val waveShortfallHeadline: schedulableItems: int -> occupancy: WaveOccupancy -> string option
+
     /// Which reservation — if any — holds `token` in the given repo.
     ///
     /// Repo-scoped by contract: a reservation in another repo names a different file (#312).

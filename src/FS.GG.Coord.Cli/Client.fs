@@ -662,6 +662,103 @@ module Client =
             for line in Batch.explainRanking result do
                 eprint line
 
+    /// Read the dispatch model from BOTH host loops. The documents govern the numbers; the engine only
+    /// parses them and refuses disagreement. Reading one copy and ignoring the other would let
+    /// `drive-board` and `work-board` silently size different fleets again.
+    let private readWaveModel () : Result<Batch.WaveModel, string> =
+        match KitDigest.kitRoot () with
+        | None -> Error "the kit root is unavailable"
+        | Some root ->
+            let paths =
+                [ for skillRoot in [ ".claude/skills"; ".agents/skills" ] do
+                      for driver in [ "drive-board"; "work-board" ] do
+                          $"%s{skillRoot}/%s{driver}/references/host-loop.md" ]
+
+            let read (relative: string) =
+                let path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
+
+                if not (File.Exists path) then
+                    Error $"%s{relative} is missing"
+                else
+                    try
+                        File.ReadAllText path
+                        |> Batch.parseWaveModel
+                        |> Result.mapError (fun e -> $"%s{relative}: %s{e}")
+                    with e ->
+                        Error $"%s{relative} could not be read: %s{e.Message}"
+
+            let existing =
+                paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
+
+            match existing with
+            | [] -> Error "no drive-board or work-board host-loop document exists"
+            | documents ->
+                // Receiver topology is intentionally asymmetric: `work-board` materializes always while
+                // operator-only `drive-board` never does. Validate every copy that EXISTS and require them
+                // to agree, without turning an intentionally absent operator skill into an unavailable
+                // signal for the product driver.
+                let results = documents |> List.map read
+                let errors =
+                    results
+                    |> List.choose (function
+                        | Error e -> Some e
+                        | Ok _ -> None)
+
+                let models =
+                    results
+                    |> List.choose (function
+                        | Ok model -> Some model
+                        | Error _ -> None)
+                    |> List.distinct
+
+                match errors, models with
+                | [], [ model ] -> Ok model
+                | [], _ -> Error "drive-board and work-board declare different fsgg:wave-model:v1 values"
+                | _, _ -> errors |> String.concat "; " |> Error
+
+    let private activeItemRefs (doc: string) : Result<Ref list, string> =
+        match Snapshot.parse doc with
+        | Error errors ->
+            errors
+            |> List.map (fun e -> $"%s{e.Path}: %s{e.Message}")
+            |> String.concat "; "
+            |> Error
+        | Ok request ->
+            let candidates =
+                request.Candidates
+                |> List.choose (fun c -> c.Item.Claim |> Option.map (fun _ -> c.Item.Ref))
+
+            let reservations =
+                request.InFlight
+                |> List.choose (fun r ->
+                    match r.Holder with
+                    | Batch.LiveClaim(_, item, _, _) -> Some item
+                    | _ -> None)
+
+            Ok(candidates @ reservations |> List.distinct)
+
+    /// Occupancy is advisory, not enforcing: refusing `batch` on an open slot would prevent the dispatch
+    /// that closes it, and a draining queue legitimately has spare capacity. It is nevertheless loud and
+    /// typed at the decision point, where a host can act on the measured deficit instead of remembering
+    /// prose from the start of a long run. STDERR preserves `batch`'s stdout machine contract byte-for-byte.
+    let private sayWaveOccupancy (doc: string) (result: Batch.BatchResult) : unit =
+        match readWaveModel (), activeItemRefs doc with
+        | Ok model, Ok active ->
+            let occupancy = Batch.waveOccupancy model active
+            eprint (Batch.renderWaveOccupancy occupancy)
+
+            Batch.waveShortfallHeadline (List.length result.Chosen) occupancy
+            |> Option.iter eprint
+        | model, active ->
+            let explain = function
+                | Ok _ -> None
+                | Error e -> Some e
+
+            [ explain model; explain active ]
+            |> List.choose id
+            |> String.concat "; "
+            |> fun reason -> eprint $"wave occupancy: unavailable (%s{reason})"
+
     let batch (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
@@ -697,6 +794,7 @@ module Client =
                 // flag that worked in one projection and silently did nothing in the other is the #1523
                 // defect this repo already paid for once.
                 sayRanking opts result
+                sayWaveOccupancy doc result
 
                 ExitGreen
 

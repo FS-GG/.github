@@ -1975,7 +1975,11 @@ module ApplicationServiceTests =
     /// misbehave the day one of these verbs starts consulting `Worker.Derived` too — exactly the condition
     /// the three shell harnesses in .github#1817's table were in until something did. Scrubbing here removes
     /// the ambient dependency before that day arrives, rather than after.
-    let private runQueue (transport: Fake.Recorder) (args: string list) : int * string * string =
+    let private runQueueWithKit
+        (configureKit: string -> unit)
+        (transport: Fake.Recorder)
+        (args: string list)
+        : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1525-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
@@ -1993,6 +1997,7 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory dir |> ignore
+            configureKit dir
 
             for v, _ in previousIdentity do
                 Environment.SetEnvironmentVariable(v, null)
@@ -2032,6 +2037,9 @@ module ApplicationServiceTests =
                 Directory.Delete(dir, true)
             with _ ->
                 ()
+
+    let private runQueue (transport: Fake.Recorder) (args: string list) : int * string * string =
+        runQueueWithKit ignore transport args
 
     /// A BUSY queue: one candidate the scheduler LOOKED AT and refused (#74), against a board with none at
     /// all. #428's distinction — this is the board that "nothing schedulable" misreports as an empty
@@ -2202,6 +2210,84 @@ module ApplicationServiceTests =
 
         Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
         Assert.Contains("FS.GG.SDD#74", err)
+        Assert.Equal(0, code)
+
+    let private waveModelDeclaration implementers =
+        $"<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=%d{implementers} review-slots=2 consolidation-threshold=3 -->"
+
+    /// The supported receiver topology: work-board is always materialized; operator-only drive-board is not.
+    let private installWaveModel (root: string) =
+        let declaration =
+            waveModelDeclaration 3
+
+        let directory = Path.Combine(root, ".claude", "skills", "work-board", "references")
+        Directory.CreateDirectory directory |> ignore
+        File.WriteAllText(Path.Combine(directory, "host-loop.md"), declaration)
+
+    let private installDisagreeingWaveModels (root: string) =
+        for skill, implementers in [ "drive-board", 4; "work-board", 3 ] do
+            let directory = Path.Combine(root, ".claude", "skills", skill, "references")
+            Directory.CreateDirectory directory |> ignore
+            File.WriteAllText(Path.Combine(directory, "host-loop.md"), waveModelDeclaration implementers)
+
+    [<Theory>]
+    [<InlineData(6, true, 0, false)>]
+    [<InlineData(2, true, 4, true)>]
+    [<InlineData(2, false, 4, false)>]
+    let ``#2096 batch reports full partial and drained wave occupancy without changing stdout``
+        (active: int)
+        (hasReady: bool)
+        (openSlots: int)
+        (shortfall: bool)
+        =
+        let readyNumber = active + 1
+
+        let bodies =
+            [ for n in 1..active -> n, $"Paths: src/%d{n}" ]
+            @ (if hasReady then [ readyNumber, $"Paths: src/%d{readyNumber}" ] else [])
+            |> Map.ofList
+
+        let holders =
+            [ for n in 1..active -> n, $"worker-%d{n}" ] |> Map.ofList
+
+        let statusFor n =
+            if hasReady && n = readyNumber then "Ready" else "In progress"
+
+        let transport = worldOf statusFor bodies holders Map.empty Set.empty false
+
+        let code, out, err =
+            runQueueWithKit
+                installWaveModel
+                transport
+                [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        let expectedOut =
+            if hasReady then $"[\"FS.GG.SDD#%d{readyNumber}\"]" else "[]"
+
+        Assert.Equal(expectedOut + Environment.NewLine, out)
+        Assert.Contains(
+            $"wave occupancy: {{\"activeItems\":%d{active},\"waveCapacity\":6,\"openSlots\":%d{openSlots}}}",
+            err
+        )
+
+        Assert.Equal(shortfall, err.Contains "WAVE SHORTFALL")
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#2096 installed driver contracts that disagree fail the occupancy read closed`` () =
+        let transport =
+            worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
+
+        let code, out, err =
+            runQueueWithKit
+                installDisagreeingWaveModels
+                transport
+                [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        Assert.Equal("[\"FS.GG.SDD#74\"]" + Environment.NewLine, out)
+        Assert.Contains("wave occupancy: unavailable", err)
+        Assert.Contains("declare different fsgg:wave-model:v1 values", err)
+        Assert.DoesNotContain("WAVE SHORTFALL", err)
         Assert.Equal(0, code)
 
     [<Fact>]
