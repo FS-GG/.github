@@ -97,7 +97,7 @@ published *at*:
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Scene, layout, input, viewer/host, controls, themes; Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. In addition to the live rendering/governance composition, ADR-0071/0072 define the not-yet-published `console`, `web`, `fable-game`, and `fable-bindings` providers. | the `rendering` scaffold provider + `fs-gg-governance` overlay; planned `FS.GG.Workspace.Template` package (`fs-gg-console`, `fs-gg-web`, `fs-gg-fable-game`, `fs-gg-fable-bindings`) |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + framework producers into one workspace at scaffold time. In addition to the live rendering/governance composition, ADR-0071/0072/0073 define the not-yet-published `console`, `web`, `fable-game`, and `fable-bindings` providers. | the `rendering` scaffold provider + `fs-gg-governance` overlay; planned `FS.GG.Workspace.Template` package (`fs-gg-console`, `fs-gg-web`, `fs-gg-fable-game`, `fs-gg-fable-bindings`) |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
@@ -380,7 +380,8 @@ README must name the same version), and proves the governance matrix end-to-end 
 0** — with independent SKIP probes so it never passes by omission.
 
 **The workspace-provider contract** ([ADR-0071](adr/0071-two-web-workspace-providers-one-template-package.md),
-[ADR-0072](adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md))
+[ADR-0072](adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md),
+[ADR-0073](adr/0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md))
 adds a top-level distinction that the current rendering-only path does not need:
 `new-sdd-workspace --template` selects a provider, while `--profile` is interpreted only by that
 provider. Omission preserves the current rendering behaviour during the compatibility window.
@@ -390,8 +391,12 @@ Core plus plain TypeScript/Vite baseline; `fs-gg-fable-game` is a bounded Fable/
 `fs-gg-fable-bindings` is a package-producing Fable interop workspace over an exactly pinned npm
 package and declaration closure, with assisted generation, curated source, compile/runtime/drift
 evidence, and browser/Node/universal targets. The Babylon bindings prototype is its first forcing
-reference, not a universal API choice. The game shape uses Fable.Remoting for typed HTTP RPC and
-SignalR for real-time session traffic, and consumes Game's producer-owned
+reference, not a universal API choice. The game shape uses plain HTTP endpoints with explicit
+versioned DTOs for typed request/response and SignalR for real-time session traffic — ADR-0073
+dropped Fable.Remoting from that role because the upstream `Fable.Remoting.MsgPack` package does
+not compile under the pinned Fable compiler (`FS.GG.Templates#370`) and the one upstream report is
+unfixed and unacknowledged; SignalR's role, and the rest of ADR-0071's design, are unchanged — and
+consumes Game's producer-owned
 `fs-gg-game-core-fable-lockstep-v1` profile. Templates owns generic Fable workspace skills; Game
 owns the lockstep skill and publishes it in the independently versioned `FS.GG.Game.Skills`
 package, materialized from its declared owner under ADR-0063. The Game Skills version must be
