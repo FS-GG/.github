@@ -32,6 +32,36 @@ pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
 
+# THE DIAGNOSTIC FOR AN INNER CORPUS'S LOG (.github#1818). `tail -N` of a 600-line run shows the END of
+# the log — the summary — not the `FAIL` lines that produced it, so a corpus that fails early and passes
+# late reports N lines containing no cause at all. This names the actual failures (capped, so one runaway
+# leg cannot flood the outer suite) plus the inner run's own summary line, which is what run.sh prints
+# unconditionally at the very end (`echo "coord-engine parity: ... failed"`) regardless of where the
+# first failure fell.
+INNER_FAIL_CAP=25
+inner_diagnostic() {   # $1 = path to the inner run's captured stdout+stderr
+  local log="$1" fails nfails summary detail
+  fails="$(grep '^FAIL ' "$log" 2>/dev/null || true)"
+  if [ -z "$fails" ]; then
+    # No FAIL line at all — the corpus died before it could name anything (a shell syntax error, a
+    # crash). The tail is the only signal that exists, so fall back to it rather than print nothing.
+    printf 'no FAIL line found in the inner run — raw tail:\n%s' "$(tail -25 "$log" 2>/dev/null)"
+    return
+  fi
+  nfails="$(printf '%s\n' "$fails" | grep -c '^FAIL ' || true)"
+  detail="$(printf '%s\n' "$fails" | head -"$INNER_FAIL_CAP")"
+  if [ "$nfails" -gt "$INNER_FAIL_CAP" ]; then
+    detail="$detail
+    ... $((nfails - INNER_FAIL_CAP)) more FAIL line(s) not shown"
+  fi
+  summary="$(grep '^coord-engine parity:' "$log" 2>/dev/null || true)"
+  if [ -n "$summary" ]; then
+    detail="$detail
+$summary"
+  fi
+  printf '%s' "$detail"
+}
+
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 [ -x "$SHIM" ]   || { echo "FAIL  the shim is missing or not executable: $SHIM" >&2; exit 1; }
 [ -f "$GUARDS" ] || { echo "FAIL  the guard module is missing: $GUARDS" >&2; exit 1; }
@@ -69,9 +99,40 @@ if FSGG_COORD_ENGINE_BIN="$WRAP" bash "$HERE/run.sh" >"$RUNLOG" 2>&1; then
   n="$(grep -c '^PASS ' "$RUNLOG" 2>/dev/null || echo 0)"
   ok "the full D.1 parity corpus ($n assertions) is green THROUGH the shim — no arg, byte of output, or exit code lost"
 else
-  bad "the D.1 corpus is NOT green through the shim" "$(tail -25 "$RUNLOG")"
+  bad "the D.1 corpus is NOT green through the shim" "$(inner_diagnostic "$RUNLOG")"
 fi
 rm -f "$WRAP" "$RUNLOG"
+
+# ---- 1b. THE DIAGNOSTIC NAMES THE CAUSE, NOT THE TAIL (.github#1818) ------------------------------
+# §1 above only exercises the green path (the corpus IS green today), so a regression back to a plain
+# `tail -25` would slip past this file unnoticed — the exact way the original defect shipped. This proves
+# `inner_diagnostic` against a SYNTHETIC inner-run log built to fail EARLY and keep talking long past it,
+# which is precisely the shape `tail -N` cannot see through. The synthetic log mimics run.sh's own
+# contract: `PASS `/`FAIL ` lines and the unconditional `coord-engine parity: ... failed` summary at the
+# end (run.sh's own final `echo`), so the assertion is about the extraction, not about run.sh's wording.
+SYNTHRUN="$(mktemp)"
+{
+  i=1
+  while [ "$i" -le 5 ]; do echo "PASS  warm-up assertion $i"; i=$((i+1)); done
+  echo "FAIL  the early leg that actually broke"
+  echo "    | this is the cause a tail -25 would never show"
+  i=1
+  while [ "$i" -le 40 ]; do echo "PASS  padding assertion $i, to push the log well past the last 25 lines"; i=$((i+1)); done
+  echo
+  echo "coord-engine parity: 46 assertion(s), 45 passed, 1 failed"
+  echo "coord-engine parity: 0 not measured"
+} >"$SYNTHRUN"
+
+diag="$(inner_diagnostic "$SYNTHRUN")"
+tailonly="$(tail -25 "$SYNTHRUN")"
+if printf '%s' "$diag" | grep -q 'the early leg that actually broke' \
+   && printf '%s' "$diag" | grep -q 'coord-engine parity: 46 assertion(s), 45 passed, 1 failed' \
+   && ! printf '%s' "$tailonly" | grep -q 'the early leg that actually broke'; then
+  ok ".github#1818: the diagnostic names an early failure that a tail -25 of the same log would have hidden, plus the inner run's summary"
+else
+  bad ".github#1818: the diagnostic must name an early cause, not only repeat the log's tail" "diag=$diag"
+fi
+rm -f "$SYNTHRUN"
 
 # ---- 2. RESOLUTION + REFUSAL --------------------------------------------------------------------
 # tier 1, honoured: an explicit, runnable bin is exec'd and its exit code returned unchanged.
