@@ -4,6 +4,7 @@ module Options =
 
     type Command =
         | Decide
+        | DriverCmd
         | Scan
         | LanesView
         | Facts
@@ -466,6 +467,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
         | Decide -> Both Json // Program.fs `decide`
+        | DriverCmd -> Both Json // Program.fs `driver`
         | LanesView -> Both Json // Program.fs `lanes`
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
         | BatchCmd -> Both Json // Client.fs `batch`
@@ -943,6 +945,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
+        | DriverCmd -> Reads
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
@@ -1074,6 +1077,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     let private commandName (c: Command) : string =
         match c with
         | Decide -> "decide"
+        | DriverCmd -> "driver"
         | Scan -> "scan"
         | LanesView -> "lanes"
         | Facts -> "facts"
@@ -1768,6 +1772,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match args with
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+        | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
