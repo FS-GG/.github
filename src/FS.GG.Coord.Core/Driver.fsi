@@ -13,6 +13,8 @@ module Driver =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
+    val parseReviewComments: comments: string list -> Result<ReviewChain, string list>
+
     type Receipt =
         { ObservedAt: int64; SourceSha: string; Complete: bool; Review: ReviewChain option }
 
