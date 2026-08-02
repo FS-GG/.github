@@ -3485,6 +3485,24 @@ module Client =
 
                             Error ExitError
 
+    /// The authoritative inventory of every `Status=Blocked` writer (#2109).  A writer is either a
+    /// deliberate park and MUST pass `requireCoherentParkIfBlocked`, or a restore of a marker's
+    /// recorded previous column. Restores never choose `Blocked`: `unclaimColumn` copies only the
+    /// value captured by `claim`, and their safety boundary is the claim record rather than a new
+    /// park decision. Keep this executable list beside the gate and pin it in BlockerLintTests; adding
+    /// a writer without classifying it is a test failure, not a prose omission.
+    type BlockedStatusWriter =
+        | DeliberatePark of string
+        | RecordedRestore of string
+
+    let blockedStatusWriterCoverage : BlockedStatusWriter list =
+        [ DeliberatePark "release --status Blocked"
+          DeliberatePark "set-field Status Blocked"
+          DeliberatePark "set-field --batch Status=Blocked"
+          DeliberatePark "add --status Blocked"
+          RecordedRestore "release (recorded previous Status=Blocked)"
+          RecordedRestore "reap (recorded previous Status=Blocked)" ]
+
     /// #2098 round 1 (independent review): a pending `Blocked by` CLEAR in the SAME batch is
     /// AUTHORITATIVE, not a cue to fall back on the live field. The live value is about to be overwritten
     /// to empty by THIS call, so reading it first reads state the batch's own write already makes
