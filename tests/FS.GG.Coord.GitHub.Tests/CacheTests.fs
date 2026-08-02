@@ -136,7 +136,7 @@ let ``#1152 a patchScan fold does not restart the TTL clock - only a real read d
     // A board write the worker made along the way folds into the cache. It is NOT a read, so it must not
     // make the cache look fresh again — otherwise a worker's own writes keep its cache eternally young and
     // it never sees another worker's board changes (#1152).
-    patchScan "FS-GG" "Coordination" "FS.GG.SDD" 42 "Status" "Done"
+    patchScan "FS-GG" "Coordination" "FS-GG" "FS.GG.SDD" 42 "Status" "Done"
 
     // The fold really happened — guards against a vacuous pass where patchScan no-op'd...
     Assert.Contains("Done", File.ReadAllText file)

@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2143-external-owner-refs
+  title: "External Owner Refs"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2143-external-owner-refs/spec.md
+  sourceClarifications: work/2143-external-owner-refs/clarifications.md
+  sourceChecklist: work/2143-external-owner-refs/checklist.md
+  sourcePlan: work/2143-external-owner-refs/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2143-external-owner-refs/spec.md
+    digest: adc2108e992448b4664d1fde4f81569181451f19357419eef3b61d113216704a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2143-external-owner-refs/clarifications.md
+    digest: 84183e237a7d33b78fe6696fb644fc320a80a8bebaac9784449ac8955b3078bb
+    schemaVersion: 1
+  - label: checklist
+    path: work/2143-external-owner-refs/checklist.md
+    digest: 502317f25e515599cfc074cca3d28a6dbdd8c8752e7bd73a7bdf5bf3f25919d4
+    schemaVersion: 1
+  - label: plan
+    path: work/2143-external-owner-refs/plan.md
+    digest: a9d43ee1f05d5894c0c350d683b7e19bc6550dc9a0255180c28ac292728291e6
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2143-external-owner-refs."

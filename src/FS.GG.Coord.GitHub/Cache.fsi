@@ -145,7 +145,8 @@ module Cache =
     /// followed by a take — so the cache would never survive the loop it exists for. Only the three fields
     /// the scan actually carries can be folded; anything else leaves the cache untouched rather than
     /// writing a field the scan has no slot for.
-    val patchScan: owner: string -> title: string -> repo: string -> number: int -> field: string -> value: string -> unit
+    val patchScan:
+        owner: string -> title: string -> issueOwner: string -> repo: string -> number: int -> field: string -> value: string -> unit
 
     /// Drop the cached scan for a board. Used by `--fresh`.
     val dropScan: owner: string -> title: string -> unit
