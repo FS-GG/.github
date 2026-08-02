@@ -386,9 +386,31 @@ jobs:
           git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
+          # $REGISTRY is a GENERATION SOURCE (scripts/generate-projections:112 names it as `skill-registry-
+          # counts`'s source), not only a leaf file. A projection derived from it — today, exactly
+          # `docs/registry/compatibility.md` — is a strict function of its bytes, so a commit that moves
+          # $REGISTRY without moving the projection edits the source and leaves the derived region stale.
+          # `semantic-skill-quality` runs `scripts/generate-projections --check` (via `check-skill-quality`)
+          # and reds on precisely that staleness — correctly; the gate is not the bug. It was invisible on
+          # every prior run because a digest-only reconcile does not change `skill-registry-counts`'
+          # rendered text, so the region was stale in VALUE-equivalent bytes. The first reconcile that
+          # changed a ROW COUNT broke that coincidence and wedged the standing PR permanently (.github#2095):
+          # every subsequent run re-pushed the same red branch, forever, because nothing here ever
+          # regenerated the projection.
+          #
+          # Regenerate before staging, and derive WHICH paths to stage from the generator's own `--list`
+          # rather than hardcoding `docs/registry/compatibility.md` — so a second projection sourced from
+          # $REGISTRY (there is exactly one today) is picked up the moment `scripts/generate-projections`
+          # declares it, with nothing here to edit in step. All kinds are regenerated, not only the
+          # registry-sourced ones: the generator already rewrites every region on every invocation (see its
+          # own header) and is idempotent when a region is already current, so filtering here would only
+          # add a second, un-tested notion of "which kinds come from the registry" that could drift from
+          # the generator's own `source_of` table. `--list` costs nothing extra (no engine call).
+          scripts/generate-projections
+          mapfile -t PROJECTIONS < <(scripts/generate-projections --list | cut -f2 | sort -u)
           # $CHANGELOG (and the `updated:` bump inside $REGISTRY) is written by `--write --now` above;
           # stage it too, so the reconcile PR carries its own changelog entry rather than owing one.
-          git add -- "$REGISTRY" "$CHANGELOG"
+          git add -- "$REGISTRY" "$CHANGELOG" "${PROJECTIONS[@]}"
           git commit -m "registry: auto-reconcile skill-registry against producer manifests (.github#299)"
           # Plain --force: this branch is bot-owned and nobody else writes it, and the `concurrency`
           # group already serializes runs — so there is no lost-update to guard against, while
@@ -535,6 +557,99 @@ jobs:
           fi
           echo "Merged standing PR #$PR — the registry on \`main\` is now reconciled."
 
+      # THE REPEATED-FAILURE ESCALATION (.github#2095). The step below this one is `::error::`, which is
+      # an hourly Actions log line — and 11 consecutive runs over ~18h proved that a log line is not a
+      # notification: nobody was paged, and "if this keeps failing, LOOK" was addressed to a human who,
+      # demonstrably, was not looking. Repeating that message faster does not make it read; it needs a
+      # channel someone is actually watching, and it needs to STOP repeating once it has said its piece,
+      # or it becomes the exact thing it exists to end — noise nobody reads.
+      #
+      # THE THRESHOLD is 3 consecutive scheduled runs (~3h at this workflow's hourly cadence) — the same
+      # bound this repo already uses elsewhere for a capped, non-infinite retry before parking on a human
+      # (independent review caps repair at three rounds, .claude/skills/pnext-item/SKILL.md section 5). Below 3,
+      # a single red run cannot be told apart from ordinary flakiness: the merge gate's own ~8-minute
+      # pending wait can itself read as a failure on a slow CI day (see the comment below), and this
+      # workflow already tolerates exactly one of those without complaint. At 3 that coincidence
+      # explanation runs out — three independent hourly snapshots agreeing something is wrong is not a
+      # blip.
+      #
+      # ESCALATION IS TWO ALREADY-GRANTED, ALREADY-PRECEDENTED THINGS — no new permission, no new bot
+      # identity, no guessed-at human to @mention (this repo's automation contains no such pattern to
+      # begin with, and guessing a handle is a maintenance liability the label avoids):
+      #   * the `blocked` label (already this repo's own taxonomy) makes the PR filterable by anyone
+      #     triaging labels, independent of whether they happen to be watching Actions runs;
+      #   * ONE sticky comment, addressed by a marker and PATCHED in place each run rather than posted
+      #     fresh — the identical idiom `touch-set-drift.yml` already uses for its verdict comment — so
+      #     the streak count stays current without ever spamming a second comment per hour.
+      # Both ride on `pull-requests: write`, already held by this job.
+      - name: Escalate a standing PR stuck for 3+ consecutive runs
+        if: steps.diff.outputs.changed == 'true' && steps.pr.outputs.number != '' && steps.merge-gate.outputs.merge != 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.pr.outputs.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- fsgg:skill-registry-autofix-escalation -->'
+          THRESHOLD=3
+
+          # This run's own failure has no conclusion in the API yet (the run is still `in_progress`), so
+          # seed the count at 1 (this run) and walk BACKWARDS over the workflow's own history, stopping
+          # at the first non-failure or the first non-`schedule` event. A manual `workflow_dispatch` run
+          # breaks the streak deliberately: it means a human already looked and re-ran it by hand, which
+          # is exactly the condition this step exists to bring about — the streak should reset, not
+          # count through it.
+          fails=1
+          while IFS=$'\t' read -r conclusion event; do
+            [ "$event" = "schedule" ] || break
+            [ "$conclusion" = "failure" ] || break
+            fails=$((fails + 1))
+          done < <(gh run list --repo "$REPO" --workflow skill-registry-autofix.yml \
+                     --json conclusion,event --limit 30 --jq '.[1:][] | [.conclusion, .event] | @tsv')
+
+          echo "consecutive failed scheduled runs, including this one: $fails"
+          if [ "$fails" -lt "$THRESHOLD" ]; then
+            echo "below the escalation threshold ($THRESHOLD) — not escalating yet."
+            exit 0
+          fi
+
+          gh pr edit "$PR" --add-label blocked || true
+
+          # Built with `printf`, one call per line, and read back with `-F body=@file` — never a
+          # heredoc inside this step's YAML block scalar (an unindented heredoc terminator/body reads as
+          # a YAML mapping key, not shell content) and never `-f body="$var"`, which re-parses `$var` as
+          # a `gh api` field expression. Same idiom `touch-set-drift.yml` uses for its own sticky comment.
+          {
+            printf '%s\n' "$MARKER"
+            printf '**%s consecutive scheduled runs have failed to land this PR** (~%sh at the hourly\n' "$fails" "$fails"
+            printf 'cadence). Re-pushing and re-gating it every hour is not progress on its own — see\n'
+            printf '[this run](%s)'"'"'s `::error::` lines for the gate'"'"'s refusal reason, and the PR'"'"'s\n' "$RUN_URL"
+            printf 'checks tab for which one is red.\n\n'
+            printf 'This comment is patched in place each run while the streak continues; it stops moving\n'
+            printf 'once #%s lands or is closed, and a fresh streak on a later standing PR starts a new one.\n' "$PR"
+          } > comment.md
+
+          # No `gh | head`: under `pipefail` (set above) a closed pipe would fail the step — the exact
+          # hazard `touch-set-drift.yml` calls out in its own comment ("No `gh | head`: under `pipefail`
+          # a closed pipe would fail the step") and the reason it captures ALL matches into a variable
+          # and takes the first line with a shell builtin instead. This step carries
+          # `continue-on-error: true`, so a SIGPIPE here would have SILENTLY SUPPRESSED the escalation —
+          # rebuilding, inside the fix for #2095, the exact "failure nobody sees" pathology #2095 exists
+          # to end. Copied verbatim from `touch-set-drift.yml`'s `matches=... existing="${matches%%...}"`
+          # construction (see its own comment above `matches="$(gh api ... --paginate ...)"`).
+          matches="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                       --jq '.[] | select(.body | startswith("'"$MARKER"'")) | .id')"
+          existing="${matches%%$'\n'*}"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+            echo "updated escalation comment on #$PR (streak: $fails)"
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@comment.md >/dev/null
+            echo "posted escalation comment on #$PR (streak: $fails)"
+          fi
+
       # FAILING TO LAND IT IS AN ERROR, NOT A WARNING — the rule both other propagation arms state in
       # their own comments, and the one #642 quotes:
       #
@@ -558,8 +673,9 @@ jobs:
           echo "::error::Standing PR #$PR was NOT merged — the gate's reason is printed above." >&2
           echo "::error::The registry on \`main\` is STILL STALE: this run reconciled it, opened the PR," >&2
           echo "::error::and did not land it. That is the whole job, unfinished — not a warning." >&2
-          echo "::error::The next scheduled run re-pushes the branch and re-gates it, but if this keeps" >&2
-          echo "::error::failing, LOOK: a red \`registry-coherence\` means the snapshot is obsolete (#425)." >&2
+          echo "::error::The next scheduled run re-pushes the branch and re-gates it. If the escalation" >&2
+          echo "::error::step above fired, the \`blocked\` label and a sticky PR comment now carry the" >&2
+          echo "::error::same signal somewhere a human is more likely to see it (#2095)." >&2
           exit 1
 
       # IS THIS RECONCILE FINISHED, OR DID IT JUST FAIL? `changed == 'false'` alone cannot tell you.
