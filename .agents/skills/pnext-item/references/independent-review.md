@@ -9,6 +9,20 @@ The host reserves a slot for the critic and keeps the implementing worker alive 
 The critic reviews requirements coverage, correctness, regressions, tests/evidence, architecture and
 ownership boundaries, release obligations, and touch-set honesty.
 
+## Handoff-assertion provenance
+
+Every specific, checkable assertion in an implementation handoff, critic report, or host relay carries
+`Verification:`. Give the command, `file:line`, API call, or URL actually used to establish the fact,
+or write exactly `Verification: unverified`. `unverified` is first-class and non-pejorative: it makes
+an unchecked claim legible without requiring every claim to be checked. A receiver must not infer
+verification from prose.
+
+Use this review checklist before forwarding or accepting a handoff: for every checkable assertion,
+verify that the `Verification:` field is present and contains either a reproducible basis or
+`unverified`. A missing field is a detectable incomplete handoff, never evidence that the assertion was
+checked. This requirement binds the host when relaying worker or critic claims onward, as well as the
+worker and critic who authored them.
+
 ## Root cause, dedupe, and materiality
 
 For every candidate finding, the critic searches the relevant code and history for the cause, then

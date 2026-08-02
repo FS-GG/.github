@@ -44,10 +44,10 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Drivers</PackageId>
-    <!-- 0.12.0 -> 0.12.1, a PATCH: work-roadmap now makes explicit that its ten-round milestone
-         critique boundary supersedes pnext-item's ordinary three-round cap, while retaining every
-         other inherited discipline. Existing skill identities and package layout hold. -->
-    <Version>0.12.1</Version>
+    <!-- 0.12.1 -> 0.13.0, a MINOR (.github#2081): the materialized work-roadmap handoff contract
+         requires every checkable assertion to carry its verification basis or an explicit unverified
+         marker. This is receiver-visible behavior; skill identities and package layout hold. -->
+    <Version>0.13.0</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>
