@@ -63,13 +63,16 @@ module Batch =
 
             match values with
             | [ (true, waves); (true, implementers); (true, reviewers); (true, consolidation) ]
-                when waves > 0 && implementers > 0 && reviewers > 0 && consolidation > 0 ->
+                when waves = Protocol.wavePolicy.Waves
+                     && implementers = Protocol.wavePolicy.ImplementerSlotsPerWave
+                     && reviewers = Protocol.wavePolicy.ReviewSlots
+                     && consolidation = Protocol.wavePolicy.ConsolidationThreshold ->
                 Ok
                     { Waves = waves
                       ImplementerSlotsPerWave = implementers
                       ReviewSlots = reviewers
                       ConsolidationThreshold = consolidation }
-            | _ -> Error "fsgg:wave-model:v1 values must be positive integers"
+            | _ -> Error "fsgg:wave-model:v1 must match the typed Protocol.wavePolicy"
 
     let waveOccupancy (model: WaveModel) (activeItems: Ref list) : WaveOccupancy =
         let active = activeItems |> List.distinct |> List.length

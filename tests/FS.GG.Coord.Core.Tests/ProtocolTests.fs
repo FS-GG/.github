@@ -717,6 +717,10 @@ module ProtocolTests =
         | Protocol.BoardStatuses(key, _) -> key
         | Protocol.ExitCodes(key, _) -> key
         | Protocol.ReleaseColumns(key, _) -> key
+        | Protocol.WavePolicy(key, _) -> key
+        | Protocol.ReviewPolicy(key, _) -> key
+        | Protocol.LifecyclePolicy(key, _) -> key
+        | Protocol.LedgerPolicy(key, _) -> key
         | Protocol.SnapshotShape(key, _, _) -> key
 
     /// How many facts a section states. `0` is the interesting answer — see the emptiness gate below.
@@ -728,6 +732,10 @@ module ProtocolTests =
         | Protocol.BoardStatuses(_, ss) -> List.length ss
         | Protocol.ExitCodes(_, cs) -> List.length cs
         | Protocol.ReleaseColumns(_, cs) -> List.length cs
+        | Protocol.WavePolicy _ -> 1
+        | Protocol.ReviewPolicy _ -> 1
+        | Protocol.LifecyclePolicy _ -> 1
+        | Protocol.LedgerPolicy _ -> 1
         // The KEYS, not the schema: a shape stating a schema and no keys is exactly the vacuity the
         // emptiness gate below exists to catch, and counting the scalar would hide it behind a `1`.
         | Protocol.SnapshotShape(_, _, keys) -> List.length keys
@@ -767,11 +775,15 @@ module ProtocolTests =
               "takeExitCodes"
               "landableExitCodes"
               "releaseColumns"
+              "wavePolicy"
+              "reviewPolicy"
+              "lifecyclePolicy"
+              "ledgerPolicy"
               "snapshotDocument" ],
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/10", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/11", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would

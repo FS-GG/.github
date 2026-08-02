@@ -65,6 +65,34 @@ module Protocol =
           /// The stdout line — the tell, since exit 0 cannot confirm a park.
           Stdout: string }
 
+    /// The fixed fleet shape that a host declaration and the driver planner must agree on.
+    type WavePolicyDoc =
+        { Waves: int
+          ImplementerSlotsPerWave: int
+          ReviewSlots: int
+          ConsolidationThreshold: int }
+
+    /// Marker vocabulary and bounded review policy enforced by `Driver`.
+    type ReviewPolicyDoc =
+        { InitialMarker: string
+          ConfirmationMarker: string
+          AcceptanceMarker: string
+          EscalationMarker: string
+          RepairPhaseMarker: string
+          MaxAutomatedRepairRounds: int
+          RepairPhaseMaxRounds: int }
+
+    /// Facts that determine whether an item can move between lifecycle stages.
+    type LifecyclePolicyDoc =
+        { RequiredHousekeeping: string list
+          TerminalActions: string list }
+
+    /// The stable shape of the content-addressed planning ledger.
+    type LedgerPolicyDoc =
+        { Schema: string
+          ObservationFields: string list
+          ReceiptFields: string list }
+
     /// One `BlockerState`, as a reader of the scan's JSON meets it.
     type BlockerStateDoc =
         { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
@@ -622,6 +650,36 @@ module Protocol =
     let driverRules: Rule list =
         [ touchSetDeclaration; touchSetGrammar; claimLock; leaseRule ]
 
+    /// The two-wave fleet contract. `Batch.parseWaveModel` refuses declarations that disagree with it,
+    /// and `Driver.nextAction` consumes its consolidation threshold through the parsed model.
+    let wavePolicy =
+        { Waves = 2
+          ImplementerSlotsPerWave = 3
+          ReviewSlots = 2
+          ConsolidationThreshold = 3 }
+
+    /// One review marker/round vocabulary. `Driver.parseReviewComments` and `receiptFresh` consume
+    /// these values; projections only render them.
+    let reviewPolicy =
+        { InitialMarker = "independent-review"
+          ConfirmationMarker = "independent-review-confirmation"
+          AcceptanceMarker = "review-accepted"
+          EscalationMarker = "independent-review-escalation"
+          RepairPhaseMarker = "independent-review-repair-phase"
+          MaxAutomatedRepairRounds = 3
+          RepairPhaseMaxRounds = 10 }
+
+    let lifecyclePolicy =
+        { RequiredHousekeeping =
+            [ "host-identity"; "stale-claim"; "engine-currency"; "pending-writes"
+              "reconcile"; "triage" ]
+          TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ] }
+
+    let ledgerPolicy =
+        { Schema = "fsgg.coord.planning-receipt/1"
+          ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
+          ReceiptFields = [ "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ] }
+
     // ================================================================================================
     // THE INVENTORY (#1027) — which facts the document states, and in what order.
     // ================================================================================================
@@ -647,6 +705,10 @@ module Protocol =
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
         | ReleaseColumns of key: string * ReleaseColumnDoc list
+        | WavePolicy of key: string * WavePolicyDoc
+        | ReviewPolicy of key: string * ReviewPolicyDoc
+        | LifecyclePolicy of key: string * LifecyclePolicyDoc
+        | LedgerPolicy of key: string * LedgerPolicyDoc
         /// The snapshot document's SHAPE. The only case carrying a scalar beside its list, because the
         /// shape IS a schema string plus its keys — and a schema emitted as a one-member `keys` entry
         /// would be a lie about what it is. See `snapshotSchema` in Protocol.fsi for the ownership call.
@@ -671,7 +733,7 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/10"
+    let factsSchema = "fsgg.coord.protocol/11"
 
     /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
     /// `Snapshot.parse` refuses a document without.
@@ -768,4 +830,8 @@ module Protocol =
           ExitCodes("takeExitCodes", takeExitCodes)
           ExitCodes("landableExitCodes", landableExitCodes)
           ReleaseColumns("releaseColumns", releaseColumns)
+          WavePolicy("wavePolicy", wavePolicy)
+          ReviewPolicy("reviewPolicy", reviewPolicy)
+          LifecyclePolicy("lifecyclePolicy", lifecyclePolicy)
+          LedgerPolicy("ledgerPolicy", ledgerPolicy)
           SnapshotShape("snapshotDocument", snapshotSchema, snapshotKeys) ]

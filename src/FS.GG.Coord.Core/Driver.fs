@@ -71,15 +71,15 @@ module Driver =
             | Ok value -> Error $"unknown route-applicability '%s{value}'"
             | Error _ -> Error "a passing review marker requires one route-applicability field"
         let ordered = comments |> List.sortBy _.Id
-        let initial = ordered |> List.filter (fun c -> marker "independent-review" c.Body)
-        let confirmations = ordered |> List.filter (fun c -> marker "independent-review-confirmation" c.Body)
-        let acceptances = ordered |> List.filter (fun c -> marker "review-accepted" c.Body)
+        let initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
+        let confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
+        let acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body)
         let errors = ResizeArray<string>()
         for comment in ordered do
-            for name in [ "independent-review"; "independent-review-confirmation"; "review-accepted" ] do
+            for name in [ Protocol.reviewPolicy.InitialMarker; Protocol.reviewPolicy.ConfirmationMarker; Protocol.reviewPolicy.AcceptanceMarker ] do
                 if malformedMarker name comment.Body then
                     errors.Add $"%s{name} marker must be the single canonical leading standalone marker"
-        if List.length confirmations > 3 then errors.Add "review confirmation round ceiling exceeded"
+        if List.length confirmations > Protocol.reviewPolicy.MaxAutomatedRepairRounds then errors.Add "review confirmation round ceiling exceeded"
         let requireOne what values =
             match values with
             | [ value ] -> Some value
@@ -203,7 +203,7 @@ module Driver =
           if not chain.HostAccepted then "host acceptance is missing" ]
 
     let receiptFresh now maxAgeSeconds (receipt: Receipt) =
-        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (validateReviewChain 3 >> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
+        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (validateReviewChain Protocol.reviewPolicy.MaxAutomatedRepairRounds >> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
 
     let nextAction model activeItems consolidationApproved housekeeping workerReturns =
         if not housekeeping.HasHostIdentity then RequestHostIdentity

@@ -172,14 +172,14 @@ PY
 }
 
 seed
-mutate_hostloop_phrase drive-board "Three or fewer consolidates" "Two or fewer consolidates"
-expect_rejection "drive-board cannot vary the two-wave consolidation threshold" \
-  "drive-board: host-loop lost two-wave contract statement 'Three or fewer consolidates'"
+mutate_hostloop_phrase drive-board "consolidation-threshold=3" "consolidation-threshold=2"
+expect_rejection "drive-board cannot vary the generated consolidation threshold" \
+  "generated process contract is stale"
 
 seed
-mutate_hostloop_phrase work-board "filling all eight slots with" "filling every implementer slot with"
+mutate_hostloop_phrase work-board "RESERVED, not advisory" "reserved when convenient"
 expect_rejection "work-board's review slots stay reserved rather than fillable by implementers" \
-  "work-board: host-loop lost two-wave contract statement 'filling all eight slots with'"
+  "work-board: host-loop lost two-wave contract statement 'RESERVED, not advisory'"
 
 seed
 mutate_hostloop_phrase work-board "fleet-wide stop for BOTH waves" "a stop for the reporting wave only"
@@ -187,7 +187,7 @@ expect_rejection "work-board cannot scope an EX_RATE stop to a single wave" \
   "work-board: host-loop lost two-wave contract statement 'fleet-wide stop for BOTH waves'"
 
 seed
-mutate_hostloop_phrase work-board "Three or fewer consolidates" "Two or fewer consolidates"
+mutate_hostloop_phrase work-board "consolidation-threshold=3" "consolidation-threshold=2"
 expect_rejection "the two host-loop copies cannot state the wave model differently" \
   "two-wave contract: drive-board and work-board host-loop copies state the wave model differently"
 
@@ -239,6 +239,41 @@ else
   sed 's/^/    | /' "$WORK/out" >&2
   fail=$((fail+1))
 fi
+
+# `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
+# today. Mutating the producer set without touching the skill must make that generated region stale.
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "  - id: new-sdd-workspace\n"
+if needle not in text:
+    raise SystemExit("fixture producer row missing")
+path.write_text(text.replace(needle, "  - id: new-sdd-workspace-fixture\n", 1))
+PY
+rc=0
+bash "$WORK/tree/scripts/generate-projections" --check >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] && grep -Fq -- "new-sdd-workspace-fixture" "$WORK/out"; then
+  echo "PASS  registry producer mutation makes release inventory stale without prose edits"
+  pass=$((pass+1))
+else
+  echo "FAIL  registry producer mutation did not invalidate release inventory (exit $rc)" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
+# A machine declaration outside its managed region is a second source even when its value happens to
+# agree. The semantic gate must reject that duplicate before a later value change splits the skills.
+seed
+for runtime in .claude .agents; do
+  printf '\n<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->\n' \
+    >>"$WORK/tree/$runtime/skills/drive-board/references/host-loop.md"
+done
+expect_rejection "hand-authored duplicate wave literals are rejected" \
+  "drive-board: hand-authored duplicate of generated wave policy"
 
 if [ "$fail" -ne 0 ]; then
   echo "skill-quality fixture: $fail failure(s), $pass pass(es)" >&2

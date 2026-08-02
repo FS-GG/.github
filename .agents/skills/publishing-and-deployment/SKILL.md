@@ -26,10 +26,15 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 | **Audio** | `FS.GG.Audio.{Core,Host,Engine,Elmish}` | package coherent set |
 | **`.github`** | `FS.GG.Coord.Cli` (the ADR-0034 engine), `FS.GG.NewSddWorkspace` (the ADR-0016 scaffolder) | org-level tools |
 
-> **`.github` IS a producer** (ADR-0039 §5), and both of its packages are absent from
-> `registry/dependencies.yml` — the org's package inventory is off by two. It owns
-> `release-coord-engine.yml` and `release-new-sdd-workspace.yml`. Do not read the sentence
-> below as excluding it.
+<!-- BEGIN GENERATED: fsgg-release-inventory -->
+*Generated from the registry’s package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*
+
+| producer contract | source version | published version | surface |
+|---|---|---|---|
+| `coord-engine` | `0.18.0` | `0.18.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `new-sdd-workspace` | `0.8.0` | `0.8.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
+
+<!-- END GENERATED: fsgg-release-inventory -->
 
 - **Feeds — there are two, and they have different jobs (ADR-0012, ADR-0039).**
   - **Publish path:** the org **GitHub Packages** feed, `https://nuget.pkg.github.com/FS-GG/index.json`.

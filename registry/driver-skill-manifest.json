@@ -60,7 +60,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "de4a9638b90f2c2c5ca0041865fa2ab881429d31da92022d84f4a4f2de3eeb69",
-      "tree-sha256": "629baa1ccaa542beffb04ccb324d2ffe9033acebe5b370fe13bbf70da02db89a",
+      "tree-sha256": "d5579dac3c02c7057dbf3e99d78abefeec61aa492a8b49509fedbece5785fabd",
       "files": [
         {
           "path": "SKILL.md",
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "f07dac2dd6406401deef31373031fd8c05fd4c943d4d09fefdf242d713f36da0",
+          "sha256": "e48d5007925eb81bcb52ffd58b312bfc95d117e23b9ac27df3eaf9a9400c4403",
           "executable": false
         },
         {
@@ -170,7 +170,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "1fa7aa8eb5130f594f5d57507aa5fa50224c6c2ddab57bdb12bbf833421ecef5",
-      "tree-sha256": "0e2e0cb4e72df5504374b6975b63d3b35293fe543acbb499f2a6edc3601de03b",
+      "tree-sha256": "3b49f5acd91af881f58b60f1c5c7fb693c140102b2c10049102f0651bb24ea6b",
       "files": [
         {
           "path": "SKILL.md",
@@ -194,7 +194,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "328e22ad99a13e768629c83444b095031dcb8d582f8812e4eb8e7a3f56f33686",
+          "sha256": "353192919fcbf5b78162fef482b43bc12caa0a0686a3e5390f76c199a109a95a",
           "executable": false
         },
         {
@@ -309,12 +309,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d",
-      "tree-sha256": "cad9626ae391d2d6a9bc308b92891a734f4e43dbe2439afacc1b1005f4eb26e7",
+      "sha256": "a83900674bbbae05b1743da7ea57ee66c938a46fe68aac8b38f59c035b9dcdd2",
+      "tree-sha256": "a82e97de77aa35b1d2f913143370df482380b7973453f598b7d60b326ac179aa",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "b7e29aef5705010682b8038ab6228b19af231ef8d34b702aa50f8568aa5aac9d",
+          "sha256": "a83900674bbbae05b1743da7ea57ee66c938a46fe68aac8b38f59c035b9dcdd2",
           "executable": false
         },
         {

@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -350,20 +351,13 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in work_triage:
             fail(errors, f"work-board: backlog planning contract lost {required!r}")
 
-    # .github#2088: two concurrent waves, three implementer slots each, two RESERVED review slots,
-    # a testable consolidation threshold, and an explicit fleet-wide EX_RATE stop. Stated once per
-    # driver family in host-loop.md; #916 is why a hand-restated copy elsewhere is the failure mode,
-    # not a convenience — so this also asserts the two host-loop copies say it identically and that
-    # the routed variants inherit rather than restate it.
+    # The machine half is a generated region. Do not carry a second numeric roster here: regeneration
+    # compares it to `facts --json`, and this gate rejects a stale region or a copied declaration outside
+    # it. The remaining required prose is qualitative operator judgement, not an executable literal.
     wave_model_required = (
-        "Run two waves in parallel, not sequentially",
-        "six implementer slots total across both waves",
         "RESERVED, not advisory",
-        "filling all eight slots with",
-        "a contract violation, not an efficiency gain",
-        "Three or fewer consolidates",
-        "Four or more runs two full waves as designed",
-        "fresh reconcile/triage, not a re-slice of the",
+        "assigning it to an implementer",
+        "immediately start a second wave from a fresh",
         "fleet-wide stop for BOTH waves",
         "flush --dry-run` before resuming either",
     )
@@ -372,16 +366,15 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
             if required not in contract_text:
                 fail(errors, f"{driver_name}: host-loop lost two-wave contract statement {required!r}")
 
+    begin = "<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->"
+    end = "<!-- END GENERATED: fsgg-protocol:wave-policy -->"
+
     def _wave_model_block(text: str) -> str:
-        marker = "**Two concurrent waves, a fixed eight-slot cap.**"
-        sentinel = "wave.\n"
-        start = text.find(marker)
-        if start < 0:
+        start = text.find(begin)
+        finish = text.find(end, start)
+        if start < 0 or finish < 0:
             return ""
-        end = text.find(sentinel, start)
-        if end < 0:
-            return ""
-        return text[start:end + len(sentinel)]
+        return text[start : finish + len(end)]
 
     drive_wave_block = _wave_model_block(host_loop)
     work_wave_block = _wave_model_block(work_host_loop)
@@ -393,6 +386,18 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
             "two-wave contract: drive-board and work-board host-loop copies state the wave model "
             "differently — the #916 near-duplicate-drift failure this gate exists to catch",
         )
+
+    for driver_name, contract_text in (("drive-board", host_loop), ("work-board", work_host_loop)):
+        machine = _wave_model_block(contract_text)
+        outside = contract_text.replace(machine, "")
+        if re.search(r"fsgg:wave-model:v1|waves=\d+|implementer-slots-per-wave=\d+|review-slots=\d+|consolidation-threshold=\d+", outside):
+            fail(errors, f"{driver_name}: hand-authored duplicate of generated wave policy")
+
+    projection = subprocess.run(
+        [str(root / "scripts/generate-projections"), "--check"], cwd=root, text=True, capture_output=True, check=False
+    )
+    if projection.returncode != 0:
+        fail(errors, "generated process contract is stale or cannot be rendered: " + projection.stderr.strip().split("\n", 1)[0])
 
     variant_wave_terms = ("implementer slot", "review slot", "consolidat", "eight-slot", "EX_RATE")
     for variant in ("drive-board-best", "drive-board-normal", "work-board-best", "work-board-normal"):

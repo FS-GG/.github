@@ -2446,7 +2446,7 @@ module ApplicationServiceTests =
 
         Assert.Equal("[\"FS.GG.SDD#74\"]" + Environment.NewLine, out)
         Assert.Contains("wave occupancy: unavailable", err)
-        Assert.Contains("declare different fsgg:wave-model:v1 values", err)
+        Assert.Contains("must match the typed Protocol.wavePolicy", err)
         Assert.DoesNotContain("WAVE SHORTFALL", err)
         Assert.Equal(0, code)
 

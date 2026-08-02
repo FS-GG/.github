@@ -900,6 +900,46 @@ module Snapshot =
 
             w.WriteEndArray()
 
+        let writeWavePolicy (key: string) (policy: Protocol.WavePolicyDoc) =
+            w.WriteStartObject(key)
+            w.WriteNumber("waves", policy.Waves)
+            w.WriteNumber("implementerSlotsPerWave", policy.ImplementerSlotsPerWave)
+            w.WriteNumber("reviewSlots", policy.ReviewSlots)
+            w.WriteNumber("consolidationThreshold", policy.ConsolidationThreshold)
+            w.WriteEndObject()
+
+        let writeReviewPolicy (key: string) (policy: Protocol.ReviewPolicyDoc) =
+            w.WriteStartObject(key)
+            w.WriteString("initialMarker", policy.InitialMarker)
+            w.WriteString("confirmationMarker", policy.ConfirmationMarker)
+            w.WriteString("acceptanceMarker", policy.AcceptanceMarker)
+            w.WriteString("escalationMarker", policy.EscalationMarker)
+            w.WriteString("repairPhaseMarker", policy.RepairPhaseMarker)
+            w.WriteNumber("maxAutomatedRepairRounds", policy.MaxAutomatedRepairRounds)
+            w.WriteNumber("repairPhaseMaxRounds", policy.RepairPhaseMaxRounds)
+            w.WriteEndObject()
+
+        let writeLifecyclePolicy (key: string) (policy: Protocol.LifecyclePolicyDoc) =
+            w.WriteStartObject(key)
+            w.WriteStartArray("requiredHousekeeping")
+            policy.RequiredHousekeeping |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteStartArray("terminalActions")
+            policy.TerminalActions |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteEndObject()
+
+        let writeLedgerPolicy (key: string) (policy: Protocol.LedgerPolicyDoc) =
+            w.WriteStartObject(key)
+            w.WriteString("schema", policy.Schema)
+            w.WriteStartArray("observationFields")
+            policy.ObservationFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteStartArray("receiptFields")
+            policy.ReceiptFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteEndObject()
+
         // THE FOLD IS THE DOCUMENT. The list's order is the JSON's key order, so document order is stated
         // once — in `Protocol.factsDocument` — rather than here as a sequence of calls that has to be kept
         // in step with it. An EXHAUSTIVE match, so a new fact shape cannot reach the payload unrendered:
@@ -913,6 +953,10 @@ module Snapshot =
             | Protocol.BoardStatuses(key, ss) -> writeBoardStatuses key ss
             | Protocol.ExitCodes(key, cs) -> writeExitCodes key cs
             | Protocol.ReleaseColumns(key, cs) -> writeReleaseColumns key cs
+            | Protocol.WavePolicy(key, policy) -> writeWavePolicy key policy
+            | Protocol.ReviewPolicy(key, policy) -> writeReviewPolicy key policy
+            | Protocol.LifecyclePolicy(key, policy) -> writeLifecyclePolicy key policy
+            | Protocol.LedgerPolicy(key, policy) -> writeLedgerPolicy key policy
             | Protocol.SnapshotShape(key, schema, keys) -> writeSnapshotShape key schema keys
 
         w.WriteEndObject()
