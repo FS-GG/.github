@@ -29,7 +29,11 @@ module Driver =
         | Some r, Some a ->
             match value "critic" r, value "reviewed-head" r, value "accepted-head" a with
             | Some critic, Some reviewed, Some accepted when critic <> "" && reviewed <> "" && reviewed = accepted ->
-                Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some reviewed; Rounds = rounds; ChecksGreen = true; HostAccepted = true }
+                let rounds = if List.isEmpty rounds then [ 1 ] else rounds
+                let sequential = rounds = [ 1 .. List.length rounds ]
+                if sequential then
+                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some reviewed; Rounds = rounds; ChecksGreen = true; HostAccepted = true }
+                else Error [ "review confirmation rounds are not sequential" ]
             | _ -> Error [ "review markers are malformed or bind different heads" ]
         | _ -> Error [ "required independent-review and review-accepted markers are missing" ]
 
