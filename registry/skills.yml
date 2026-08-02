@@ -180,7 +180,7 @@ skills:
   # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
   # the historical divergence between retained `fs-gg-feedback-report` and retired
   # `fs-gg-feedback-capture`.)
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e6e92e193474e3bb210672a2d7f3914292ebb2c8737bfec6a6d7762a6bc0cf83, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e86842e3ad5bad67f8aa64eca58007c224bbca9d77674375a71c270e1262ea73, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
   # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration;
