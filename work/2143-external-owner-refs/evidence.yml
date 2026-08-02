@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
       outcome: passed
-      passed: 441
+      passed: 442
       failed: 0
       skipped: 0
     notes: [Single and batch external-owner cached-item regression tests passed.]
@@ -76,9 +76,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
       outcome: passed
-      passed: 441
+      passed: 442
       failed: 0
       skipped: 0
     notes: [Owner-qualified scan-cache fold preserves same-name repository isolation.]
@@ -100,9 +100,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
       outcome: passed
-      passed: 441
+      passed: 442
       failed: 0
       skipped: 0
     notes: [Focused GitHub board and cache suite passed 126 tests.]
@@ -124,9 +124,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
       outcome: passed
-      passed: 441
+      passed: 442
       failed: 0
       skipped: 0
     notes: [Legacy ownerless cache records retain their prior compatible fold behavior.]
@@ -148,9 +148,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:6907306de56bd6a97d7d304ec571de4b0cbaea49b34bf5ca31768007abb0ceeb"
+      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
       outcome: passed
-      passed: 441
+      passed: 442
       failed: 0
       skipped: 0
     notes: [Generated analysis and readiness views refreshed from authored lifecycle inputs.]

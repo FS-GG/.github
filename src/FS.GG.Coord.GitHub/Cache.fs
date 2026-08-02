@@ -197,12 +197,13 @@ module Cache =
                                 let n = o.["number"]
 
                                 // Older cache records predate the owner field. They are necessarily
-                                // ambiguous, so retain their historic same-repository fold only for the
-                                // board owner; current scan records carry owner and remain exact.
+                                // ambiguous, so retain their historic same-repository fold only when the
+                                // write itself names the board owner; an explicit external owner must
+                                // never cross-fold a default-owner same-name row (#2143).
                                 not (isNull r)
                                 && not (isNull n)
-                                && (isNull o'
-                                    || o'.GetValue<string>() = issueOwner)
+                                && ((not (isNull o') && o'.GetValue<string>() = issueOwner)
+                                    || (isNull o' && issueOwner = owner))
                                 && r.GetValue<string>() = repo
                                 && n.GetValue<int>() = number
 
