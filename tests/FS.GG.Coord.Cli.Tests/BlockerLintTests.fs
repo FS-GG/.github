@@ -1,5 +1,7 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System.IO
+open System.Text.RegularExpressions
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -13,11 +15,17 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``#2109 the Status=Blocked writer inventory is exhaustive and classifies every restore`` () =
-        let deliberate, restores =
+        let deliberate, other =
             Client.blockedStatusWriterCoverage
             |> List.partition (function
                 | Client.DeliberatePark _ -> true
-                | Client.RecordedRestore _ -> false)
+                | _ -> false)
+
+        let restores, impossible =
+            other
+            |> List.partition (function
+                | Client.RecordedRestore _ -> true
+                | _ -> false)
 
         Assert.Equal<string list>(
             [ "add --status Blocked"
@@ -31,6 +39,22 @@ module BlockerLintTests =
               "release (recorded previous Status=Blocked)" ],
             restores |> List.map (function Client.RecordedRestore name -> name | _ -> failwith "unreachable") |> List.sort
         )
+        Assert.Equal<string list>(
+            [ "claim (Status=In progress)"; "done (Status=Done)" ],
+            impossible |> List.map (function Client.CannotWriteBlocked name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+
+        // The inventory is not a list tested against itself. Every direct Status mutation in the
+        // production source is counted: a new site changes this number and forces its author to add a
+        // classified inventory entry (or refactor through an existing one). The two generic set-field
+        // doors are separately named above because their field name is argv, not this literal.
+        let rec repoRoot dir =
+            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
+            else repoRoot (Directory.GetParent(dir).FullName)
+
+        let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
+        let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
+        Assert.Equal(5, directStatusWrites)
 
     [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
