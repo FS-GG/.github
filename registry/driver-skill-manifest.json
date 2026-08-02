@@ -60,7 +60,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "de4a9638b90f2c2c5ca0041865fa2ab881429d31da92022d84f4a4f2de3eeb69",
-      "tree-sha256": "9f46e8d118d444ce8b379f0aabd6de66e6826aa5178b45d585d27fffd45da168",
+      "tree-sha256": "5e6078589b20262b841ff7f2ad289f64897ccf6e972d2b318c154b3e3cd16b74",
       "files": [
         {
           "path": "SKILL.md",
@@ -74,7 +74,7 @@
         },
         {
           "path": "references/backlog-triage.md",
-          "sha256": "dc245e35602dd1966cd70a64ad85b2de37c0e583d27b4c434090011c7335abf3",
+          "sha256": "5069b30747fb993a23c934d637097c6c0ee4ee2b46b15e6d35ebed32342896e9",
           "executable": false
         },
         {
@@ -170,7 +170,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "1fa7aa8eb5130f594f5d57507aa5fa50224c6c2ddab57bdb12bbf833421ecef5",
-      "tree-sha256": "a2eb4bfa506b108f1dab731af4fdc0a76eeee022d39fa2e7498039dc2b06ce68",
+      "tree-sha256": "4fa1c60beb9136734281216f95001fb9c97711f59db9925dfafdff1f360e1b0d",
       "files": [
         {
           "path": "SKILL.md",
@@ -184,7 +184,7 @@
         },
         {
           "path": "references/backlog-triage.md",
-          "sha256": "11bf2ac69ce2331d87ebf0af36a36d2c9bdf67c5c5f0a3b2222093ee79f7e30a",
+          "sha256": "6e08a7a79f4be97f1a8fe78f3996bfa6b90bc863baf4094c87855e44f3fc27f6",
           "executable": false
         },
         {
