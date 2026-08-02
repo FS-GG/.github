@@ -3492,11 +3492,14 @@ module Client =
     /// park decision. Keep this executable list beside the gate and pin it in BlockerLintTests; adding
     /// a writer without classifying it is a test failure, not a prose omission.
     type BlockedStatusWriter =
+        | CannotWriteBlocked of string
         | DeliberatePark of string
         | RecordedRestore of string
 
     let blockedStatusWriterCoverage : BlockedStatusWriter list =
-        [ DeliberatePark "release --status Blocked"
+        [ CannotWriteBlocked "claim (Status=In progress)"
+          CannotWriteBlocked "done (Status=Done)"
+          DeliberatePark "release --status Blocked"
           DeliberatePark "set-field Status Blocked"
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
