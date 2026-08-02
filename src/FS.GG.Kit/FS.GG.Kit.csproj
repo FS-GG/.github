@@ -362,7 +362,11 @@
     <!-- 0.28.0 -> 0.29.0, a MINOR (.github#2081): handoff assertions now carry either their
          verification basis or an explicit unverified marker. This changes the required behavior of
          materialized workers, critics, and hosts while preserving the packed member set and destinations. -->
-    <Version>0.29.0</Version>
+    <!-- 0.29.0 -> 0.30.0, a MINOR (.github#2127): host review acceptance now carries the initial-review
+         and latest-confirmation comment URLs as mandatory machine fields, and the runtime validates the
+         exact ordered chain rather than accepting a head SHA alone. This changes receiver-visible required
+         review behavior while preserving the packed member set and destinations. -->
+    <Version>0.30.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
