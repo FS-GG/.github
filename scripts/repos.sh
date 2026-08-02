@@ -71,6 +71,20 @@ REG_DEFAULT="$ROOT_DEFAULT/registry/repos.yml"
 # validation error — so a typo can't silently exclude a repo from a fabric. Grow it deliberately.
 KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence","skill-union"]'
 
+# CAPS THAT MUST KEEP A `capabilities:` ROW EVEN AT ZERO RECEIVERS (#1806). The closure check below
+# this one is keyed on the ROSTER (what repos[] actually `receives`) and is deliberately vacuous for a
+# word nobody receives — a vocabulary word nobody says is harmless, since nothing claims it and nothing
+# can rot. That rationale STOPS covering a word once it is explicitly retired to zero receivers on
+# purpose (skill-union, #1715 then #1742): the row is the ONLY thing left sweeping every rostered repo
+# for a caller wiring the retired shape back in (repos-audit's reverse direction), so deleting it is
+# silent — an empty receiver set plus no row still reads as "tidied up", not "the guard is gone".
+# `validate` cannot recover that fact from the roster once the row is deleted (the row IS where it was
+# recorded), so it has to be named here instead — durable, next to the vocabulary it constrains, and
+# grown only alongside the same reasoning a new retirement needs anyway. Growing KNOWN_CAPS with an
+# ordinary never-adopted word does NOT enter this list, so the "nobody says it" exemption still holds
+# for the words it was written for.
+CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS='["skill-union"]'
+
 die() { echo "::error::repos-registry: $*" >&2; exit 2; }
 
 # need_val <subcommand> <flag> [value …] — a missing flag value is a usage error ("I was called
@@ -1013,6 +1027,27 @@ cmd_validate() {
     | unique | join("; ")')"
   [ -z "$undetectable" ] \
     || err "capability/ies received but NOT detectable — no 'capabilities:' row, so repos-audit sweeps them in NEITHER direction and the roster's claim about them can never go red: $undetectable. Give each a detector row (workflow:/script:/materializer:/push:)."
+
+  # --- CLOSURE (narrower, #1806): a word explicitly retired-with-no-receiver keeps its row -----------
+  #
+  # THE GAP the check above cannot see: it is keyed on the roster, so it is vacuous once a word's
+  # receiver set is empty — `{caps any repo receives} ⊆ {caps with a detector row}` holds vacuously
+  # when the left side has no member for that word at all. That is exactly right for a word nobody has
+  # adopted YET (nothing claims it, so nothing can rot), but `skill-union` (#1715, then #1742) is a word
+  # the org explicitly retired TO zero receivers on purpose, and its row is the only thing left sweeping
+  # every rostered repo for a caller wiring the retired shape back in (repos-audit's reverse direction).
+  # Deleting the row is therefore silent: an empty receiver set plus no row still reads as "retired,
+  # tidied up", while the org quietly loses the only thing watching for the mistake — measured on
+  # #1742's branch 2026-07-28 (#1806). `#1742` declined deleting this row on exactly this record.
+  #
+  # CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS is the durable list of words in that state (defined next to
+  # KNOWN_CAPS above). It is deliberately NOT "every KNOWN_CAPS word" — that would also force a row on
+  # a word nobody has adopted yet, which is the case the roster-keyed rationale above says is harmless.
+  local reqcap
+  for reqcap in $(echo "$CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS" | jq -r '.[]'); do
+    echo "$json" | jq -e --arg c "$reqcap" '[(.capabilities // [])[] | select(.id==$c)] | length > 0' >/dev/null \
+      || err "capability '$reqcap' has no 'capabilities:' row — it is retired-with-no-receiver (CAPS_REQUIRING_ROW_AT_ZERO_RECEIVERS in scripts/repos.sh), and its row is the only thing left sweeping every rostered repo for a caller wiring the retired shape back in. Deleting it is silent: an empty receiver set plus no row still reads as 'tidied up' while the reverse sweep is gone (#1715, #1742, #1806)."
+  done
 
   # --- kit rows must not collide at the receiver (.github#348) ---
   # Two kit rows that resolve to one destination make the fabric unsatisfiable: coordination-sync
