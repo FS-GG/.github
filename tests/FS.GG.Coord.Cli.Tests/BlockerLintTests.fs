@@ -339,6 +339,68 @@ module BlockerLintTests =
             Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.InProgress) (Some(Board.Set "x"))
         )
 
+    // ---- round 1 (independent review, PR #2103): a pending CLEAR must not trust a stale live field -----
+    //
+    // The round-1 defect: the wrapper's fallback arm treated "no `Blocked by` pair in this batch" and "a
+    // pending CLEAR" identically, deferring both to the live-read gate. That is unsound for a CLEAR — the
+    // live field is about to be overwritten to EMPTY by this SAME batch, so a live read that still finds
+    // it non-empty is reading state the write itself already obsoletes. Reproduced end to end:
+    // `set-field --batch <ref> Status=Blocked "Blocked by="` landed successfully whenever the live field
+    // happened to still hold a stale ref — exactly the `Status=Blocked`-with-empty-field-and-no-sentinel
+    // shape `.github#2079` exists to prevent. These legs pin the fix: a pending CLEAR consults ONLY the
+    // sentinel, never the live field, via a transport that hard-refuses every GraphQL call.
+    module private ClearedBlockedByFixture =
+
+        let private ok (body: string) : Errors.IoResult<Response> =
+            Ok
+                { Status = 200
+                  Body = body
+                  ETag = None
+                  NextLink = None }
+
+        /// Serves ONLY the REST body read `requireSentinelIfBlockedByCleared` makes. Any GraphQL call —
+        /// in particular the live `Blocked by` resolver read (`fieldValueByName`) — is a hard refusal, so
+        /// a passing assertion below is also the proof that a pending CLEAR never consults the live field.
+        let transport (body: string) =
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
+                | m, p ->
+                    Error(Errors.NotFound $"a pending CLEAR must consult ONLY the body — got %s{m} %s{p}"))
+
+    [<Fact>]
+    let ``round 1: a pending Blocked by CLEAR REFUSES even when the LIVE field is stale non-empty, and never reads it`` () =
+        // The critic's exact reproduction: no sentinel in the body, and — if the live field were consulted
+        // — it would (wrongly) look coherent, because `ClearedBlockedByFixture` refuses that call outright
+        // rather than serving a stale value. Under the round-1 defect this would never even reach the
+        // assertion: the fallback to the live gate would have called it and the fixture's refusal would
+        // surface as an unrelated `NotFound`, not the coherence refusal this pins.
+        let ctx = ParkGateFixture.context (ClearedBlockedByFixture.transport "Paths: src/A.fs")
+
+        match
+            Client.requireCoherentParkIfBlockedForBatch
+                ctx
+                ParkGateFixture.subject
+                (Some BoardStatus.Blocked)
+                (Some Board.Clear)
+        with
+        | Ok() -> failwith "expected the batch gate to refuse — the body has no sentinel, and a pending CLEAR must not trust a stale live field"
+        | Error code -> Assert.NotEqual(0, code)
+
+    [<Fact>]
+    let ``round 1: a pending Blocked by CLEAR PROCEEDS on a Blocked on: sentinel, still never touching the live field`` () =
+        let ctx = ParkGateFixture.context (ClearedBlockedByFixture.transport "Blocked on: human/decision")
+
+        Assert.Equal(
+            Ok(),
+            Client.requireCoherentParkIfBlockedForBatch
+                ctx
+                ParkGateFixture.subject
+                (Some BoardStatus.Blocked)
+                (Some Board.Clear)
+        )
+
     // ---- AC2 (.github#2098): `set-field --batch` end to end, from raw argv to the aliased mutation ----
     //
     // The legs above pin `requireCoherentParkIfBlockedForBatch`'s PREDICATE. These drive
@@ -361,8 +423,10 @@ module BlockerLintTests =
         /// (`updateProjectV2ItemFieldValue`), and — for the leg that must fall back to the LIVE gate — the
         /// `Blocked by` resolver read (`fieldValueByName`) and the REST issue body for the sentinel check.
         /// `body` is served on the REST read; it is UNREACHABLE on the leg where a same-call pending
-        /// `Blocked by` write should short-circuit before any live read.
-        let transport (body: string) =
+        /// `Blocked by` write should short-circuit before any live read. `liveBlockedBy` answers the
+        /// resolver read — `None` is the genuinely-empty field; `Some v` is a STALE non-empty value, for
+        /// round 1's reproduction: a same-call CLEAR must not trust it.
+        let private build (body: string) (liveBlockedBy: string option) =
             Fake.Recorder(fun (req: Request) ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
@@ -378,8 +442,13 @@ module BlockerLintTests =
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "fieldValueByName" then
-                            ok
-                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            match liveBlockedBy with
+                            | Some v ->
+                                ok
+                                    $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"text":"%s{v}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            | None ->
+                                ok
+                                    """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         elif document.Contains "updateProjectV2ItemFieldValue" then
                             ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
                         // The item-id lookup shares the `projectItems` substring with the resolver read
@@ -391,6 +460,13 @@ module BlockerLintTests =
                             Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                     | _ -> Error(Errors.NotFound "a graphql call with no document")
                 | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+        let transport (body: string) = build body None
+
+        /// Round 1's reproduction fixture: the live `Blocked by` field is STALE non-empty. Used only by
+        /// the leg that clears the field in the SAME batch — that write must be judged coherent (or not)
+        /// on the sentinel alone, never on this stale value.
+        let transportWithStaleLiveField (body: string) (staleValue: string) = build body (Some staleValue)
 
         let private sessionVars =
             [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
@@ -475,6 +551,21 @@ module BlockerLintTests =
         Assert.Contains("Status = Blocked", out)
         Assert.Contains("Blocked by = FS-GG/FS.GG.SDD#9", out)
         Assert.True(transport.Logged "updateProjectV2ItemFieldValue")
+
+    [<Fact>]
+    let ``round 1: set-field --batch Status=Blocked with 'Blocked by=' (a same-call CLEAR) is refused even when the LIVE field is stale non-empty, and writes nothing`` () =
+        // The critic's exact end-to-end reproduction against the round-1 head: the live field still names
+        // a ref (`FS-GG/FS.GG.SDD#9`, stale), the body has no sentinel, and this SAME call clears the
+        // field alongside `Status=Blocked`. Under the round-1 defect the wrapper deferred to the live
+        // read, found the stale non-empty value, and wrongly returned Ok — this call landed, exit 0.
+        let transport = SetFieldBatchParkFixture.transportWithStaleLiveField "Paths: src/A.fs" "FS-GG/FS.GG.SDD#9"
+
+        let code, _, err =
+            SetFieldBatchParkFixture.run transport (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked"; "Blocked by=" ])
+
+        Assert.NotEqual(0, code)
+        Assert.Contains("2079", err)
+        Assert.False(transport.Logged "updateProjectV2ItemFieldValue")
 
     // ---- `reconcile` withholds BLOCKER-CLEARED on the divergence (.github#2079, leg 2) ---------------
     //

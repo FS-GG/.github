@@ -3387,6 +3387,36 @@ module Client =
 
                             Error ExitError
 
+    /// #2098 round 1 (independent review): a pending `Blocked by` CLEAR in the SAME batch is
+    /// AUTHORITATIVE, not a cue to fall back on the live field. The live value is about to be overwritten
+    /// to empty by THIS call, so reading it first reads state the batch's own write already makes
+    /// obsolete — the round-1 defect let `set-field --batch <ref> Status=Blocked "Blocked by="` succeed
+    /// whenever the live field happened to still hold a stale non-empty value, landing exactly the
+    /// `Status=Blocked`-with-empty-field-and-no-sentinel shape `.github#2079` exists to prevent.
+    ///
+    /// `release --blocked-by ''` refuses this shape outright (`writeBlockedByIfRequested`'s `Ok None` arm,
+    /// above) — a park never clears. `set-field --batch` cannot refuse a `Blocked by` CLEAR
+    /// unconditionally the way `release` does: clearing the field is a legitimate write on its own (e.g.
+    /// paired with `Status=Ready` once a blocker resolves), and only becomes incoherent when paired with
+    /// `Status=Blocked` in the SAME call — which is exactly the one case this function ever runs for. So
+    /// it checks the one thing that stays true regardless of what the live field currently holds: the
+    /// `Blocked on: human/...` sentinel.
+    let private requireSentinelIfBlockedByCleared (ctx: Context) (ref: Ref) : Result<unit, int> =
+        match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+        | Error e ->
+            eprint
+                $"fsgg-coord-engine: set-field --batch: the body could not be read to check for a 'Blocked on:' sentinel (%s{Errors.explain e}) — nothing written."
+
+            Error ExitError
+        | Ok body ->
+            match HumanBlock.parse body with
+            | Some _ -> Ok()
+            | None ->
+                eprint
+                    $"fsgg-coord-engine: set-field --batch refuses: this call clears 'Blocked by' in the SAME batch as 'Status=Blocked' — the row would land with an EMPTY field and no 'Blocked on: human/...' sentinel (.github#2079). Pair 'Status=Blocked' with a non-empty 'Blocked by=<refs>' instead, or record a human park first: add a body line 'Blocked on: human/decision' or 'Blocked on: human/action'. Nothing written."
+
+                Error ExitError
+
     /// #2098: `requireCoherentParkIfBlocked` alone is the wrong gate for `set-field --batch`. `release`
     /// and single `set-field` write the `Blocked by` field as a SEPARATE step BEFORE calling it
     /// (`writeBlockedByIfRequested`, `--blocked-by` above; the single-field write itself for the other
@@ -3397,20 +3427,25 @@ module Client =
     /// as-is would refuse the exact call the docs steer callers toward: `Status=Blocked` paired with a
     /// non-empty `Blocked by=<ref>` in the SAME batch, because the live board has not seen that pair yet.
     ///
-    /// So this batch-only wrapper is handed the batch's OWN pending `Blocked by` write and checks it
-    /// FIRST: a non-empty pending value makes the park coherent on its own, no live read needed. Every
-    /// other shape — no `Blocked by` pair in this batch, or one that CLEARS the field — defers entirely
-    /// to the live-read gate above, so a batch that never touches `Blocked by` behaves exactly as it did
-    /// before this issue.
+    /// So this batch-only wrapper is handed the batch's OWN pending `Blocked by` write and judges it
+    /// BEFORE ever touching the live field: a non-empty pending `Set` makes the park coherent on its own
+    /// (no live read needed); a pending `Clear` is judged on the sentinel ALONE (the live field is about
+    /// to be obsolete — see `requireSentinelIfBlockedByCleared` above); only the ABSENCE of a `Blocked by`
+    /// pair in this batch defers to the live-read gate, so a batch that never touches `Blocked by` behaves
+    /// exactly as it did before this issue.
     let requireCoherentParkIfBlockedForBatch
         (ctx: Context)
         (ref: Ref)
         (requested: BoardStatus option)
         (pendingBlockedBy: Board.FieldWrite option)
         : Result<unit, int> =
-        match pendingBlockedBy with
-        | Some(Board.Set v) when not (String.IsNullOrWhiteSpace v) -> Ok()
-        | _ -> requireCoherentParkIfBlocked ctx ref requested
+        if requested <> Some BoardStatus.Blocked then
+            Ok()
+        else
+            match pendingBlockedBy with
+            | Some(Board.Set v) when not (String.IsNullOrWhiteSpace v) -> Ok()
+            | Some Board.Clear -> requireSentinelIfBlockedByCleared ctx ref
+            | _ -> requireCoherentParkIfBlocked ctx ref requested
 
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
