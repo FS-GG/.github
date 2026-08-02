@@ -14,7 +14,7 @@ module Driver =
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
     type Receipt =
-        { ObservedAt: int64; SourceSha: string; Complete: bool }
+        { ObservedAt: int64; SourceSha: string; Complete: bool; Review: ReviewChain option }
 
     val receiptFresh: now: int64 -> maxAgeSeconds: int64 -> Receipt -> bool
 

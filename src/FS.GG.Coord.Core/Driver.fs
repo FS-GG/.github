@@ -13,10 +13,7 @@ module Driver =
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
     type Receipt =
-        { ObservedAt: int64; SourceSha: string; Complete: bool }
-
-    let receiptFresh now maxAgeSeconds receipt =
-        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
+        { ObservedAt: int64; SourceSha: string; Complete: bool; Review: ReviewChain option }
 
     type WorkerReturn =
         { ClaimLive: bool; ReviewReady: bool; ParkedOrDone: bool }
@@ -35,6 +32,9 @@ module Driver =
           if List.length chain.Rounds > maxRounds then "review round ceiling exceeded"
           if not chain.ChecksGreen then "review checks are not green"
           if not chain.HostAccepted then "host acceptance is missing" ]
+
+    let receiptFresh now maxAgeSeconds receipt =
+        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (validateReviewChain 3 >> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
 
     let nextAction model activeItems consolidationApproved housekeeping workerReturns =
         if not housekeeping.HasHostIdentity then RequestHostIdentity

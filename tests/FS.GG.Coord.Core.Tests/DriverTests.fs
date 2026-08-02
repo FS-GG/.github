@@ -10,8 +10,10 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 receipts are source-bound complete and fresh`` () =
-        Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true })
-        Assert.False(receiptFresh 120L 30L { ObservedAt = 80L; SourceSha = "abc"; Complete = true })
+        let review = { MarkerValid = true; CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]; ChecksGreen = true; HostAccepted = true }
+        Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = Some review })
+        Assert.False(receiptFresh 120L 30L { ObservedAt = 80L; SourceSha = "abc"; Complete = true; Review = Some review })
+        Assert.False(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = None })
 
     [<Fact>]
     let ``#2127 6 to 2 consolidates then dispatches a fresh three-slot wave`` () =
