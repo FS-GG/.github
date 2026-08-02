@@ -14,6 +14,7 @@
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
     <Compile Include="OptionsTests.fs" />
+    <Compile Include="DriverCommandTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="SkillProgressiveDisclosureTests.fs" />

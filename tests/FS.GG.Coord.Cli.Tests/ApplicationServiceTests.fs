@@ -2427,7 +2427,9 @@ module ApplicationServiceTests =
     /// this block: the coverage leg quotes it, so moving a verb between the two lists costs a line in a
     /// diff instead of costing nothing.
     let private notDriven: (Options.Command * string) list =
-        [ Options.Decide,
+        [ Options.DriverCmd,
+          "Program.fs driver is private to the entry point; audited by reading — JSON emits one typed driver document from one parsed source snapshot and malformed input is stderr at a non-zero code"
+          Options.Decide,
           "`Program.fs` `decide` is private to the entry point; audited by reading — under `Json` the SAME `printfn (Snapshot.render …)` runs for all three verdicts and Red/NoVerdict only pick the exit code, so there is no verdict that swaps the document for prose (the eprint-per-verdict projection is `renderText`, which is the Text arm). Its two refusal arms, empty stdin and an unparseable snapshot, are `eprint` at a non-zero code"
           Options.LanesView,
           "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"

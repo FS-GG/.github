@@ -22,6 +22,20 @@ module DriverTests =
         Assert.Equal(RefreshTriage, nextAction model 2 true { clean with TriageFresh = false } [])
 
     [<Fact>]
+    let ``#2127 stale reconciliation and scoped currency block dispatch`` () =
+        Assert.Equal(ReconcileBoard, nextAction model 2 true { clean with ReconcileFresh = false } [])
+        Assert.Equal(RepairEngineCurrency, nextAction model 2 true { clean with CurrencyScoped = false } [])
+
+    [<Fact>]
+    let ``#2127 no-pr and tests-running live claims resume their worker`` () =
+        Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
+
+    [<Fact>]
+    let ``#2127 review validation rejects marker sha rounds checks and acceptance defects`` () =
+        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 2 ]; ChecksGreen = false; HostAccepted = false }
+        Assert.True(List.length errors >= 5)
+
+    [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
         let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; ChecksGreen = false; HostAccepted = false }

@@ -267,6 +267,7 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
+  driver [--snapshot FILE] [--json|--text]   plan one typed two-wave transition from a source snapshot
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
