@@ -631,8 +631,17 @@ jobs:
             printf 'once #%s lands or is closed, and a fresh streak on a later standing PR starts a new one.\n' "$PR"
           } > comment.md
 
-          existing="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-                        --jq '.[] | select(.body | startswith("'"$MARKER"'")) | .id' | head -1)"
+          # No `gh | head`: under `pipefail` (set above) a closed pipe would fail the step — the exact
+          # hazard `touch-set-drift.yml` calls out in its own comment ("No `gh | head`: under `pipefail`
+          # a closed pipe would fail the step") and the reason it captures ALL matches into a variable
+          # and takes the first line with a shell builtin instead. This step carries
+          # `continue-on-error: true`, so a SIGPIPE here would have SILENTLY SUPPRESSED the escalation —
+          # rebuilding, inside the fix for #2095, the exact "failure nobody sees" pathology #2095 exists
+          # to end. Copied verbatim from `touch-set-drift.yml`'s `matches=... existing="${matches%%...}"`
+          # construction (see its own comment above `matches="$(gh api ... --paginate ...)"`).
+          matches="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                       --jq '.[] | select(.body | startswith("'"$MARKER"'")) | .id')"
+          existing="${matches%%$'\n'*}"
           if [ -n "$existing" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
             echo "updated escalation comment on #$PR (streak: $fails)"
