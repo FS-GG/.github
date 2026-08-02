@@ -18,8 +18,8 @@ module Driver =
             |> Array.tryPick (fun line ->
                 let prefix = key + ":"
                 if line.TrimStart().StartsWith prefix then Some(line.Substring(line.IndexOf(':') + 1).Trim()) else None)
-        let review = comments |> List.tryFind (fun c -> c.Contains("<!-- fsgg:independent-review:v1 -->"))
-        let accepted = comments |> List.tryFind (fun c -> c.Contains("<!-- fsgg:review-accepted:v1 -->"))
+        let review = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:independent-review:v1 -->")) |> List.tryLast
+        let accepted = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:review-accepted:v1 -->")) |> List.tryLast
         match review, accepted with
         | Some r, Some a ->
             match value "critic" r, value "reviewed-head" r, value "accepted-head" a with

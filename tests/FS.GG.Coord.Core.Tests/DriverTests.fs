@@ -51,6 +51,13 @@ module DriverTests =
         Assert.True(Result.isError (parseReviewComments [ "<!-- fsgg:independent-review:v1 -->\ncritic: x\nreviewed-head: abc" ]))
 
     [<Fact>]
+    let ``#2127 latest confirmation round binds the accepted sha`` () =
+        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old"; "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: new"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
+        match parseReviewComments comments with
+        | Ok chain -> Assert.Equal(Some "new", chain.HeadSha)
+        | Error errors -> failwithf "%A" errors
+
+    [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
         let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; ChecksGreen = false; HostAccepted = false }

@@ -818,7 +818,7 @@ module Client =
                                 match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
                                       Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
                                       Reads.prHeadRef ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.commentBodies ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number with
+                                      Reads.commentBodies ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
                                 | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
                                     match Driver.parseReviewComments comments with
                                     | Ok review when review.HeadSha = Some head -> Some(pr, head, scan.Markers.Length)
