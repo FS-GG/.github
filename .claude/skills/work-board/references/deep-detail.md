@@ -72,6 +72,24 @@ is a **runtime** property, not a materialization gate. So before the loop, check
    with an explicit `FSGG_COORD_OWNER` for a named account, or `FSGG_COORD_OWNER_TYPE=user` with **no**
    `FSGG_COORD_OWNER` to drive the token's **own** `viewer` board with no login in config (the CLI labels
    it `@me`). Unset / `org` keeps the org default, byte-identical.
+4. **The board governs this repository.** After the successful read, prove that the board has recorded at
+   least one row for this repository, in any Status and whether its issue is open or closed. Capture the
+   scoped read's stderr as well as its JSON — `ready` deliberately returns `[]` and exit `0` for a board
+   it can read that names no such repository, and puts the useful “check the spelling, or this repo has
+   no items” advisory on stderr. For example, run `scripts/fsgg-coord ready --repo <this-repo> --all
+   --json >rows.json 2>ready.stderr`; only a successful command with a non-empty `rows.json` is proof of
+   governance. If it is empty, stop cleanly without a board write, print `ready.stderr` verbatim, and say
+   that the board does not yet govern this repository; point the operator to the coordination-kit/board
+   retrofit path above. An entirely empty board cannot emit the scoped advisory (there is no known-repo
+   set to compare), so say that explicitly rather than mistaking `[]` for a governed empty queue. An
+   operator may explicitly acknowledge this ungoverned state and direct the run to continue; do not infer
+   acknowledgement from a green exit code, an empty batch, or a later loop result.
+
+   A leg that can fail: against a real reachable board whose history has no row for the checkout's repo,
+   the command above exits `0`, writes `[]` to `rows.json`, and writes the scope advisory to
+   `ready.stderr` (or has no advisory only when the whole board is empty). The fourth precondition must
+   stop at this gate with that diagnostic, not enter the scheduling loop. Add a row for the repo and the
+   same read becomes the positive control.
 
 That is the whole of "or fail gracefully": the skill lands everywhere, and decides at runtime whether the
 workspace is board-capable. A miss is a clean stop with a pointer, not an error.
