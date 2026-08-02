@@ -110,14 +110,16 @@ module AddStatusDefaultTests =
     /// The two `projectItems` reads are told apart by `fieldValueByName`, which only `Board.itemStatus`
     /// selects. `Board.itemId` asks for `nodes { id project { number } }` on the same connection, so a
     /// fixture keying on `projectItems` alone would answer one query with the other's shape.
-    let private graphqlAnswer (board: Board) (document: string) : Errors.IoResult<Response> =
+    let private graphqlAnswer (board: Board) (blockedBy: string option) (document: string) : Errors.IoResult<Response> =
         if document.Contains "projectsV2" then
             ok ProjectAnswer
         elif document.Contains "fields(first" then
             ok FieldsAnswer
         elif document.Contains "\"Blocked by\"" then
-            // #2109 checks this before item-add. These fixtures deliberately have no live edge.
-            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+            match blockedBy with
+            | Some value ->
+                ok $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"project":{{"number":12}},"fieldValueByName":{{"text":"%s{value}"}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+            | None -> ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
         elif document.Contains "fieldValueByName" then
             // `Board.itemStatus` — the read that decides whether the default may fire.
             match board.Column with
@@ -151,7 +153,7 @@ module AddStatusDefaultTests =
     /// different rule and a refusal there would stop these legs before they reached the board at all.
     let private IssueBody = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
 
-    let private worldWithBody (column: Column) issueBody =
+    let private worldWithBodyAndBlockedBy (column: Column) issueBody blockedBy =
         let board = Board column
 
         Fake.Recorder(fun (req: Request) ->
@@ -162,7 +164,7 @@ module AddStatusDefaultTests =
                 match req.Body with
                 | Query(document, _) when document.Contains "items(first: 100" ->
                     ok """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"Ready"},"blockedBy":null,"class":null,"severity":null,"phase":null,"repoScope":null,"content":{"__typename":"Issue","number":9,"title":"narrow sibling","state":"OPEN","createdAt":"2026-07-30T00:00:00Z","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                | Query(document, _) -> graphqlAnswer board document
+                | Query(document, _) -> graphqlAnswer board blockedBy document
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok issueBody
@@ -170,6 +172,8 @@ module AddStatusDefaultTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/9/comments" -> ok "[]"
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private worldWithBody (column: Column) issueBody = worldWithBodyAndBlockedBy column issueBody None
 
     let private world (column: Column) = worldWithBody column IssueBody
 
@@ -414,6 +418,18 @@ module AddStatusDefaultTests =
         Assert.Equal(0, code)
         Assert.Equal(NewItemId, out.Trim())
         Assert.True(transport.Logged(statusWrite NewItemId "opt_blocked"), $"log: %A{transport.Log}")
+
+    [<Fact>]
+    let ``#2109 add --status Blocked proceeds for a live Blocked by edge without reading the body twice`` () =
+        let body = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
+        let transport = worldWithBodyAndBlockedBy NotOnBoard body (Some "FS-GG/FS.GG.SDD#9")
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_blocked"), $"log: %A{transport.Log}")
+        Assert.Equal(1, transport.Count "issue-get FS-GG/FS.GG.SDD 42")
 
     // ---- AC1 — AND IT SAYS SO ----------------------------------------------------------------------
 

@@ -12,6 +12,27 @@ module BlockerLintTests =
     let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
 
     [<Fact>]
+    let ``#2109 the Status=Blocked writer inventory is exhaustive and classifies every restore`` () =
+        let deliberate, restores =
+            Client.blockedStatusWriterCoverage
+            |> List.partition (function
+                | Client.DeliberatePark _ -> true
+                | Client.RecordedRestore _ -> false)
+
+        Assert.Equal<string list>(
+            [ "add --status Blocked"
+              "release --status Blocked"
+              "set-field --batch Status=Blocked"
+              "set-field Status Blocked" ],
+            deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+        Assert.Equal<string list>(
+            [ "reap (recorded previous Status=Blocked)"
+              "release (recorded previous Status=Blocked)" ],
+            restores |> List.map (function Client.RecordedRestore name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+
+    [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
         let verdict body blockedBy =
             Client.blockedNoReasonVerdict IssueState.Open BoardStatus.Blocked blockedBy body
