@@ -158,6 +158,7 @@ module Cache =
     let patchScan
         (owner: string)
         (title: string)
+        (issueOwner: string)
         (repo: string)
         (number: int)
         (field: string)
@@ -191,11 +192,18 @@ module Cache =
                         match item with
                         | :? JsonObject as o ->
                             let matches =
+                                let o' = o.["owner"]
                                 let r = o.["repo"]
                                 let n = o.["number"]
 
+                                // Older cache records predate the owner field. They are necessarily
+                                // ambiguous, so retain their historic same-repository fold only when the
+                                // write itself names the board owner; an explicit external owner must
+                                // never cross-fold a default-owner same-name row (#2143).
                                 not (isNull r)
                                 && not (isNull n)
+                                && ((not (isNull o') && o'.GetValue<string>() = issueOwner)
+                                    || (isNull o' && issueOwner = owner))
                                 && r.GetValue<string>() = repo
                                 && n.GetValue<int>() = number
 

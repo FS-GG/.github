@@ -519,7 +519,19 @@ module Board =
         (number: int)
         : IoResult<AddOutcome> =
 
-        match itemId transport board owner repo number with
+        // Resolve an external owner through the same owner-qualified positive cache as `item-id` and `addItem`.
+        //
+        // An external-owner issue can be added to an organization board and yield a stable project-item id,
+        // while GitHub's subsequent `repository.issue.projectItems` read omits that cross-owner placement.
+        // Re-asking turns a known canonical item into a false `NotOnBoard`; keeping the cache key as
+        // owner/repo/number/board makes same-name repositories under different owners distinct (#2143).
+        let resolved =
+            if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+                itemId transport board owner repo number
+            else
+                itemIdCached transport board owner repo number
+
+        match resolved with
         | Error e -> Error e
         | Ok(Some existing) ->
             // Idempotent, and it costs one read and no write. Re-running `add` is how a close-out pass or a
@@ -982,7 +994,15 @@ module Board =
         (write: FieldWrite)
         : IoResult<WriteOutcome> =
 
-        match itemId transport board owner repo number with
+        // Keep batch writes on the identical item-resolution path as single writes.  A mixed policy here
+        // would make `set-field` work for an external owner while `set-field --batch` falsely refused it.
+        let resolved =
+            if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+                itemId transport board owner repo number
+            else
+                itemIdCached transport board owner repo number
+
+        match resolved with
         | Error e -> Error e
 
         // A SUCCESSFUL READ THAT FOUND NOTHING. The issue is genuinely not on this board — permanent, and
@@ -1004,6 +1024,7 @@ module Board =
                 Cache.patchScan
                     board.Owner
                     board.Title
+                    owner
                     repo
                     number
                     field
@@ -1100,7 +1121,13 @@ module Board =
 
             go writes
 
-        match itemId transport board owner repo number with
+        let resolved =
+            if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+                itemId transport board owner repo number
+            else
+                itemIdCached transport board owner repo number
+
+        match resolved with
         | Error e -> if isQueueable e then queueAll e else Error e
         | Ok None -> Ok NotOnBoard
         | Ok(Some item) ->
@@ -1112,6 +1139,7 @@ module Board =
                     Cache.patchScan
                         board.Owner
                         board.Title
+                        owner
                         repo
                         number
                         field

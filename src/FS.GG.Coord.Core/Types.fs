@@ -44,6 +44,7 @@ module Types =
           Number: int }
 
         member this.Short = $"%s{this.Repo}#%d{this.Number}"
+        member this.Canonical = $"%s{this.Owner}/%s{this.Repo}#%d{this.Number}"
 
     /// A `Blocked by` entry.
     ///

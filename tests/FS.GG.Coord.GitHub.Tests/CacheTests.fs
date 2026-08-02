@@ -136,7 +136,7 @@ let ``#1152 a patchScan fold does not restart the TTL clock - only a real read d
     // A board write the worker made along the way folds into the cache. It is NOT a read, so it must not
     // make the cache look fresh again — otherwise a worker's own writes keep its cache eternally young and
     // it never sees another worker's board changes (#1152).
-    patchScan "FS-GG" "Coordination" "FS.GG.SDD" 42 "Status" "Done"
+    patchScan "FS-GG" "Coordination" "FS-GG" "FS.GG.SDD" 42 "Status" "Done"
 
     // The fold really happened — guards against a vacuous pass where patchScan no-op'd...
     Assert.Contains("Done", File.ReadAllText file)
@@ -145,6 +145,29 @@ let ``#1152 a patchScan fold does not restart the TTL clock - only a real read d
     // code the patch's rewrite stamped `now`, and this read served the stale scan as fresh.
     Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "90")
     Assert.True((getScan Scheduling "FS-GG" "Coordination").IsNone)
+
+[<Fact>]
+let ``#2143 ownerless legacy rows only fold default-owner writes when same-name external twins exist`` () =
+    use sandbox = new Sandbox()
+
+    let twins =
+        """[{"repo":"rogue3","number":96,"status":"Ready"},{"owner":"EHotwagner","repo":"rogue3","number":96,"status":"Ready"}]"""
+
+    Assert.True(putScan "FS-GG" "Coordination" twins)
+
+    // The legacy row has no owner and therefore cannot truthfully stand for the explicit external item.
+    // Only the external row changes; a later fresh read cannot report the default-owner twin as written.
+    patchScan "FS-GG" "Coordination" "EHotwagner" "rogue3" 96 "Status" "In progress"
+    let externalFold = File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+    Assert.Contains("{\"repo\":\"rogue3\",\"number\":96,\"status\":\"Ready\"}", externalFold)
+    Assert.Contains("{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}", externalFold)
+
+    // The compatibility case is intentionally narrower: an ownerless row remains foldable only for the
+    // board owner it historically denoted.
+    patchScan "FS-GG" "Coordination" "FS-GG" "rogue3" 96 "Status" "Done"
+    let defaultFold = File.ReadAllText(Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne)
+    Assert.Contains("{\"repo\":\"rogue3\",\"number\":96,\"status\":\"Done\"}", defaultFold)
+    Assert.Contains("{\"owner\":\"EHotwagner\",\"repo\":\"rogue3\",\"number\":96,\"status\":\"In progress\"}", defaultFold)
 
 [<Fact>]
 let ``a ZERO-BYTE cache file is a miss, not an empty board`` () =

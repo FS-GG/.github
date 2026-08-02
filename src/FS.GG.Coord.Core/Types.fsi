@@ -80,7 +80,11 @@ module Types =
           Repo: string
           Number: int }
 
+        /// The compact repo-qualified spelling. Deliberately omits the owner.
         member Short: string
+
+        /// The unambiguous owner/repo-qualified spelling.
+        member Canonical: string
 
     /// A `Blocked by` entry.
     ///

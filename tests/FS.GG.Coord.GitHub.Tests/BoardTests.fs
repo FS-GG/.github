@@ -503,6 +503,42 @@ let ``#510 an exhausted budget DEFERS the board write - and it is really queued`
     | other -> failwith $"an exhausted budget must defer — got %A{other}"
 
 [<Fact>]
+let ``#2143 an external-owner item cached by intake is written without re-parsing it as the default owner`` () =
+    use _sandbox = new Sandbox()
+
+    // The coordination owner and an external owner can have the same repository name and issue number.
+    // `add` / `item-id` obtained both canonical ids, so the write must preserve the explicit issue owner
+    // all the way to the mutation target rather than selecting the default owner's same-name twin.
+    Cache.putItemId "FS-GG" "rogue3" 96 board.Number "PVTI_default96"
+    Cache.putItemId "EHotwagner" "rogue3" 96 board.Number "PVTI_external96"
+
+    let transport =
+        serving """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+
+    match boardWrite transport board "EHotwagner" "rogue3" 96 "Status" (Set "Ready") "vole-418" with
+    | Ok Written ->
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.True(transport.Logged "--id PVTI_external96")
+        Assert.False(transport.Logged "PVTI_default96")
+    | other -> failwith $"the external-owner cached item must be written — got %A{other}"
+
+[<Fact>]
+let ``#2143 an external-owner batch uses the same canonical cached item as a single field write`` () =
+    use _sandbox = new Sandbox()
+    Cache.putItemId "FS-GG" "rogue3" 96 board.Number "PVTI_default96"
+    Cache.putItemId "EHotwagner" "rogue3" 96 board.Number "PVTI_external96"
+
+    let transport =
+        serving """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+
+    match boardWriteBatch transport board "EHotwagner" "rogue3" 96 [ "Status", Set "Ready"; "Blocked by", Clear ] "vole-418" with
+    | Ok Written ->
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.True(transport.Logged "itemId: \"PVTI_external96\"")
+        Assert.False(transport.Logged "PVTI_default96")
+    | other -> failwith $"the external-owner batch must use the canonical cached item — got %A{other}"
+
+[<Fact>]
 let ``#510 a REFUSED write is NEVER queued - replaying it would loop forever`` () =
     use _sandbox = new Sandbox()
 

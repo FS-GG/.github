@@ -567,6 +567,85 @@ module BlockerLintTests =
         Assert.Contains("2079", err)
         Assert.False(transport.Logged "updateProjectV2ItemFieldValue")
 
+    // ---- #2143: field-write receipts preserve the explicit owner -----------------------------------
+
+    module private SetFieldReceiptFixture =
+
+        let private ok (body: string) : Errors.IoResult<Response> =
+            Ok
+                { Status = 200
+                  Body = body
+                  ETag = None
+                  NextLink = None }
+
+        /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
+        /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
+        let transport () =
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, variables) ->
+                        if document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "updateProjectV2ItemFieldValue" || document.Contains "clearProjectV2ItemFieldValue" then
+                            if document.Contains "f0:" then
+                                ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                            else
+                                ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                        elif document.Contains "projectItems" then
+                            let owner =
+                                variables
+                                |> List.tryPick (fun (name, value) ->
+                                    match name, value with
+                                    | "owner", VString text -> Some text
+                                    | _ -> None)
+                                |> Option.defaultValue ""
+
+                            let item = if owner = "EHotwagner" then "PVTI_external96" else "PVTI_default96"
+
+                            ok
+                                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{item}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        else
+                            Error(Errors.NotFound $"the receipt fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | m, p -> Error(Errors.NotFound $"the receipt fixture serves no %s{m} %s{p}"))
+
+    [<Theory>]
+    [<InlineData(false, "rogue3#96", "FS-GG/rogue3#96", "EHotwagner/rogue3#96", "PVTI_default96", "PVTI_external96")>]
+    [<InlineData(false, "https://github.com/EHotwagner/rogue3/issues/96", "EHotwagner/rogue3#96", "FS-GG/rogue3#96", "PVTI_external96", "PVTI_default96")>]
+    [<InlineData(true, "rogue3#96", "FS-GG/rogue3#96", "EHotwagner/rogue3#96", "PVTI_default96", "PVTI_external96")>]
+    [<InlineData(true, "https://github.com/EHotwagner/rogue3/issues/96", "EHotwagner/rogue3#96", "FS-GG/rogue3#96", "PVTI_external96", "PVTI_default96")>]
+    let ``#2143 single and batch receipts distinguish default and external same-name twins``
+        (batch: bool)
+        (refArg: string)
+        (expectedRef: string)
+        (otherRef: string)
+        (expectedItem: string)
+        (otherItem: string)
+        =
+        let transport = SetFieldReceiptFixture.transport ()
+
+        let args =
+            if batch then
+                [ "set-field"; "--batch"; refArg; "Status=Ready"; "Blocked by=" ]
+            else
+                [ "set-field"; refArg; "Status"; "Ready" ]
+
+        let code, out, err = SetFieldBatchParkFixture.run transport args
+
+        Assert.Equal(0, code)
+        Assert.Equal("", err)
+        Assert.Contains(expectedRef, out)
+        Assert.DoesNotContain(otherRef, out)
+        Assert.True(transport.Logged expectedItem, $"mutation log: %A{transport.Log}")
+        Assert.False(transport.Logged otherItem, $"mutation log: %A{transport.Log}")
+
     // ---- `reconcile` withholds BLOCKER-CLEARED on the divergence (.github#2079, leg 2) ---------------
     //
     // `FS.GG.SDD#42` is `Blocked`, its FIELD names one blocker, `FS.GG.SDD#8`, which is CLOSED — so
