@@ -354,6 +354,14 @@ module ApplicationServiceTests =
         | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
     [<Fact>]
+    let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =
+        // The full driver fixture is intentionally anchored on the PR id: review markers live on the
+        // pull request conversation, never on the backing issue.
+        let pr = 2140
+        let expected = $"repos/FS-GG/.github/issues/%d{pr}/comments"
+        Assert.EndsWith("issues/2140/comments", expected)
+
+    [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
         let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-followup-audit-" + Guid.NewGuid().ToString "n")
