@@ -431,7 +431,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              and producer checkouts under $FSGG_REPOS_ROOT (default .repos).
                                              Local: no board, no token. Defaults to text; --json gives the
                                              machine verdict. Only `mirrored` compared today.
-  diff-audit <base> <head> <old> <new> [receipt.json] --paths P... [--repo ROOT] [--json]
+  diff-audit <base> <head> <old> <new> [receipt.json|-] [item-body.md] --paths P... [--repo ROOT] [--json]
                                              inventory exact git-object changes; unresolved required receipts
                                              exit red. A supplied receipt is rejected when stale, incomplete,
                                              duplicated, malformed, or outside the declared paths.

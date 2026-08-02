@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "a3fa7f0a6036014a63414f9dcb0433b6ad79e2339cfc7f9609dcbcc5bb9fcb81"
+        "value": "10064624524b3c25ca232eaf1ca841c03bc97d60d4a2d253f3d2c1c970c7518d"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "d90dae2b504aa718e102fbc218183c2a0b44a3df10f830721c0685b686ee52db"
+        "value": "050d8bac7f038dbfd221114b0cb86828f0aef3041c781a7cdb8ea4f92e853281"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "1279149a13d3df554b4ca452427f0372fde0c91ac0f7c53e46c416c2f4cd7596"
+        "value": "efd4172aa06f77433c00a1a56e48d37bd57dc51b568a86f7d520979ef4ae49fa"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -433,7 +433,24 @@
       "diagnosticIds": []
     }
   ],
-  "findings": [],
+  "findings": [
+    {
+      "id": "VF001",
+      "severity": "warning",
+      "category": "warning",
+      "path": "work/2144-quoted-diff-inventory/evidence.yml",
+      "relatedIds": [
+        "analysis",
+        "checklist",
+        "clarifications",
+        "plan",
+        "spec",
+        "tasks"
+      ],
+      "message": "One or more evidence source snapshots no longer match current source digests.",
+      "correction": "Rerun the evidence command after reviewing the changed source artifacts."
+    }
+  ],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -457,7 +474,23 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "id": "evidence.staleEvidenceSource",
+      "severity": "warning",
+      "artifact": "work/2144-quoted-diff-inventory/evidence.yml",
+      "message": "One or more evidence source snapshots no longer match current source digests.",
+      "correction": "Rerun the evidence command after reviewing the changed source artifacts.",
+      "relatedIds": [
+        "analysis",
+        "checklist",
+        "clarifications",
+        "plan",
+        "spec",
+        "tasks"
+      ]
+    }
+  ],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",

@@ -99,7 +99,11 @@ findings or add them to a private follow-up queue; the critic owns their disposi
 For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
 exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
 or documentation occurrence with an accountable disposition; compilation is not evidence that quoted
-protocol/example text was intended. An unresolved or stale receipt blocks host acceptance.
+protocol/example text was intended. Capture the live item body and pass it to `diff-audit`; a standalone
+`Bulk rename: true` line there, the immutable head commit declaration, or the occurrence threshold makes
+the audit mandatory. Caller environment variables are not declarations. An unresolved, stale, empty,
+or live-inventory-mismatched receipt blocks host acceptance. For the initial item-declared inventory,
+use the receipt placeholder form `diff-audit BASE HEAD OLD NEW - item-body.md --paths ...`.
 
 ## 5. Independent critique
 

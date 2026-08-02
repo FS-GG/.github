@@ -166,7 +166,12 @@ module Client =
     /// factored so `done`'s Status=Done stamp and `claim`'s In-progress move cannot regrow the same
     /// promise-under-`ignore` (#1151). It does NOT touch the verdict: the caller keeps its exit code and
     /// merely emits this note, because the WORK is done (or the lock is held) whatever the column says.
-    let private boardWriteNote (ref: Ref) (field: string) (value: string) (outcome: Result<Board.WriteOutcome, Errors.IoError>) : unit =
+    let private boardWriteNote
+        (ref: Ref)
+        (field: string)
+        (value: string)
+        (outcome: Result<Board.WriteOutcome, Errors.IoError>)
+        : unit =
         match outcome with
         | Ok Board.Written -> ()
         | Ok Board.Deferred ->
@@ -188,16 +193,18 @@ module Client =
         | v -> v
 
     type Context =
-        { Transport: IGitHubTransport
-          Owner: string
-          Title: string
-          /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
-          DefaultRepo: string option
-          /// The per-deployment chore-lock roster a VENDORED tenant injects by env
-          /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
-          /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
-          /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
-          ChoreLocks: Ref list }
+        {
+            Transport: IGitHubTransport
+            Owner: string
+            Title: string
+            /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
+            DefaultRepo: string option
+            /// The per-deployment chore-lock roster a VENDORED tenant injects by env
+            /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
+            /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
+            /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
+            ChoreLocks: Ref list
+        }
 
     /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
     /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
@@ -243,7 +250,8 @@ module Client =
                 // #419: point at the mint COMMAND, not a literal — the same remedy `whoami` gives, so the
                 // command path agents actually run most does not re-introduce the copy-a-literal attractor.
                 // The id is named as DIAGNOSIS (which id you are using now), never as one to invent.
-                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                eprint
+                    $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
             | _ -> ()
 
             Ok w
@@ -285,7 +293,8 @@ module Client =
     /// literal — an id an agent copies is an id agents collide on (#551), which is why no id appears here to
     /// copy.
     let private mintRemedy () =
-        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+        eprint
+            "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
 
     /// THE TWIN REFUSAL, shared by the three verbs that REFUSE over a twin's marker — `release`, `heartbeat`,
     /// `widen` (#1031).
@@ -307,7 +316,9 @@ module Client =
         // A different session can also be a long-lived worker whose harness rotated its ambient
         // session id (#1857). We cannot prove that here, so preserve #419's refusal; but minting
         // would strand that worker's live claim. Name the safe recovery which pins the marker fact.
-        eprint $"  This may be a rotated session, not a twin. If this is your existing claim, retry with CLAUDE_CODE_SESSION_ID=%s{theirs.Value} FSGG_WORKER=%s{workerId}; do NOT mint a new id for this live claim."
+        eprint
+            $"  This may be a rotated session, not a twin. If this is your existing claim, retry with CLAUDE_CODE_SESSION_ID=%s{theirs.Value} FSGG_WORKER=%s{workerId}; do NOT mint a new id for this live claim."
+
         ExitRed
 
     /// THE IMPERSONATION REFUSAL (#1646), shared by the verbs that REFUSE over a worker we are not — `claim`,
@@ -340,12 +351,7 @@ module Client =
     /// own bypass has closed nothing.
     ///
     /// ExitRed, matching the twin refusal: acting as another worker is a stop, not a retry.
-    let private impersonationRefusal
-        (verb: string)
-        (ref: Ref)
-        (derived: WorkerId)
-        (named: WorkerId)
-        : int =
+    let private impersonationRefusal (verb: string) (ref: Ref) (derived: WorkerId) (named: WorkerId) : int =
         eprint
             $"fsgg-coord-engine: refusing to %s{verb} %s{ref.Short} as '%s{named.Value}' — this process's OWN worker id is '%s{derived.Value}'. `--worker` ASSERTS an identity; it does not prove one, so acting on %s{ref.Short} under another worker's id would take, renew or destroy their lock with nothing recorded and nobody told (#1646)."
 
@@ -441,8 +447,7 @@ module Client =
     /// item we could not join is an item whose column we do not claim to know, and `BoardClass = None`
     /// costs at most one idempotent re-write rather than suppressing a projection that is genuinely owed.
     let private enrichBoardFacts (rows: Scan.Row list) (request: Snapshot.Request) : Snapshot.Request =
-        let byRef =
-            rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
+        let byRef = rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
 
         // ONE `now` FOR THE WHOLE BATCH. Reading the clock per item would let two candidates a millisecond
         // apart be aged against two different instants, which is a comparison whose inputs move while it
@@ -687,8 +692,7 @@ module Client =
                     with e ->
                         Error $"%s{relative} could not be read: %s{e.Message}"
 
-            let existing =
-                paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
+            let existing = paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
 
             match existing with
             | [] -> Error "no drive-board or work-board host-loop document exists"
@@ -698,6 +702,7 @@ module Client =
                 // to agree, without turning an intentionally absent operator skill into an unavailable
                 // signal for the product driver.
                 let results = documents |> List.map read
+
                 let errors =
                     results
                     |> List.choose (function
@@ -727,7 +732,10 @@ module Client =
             let candidates =
                 request.Candidates
                 |> List.choose (fun c ->
-                    if c.Item.Claim.IsSome || c.Item.ItemPr.IsSome then Some c.Item.Ref else None)
+                    if c.Item.Claim.IsSome || c.Item.ItemPr.IsSome then
+                        Some c.Item.Ref
+                    else
+                        None)
 
             let reservations =
                 request.InFlight
@@ -753,7 +761,8 @@ module Client =
             Batch.waveShortfallHeadline (List.length result.Chosen) occupancy
             |> Option.iter eprint
         | model, active ->
-            let explain = function
+            let explain =
+                function
                 | Ok _ -> None
                 | Error e -> Some e
 
@@ -807,7 +816,8 @@ module Client =
         // replayed over a materially different board.  Every live read consumed by the transition is now
         // one constituent.  Callers can carry the content-addressed receipts; they cannot choose the source
         // against which this invocation validates them.
-        facts |> String.concat "\n\u001e\n"
+        facts
+        |> String.concat "\n\u001e\n"
         |> Text.Encoding.UTF8.GetBytes
         |> Security.Cryptography.SHA256.HashData
         |> Convert.ToHexString
@@ -818,9 +828,13 @@ module Client =
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
+
             let receipt: Driver.PlanningReceipt =
                 { ObservedAt = root.GetProperty("observedAt").GetInt64()
-                  SourceSha = root.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
+                  SourceSha =
+                    root.GetProperty("sourceSha").GetString()
+                    |> Option.ofObj
+                    |> Option.defaultValue ""
                   Complete = bool "complete" root
                   ConsolidationApproved = bool "consolidationApproved" root
                   Observations =
@@ -828,25 +842,90 @@ module Client =
                     |> Seq.map (fun item ->
                         ({ Kind = item.GetProperty("kind").GetString() |> Option.ofObj |> Option.defaultValue ""
                            ObservedAt = item.GetProperty("observedAt").GetInt64()
-                           SourceSha = item.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           Outcome = item.GetProperty("outcome").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ReceiptId = item.GetProperty("receiptId").GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
+                           SourceSha =
+                             item.GetProperty("sourceSha").GetString()
+                             |> Option.ofObj
+                             |> Option.defaultValue ""
+                           Outcome =
+                             item.GetProperty("outcome").GetString()
+                             |> Option.ofObj
+                             |> Option.defaultValue ""
+                           ReceiptId =
+                             item.GetProperty("receiptId").GetString()
+                             |> Option.ofObj
+                             |> Option.defaultValue "" }
+                        : Driver.PlanningObservation))
                     |> Seq.toList }
+
             Ok receipt
-        with error -> Error $"the driver receipt is malformed: %s{error.Message}"
+        with error ->
+            Error $"the driver receipt is malformed: %s{error.Message}"
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
+        let auditReceipt (comments: Driver.ReviewComment list) =
+            comments
+            |> List.choose (fun comment ->
+                comment.Body.Split '\n'
+                |> Array.choose (fun line ->
+                    let prefix = "diff-audit-receipt-v1:"
+                    let line = line.Trim()
+
+                    if line.StartsWith(prefix, StringComparison.Ordinal) then
+                        Some(line.Substring(prefix.Length).Trim())
+                    else
+                        None)
+                |> Array.toList
+                |> function
+                    | [ encoded ] -> SemanticDiff.ofBase64 encoded |> Result.toOption
+                    | _ -> None)
+            |> function
+                | [ receipt ] -> Some receipt
+                | _ -> None
+
+        let recomputeAudit owner repo baseSha headSha (submitted: SemanticDiff.Receipt) =
+            submitted.DeclaredPaths
+            |> List.map (fun path ->
+                match
+                    Reads.fileAtRef ctx.Transport owner repo path baseSha,
+                    Reads.fileAtRef ctx.Transport owner repo path headSha
+                with
+                | Ok before, Ok after ->
+                    Ok(SemanticDiff.inventory path before after submitted.OldToken submitted.NewToken)
+                | Error error, _
+                | _, Error error -> Error error)
+            |> List.fold
+                (fun state next -> Result.bind (fun all -> Result.map (fun rows -> all @ rows) next) state)
+                (Ok [])
+            |> Result.map (fun rows ->
+                SemanticDiff.receipt
+                    submitted.Repository
+                    baseSha
+                    headSha
+                    submitted.OldToken
+                    submitted.NewToken
+                    submitted.DeclaredPaths
+                    true
+                    rows)
+
         match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
-        | Error e, _ -> eprint (Errors.explain e); ExitError
-        | _, Error e -> eprint e; ExitError
+        | Error e, _ ->
+            eprint (Errors.explain e)
+            ExitError
+        | _, Error e ->
+            eprint e
+            ExitError
         | Ok(_, doc, _), Ok model ->
             match activeItemRefs doc with
-            | Error e -> eprint e; ExitError
+            | Error e ->
+                eprint e
+                ExitError
             | Ok active ->
                 match Snapshot.parse doc with
                 | Error errors ->
-                    errors |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+                    errors
+                    |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+
                     ExitError
                 | Ok snapshot ->
                     let reviewEvidence =
@@ -854,20 +933,70 @@ module Client =
                         |> List.choose (fun candidate ->
                             match candidate.Item.ItemPr with
                             | Some pr ->
-                                match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
-                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.commentsWithIdentity ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                match
+                                    Reads.markerScan
+                                        ctx.Transport
+                                        candidate.Item.Ref.Owner
+                                        candidate.Item.Ref.Repo
+                                        candidate.Item.Ref.Number,
+                                    Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                    Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                    Reads.commentsWithIdentity
+                                        ctx.Transport
+                                        candidate.Item.Ref.Owner
+                                        candidate.Item.Ref.Repo
+                                        pr
+                                with
                                 | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
-                                    let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
-                                    match Driver.parseReviewComments comments with
-                                    | Ok review when review.HeadSha = Some head ->
-                                        Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
-                                    | _ -> None
+                                    let comments =
+                                        comments
+                                        |> List.map (fun c ->
+                                            ({ Id = c.Id
+                                               Url = c.Url
+                                               Body = c.Body }
+                                            : Driver.ReviewComment))
+
+                                    match auditReceipt comments with
+                                    | Some submitted ->
+                                        match
+                                            Reads.prBaseSha
+                                                ctx.Transport
+                                                candidate.Item.Ref.Owner
+                                                candidate.Item.Ref.Repo
+                                                pr
+                                        with
+                                        | Ok baseSha ->
+                                            match
+                                                recomputeAudit
+                                                    candidate.Item.Ref.Owner
+                                                    candidate.Item.Ref.Repo
+                                                    baseSha
+                                                    head
+                                                    submitted
+                                            with
+                                            | Ok trusted ->
+                                                match Driver.parseReviewCommentsWithAudit trusted comments with
+                                                | Ok review when review.HeadSha = Some head ->
+                                                    Some(
+                                                        pr,
+                                                        head,
+                                                        { review with ChecksGreen = true },
+                                                        scan.Markers.Length
+                                                    )
+                                                | _ -> None
+                                            | Error _ -> None
+                                        | Error _ -> None
+                                    | None ->
+                                        match Driver.parseReviewComments comments with
+                                        | Ok review when review.HeadSha = Some head ->
+                                            Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
+                                        | _ -> None
                                 | _ -> None
                             | None -> None)
+
                     let pending = Cache.pending ()
                     let identity = Identity.resolve opts.Worker
+
                     let staleClaim =
                         snapshot.Candidates
                         |> List.exists (fun candidate ->
@@ -879,19 +1008,33 @@ module Client =
                     // receipt changes exactly when that age becomes actionable, not every second.
                     let stableBoard =
                         Text.RegularExpressions.Regex.Replace(doc, "\"ageSeconds\":-?[0-9]+", "\"ageSeconds\":0")
+
                     let sourceSha =
                         planningSourceSha
                             [ "board:" + stableBoard
                               "stale-claim:" + string staleClaim
-                              "pending:" + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
-                              "identity:" + (identity |> Result.map (fun value -> sprintf "%A" value) |> Result.defaultValue "UNRESOLVED")
+                              "pending:"
+                              + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
+                              "identity:"
+                              + (identity
+                                 |> Result.map (fun value -> sprintf "%A" value)
+                                 |> Result.defaultValue "UNRESOLVED")
                               "review:" + sprintf "%A" reviewEvidence
-                              "engine:" + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId) ]
+                              "engine:"
+                              + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId) ]
+
                     let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                    let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
-                    let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+
+                    let suppliedReceipt =
+                        opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
+
+                    let receiptValid =
+                        suppliedReceipt
+                        |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+
                     let pendingWrites = pending |> Result.map List.length |> Result.defaultValue 1
                     let hasIdentity = Result.isOk identity
+
                     let housekeeping: Driver.Housekeeping =
                         { HasHostIdentity = hasIdentity
                           StaleClaim = staleClaim
@@ -902,22 +1045,42 @@ module Client =
                           ReconcileFresh = receiptValid
                           TriageFresh = receiptValid
                           CurrencyScoped = receiptValid }
+
                     let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
+
                     let workerReturns =
                         snapshot.Candidates
                         |> List.choose (fun candidate ->
                             match candidate.Item.Claim with
                             | Some(_, Types.LeaseHeld) ->
-                                Some
-                                    ({ ClaimLive = true
-                                       ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
-                                       ParkedOrDone = candidate.Item.Status = Types.Blocked || candidate.Item.Status = Types.Done }: Driver.WorkerReturn)
+                                Some(
+                                    { ClaimLive = true
+                                      ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
+                                      ParkedOrDone =
+                                        candidate.Item.Status = Types.Blocked || candidate.Item.Status = Types.Done }
+                                    : Driver.WorkerReturn
+                                )
                             | _ -> None)
-                    let consolidationApproved = suppliedReceipt |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
-                    let action = Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
+
+                    let consolidationApproved =
+                        suppliedReceipt
+                        |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
+
+                    let action =
+                        Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
+
                     match opts.Render with
-                    | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
+                    | Json ->
+                        printfn
+                            "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}"
+                            sourceSha
+                            (if receiptValid then "true" else "false")
+                            (List.length active)
+                            model.ReviewSlots
+                            (List.length reviewEvidence)
+                            action
                     | Text -> printfn "%A" action
+
                     ExitGreen
 
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
@@ -1100,7 +1263,7 @@ module Client =
 
             let rows =
                 if File.Exists registryPath then
-                    RegistryPredicate.parseRows(File.ReadAllText registryPath)
+                    RegistryPredicate.parseRows (File.ReadAllText registryPath)
                 else
                     []
 
@@ -1219,7 +1382,13 @@ module Client =
         // look" and then compared as though it had been read.
         | Ok(rows, doc, _) -> offerBoardOf rows doc
 
-    let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (observed: Chore.Board) : unit =
+    let private offerChoreAt
+        (ctx: Context)
+        (opts: Options)
+        (boundary: Chore.Boundary)
+        (repo: string)
+        (observed: Chore.Board)
+        : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
         // asymmetry is deliberate: the ANSWER does not touch a lock, the OFFER is nothing but one. Note this
         // uses `Identity.resolve` directly rather than `worker`, which PRINTS a #419 warning and would make
@@ -1235,7 +1404,16 @@ module Client =
             // out-of-scope repos — which is what makes the rules reachable at all. `BLOCKER-CLEARED` needs a
             // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
             // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
-            Chores.offer ctx.Transport boundary (WorkerId w.Id) (selfOf w) session ctx.ChoreLocks ctx.Owner repo observed
+            Chores.offer
+                ctx.Transport
+                boundary
+                (WorkerId w.Id)
+                (selfOf w)
+                session
+                ctx.ChoreLocks
+                ctx.Owner
+                repo
+                observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
@@ -1315,8 +1493,7 @@ module Client =
     /// default-scoped, that reuse would silently relabel a slice `Whole` and the fail-open returns with no
     /// compile error. `wholeBoard` is the only door, so the re-read buys the guarantee back.
     let private offerChoreAtNext (ctx: Context) (opts: Options) : unit =
-        let repo =
-            opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
+        let repo = opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
 
         // The free question first, exactly as `Chores.offer` does it and for the same reason: a repo with no
         // chore lock must not buy a board read to hear so.
@@ -1380,7 +1557,9 @@ module Client =
         // not know — which is still a case that reaches here, and is still one nobody should pay a scan for.
         match Options.choreLockRef ctx.ChoreLocks ctx.Owner ref.Repo with
         | None -> ()
-        | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
+        | Some _ ->
+            wholeBoard ctx opts
+            |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
 
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
@@ -1519,7 +1698,12 @@ module Client =
                                     let repo = el.GetProperty("repo").GetString()
                                     let number = el.GetProperty("number").GetInt32()
 
-                                    Some({ Owner = owner; Repo = repo; Number = number }, bodyEl.GetString())
+                                    Some(
+                                        { Owner = owner
+                                          Repo = repo
+                                          Number = number },
+                                        bodyEl.GetString()
+                                    )
                                 | _ -> None)
                             |> Map.ofSeq
                     with _ ->
@@ -1609,12 +1793,20 @@ module Client =
                     if List.isEmpty chores then
                         printfn "clean — no mechanical board repairs"
                     else
-                        printfn "%s (%d mechanical finding(s))" (if opts.Apply then "applying" else "dry-run") chores.Length
+                        printfn
+                            "%s (%d mechanical finding(s))"
+                            (if opts.Apply then "applying" else "dry-run")
+                            chores.Length
 
                         for chore in chores do
                             printfn "  %-24s %-24s %s" chore.Kind.RuleId chore.Subject.Short (target chore)
 
-                    printfn "judgement findings are report-only: scripts/fsgg-coord lint%s" (if opts.Repo.IsSome then " --repo " + opts.Repo.Value else "")
+                    printfn
+                        "judgement findings are report-only: scripts/fsgg-coord lint%s"
+                        (if opts.Repo.IsSome then
+                             " --repo " + opts.Repo.Value
+                         else
+                             "")
 
                 if not opts.Apply || List.isEmpty chores then
                     // The DRY RUN, and the nothing-to-do apply. No outcome exists, so none is claimed: the
@@ -1679,7 +1871,8 @@ module Client =
                             let processPath =
                                 Environment.ProcessPath
                                 |> Option.ofObj
-                                |> Option.defaultWith (fun () -> invalidOp "reconcile: current executable path is unavailable")
+                                |> Option.defaultWith (fun () ->
+                                    invalidOp "reconcile: current executable path is unavailable")
 
                             let psi = ProcessStartInfo(processPath)
                             psi.UseShellExecute <- false
@@ -1746,7 +1939,8 @@ module Client =
                             child.WaitForExit()
                             reapExit[repo] <- child.ExitCode
 
-                            if child.ExitCode <> ExitGreen then failed <- true)
+                            if child.ExitCode <> ExitGreen then
+                                failed <- true)
 
                         let applied =
                             [ for chore in chores do
@@ -1773,11 +1967,9 @@ module Client =
                                           reconcileRow
                                               chore
                                               (Some(
-                                                  Failed
-                                                      $"`reap --repo %s{chore.Subject.Repo} --apply` exited %d{code}"
+                                                  Failed $"`reap --repo %s{chore.Subject.Repo} --apply` exited %d{code}"
                                               ))
-                                      | _ ->
-                                          reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
+                                      | _ -> reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
                                   | Some(field, value) ->
                                       match
                                           Board.boardWrite
@@ -1964,7 +2156,8 @@ module Client =
                 // The board rows in scope, no PRs (#641). #480 — `--repo` scopes to the checkout. These
                 // carry the ONE thing the off-board scan cannot: the In-progress COLUMN, which is the only
                 // fact that licenses an `unclaimed` verdict on a markerless item (work outside the protocol).
-                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+                let scoped =
+                    rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
 
                 // #979. `who` does not fail OPEN on an unrostered `--repo` the way `ready` did — the
                 // off-board fallback below scans `<owner>/<name>` directly, so a repo that does not
@@ -2034,8 +2227,7 @@ module Client =
                         |> Seq.sortBy (fun (o, r, n) -> o, r, n)
                         |> List.ofSeq
 
-                let isInProgress ref =
-                    inProgressRefs |> Set.contains ref
+                let isInProgress ref = inProgressRefs |> Set.contains ref
 
                 let results = ResizeArray<WhoRow>()
 
@@ -2269,10 +2461,7 @@ module Client =
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
                                         wt
                                 | Unclaimed ->
-                                    printfn
-                                        "  %-16s UNCLAIMED — In progress with NO claim marker%s"
-                                        row.Ref.Short
-                                        wt
+                                    printfn "  %-16s UNCLAIMED — In progress with NO claim marker%s" row.Ref.Short wt
                                 // .github#1668. NOT a variant spelling of UNCLAIMED: this row is the verb
                                 // declining to answer. The count goes in the line because "1 comment" and
                                 // "all 40 comments" are very different situations to walk into, and the
@@ -2419,243 +2608,256 @@ module Client =
     let reap (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
-            eprint
-                "fsgg-coord-engine: reap: --repo required (no git remote here, so the repo to reap is undefined)."
+            eprint "fsgg-coord-engine: reap: --repo required (no git remote here, so the repo to reap is undefined)."
 
             ExitError
         | Some repoName ->
 
-        // The board map, for the post-reap column restore. BEST-EFFORT: reap has already broken the lock by
-        // the time it restores, so a board it cannot resolve leaves the column alone and reports it, rather
-        // than a failure that would strand the freed item.
-        //
-        // LAZY, and #418 is why: a DRY RUN performs no restore, so it must not pay `bootstrap`'s two GraphQL
-        // points on the budget that dies first for a board it will never write. Resolving on first actual
-        // reset keeps the dry run — the form an operator runs to LOOK before deciding — free.
-        let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
+            // The board map, for the post-reap column restore. BEST-EFFORT: reap has already broken the lock by
+            // the time it restores, so a board it cannot resolve leaves the column alone and reports it, rather
+            // than a failure that would strand the freed item.
+            //
+            // LAZY, and #418 is why: a DRY RUN performs no restore, so it must not pay `bootstrap`'s two GraphQL
+            // points on the budget that dies first for a board it will never write. Resolving on first actual
+            // reset keeps the dry run — the form an operator runs to LOOK before deciding — free.
+            let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
 
-        match Reads.openIssues ctx.Transport ctx.Owner repoName with
-        | Error e -> fail e
-        | Ok issues ->
-            let mutable failure: Errors.IoError option = None
+            match Reads.openIssues ctx.Transport ctx.Owner repoName with
+            | Error e -> fail e
+            | Ok issues ->
+                let mutable failure: Errors.IoError option = None
 
-            // `reap` needs the NUMBER only: its subject is the lock, and the lock is a comment. The body
-            // rides along free and is not consulted, so its readability cannot change a reap decision.
-            for { Reads.OpenIssue.Number = number } in issues do
-                if failure.IsNone then
-                    let ref =
-                        { Owner = ctx.Owner
-                          Repo = repoName
-                          Number = number }
+                // `reap` needs the NUMBER only: its subject is the lock, and the lock is a comment. The body
+                // rides along free and is not consulted, so its readability cannot change a reap decision.
+                for { Reads.OpenIssue.Number = number } in issues do
+                    if failure.IsNone then
+                        let ref =
+                            { Owner = ctx.Owner
+                              Repo = repoName
+                              Number = number }
 
-                    // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
-                    match
-                        Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
-                        |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
-                    with
-                    | Error e -> failure <- Some e
-                    | Ok markers ->
-                        // A live winner is a claim reap may not touch. Only when NO winner is live but a
-                        // marker exists is the lowest-id marker a stale lock — reap's one candidate per item.
-                        match Reads.winner opts.LeaseMinutes markers with
-                        | Some _ -> ()
-                        | None ->
-                            match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
-                            | None -> ()
-                            | Some marker ->
-                                // #581: the lease lapsed — now ask whether the WORK did.
-                                match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
-                                | Error e -> failure <- Some e
-                                | Ok liveness ->
-                                    match Writes.reapable ref marker liveness with
-                                    | Error(Writes.WorkAlive pr) ->
-                                        // #697: refusing on the PR's mere EXISTENCE is right (#581), but the
-                                        // remedy that used to follow — "close it, then reap" — is a loaded
-                                        // gun pointed at the best work on the board. Read WHAT the PR says
-                                        // and tell the states apart: only ever advise closing the one that is
-                                        // genuinely abandoned (red/conflicted). The verdict is advisory — a
-                                        // `PrUnknown` chooses the "look yourself" wording, never a delete.
-                                        let idleM = marker.AgeSeconds / 60
-                                        let w = marker.Worker.Value
+                        // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
+                        match
+                            Reads.markerScan ctx.Transport ref.Owner ref.Repo ref.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan ref.Short)
+                        with
+                        | Error e -> failure <- Some e
+                        | Ok markers ->
+                            // A live winner is a claim reap may not touch. Only when NO winner is live but a
+                            // marker exists is the lowest-id marker a stale lock — reap's one candidate per item.
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | Some _ -> ()
+                            | None ->
+                                match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                                | None -> ()
+                                | Some marker ->
+                                    // #581: the lease lapsed — now ask whether the WORK did.
+                                    match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
+                                    | Error e -> failure <- Some e
+                                    | Ok liveness ->
+                                        match Writes.reapable ref marker liveness with
+                                        | Error(Writes.WorkAlive pr) ->
+                                            // #697: refusing on the PR's mere EXISTENCE is right (#581), but the
+                                            // remedy that used to follow — "close it, then reap" — is a loaded
+                                            // gun pointed at the best work on the board. Read WHAT the PR says
+                                            // and tell the states apart: only ever advise closing the one that is
+                                            // genuinely abandoned (red/conflicted). The verdict is advisory — a
+                                            // `PrUnknown` chooses the "look yourself" wording, never a delete.
+                                            let idleM = marker.AgeSeconds / 60
+                                            let w = marker.Worker.Value
 
-                                        match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
-                                        | PrGreen ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE."
-
-                                            eprint
-                                                "fsgg-coord-engine:   This work is FINISHED — the worker died between \"green\" and \"merge\", the window this protocol leaves open on every item. Do NOT close it: that destroys a reviewed, passing fix. LAND IT:"
-
-                                            eprint $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
-                                        | PrPending ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle and look again:"
-
-                                            eprint
-                                                $"fsgg-coord-engine:       scripts/fsgg-coord who --repo %s{repoName}        # green? then: scripts/fsgg-coord adopt %s{ref.Short}"
-                                        | PrUnknown ->
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
-                                        | (PrMerged | PrClosed) as verdict ->
-                                            // Structurally unreachable: this arm is reached through
-                                            // `Writes.WorkAlivePr`, which names an OPEN PR. Handled anyway,
-                                            // and handled SAFELY — a merged PR is finished work, so the one
-                                            // thing this must never do is advise closing it.
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, stamp the item: scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pr}"
-                                        | (PrRed | PrConflicted) as verdict ->
-                                            // The one genuinely-abandoned case — and the ONLY one that may
-                                            // advise closing. A conflicted or red PR is not finished work.
-                                            eprint
-                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (%s{Landable.name verdict}). The lease lapsed; the WORK did not."
-
-                                            eprint
-                                                $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
-                                    | Error Writes.WorkAliveBranch ->
-                                        // #1055: no PR yet, but a pushed `item/<n>-*` branch — proof of life
-                                        // during §3, before §5 opens the PR. There is nothing to `adopt` (a
-                                        // branch is not a landable PR), so this refuses without the land/close
-                                        // advice: the worker is likely still writing, or a REST outage expired
-                                        // the lease mid-work and they have not re-claimed yet.
-                                        let idleM = marker.AgeSeconds / 60
-                                        let w = marker.Worker.Value
-
-                                        eprint
-                                            $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), a pushed item/%d{ref.Number}-* branch has NO PR yet. The lease lapsed; the WORK did not (#1055/#581)."
-
-                                        eprint
-                                            "fsgg-coord-engine:   A branch with no PR is work IN PROGRESS, not an abandoned one — the worker may be mid-build, or a REST outage expired the lease before they opened the PR. Nothing to adopt (there is no PR to land). Leave it: they re-claim, or push the PR."
-                                    | Error(Writes.Undetermined why) ->
-                                        eprint
-                                            $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
-                                    | Ok reapable ->
-                                        if not opts.Apply then
-                                            // DRY RUN — say what --apply would collect, and touch nothing.
-                                            printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
-                                        else
-                                            match Writes.reap ctx.Transport opts.LeaseMinutes reapable with
-                                            | Error e ->
-                                                // A FAILED DELETE IS REPORTED, NOT SWALLOWED, and the scan
-                                                // moves on to the next item. The marker is still there, so the
-                                                // item is still HELD — the board is left untouched and the
-                                                // worker is NOT told it was released. `reap` deletes BEFORE it
-                                                // would ever notify (and this engine's reap posts no notify at
-                                                // all): a notify ahead of a failed delete would tell a worker
-                                                // to stop while its marker still holds the item for a full
-                                                // lease — released to its owner, held against everyone else,
-                                                // and nothing clears it. One failed collect is not fatal to
-                                                // the whole reap; the other items still collect.
+                                            match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
+                                            | PrGreen ->
                                                 eprint
-                                                    $"fsgg-coord-engine: FAILED  %s{ref.Short}  worker %s{marker.Worker.Value}  — could not remove the marker (%s{Errors.explain e}); board left untouched, worker not notified."
-                                            | Ok(Writes.RenewedSinceScan ageSeconds) ->
-                                                // The holder HEARTBEATED between the scan and this delete: the
-                                                // lock is live again, so reap SKIPS it rather than break a
-                                                // lease that was renewed under it — the one way reap could
-                                                // itself cause the double-hold it exists to clean up.
-                                                printfn
-                                                    "skipped  %s  worker %s  — renewed since the scan (%dm), still alive"
-                                                    ref.Short
-                                                    marker.Worker.Value
-                                                    (ageSeconds / 60)
-                                            | Ok Writes.AlreadyGone ->
-                                                // A peer collected the same stale marker first — nothing left
-                                                // to break, which is a collector's goal state, not a failure.
-                                                printfn
-                                                    "skipped  %s  worker %s  — marker already gone"
-                                                    ref.Short
-                                                    marker.Worker.Value
-                                            | Ok Writes.Reaped ->
-                                                printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE."
 
-                                                // Restore the freed column — best-effort, the lock is already
-                                                // gone. An OFF-BOARD claim has no board item to reset, and reap
-                                                // must not claim a reset it never performed (case 25).
-                                                match board.Value with
-                                                | Ok bm ->
-                                                    match
-                                                        Board.itemIdCached ctx.Transport bm ref.Owner ref.Repo ref.Number
-                                                    with
-                                                    | Ok(Some _) ->
-                                                        // #331's read, in `reap`'s copy — because the reaper
-                                                        // collects a LEASE and knows nothing about whether the
-                                                        // item became startable. A worker whose lease lapsed on
-                                                        // an item it had deliberately marked `Blocked` had that
-                                                        // column reset on its way out, which is #331 with a
-                                                        // dead worker instead of a live one. bash asked ONE
-                                                        // question here (`unclaim_status`); so does this.
+                                                eprint
+                                                    "fsgg-coord-engine:   This work is FINISHED — the worker died between \"green\" and \"merge\", the window this protocol leaves open on every item. Do NOT close it: that destroys a reviewed, passing fix. LAND IT:"
+
+                                                eprint
+                                                    $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
+                                            | PrPending ->
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
+
+                                                eprint
+                                                    "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle and look again:"
+
+                                                eprint
+                                                    $"fsgg-coord-engine:       scripts/fsgg-coord who --repo %s{repoName}        # green? then: scripts/fsgg-coord adopt %s{ref.Short}"
+                                            | PrUnknown ->
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
+                                            | (PrMerged | PrClosed) as verdict ->
+                                                // Structurally unreachable: this arm is reached through
+                                                // `Writes.WorkAlivePr`, which names an OPEN PR. Handled anyway,
+                                                // and handled SAFELY — a merged PR is finished work, so the one
+                                                // thing this must never do is advise closing it.
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is %s{Landable.name verdict}, not open."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   The claim outlived its PR. Do NOT close anything — look at PR #%d{pr} and, if it MERGED, stamp the item: scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pr}"
+                                            | (PrRed | PrConflicted) as verdict ->
+                                                // The one genuinely-abandoned case — and the ONLY one that may
+                                                // advise closing. A conflicted or red PR is not finished work.
+                                                eprint
+                                                    $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (%s{Landable.name verdict}). The lease lapsed; the WORK did not."
+
+                                                eprint
+                                                    $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
+                                        | Error Writes.WorkAliveBranch ->
+                                            // #1055: no PR yet, but a pushed `item/<n>-*` branch — proof of life
+                                            // during §3, before §5 opens the PR. There is nothing to `adopt` (a
+                                            // branch is not a landable PR), so this refuses without the land/close
+                                            // advice: the worker is likely still writing, or a REST outage expired
+                                            // the lease mid-work and they have not re-claimed yet.
+                                            let idleM = marker.AgeSeconds / 60
+                                            let w = marker.Worker.Value
+
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), a pushed item/%d{ref.Number}-* branch has NO PR yet. The lease lapsed; the WORK did not (#1055/#581)."
+
+                                            eprint
+                                                "fsgg-coord-engine:   A branch with no PR is work IN PROGRESS, not an abandoned one — the worker may be mid-build, or a REST outage expired the lease before they opened the PR. Nothing to adopt (there is no PR to land). Leave it: they re-claim, or push the PR."
+                                        | Error(Writes.Undetermined why) ->
+                                            eprint
+                                                $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
+                                        | Ok reapable ->
+                                            if not opts.Apply then
+                                                // DRY RUN — say what --apply would collect, and touch nothing.
+                                                printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
+                                            else
+                                                match Writes.reap ctx.Transport opts.LeaseMinutes reapable with
+                                                | Error e ->
+                                                    // A FAILED DELETE IS REPORTED, NOT SWALLOWED, and the scan
+                                                    // moves on to the next item. The marker is still there, so the
+                                                    // item is still HELD — the board is left untouched and the
+                                                    // worker is NOT told it was released. `reap` deletes BEFORE it
+                                                    // would ever notify (and this engine's reap posts no notify at
+                                                    // all): a notify ahead of a failed delete would tell a worker
+                                                    // to stop while its marker still holds the item for a full
+                                                    // lease — released to its owner, held against everyone else,
+                                                    // and nothing clears it. One failed collect is not fatal to
+                                                    // the whole reap; the other items still collect.
+                                                    eprint
+                                                        $"fsgg-coord-engine: FAILED  %s{ref.Short}  worker %s{marker.Worker.Value}  — could not remove the marker (%s{Errors.explain e}); board left untouched, worker not notified."
+                                                | Ok(Writes.RenewedSinceScan ageSeconds) ->
+                                                    // The holder HEARTBEATED between the scan and this delete: the
+                                                    // lock is live again, so reap SKIPS it rather than break a
+                                                    // lease that was renewed under it — the one way reap could
+                                                    // itself cause the double-hold it exists to clean up.
+                                                    printfn
+                                                        "skipped  %s  worker %s  — renewed since the scan (%dm), still alive"
+                                                        ref.Short
+                                                        marker.Worker.Value
+                                                        (ageSeconds / 60)
+                                                | Ok Writes.AlreadyGone ->
+                                                    // A peer collected the same stale marker first — nothing left
+                                                    // to break, which is a collector's goal state, not a failure.
+                                                    printfn
+                                                        "skipped  %s  worker %s  — marker already gone"
+                                                        ref.Short
+                                                        marker.Worker.Value
+                                                | Ok Writes.Reaped ->
+                                                    printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
+
+                                                    // Restore the freed column — best-effort, the lock is already
+                                                    // gone. An OFF-BOARD claim has no board item to reset, and reap
+                                                    // must not claim a reset it never performed (case 25).
+                                                    match board.Value with
+                                                    | Ok bm ->
                                                         match
-                                                            Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                            Board.itemIdCached
+                                                                ctx.Transport
+                                                                bm
+                                                                ref.Owner
+                                                                ref.Repo
+                                                                ref.Number
                                                         with
-                                                        // A column we could not read is not one we may
-                                                        // overwrite (#266, aimed at a writer). Never fatal —
-                                                        // the lock is already gone.
-                                                        | Error e ->
-                                                            printfn
-                                                                "  column UNREADABLE (%s) — marker cleared, column left ALONE:  scripts/fsgg-coord set-field %s Status '<column>'"
-                                                                (Errors.explain e)
-                                                                ref.Short
-                                                        | Ok live ->
-
-                                                        match unclaimColumn live reapable.PreviousStatus with
-                                                        | Preserve(Some s) ->
-                                                            printfn
-                                                                "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
-                                                                (statusWireName s)
-                                                        | Preserve None -> printfn "  no column set (nothing to reset)"
-                                                        | ResetTo restoreTo ->
-
-                                                        let name = statusWireName restoreTo
-
-                                                        if name <> "" then
-                                                            // #867: `release`'s defect, in `reap`'s copy —
-                                                            // the outcome was discarded, so "best-effort"
-                                                            // meant "unmentioned". Case 25's own rule is that
-                                                            // reap must not claim a reset it never performed;
-                                                            // a silent `Deferred` or failure claims exactly
-                                                            // that, by saying nothing. Still never fatal: the
-                                                            // lock is already gone.
+                                                        | Ok(Some _) ->
+                                                            // #331's read, in `reap`'s copy — because the reaper
+                                                            // collects a LEASE and knows nothing about whether the
+                                                            // item became startable. A worker whose lease lapsed on
+                                                            // an item it had deliberately marked `Blocked` had that
+                                                            // column reset on its way out, which is #331 with a
+                                                            // dead worker instead of a live one. bash asked ONE
+                                                            // question here (`unclaim_status`); so does this.
                                                             match
-                                                                Board.boardWrite
+                                                                Board.itemStatus
                                                                     ctx.Transport
                                                                     bm
                                                                     ref.Owner
                                                                     ref.Repo
                                                                     ref.Number
-                                                                    "Status"
-                                                                    (Board.Set name)
-                                                                    marker.Worker.Value
                                                             with
-                                                            | Ok Board.Written -> printfn "  reset to %s" name
-                                                            | Ok Board.Deferred ->
-                                                                printfn
-                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
-                                                                    name
-                                                            | Ok Board.NotOnBoard ->
-                                                                printfn "  not on board (marker cleared; nothing to reset)"
+                                                            // A column we could not read is not one we may
+                                                            // overwrite (#266, aimed at a writer). Never fatal —
+                                                            // the lock is already gone.
                                                             | Error e ->
                                                                 printfn
-                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
-                                                                    name
+                                                                    "  column UNREADABLE (%s) — marker cleared, column left ALONE:  scripts/fsgg-coord set-field %s Status '<column>'"
                                                                     (Errors.explain e)
                                                                     ref.Short
-                                                                    name
-                                                    | Ok None ->
-                                                        printfn "  not on board (marker cleared; nothing to reset)"
-                                                    | Error _ -> ()
-                                                | Error _ -> ()
+                                                            | Ok live ->
 
-            match failure with
-            | Some e -> fail e
-            | None -> ExitGreen
+                                                                match unclaimColumn live reapable.PreviousStatus with
+                                                                | Preserve(Some s) ->
+                                                                    printfn
+                                                                        "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
+                                                                        (statusWireName s)
+                                                                | Preserve None ->
+                                                                    printfn "  no column set (nothing to reset)"
+                                                                | ResetTo restoreTo ->
+
+                                                                    let name = statusWireName restoreTo
+
+                                                                    if name <> "" then
+                                                                        // #867: `release`'s defect, in `reap`'s copy —
+                                                                        // the outcome was discarded, so "best-effort"
+                                                                        // meant "unmentioned". Case 25's own rule is that
+                                                                        // reap must not claim a reset it never performed;
+                                                                        // a silent `Deferred` or failure claims exactly
+                                                                        // that, by saying nothing. Still never fatal: the
+                                                                        // lock is already gone.
+                                                                        match
+                                                                            Board.boardWrite
+                                                                                ctx.Transport
+                                                                                bm
+                                                                                ref.Owner
+                                                                                ref.Repo
+                                                                                ref.Number
+                                                                                "Status"
+                                                                                (Board.Set name)
+                                                                                marker.Worker.Value
+                                                                        with
+                                                                        | Ok Board.Written ->
+                                                                            printfn "  reset to %s" name
+                                                                        | Ok Board.Deferred ->
+                                                                            printfn
+                                                                                "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
+                                                                                name
+                                                                        | Ok Board.NotOnBoard ->
+                                                                            printfn
+                                                                                "  not on board (marker cleared; nothing to reset)"
+                                                                        | Error e ->
+                                                                            printfn
+                                                                                "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
+                                                                                name
+                                                                                (Errors.explain e)
+                                                                                ref.Short
+                                                                                name
+                                                        | Ok None ->
+                                                            printfn "  not on board (marker cleared; nothing to reset)"
+                                                        | Error _ -> ()
+                                                    | Error _ -> ()
+
+                match failure with
+                | Some e -> fail e
+                | None -> ExitGreen
 
     /// `pendingBoardWrites` is the DEPTH OF THE DEFERRAL QUEUE — the writes `boardWrite` took on an
     /// exhausted budget and `flush` will replay (#862). It reads a local file and spends nothing, which is
@@ -2699,7 +2901,10 @@ module Client =
                 // healthy-looking number in the other, concluded the engine was tripping a counter of its
                 // own. It reports ONE bucket, read from GitHub's own free `/rate_limit`, and the claim lock
                 // does not live in it. Neither does a secondary limit, which never appears there at all.
-                printfn "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining" meter.Remaining meter.Limit
+                printfn
+                    "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining"
+                    meter.Remaining
+                    meter.Limit
 
                 printfn
                     "REST requests: NOT REPORTED here — /rate_limit's `core` figure disagrees with the counter real requests are billed against on this account, and a SECONDARY (abuse-detection) limit never appears in it. The claim lock lives on REST (ADR-0034 §3), so a healthy line above is not evidence that `claim`/`take`/`who` will run."
@@ -2710,14 +2915,16 @@ module Client =
                 | None -> printfn "pending board writes: UNKNOWN — the deferral queue could not be read"
 
             if meter.Remaining < Budget.WarnBelow then
-                eprint $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
+                eprint
+                    $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
 
             // A QUEUE WITH ENTRIES IN IT IS NOT AN ERROR — it is the state `flush` exists for — so this
             // stays green and merely says so. Exiting non-zero here would make `budget`, the one free
             // pre-flight read the recipes tell you to START with, fail on a board that is merely mid-repair.
             match pending with
             | Some n when n > 0 ->
-                eprint $"fsgg-coord-engine: NOTE — %d{n} board write(s) are queued and have NOT landed; `flush` replays them (#862)."
+                eprint
+                    $"fsgg-coord-engine: NOTE — %d{n} board write(s) are queued and have NOT landed; `flush` replays them (#862)."
             | _ -> ()
 
             ExitGreen
@@ -2803,7 +3010,10 @@ module Client =
                 // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
                 // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
                 let heldCheck =
-                    if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    if opts.Force then
+                        Ok []
+                    else
+                        heldElsewhere ctx opts.LeaseMinutes w.Id ref
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e
@@ -2813,18 +3023,19 @@ module Client =
                     eprint
                         $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
 
-                    eprint "  Finish or drop the item you hold:  scripts/fsgg-coord done <issue> --flip   (or: release <issue>)"
+                    eprint
+                        "  Finish or drop the item you hold:  scripts/fsgg-coord done <issue> --flip   (or: release <issue>)"
 
                     // #1620: `--force` now carries a SECOND, destructive power — it STEALS a live claim.
                     // This line points a worker at the flag for the #516 override alone, so it has to say
                     // what else it will do, or it sends somebody to delete a lock they never meant to touch.
                     // That is exactly the message-vs-behaviour disagreement #1620 exists to close, and it
                     // would have been re-created here, in the one place that actively recommends the flag.
-                    eprint
-                        $"  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
+                    eprint $"  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
 
                     eprint
                         $"  NOTE: --force ALSO STEALS a live claim — against an item another worker is holding it will DELETE their lock (#1620). On a FREE item it does nothing but lift this refusal."
+
                     ExitRed
                 | Ok [] ->
                     // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
@@ -2865,7 +3076,9 @@ module Client =
                     // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
                     let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
                         let markerObserved, markerId =
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
+                            match
+                                Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref
+                            with
                             | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
                             | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
                             | Ok Writes.DoesNotHold
@@ -2881,19 +3094,25 @@ module Client =
                             | Ok(Writes.ImpersonatesHolder _)
                             | Ok(Writes.TwinHolds _) -> false, None
                             | Error e ->
-                                eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                eprint
+                                    $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                 false, None
 
                         let status, statusRead =
                             match board.Force() with
                             | Error e ->
-                                eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                eprint
+                                    $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                 None, "failed"
                             | Ok b ->
                                 match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
                                 | Ok s -> s |> Option.map statusWireName, "observed"
                                 | Error e ->
-                                    eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                    eprint
+                                        $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+
                                     None, "failed"
 
                         let statusWrite =
@@ -2940,8 +3159,16 @@ module Client =
                                 printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
                             else
                                 let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
-                                printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
-                                eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
+
+                                printfn
+                                    "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)"
+                                    humanPrefix
+                                    markerObserved
+                                    shownStatus
+                                    statusWrite
+
+                                eprint
+                                    $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
 
                         boardWriteNote ref "Status" "In progress" statusOutcome
                         KitDigest.declaredWarn ctx.Transport ref
@@ -2976,7 +3203,16 @@ module Client =
                     let setInProgress () =
                         match board.Force() with
                         | Error e -> Error e
-                        | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                        | Ok b ->
+                            Board.boardWrite
+                                ctx.Transport
+                                b
+                                ref.Owner
+                                ref.Repo
+                                ref.Number
+                                "Status"
+                                (Board.Set "In progress")
+                                w.Id
 
                     let force =
                         if opts.Force then
@@ -3081,9 +3317,11 @@ module Client =
                             eprint
                                 $"fsgg-coord-engine: %s{ref.Short} was CLEARED by --force, and then %s{holder.Value} won the open race for it — the steal displaced the previous holder but did NOT give you the item."
 
-                            eprint "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
+                            eprint
+                                "  Retry to race for it, or leave it: a fresh holder is a working worker, not the dead one you came to recover."
                         else
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
 
                         ExitRed
                     | Ok(Writes.Twin theirs) ->
@@ -3095,7 +3333,9 @@ module Client =
                         eprint
                             $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
 
-                        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                        eprint
+                            "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+
                         ExitRed
                     | Ok(Writes.Impersonates(derived, named)) ->
                         // #1646: `claim` is `Held`'s OTHER door, and the re-claim arm walks through it on the
@@ -3104,10 +3344,14 @@ module Client =
                         // holder's lease and reported the item held. Same refusal as the other four verbs.
                         impersonationRefusal "claim" ref derived named
                     | Ok(Writes.Undecided reason) ->
-                        eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+                        eprint
+                            $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+
                         ExitRed
                     | Ok Writes.BlockedByUnparseableMarker ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+                        eprint
+                            $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+
                         ExitRed
 
     /// #697 — take over an ORPHAN (a stale claim whose PR is FINISHED) and land it.
@@ -3261,8 +3505,7 @@ module Client =
                                     eprint
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is ALREADY MERGED — there is nothing to adopt, and nothing to land. The work is done; what is missing is the STAMP."
 
-                                    eprint
-                                        $"  scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pnum}"
+                                    eprint $"  scripts/fsgg-coord done %s{ref.Short} --flip --pr %d{pnum}"
 
                                     ExitRed
                                 | PrClosed ->
@@ -3356,8 +3599,10 @@ module Client =
                             let rec poll (i: int) (prev: int) : PrState * Reads.Unmet list =
                                 let v, n, missing = read ()
 
-                                if Landable.settled v n prev then v, missing
-                                elif i >= tries then v, missing
+                                if Landable.settled v n prev then
+                                    v, missing
+                                elif i >= tries then
+                                    v, missing
                                 else
                                     if interval > 0 then
                                         System.Threading.Thread.Sleep(interval * 1000)
@@ -3542,7 +3787,15 @@ module Client =
                     Error ExitError
                 | Ok board ->
                     match
-                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id
+                        Board.boardWrite
+                            ctx.Transport
+                            board
+                            ref.Owner
+                            ref.Repo
+                            ref.Number
+                            "Blocked by"
+                            (Board.Set canonical)
+                            w.Id
                     with
                     | Ok Board.Written -> Ok()
                     | Ok Board.Deferred ->
@@ -3551,7 +3804,9 @@ module Client =
 
                         Error Errors.ExRate
                     | Ok Board.NotOnBoard ->
-                        eprint $"fsgg-coord-engine: release --blocked-by: %s{ref.Short} is not an item on this board. Nothing released."
+                        eprint
+                            $"fsgg-coord-engine: release --blocked-by: %s{ref.Short} is not an item on this board. Nothing released."
+
                         Error ExitError
                     | Error e ->
                         eprint
@@ -3673,171 +3928,188 @@ module Client =
         | _, Error c -> c
         | Ok arg, Ok w ->
 
-        match requestedStatus opts with
-        | Error c -> c
-        | Ok requested ->
-            match parseRef ctx arg with
-            | Error msg ->
-                eprint $"fsgg-coord-engine: %s{msg}"
-                ExitError
-            | Ok ref ->
-
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
-                | Error e -> fail e
-                | Ok Writes.DoesNotHold ->
-                    eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
-                    noteWorkerDisagreement w
+            match requestedStatus opts with
+            | Error c -> c
+            | Ok requested ->
+                match parseRef ctx arg with
+                | Error msg ->
+                    eprint $"fsgg-coord-engine: %s{msg}"
                     ExitError
-                // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
-                // a lock they are working behind — the one outcome this verb must never produce.
-                | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
-                // #1646: the marker really is the NAMED worker's, and we are not them. `release` is the most
-                // destructive of the four — it DELETES the lock — and it is the verb #1620's decision named as
-                // the impersonation route that had to be closed.
-                | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
-                | Ok(Writes.Holds held) ->
+                | Ok ref ->
 
-                // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
-                // AFTER the holder check above and BEFORE the lock drops below.
-                //
-                // THE ORDERING RELATIVE TO THE HOLDER CHECK IS LOAD-BEARING (round-1 review). A caller who
-                // does NOT hold this item still reaches `release <ref> --blocked-by <x>` on argv — `release`
-                // takes no lock to attempt the write, `--blocked-by` doesn't gate on holding — so a write
-                // BEFORE `Writes.verifyHeld` would land a live board mutation from a non-holder even though
-                // the release itself then correctly refuses with "does not hold". `release`'s whole contract
-                // is that it only touches rows it holds; that is worth more than the field write landing a
-                // few lines earlier. So both go HERE, inside `Ok(Writes.Holds held)`, after the ONLY check
-                // that establishes we may touch this row at all — never ahead of it.
-                match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
-                | Error c -> c
-                | Ok() ->
-
-                match requireCoherentParkIfBlocked ctx ref requested with
-                | Error c -> c
-                | Ok() ->
-
-                    match Writes.release ctx.Transport held with
+                    match
+                        Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                    with
                     | Error e -> fail e
-                    | Ok previousStatus ->
-                        // THE LEASE IS ALREADY DROPPED, and everything below runs in that shadow. The marker is
-                        // the lock, so a board we cannot read or write from here leaves a column wrong — never a
-                        // claim stranded. That ordering is why the live read below may fail without being fatal.
+                    | Ok Writes.DoesNotHold ->
+                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
+                        noteWorkerDisagreement w
+                        ExitError
+                    // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
+                    // a lock they are working behind — the one outcome this verb must never produce.
+                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
+                    // #1646: the marker really is the NAMED worker's, and we are not them. `release` is the most
+                    // destructive of the four — it DELETES the lock — and it is the verb #1620's decision named as
+                    // the impersonation route that had to be closed.
+                    | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
+                    | Ok(Writes.Holds held) ->
+
+                        // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
+                        // AFTER the holder check above and BEFORE the lock drops below.
                         //
-                        // The board is resolved ONCE and shared by the live read and the write. `bootstrapCached`
-                        // is the same call both would make; resolving it twice would spend #418's budget twice
-                        // for one answer.
-                        let board = Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+                        // THE ORDERING RELATIVE TO THE HOLDER CHECK IS LOAD-BEARING (round-1 review). A caller who
+                        // does NOT hold this item still reaches `release <ref> --blocked-by <x>` on argv — `release`
+                        // takes no lock to attempt the write, `--blocked-by` doesn't gate on holding — so a write
+                        // BEFORE `Writes.verifyHeld` would land a live board mutation from a non-holder even though
+                        // the release itself then correctly refuses with "does not hold". `release`'s whole contract
+                        // is that it only touches rows it holds; that is worth more than the field write landing a
+                        // few lines earlier. So both go HERE, inside `Ok(Writes.Holds held)`, after the ONLY check
+                        // that establishes we may touch this row at all — never ahead of it.
+                        match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
+                        | Error c -> c
+                        | Ok() ->
 
-                        // WHAT THE COLUMN BECOMES.
-                        //
-                        // #867: an explicit `--status` IS the caller naming the deliberate column, so it beats
-                        // both the recorded restore and the `Ready` fallback — that is #331/#481's precedence,
-                        // and the skill has documented it since. The port dropped the flag on the floor:
-                        // `opts.Status` was never consulted, so the documented way to abandon an item into a
-                        // column was a no-op that exited 0. It is how #732 kept coming back — four workers
-                        // correctly parked it `Blocked`, and the board kept saying `Ready` (#888).
-                        //
-                        // It also spends NO live read: the caller stated the end state, so there is no default
-                        // left to derive, and the read exists only to derive the default.
-                        let decision =
-                            match requested with
-                            | Some s -> Ok(ResetTo s)
-                            | None ->
-                                // #331's read. The recorded column answers "what did the claim overwrite?"; it
-                                // CANNOT answer "did somebody choose a column since?" — the marker was written
-                                // at claim time and never updated. Only the live column knows, so `release`
-                                // asks it rather than reverting a `Blocked` the protocol itself told the worker
-                                // to set.
-                                // The two ways the answer can be missing are REPORTED APART, because they send
-                                // the reader somewhere different: an unresolvable board is an auth/plumbing
-                                // problem, an unreadable column is this item's own read.
-                                match board with
-                                | Error e -> Error $"the board could not be resolved (%s{Errors.explain e})"
-                                | Ok bm ->
-                                    match Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number with
-                                    | Ok live -> Ok(unclaimColumn live previousStatus)
-                                    // A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. #266's
-                                    // fail-closed rule, aimed at a WRITER: the obvious read-compare-write fails
-                                    // OPEN here — treat an unreadable column as "not In progress" and you
-                                    // preserve blindly; treat it as "In progress" and you revert a deliberate
-                                    // column on a transient 502. Neither is knowledge. So the column is left
-                                    // alone and SAID SO, naming the repair.
-                                    | Error e -> Error $"its current column could not be read (%s{Errors.explain e})"
+                            match requireCoherentParkIfBlocked ctx ref requested with
+                            | Error c -> c
+                            | Ok() ->
 
-                        match decision with
-                        | Error why ->
-                            eprint
-                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  scripts/fsgg-coord set-field %s{ref.Short} Status '<column>'"
+                                match Writes.release ctx.Transport held with
+                                | Error e -> fail e
+                                | Ok previousStatus ->
+                                    // THE LEASE IS ALREADY DROPPED, and everything below runs in that shadow. The marker is
+                                    // the lock, so a board we cannot read or write from here leaves a column wrong — never a
+                                    // claim stranded. That ordering is why the live read below may fail without being fatal.
+                                    //
+                                    // The board is resolved ONCE and shared by the live read and the write. `bootstrapCached`
+                                    // is the same call both would make; resolving it twice would spend #418's budget twice
+                                    // for one answer.
+                                    let board = Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
 
-                            printfn "released %s" ref.Short
-                            ExitGreen
-                        | Ok(Preserve live) ->
-                            // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
-                            // and stdout must not imply `release` put it there.
-                            match live with
-                            | Some s -> printfn "released %s (column left at %s)" ref.Short (statusWireName s)
-                            // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
-                            // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
-                            // column did NOT land, and stderr says why", so printing one here would raise that
-                            // alarm with nothing behind it — and it would lose the plain "not an item on this
-                            // board" that the pre-#331 write path reported. `itemStatus` cannot tell the two
-                            // apart (`Ok None` is both), so this states what is TRUE of both rather than
-                            // guessing which.
-                            | None -> printfn "released %s (no column to reset — not on this board, or no Status set)" ref.Short
+                                    // WHAT THE COLUMN BECOMES.
+                                    //
+                                    // #867: an explicit `--status` IS the caller naming the deliberate column, so it beats
+                                    // both the recorded restore and the `Ready` fallback — that is #331/#481's precedence,
+                                    // and the skill has documented it since. The port dropped the flag on the floor:
+                                    // `opts.Status` was never consulted, so the documented way to abandon an item into a
+                                    // column was a no-op that exited 0. It is how #732 kept coming back — four workers
+                                    // correctly parked it `Blocked`, and the board kept saying `Ready` (#888).
+                                    //
+                                    // It also spends NO live read: the caller stated the end state, so there is no default
+                                    // left to derive, and the read exists only to derive the default.
+                                    let decision =
+                                        match requested with
+                                        | Some s -> Ok(ResetTo s)
+                                        | None ->
+                                            // #331's read. The recorded column answers "what did the claim overwrite?"; it
+                                            // CANNOT answer "did somebody choose a column since?" — the marker was written
+                                            // at claim time and never updated. Only the live column knows, so `release`
+                                            // asks it rather than reverting a `Blocked` the protocol itself told the worker
+                                            // to set.
+                                            // The two ways the answer can be missing are REPORTED APART, because they send
+                                            // the reader somewhere different: an unresolvable board is an auth/plumbing
+                                            // problem, an unreadable column is this item's own read.
+                                            match board with
+                                            | Error e -> Error $"the board could not be resolved (%s{Errors.explain e})"
+                                            | Ok bm ->
+                                                match
+                                                    Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                with
+                                                | Ok live -> Ok(unclaimColumn live previousStatus)
+                                                // A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. #266's
+                                                // fail-closed rule, aimed at a WRITER: the obvious read-compare-write fails
+                                                // OPEN here — treat an unreadable column as "not In progress" and you
+                                                // preserve blindly; treat it as "In progress" and you revert a deliberate
+                                                // column on a transient 502. Neither is knowledge. So the column is left
+                                                // alone and SAID SO, naming the repair.
+                                                | Error e ->
+                                                    Error $"its current column could not be read (%s{Errors.explain e})"
 
-                            ExitGreen
-                        | Ok(ResetTo restoreTo) ->
+                                    match decision with
+                                    | Error why ->
+                                        eprint
+                                            $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  scripts/fsgg-coord set-field %s{ref.Short} Status '<column>'"
 
-                        let name = statusWireName restoreTo
+                                        printfn "released %s" ref.Short
+                                        ExitGreen
+                                    | Ok(Preserve live) ->
+                                        // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
+                                        // and stdout must not imply `release` put it there.
+                                        match live with
+                                        | Some s ->
+                                            printfn "released %s (column left at %s)" ref.Short (statusWireName s)
+                                        // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
+                                        // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
+                                        // column did NOT land, and stderr says why", so printing one here would raise that
+                                        // alarm with nothing behind it — and it would lose the plain "not an item on this
+                                        // board" that the pre-#331 write path reported. `itemStatus` cannot tell the two
+                                        // apart (`Ok None` is both), so this states what is TRUE of both rather than
+                                        // guessing which.
+                                        | None ->
+                                            printfn
+                                                "released %s (no column to reset — not on this board, or no Status set)"
+                                                ref.Short
 
-                        // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
-                        // failed column must not red the command — but "not fatal" and "not mentioned" are
-                        // different things, and only the second shipped: `|> ignore` discarded all four
-                        // outcomes directly beneath a comment promising they were reported. `Deferred` is the
-                        // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
-                        // on its own (#510/#878), so a silent defer is a column that never lands.
-                        let landed =
-                            match board with
-                            | Ok board when name <> "" ->
-                                match
-                                    Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
-                                with
-                                | Ok Board.Written -> true
-                                | Ok Board.Deferred ->
-                                    eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
+                                        ExitGreen
+                                    | Ok(ResetTo restoreTo) ->
 
-                                    false
-                                | Ok Board.NotOnBoard ->
-                                    eprint
-                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+                                        let name = statusWireName restoreTo
 
-                                    false
-                                | Error e ->
-                                    eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+                                        // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
+                                        // failed column must not red the command — but "not fatal" and "not mentioned" are
+                                        // different things, and only the second shipped: `|> ignore` discarded all four
+                                        // outcomes directly beneath a comment promising they were reported. `Deferred` is the
+                                        // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
+                                        // on its own (#510/#878), so a silent defer is a column that never lands.
+                                        let landed =
+                                            match board with
+                                            | Ok board when name <> "" ->
+                                                match
+                                                    Board.boardWrite
+                                                        ctx.Transport
+                                                        board
+                                                        ref.Owner
+                                                        ref.Repo
+                                                        ref.Number
+                                                        "Status"
+                                                        (Board.Set name)
+                                                        w.Id
+                                                with
+                                                | Ok Board.Written -> true
+                                                | Ok Board.Deferred ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
 
-                                    false
-                            | Error e ->
-                                eprint
-                                    $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
+                                                    false
+                                                | Ok Board.NotOnBoard ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
 
-                                false
-                            | Ok _ -> false
+                                                    false
+                                                | Error e ->
+                                                    eprint
+                                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
 
-                        // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
-                        // what let the ignored `--status` look like it had worked — but a line that names the
-                        // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
-                        // or failed write it asserts, on stdout and with a green exit, a column the board does
-                        // not hold. stderr already said otherwise, and a caller that reads one of the two
-                        // reads stdout. So stdout states only what is true; the reason it is not true is on
-                        // stderr, immediately above.
-                        if landed then
-                            printfn "released %s → %s" ref.Short name
-                        else
-                            printfn "released %s" ref.Short
+                                                    false
+                                            | Error e ->
+                                                eprint
+                                                    $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
 
-                        ExitGreen
+                                                false
+                                            | Ok _ -> false
+
+                                        // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
+                                        // what let the ignored `--status` look like it had worked — but a line that names the
+                                        // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
+                                        // or failed write it asserts, on stdout and with a green exit, a column the board does
+                                        // not hold. stderr already said otherwise, and a caller that reads one of the two
+                                        // reads stdout. So stdout states only what is true; the reason it is not true is on
+                                        // stderr, immediately above.
+                                        if landed then
+                                            printfn "released %s → %s" ref.Short name
+                                        else
+                                            printfn "released %s" ref.Short
+
+                                        ExitGreen
 
     let heartbeat (ctx: Context) (opts: Options) : int =
         match oneArg opts "heartbeat: an issue ref", worker opts with
@@ -3849,7 +4121,9 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                match
+                    Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                with
                 | Error e -> fail e
                 // #1646: `heartbeat` is the quiet one — it RENEWS another worker's lease, so an impersonation
                 // here keeps their item alive under our control while they are told nothing. It is refused
@@ -3878,7 +4152,8 @@ module Client =
                             // heartbeats successfully is a worker that never learns it was displaced. Name
                             // the possibility, because "held by someone else" reads as a mistake of ours,
                             // and a steal is not.
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is held by %s{m.Worker.Value}, not %s{w.Id} — STOP working it, or reap it."
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} is held by %s{m.Worker.Value}, not %s{w.Id} — STOP working it, or reap it."
 
                             eprint
                                 $"  If you DID hold it, your claim was taken (`claim --force`) — check `inbox` for the notice, and do not push against %s{ref.Short}."
@@ -3886,7 +4161,8 @@ module Client =
                             // An EXPIRED lease needs no `--force`: a plain `claim` COLLECTS the stale marker
                             // it claims over. `--force` steals a LIVE claim (#1620), which this is not, and
                             // advertising it here taught workers to reach for the steal by default.
-                            eprint $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
+                            eprint
+                                $"fsgg-coord-engine: %s{w.Id}'s lease on %s{ref.Short} has EXPIRED and cannot be renewed in place — re-claim it (a plain `claim` collects the expired marker)."
 
                         // #1646: BOTH arms above key on the id the caller NAMED, so both are wrong in the same
                         // way when that id is not this process's own — "your lease expired" about somebody
@@ -4032,18 +4308,30 @@ module Client =
                         let field = s.Substring(0, i)
                         let value = s.Substring(i + 1)
 
-                        if field = "" then Error s
-                        else Ok(field, (if value = "" then Board.Clear else Board.Set value))
+                        if field = "" then
+                            Error s
+                        else
+                            Ok(field, (if value = "" then Board.Clear else Board.Set value))
 
                 let parsed = pairs |> List.map parsePair
 
-                match parsed |> List.tryPick (function | Error s -> Some s | Ok _ -> None) with
+                match
+                    parsed
+                    |> List.tryPick (function
+                        | Error s -> Some s
+                        | Ok _ -> None)
+                with
                 | Some bad ->
                     eprint
                         $"fsgg-coord-engine: set-field --batch takes Field=Value pairs (an empty value clears); '%s{bad}' is not one."
+
                     ExitError
                 | None ->
-                    let rawWrites = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
+                    let rawWrites =
+                        parsed
+                        |> List.choose (function
+                            | Ok p -> Some p
+                            | Error _ -> None)
 
                     // The `Blocked by` gate applies to `--batch` too — the same one home the single write
                     // uses — so a prose dependency cannot slip in through the aliased document. It runs
@@ -4068,83 +4356,95 @@ module Client =
                     | Error rc -> rc
                     | Ok writes ->
 
-                    // #2098 AC1: the SAME coherent-park invariant `release`/single `set-field` already
-                    // enforce, reached through the batch door — a `Status=Blocked` write must not land
-                    // with an empty `Blocked by` field and no `Blocked on: human/...` sentinel. Judged
-                    // against THIS batch's own pending writes (`requireCoherentParkIfBlockedForBatch`),
-                    // so a call pairing `Status=Blocked` with a non-empty `Blocked by=<ref>` in the SAME
-                    // document is coherent without a live read racing its own not-yet-emitted mutation.
-                    // Runs BEFORE any alias is emitted, same as `gateField` above — a refused batch must
-                    // cost nothing.
-                    let requestedStatus =
-                        writes
-                        |> List.tryPick (fun (field, write) ->
-                            if field = "Status" then
-                                match write with
-                                | Board.Set v -> Reads.statusOfName v
-                                | Board.Clear -> None
-                            else
-                                None)
+                        // #2098 AC1: the SAME coherent-park invariant `release`/single `set-field` already
+                        // enforce, reached through the batch door — a `Status=Blocked` write must not land
+                        // with an empty `Blocked by` field and no `Blocked on: human/...` sentinel. Judged
+                        // against THIS batch's own pending writes (`requireCoherentParkIfBlockedForBatch`),
+                        // so a call pairing `Status=Blocked` with a non-empty `Blocked by=<ref>` in the SAME
+                        // document is coherent without a live read racing its own not-yet-emitted mutation.
+                        // Runs BEFORE any alias is emitted, same as `gateField` above — a refused batch must
+                        // cost nothing.
+                        let requestedStatus =
+                            writes
+                            |> List.tryPick (fun (field, write) ->
+                                if field = "Status" then
+                                    match write with
+                                    | Board.Set v -> Reads.statusOfName v
+                                    | Board.Clear -> None
+                                else
+                                    None)
 
-                    let pendingBlockedBy =
-                        writes
-                        |> List.tryPick (fun (field, write) -> if field = "Blocked by" then Some write else None)
+                        let pendingBlockedBy =
+                            writes
+                            |> List.tryPick (fun (field, write) -> if field = "Blocked by" then Some write else None)
 
-                    match requireCoherentParkIfBlockedForBatch ctx ref requestedStatus pendingBlockedBy with
-                    | Error rc -> rc
-                    | Ok() ->
+                        match requireCoherentParkIfBlockedForBatch ctx ref requestedStatus pendingBlockedBy with
+                        | Error rc -> rc
+                        | Ok() ->
 
-                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                    | Error e -> fail e
-                    | Ok board ->
-                        // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
-                        // in the caller's OWN vocabulary — `Field='value'` — not "f2".
-                        let describe (alias: string) : string =
-                            let idx =
-                                match Int32.TryParse(alias.TrimStart 'f') with
-                                | true, n -> Some n
-                                | _ -> None
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Error e -> fail e
+                            | Ok board ->
+                                // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
+                                // in the caller's OWN vocabulary — `Field='value'` — not "f2".
+                                let describe (alias: string) : string =
+                                    let idx =
+                                        match Int32.TryParse(alias.TrimStart 'f') with
+                                        | true, n -> Some n
+                                        | _ -> None
 
-                            match idx with
-                            | Some i when i >= 0 && i < List.length writes ->
-                                match List.item i writes with
-                                | field, Board.Set v -> $"%s{field}='%s{v}'"
-                                | field, Board.Clear -> $"%s{field}=<cleared>"
-                            | _ -> alias
+                                    match idx with
+                                    | Some i when i >= 0 && i < List.length writes ->
+                                        match List.item i writes with
+                                        | field, Board.Set v -> $"%s{field}='%s{v}'"
+                                        | field, Board.Clear -> $"%s{field}=<cleared>"
+                                    | _ -> alias
 
-                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number writes w.Id with
-                        // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
-                        // landed; reporting nothing happened would be a lie, and reporting success is the bug
-                        // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
-                        | Error(Errors.Partial(applied, failed)) ->
-                            eprint
-                                "fsgg-coord-engine: PARTIALLY APPLIED — the board is now half-written. This is NOT queued: replaying the document would rewrite the aliases that already landed."
+                                match
+                                    Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number writes w.Id
+                                with
+                                // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
+                                // landed; reporting nothing happened would be a lie, and reporting success is the bug
+                                // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
+                                | Error(Errors.Partial(applied, failed)) ->
+                                    eprint
+                                        "fsgg-coord-engine: PARTIALLY APPLIED — the board is now half-written. This is NOT queued: replaying the document would rewrite the aliases that already landed."
 
-                            for alias in applied do
-                                eprint $"  APPLIED  %s{describe alias}"
+                                    for alias in applied do
+                                        eprint $"  APPLIED  %s{describe alias}"
 
-                            for alias, msg in failed do
-                                eprint $"  FAILED   %s{describe alias} — %s{msg}"
+                                    for alias, msg in failed do
+                                        eprint $"  FAILED   %s{describe alias} — %s{msg}"
 
-                            Errors.ExPartial
-                        | Error e -> fail e
-                        | Ok Board.Written ->
-                            printfn "set %d field(s) on %s in one aliased mutation:" (List.length writes) ref.Short
+                                    Errors.ExPartial
+                                | Error e -> fail e
+                                | Ok Board.Written ->
+                                    printfn
+                                        "set %d field(s) on %s in one aliased mutation:"
+                                        (List.length writes)
+                                        ref.Short
 
-                            for field, write in writes do
-                                printfn "  %s = %s" field (match write with | Board.Set v -> v | Board.Clear -> "<cleared>")
+                                    for field, write in writes do
+                                        printfn
+                                            "  %s = %s"
+                                            field
+                                            (match write with
+                                             | Board.Set v -> v
+                                             | Board.Clear -> "<cleared>")
 
-                            ExitGreen
-                        | Ok Board.Deferred ->
-                            printfn
-                                "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
-                                ref.Short
-                                (List.length writes)
+                                    ExitGreen
+                                | Ok Board.Deferred ->
+                                    printfn
+                                        "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
+                                        ref.Short
+                                        (List.length writes)
 
-                            Errors.ExRate
-                        | Ok Board.NotOnBoard ->
-                            eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
-                            ExitError
+                                    Errors.ExRate
+                                | Ok Board.NotOnBoard ->
+                                    eprint
+                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
+
+                                    ExitError
         | _ ->
             eprint "fsgg-coord-engine: set-field --batch takes <ref> followed by one or more Field=Value pairs."
             ExitError
@@ -4154,59 +4454,69 @@ module Client =
             setFieldBatchCmd ctx opts
         else
 
-        match opts.Args with
-        | [ refArg; field; value ] ->
-            match parseRef ctx refArg, worker opts with
-            | Error msg, _ ->
-                eprint $"fsgg-coord-engine: %s{msg}"
+            match opts.Args with
+            | [ refArg; field; value ] ->
+                match parseRef ctx refArg, worker opts with
+                | Error msg, _ ->
+                    eprint $"fsgg-coord-engine: %s{msg}"
+                    ExitError
+                | _, Error c -> c
+                | Ok ref, Ok w ->
+                    // The `Blocked by` gate runs FIRST — before any board read — so a refused value spends no
+                    // GraphQL, and it produces the canonical value (or `Clear`) the write below emits.
+                    match gateField ref field value with
+                    | Error rc -> rc
+                    | Ok write ->
+
+                        // AC1 (.github#2079): `set-field <ref> Status Blocked` is `release --status Blocked`'s
+                        // other door onto the same park invariant — refused BEFORE any write when the row would
+                        // land with neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel.
+                        // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
+                        // no-op unless the resolved status is `Blocked`).
+                        match
+                            requireCoherentParkIfBlocked
+                                ctx
+                                ref
+                                (if field = "Status" then Reads.statusOfName value else None)
+                        with
+                        | Error rc -> rc
+                        | Ok() ->
+
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Error e -> fail e
+                            | Ok board ->
+                                match
+                                    Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number field write w.Id
+                                with
+                                | Error e -> fail e
+                                | Ok Board.Written ->
+                                    printfn
+                                        "set %s %s = %s"
+                                        ref.Short
+                                        field
+                                        (match write with
+                                         | Board.Set v -> v
+                                         | Board.Clear -> "<cleared>")
+
+                                    ExitGreen
+                                | Ok Board.Deferred ->
+                                    printfn
+                                        "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
+                                        ref.Short
+                                        field
+                                        (match write with
+                                         | Board.Set v -> v
+                                         | Board.Clear -> "<cleared>")
+
+                                    Errors.ExRate
+                                | Ok Board.NotOnBoard ->
+                                    eprint
+                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
+
+                                    ExitError
+            | _ ->
+                eprint "fsgg-coord-engine: set-field takes <ref> <field> <value> (an empty value clears)."
                 ExitError
-            | _, Error c -> c
-            | Ok ref, Ok w ->
-                // The `Blocked by` gate runs FIRST — before any board read — so a refused value spends no
-                // GraphQL, and it produces the canonical value (or `Clear`) the write below emits.
-                match gateField ref field value with
-                | Error rc -> rc
-                | Ok write ->
-
-                // AC1 (.github#2079): `set-field <ref> Status Blocked` is `release --status Blocked`'s
-                // other door onto the same park invariant — refused BEFORE any write when the row would
-                // land with neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel.
-                // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
-                // no-op unless the resolved status is `Blocked`).
-                match requireCoherentParkIfBlocked ctx ref (if field = "Status" then Reads.statusOfName value else None) with
-                | Error rc -> rc
-                | Ok() ->
-
-                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                | Error e -> fail e
-                | Ok board ->
-                    match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number field write w.Id with
-                    | Error e -> fail e
-                    | Ok Board.Written ->
-                        printfn
-                            "set %s %s = %s"
-                            ref.Short
-                            field
-                            (match write with
-                             | Board.Set v -> v
-                             | Board.Clear -> "<cleared>")
-                        ExitGreen
-                    | Ok Board.Deferred ->
-                        printfn
-                            "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
-                            ref.Short
-                            field
-                            (match write with
-                             | Board.Set v -> v
-                             | Board.Clear -> "<cleared>")
-
-                        Errors.ExRate
-                    | Ok Board.NotOnBoard ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
-                        ExitError
-        | _ ->
-            eprint "fsgg-coord-engine: set-field takes <ref> <field> <value> (an empty value clears)."
-            ExitError
 
     let child (ctx: Context) (opts: Options) : int =
         match opts.Args with
@@ -4228,6 +4538,7 @@ module Client =
                     | Error e ->
                         eprint
                             $"fsgg-coord-engine: child: cannot read %s{parent.Short}'s sub-issues (%s{Errors.explain e}) — refusing to guess whether %s{childRef.Short} is already linked."
+
                         ExitError
                     | Ok existing when List.contains childId existing ->
                         printfn "%s is already a sub-issue of %s — nothing to do" childRef.Short parent.Short
@@ -4524,6 +4835,7 @@ module Client =
                         | None -> scan acc rest
                         | Some m ->
                             let otherPathRepo = m.PathRepo |> Option.defaultValue other.Repo
+
                             let samePathRepo =
                                 String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
                                 && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
@@ -4601,10 +4913,14 @@ module Client =
                 | Ok ref ->
                     // #706 — widen takes the HELD claim. verifyHeld is the only door to it that this command
                     // has, and it fails closed: no capability from a failed read.
-                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                    match
+                        Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref
+                    with
                     | Error e -> fail e
                     | Ok Writes.DoesNotHold ->
-                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
+                        eprint
+                            $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
+
                         noteWorkerDisagreement w
                         ExitError
                     // #1031: our id, another session. A path update PATCHes the issue BODY, so a twin's touch-set
@@ -4634,8 +4950,7 @@ module Client =
                                     match update with
                                     | Replace -> Ok validated
                                     | Union ->
-                                        declaredPathTokens (TouchSet.parse body)
-                                        @ validated.Tokens
+                                        declaredPathTokens (TouchSet.parse body) @ validated.Tokens
                                         |> List.distinct
                                         |> Writes.validate
 
@@ -4740,7 +5055,10 @@ module Client =
                                                 match opts.Render with
                                                 | Json -> printfn "%s" (receipt [])
                                                 | Text ->
-                                                    printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                                    printfn
+                                                        "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)."
+                                                        ref.Owner
+                                                        ref.Repo
 
                                                 ExitGreen
                                             | collisions ->
@@ -4753,64 +5071,76 @@ module Client =
                                                 // machine contract, and stdout is the only stream `--json` speaks on.
                                                 let notified =
                                                     [ for other, holder, toks in collisions do
-                                                        let toksText = sharedTokenText toks
+                                                          let toksText = sharedTokenText toks
 
-                                                        eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                                        eprint $"  %s{toksText}"
+                                                          eprint
+                                                              $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
 
-                                                        // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
-                                                        // overlap is TRANSIENT — the scheduler already sequences it and
-                                                        // it self-clears the moment a claim drops — whereas `Blocked by`
-                                                        // is a DURABLE edge nothing ever recomputes. Offering the durable
-                                                        // remedy for the transient condition is how a ring got drawn on a
-                                                        // premise withdrawn 60 seconds later and held #1059 hostage: a
-                                                        // category error the tool used to recommend first. `Blocked by` is
-                                                        // correct ONLY for a real logical dependency (this work must be
-                                                        // authored against the other's LANDED result), which outlives any
-                                                        // claim — and that distinction is the thing the worker has to
-                                                        // decide, so the message names it instead of defaulting to the
-                                                        // edge that closes rings.
-                                                        let msg =
-                                                            // #1740 AC5, ON THE MESSAGE THE OTHER WORKER READS. Taking
-                                                            // "introduced" off stderr and leaving "which NOW overlaps"
-                                                            // here would move the false causal claim rather than remove
-                                                            // it — and this is the copy the innocent party reads, so it
-                                                            // is the one that misdirects someone who did nothing.
-                                                            let origin =
-                                                                if isNarrowing then
-                                                                    "That is a NARROWING, so it cannot have caused this — the overlap already existed and predates my command"
-                                                                else
-                                                                    "I do not know which of us declared these paths first, so this may or may not be new"
+                                                          eprint $"  %s{toksText}"
 
-                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                          // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
+                                                          // overlap is TRANSIENT — the scheduler already sequences it and
+                                                          // it self-clears the moment a claim drops — whereas `Blocked by`
+                                                          // is a DURABLE edge nothing ever recomputes. Offering the durable
+                                                          // remedy for the transient condition is how a ring got drawn on a
+                                                          // premise withdrawn 60 seconds later and held #1059 hostage: a
+                                                          // category error the tool used to recommend first. `Blocked by` is
+                                                          // correct ONLY for a real logical dependency (this work must be
+                                                          // authored against the other's LANDED result), which outlives any
+                                                          // claim — and that distinction is the thing the worker has to
+                                                          // decide, so the message names it instead of defaulting to the
+                                                          // edge that closes rings.
+                                                          let msg =
+                                                              // #1740 AC5, ON THE MESSAGE THE OTHER WORKER READS. Taking
+                                                              // "introduced" off stderr and leaving "which NOW overlaps"
+                                                              // here would move the false causal claim rather than remove
+                                                              // it — and this is the copy the innocent party reads, so it
+                                                              // is the one that misdirects someone who did nothing.
+                                                              let origin =
+                                                                  if isNarrowing then
+                                                                      "That is a NARROWING, so it cannot have caused this — the overlap already existed and predates my command"
+                                                                  else
+                                                                      "I do not know which of us declared these paths first, so this may or may not be new"
 
-                                                        match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                                                        | Error e ->
-                                                            eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+                                                              $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
-                                                            yield
-                                                                { Ref = other
-                                                                  Worker = holder
-                                                                  SharedTokens = toks
-                                                                  Notified = false
-                                                                  NotifyError = Some(Errors.explain e) }
-                                                        | Ok() ->
-                                                            eprint $"  notified worker %s{holder} on %s{other.Short}"
+                                                          match
+                                                              Writes.say
+                                                                  ctx.Transport
+                                                                  (WorkerId w.Id)
+                                                                  (WorkerId holder)
+                                                                  other
+                                                                  msg
+                                                          with
+                                                          | Error e ->
+                                                              eprint
+                                                                  $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
 
-                                                            yield
-                                                                { Ref = other
-                                                                  Worker = holder
-                                                                  SharedTokens = toks
-                                                                  Notified = true
-                                                                  NotifyError = None } ]
+                                                              yield
+                                                                  { Ref = other
+                                                                    Worker = holder
+                                                                    SharedTokens = toks
+                                                                    Notified = false
+                                                                    NotifyError = Some(Errors.explain e) }
+                                                          | Ok() ->
+                                                              eprint $"  notified worker %s{holder} on %s{other.Short}"
+
+                                                              yield
+                                                                  { Ref = other
+                                                                    Worker = holder
+                                                                    SharedTokens = toks
+                                                                    Notified = true
+                                                                    NotifyError = None } ]
 
                                                 // #1740 AC5 — NAME WHAT WE KNOW, AND NOTHING MORE. Neither
                                                 // sentence says "introduced" unless that has been shown; on a
                                                 // narrowing we can prove the opposite, so we say THAT.
                                                 if isNarrowing then
-                                                    eprint $"fsgg-coord-engine: this %s{verb} NARROWED the touch-set, so it cannot have introduced the collision — a subset names fewer files. The overlap was ALREADY there, and belongs to a claim that predates this command. Do NOT keep editing the shared paths until it is resolved."
+                                                    eprint
+                                                        $"fsgg-coord-engine: this %s{verb} NARROWED the touch-set, so it cannot have introduced the collision — a subset names fewer files. The overlap was ALREADY there, and belongs to a claim that predates this command. Do NOT keep editing the shared paths until it is resolved."
                                                 else
-                                                    eprint "fsgg-coord-engine: the updated touch-set COLLIDES with a live claim (this command may or may not be what introduced it) — do NOT keep editing the shared paths until it is resolved."
+                                                    eprint
+                                                        "fsgg-coord-engine: the updated touch-set COLLIDES with a live claim (this command may or may not be what introduced it) — do NOT keep editing the shared paths until it is resolved."
 
                                                 // The OVERLAP detail is IN the object, not beside it on stderr — that
                                                 // split is the half of this defect a machine consumer could not work
@@ -4874,7 +5204,12 @@ module Client =
                         ExitGreen
                     | Ok collisions ->
                         for other, holder, toks in collisions do
-                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder (sharedTokenText toks)
+                            printfn
+                                "OVERLAP — %s collides with %s held by %s on %s"
+                                ref.Short
+                                other.Short
+                                holder
+                                (sharedTokenText toks)
 
                         ExitContended
 
@@ -4888,7 +5223,9 @@ module Client =
                 match boardPathScopes ctx with
                 | Error e -> fail e
                 | Ok scopes ->
-                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> Option.defaultValue r.Repo
+                    let pathRepoOf (r: Ref) =
+                        Map.tryFind r scopes |> Option.defaultValue r.Repo
+
                     let samePathRepo =
                         String.Equals(pathRepoOf ra, pathRepoOf rb, StringComparison.OrdinalIgnoreCase)
 
@@ -4908,12 +5245,23 @@ module Client =
                             match touchSetOf rb with
                             | Error e -> failSchedule rb e
                             | Ok tsb ->
-                                match TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb with
+                                match
+                                    TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb
+                                with
                                 | [] ->
-                                    printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
+                                    printfn
+                                        "DISJOINT — %s and %s share no touch-set token; they may run in parallel."
+                                        ra.Short
+                                        rb.Short
+
                                     ExitGreen
                                 | pairs ->
-                                    printfn "OVERLAP — %s and %s share %s" ra.Short rb.Short (sharedTokenText (sharedTokens pairs))
+                                    printfn
+                                        "OVERLAP — %s and %s share %s"
+                                        ra.Short
+                                        rb.Short
+                                        (sharedTokenText (sharedTokens pairs))
+
                                     ExitContended
 
         | _ ->
@@ -4938,7 +5286,8 @@ module Client =
                 // (heron-b71) can never see. `*` — anyone holding the item — is the one literal that is
                 // not a worker id. Slug via Identity.slug, the SAME normalization that creates ids (#485).
                 let normalizedTo =
-                    if toW = "*" then Ok "*"
+                    if toW = "*" then
+                        Ok "*"
                     else
                         match Identity.slug toW with
                         | "" -> Error $"say: --to '%s{toW}' is not a usable worker id."
@@ -5137,7 +5486,13 @@ module Client =
                 ExitError
             else
                 let parsed = opts.Over |> List.map (fun t -> t, parseRef ctx t)
-                let bad = parsed |> List.choose (fun (t, r) -> match r with Error m -> Some(t, m) | Ok _ -> None)
+
+                let bad =
+                    parsed
+                    |> List.choose (fun (t, r) ->
+                        match r with
+                        | Error m -> Some(t, m)
+                        | Ok _ -> None)
 
                 match bad with
                 | _ :: _ ->
@@ -5169,11 +5524,13 @@ module Client =
                         // A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's.
                         let owner, repo = first.Owner, first.Repo
 
-                        let strangers =
-                            members |> List.filter (fun m -> m.Owner <> owner || m.Repo <> repo)
+                        let strangers = members |> List.filter (fun m -> m.Owner <> owner || m.Repo <> repo)
 
                         if not (List.isEmpty strangers) then
-                            let named = strangers |> List.map (fun m -> $"%s{m.Owner}/%s{m.Repo}#%d{m.Number}") |> String.concat ", "
+                            let named =
+                                strangers
+                                |> List.map (fun m -> $"%s{m.Owner}/%s{m.Repo}#%d{m.Number}")
+                                |> String.concat ", "
 
                             eprint
                                 $"fsgg-coord-engine: room open is intra-repo (ADR-0027 §5) — these members are outside %s{owner}/%s{repo}: %s{named}. A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's."
@@ -5181,51 +5538,51 @@ module Client =
                             ExitError
                         else
 
-                        let memberList = members |> List.map (fun r -> r.Short) |> String.concat ", "
-                        let title = $"coordination room over %s{memberList}"
+                            let memberList = members |> List.map (fun r -> r.Short) |> String.concat ", "
+                            let title = $"coordination room over %s{memberList}"
 
-                        let bodyText =
-                            $"Coordination room (ADR-0051), opened by worker %s{w.Id} over %s{memberList}.\n\n"
-                            + "Workers holding these items share this room's channel — reach it with `say` on this "
-                            + "issue and read it with `inbox`. Membership and lifecycle are DERIVED from the "
-                            + "`Rooms:` back-references on the items: this room closes itself when every referenced "
-                            + "item is done. Record any touch-set agreement as a `widen` on the real items, not here.\n\n"
-                            + "Paths: none"
+                            let bodyText =
+                                $"Coordination room (ADR-0051), opened by worker %s{w.Id} over %s{memberList}.\n\n"
+                                + "Workers holding these items share this room's channel — reach it with `say` on this "
+                                + "issue and read it with `inbox`. Membership and lifecycle are DERIVED from the "
+                                + "`Rooms:` back-references on the items: this room closes itself when every referenced "
+                                + "item is done. Record any touch-set agreement as a `widen` on the real items, not here.\n\n"
+                                + "Paths: none"
 
-                        match Writes.createRoom ctx.Transport owner repo title bodyText with
-                        | Error e -> fail e
-                        | Ok room ->
-                            // Every member shares the room's repo (enforced above), so the back-reference is a
-                            // bare `#n` — which `Rooms.parse`, defaulting a bare ref to the member's own repo,
-                            // resolves to exactly this room.
-                            let roomToken = $"#%d{room.Number}"
+                            match Writes.createRoom ctx.Transport owner repo title bodyText with
+                            | Error e -> fail e
+                            | Ok room ->
+                                // Every member shares the room's repo (enforced above), so the back-reference is a
+                                // bare `#n` — which `Rooms.parse`, defaulting a bare ref to the member's own repo,
+                                // resolves to exactly this room.
+                                let roomToken = $"#%d{room.Number}"
 
-                            let mutable failure: Errors.IoError option = None
+                                let mutable failure: Errors.IoError option = None
 
-                            for m in members do
-                                if failure.IsNone then
-                                    match Reads.issueBody ctx.Transport m.Owner m.Repo m.Number with
-                                    | Error e -> failure <- Some e
-                                    | Ok mbody ->
-                                        // Idempotent: a member already referencing the room keeps its one line
-                                        // rather than growing a duplicate (the union in `Rooms.parse` would
-                                        // collapse it anyway, but a clean body is worth the read).
-                                        if Rooms.parse m.Owner m.Repo mbody |> List.contains room then
-                                            ()
-                                        else
-                                            match Writes.writeRoomRef ctx.Transport m mbody roomToken with
-                                            | Error e -> failure <- Some e
-                                            | Ok() -> ()
+                                for m in members do
+                                    if failure.IsNone then
+                                        match Reads.issueBody ctx.Transport m.Owner m.Repo m.Number with
+                                        | Error e -> failure <- Some e
+                                        | Ok mbody ->
+                                            // Idempotent: a member already referencing the room keeps its one line
+                                            // rather than growing a duplicate (the union in `Rooms.parse` would
+                                            // collapse it anyway, but a clean body is worth the read).
+                                            if Rooms.parse m.Owner m.Repo mbody |> List.contains room then
+                                                ()
+                                            else
+                                                match Writes.writeRoomRef ctx.Transport m mbody roomToken with
+                                                | Error e -> failure <- Some e
+                                                | Ok() -> ()
 
-                            match failure with
-                            | Some e ->
-                                eprint
-                                    $"fsgg-coord-engine: room %s{room.Short} was created, but a `Rooms:` back-reference could not be written: %s{Errors.explain e}. The room exists; wire the remaining members by hand or re-run."
+                                match failure with
+                                | Some e ->
+                                    eprint
+                                        $"fsgg-coord-engine: room %s{room.Short} was created, but a `Rooms:` back-reference could not be written: %s{Errors.explain e}. The room exists; wire the remaining members by hand or re-run."
 
-                                Errors.exitCode e
-                            | None ->
-                                printfn "opened room %s over %s" room.Short memberList
-                                ExitGreen
+                                    Errors.exitCode e
+                                | None ->
+                                    printfn "opened room %s over %s" room.Short memberList
+                                    ExitGreen
 
     let doneCmd (ctx: Context) (opts: Options) : int =
         match oneArg opts "done: an issue ref", worker opts with
@@ -5255,7 +5612,15 @@ module Client =
                             // outcome was `|> ignore`d directly under the "reports the note" comment, so a
                             // `Deferred` (queued, nothing auto-replays it) printed green with no flush remedy
                             // and the board silently drifted un-stamped. Surface it, keeping the verdict green.
-                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "Done") w.Id
+                            Board.boardWrite
+                                ctx.Transport
+                                board
+                                ref.Owner
+                                ref.Repo
+                                ref.Number
+                                "Status"
+                                (Board.Set "Done")
+                                w.Id
                             |> boardWriteNote ref "Status" "Done"
 
                             // --flip: roll the parent up. Whether this child DISCHARGES its parent is a fact
@@ -5274,7 +5639,8 @@ module Client =
                                 | Some parent ->
                                     match Done.rollUp ctx.Transport board w.Id parent discharge with
                                     | Error e ->
-                                        eprint $"fsgg-coord-engine: the stamp is GREEN, but the roll-up to %s{parent.Short} did not complete: %s{Errors.explain e}"
+                                        eprint
+                                            $"fsgg-coord-engine: the stamp is GREEN, but the roll-up to %s{parent.Short} did not complete: %s{Errors.explain e}"
                                     | Ok results ->
                                         for r in results do
                                             match r with
@@ -5337,7 +5703,9 @@ module Client =
                                                 if not stillReferenced then
                                                     match Writes.closeRoom ctx.Transport room with
                                                     | Ok() ->
-                                                        printfn "  ⋄ %s closed — every referenced item is done (ADR-0051)" room.Short
+                                                        printfn
+                                                            "  ⋄ %s closed — every referenced item is done (ADR-0051)"
+                                                            room.Short
                                                     | Error e ->
                                                         eprint
                                                             $"fsgg-coord-engine: the stamp is GREEN, but room %s{room.Short} could not be closed: %s{Errors.explain e}"
@@ -5358,7 +5726,15 @@ module Client =
                             // "only your own" rule is the capability type, not a forgettable `if`. And unlike
                             // the `release` command, we do NOT restore the column: the item is Done, and Done
                             // is what stands.
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
+                            match
+                                Writes.verifyHeld
+                                    ctx.Transport
+                                    opts.LeaseMinutes
+                                    (WorkerId w.Id)
+                                    (selfOf w)
+                                    (sessionOf w)
+                                    ref
+                            with
                             | Ok(Writes.Holds held) ->
                                 match Writes.release ctx.Transport held with
                                 | Ok _ -> ()
@@ -5429,10 +5805,11 @@ module Client =
                                             (WorkerId w.Id)
                                             $"deferred after completing %s{ref.Short}: this worker's follow-up queue still contains this open item. Drain it sequentially, or explicitly abandon it with a reason before this worker ends."
                                     with
-                                    | Ok () -> ()
+                                    | Ok() -> ()
                                     | Error e ->
                                         recorded <- false
                                         followupsDisposed <- false
+
                                         eprint
                                             $"fsgg-coord-engine: could not durably record the follow-up disposition for %s{owed.Short}: %s{Errors.explain e}. The queue was NOT rewritten; retry `done` or record an explicit disposition before ending worker %s{w.Id}."
 
@@ -5442,11 +5819,14 @@ module Client =
                             | Followups.Unreadable why
                             | Followups.Refused why ->
                                 followupsDisposed <- false
+
                                 eprint
                                     $"fsgg-coord-engine: %s{why} The done stamp stands, but do not treat this as an empty queue. Retry `scripts/fsgg-coord followup list` before ending this worker."
                             | other ->
                                 followupsDisposed <- false
-                                eprint $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
+
+                                eprint
+                                    $"fsgg-coord-engine: unexpected follow-up audit result %A{other}; the queue was not rewritten."
 
                             // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
                             //
@@ -5615,7 +5995,10 @@ module Client =
                         | _ -> 30_000
 
                 if not (p.WaitForExit timeoutMs) then
-                    (try p.Kill true with _ -> ())
+                    (try
+                        p.Kill true
+                     with _ ->
+                         ())
 
                     eprint
                         $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
@@ -5623,21 +6006,21 @@ module Client =
                     Set.empty
                 else
 
-                // The child is gone; this second, unbounded wait is the documented way to let the async
-                // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
-                p.WaitForExit()
-                let out = lock sync (fun () -> stdout.ToString())
+                    // The child is gone; this second, unbounded wait is the documented way to let the async
+                    // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
+                    p.WaitForExit()
+                    let out = lock sync (fun () -> stdout.ToString())
 
-                if p.ExitCode <> 0 then
-                    eprint
-                        $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+                    if p.ExitCode <> 0 then
+                        eprint
+                            $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
 
-                    Set.empty
-                else
-                    out.Split('\n')
-                    |> Array.map (fun l -> l.Trim())
-                    |> Array.filter (fun l -> l <> "")
-                    |> Set.ofArray
+                        Set.empty
+                    else
+                        out.Split('\n')
+                        |> Array.map (fun l -> l.Trim())
+                        |> Array.filter (fun l -> l <> "")
+                        |> Set.ofArray
             with ex ->
                 eprint
                     $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
@@ -5684,265 +6067,299 @@ module Client =
                 ExitError
             | Ok issueRef ->
 
-            // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
-            // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
-            // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
-            // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
-            // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
-            // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
-            // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
-            // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
-            // `git config` failing is not a rate limit dressed up as one).
-            let repo =
-                match opts.Repo with
-                | Some r -> Ok(resolveRepo r)
-                | None ->
-                    match issueRef with
-                    | Some ir -> Ok ir.Repo
+                // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
+                // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
+                // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
+                // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
+                // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
+                // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
+                // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
+                // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
+                // `git config` failing is not a rate limit dressed up as one).
+                let repo =
+                    match opts.Repo with
+                    | Some r -> Ok(resolveRepo r)
                     | None ->
-                        match gitRemoteRepo () with
-                        | Some slug -> Ok(resolveRepo slug)
+                        match issueRef with
+                        | Some ir -> Ok ir.Repo
                         | None ->
+                            match gitRemoteRepo () with
+                            | Some slug -> Ok(resolveRepo slug)
+                            | None ->
+                                eprint
+                                    "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
+
+                                Result.Error ExitError
+
+                match repo with
+                | Result.Error rc -> rc
+                | Ok repo ->
+
+                    // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
+                    // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
+                    // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
+                    // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
+                    // merge never closes the issue, and there is no repair once the PR has merged (editing the
+                    // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
+                    // because this is the one moment fixing it is free — the PR is still open.
+                    //
+                    // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
+                    // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
+                    // otherwise-healthy touch-set run red.
+                    let closingFindings =
+                        match Reads.prBody ctx.Transport owner repo pr with
+                        | Error e ->
                             eprint
-                                "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
+                                $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
 
-                            Result.Error ExitError
+                            []
+                        | Ok body -> RefParsing.boardShorthandCloses body
 
-            match repo with
-            | Result.Error rc -> rc
-            | Ok repo ->
-
-            // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
-            // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
-            // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
-            // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
-            // merge never closes the issue, and there is no repair once the PR has merged (editing the
-            // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
-            // because this is the one moment fixing it is free — the PR is still open.
-            //
-            // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
-            // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
-            // otherwise-healthy touch-set run red.
-            let closingFindings =
-                match Reads.prBody ctx.Transport owner repo pr with
-                | Error e ->
-                    eprint
-                        $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
-
-                    []
-                | Ok body -> RefParsing.boardShorthandCloses body
-
-            // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
-            // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
-            // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
-            // those already mean "no confident verdict was reached", and this is not the check that gets to
-            // override that.
-            let combine (rc: int) : int =
-                if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
-                    rc
-                else
-                    printfn
-                        "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
-                        pr
-
-                    for f in closingFindings do
-                        printfn "    `%s`" f.Matched
-
-                        printfn
-                            "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
-                            f.Ref
-                            f.Number
-                            f.Number
-
-                    eprint
-                        "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
-
-                    ExitRed
-
-            // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
-            // says nothing about the files changed in the other, and printing a verdict on the wrong subject
-            // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
-            // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
-            // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
-            // absent, `repo` IS the issue's repo and they agree by construction.)
-            match issueRef with
-            | Some ir when opts.Repo.IsSome && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase)) ->
-                // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
-                // produces none; it exits non-zero and the gate reads that as the failure it is.
-                eprint (
-                    sprintf
-                        "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
-                        pr
-                        owner
-                        repo
-                        ir.Owner
-                        ir.Repo
-                        ir.Number
-                )
-
-                ExitNoVerdict
-            | _ ->
-
-            // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
-            // #322, an unreadable head ref must not drag down a run that named its issue), else its
-            // `item/<n>-*` branch, else what it declares it closes.
-            let resolveIssue () : Result<Ref option, Errors.IoError> =
-                match issueRef with
-                | Some ir -> Ok(Some ir)
-                | None ->
-                    match Reads.prHeadRef ctx.Transport owner repo pr with
-                    | Error e -> Result.Error e
-                    | Ok head ->
-                        let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
-
-                        if m.Success then
-                            Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
+                    // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
+                    // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
+                    // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
+                    // those already mean "no confident verdict was reached", and this is not the check that gets to
+                    // override that.
+                    let combine (rc: int) : int =
+                        if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
+                            rc
                         else
-                            // Not an item branch — ask what it closes.
-                            Reads.prClosingRef ctx.Transport owner repo pr
+                            printfn
+                                "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
+                                pr
 
-            match resolveIssue () with
-            | Error e -> fail e
-            | Ok None ->
-                // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
-                // implements no tracked item has no touch-set to drift from.
-                printfn
-                    "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
-                    pr
+                            for f in closingFindings do
+                                printfn "    `%s`" f.Matched
 
-                combine ExitGreen
-            | Ok(Some issue) ->
-                // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
-                // against B's paths — those say nothing about A's files (#353).
-                if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
-                    printfn
-                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
-                        pr
-                        owner
-                        repo
-                        issue.Owner
-                        issue.Repo
-                        issue.Number
+                                printfn
+                                    "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
+                                    f.Ref
+                                    f.Number
+                                    f.Number
 
-                    combine ExitGreen
-                else
+                            eprint
+                                "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
 
-                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
-                | Error e -> fail e
-                | Ok body ->
-                    match TouchSet.parse body with
-                    | Undeclared
-                    | DeclaredNone
-                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
-                    // could stray outside of — nothing to verify against (#1103 leg 8).
-                    | DeclaredChore ->
-                        printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
-                        combine ExitGreen
-                    | Unreadable reason ->
-                        // Should not happen (we just read the body), but the type demands it be handled, and
-                        // "I could not read the body" is an error, never a SKIP.
-                        eprint $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
-                        ExitError
-                    | Declared tokens ->
-                        let unmatchable =
-                            tokens
-                            |> List.choose (function
-                                | Unmatchable u -> Some u
-                                | Matchable _ -> None)
+                            ExitRed
 
-                        if List.length unmatchable = List.length tokens then
-                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
-                            // INVALID, not "everything drifts": the touch-set is the broken thing.
-                            let bad = String.Join(", ", unmatchable)
-                            printfn "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s" issue.Short bad
-                            eprint $"  %s{Schedulability.TouchSetGrammar}"
-                            combine (if opts.Warn then ExitGreen else ExitRed)
-                        else
+                    // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
+                    // says nothing about the files changed in the other, and printing a verdict on the wrong subject
+                    // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
+                    // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
+                    // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
+                    // absent, `repo` IS the issue's repo and they agree by construction.)
+                    match issueRef with
+                    | Some ir when
+                        opts.Repo.IsSome
+                        && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase))
+                        ->
+                        // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
+                        // produces none; it exits non-zero and the gate reads that as the failure it is.
+                        eprint (
+                            sprintf
+                                "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
+                                pr
+                                owner
+                                repo
+                                ir.Owner
+                                ir.Repo
+                                ir.Number
+                        )
 
-                        match Reads.prFiles ctx.Transport owner repo pr with
-                        | Error e -> fail e
-                        | Ok files ->
-                            let drift =
-                                files
-                                |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+                        ExitNoVerdict
+                    | _ ->
 
-                            // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
-                            // by the letter of the touch-set and are not a finding — §1 forbids declaring
-                            // them, so reporting them is the gate firing on its own instruction.
-                            //
-                            // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
-                            // --repo <other>` is a legal call, and the local generators say NOTHING about
-                            // another repo's artifacts: subtracting this repo's set there would suppress real
-                            // drift in a repo we never asked. That is the fail-open this change exists to
-                            // avoid, reached from the one direction the roster cannot see. Owner included —
-                            // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
-                            // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
-                            // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
-                            // failing `generated-paths` reports that nothing was subtracted "so a regenerated
-                            // artifact will be reported as drift below"; on a PR with no drift, that sentence
-                            // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
-                            // our stderr into the file it publishes). A gate that cries wolf on the happy path
-                            // teaches one lesson — that its output is noise — and the next warning will be
-                            // real (#698). With no drift there is nothing to subtract and nothing to say.
-                            let regenerated, undeclared =
-                                if List.isEmpty drift then
-                                    [], []
-                                else
+                        // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
+                        // #322, an unreadable head ref must not drag down a run that named its issue), else its
+                        // `item/<n>-*` branch, else what it declares it closes.
+                        let resolveIssue () : Result<Ref option, Errors.IoError> =
+                            match issueRef with
+                            | Some ir -> Ok(Some ir)
+                            | None ->
+                                match Reads.prHeadRef ctx.Transport owner repo pr with
+                                | Error e -> Result.Error e
+                                | Ok head ->
+                                    let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
 
-                                let subtractable =
-                                    let checkoutIsSubject =
-                                        match gitRemoteRepo () with
-                                        | Some slug ->
-                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
-                                        | None -> false
-
-                                    if not checkoutIsSubject then
-                                        Set.empty
+                                    if m.Success then
+                                        Ok(
+                                            Some
+                                                { Owner = owner
+                                                  Repo = repo
+                                                  Number = int m.Groups.[1].Value }
+                                        )
                                     else
-                                        match KitDigest.kitRoot () with
-                                        | Some root -> generatedPaths root
-                                        | None -> Set.empty
+                                        // Not an item branch — ask what it closes.
+                                        Reads.prClosingRef ctx.Transport owner repo pr
 
-                                drift |> List.partition (fun f -> Set.contains f subtractable)
+                        match resolveIssue () with
+                        | Error e -> fail e
+                        | Ok None ->
+                            // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
+                            // implements no tracked item has no touch-set to drift from.
+                            printfn
+                                "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
+                                pr
 
-                            // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
-                            // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
-                            // edits a kit source and never relocks reds `main` whether or not it drifted, so an
-                            // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
-                            // complaint — the worker's own pre-merge check is green while `main` is about to go
-                            // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
-                            // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
-                            // and left this one behind, so the warning stopped firing on the one command §5
-                            // tells every worker to run. A gate that silently stops running is #266's whole
-                            // shape, which is why it is restored here rather than left to the merge.
-                            KitDigest.digestWarn ()
+                            combine ExitGreen
+                        | Ok(Some issue) ->
+                            // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
+                            // against B's paths — those say nothing about A's files (#353).
+                            if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
+                                printfn
+                                    "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
+                                    pr
+                                    owner
+                                    repo
+                                    issue.Owner
+                                    issue.Repo
+                                    issue.Number
 
-                            // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
-                            // context, not a finding. Printed after the verdict line so the first line of
-                            // output stays the answer, and named `regenerated (expected)` so a reader can
-                            // tell at a glance which list they are being asked to act on.
-                            let reportRegenerated () =
-                                if not (List.isEmpty regenerated) then
-                                    printfn "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
-
-                                    for f in regenerated do
-                                        printfn "    %s" f
-
-                            if List.isEmpty undeclared then
-                                printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
-                                reportRegenerated ()
                                 combine ExitGreen
                             else
-                                printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
 
-                                printfn "  undeclared (review):"
+                                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
+                                | Error e -> fail e
+                                | Ok body ->
+                                    match TouchSet.parse body with
+                                    | Undeclared
+                                    | DeclaredNone
+                                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
+                                    // could stray outside of — nothing to verify against (#1103 leg 8).
+                                    | DeclaredChore ->
+                                        printfn
+                                            "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against."
+                                            issue.Short
 
-                                for f in undeclared do
-                                    printfn "    %s" f
+                                        combine ExitGreen
+                                    | Unreadable reason ->
+                                        // Should not happen (we just read the body), but the type demands it be handled, and
+                                        // "I could not read the body" is an error, never a SKIP.
+                                        eprint
+                                            $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
 
-                                reportRegenerated ()
-                                eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
-                                combine (if opts.Warn then ExitGreen else ExitRed)
+                                        ExitError
+                                    | Declared tokens ->
+                                        let unmatchable =
+                                            tokens
+                                            |> List.choose (function
+                                                | Unmatchable u -> Some u
+                                                | Matchable _ -> None)
+
+                                        if List.length unmatchable = List.length tokens then
+                                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
+                                            // INVALID, not "everything drifts": the touch-set is the broken thing.
+                                            let bad = String.Join(", ", unmatchable)
+
+                                            printfn
+                                                "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s"
+                                                issue.Short
+                                                bad
+
+                                            eprint $"  %s{Schedulability.TouchSetGrammar}"
+                                            combine (if opts.Warn then ExitGreen else ExitRed)
+                                        else
+
+                                            match Reads.prFiles ctx.Transport owner repo pr with
+                                            | Error e -> fail e
+                                            | Ok files ->
+                                                let drift =
+                                                    files
+                                                    |> List.filter (fun f ->
+                                                        not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+
+                                                // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
+                                                // by the letter of the touch-set and are not a finding — §1 forbids declaring
+                                                // them, so reporting them is the gate firing on its own instruction.
+                                                //
+                                                // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
+                                                // --repo <other>` is a legal call, and the local generators say NOTHING about
+                                                // another repo's artifacts: subtracting this repo's set there would suppress real
+                                                // drift in a repo we never asked. That is the fail-open this change exists to
+                                                // avoid, reached from the one direction the roster cannot see. Owner included —
+                                                // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
+                                                // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
+                                                // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
+                                                // failing `generated-paths` reports that nothing was subtracted "so a regenerated
+                                                // artifact will be reported as drift below"; on a PR with no drift, that sentence
+                                                // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
+                                                // our stderr into the file it publishes). A gate that cries wolf on the happy path
+                                                // teaches one lesson — that its output is noise — and the next warning will be
+                                                // real (#698). With no drift there is nothing to subtract and nothing to say.
+                                                let regenerated, undeclared =
+                                                    if List.isEmpty drift then
+                                                        [], []
+                                                    else
+
+                                                        let subtractable =
+                                                            let checkoutIsSubject =
+                                                                match gitRemoteRepo () with
+                                                                | Some slug ->
+                                                                    String.Equals(
+                                                                        slug,
+                                                                        $"%s{owner}/%s{repo}",
+                                                                        StringComparison.OrdinalIgnoreCase
+                                                                    )
+                                                                | None -> false
+
+                                                            if not checkoutIsSubject then
+                                                                Set.empty
+                                                            else
+                                                                match KitDigest.kitRoot () with
+                                                                | Some root -> generatedPaths root
+                                                                | None -> Set.empty
+
+                                                        drift |> List.partition (fun f -> Set.contains f subtractable)
+
+                                                // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
+                                                // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
+                                                // edits a kit source and never relocks reds `main` whether or not it drifted, so an
+                                                // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
+                                                // complaint — the worker's own pre-merge check is green while `main` is about to go
+                                                // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
+                                                // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
+                                                // and left this one behind, so the warning stopped firing on the one command §5
+                                                // tells every worker to run. A gate that silently stops running is #266's whole
+                                                // shape, which is why it is restored here rather than left to the merge.
+                                                KitDigest.digestWarn ()
+
+                                                // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
+                                                // context, not a finding. Printed after the verdict line so the first line of
+                                                // output stays the answer, and named `regenerated (expected)` so a reader can
+                                                // tell at a glance which list they are being asked to act on.
+                                                let reportRegenerated () =
+                                                    if not (List.isEmpty regenerated) then
+                                                        printfn
+                                                            "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
+
+                                                        for f in regenerated do
+                                                            printfn "    %s" f
+
+                                                if List.isEmpty undeclared then
+                                                    printfn
+                                                        "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s."
+                                                        pr
+                                                        issue.Short
+
+                                                    reportRegenerated ()
+                                                    combine ExitGreen
+                                                else
+                                                    printfn
+                                                        "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:"
+                                                        pr
+                                                        issue.Short
+
+                                                    printfn "  undeclared (review):"
+
+                                                    for f in undeclared do
+                                                        printfn "    %s" f
+
+                                                    reportRegenerated ()
+
+                                                    eprint
+                                                        "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
+
+                                                    combine (if opts.Warn then ExitGreen else ExitRed)
 
     // ---- identity --------------------------------------------------------------------------------------
 
@@ -5970,7 +6387,8 @@ module Client =
                     eprint
                         "fsgg-coord-engine: WARNING — this id was derived from a session that shares one id across every subagent, so a fan-out of workers would all draw it and collide on each other's locks (#419)."
 
-                    eprint "  Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+                    eprint
+                        "  Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                 | _ -> ()
 
                 ExitGreen
@@ -5990,10 +6408,20 @@ module Client =
 
         let assertion: Result<RegistryPredicate.Assertion option, string> =
             match opts.Args with
-            | [ id; field; value ] -> Ok(Some { Id = id; Field = field; Value = value })
+            | [ id; field; value ] ->
+                Ok(
+                    Some
+                        { Id = id
+                          Field = field
+                          Value = value }
+                )
             | [] ->
                 let body = Console.In.ReadToEnd()
-                if body.Trim() = "" then Ok None else Ok(RegistryPredicate.parseAssertion body)
+
+                if body.Trim() = "" then
+                    Ok None
+                else
+                    Ok(RegistryPredicate.parseAssertion body)
             | _ -> Error "predicate: give `<id> <field> <value>`, or a cross-repo-request body on stdin"
 
         match assertion with
@@ -6016,7 +6444,7 @@ module Client =
                             registryPath
                     )
                 else
-                    let rows = RegistryPredicate.parseRows(File.ReadAllText registryPath)
+                    let rows = RegistryPredicate.parseRows (File.ReadAllText registryPath)
 
                     // classify short-circuits on a missing row / unsupported field before it reads `owner`,
                     // so resolve the manifest only when it will actually be consulted.
@@ -6054,7 +6482,8 @@ module Client =
 
                 match verdict with
                 | RegistryPredicate.Agrees -> ()
-                | RegistryPredicate.Contradicts(ov, note) -> eprint (sprintf "  owner declares `%s: %s` — %s" a.Field ov note)
+                | RegistryPredicate.Contradicts(ov, note) ->
+                    eprint (sprintf "  owner declares `%s: %s` — %s" a.Field ov note)
                 | RegistryPredicate.Unknown reason -> eprint (sprintf "  %s" reason)
 
             match verdict with
@@ -6076,7 +6505,8 @@ module Client =
     let parseChoreLocks (raw: string) : Ref list =
         raw.Split(',')
         |> Array.choose (fun tok ->
-            let m = Text.RegularExpressions.Regex.Match(tok.Trim(), @"^([\w.-]+)/([\w.-]+)#(\d+)$")
+            let m =
+                Text.RegularExpressions.Regex.Match(tok.Trim(), @"^([\w.-]+)/([\w.-]+)#(\d+)$")
 
             if m.Success then
                 Some(
@@ -6130,14 +6560,23 @@ module Client =
     /// then its marker scan is required to be complete before we say it has no live claim.
     // The application fixture supplies the same typed context every other Client handler receives. The
     // override is scoped and restored even when its assertion throws; production never installs one.
-    let mutable private followupAuditContextOverride: (Context * IDisposable) option = None
+    let mutable private followupAuditContextOverride: (Context * IDisposable) option =
+        None
 
     let withFollowupAuditContextForTest (ctx: Context) (f: unit -> 'a) : 'a =
         let prior = followupAuditContextOverride
-        followupAuditContextOverride <- Some(ctx, { new IDisposable with member _.Dispose() = () })
 
-        try f ()
-        finally followupAuditContextOverride <- prior
+        followupAuditContextOverride <-
+            Some(
+                ctx,
+                { new IDisposable with
+                    member _.Dispose() = () }
+            )
+
+        try
+            f ()
+        finally
+            followupAuditContextOverride <- prior
 
     let followupAudit (opts: Options) : int =
         let supplied =
@@ -6166,7 +6605,8 @@ module Client =
             // the issue-state authority, and anything it cannot name remains UNKNOWN.
             let boardRows =
                 Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
-                |> Result.bind (fun board -> Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
+                |> Result.bind (fun board ->
+                    Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number)
 
             // AC1 is about the QUEUE OWNER, not merely the owed issue. Mirror `who`'s A ∪ B sweep: board
             // In-progress rows (A) union every open issue in every board repository (B). B is what finds
@@ -6184,32 +6624,42 @@ module Client =
 
                     let candidates =
                         allRepos
-                        |> Seq.fold (fun state (owner, repo) ->
-                            state
-                            |> Result.bind (fun refs ->
-                                Reads.openIssues ctx.Transport owner repo
-                                |> Result.map (fun issues ->
-                                    issues
-                                    |> List.map (fun issue -> { Owner = owner; Repo = repo; Number = issue.Number })
-                                    |> List.append refs))) (Ok [])
+                        |> Seq.fold
+                            (fun state (owner, repo) ->
+                                state
+                                |> Result.bind (fun refs ->
+                                    Reads.openIssues ctx.Transport owner repo
+                                    |> Result.map (fun issues ->
+                                        issues
+                                        |> List.map (fun issue ->
+                                            { Owner = owner
+                                              Repo = repo
+                                              Number = issue.Number })
+                                        |> List.append refs)))
+                            (Ok [])
                         |> Result.map (fun openRefs ->
                             let inProgress =
                                 rows
-                                |> List.filter (fun row -> not row.IsPullRequest && row.Status = BoardStatus.InProgress)
+                                |> List.filter (fun row ->
+                                    not row.IsPullRequest && row.Status = BoardStatus.InProgress)
                                 |> List.map (fun row -> row.Ref)
 
                             Set.union (Set.ofList openRefs) (Set.ofList inProgress) |> Set.toList)
 
                     candidates
-                    |> Result.bind (List.fold (fun state (row: Ref) ->
-                        state
-                        |> Result.bind (fun claims ->
-                            Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
-                            |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
-                            |> Result.map (fun markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker -> (marker.Worker, row) :: claims
-                                | None -> claims))) (Ok [])))
+                    |> Result.bind (
+                        List.fold
+                            (fun state (row: Ref) ->
+                                state
+                                |> Result.bind (fun claims ->
+                                    Reads.markerScan ctx.Transport row.Owner row.Repo row.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan row.Short)
+                                    |> Result.map (fun markers ->
+                                        match Reads.winner opts.LeaseMinutes markers with
+                                        | Some marker -> (marker.Worker, row) :: claims
+                                        | None -> claims)))
+                            (Ok [])
+                    ))
 
             let mutable closedByWorker: Map<string, Ref list> = Map.empty
 
@@ -6218,10 +6668,12 @@ module Client =
                     match liveClaims with
                     | Error e ->
                         failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
-                        Error ()
-                    | Ok claims ->
-                        Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
+
+                        eprint
+                            $"UNKNOWN: worker %s{queue.Worker}: complete fleet claim scan failed: %s{Errors.explain e}. Queue retained."
+
+                        Error()
+                    | Ok claims -> Ok(claims |> List.tryFind (fun (worker, _) -> worker.Value = queue.Worker))
 
                 let abandonedOwner =
                     match label, ownerIsLive with
@@ -6232,44 +6684,61 @@ module Client =
                     match Reads.issueState ctx.Transport owed.Owner owed.Repo owed.Number with
                     | Error e ->
                         failed <- true
-                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
+
+                        eprint
+                            $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: could not read authoritative issue state: %s{Errors.explain e}. Queue retained."
                     | Ok IssueState.Closed ->
                         if abandonedOwner then
                             closedByWorker <-
                                 closedByWorker
                                 |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                        eprint $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
+
+                        eprint
+                            $"CLOSED: worker %s{queue.Worker}, %s{owed.Short}; eligible for reconciliation, but queue retained (preview)."
                     | Ok IssueState.Open ->
-                            match
-                                Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
-                                |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
-                            with
-                            | Error e ->
-                                failed <- true
-                                eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
-                            | Ok markers ->
-                                match Reads.winner opts.LeaseMinutes markers with
-                                | Some marker ->
+                        match
+                            Reads.markerScan ctx.Transport owed.Owner owed.Repo owed.Number
+                            |> Result.bind (Reads.requireCompleteMarkerScan owed.Short)
+                        with
+                        | Error e ->
+                            failed <- true
+
+                            eprint
+                                $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: claim scan incomplete: %s{Errors.explain e}. Queue retained."
+                        | Ok markers ->
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | Some marker ->
+                                if abandonedOwner then
+                                    closedByWorker <-
+                                        closedByWorker
+                                        |> Map.change queue.Worker (fun prior ->
+                                            Some(owed :: Option.defaultValue [] prior))
+
+                                eprint
+                                    $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
+                            | None ->
+                                match ownerIsLive with
+                                | Ok(Some(_, held)) ->
+                                    eprint
+                                        $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
+                                | Ok None ->
                                     if abandonedOwner then
                                         closedByWorker <-
                                             closedByWorker
-                                            |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                    eprint $"LIVE-CLAIM: worker %s{queue.Worker}, %s{owed.Short} is open and claimed by %s{marker.Worker.Value}; queue retained."
-                                | None ->
-                                    match ownerIsLive with
-                                    | Ok(Some(_, held)) ->
-                                        eprint $"ACTIVE-WORKER: worker %s{queue.Worker} holds %s{held.Short}; %s{owed.Short} is open and unclaimed. Queue retained."
-                                    | Ok None ->
-                                        if abandonedOwner then
-                                            closedByWorker <-
-                                                closedByWorker
-                                                |> Map.change queue.Worker (fun prior -> Some(owed :: Option.defaultValue [] prior))
-                                        eprint $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
-                                    | Error () ->
-                                        eprint $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
+                                            |> Map.change queue.Worker (fun prior ->
+                                                Some(owed :: Option.defaultValue [] prior))
 
-            for queue in local.Stale do reportQueue "ABANDONED" queue
-            for queue in local.Fresh do reportQueue "ACTIVE" queue
+                                    eprint
+                                        $"%s{label}: worker %s{queue.Worker} holds no live claim; %s{owed.Short} is open and unclaimed. Queue retained pending durable disposition."
+                                | Error() ->
+                                    eprint
+                                        $"UNKNOWN: worker %s{queue.Worker}, %s{owed.Short}: owner liveness is unreadable. Queue retained."
+
+            for queue in local.Stale do
+                reportQueue "ABANDONED" queue
+
+            for queue in local.Fresh do
+                reportQueue "ACTIVE" queue
 
             // The apply phase is deliberately after ALL reads: an unknown anywhere keeps every queue
             // intact. For each abandoned ref (open is re-surfaced, closed is cleared), comment first; only a fully acknowledged batch may rewrite its
@@ -6282,20 +6751,33 @@ module Client =
                         eprint $"UNKNOWN: cannot resolve queued worker %s{workerId}: %s{why}. Queue retained."
                     | Ok worker ->
                         let mutable durable = true
+
                         for owed in refs do
-                            match Writes.followupDisposition ctx.Transport owed (WorkerId worker.Id) "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared." with
-                            | Ok () -> ()
+                            match
+                                Writes.followupDisposition
+                                    ctx.Transport
+                                    owed
+                                    (WorkerId worker.Id)
+                                    "reconciled from an abandoned worker queue: this issue has been re-surfaced for the board; the durable queue promise is now cleared."
+                            with
+                            | Ok() -> ()
                             | Error e ->
                                 durable <- false
                                 failed <- true
-                                eprint $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
+
+                                eprint
+                                    $"UNKNOWN: could not record disposition for %s{owed.Short}: %s{Errors.explain e}. Queue retained."
 
                         if durable then
                             match Followups.remove worker (Set.ofList refs) with
-                            | Ok removed -> eprint $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
+                            | Ok removed ->
+                                eprint
+                                    $"RECONCILED: worker %s{worker.Id}, removed %d{removed} re-surfaced follow-up(s)."
                             | Error why ->
                                 failed <- true
-                                eprint $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
+
+                                eprint
+                                    $"UNKNOWN: dispositions landed but queue %s{worker.Id} could not be rewritten: %s{why}. Queue retained."
 
             if failed then ExitRed else ExitGreen
 
@@ -6369,7 +6851,13 @@ module Client =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
         | Ok board ->
-            printfn "bootstrapped board #%d '%s' in %s (%d fields)" board.Number board.Title board.Owner (Map.count board.Fields)
+            printfn
+                "bootstrapped board #%d '%s' in %s (%d fields)"
+                board.Number
+                board.Title
+                board.Owner
+                (Map.count board.Fields)
+
             ExitGreen
 
     let boardCmd (ctx: Context) : int =
@@ -6542,185 +7030,216 @@ module Client =
                 | Error e -> fail e
                 | Ok body ->
 
-                match outOfVocabularyClass body with
-                | Some detail ->
-                    eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
-                    ExitError
-                | None ->
-
-                let laneOfOneWarning =
-                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                    | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                    | Ok board ->
-                        match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
-                        | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                        | Ok rows ->
-                            match Scan.snapshot ctx.Transport rows (Some ref.Repo) true None opts.LeaseMinutes with
-                            | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
-                            | Ok(doc, _) ->
-                                match Snapshot.parse doc with
-                                | Error errors ->
-                                    let detail = sprintf "%A" errors
-                                    Some($"could not inspect sibling declarations ({detail})")
-                                | Ok request ->
-                                    let siblings = filingLaneOfOne ref (TouchSet.parse body) (request.Candidates |> List.map _.Item)
-                                    if List.isEmpty siblings then None
-                                    else
-                                        let names = siblings |> List.map _.Short |> String.concat ", "
-                                        Some($"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work.")
-
-                laneOfOneWarning |> Option.iter (fun warning -> eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
-
-                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                | Error e -> fail e
-                | Ok board ->
-
-                // AN EXPLICIT `--status` IS CHECKED BEFORE ANYTHING IS WRITTEN, and it costs zero
-                // GraphQL: `bootstrapCached` has already resolved the column's options, so the check is
-                // free and it precedes the add.
-                //
-                // Checked here, and not left to the write, because of what the write does with a refusal.
-                // The Status write is deliberately NON-FATAL — the row is boarded, so a red would send a
-                // filer back to re-run `add` rather than to the field write actually owed — and that is
-                // right for a DEFAULT nobody asked for. It is wrong for an instruction: `add --status Redy`
-                // would board the row, print the id, note the refusal, and exit 0, leaving a row with NO
-                // column at all. The flag added to close "a boarded row invisible to every scheduler"
-                // would itself be a way to produce one, on a green exit. `set-field` exits non-zero for
-                // the same value, and this must not be the weaker verb it says it is.
-                //
-                // NOTHING HAS BEEN WRITTEN when this refuses, and the remedy is: fix the value, re-run.
-                // `add` is idempotent, so the retry is free — `outOfVocabularyClass` above, exactly.
-                let explicitStatus =
-                    match opts.Status with
-                    | None -> Ok None
-                    | Some name ->
-                        match Map.tryFind "Status" board.Fields with
-                        | Some { Type = Board.SingleSelect options } when Map.containsKey name options -> Ok(Some name)
-                        | Some { Type = Board.SingleSelect options } ->
-                            let known = options |> Map.keys |> String.concat ", "
-
-                            Error
-                                $"'%s{name}' is not a column on this board's `Status` field. Known columns: %s{known}. Nothing was written — fix the value and re-run `add` (it is idempotent, so the retry is free)."
-                        | Some _ -> Error "this board's `Status` field is not a single-select, so `--status` cannot name a column on it."
-                        | None ->
-                            let known = board.Fields |> Map.keys |> String.concat ", "
-
-                            Error $"this board has no `Status` field at all, so `--status` names nothing. Known fields: %s{known}."
-
-                match explicitStatus with
-                | Error detail ->
-                    eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail}"
-                    ExitError
-                | Ok explicitStatus ->
-
-                match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e -> fail e
-                | Ok outcome ->
-
-                // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
-                // filing procedure, so a close-out pass, a retry, or two workers racing the same
-                // follow-up all reach it — and none of them is an error. It says so on stderr and puts
-                // the id on stdout, so a caller piping it gets an id either way.
-                let itemId =
-                    match outcome with
-                    | Board.AlreadyOnBoard id ->
-                        eprint $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
-                        id
-                    | Board.AddedToBoard id ->
-                        eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
-                        id
-
-                // THE ID GOES OUT BEFORE THE COLUMN IS SETTLED, unconditionally. `add`'s promise is
-                // "this issue is on the board, here is its item id", and that promise is already kept
-                // by the time we get here. Every Status outcome below is a note ABOUT a row that is
-                // boarded; none of them may swallow the id a caller is piping.
-                printfn "%s" itemId
-
-                // THE IDENTITY IS RESOLVED HERE, AFTER THE ROW IS BOARDED, AND NEVER BEFORE IT.
-                //
-                // The deferral queue is keyed on the worker id, so a board write needs one — but #1823
-                // explicitly REFUSED to make `add` refuse: *"`add` is called mid-item by a worker who
-                // has just found something outside its touch-set, and a refusal at that moment is how a
-                // finding ends up in a report instead of on the board."* Resolving before the add would
-                // turn a working `add` into a refusal for any caller with no identity ladder, which is
-                // that same failure wearing this change's badge. So the column is what degrades, loudly
-                // and by name, and `add`'s own promise is untouched.
-                //
-                // Through `worker`, not `Identity.resolve`, so the #419 shared-session WARNING fires here
-                // as it does on every other verb that writes. `add` is now one of them, and a write verb
-                // that alone stays silent about a shared id is the one place the warning is missing.
-                let write (value: string) (why: string) : int =
-                    match worker opts with
-                    | Error _ ->
+                    match outOfVocabularyClass body with
+                    | Some detail ->
                         eprint
-                            $"fsgg-coord-engine: %s{ref.Short} IS on the board (its id is on stdout), but Status was NOT set to '%s{value}' — a board write is queued against a worker id and this process could not derive one. The refusal above says how to fix it; then:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+                            $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
 
-                        ExitGreen
+                        ExitError
+                    | None ->
 
-                    | Ok w ->
+                        let laneOfOneWarning =
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                            | Ok board ->
+                                match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                                | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                                | Ok rows ->
+                                    match
+                                        Scan.snapshot ctx.Transport rows (Some ref.Repo) true None opts.LeaseMinutes
+                                    with
+                                    | Error e -> Some($"could not inspect sibling declarations ({Errors.explain e})")
+                                    | Ok(doc, _) ->
+                                        match Snapshot.parse doc with
+                                        | Error errors ->
+                                            let detail = sprintf "%A" errors
+                                            Some($"could not inspect sibling declarations ({detail})")
+                                        | Ok request ->
+                                            let siblings =
+                                                filingLaneOfOne
+                                                    ref
+                                                    (TouchSet.parse body)
+                                                    (request.Candidates |> List.map _.Item)
 
-                    let writeOutcome =
-                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set value) w.Id
+                                            if List.isEmpty siblings then
+                                                None
+                                            else
+                                                let names = siblings |> List.map _.Short |> String.concat ", "
 
-                    match writeOutcome with
-                    | Ok Board.Written ->
-                        eprint $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
-                        ExitGreen
-                    | _ ->
-                        // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
-                        // NOT land and the exact command that finishes it. The verdict stays green:
-                        // the ROW IS BOARDED, which is what `add` was asked to do and what its stdout
-                        // now says — and reporting a red here would send a filer back to re-run `add`
-                        // rather than to the one-field write that is actually owed. (An explicit
-                        // `--status` cannot reach here on a bad VALUE — that was refused above, before
-                        // the add — so what remains is genuinely a transport or budget condition.)
-                        boardWriteNote ref "Status" value writeOutcome
-                        ExitGreen
+                                                Some(
+                                                    $"its Paths: declaration strictly contains {names}. A directory token reserves future files beneath it too, so this is a lane of one; narrow the holding declaration or sequence the work."
+                                                )
 
-                match explicitStatus with
-                // AC2 — AN EXPLICIT STATUS STILL WINS. `--status` is the caller naming the column, so
-                // it is written whatever is there: this is `set-field <ref> Status <S>` reached from
-                // `add`, and #1823 makes only the DEFAULT conditional. A flag accepted and then
-                // silently declined would be #867's defect, on the flag #867 is about.
-                | Some explicit ->
-                    write explicit "you named it with --status (an explicit column always wins over the #1823 default)."
+                        laneOfOneWarning
+                        |> Option.iter (fun warning ->
+                            eprint $"fsgg-coord-engine: filing advisory for %s{ref.Short} — %s{warning}")
 
-                | None ->
+                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                        | Error e -> fail e
+                        | Ok board ->
 
-                // AC4 — THE IDEMPOTENCE ARM, AND IT IS THE ONLY ARM. Read the column, then prefer
-                // whatever is already there. This is what a "just set Status on add" change gets wrong.
-                //
-                // THE FRESHLY-ADDED CASE USED TO SKIP THIS READ and it was wrong to. The justification was
-                // "a new project item has no field values, and #421's guard means `AddedToBoard` only
-                // follows a definite not-on-board read" — but `Board.addItem`'s own docstring records the
-                // opposite about the mutation: `addProjectV2ItemById` is idempotent SERVER-side and
-                // returns the EXISTING item's id for an issue already on the board. So `AddedToBoard`
-                // means "the lookup did not find it", never "the item is new" — and that lookup is
-                // `projectItems(first: 20)` with no pagination, so a successful read can miss a row that
-                // is on the board carrying a live column. One unpaginated miss and the default would have
-                // overwritten it. That is the ONE direction this change destroys information, asserted to
-                // be impossible rather than made so. It costs one GraphQL point on a once-per-filing verb
-                // (#418) to stop asserting it.
-                match Board.itemStatus ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e ->
-                    // #266. NOT MEASURED is not `Ok None`. We could not read the column, so we may
-                    // not assert it is empty, and defaulting on an unread column is exactly how
-                    // this change would destroy information instead of adding it.
-                    eprint
-                        $"fsgg-coord-engine: %s{ref.Short} is on the board, but its Status could NOT BE READ (%s{Errors.explain e}) — so the #1823 default was NOT applied. That is a read that did not happen, not an empty column, and defaulting over one would overwrite whatever is really there. Check it:  scripts/fsgg-coord ready --all --repo %s{ref.Repo}"
+                            // AN EXPLICIT `--status` IS CHECKED BEFORE ANYTHING IS WRITTEN, and it costs zero
+                            // GraphQL: `bootstrapCached` has already resolved the column's options, so the check is
+                            // free and it precedes the add.
+                            //
+                            // Checked here, and not left to the write, because of what the write does with a refusal.
+                            // The Status write is deliberately NON-FATAL — the row is boarded, so a red would send a
+                            // filer back to re-run `add` rather than to the field write actually owed — and that is
+                            // right for a DEFAULT nobody asked for. It is wrong for an instruction: `add --status Redy`
+                            // would board the row, print the id, note the refusal, and exit 0, leaving a row with NO
+                            // column at all. The flag added to close "a boarded row invisible to every scheduler"
+                            // would itself be a way to produce one, on a green exit. `set-field` exits non-zero for
+                            // the same value, and this must not be the weaker verb it says it is.
+                            //
+                            // NOTHING HAS BEEN WRITTEN when this refuses, and the remedy is: fix the value, re-run.
+                            // `add` is idempotent, so the retry is free — `outOfVocabularyClass` above, exactly.
+                            let explicitStatus =
+                                match opts.Status with
+                                | None -> Ok None
+                                | Some name ->
+                                    match Map.tryFind "Status" board.Fields with
+                                    | Some { Type = Board.SingleSelect options } when Map.containsKey name options ->
+                                        Ok(Some name)
+                                    | Some { Type = Board.SingleSelect options } ->
+                                        let known = options |> Map.keys |> String.concat ", "
 
-                    ExitGreen
+                                        Error
+                                            $"'%s{name}' is not a column on this board's `Status` field. Known columns: %s{known}. Nothing was written — fix the value and re-run `add` (it is idempotent, so the retry is free)."
+                                    | Some _ ->
+                                        Error
+                                            "this board's `Status` field is not a single-select, so `--status` cannot name a column on it."
+                                    | None ->
+                                        let known = board.Fields |> Map.keys |> String.concat ", "
 
-                | Ok(Some existing) ->
-                    eprint
-                        $"fsgg-coord-engine: %s{ref.Short} already has Status='%s{statusWireName existing}' — LEFT AS IT IS. The #1823 default only ever fills an EMPTY column, so re-running `add` never walks a row somebody set back to Backlog."
+                                        Error
+                                            $"this board has no `Status` field at all, so `--status` names nothing. Known fields: %s{known}."
 
-                    ExitGreen
+                            match explicitStatus with
+                            | Error detail ->
+                                eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail}"
+                                ExitError
+                            | Ok explicitStatus ->
 
-                | Ok None ->
-                    write
-                        AddDefaultStatus
-                        $"the #1823 default, because you named none. The row is ON the board and VISIBLE to triage, but NOT startable: a scheduler takes `Ready`, and promoting it there is a deliberate act. Use `--status <column>` to choose, or `set-field %s{ref.Short} Status Ready` once it is triaged."
+                                match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
+                                | Error e -> fail e
+                                | Ok outcome ->
+
+                                    // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
+                                    // filing procedure, so a close-out pass, a retry, or two workers racing the same
+                                    // follow-up all reach it — and none of them is an error. It says so on stderr and puts
+                                    // the id on stdout, so a caller piping it gets an id either way.
+                                    let itemId =
+                                        match outcome with
+                                        | Board.AlreadyOnBoard id ->
+                                            eprint
+                                                $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
+
+                                            id
+                                        | Board.AddedToBoard id ->
+                                            eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
+                                            id
+
+                                    // THE ID GOES OUT BEFORE THE COLUMN IS SETTLED, unconditionally. `add`'s promise is
+                                    // "this issue is on the board, here is its item id", and that promise is already kept
+                                    // by the time we get here. Every Status outcome below is a note ABOUT a row that is
+                                    // boarded; none of them may swallow the id a caller is piping.
+                                    printfn "%s" itemId
+
+                                    // THE IDENTITY IS RESOLVED HERE, AFTER THE ROW IS BOARDED, AND NEVER BEFORE IT.
+                                    //
+                                    // The deferral queue is keyed on the worker id, so a board write needs one — but #1823
+                                    // explicitly REFUSED to make `add` refuse: *"`add` is called mid-item by a worker who
+                                    // has just found something outside its touch-set, and a refusal at that moment is how a
+                                    // finding ends up in a report instead of on the board."* Resolving before the add would
+                                    // turn a working `add` into a refusal for any caller with no identity ladder, which is
+                                    // that same failure wearing this change's badge. So the column is what degrades, loudly
+                                    // and by name, and `add`'s own promise is untouched.
+                                    //
+                                    // Through `worker`, not `Identity.resolve`, so the #419 shared-session WARNING fires here
+                                    // as it does on every other verb that writes. `add` is now one of them, and a write verb
+                                    // that alone stays silent about a shared id is the one place the warning is missing.
+                                    let write (value: string) (why: string) : int =
+                                        match worker opts with
+                                        | Error _ ->
+                                            eprint
+                                                $"fsgg-coord-engine: %s{ref.Short} IS on the board (its id is on stdout), but Status was NOT set to '%s{value}' — a board write is queued against a worker id and this process could not derive one. The refusal above says how to fix it; then:  scripts/fsgg-coord set-field %s{ref.Short} Status %s{value}"
+
+                                            ExitGreen
+
+                                        | Ok w ->
+
+                                            let writeOutcome =
+                                                Board.boardWrite
+                                                    ctx.Transport
+                                                    board
+                                                    ref.Owner
+                                                    ref.Repo
+                                                    ref.Number
+                                                    "Status"
+                                                    (Board.Set value)
+                                                    w.Id
+
+                                            match writeOutcome with
+                                            | Ok Board.Written ->
+                                                eprint $"fsgg-coord-engine: Status=%s{value} on %s{ref.Short} — %s{why}"
+                                                ExitGreen
+                                            | _ ->
+                                                // Deferred / NotOnBoard / a failed mutation. `boardWriteNote` names what did
+                                                // NOT land and the exact command that finishes it. The verdict stays green:
+                                                // the ROW IS BOARDED, which is what `add` was asked to do and what its stdout
+                                                // now says — and reporting a red here would send a filer back to re-run `add`
+                                                // rather than to the one-field write that is actually owed. (An explicit
+                                                // `--status` cannot reach here on a bad VALUE — that was refused above, before
+                                                // the add — so what remains is genuinely a transport or budget condition.)
+                                                boardWriteNote ref "Status" value writeOutcome
+                                                ExitGreen
+
+                                    match explicitStatus with
+                                    // AC2 — AN EXPLICIT STATUS STILL WINS. `--status` is the caller naming the column, so
+                                    // it is written whatever is there: this is `set-field <ref> Status <S>` reached from
+                                    // `add`, and #1823 makes only the DEFAULT conditional. A flag accepted and then
+                                    // silently declined would be #867's defect, on the flag #867 is about.
+                                    | Some explicit ->
+                                        write
+                                            explicit
+                                            "you named it with --status (an explicit column always wins over the #1823 default)."
+
+                                    | None ->
+
+                                        // AC4 — THE IDEMPOTENCE ARM, AND IT IS THE ONLY ARM. Read the column, then prefer
+                                        // whatever is already there. This is what a "just set Status on add" change gets wrong.
+                                        //
+                                        // THE FRESHLY-ADDED CASE USED TO SKIP THIS READ and it was wrong to. The justification was
+                                        // "a new project item has no field values, and #421's guard means `AddedToBoard` only
+                                        // follows a definite not-on-board read" — but `Board.addItem`'s own docstring records the
+                                        // opposite about the mutation: `addProjectV2ItemById` is idempotent SERVER-side and
+                                        // returns the EXISTING item's id for an issue already on the board. So `AddedToBoard`
+                                        // means "the lookup did not find it", never "the item is new" — and that lookup is
+                                        // `projectItems(first: 20)` with no pagination, so a successful read can miss a row that
+                                        // is on the board carrying a live column. One unpaginated miss and the default would have
+                                        // overwritten it. That is the ONE direction this change destroys information, asserted to
+                                        // be impossible rather than made so. It costs one GraphQL point on a once-per-filing verb
+                                        // (#418) to stop asserting it.
+                                        match Board.itemStatus ctx.Transport board ref.Owner ref.Repo ref.Number with
+                                        | Error e ->
+                                            // #266. NOT MEASURED is not `Ok None`. We could not read the column, so we may
+                                            // not assert it is empty, and defaulting on an unread column is exactly how
+                                            // this change would destroy information instead of adding it.
+                                            eprint
+                                                $"fsgg-coord-engine: %s{ref.Short} is on the board, but its Status could NOT BE READ (%s{Errors.explain e}) — so the #1823 default was NOT applied. That is a read that did not happen, not an empty column, and defaulting over one would overwrite whatever is really there. Check it:  scripts/fsgg-coord ready --all --repo %s{ref.Repo}"
+
+                                            ExitGreen
+
+                                        | Ok(Some existing) ->
+                                            eprint
+                                                $"fsgg-coord-engine: %s{ref.Short} already has Status='%s{statusWireName existing}' — LEFT AS IT IS. The #1823 default only ever fills an EMPTY column, so re-running `add` never walks a row somebody set back to Backlog."
+
+                                            ExitGreen
+
+                                        | Ok None ->
+                                            write
+                                                AddDefaultStatus
+                                                $"the #1823 default, because you named none. The row is ON the board and VISIBLE to triage, but NOT startable: a scheduler takes `Ready`, and promoting it there is a deliberate act. Use `--status <column>` to choose, or `set-field %s{ref.Short} Status Ready` once it is triaged."
         | _ ->
             eprint "fsgg-coord-engine: add takes <ref> (a URL, owner/repo#n, or repo#n)."
             ExitError
@@ -6904,7 +7423,8 @@ module Client =
                 // `resolveRepo` is idempotent, so the second call was a no-op. It was worth deleting
                 // anyway: it was the last thing in the tree implying a verb still resolves for itself,
                 // which is the habit that made the filter five copies in the first place.
-                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+                let scoped =
+                    rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
 
                 scoped.Advisory |> Option.iter eprint
 
@@ -6918,7 +7438,8 @@ module Client =
                 // `bodyNeeded` below — so a copy that drifted would leave one rule reading a body the pass
                 // never fetched.
                 let isSchedulableCandidate (r: Scan.Row) =
-                    r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+                    r.State = IssueState.Open
+                    && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
 
                 let mk code severity (r: Scan.Row) detail =
                     { Code = code
@@ -7090,8 +7611,7 @@ module Client =
                     match rows with
                     | [] -> Ok(acc, touchSets)
                     | r :: rest ->
-                        let isEpic =
-                            r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
+                        let isEpic = r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
 
                         let isTouchSetCandidate = isSchedulableCandidate r
 
@@ -7104,7 +7624,11 @@ module Client =
 
                         let doneOpenNote =
                             if r.Status = BoardStatus.Done && r.State = IssueState.Open then
-                                [ mk "DONE-STATUS-OPEN-ISSUE" "note" r "board Status is Done but the issue is still open" ]
+                                [ mk
+                                      "DONE-STATUS-OPEN-ISSUE"
+                                      "note"
+                                      r
+                                      "board Status is Done but the issue is still open" ]
                             else
                                 []
 
@@ -7147,8 +7671,7 @@ module Client =
 
                             let clsFindings = classFindings r body
 
-                            let epicResult =
-                                if isEpic then epicFindings r body else Ok []
+                            let epicResult = if isEpic then epicFindings r body else Ok []
 
                             match epicResult with
                             | Error e -> Error e
@@ -7203,10 +7726,12 @@ module Client =
                 // deadlock a human must break.
                 let cycleFindings =
                     let byRef = items |> List.map (fun row -> row.Ref, row) |> Map.ofList
+
                     Scan.blockerGraph items
                     |> blockerCycleVerdicts
                     |> List.choose (fun (ref, detail) ->
-                        Map.tryFind ref byRef |> Option.map (fun row -> mk "BLOCKER-CYCLE" "error" row detail))
+                        Map.tryFind ref byRef
+                        |> Option.map (fun row -> mk "BLOCKER-CYCLE" "error" row detail))
 
                 match classify [] [] items with
                 | Error e -> fail e
@@ -7264,6 +7789,7 @@ module Client =
                                | [] -> []))
 
                     let findings = perItemFindings @ cycleFindings @ consolidationFindings
+
                     let summary =
                         findings
                         |> List.map (fun finding -> finding.Severity)
@@ -7293,10 +7819,7 @@ module Client =
                     // tell a discharged epic from #614's partial fix. Reddening a gate on a question nobody has
                     // been asked yet teaches the lesson #698 names: the gate is noise, merge anyway. `--strict` is
                     // for the caller who wants to be stopped by one.
-                    if summary.Fails then
-                        ExitError
-                    else
-                        ExitGreen
+                    if summary.Fails then ExitError else ExitGreen
 
     /// `issues <repo> [--label L] [--state S] [--refresh]` — list a repo's issues over REST, ETag-revalidated
     /// (#446/#418). The repo is resolved like every OTHER repo-taking command: an `owner/repo` splits and
@@ -7364,7 +7887,10 @@ module Client =
         let opts =
             match opts.Command with
             | Who ->
-                if opts.AllRepos then opts else { opts with Repo = scopedRepo opts }
+                if opts.AllRepos then
+                    opts
+                else
+                    { opts with Repo = scopedRepo opts }
             | Next
             | BatchCmd
             | Reap
@@ -7381,49 +7907,49 @@ module Client =
             ExitError
         | _ ->
 
-        match context () with
-        | Error code -> code
-        | Ok(ctx, disposable) ->
-            use _ = disposable
+            match context () with
+            | Error code -> code
+            | Ok(ctx, disposable) ->
+                use _ = disposable
 
-            // #548: populate the ONE field every `<ref>` parse defaults against, here, so accepting a bare
-            // `<n>` reaches all 15 `parseRef` call sites through a single edit rather than 15.
-            let ctx =
-                { ctx with
-                    DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
+                // #548: populate the ONE field every `<ref>` parse defaults against, here, so accepting a bare
+                // `<n>` reaches all 15 `parseRef` call sites through a single edit rather than 15.
+                let ctx =
+                    { ctx with
+                        DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
 
-            match opts.Command with
-            | Next -> next ctx opts
-            | BatchCmd -> batch ctx opts
-            | DriverCmd -> driver ctx opts
-            | Ready -> ready ctx opts
-            | Reconcile -> reconcile ctx opts
-            | Who -> who ctx opts
-            | Reap -> reap ctx opts
-            | Budget -> budget ctx opts
-            | Claim -> claim ctx opts
-            | Adopt -> adopt ctx opts
-            | Landable -> landable ctx opts
-            | Take -> take ctx opts
-            | Release -> release ctx opts
-            | Heartbeat -> heartbeat ctx opts
-            | SetField -> setField ctx opts
-            | Child -> child ctx opts
-            | Widen -> widen ctx opts
-            | SetPaths -> setPaths ctx opts
-            | Overlap -> overlapCmd ctx opts
-            | Say -> say ctx opts
-            | Inbox -> inbox ctx opts
-            | RoomOpen -> roomOpen ctx opts
-            | DoneCmd -> doneCmd ctx opts
-            | VerifyPaths -> verifyPaths ctx opts
-            | Bootstrap -> bootstrapCmd ctx opts
-            | BoardCmd -> boardCmd ctx
-            | FieldId -> fieldId ctx opts
-            | OptionId -> optionId ctx opts
-            | ItemId -> itemIdCmd ctx opts
-            | Add -> addCmd ctx opts
-            | Flush -> flushCmd ctx opts
-            | LintCmd -> lint ctx opts
-            | Issues -> issues ctx opts
-            | other -> failwith $"Client.run received a non-IO command: %A{other}"
+                match opts.Command with
+                | Next -> next ctx opts
+                | BatchCmd -> batch ctx opts
+                | DriverCmd -> driver ctx opts
+                | Ready -> ready ctx opts
+                | Reconcile -> reconcile ctx opts
+                | Who -> who ctx opts
+                | Reap -> reap ctx opts
+                | Budget -> budget ctx opts
+                | Claim -> claim ctx opts
+                | Adopt -> adopt ctx opts
+                | Landable -> landable ctx opts
+                | Take -> take ctx opts
+                | Release -> release ctx opts
+                | Heartbeat -> heartbeat ctx opts
+                | SetField -> setField ctx opts
+                | Child -> child ctx opts
+                | Widen -> widen ctx opts
+                | SetPaths -> setPaths ctx opts
+                | Overlap -> overlapCmd ctx opts
+                | Say -> say ctx opts
+                | Inbox -> inbox ctx opts
+                | RoomOpen -> roomOpen ctx opts
+                | DoneCmd -> doneCmd ctx opts
+                | VerifyPaths -> verifyPaths ctx opts
+                | Bootstrap -> bootstrapCmd ctx opts
+                | BoardCmd -> boardCmd ctx
+                | FieldId -> fieldId ctx opts
+                | OptionId -> optionId ctx opts
+                | ItemId -> itemIdCmd ctx opts
+                | Add -> addCmd ctx opts
+                | Flush -> flushCmd ctx opts
+                | LintCmd -> lint ctx opts
+                | Issues -> issues ctx opts
+                | other -> failwith $"Client.run received a non-IO command: %A{other}"

@@ -33,18 +33,20 @@ module Reads =
     /// not being redesigned here; ADR-0040 C4 says so explicitly. This port changes the LANGUAGE, not the
     /// SUBSTRATE.
     type Marker =
-        { Id: int64
-          Worker: WorkerId
-          Session: SessionId option
-          /// Seconds since the marker was last heartbeated, by the SERVER's clock (`updated_at`).
-          AgeSeconds: int
-          /// The board column this claim overwrote, so releasing it can put that column back rather than
-          /// guessing `Ready` (#481). A value nobody recorded cannot be restored.
-          PreviousStatus: BoardStatus option
-          PathRepo: string option
-          /// The raw comment body — kept so that a heartbeat can rewrite the WHOLE marker without
-          /// forgetting a field it never parsed (#550).
-          Raw: string }
+        {
+            Id: int64
+            Worker: WorkerId
+            Session: SessionId option
+            /// Seconds since the marker was last heartbeated, by the SERVER's clock (`updated_at`).
+            AgeSeconds: int
+            /// The board column this claim overwrote, so releasing it can put that column back rather than
+            /// guessing `Ready` (#481). A value nobody recorded cannot be restored.
+            PreviousStatus: BoardStatus option
+            PathRepo: string option
+            /// The raw comment body — kept so that a heartbeat can rewrite the WHOLE marker without
+            /// forgetting a field it never parsed (#550).
+            Raw: string
+        }
 
     /// THE MARKER READ, WITH ITS OWN COMPLETENESS ATTACHED (.github#1668).
     ///
@@ -54,16 +56,18 @@ module Reads =
     /// working outside the protocol — which is the fail-open direction on the one read that separates
     /// workers. This type is what makes the difference sayable.
     type MarkerScan =
-        { /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
-          Markers: Marker list
-          /// One entry per comment the scan could NOT classify, each naming which comment and why: a comment
-          /// with no readable `body` (it may have been a marker), or a comment whose body IS a marker but
-          /// which carries no numeric `id` to order it by.
-          ///
-          /// **EMPTY IS THE LOAD-BEARING VALUE.** Only an empty list licenses "there is no claim here".
-          /// Non-empty means `Markers` is a LOWER BOUND, and a caller that reports absence off it is
-          /// manufacturing an answer out of what it could not read (#266, .github#1794).
-          Unreadable: string list }
+        {
+            /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
+            Markers: Marker list
+            /// One entry per comment the scan could NOT classify, each naming which comment and why: a comment
+            /// with no readable `body` (it may have been a marker), or a comment whose body IS a marker but
+            /// which carries no numeric `id` to order it by.
+            ///
+            /// **EMPTY IS THE LOAD-BEARING VALUE.** Only an empty list licenses "there is no claim here".
+            /// Non-empty means `Markers` is a LOWER BOUND, and a caller that reports absence off it is
+            /// manufacturing an answer out of what it could not read (#266, .github#1794).
+            Unreadable: string list
+        }
 
     /// The `BoardStatus` for a Projects v2 Status option NAME (case-insensitive), or for a marker's decoded
     /// `prev=` value — the two callers that turn a column's human name back into the type. A name we do not
@@ -87,7 +91,8 @@ module Reads =
     val markerScan: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<MarkerScan>
 
     /// Raw issue/PR comment bodies, in API order; malformed comments fail closed.
-    val commentBodies: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<string list>
+    val commentBodies:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<string list>
 
     /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
     /// error that names every unclassifiable comment.
@@ -165,7 +170,8 @@ module Reads =
     ///
     /// A failed lookup yields `BlockerUnknown`, which BLOCKS. "I could not look" is not "I looked and it is
     /// fine" — and the safe direction on a lock is always to hold it.
-    val blockerState: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<BlockerState>
+    val blockerState:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<BlockerState>
 
     /// Is there an OPEN pull request on this item's own `item/<n>-*` branch?
     ///
@@ -193,9 +199,7 @@ module Reads =
     /// a field called `Cost` holding `limit - remaining`, which is a number that reads as one thing and
     /// means another. In a codebase whose entire thesis is that a value must not be able to masquerade as a
     /// different fact, that is not a shortcut worth taking.
-    type RateLimitSnapshot =
-        { Remaining: int
-          Limit: int }
+    type RateLimitSnapshot = { Remaining: int; Limit: int }
 
     /// An issue's REST INTEGER ID — `.id`, not its number.
     ///
@@ -251,9 +255,23 @@ module Reads =
     val prHeadRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
     /// Immutable head commit SHA for evidence binding.
     val prHeadSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+    /// Immutable base commit SHA for evidence binding.
+    val prBaseSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
 
-    type CommentBody = { Id: int64; Url: string; Body: string }
-    val commentsWithIdentity: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
+    /// UTF-8 file content at an immutable git ref.
+    val fileAtRef:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        path: string ->
+        gitRef: string ->
+            IoResult<string>
+
+    type CommentBody =
+        { Id: int64; Url: string; Body: string }
+
+    val commentsWithIdentity:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>

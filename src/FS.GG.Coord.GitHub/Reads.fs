@@ -25,12 +25,14 @@ module Reads =
     /// I could not read, and any of them may have been the claim"*. Those are different facts, and the whole
     /// of `who`'s under-report is the second one being rendered as the first.
     type MarkerScan =
-        { /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
-          Markers: Marker list
-          /// One entry per comment the scan could NOT classify, each saying which comment and why. EMPTY is
-          /// the load-bearing value: empty means the marker list is COMPLETE, and only then may a caller
-          /// say an item is unheld.
-          Unreadable: string list }
+        {
+            /// The claim markers, lowest comment id first — the CAS's total order, winner at the head.
+            Markers: Marker list
+            /// One entry per comment the scan could NOT classify, each saying which comment and why. EMPTY is
+            /// the load-bearing value: empty means the marker list is COMPLETE, and only then may a caller
+            /// say an item is unheld.
+            Unreadable: string list
+        }
 
     type RateLimitSnapshot = { Remaining: int; Limit: int }
 
@@ -203,11 +205,7 @@ module Reads =
                 // Storing `None` is not a no-op: it DROPS any validator left from when this set still had
                 // headroom, which is what stops a grown collection revalidating against the page it used to
                 // fit on.
-                let validator =
-                    if memoisable shape response then
-                        response.ETag
-                    else
-                        None
+                let validator = if memoisable shape response then response.ETag else None
 
                 Cache.putBody cacheKey validator response.Body
                 Ok response.Body
@@ -219,16 +217,18 @@ module Reads =
     /// Both are security properties, not style. Un-anchor it and any free-form `say` message whose text
     /// merely QUOTES a marker (`<!-- fsgg:claim worker=ghost -->`) forges a lock on the item it is posted
     /// to.
-    let private markerRe =
-        Regex(@"^<!--\s*fsgg:claim\s", RegexOptions.Compiled)
+    let private markerRe = Regex(@"^<!--\s*fsgg:claim\s", RegexOptions.Compiled)
 
     let private workerRe =
         Regex(@"^<!--\s*fsgg:claim\s+worker=(?<w>[^\s>]+)", RegexOptions.Compiled)
 
     let private prevRe = Regex(@"^<!--[^>]*\sprev=(?<p>[^\s>]*)", RegexOptions.Compiled)
 
-    let private sessionRe = Regex(@"^<!--[^>]*\ssession=(?<s>[^\s>]+)", RegexOptions.Compiled)
-    let private pathRepoRe = Regex(@"^<!--[^>]*\spathRepo=(?<r>[^\s>]+)", RegexOptions.Compiled)
+    let private sessionRe =
+        Regex(@"^<!--[^>]*\ssession=(?<s>[^\s>]+)", RegexOptions.Compiled)
+
+    let private pathRepoRe =
+        Regex(@"^<!--[^>]*\spathRepo=(?<r>[^\s>]+)", RegexOptions.Compiled)
 
     /// Undo `enc_status`. `%` was encoded FIRST, so it must be decoded LAST — otherwise a status
     /// containing a literal `%20` decodes into a space that was never there.
@@ -283,70 +283,74 @@ module Reads =
         | Some body when not (markerRe.IsMatch body) -> NotAMarker
         | Some body ->
 
-        let id =
-            match comment.TryGetProperty "id" with
-            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
-            | _ -> None
+            let id =
+                match comment.TryGetProperty "id" with
+                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+                | _ -> None
 
-        match id with
-        // A COMMENT WITH NO ID IS NOT A MARKER WE CAN ORDER, and the id IS the lock — it is the total order
-        // every racer observes. A marker we cannot place in that order cannot win or lose a race. But it is
-        // a MARKER: `markerRe` matched, so we are looking at a claim. Reporting the item free on the
-        // strength of it is the one thing a lock may never do, so it leaves as `Unclassifiable` and the
-        // caller fails closed on it.
-        | None ->
-            Unclassifiable
-                $"comment %d{index} IS a claim marker (its body matches the marker grammar) but carries no numeric `id`, so it cannot be placed in the CAS's total order"
-        | Some id ->
+            match id with
+            // A COMMENT WITH NO ID IS NOT A MARKER WE CAN ORDER, and the id IS the lock — it is the total order
+            // every racer observes. A marker we cannot place in that order cannot win or lose a race. But it is
+            // a MARKER: `markerRe` matched, so we are looking at a claim. Reporting the item free on the
+            // strength of it is the one thing a lock may never do, so it leaves as `Unclassifiable` and the
+            // caller fails closed on it.
+            | None ->
+                Unclassifiable
+                    $"comment %d{index} IS a claim marker (its body matches the marker grammar) but carries no numeric `id`, so it cannot be placed in the CAS's total order"
+            | Some id ->
 
-        let m = workerRe.Match body
+                let m = workerRe.Match body
 
-        let worker =
-            if m.Success then
-                WorkerId m.Groups.["w"].Value
-            else
-                // A MARKER WE CANNOT PARSE A WORKER OUT OF IS A CLAIM HELD BY NOBODY — and it BLOCKS the
-                // item rather than vanishing. A half-written lock must fail closed. If this returned `None`
-                // the item would read as free, and the whole point of a lock is that a lock you cannot
-                // read is still a lock.
-                WorkerId "unparsed-marker"
+                let worker =
+                    if m.Success then
+                        WorkerId m.Groups.["w"].Value
+                    else
+                        // A MARKER WE CANNOT PARSE A WORKER OUT OF IS A CLAIM HELD BY NOBODY — and it BLOCKS the
+                        // item rather than vanishing. A half-written lock must fail closed. If this returned `None`
+                        // the item would read as free, and the whole point of a lock is that a lock you cannot
+                        // read is still a lock.
+                        WorkerId "unparsed-marker"
 
-        let session =
-            let s = sessionRe.Match body
-            if s.Success then Some(SessionId s.Groups.["s"].Value) else None
+                let session =
+                    let s = sessionRe.Match body
 
-        let previousStatus =
-            let p = prevRe.Match body
+                    if s.Success then
+                        Some(SessionId s.Groups.["s"].Value)
+                    else
+                        None
 
-            if p.Success then
-                statusOfName (decodeStatus p.Groups.["p"].Value)
-            else
-                None
+                let previousStatus =
+                    let p = prevRe.Match body
 
-        let pathRepo =
-            let p = pathRepoRe.Match body
-            if p.Success then Some p.Groups.["r"].Value else None
+                    if p.Success then
+                        statusOfName (decodeStatus p.Groups.["p"].Value)
+                    else
+                        None
 
-        // AGE IS MEASURED AGAINST THE SERVER'S CLOCK (`updated_at`), not ours. A marker with no readable
-        // timestamp gets a NEGATIVE age, which `Schedulability.leaseWindow` renders as "lease unknown" —
-        // because inventing "frees in ~120m" out of a missing field is a confident sentence with nothing
-        // behind it, and both #440 and #488 were closed for exactly that.
-        let ageSeconds =
-            match str comment "updated_at" with
-            | Some ts ->
-                match DateTimeOffset.TryParse ts with
-                | true, at -> int (now - at).TotalSeconds
-                | _ -> -1
-            | None -> -1
+                let pathRepo =
+                    let p = pathRepoRe.Match body
+                    if p.Success then Some p.Groups.["r"].Value else None
 
-        IsMarker
-            { Id = id
-              Worker = worker
-              Session = session
-              AgeSeconds = ageSeconds
-              PreviousStatus = previousStatus
-              PathRepo = pathRepo
-              Raw = body }
+                // AGE IS MEASURED AGAINST THE SERVER'S CLOCK (`updated_at`), not ours. A marker with no readable
+                // timestamp gets a NEGATIVE age, which `Schedulability.leaseWindow` renders as "lease unknown" —
+                // because inventing "frees in ~120m" out of a missing field is a confident sentence with nothing
+                // behind it, and both #440 and #488 were closed for exactly that.
+                let ageSeconds =
+                    match str comment "updated_at" with
+                    | Some ts ->
+                        match DateTimeOffset.TryParse ts with
+                        | true, at -> int (now - at).TotalSeconds
+                        | _ -> -1
+                    | None -> -1
+
+                IsMarker
+                    { Id = id
+                      Worker = worker
+                      Session = session
+                      AgeSeconds = ageSeconds
+                      PreviousStatus = previousStatus
+                      PathRepo = pathRepo
+                      Raw = body }
 
     /// Has this marker's lease lapsed?
     ///
@@ -393,12 +397,7 @@ module Reads =
         | Some m -> Some m
         | None -> markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
 
-    let markerScan
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<MarkerScan> =
+    let markerScan (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<MarkerScan> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
@@ -456,7 +455,9 @@ module Reads =
                             | IsMarker _
                             | NotAMarker -> None)
 
-                    Ok { Markers = found; Unreadable = unreadable }
+                    Ok
+                        { Markers = found
+                          Unreadable = unreadable }
 
     /// REQUIRE A COMPLETE LOCK READ before a caller decides or writes from it (.github#1896).
     ///
@@ -511,36 +512,36 @@ module Reads =
         | Some body when not (msgRe.IsMatch body) -> None
         | Some body ->
 
-        let id =
-            match comment.TryGetProperty "id" with
-            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
-            | _ -> None
+            let id =
+                match comment.TryGetProperty "id" with
+                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+                | _ -> None
 
-        match id with
-        // A message with no orderable id cannot be paged past — the inbox cursor is keyed on the id. Drop
-        // it rather than let a null reset every reader's high-water mark. A message is NOT a lock, so the
-        // safe failure here is to lose one message, never (as with a marker) to read an item as free.
-        | None -> None
-        | Some id ->
+            match id with
+            // A message with no orderable id cannot be paged past — the inbox cursor is keyed on the id. Drop
+            // it rather than let a null reset every reader's high-water mark. A message is NOT a lock, so the
+            // safe failure here is to lose one message, never (as with a marker) to read an item as free.
+            | None -> None
+            | Some id ->
 
-        let m = msgFromToRe.Match body
+                let m = msgFromToRe.Match body
 
-        if not m.Success then
-            // A half-written `fsgg:msg` names no correspondent. Deliver it to nobody rather than guess a
-            // recipient — again, a message is not a lock: dropping it is safe where broadcasting is not.
-            None
-        else
-            let text =
-                let noComment = msgCommentRe.Replace(body, "")
-                let noHeader = msgHeaderRe.Replace(noComment, "")
-                noHeader.TrimEnd()
+                if not m.Success then
+                    // A half-written `fsgg:msg` names no correspondent. Deliver it to nobody rather than guess a
+                    // recipient — again, a message is not a lock: dropping it is safe where broadcasting is not.
+                    None
+                else
+                    let text =
+                        let noComment = msgCommentRe.Replace(body, "")
+                        let noHeader = msgHeaderRe.Replace(noComment, "")
+                        noHeader.TrimEnd()
 
-            Some
-                { Id = id
-                  From = m.Groups.["f"].Value
-                  To = m.Groups.["t"].Value
-                  At = (str comment "created_at" |> Option.defaultValue "")
-                  Text = text }
+                    Some
+                        { Id = id
+                          From = m.Groups.["f"].Value
+                          To = m.Groups.["t"].Value
+                          At = (str comment "created_at" |> Option.defaultValue "")
+                          Text = text }
 
     /// The worker-to-worker messages on an issue, in comment-id order (lowest first).
     ///
@@ -548,12 +549,7 @@ module Reads =
     /// UNCONDITIONALLY, exactly like `markers`: a 304 could serve a comments page captured before a `say`,
     /// and a lost message is a coordination failure even where it is not a lost lock — the same reason the
     /// claim scan never goes conditional.
-    let messages
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<Message list> =
+    let messages (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<Message list> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} messages"
 
@@ -585,11 +581,21 @@ module Reads =
 
                     Ok found
 
-    type CommentBody = { Id: int64; Url: string; Body: string }
+    type CommentBody =
+        { Id: int64; Url: string; Body: string }
 
     let commentsWithIdentity (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
-        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
@@ -597,20 +603,36 @@ module Reads =
             | Error e -> Error e
             | Ok doc ->
                 use doc = doc
-                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
                 else
                     doc.RootElement.EnumerateArray()
                     |> Seq.map (fun c ->
                         match c.TryGetProperty "id", str c "html_url", str c "body" with
                         | (true, id), Some url, Some body when id.ValueKind = JsonValueKind.Number ->
-                            Ok { Id = id.GetInt64(); Url = url; Body = body }
+                            Ok
+                                { Id = id.GetInt64()
+                                  Url = url
+                                  Body = body }
                         | _ -> Error(Malformed(subject, "a comment has no readable id, html_url, and body")))
-                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Seq.fold
+                        (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
+                        (Ok [])
                     |> Result.map List.rev
 
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
-        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
@@ -618,21 +640,23 @@ module Reads =
             | Error e -> Error e
             | Ok doc ->
                 use doc = doc
-                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
                 else
                     doc.RootElement.EnumerateArray()
-                    |> Seq.map (fun c -> match str c "body" with Some body -> Ok body | None -> Error(Malformed(subject, "a comment has no readable body")))
-                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Seq.map (fun c ->
+                        match str c "body" with
+                        | Some body -> Ok body
+                        | None -> Error(Malformed(subject, "a comment has no readable body")))
+                    |> Seq.fold
+                        (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
+                        (Ok [])
                     |> Result.map List.rev
 
     // ---- the issue body ---------------------------------------------------------------------------
 
-    let issueBody
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<string> =
+    let issueBody (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
@@ -666,14 +690,10 @@ module Reads =
     /// A per-ref state read for reconcilers. Unlike an open-list membership test, this distinguishes a
     /// valid CLOSED off-board issue from a missing, unreadable, or pull-request ref; those latter cases
     /// remain `Error` and callers must retain their local queue entry.
-    let issueState
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<IssueState> =
+    let issueState (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<IssueState> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} state"
+
         let request =
             { Method = "GET"
               Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
@@ -690,6 +710,7 @@ module Reads =
             | Error e -> Error e
             | Ok doc ->
                 use doc = doc
+
                 match doc.RootElement.TryGetProperty "pull_request", doc.RootElement.TryGetProperty "state" with
                 | (true, _), _ -> Error(Malformed(subject, "the ref names a pull request, not a queued issue"))
                 | _, (true, state) when state.ValueKind = JsonValueKind.String ->
@@ -820,12 +841,7 @@ module Reads =
                 else
                     Ok(doc.RootElement.GetArrayLength() > 0)
 
-    let prAlive
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<Liveness> =
+    let prAlive (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<Liveness> =
 
         let subject = $"%s{owner}/%s{repo} open PRs for item #%d{number}"
 
@@ -891,12 +907,7 @@ module Reads =
                         | Ok true -> Ok LeaseExpiredBranchPushed
                         | Ok false -> Ok LeaseExpiredNoPr
 
-    let restId
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<int64> =
+    let restId (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<int64> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number}"
 
@@ -927,12 +938,7 @@ module Reads =
     /// idempotent — re-linking a child that is already attached is a no-op, not a 422 — and folding a
     /// failed read into "the edge is absent" would make it POST, collect a 422, and blame the token. An
     /// unreachable subject is not an absent one.
-    let subIssueIds
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<int64 list> =
+    let subIssueIds (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<int64 list> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} sub-issues"
 
@@ -975,12 +981,7 @@ module Reads =
     let private SubIssuesDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { subIssues(first: 100) { totalCount nodes { number state repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
 
-    let subIssues
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<SubIssueSet> =
+    let subIssues (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<SubIssueSet> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} sub-issue graph"
 
@@ -1039,7 +1040,10 @@ module Reads =
                                 | _ -> true
 
                             match nwo, num with
-                            | Some nwo, Some num -> Some { Ref = $"%s{nwo}#%d{num}"; Open = isOpen }
+                            | Some nwo, Some num ->
+                                Some
+                                    { Ref = $"%s{nwo}#%d{num}"
+                                      Open = isOpen }
                             | _ -> None)
                         |> List.ofSeq
 
@@ -1049,12 +1053,7 @@ module Reads =
                 | :? System.NullReferenceException ->
                     Error(Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`"))
 
-    let refIsPullRequest
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (number: int)
-        : IoResult<bool> =
+    let refIsPullRequest (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<bool> =
 
         let subject = $"%s{owner}/%s{repo}#%d{number} (pull-request probe)"
 
@@ -1136,12 +1135,7 @@ module Reads =
                             )
                         )
 
-    let prHeadRef
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : IoResult<string> =
+    let prHeadRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
 
@@ -1172,17 +1166,19 @@ module Reads =
                 | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
 
     /// The immutable commit identity for evidence that must bind to the reviewed PR revision.
-    let prHeadSha
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : IoResult<string> =
+    let prHeadSha (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
+
         let request =
-            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"; Query = []; Body = NoBody
-              Budget = Rest; IfNoneMatch = None; Subject = subject }
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
         match transport.Send request with
         | Error e -> Error e
         | Ok response ->
@@ -1190,6 +1186,7 @@ module Reads =
             | Error e -> Error e
             | Ok doc ->
                 use doc = doc
+
                 match doc.RootElement.TryGetProperty "head" with
                 | true, head when head.ValueKind = JsonValueKind.Object ->
                     match str head "sha" with
@@ -1197,12 +1194,74 @@ module Reads =
                     | _ -> Error(Malformed(subject, "the PR response carried no head.sha"))
                 | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
 
-    let prFiles
+    let prBaseSha (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "base" with
+                | true, baseNode when baseNode.ValueKind = JsonValueKind.Object ->
+                    match str baseNode "sha" with
+                    | Some sha when not (String.IsNullOrWhiteSpace sha) -> Ok sha
+                    | _ -> Error(Malformed(subject, "the PR response carried no base.sha"))
+                | _ -> Error(Malformed(subject, "the PR response carried no `base`"))
+
+    let fileAtRef
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
-        (pr: int)
-        : IoResult<string list> =
+        (path: string)
+        (gitRef: string)
+        : IoResult<string> =
+        let subject = $"%s{owner}/%s{repo}:%s{path}@%s{gitRef}"
+
+        let escapedPath =
+            path.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/contents/%s{escapedPath}"
+              Query = [ "ref", gitRef ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                match str doc.RootElement "encoding", str doc.RootElement "content" with
+                | Some "base64", Some content ->
+                    try
+                        content.Replace("\n", "")
+                        |> Convert.FromBase64String
+                        |> Text.Encoding.UTF8.GetString
+                        |> Ok
+                    with ex ->
+                        Error(Malformed(subject, $"invalid base64 content: %s{ex.Message}"))
+                | _ -> Error(Malformed(subject, "the contents response carried no base64 content"))
+
+    let prFiles (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string list> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} files"
 
@@ -1232,12 +1291,7 @@ module Reads =
                         |> List.ofSeq
                     )
 
-    let prBody
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : IoResult<string> =
+    let prBody (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<string> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} body"
 
@@ -1404,51 +1458,48 @@ module Reads =
     /// Everything ONE read of `pulls/{n}` tells the landable verdict, bound together so no two facts here
     /// can describe different PRs. `None` on any field is "unreadable or absent", never a guess.
     type private PrFacts =
-        { Merge: MergeState
-          /// The head commit the PR OBJECT names — eventually consistent, so not necessarily the branch's
-          /// real tip (#955/#989/#995).
-          HeadSha: string option
-          /// The head BRANCH, which is what lets a stale `head.sha` be measured against that tip.
-          HeadRef: string option
-          /// The BASE branch — the branch whose policy decides whether GitHub will take this merge (#1575).
-          /// Read from the same object as the rest, so a verdict can never be scored against one PR's head
-          /// and another PR's base.
-          BaseRef: string option
-          /// `mergeable_state` — GITHUB'S OWN ANSWER to "will I take this merge?" (#1575), and the field
-          /// that makes the whole guard below free. `mergeable` says only "does it apply cleanly"; this
-          /// says whether the BASE BRANCH POLICY is satisfied — `clean`, `blocked` (a required context has
-          /// not passed, or has not reported at all), `behind` (a strict base moved), `draft`, `unstable`
-          /// (a NON-required check failed — GitHub still merges it), `dirty`, `unknown`.
-          ///
-          /// It is computed by the same lazy background job as `mergeable` and rides in the same object,
-          /// so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
-          MergeableState: string option
-          /// IS THE PR STILL OPEN, AND DID IT MERGE? (#1680) — `state` and `merged`, from the same object
-          /// as everything else here, so a verdict can never be scored against one PR's openness and
-          /// another PR's checks.
-          ///
-          /// Free, which is the point: both ride in the `pulls/{n}` body this function already reads, so
-          /// asking "is this PR merged?" costs no request, no pagination and no extra scope. That matters
-          /// because the alternative — leaving merged-ness out of the domain — is what made the answer
-          /// `pending`. GitHub reports `mergeable: null` and `mergeable_state: "unknown"` for a merged PR
-          /// (measured on #1675: `state=closed merged=true mergeable=null`), so a reader that knows only
-          /// about mergeability sees the SAME shape as a PR whose background job has not finished, and
-          /// #950's arm maps that to `PrPending` — correctly, for the case it was written for, and
-          /// catastrophically for this one. The distinction is not inferable from `mergeable`; it has to
-          /// be READ. So it is read.
-          ///
-          /// `Merged` is NOT derived from `State = "closed"`: a closed PR may or may not have merged, and
-          /// conflating them is exactly the collapse #1680 AC4 refuses. Both are carried.
-          State: string option
-          Merged: bool }
+        {
+            Merge: MergeState
+            /// The head commit the PR OBJECT names — eventually consistent, so not necessarily the branch's
+            /// real tip (#955/#989/#995).
+            HeadSha: string option
+            /// The head BRANCH, which is what lets a stale `head.sha` be measured against that tip.
+            HeadRef: string option
+            /// The BASE branch — the branch whose policy decides whether GitHub will take this merge (#1575).
+            /// Read from the same object as the rest, so a verdict can never be scored against one PR's head
+            /// and another PR's base.
+            BaseRef: string option
+            /// `mergeable_state` — GITHUB'S OWN ANSWER to "will I take this merge?" (#1575), and the field
+            /// that makes the whole guard below free. `mergeable` says only "does it apply cleanly"; this
+            /// says whether the BASE BRANCH POLICY is satisfied — `clean`, `blocked` (a required context has
+            /// not passed, or has not reported at all), `behind` (a strict base moved), `draft`, `unstable`
+            /// (a NON-required check failed — GitHub still merges it), `dirty`, `unknown`.
+            ///
+            /// It is computed by the same lazy background job as `mergeable` and rides in the same object,
+            /// so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
+            MergeableState: string option
+            /// IS THE PR STILL OPEN, AND DID IT MERGE? (#1680) — `state` and `merged`, from the same object
+            /// as everything else here, so a verdict can never be scored against one PR's openness and
+            /// another PR's checks.
+            ///
+            /// Free, which is the point: both ride in the `pulls/{n}` body this function already reads, so
+            /// asking "is this PR merged?" costs no request, no pagination and no extra scope. That matters
+            /// because the alternative — leaving merged-ness out of the domain — is what made the answer
+            /// `pending`. GitHub reports `mergeable: null` and `mergeable_state: "unknown"` for a merged PR
+            /// (measured on #1675: `state=closed merged=true mergeable=null`), so a reader that knows only
+            /// about mergeability sees the SAME shape as a PR whose background job has not finished, and
+            /// #950's arm maps that to `PrPending` — correctly, for the case it was written for, and
+            /// catastrophically for this one. The distinction is not inferable from `mergeable`; it has to
+            /// be READ. So it is read.
+            ///
+            /// `Merged` is NOT derived from `State = "closed"`: a closed PR may or may not have merged, and
+            /// conflating them is exactly the collapse #1680 AC4 refuses. Both are carried.
+            State: string option
+            Merged: bool
+        }
 
     /// Read a PR once: its mergeability state, head SHA, head branch ref, and base branch ref.
-    let private prFacts
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : PrFacts option =
+    let private prFacts (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : PrFacts option =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
 
@@ -1628,45 +1679,44 @@ module Reads =
                     Error $"could not read %s{subject} — the payload is not an object"
                 else
 
-                match doc.RootElement.TryGetProperty "required_status_checks" with
-                | true, rsc when rsc.ValueKind = JsonValueKind.Object ->
-                    // `checks` is the current shape (context + app_id); `contexts` is the legacy one. Read
-                    // `checks` when it is there and fall back only when it is ABSENT — an empty `checks` is
-                    // "requires nothing", not "look somewhere else".
-                    let entries =
-                        match rsc.TryGetProperty "checks" with
-                        | true, checks when checks.ValueKind = JsonValueKind.Array ->
-                            checks.EnumerateArray()
-                            |> Seq.map (fun c ->
-                                if c.ValueKind = JsonValueKind.Object then
-                                    str c "context"
-                                else
-                                    None)
-                            |> List.ofSeq
-                            |> Some
-                        | _ ->
-                            match rsc.TryGetProperty "contexts" with
-                            | true, arr when arr.ValueKind = JsonValueKind.Array ->
-                                arr.EnumerateArray()
+                    match doc.RootElement.TryGetProperty "required_status_checks" with
+                    | true, rsc when rsc.ValueKind = JsonValueKind.Object ->
+                        // `checks` is the current shape (context + app_id); `contexts` is the legacy one. Read
+                        // `checks` when it is there and fall back only when it is ABSENT — an empty `checks` is
+                        // "requires nothing", not "look somewhere else".
+                        let entries =
+                            match rsc.TryGetProperty "checks" with
+                            | true, checks when checks.ValueKind = JsonValueKind.Array ->
+                                checks.EnumerateArray()
                                 |> Seq.map (fun c ->
-                                    if c.ValueKind = JsonValueKind.String then
-                                        Some(c.GetString())
+                                    if c.ValueKind = JsonValueKind.Object then
+                                        str c "context"
                                     else
                                         None)
                                 |> List.ofSeq
                                 |> Some
-                            | _ -> None
+                            | _ ->
+                                match rsc.TryGetProperty "contexts" with
+                                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                                    arr.EnumerateArray()
+                                    |> Seq.map (fun c ->
+                                        if c.ValueKind = JsonValueKind.String then
+                                            Some(c.GetString())
+                                        else
+                                            None)
+                                    |> List.ofSeq
+                                    |> Some
+                                | _ -> None
 
-                    match entries with
-                    | None -> Ok []
-                    // A required check we cannot NAME is one we decline to name. Dropping it silently
-                    // would shorten the list from a payload we did not understand.
-                    | Some list when list |> List.exists Option.isNone ->
-                        Error
-                            $"could not read %s{subject} — a required status check has no readable `context`"
-                    | Some list -> list |> List.choose id |> List.filter (fun c -> c <> "") |> Ok
-                // Protected, but not on status checks. A real answer.
-                | _ -> Ok []
+                        match entries with
+                        | None -> Ok []
+                        // A required check we cannot NAME is one we decline to name. Dropping it silently
+                        // would shorten the list from a payload we did not understand.
+                        | Some list when list |> List.exists Option.isNone ->
+                            Error $"could not read %s{subject} — a required status check has no readable `context`"
+                        | Some list -> list |> List.choose id |> List.filter (fun c -> c <> "") |> Ok
+                    // Protected, but not on status checks. A real answer.
+                    | _ -> Ok []
 
     /// Required contexts from RULESETS — the OTHER, entirely separate store. `branches/<b>/protection`
     /// does not report ruleset rules and `rules/branches/<b>` does not report classic protection; a branch
@@ -1687,7 +1737,12 @@ module Reads =
             $"repos/%s{owner}/%s{repo}/rules/branches/%s{Uri.EscapeDataString branch}"
 
         match
-            conditionalGet transport subject path [ "per_page", string CollectionPageSize ] (Page(CollectionPageSize, None))
+            conditionalGet
+                transport
+                subject
+                path
+                [ "per_page", string CollectionPageSize ]
+                (Page(CollectionPageSize, None))
         with
         | Error(NotFound _) ->
             Error
@@ -1921,231 +1976,215 @@ module Reads =
         | Some "closed", false -> PrClosed, 0, assertedSha
         | _ ->
 
-        let staleHead =
-            match facts.Merge, facts.HeadSha with
-            | Mergeable _, Some sha when expected |> Option.exists (fun e -> e <> sha) -> Some sha
-            | _ -> None
+            let staleHead =
+                match facts.Merge, facts.HeadSha with
+                | Mergeable _, Some sha when expected |> Option.exists (fun e -> e <> sha) -> Some sha
+                | _ -> None
 
-        match staleHead with
-        | Some sha ->
-            let want = defaultArg expected ""
+            match staleHead with
+            | Some sha ->
+                let want = defaultArg expected ""
 
-            PrPending,
-            0,
-            [ Asserted
-                  $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
-        | None ->
+                PrPending,
+                0,
+                [ Asserted
+                      $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+            | None ->
 
-        // Bound HERE, past the early return above, and matched on `expected = None` — so the read is spent on
-        // exactly one path and no other. A caller who passed `--sha` has already been answered (agreeing, or
-        // returned as stale above) and must not pay for a second opinion; `Computing`/`Absent`/`true` never
-        // reach it at all. `Option.exists` is the fail-closed half: an unreadable tip is `None`, which is
-        // `false`, which leaves the conflict standing.
-        let staleAgainstBranch =
-            match facts.Merge, facts.HeadSha, facts.HeadRef, expected with
-            | Mergeable false, Some sha, Some headRef, None ->
-                branchTip transport owner repo headRef |> Option.exists (fun tip -> tip <> sha)
-            | _ -> false
+                // Bound HERE, past the early return above, and matched on `expected = None` — so the read is spent on
+                // exactly one path and no other. A caller who passed `--sha` has already been answered (agreeing, or
+                // returned as stale above) and must not pay for a second opinion; `Computing`/`Absent`/`true` never
+                // reach it at all. `Option.exists` is the fail-closed half: an unreadable tip is `None`, which is
+                // `false`, which leaves the conflict standing.
+                let staleAgainstBranch =
+                    match facts.Merge, facts.HeadSha, facts.HeadRef, expected with
+                    | Mergeable false, Some sha, Some headRef, None ->
+                        branchTip transport owner repo headRef |> Option.exists (fun tip -> tip <> sha)
+                    | _ -> false
 
-        match facts.Merge, facts.HeadSha, facts.HeadRef with
-        // A `false` NOBODY ASSERTED A SHA FOR — §5's own `landable <pr> --wait`, and the form every worker
-        // runs (#989). #955 made the guard above reachable for a `false`; it is reachable only by a caller
-        // that passes `--sha`, and the recipe passes none, so the repair could not fire on the path it was
-        // for.
-        //
-        // Asking the RECIPE to pass `--sha "$(git rev-parse HEAD)"` was #955's own recommendation, and it
-        // has a race #955 did not see: a bot pushes to your item branch (`lockfile-sync.yml` is a
-        // `workflow_call` reusable ending in a bare push; `feed-autofix.yml` triggers `on: pull_request` and
-        // force-pushes), your worktree HEAD is then NOT the PR's head, and the assertion fails through no
-        // fault of yours — turning #955's TRANSIENT false `conflicted` into a PERMANENT false `pending`.
-        // That is strictly worse: waiting is exactly what the recipe tells you to do about a 7.
-        //
-        // So ask GIT, not the caller. The push updated `refs/heads/{branch}` synchronously — that IS the
-        // push — while the PR object is re-pointed by a background job, and this function's own contract has
-        // recorded the consequence since `--sha` was built: "for a second or so `pulls/{n}` still names the
-        // PREVIOUS commit". A tip that disagrees with `head.sha` is therefore not an opinion about what the
-        // caller believes; it is GitHub disagreeing with itself, and it means precisely "has not caught up".
-        // That is the fact #955 is about, MEASURED rather than asserted — and it is immune to the bot-push
-        // race, because it never asks what the caller believes. It is also why #955's t1 read `conflicted`
-        // at all: `--wait` returns a conflicted TERMINALLY on the first read, and the first read is exactly
-        // the one inside that window.
-        //
-        // Only on this path. A caller who passed `--sha` was answered above at no cost, and the green path
-        // never reaches here — so the extra REST read is paid on a conflicted verdict only, never on the
-        // merge that follows a green one.
-        //
-        // FAIL-CLOSED both ways (#266). A tip we cannot READ proves nothing, so the conflict stands: an
-        // unreadable ref must not manufacture a `pending` any more than it may manufacture a green. And an
-        // AGREEING tip means the PR really does name the branch's real head, so its `false` is about the
-        // code that would be merged — a real conflict, still terminal, still exit 3 on the first read.
-        | Mergeable false, _, _ when staleAgainstBranch -> PrPending, 0, []
-        | Mergeable false, _, _ -> PrConflicted, 0, []
-        // `Computing` and `Absent` MUST NOT share a body (#950). Both mean "no mergeability here", but only
-        // one of them can change: a `null` outliving the bounded re-read above is a background job that has
-        // not landed yet — GUARANTEED transient — while an absent field will never appear. Collapsing them
-        // made the transient one terminal, and `Landable.settled` settles `PrUnknown` at once, so `--wait`
-        // returned exit 4 on a seconds-old PR without waiting at all — the one form §5 tells workers to run.
-        // `PrPending` never settles, so `--wait` polls until GitHub answers; the 3-try budget is unchanged
-        // for single-shot callers, who now get a retryable 7 instead of a fail-closed 4.
-        //
-        // No unmet REASON, deliberately, though there is an obvious one to give. That list is the channel for
-        // assertions the CALLER added (`--require`, `--sha`) — its two producers are exactly those, and the
-        // stderr it feeds says so in as many words ("These are assertions you asked for"). Nobody asked for
-        // this one, so a reason here would print a true sentence under a false one. `PrConflicted`/`PrUnknown`
-        // give none for the same reason.
-        | Computing, _, _ -> PrPending, 0, []
-        | Absent, _, _ -> PrUnknown, 0, []
-        | Mergeable true, None, _ -> PrUnknown, 0, []
-        // The head SHA is reconciled above for a caller that PASSED `--sha`. One that did not has asserted
-        // nothing, so `sha` here is whatever the PR names — which, inside the force-push window, is the
-        // commit they REPLACED. See the green guard below (#995).
-        | Mergeable true, Some sha, headRef ->
-            match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
-            | Some runs, Some checks ->
-                let state, n = Landable.scoreRequired required (Some true) runs checks
+                match facts.Merge, facts.HeadSha, facts.HeadRef with
+                // A `false` NOBODY ASSERTED A SHA FOR — §5's own `landable <pr> --wait`, and the form every worker
+                // runs (#989). #955 made the guard above reachable for a `false`; it is reachable only by a caller
+                // that passes `--sha`, and the recipe passes none, so the repair could not fire on the path it was
+                // for.
+                //
+                // Asking the RECIPE to pass `--sha "$(git rev-parse HEAD)"` was #955's own recommendation, and it
+                // has a race #955 did not see: a bot pushes to your item branch (`lockfile-sync.yml` is a
+                // `workflow_call` reusable ending in a bare push; `feed-autofix.yml` triggers `on: pull_request` and
+                // force-pushes), your worktree HEAD is then NOT the PR's head, and the assertion fails through no
+                // fault of yours — turning #955's TRANSIENT false `conflicted` into a PERMANENT false `pending`.
+                // That is strictly worse: waiting is exactly what the recipe tells you to do about a 7.
+                //
+                // So ask GIT, not the caller. The push updated `refs/heads/{branch}` synchronously — that IS the
+                // push — while the PR object is re-pointed by a background job, and this function's own contract has
+                // recorded the consequence since `--sha` was built: "for a second or so `pulls/{n}` still names the
+                // PREVIOUS commit". A tip that disagrees with `head.sha` is therefore not an opinion about what the
+                // caller believes; it is GitHub disagreeing with itself, and it means precisely "has not caught up".
+                // That is the fact #955 is about, MEASURED rather than asserted — and it is immune to the bot-push
+                // race, because it never asks what the caller believes. It is also why #955's t1 read `conflicted`
+                // at all: `--wait` returns a conflicted TERMINALLY on the first read, and the first read is exactly
+                // the one inside that window.
+                //
+                // Only on this path. A caller who passed `--sha` was answered above at no cost, and the green path
+                // never reaches here — so the extra REST read is paid on a conflicted verdict only, never on the
+                // merge that follows a green one.
+                //
+                // FAIL-CLOSED both ways (#266). A tip we cannot READ proves nothing, so the conflict stands: an
+                // unreadable ref must not manufacture a `pending` any more than it may manufacture a green. And an
+                // AGREEING tip means the PR really does name the branch's real head, so its `false` is about the
+                // code that would be merged — a real conflict, still terminal, still exit 3 on the first read.
+                | Mergeable false, _, _ when staleAgainstBranch -> PrPending, 0, []
+                | Mergeable false, _, _ -> PrConflicted, 0, []
+                // `Computing` and `Absent` MUST NOT share a body (#950). Both mean "no mergeability here", but only
+                // one of them can change: a `null` outliving the bounded re-read above is a background job that has
+                // not landed yet — GUARANTEED transient — while an absent field will never appear. Collapsing them
+                // made the transient one terminal, and `Landable.settled` settles `PrUnknown` at once, so `--wait`
+                // returned exit 4 on a seconds-old PR without waiting at all — the one form §5 tells workers to run.
+                // `PrPending` never settles, so `--wait` polls until GitHub answers; the 3-try budget is unchanged
+                // for single-shot callers, who now get a retryable 7 instead of a fail-closed 4.
+                //
+                // No unmet REASON, deliberately, though there is an obvious one to give. That list is the channel for
+                // assertions the CALLER added (`--require`, `--sha`) — its two producers are exactly those, and the
+                // stderr it feeds says so in as many words ("These are assertions you asked for"). Nobody asked for
+                // this one, so a reason here would print a true sentence under a false one. `PrConflicted`/`PrUnknown`
+                // give none for the same reason.
+                | Computing, _, _ -> PrPending, 0, []
+                | Absent, _, _ -> PrUnknown, 0, []
+                | Mergeable true, None, _ -> PrUnknown, 0, []
+                // The head SHA is reconciled above for a caller that PASSED `--sha`. One that did not has asserted
+                // nothing, so `sha` here is whatever the PR names — which, inside the force-push window, is the
+                // commit they REPLACED. See the green guard below (#995).
+                | Mergeable true, Some sha, headRef ->
+                    match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
+                    | Some runs, Some checks ->
+                        let state, n = Landable.scoreRequired required (Some true) runs checks
 
-                let unmet =
-                    Landable.missing required runs checks
-                    |> List.map (fun name -> Asserted $"required check `%s{name}` has not reported")
+                        let unmet =
+                            Landable.missing required runs checks
+                            |> List.map (fun name -> Asserted $"required check `%s{name}` has not reported")
 
-                // DO NOT CALL THE REPLACED COMMIT'S GREEN OURS (#995, epic #266).
-                //
-                // #955 and #989 repaired this same stale head on the `false` arm, where it failed CLOSED —
-                // a false `conflicted` that cost the worker an hour. HERE IT FAILS OPEN, and the cost is
-                // untested code on `main`: `pulls/{n}` names the pre-rebase commit for a beat after a
-                // force-push, its runs are COMPLETE and GREEN, and they are not about the code that would be
-                // merged. This function's contract has said exactly that since `--sha` was built (#737) —
-                // "whose checks are green and are not about the code that would be merged" — and named
-                // `--sha` as the guard. §5 runs `landable <pr> --wait` and passes none, so the guard was
-                // unreachable on the one path every worker runs. That is #989's gap, on the arm where being
-                // wrong merges rather than stalls.
-                //
-                // Measured on PR #993 (#989's own evidence, re-read for what it says about `true`): the
-                // instant the push returned, `ref-tip=NEW  pr.head=OLD  mergeable=true`. Score that and
-                // `--wait` settles GREEN on its FIRST read, over the dead commit's checks.
-                //
-                // ONLY WHEN THE SCORE IS GREEN, and that is what makes this affordable rather than a tax on
-                // every poll. `--wait` polls many times and stops at the first settling verdict, so the green
-                // arm is reached ONCE per invocation — one REST request to know the checks we scored belong
-                // to the commit that will merge. A red or pending never reads the ref: it is already not
-                // merging. `expected = Some` never reaches it either — that caller was answered above, for
-                // free, and asserted the SHA itself.
-                //
-                // FAIL-CLOSED (#266): a tip we cannot READ leaves the green alone. An unreadable ref proves
-                // nothing, and manufacturing a `pending` from it would strand every caller whose ref read
-                // 404s — the fix, failing open in the other direction.
-                match state, headRef with
-                | PrGreen, Some r when
-                    expected.IsNone
-                    && branchTip transport owner repo r |> Option.exists (fun tip -> tip <> sha)
-                    ->
-                    PrPending, 0, []
-                // A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT A PASSING ONE (#1575, epic #266).
-                //
-                // The rollup above asks "is anything red?", and that question is structurally blind to a
-                // subject that is ABSENT — #606's lesson, which `--require` already closes for checks the
-                // CALLER names. What it did not close is the set GitHub itself will hold the merge on. So
-                // this command answered `green`, exit 0, for a PR GitHub then refused:
-                //
-                //     $ landable 1027 --repo FS.GG.Rendering --wait --sha 69367d92
-                //     green
-                //     $ gh pr merge 1027 --squash
-                //     X ... the base branch policy prohibits the merge.
-                //
-                // `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all 18 reporting check runs SUCCESS —
-                // and the required context `skill-union / skill-union` had NO CHECK RUN AT ALL, because the
-                // workflow that produces it was added to `main` AFTER this PR's head was pushed. A context
-                // that never reports is not a context that fails, and nothing in an "is anything red?"
-                // rollup can see the difference.
-                //
-                // THE FAILURE DIRECTION WAS THE SAFE ONE — GitHub still refused — so this never merged
-                // anything bad. It is still a false verdict, and `landable` is the gate the whole worker
-                // protocol keys on (`pnext-item` §5 says merge only on this word). A verdict of `green`
-                // that GitHub refuses answers a different question from the one its caller asked.
-                //
-                // ASK THE PULL REQUEST, NOT THE BRANCH POLICY. #1575 proposed deriving the must-have-
-                // reported set from `branches/{b}/protection` and comparing it to the head's check runs.
-                // That read needs `administration: read`, which is NOT A VALID `permissions:` SCOPE for a
-                // workflow's GITHUB_TOKEN at all — and `landable`'s own unattended caller,
-                // `skill-registry-autofix.yml`, "runs entirely under GITHUB_TOKEN" in that file's own
-                // words. A verdict resting on it would 403 there forever, which is #463 restored: a
-                // protection probe that 403'd on every receiver, fell through to the fail-closed arm, and
-                // stopped the kit landing anywhere. #463's ratified repair was to ask the PR instead, and
-                // that is recorded as the better design on its merits.
-                //
-                // `mergeable_state` IS THAT ANSWER, and it is already in the object above — same lazy
-                // background job as `mergeable`, same request, no extra scope, no new failure mode. It is
-                // also strictly WIDER than the derived set: it accounts for a required context that never
-                // reported, for one satisfied by a legacy commit STATUS rather than a check run, for
-                // app-id mismatch, for a strict base the branch has fallen behind, for required reviews
-                // and unresolved conversations. Every one of those refuses a merge this command was about
-                // to call finished.
-                //
-                // ONLY THE STATES GITHUB ACTUALLY REFUSES. `unstable` is NOT among them — it means a
-                // NON-required check failed, which GitHub merges (our own rollup reds it first anyway, and
-                // that is a deliberate house rule, not GitHub's). `clean` is the merge path and must stay
-                // exactly as fast as it was. An ABSENT field is NO OPINION, not a refusal: it is not a
-                // permission-gated read but part of a body we already hold, so its absence means the
-                // payload is not what github.com serves — and manufacturing a refusal from it would
-                // strand every caller against a fixture or a GHES that omits it.
-                //
-                // `PrPending`, NOT `PrRed` — the same call `scoreRequired` makes for a missing required
-                // check, for the same reason. "It has not reported" is literally the pending sentence, and
-                // it is usually transient. `pending` never settles, so `--wait` rides out the transient
-                // case and refuses the permanent one when its tries run out — the same no-merge, reached
-                // honestly, and never a green.
-                //
-                // THE POLICY READ BELOW IS DIAGNOSIS AND MAY FAIL. It names WHICH context has not
-                // reported, which is the difference between a diagnosis and a mystery — but the verdict is
-                // already decided, so a 403 or a rate limit costs a sentence, not a merge. That is what
-                // keeps the fail-closed rule on the question the fleet can answer.
-                | PrGreen, _ when refusedState facts |> Option.isSome ->
-                    let refusal = (refusedState facts).Value
-                    let baseRef = defaultArg facts.BaseRef "the base branch"
+                        // DO NOT CALL THE REPLACED COMMIT'S GREEN OURS (#995, epic #266).
+                        //
+                        // #955 and #989 repaired this same stale head on the `false` arm, where it failed CLOSED —
+                        // a false `conflicted` that cost the worker an hour. HERE IT FAILS OPEN, and the cost is
+                        // untested code on `main`: `pulls/{n}` names the pre-rebase commit for a beat after a
+                        // force-push, its runs are COMPLETE and GREEN, and they are not about the code that would be
+                        // merged. This function's contract has said exactly that since `--sha` was built (#737) —
+                        // "whose checks are green and are not about the code that would be merged" — and named
+                        // `--sha` as the guard. §5 runs `landable <pr> --wait` and passes none, so the guard was
+                        // unreachable on the one path every worker runs. That is #989's gap, on the arm where being
+                        // wrong merges rather than stalls.
+                        //
+                        // Measured on PR #993 (#989's own evidence, re-read for what it says about `true`): the
+                        // instant the push returned, `ref-tip=NEW  pr.head=OLD  mergeable=true`. Score that and
+                        // `--wait` settles GREEN on its FIRST read, over the dead commit's checks.
+                        //
+                        // ONLY WHEN THE SCORE IS GREEN, and that is what makes this affordable rather than a tax on
+                        // every poll. `--wait` polls many times and stops at the first settling verdict, so the green
+                        // arm is reached ONCE per invocation — one REST request to know the checks we scored belong
+                        // to the commit that will merge. A red or pending never reads the ref: it is already not
+                        // merging. `expected = Some` never reaches it either — that caller was answered above, for
+                        // free, and asserted the SHA itself.
+                        //
+                        // FAIL-CLOSED (#266): a tip we cannot READ leaves the green alone. An unreadable ref proves
+                        // nothing, and manufacturing a `pending` from it would strand every caller whose ref read
+                        // 404s — the fix, failing open in the other direction.
+                        match state, headRef with
+                        | PrGreen, Some r when
+                            expected.IsNone
+                            && branchTip transport owner repo r |> Option.exists (fun tip -> tip <> sha)
+                            ->
+                            PrPending, 0, []
+                        // A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT A PASSING ONE (#1575, epic #266).
+                        //
+                        // The rollup above asks "is anything red?", and that question is structurally blind to a
+                        // subject that is ABSENT — #606's lesson, which `--require` already closes for checks the
+                        // CALLER names. What it did not close is the set GitHub itself will hold the merge on. So
+                        // this command answered `green`, exit 0, for a PR GitHub then refused:
+                        //
+                        //     $ landable 1027 --repo FS.GG.Rendering --wait --sha 69367d92
+                        //     green
+                        //     $ gh pr merge 1027 --squash
+                        //     X ... the base branch policy prohibits the merge.
+                        //
+                        // `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all 18 reporting check runs SUCCESS —
+                        // and the required context `skill-union / skill-union` had NO CHECK RUN AT ALL, because the
+                        // workflow that produces it was added to `main` AFTER this PR's head was pushed. A context
+                        // that never reports is not a context that fails, and nothing in an "is anything red?"
+                        // rollup can see the difference.
+                        //
+                        // THE FAILURE DIRECTION WAS THE SAFE ONE — GitHub still refused — so this never merged
+                        // anything bad. It is still a false verdict, and `landable` is the gate the whole worker
+                        // protocol keys on (`pnext-item` §5 says merge only on this word). A verdict of `green`
+                        // that GitHub refuses answers a different question from the one its caller asked.
+                        //
+                        // ASK THE PULL REQUEST, NOT THE BRANCH POLICY. #1575 proposed deriving the must-have-
+                        // reported set from `branches/{b}/protection` and comparing it to the head's check runs.
+                        // That read needs `administration: read`, which is NOT A VALID `permissions:` SCOPE for a
+                        // workflow's GITHUB_TOKEN at all — and `landable`'s own unattended caller,
+                        // `skill-registry-autofix.yml`, "runs entirely under GITHUB_TOKEN" in that file's own
+                        // words. A verdict resting on it would 403 there forever, which is #463 restored: a
+                        // protection probe that 403'd on every receiver, fell through to the fail-closed arm, and
+                        // stopped the kit landing anywhere. #463's ratified repair was to ask the PR instead, and
+                        // that is recorded as the better design on its merits.
+                        //
+                        // `mergeable_state` IS THAT ANSWER, and it is already in the object above — same lazy
+                        // background job as `mergeable`, same request, no extra scope, no new failure mode. It is
+                        // also strictly WIDER than the derived set: it accounts for a required context that never
+                        // reported, for one satisfied by a legacy commit STATUS rather than a check run, for
+                        // app-id mismatch, for a strict base the branch has fallen behind, for required reviews
+                        // and unresolved conversations. Every one of those refuses a merge this command was about
+                        // to call finished.
+                        //
+                        // ONLY THE STATES GITHUB ACTUALLY REFUSES. `unstable` is NOT among them — it means a
+                        // NON-required check failed, which GitHub merges (our own rollup reds it first anyway, and
+                        // that is a deliberate house rule, not GitHub's). `clean` is the merge path and must stay
+                        // exactly as fast as it was. An ABSENT field is NO OPINION, not a refusal: it is not a
+                        // permission-gated read but part of a body we already hold, so its absence means the
+                        // payload is not what github.com serves — and manufacturing a refusal from it would
+                        // strand every caller against a fixture or a GHES that omits it.
+                        //
+                        // `PrPending`, NOT `PrRed` — the same call `scoreRequired` makes for a missing required
+                        // check, for the same reason. "It has not reported" is literally the pending sentence, and
+                        // it is usually transient. `pending` never settles, so `--wait` rides out the transient
+                        // case and refuses the permanent one when its tries run out — the same no-merge, reached
+                        // honestly, and never a green.
+                        //
+                        // THE POLICY READ BELOW IS DIAGNOSIS AND MAY FAIL. It names WHICH context has not
+                        // reported, which is the difference between a diagnosis and a mystery — but the verdict is
+                        // already decided, so a 403 or a rate limit costs a sentence, not a merge. That is what
+                        // keeps the fail-closed rule on the question the fleet can answer.
+                        | PrGreen, _ when refusedState facts |> Option.isSome ->
+                            let refusal = (refusedState facts).Value
+                            let baseRef = defaultArg facts.BaseRef "the base branch"
 
-                    let named =
-                        match facts.BaseRef with
-                        | None ->
-                            [ PolicyUnreadable
-                                  "the PR object named no base branch, so its policy could not be read to say which requirement is unmet" ]
-                        | Some b ->
-                            match requiredContexts transport owner repo b with
-                            | RequiredUnreadable why -> [ PolicyUnreadable why ]
-                            | RequiredContexts contexts ->
-                                Landable.missing contexts runs checks
-                                |> List.map (fun c -> NotReported(c, b))
+                            let named =
+                                match facts.BaseRef with
+                                | None ->
+                                    [ PolicyUnreadable
+                                          "the PR object named no base branch, so its policy could not be read to say which requirement is unmet" ]
+                                | Some b ->
+                                    match requiredContexts transport owner repo b with
+                                    | RequiredUnreadable why -> [ PolicyUnreadable why ]
+                                    | RequiredContexts contexts ->
+                                        Landable.missing contexts runs checks |> List.map (fun c -> NotReported(c, b))
 
-                    PrPending, n, (Refused(refusal, baseRef) :: named) @ unmet
-                | _ -> state, n, unmet
-            | _ -> PrUnknown, 0, []
+                            PrPending, n, (Refused(refusal, baseRef) :: named) @ unmet
+                        | _ -> state, n, unmet
+                    | _ -> PrUnknown, 0, []
 
-    let prLandableN
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : PrState * int =
+    let prLandableN (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : PrState * int =
         let state, n, _ = prLandableRequire transport owner repo pr [] None
         state, n
 
-    let prLandable
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : PrState =
+    let prLandable (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : PrState =
         prLandableN transport owner repo pr |> fst
 
     [<Literal>]
     let private ClosingRefDoc =
         "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
 
-    let prClosingRef
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        (pr: int)
-        : IoResult<Ref option> =
+    let prClosingRef (transport: IGitHubTransport) (owner: string) (repo: string) (pr: int) : IoResult<Ref option> =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} closing refs"
 
@@ -2198,7 +2237,12 @@ module Reads =
                         | Some num, Some nwo when nwo.Contains "/" ->
                             let parts = nwo.Split('/')
 
-                            Ok(Some { Owner = parts.[0]; Repo = parts.[1]; Number = num })
+                            Ok(
+                                Some
+                                    { Owner = parts.[0]
+                                      Repo = parts.[1]
+                                      Number = num }
+                            )
                         | _ -> Ok None
                 with
                 | :? System.Collections.Generic.KeyNotFoundException
@@ -2213,11 +2257,7 @@ module Reads =
 
     type OpenIssue = { Number: int; Body: IssueBodyRead }
 
-    let openIssues
-        (transport: IGitHubTransport)
-        (owner: string)
-        (repo: string)
-        : IoResult<OpenIssue list> =
+    let openIssues (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<OpenIssue list> =
 
         let subject = $"%s{owner}/%s{repo} open issues"
 
@@ -2260,42 +2300,42 @@ module Reads =
                         | true, _ -> Ok None
                         | _ ->
 
-                        match i.TryGetProperty "number" with
-                        // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
-                        // carried as an unreadable ENTRY the way a marker scan is keyed
-                        // on the number, so there is no lock to look up, no ref to report, and nothing a
-                        // caller could fail closed *about*. Dropping it was the fail-open — the issue
-                        // vanished from the claim scan, its lock reserved nothing, and nothing anywhere
-                        // said an element had been discarded. #266: never "I looked and it was fine".
-                        | true, n when n.ValueKind <> JsonValueKind.Number ->
-                            Error(
-                                Malformed(
-                                    subject,
-                                    $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                            match i.TryGetProperty "number" with
+                            // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
+                            // carried as an unreadable ENTRY the way a marker scan is keyed
+                            // on the number, so there is no lock to look up, no ref to report, and nothing a
+                            // caller could fail closed *about*. Dropping it was the fail-open — the issue
+                            // vanished from the claim scan, its lock reserved nothing, and nothing anywhere
+                            // said an element had been discarded. #266: never "I looked and it was fine".
+                            | true, n when n.ValueKind <> JsonValueKind.Number ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                    )
                                 )
-                            )
-                        | false, _ ->
-                            Error(
-                                Malformed(
-                                    subject,
-                                    $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                            | false, _ ->
+                                Error(
+                                    Malformed(
+                                        subject,
+                                        $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
+                                    )
                                 )
-                            )
-                        | true, n ->
-                            let body =
-                                match i.TryGetProperty "body" with
-                                | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
-                                // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
-                                // for an issue nobody wrote a description for; the issue exists and declares
-                                // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
-                                // .github#1794 names is not this line — it is that the two lines below used
-                                // to be this line.
-                                | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
-                                | true, b ->
-                                    BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
-                                | false, _ -> BodyUnread "the element carries no `body` field"
+                            | true, n ->
+                                let body =
+                                    match i.TryGetProperty "body" with
+                                    | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
+                                    // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
+                                    // for an issue nobody wrote a description for; the issue exists and declares
+                                    // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
+                                    // .github#1794 names is not this line — it is that the two lines below used
+                                    // to be this line.
+                                    | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
+                                    | true, b ->
+                                        BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
+                                    | false, _ -> BodyUnread "the element carries no `body` field"
 
-                            Ok(Some { Number = n.GetInt32(); Body = body })
+                                Ok(Some { Number = n.GetInt32(); Body = body })
 
                     // Short-circuit on the first refusal. `List.fold` would read the rest of the array to
                     // no purpose, and an `Error` is an answer about the WHOLE read, not about one element.

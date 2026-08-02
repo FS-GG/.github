@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2144-quoted-diff-inventory/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "050d8bac7f038dbfd221114b0cb86828f0aef3041c781a7cdb8ea4f92e853281"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2144-quoted-diff-inventory/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "a081783172f43bdd528ba7e161d3bac9001f21573c4e3f4f1ce3cd390b0fb351"
+        "value": "141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -316,7 +326,7 @@
     {
       "path": "readiness/2144-quoted-diff-inventory/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
