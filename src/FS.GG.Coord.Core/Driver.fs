@@ -12,6 +12,12 @@ module Driver =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
+    type Receipt =
+        { ObservedAt: int64; SourceSha: string; Complete: bool }
+
+    let receiptFresh now maxAgeSeconds receipt =
+        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
+
     type WorkerReturn =
         { ClaimLive: bool; ReviewReady: bool; ParkedOrDone: bool }
 

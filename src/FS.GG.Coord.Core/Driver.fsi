@@ -13,6 +13,11 @@ module Driver =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
+    type Receipt =
+        { ObservedAt: int64; SourceSha: string; Complete: bool }
+
+    val receiptFresh: now: int64 -> maxAgeSeconds: int64 -> Receipt -> bool
+
     type WorkerReturn =
         { ClaimLive: bool; ReviewReady: bool; ParkedOrDone: bool }
 

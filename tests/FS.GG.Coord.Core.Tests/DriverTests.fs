@@ -9,6 +9,11 @@ module DriverTests =
     let clean = { HasHostIdentity = true; StaleClaim = false; EngineCurrent = true; PendingWrites = 0; ReconcileDryRunFresh = true; ReconcileApplied = true; ReconcileFresh = true; TriageFresh = true; CurrencyScoped = true }
 
     [<Fact>]
+    let ``#2127 receipts are source-bound complete and fresh`` () =
+        Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true })
+        Assert.False(receiptFresh 120L 30L { ObservedAt = 80L; SourceSha = "abc"; Complete = true })
+
+    [<Fact>]
     let ``#2127 6 to 2 consolidates then dispatches a fresh three-slot wave`` () =
         Assert.Equal(Consolidate, nextAction model 2 false clean [])
         Assert.Equal(DispatchWave 3, nextAction model 2 true clean [])
