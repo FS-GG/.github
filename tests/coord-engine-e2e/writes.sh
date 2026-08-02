@@ -840,7 +840,7 @@ no_mutation_verdict "predicate" 4 env FSGG_REGISTRY="$PREDICATE_FIX/registry/ski
 
 # `diff-audit` reads two immutable objects and declared paths from this checkout.  HEAD/HEAD is the
 # executable zero-occurrence control; its dedicated CLI tests cover a planted rename and bad revision.
-no_mutation "diff-audit" "$ENGINE" diff-audit HEAD HEAD oldName newName --repo . --paths src/FS.GG.Coord.Core/SemanticDiff.fs
+no_mutation "diff-audit" "$ENGINE" diff-audit HEAD HEAD oldName newName --repo "$REPO_ROOT" --paths src/FS.GG.Coord.Core/SemanticDiff.fs
 
 # `--apply` is a valid alternative argv shape even when this fixture finds no safe repair/reap.
 # Do not call a non-zero no-op (or a parser refusal) evidence: both commands must complete their
