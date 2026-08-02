@@ -487,6 +487,35 @@ let ``an issue with a NULL body reads as empty - that is a successful read, not 
     | Ok "" -> ()
     | other -> failwith $"a null body is an empty body — got %A{other}"
 
+// ---- .github#2107: a PR's own body, for the board-shorthand closing-keyword check -------------------
+
+[<Fact>]
+let ``a PR with a NULL body reads as empty - that is a successful read, not a failure`` () =
+    // `issueBody`'s exact sibling rule: a PR nobody described is a real, successfully-observed fact.
+    let recorder = serving """{"number":801,"body":null}"""
+
+    match Reads.prBody recorder "FS-GG" ".github" 801 with
+    | Ok "" -> ()
+    | other -> failwith $"a null PR body is an empty body — got %A{other}"
+
+[<Fact>]
+let ``a PR body we could NOT read is an error - never an empty string`` () =
+    let recorder = failing (Http(502, "bad gateway"))
+
+    match Reads.prBody recorder "FS-GG" ".github" 801 with
+    | Error(Http(502, _)) -> ()
+    | other -> failwith $"an unreadable PR body must not become an empty read — got %A{other}"
+
+[<Fact>]
+let ``a PR body that IS a string reads back exactly, closing-keyword defects and all`` () =
+    // The whole reason this read exists (.github#2107): `verify-paths` scans exactly this text for a
+    // closing keyword next to the board's own '<repo>#<n>' shorthand.
+    let recorder = serving """{"number":801,"body":"Closes .github#2095"}"""
+
+    match Reads.prBody recorder "FS-GG" ".github" 801 with
+    | Ok "Closes .github#2095" -> ()
+    | other -> failwith $"expected the body verbatim — got %A{other}"
+
 [<Fact>]
 let ``an issue body we could NOT read is an error - never an empty touch-set`` () =
     // This is the one that matters. Coercing an unread body to `Undeclared` would report a confident

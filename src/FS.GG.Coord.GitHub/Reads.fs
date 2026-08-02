@@ -1166,6 +1166,39 @@ module Reads =
                         |> List.ofSeq
                     )
 
+    let prBody
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} body"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                // `issueBody`'s exact rule: `"body": null` is a real, successfully-read fact (a PR nobody
+                // described), not a failure — the failed-read case already returned `Error` above.
+                match doc.RootElement.TryGetProperty "body" with
+                | true, v when v.ValueKind = JsonValueKind.String -> Ok(v.GetString())
+                | true, v when v.ValueKind = JsonValueKind.Null -> Ok ""
+                | _ -> Ok ""
+
     /// A JSON element's `int64` property, or `None` — for `check_suite.id` / `check_suite_id`.
     let private int64Of (e: JsonElement) (name: string) =
         match e.TryGetProperty name with

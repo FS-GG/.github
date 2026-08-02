@@ -5480,6 +5480,53 @@ module Client =
             | Result.Error rc -> rc
             | Ok repo ->
 
+            // .github#2107 — the org's own board shorthand `<repo>#<n>` (RefParsing's OWN 'short' form,
+            // the one `take`/`claim`/`widen`/every recipe teaches) is NOT GitHub's closing-keyword
+            // grammar: it wants a bare `#<n>` for a same-repo issue, or `owner/repo#<n>` for a cross-repo
+            // one. Written next to a closing verb it renders as plain text — GitHub never links it, the
+            // merge never closes the issue, and there is no repair once the PR has merged (editing the
+            // body does not replay the close). Checked HERE, independently of the touch-set verdict below,
+            // because this is the one moment fixing it is free — the PR is still open.
+            //
+            // A prBody READ FAILURE never contaminates the touch-set verdict: this is an ADDITIONAL check
+            // bolted onto an existing command, and a network hiccup on this one extra call must not turn an
+            // otherwise-healthy touch-set run red.
+            let closingFindings =
+                match Reads.prBody ctx.Transport owner repo pr with
+                | Error e ->
+                    eprint
+                        $"fsgg-coord-engine: verify-paths: could not read PR #%d{pr}'s body to check for board-shorthand closing keywords (%s{Errors.explain e}) — skipping that check."
+
+                    []
+                | Ok body -> RefParsing.boardShorthandCloses body
+
+            // Applied to every leaf that would otherwise report GREEN or RED: a closing-keyword defect is
+            // worth failing on even when the touch-set itself is clean, or when there is no touch-set to
+            // check at all. Left UNCHANGED on every other code (NO-VERDICT, ERROR, the straddle refusal) —
+            // those already mean "no confident verdict was reached", and this is not the check that gets to
+            // override that.
+            let combine (rc: int) : int =
+                if List.isEmpty closingFindings || not (rc = ExitGreen || rc = ExitRed) then
+                    rc
+                else
+                    printfn
+                        "FSGG-CLOSES DEFECT — PR #%d's body writes a closing keyword next to the board's OWN '<repo>#<n>' shorthand, which GitHub's closing-keyword grammar does not parse:"
+                        pr
+
+                    for f in closingFindings do
+                        printfn "    `%s`" f.Matched
+
+                        printfn
+                            "      GitHub will NOT close %s from this. Use a bare '#%s' (same-repo) or 'owner/repo#%s' (cross-repo)."
+                            f.Ref
+                            f.Number
+                            f.Number
+
+                    eprint
+                        "  Fix the PR body now — this is unrecoverable once the PR is merged (editing a merged PR's body does not replay the close, .github#2107)."
+
+                    ExitRed
+
             // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
             // says nothing about the files changed in the other, and printing a verdict on the wrong subject
             // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
@@ -5531,7 +5578,7 @@ module Client =
                     "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
                     pr
 
-                ExitGreen
+                combine ExitGreen
             | Ok(Some issue) ->
                 // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
                 // against B's paths — those say nothing about A's files (#353).
@@ -5545,7 +5592,7 @@ module Client =
                         issue.Repo
                         issue.Number
 
-                    ExitGreen
+                    combine ExitGreen
                 else
 
                 match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
@@ -5558,7 +5605,7 @@ module Client =
                     // could stray outside of — nothing to verify against (#1103 leg 8).
                     | DeclaredChore ->
                         printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
-                        ExitGreen
+                        combine ExitGreen
                     | Unreadable reason ->
                         // Should not happen (we just read the body), but the type demands it be handled, and
                         // "I could not read the body" is an error, never a SKIP.
@@ -5577,7 +5624,7 @@ module Client =
                             let bad = String.Join(", ", unmatchable)
                             printfn "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s" issue.Short bad
                             eprint $"  %s{Schedulability.TouchSetGrammar}"
-                            if opts.Warn then ExitGreen else ExitRed
+                            combine (if opts.Warn then ExitGreen else ExitRed)
                         else
 
                         match Reads.prFiles ctx.Transport owner repo pr with
@@ -5652,7 +5699,7 @@ module Client =
                             if List.isEmpty undeclared then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
                                 reportRegenerated ()
-                                ExitGreen
+                                combine ExitGreen
                             else
                                 printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
 
@@ -5663,7 +5710,7 @@ module Client =
 
                                 reportRegenerated ()
                                 eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
-                                if opts.Warn then ExitGreen else ExitRed
+                                combine (if opts.Warn then ExitGreen else ExitRed)
 
     // ---- identity --------------------------------------------------------------------------------------
 

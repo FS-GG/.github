@@ -25,3 +25,33 @@ module RefParsing =
                         | Some repo -> numbered owner repo bare.Groups.[1].Value
                         | None -> Error $"cannot resolve the bare issue number '%s{raw}' — no %s{owner} repo to infer it from (no --repo, and this is not a %s{owner} checkout). Name the repo: use a URL, owner/repo#n, or repo#n."
                     else Error $"unrecognised issue ref '%s{raw}' (%s{forms})."
+
+    type BoardShorthandClose =
+        { Matched: string
+          Ref: string
+          Number: string }
+
+    // `\s+` between the keyword and the ref is load-bearing, not decorative — it is what makes the
+    // TWO valid GitHub forms structurally unable to match:
+    //   * a bare `#2095`   — `[\w.-]+` demands at least one character before `#`, and a bare ref has
+    //     none right after the required whitespace, so the token class never gets started.
+    //   * `owner/repo#2095` — `[\w.-]+` excludes `/`, so it can capture at most `repo`'s side, and
+    //     the character immediately after that partial capture is `/`, never the `#` the pattern
+    //     requires next. Every backtrack shrinks the same way and never reaches `#`.
+    // Only the board's OWN `<repo>#<n>` shorthand — a single `[\w.-]+` token, no `/`, immediately
+    // followed by `#<n>` — satisfies both constraints at once, which is exactly the one form GitHub
+    // will not parse.
+    let private boardShorthandCloseDoc =
+        Text.RegularExpressions.Regex(
+            @"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s+([\w.-]+)#(\d+)",
+            Text.RegularExpressions.RegexOptions.IgnoreCase
+        )
+
+    let boardShorthandCloses (body: string) : BoardShorthandClose list =
+        boardShorthandCloseDoc.Matches(body)
+        |> Seq.cast<Text.RegularExpressions.Match>
+        |> Seq.map (fun m ->
+            { Matched = m.Value
+              Ref = $"%s{m.Groups.[1].Value}#%s{m.Groups.[2].Value}"
+              Number = m.Groups.[2].Value })
+        |> List.ofSeq
