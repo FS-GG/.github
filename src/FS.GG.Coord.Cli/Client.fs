@@ -798,6 +798,25 @@ module Client =
 
                 ExitGreen
 
+    /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
+    let driver (ctx: Context) (opts: Options) : int =
+        match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
+        | Error e, _ -> eprint (Errors.explain e); ExitError
+        | _, Error e -> eprint e; ExitError
+        | Ok(_, doc, _), Ok model ->
+            match activeItemRefs doc with
+            | Error e -> eprint e; ExitError
+            | Ok active ->
+                let action =
+                    Driver.nextAction model (List.length active) false
+                        { HasHostIdentity = true; StaleClaim = false; EngineCurrent = true; PendingWrites = 0
+                          ReconcileDryRunFresh = true; ReconcileApplied = true; ReconcileFresh = true
+                          TriageFresh = true; CurrencyScoped = true } []
+                match opts.Render with
+                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"action\":\"%A\"}" (List.length active) model.ReviewSlots action
+                | Text -> printfn "%A" action
+                ExitGreen
+
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
     /// already dropped, #533).
@@ -7273,6 +7292,7 @@ module Client =
             match opts.Command with
             | Next -> next ctx opts
             | BatchCmd -> batch ctx opts
+            | DriverCmd -> driver ctx opts
             | Ready -> ready ctx opts
             | Reconcile -> reconcile ctx opts
             | Who -> who ctx opts
