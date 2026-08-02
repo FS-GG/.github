@@ -1,0 +1,96 @@
+schemaVersion: 1
+work:
+  id: 2086-independent-review-runtime-route
+  title: "Require critic production-route execution evidence"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2086-independent-review-runtime-route/spec.md
+  sourceClarifications: work/2086-independent-review-runtime-route/clarifications.md
+  sourceChecklist: work/2086-independent-review-runtime-route/checklist.md
+  sourcePlan: work/2086-independent-review-runtime-route/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2086-independent-review-runtime-route/spec.md
+    digest: cb3c18d5182da42f9eb24f5a5b74bd3f104424c347c0ee1d8eb601eb9abe83f9
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2086-independent-review-runtime-route/clarifications.md
+    digest: 412024357517f8a6a82b4748fcb5328770d043e992b27cf7b86eb7d7b3ae3fd2
+    schemaVersion: 1
+  - label: checklist
+    path: work/2086-independent-review-runtime-route/checklist.md
+    digest: c3168148bc840d099dcd02bac354570ac63ac244fbfe5279876ab903fedc5fa5
+    schemaVersion: 1
+  - label: plan
+    path: work/2086-independent-review-runtime-route/plan.md
+    digest: 8500a10c624b5e31ee01252a2480f6898eb996de521d556200c895db64c34907
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001, PD-002, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-003, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV006]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2086-independent-review-runtime-route."

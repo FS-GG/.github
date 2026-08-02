@@ -9,6 +9,26 @@ The host reserves a slot for the critic and keeps the implementing worker alive 
 The critic reviews requirements coverage, correctness, regressions, tests/evidence, architecture and
 ownership boundaries, release obligations, and touch-set honesty.
 
+## Runtime-route evidence gate
+
+Source review remains required, but it is not sufficient for a runtime-route divergence claim. When
+the PR's requirements, claimed behavior, or a candidate finding concern runtime behavior reachable
+through more than one meaningful route, the critic **must execute or measure** at least one comparison
+through the production route against the built artifact. The comparison must observe the behavior that
+could diverge (for example, a player input route and its direct dispatch), rather than merely assert
+that the source implementations look equivalent.
+
+The critic records the built artifact, command or measurement, compared routes, and observed result in
+the review report with `Verification:`. A report that cites only source reading for such a claim is
+incomplete; it cannot be accepted as evidence that the routes agree. If no meaningful production-route
+comparison exists for the review subject, the critic states that boundary and why under `Verification:`;
+that exception does not waive the rest of the required source review.
+
+This is reusable guidance, not an audio-specific recipe. Rogue3 exposed the shape when a built product
+route emitted `[]` while direct dispatch emitted `[PlaySfx (SoundId "floor-descend", 0.8)]`: the cue map
+looked correct in isolation, but executing both routes revealed the defect. Apply the same comparison
+discipline to any reachable behavior whose routes can diverge.
+
 ## Handoff-assertion provenance
 
 Every specific, checkable assertion in an implementation handoff, critic report, or host relay carries

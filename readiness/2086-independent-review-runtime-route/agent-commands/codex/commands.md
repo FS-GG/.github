@@ -1,0 +1,35 @@
+# Agent commands for codex (generated)
+
+Generated from `readiness/2086-independent-review-runtime-route/work-model.json`. This is a generated projection of the
+normalized work model, not an authored source of truth. See `guidance.json`.
+
+## T001 — Implement requirement FR-001
+- Stage: specify
+- Purpose: Carry out lifecycle task T001 (pending) covering AC-001, FR-001, PD-001, PD-002, PD-003.
+- Related: AC-001, FR-001, PD-001, PD-002, PD-003
+
+## T002 — Update contract surface PC-001
+- Stage: specify
+- Purpose: Carry out lifecycle task T002 (pending) covering PC-001, PD-001.
+- Related: PC-001, PD-001
+
+## T003 — Record verification evidence VO-001
+- Stage: specify
+- Purpose: Carry out lifecycle task T003 (pending) covering PC-001, PD-001, VO-001.
+- Related: PC-001, PD-001, VO-001
+
+## T004 — Record verification evidence VO-002
+- Stage: specify
+- Purpose: Carry out lifecycle task T004 (pending) covering PC-001, PD-003, VO-002.
+- Related: PC-001, PD-003, VO-002
+
+## T005 — Handle migration posture PM-001
+- Stage: specify
+- Purpose: Carry out lifecycle task T005 (pending) covering PC-001, PM-001.
+- Related: PC-001, PM-001
+
+## T006 — Refresh generated view impact GV-001
+- Stage: specify
+- Purpose: Carry out lifecycle task T006 (pending) covering GV-001, PD-001.
+- Related: GV-001, PD-001
+
