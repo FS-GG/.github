@@ -4442,7 +4442,19 @@ module Client =
         // Round-trip through the one grammar the issue-body reader uses. This normalizes comma-separated
         // arguments, a leading `./`, backticks and duplicates before the union is formed, so two spellings
         // of one path cannot make a repeated `widen` grow the declaration (#1377).
-        "Paths: " + String.Join(" ", tokens)
+        // `TouchSet.parse` reads physical lines: it must, because an issue body can carry ordinary prose
+        // after its declaration. An argv token is not an issue-body line, though. Shell substitutions and
+        // file-backed variables commonly pass a newline-separated path list as ONE token; feeding that
+        // directly into the synthetic body made every line after the first disappear before validation.
+        // Split that transport shape before constructing the one-line declaration, so every supplied path
+        // reaches the grammar, validation, collision scan, and receipt (#2104).
+        let physicalTokens =
+            tokens
+            |> List.collect (fun token ->
+                token.Split([| '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
+                |> Array.toList)
+
+        "Paths: " + String.Join(" ", physicalTokens)
         |> TouchSet.parse
         |> declaredPathTokens
 

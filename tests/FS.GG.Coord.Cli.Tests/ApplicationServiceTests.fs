@@ -657,6 +657,32 @@ module ApplicationServiceTests =
     [<Theory>]
     [<InlineData "widen">]
     [<InlineData "set-paths">]
+    let ``#2104 both --paths verbs preserve every newline-separated path in one argv token`` (verb: string) =
+        let code, out =
+            run
+                (disjointWorld ())
+                [ verb
+                  "FS.GG.SDD#74"
+                  "--worker"
+                  "kite-469"
+                  "--json"
+                  "--paths"
+                  "src/First.fs\nsrc/Second.fs\nsrc/Third.fs" ]
+
+        let receipt = parsed out
+
+        let expected =
+            if verb = "widen" then
+                [ "scripts/fsgg-coord"; "src/First.fs"; "src/Second.fs"; "src/Third.fs" ]
+            else
+                [ "src/First.fs"; "src/Second.fs"; "src/Third.fs" ]
+
+        Assert.Equal<string list>(expected, strings "paths" receipt)
+        Assert.Equal(0, code)
+
+    [<Theory>]
+    [<InlineData "widen">]
+    [<InlineData "set-paths">]
     let ``the OVERLAP branch rides IN the JSON object, not on a second stream`` (verb: string) =
         let code, out =
             run
