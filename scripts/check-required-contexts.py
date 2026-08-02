@@ -520,6 +520,45 @@ def jobs_of(doc: dict, what: str) -> dict:
     return jobs
 
 
+def job_condition(job: dict, subject: str) -> tuple[bool, str | None, bool]:
+    """Whether a job is proven to report on every normal pull request.
+
+    Returns ``(always_runs, description, known_suppressed)``.  GitHub evaluates job-level
+    ``if:`` at run time, so an expression we cannot prove always-run must not be treated as a
+    producer of a required context.  ``!cancelled()`` is the deliberately supported control: it
+    prevents cancellation from leaving dependent work running, while still running on a normal PR.
+    """
+    if "if" not in job:
+        return True, None, False
+    raw = job["if"]
+    if raw is True:
+        return True, None, False
+    if raw is False:
+        return False, "`if: false`", True
+    if not isinstance(raw, str):
+        return False, f"`if:` has unsupported value {raw!r}", False
+    expression = raw.strip()
+    if expression.startswith("${{") and expression.endswith("}}"):
+        expression = expression[3:-2].strip()
+    normalized = re.sub(r"\s+", "", expression).lower()
+    # The workflow itself is already known to be a pull-request workflow, so this common guard is
+    # true for every normal PR event.  It is used by the production kit-materializer caller.
+    proven_terms = {
+        "true",
+        "!cancelled()",
+        "github.event_name=='pull_request'",
+        'github.event_name=="pull_request"',
+    }
+    # A conjunction of independently proven normal-PR predicates remains proven.  Keep this
+    # intentionally narrow: OR, negation beyond !cancelled(), and arbitrary context expressions
+    # all need runtime values this static gate does not possess.
+    if normalized.split("&&") and all(term in proven_terms for term in normalized.split("&&")):
+        return True, None, False
+    if normalized == "false":
+        return False, f"`if: {raw}`", True
+    return False, f"`if: {raw}`", False
+
+
 def contexts_of(
     doc: dict,
     what: str,
@@ -527,6 +566,7 @@ def contexts_of(
     prefix: str = "",
     depth: int = 0,
     crossings: dict[str, set[str]] | None = None,
+    conditions: dict[str, list[tuple[str, bool]]] | None = None,
 ) -> set[str]:
     """Every check-run name the jobs of `doc` produce, prefixed by any calling job's display name.
 
@@ -545,6 +585,7 @@ def contexts_of(
     out: set[str] = set()
     for job_id, job in jobs_of(doc, what).items():
         subject = f"{what} [{job_id}]"
+        always_runs, condition, known_suppressed = job_condition(job, subject)
         for suffix in matrix_suffixes(job, subject):
             display = f"{prefix}{display_name(job_id, job)}{suffix}"
             # An expression is resolved at run time, from values this gate cannot see. Deriving the
@@ -563,13 +604,18 @@ def contexts_of(
                 uses = str(job["uses"]).strip()
                 callee = wf.callee(uses, subject)
                 produced = contexts_of(callee, uses, wf, prefix=f"{display} / ",
-                                       depth=depth + 1, crossings=crossings)
+                                       depth=depth + 1, crossings=crossings, conditions=conditions)
                 out |= produced
+                if not always_runs and conditions is not None:
+                    for context in produced:
+                        conditions.setdefault(context, []).append((condition or "`if:`", known_suppressed))
                 if crossings is not None and REMOTE_USES_RE.match(uses):
                     for context in produced:
                         crossings.setdefault(context, set()).add(uses)
             else:
                 out.add(display)
+                if not always_runs and conditions is not None:
+                    conditions.setdefault(display, []).append((condition or "`if:`", known_suppressed))
     return out
 
 
@@ -604,10 +650,10 @@ def unsound_crossings(uses_strings: set[str]) -> list[str]:
 
 def producible_contexts(
     root: str, repo: str, branch: str
-) -> tuple[set[str], dict[str, list[str]], list[str], dict[str, set[str]]]:
+) -> tuple[set[str], dict[str, list[PathFilter]], dict[str, list[tuple[str, bool]]], list[str], dict[str, set[str]]]:
     """Every context the repo reports on an ARBITRARY pull request, and the two ways of falling short.
 
-    Returns (always, filtered, non_pr, crossings):
+    Returns (always, filtered, conditional, non_pr, crossings):
 
       always    contexts reported on EVERY pull request — the only set a required context may live in.
       filtered  context -> the path-filtered workflow(s) that are its ONLY producers, so it reports on
@@ -634,6 +680,7 @@ def producible_contexts(
 
     pr_contexts: set[str] = set()
     filtered: dict[str, list[PathFilter]] = {}
+    conditional: dict[str, list[tuple[str, bool]]] = {}
     non_pr: list[str] = []
     crossings: dict[str, set[str]] = {}
     for path in files:
@@ -643,13 +690,22 @@ def producible_contexts(
         if any(e in triggers(doc) for e in PR_EVENTS):
             # A path filter must not cost us the DERIVATION: the finding names the context, so it has
             # to be derived exactly here, and an unparsable filtered workflow is still exit 3.
-            produced = contexts_of(doc, rel, wf, crossings=crossings)
+            local_conditions: dict[str, list[tuple[str, bool]]] = {}
+            produced = contexts_of(doc, rel, wf, crossings=crossings, conditions=local_conditions)
             path_filters = pr_path_filters(doc, rel, branch)
             if path_filters is None:
-                pr_contexts |= produced
+                pr_contexts |= produced - local_conditions.keys()
+                for context, conditions in local_conditions.items():
+                    conditional.setdefault(context, []).extend(conditions)
             else:
                 for context in sorted(produced):
                     filtered.setdefault(context, []).extend(path_filters)
+                    # Filter coverage alone cannot make a context universal: every producer that
+                    # supplies that coverage must also be proven to run.  Keep this provenance
+                    # alongside the filtered context so the complementary-filter promotion below
+                    # cannot discard a suppressing job-level condition.
+                    if conditions := local_conditions.get(context):
+                        conditional.setdefault(context, []).extend(conditions)
         else:
             # Not a finding by itself — most workflows are not PR gates. But a required context that
             # matches one of these is a repo that will hang forever, and the message must say so.
@@ -670,15 +726,20 @@ def producible_contexts(
     # filtered?" — and answering the second would be a confident, wrong "your repo is deadlocked".
     for context in pr_contexts:
         filtered.pop(context, None)
+        conditional.pop(context, None)
 
     # ...and neither is GitHub's own documented remedy a deadlock. A `paths: P` producer beside a
     # `paths-ignore: P` one covers every pull request between them, so the context always reports
     # even though NO single producer is unfiltered.
     for context, fs in list(filtered.items()):
         if filters_cover_every_pr(fs):
-            pr_contexts.add(context)
-            del filtered[context]
-    return pr_contexts, filtered, non_pr, crossings
+            # `conditional` was filled while collecting the individual filtered producers.  A
+            # complement only covers every PR when each producer in the covering pair actually
+            # runs; otherwise its apparent coverage is a fail-open over a suppressed check.
+            if context not in conditional:
+                pr_contexts.add(context)
+                del filtered[context]
+    return pr_contexts, filtered, conditional, non_pr, crossings
 
 
 def classic_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
@@ -867,7 +928,9 @@ def main(argv: list[str]) -> int:
         )
         return OK
 
-    pr_contexts, filtered, non_pr, crossings = producible_contexts(args.root, args.repo, args.branch)
+    pr_contexts, filtered, conditional, non_pr, crossings = producible_contexts(
+        args.root, args.repo, args.branch
+    )
 
     findings: list[str] = []
     ref_findings: list[str] = []
@@ -904,6 +967,33 @@ def main(argv: list[str]) -> int:
                 )
                 continue
             print(f"  ok   {context}")
+            continue
+
+        # A job-level `if:` is evaluated after the workflow trigger.  Unlike a workflow-level
+        # filter, GitHub creates a skipped job, but that is still not a reported required context
+        # on which branch protection can rely.  An explicit false condition is a definite finding;
+        # an expression we cannot prove always-run is a no-verdict rather than a guessed green.
+        # This precedes path-filter handling because an apparent complementary pair is not coverage
+        # when either member is conditionally suppressed.
+        if context in conditional:
+            conditions = conditional[context]
+            unknown = [description for description, known_suppressed in conditions if not known_suppressed]
+            if unknown:
+                raise GateError(
+                    f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but EVERY "
+                    f"producer is guarded by a job-level condition this gate cannot prove runs on "
+                    f"a normal pull request: {', '.join(unknown)}. The check may be suppressed, "
+                    f"so this gate has no verdict rather than guessing the required context reports. "
+                    "Use an unconditional job or the proven always-run `${{ !cancelled() }}` form."
+                )
+            findings.append(
+                f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but its only "
+                f"producer is suppressed by a job-level condition: {', '.join(description for description, _ in conditions)}. "
+                f"GitHub creates no successful required check for that job, so branch protection "
+                f"holds pull requests at \"Expected — waiting for status to be reported\". Remove "
+                f"the suppressing condition, give the context an always-running producer, or stop "
+                f"requiring it."
+            )
             continue
 
         # A PATH-FILTERED producer deadlocks differently from an absent one, and the repair is
