@@ -593,6 +593,38 @@ expect "#1953 a required context behind job-level \`if: false\` is a finding" \
 expect "#1953 the proven always-run cancellation control remains producible" \
   0 "ok: every required context is producible" "$WFP" "$RJIFOK" FS-GG/JobIf
 
+# Complementary workflow filters cover every PR only when EACH job in the pair is itself
+# always-run.  Retaining the condition provenance here prevents the coverage algebra from
+# promoting two suppressed producers to a false green.
+RJIFPAIR="$WORK/r-job-if-complement"; RJIFPAIR_OK="$WORK/r-job-if-complement-ok"
+for root in "$RJIFPAIR" "$RJIFPAIR_OK"; do mkdir -p "$root/.github/workflows"; done
+for root in "$RJIFPAIR" "$RJIFPAIR_OK"; do
+  mkwf "$root/.github/workflows/paths.yml" <<'YML'
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  gate:
+    IF_VALUE
+    runs-on: ubuntu-latest
+    steps: [{run: 'true'}]
+YML
+  mkwf "$root/.github/workflows/paths-ignore.yml" <<'YML'
+on: { pull_request: { paths-ignore: ["src/**"] } }
+jobs:
+  gate:
+    IF_VALUE
+    runs-on: ubuntu-latest
+    steps: [{run: 'true'}]
+YML
+done
+sed -i 's/    IF_VALUE/    if: false/' "$RJIFPAIR/.github/workflows/paths.yml" "$RJIFPAIR/.github/workflows/paths-ignore.yml"
+sed -i "s|    IF_VALUE|    if: \${{ !cancelled() \\&\\& github.event_name == 'pull_request' }}|" \
+  "$RJIFPAIR_OK/.github/workflows/paths.yml" "$RJIFPAIR_OK/.github/workflows/paths-ignore.yml"
+protect "$WFP" FS-GG/JobIfComplement main gate
+expect "#1953 complementary path filters behind \`if: false\` are not universally producible" \
+  1 "job-level condition" "$WFP" "$RJIFPAIR" FS-GG/JobIfComplement
+expect "#1953 complementary path filters with the production cancellation guard remain valid" \
+  0 "ok: every required context is producible" "$WFP" "$RJIFPAIR_OK" FS-GG/JobIfComplement
+
 # `paths-ignore:` is the same defect wearing the other key. A PR touching only ignored paths gets no
 # check run, so the context still cannot be required.
 RFI="$WORK/r-paths-ignore"

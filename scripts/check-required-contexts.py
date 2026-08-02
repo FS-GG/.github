@@ -650,7 +650,7 @@ def unsound_crossings(uses_strings: set[str]) -> list[str]:
 
 def producible_contexts(
     root: str, repo: str, branch: str
-) -> tuple[set[str], dict[str, list[str]], dict[str, list[tuple[str, bool]]], list[str], dict[str, set[str]]]:
+) -> tuple[set[str], dict[str, list[PathFilter]], dict[str, list[tuple[str, bool]]], list[str], dict[str, set[str]]]:
     """Every context the repo reports on an ARBITRARY pull request, and the two ways of falling short.
 
     Returns (always, filtered, conditional, non_pr, crossings):
@@ -700,6 +700,12 @@ def producible_contexts(
             else:
                 for context in sorted(produced):
                     filtered.setdefault(context, []).extend(path_filters)
+                    # Filter coverage alone cannot make a context universal: every producer that
+                    # supplies that coverage must also be proven to run.  Keep this provenance
+                    # alongside the filtered context so the complementary-filter promotion below
+                    # cannot discard a suppressing job-level condition.
+                    if conditions := local_conditions.get(context):
+                        conditional.setdefault(context, []).extend(conditions)
         else:
             # Not a finding by itself — most workflows are not PR gates. But a required context that
             # matches one of these is a repo that will hang forever, and the message must say so.
@@ -720,14 +726,19 @@ def producible_contexts(
     # filtered?" — and answering the second would be a confident, wrong "your repo is deadlocked".
     for context in pr_contexts:
         filtered.pop(context, None)
+        conditional.pop(context, None)
 
     # ...and neither is GitHub's own documented remedy a deadlock. A `paths: P` producer beside a
     # `paths-ignore: P` one covers every pull request between them, so the context always reports
     # even though NO single producer is unfiltered.
     for context, fs in list(filtered.items()):
         if filters_cover_every_pr(fs):
-            pr_contexts.add(context)
-            del filtered[context]
+            # `conditional` was filled while collecting the individual filtered producers.  A
+            # complement only covers every PR when each producer in the covering pair actually
+            # runs; otherwise its apparent coverage is a fail-open over a suppressed check.
+            if context not in conditional:
+                pr_contexts.add(context)
+                del filtered[context]
     return pr_contexts, filtered, conditional, non_pr, crossings
 
 
@@ -958,6 +969,33 @@ def main(argv: list[str]) -> int:
             print(f"  ok   {context}")
             continue
 
+        # A job-level `if:` is evaluated after the workflow trigger.  Unlike a workflow-level
+        # filter, GitHub creates a skipped job, but that is still not a reported required context
+        # on which branch protection can rely.  An explicit false condition is a definite finding;
+        # an expression we cannot prove always-run is a no-verdict rather than a guessed green.
+        # This precedes path-filter handling because an apparent complementary pair is not coverage
+        # when either member is conditionally suppressed.
+        if context in conditional:
+            conditions = conditional[context]
+            unknown = [description for description, known_suppressed in conditions if not known_suppressed]
+            if unknown:
+                raise GateError(
+                    f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but EVERY "
+                    f"producer is guarded by a job-level condition this gate cannot prove runs on "
+                    f"a normal pull request: {', '.join(unknown)}. The check may be suppressed, "
+                    f"so this gate has no verdict rather than guessing the required context reports. "
+                    "Use an unconditional job or the proven always-run `${{ !cancelled() }}` form."
+                )
+            findings.append(
+                f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but its only "
+                f"producer is suppressed by a job-level condition: {', '.join(description for description, _ in conditions)}. "
+                f"GitHub creates no successful required check for that job, so branch protection "
+                f"holds pull requests at \"Expected — waiting for status to be reported\". Remove "
+                f"the suppressing condition, give the context an always-running producer, or stop "
+                f"requiring it."
+            )
+            continue
+
         # A PATH-FILTERED producer deadlocks differently from an absent one, and the repair is
         # different too, so it gets its own finding rather than a clause bolted onto the generic one
         # (.github#1508). "Every PR" would be wrong here — it is every PR the filter excludes, and
@@ -1000,31 +1038,6 @@ def main(argv: list[str]) -> int:
                 f"pull request: drop the `{f.key}:` filter, or add GitHub's documented twin — a "
                 f"no-op job reporting the same context, filtered by the exact complement — or stop "
                 f"requiring the context."
-            )
-            continue
-
-        # A job-level `if:` is evaluated after the workflow trigger.  Unlike a workflow-level
-        # filter, GitHub creates a skipped job, but that is still not a reported required context
-        # on which branch protection can rely.  An explicit false condition is a definite finding;
-        # an expression we cannot prove always-run is a no-verdict rather than a guessed green.
-        if context in conditional:
-            conditions = conditional[context]
-            unknown = [description for description, known_suppressed in conditions if not known_suppressed]
-            if unknown:
-                raise GateError(
-                    f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but EVERY "
-                    f"producer is guarded by a job-level condition this gate cannot prove runs on "
-                    f"a normal pull request: {', '.join(unknown)}. The check may be suppressed, "
-                    f"so this gate has no verdict rather than guessing the required context reports. "
-                    "Use an unconditional job or the proven always-run `${{ !cancelled() }}` form."
-                )
-            findings.append(
-                f"{args.repo}@{args.branch} REQUIRES the status check {context!r}, but its only "
-                f"producer is suppressed by a job-level condition: {', '.join(description for description, _ in conditions)}. "
-                f"GitHub creates no successful required check for that job, so branch protection "
-                f"holds pull requests at \"Expected — waiting for status to be reported\". Remove "
-                f"the suppressing condition, give the context an always-running producer, or stop "
-                f"requiring it."
             )
             continue
 
