@@ -15,6 +15,8 @@ complete item-driver contract, including the simple-versus-complex SDD lifecycle
 feedback envelope. Do not hand it a second item. It MAY, after its done stamp, drain its OWN follow-up
 queue sequentially — one claim at a time, never interleaved.
 
+<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->
+
 **Two concurrent waves, a fixed eight-slot cap.** Run two waves in parallel, not sequentially: each
 wave holds three implementer slots, six implementer slots total across both waves. Two additional
 subagent slots are reserved fleet-wide for independent critics at each wave's review boundary —
@@ -22,6 +24,13 @@ RESERVED, not advisory. An implementer may never occupy a review slot, and filli
 implementers is a contract violation, not an efficiency gain. Dispatch does not wait on one wave's
 verification boundary before the other wave's implementers start; that overlap is the whole point of
 running two waves instead of one.
+
+`batch` reads the machine declaration above and emits `activeItems`, `waveCapacity`, and `openSlots`
+beside its scheduling answer. When schedulable work and open slots coexist it also emits `WAVE
+SHORTFALL`; treat that headline as an immediate re-plan/dispatch instruction. The signal is advisory
+because an enforcing refusal would also prevent the dispatch that fills the slot, and ordinary
+drain-down can legitimately leave capacity open. Advisory does not mean optional: the host loop owns
+acting on the measured deficit.
 
 **Consolidation.** Count the items being worked across both waves combined — claimed, in review, or
 newly dispatched; not yet-verified follow-ups. Three or fewer consolidates: fold every active item into

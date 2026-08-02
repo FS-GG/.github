@@ -1043,3 +1043,45 @@ module BatchTests =
         Assert.Equal(Some P3Governance, d.Rank.Phase)
         Assert.Equal(Some 12, d.Rank.AgeDays)
         Assert.Equal(1, d.Rank.Number)
+
+    [<Fact>]
+    let ``#2096 wave capacity is derived from the host-loop declaration`` () =
+        let document =
+            """# host loop
+<!-- fsgg:wave-model:v1 waves=3 implementer-slots-per-wave=4 review-slots=2 consolidation-threshold=3 -->
+"""
+
+        let model = parseWaveModel document |> Result.defaultWith failwith
+        let occupancy = waveOccupancy model [ ref 1; ref 2; ref 2 ]
+
+        Assert.Equal(3, model.Waves)
+        Assert.Equal(4, model.ImplementerSlotsPerWave)
+        Assert.Equal(2, occupancy.ActiveItems)
+        Assert.Equal(12, occupancy.WaveCapacity)
+        Assert.Equal(10, occupancy.OpenSlots)
+
+    [<Theory>]
+    [<InlineData("no declaration")>]
+    [<InlineData("<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=0 review-slots=2 consolidation-threshold=3 -->")>]
+    [<InlineData("<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 --><!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->")>]
+    let ``#2096 an absent malformed or duplicate wave model fails closed`` (document: string) =
+        Assert.True(Result.isError (parseWaveModel document))
+
+    [<Fact>]
+    let ``#2096 wave output is typed and shortfall is conditional on both deficit and work`` () =
+        let model =
+            parseWaveModel
+                "<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->"
+            |> Result.defaultWith failwith
+
+        let partial = waveOccupancy model [ ref 1; ref 2 ]
+        let full = waveOccupancy model [ for n in 1..6 -> ref n ]
+
+        Assert.Equal(
+            "wave occupancy: {\"activeItems\":2,\"waveCapacity\":6,\"openSlots\":4}",
+            renderWaveOccupancy partial
+        )
+
+        Assert.Contains("dispatch the next wave now", waveShortfallHeadline 1 partial |> Option.get)
+        Assert.Equal(None, waveShortfallHeadline 0 partial)
+        Assert.Equal(None, waveShortfallHeadline 1 full)
