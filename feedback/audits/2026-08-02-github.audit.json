@@ -1,0 +1,8 @@
+{
+  "auditSchema": 1,
+  "report": "feedback/2026-08-02-github.md",
+  "reportSha256": "1da9c45ed0ce8474a676774ee247a67755fb7715307a5a1884267529994e7393",
+  "criticMode": "separated-critic-pass",
+  "criticPromptVersion": "actionability-v1",
+  "findings": []
+}
