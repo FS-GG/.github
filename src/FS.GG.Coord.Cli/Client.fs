@@ -669,11 +669,10 @@ module Client =
         match KitDigest.kitRoot () with
         | None -> Error "the kit root is unavailable"
         | Some root ->
-            let roots = [ ".claude/skills"; ".agents/skills" ]
-
-            let relativePaths skillRoot =
-                [ $"%s{skillRoot}/drive-board/references/host-loop.md"
-                  $"%s{skillRoot}/work-board/references/host-loop.md" ]
+            let paths =
+                [ for skillRoot in [ ".claude/skills"; ".agents/skills" ] do
+                      for driver in [ "drive-board"; "work-board" ] do
+                          $"%s{skillRoot}/%s{driver}/references/host-loop.md" ]
 
             let read (relative: string) =
                 let path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar))
@@ -688,20 +687,17 @@ module Client =
                     with e ->
                         Error $"%s{relative} could not be read: %s{e.Message}"
 
-            let existingRoots =
-                roots
-                |> List.choose (fun skillRoot ->
-                    let paths = relativePaths skillRoot
+            let existing =
+                paths |> List.filter (fun p -> File.Exists(Path.Combine(root, p)))
 
-                    if paths |> List.exists (fun p -> File.Exists(Path.Combine(root, p))) then
-                        Some paths
-                    else
-                        None)
-
-            match existingRoots with
-            | [] -> Error "no .claude or .agents host-loop skill root exists"
-            | groups ->
-                let results = groups |> List.collect id |> List.map read
+            match existing with
+            | [] -> Error "no drive-board or work-board host-loop document exists"
+            | documents ->
+                // Receiver topology is intentionally asymmetric: `work-board` materializes always while
+                // operator-only `drive-board` never does. Validate every copy that EXISTS and require them
+                // to agree, without turning an intentionally absent operator skill into an unavailable
+                // signal for the product driver.
+                let results = documents |> List.map read
                 let errors =
                     results
                     |> List.choose (function

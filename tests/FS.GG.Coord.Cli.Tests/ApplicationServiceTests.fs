@@ -2212,14 +2212,23 @@ module ApplicationServiceTests =
         Assert.Contains("FS.GG.SDD#74", err)
         Assert.Equal(0, code)
 
+    let private waveModelDeclaration implementers =
+        $"<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=%d{implementers} review-slots=2 consolidation-threshold=3 -->"
+
+    /// The supported receiver topology: work-board is always materialized; operator-only drive-board is not.
     let private installWaveModel (root: string) =
         let declaration =
-            "<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->"
+            waveModelDeclaration 3
 
-        for skill in [ "drive-board"; "work-board" ] do
+        let directory = Path.Combine(root, ".claude", "skills", "work-board", "references")
+        Directory.CreateDirectory directory |> ignore
+        File.WriteAllText(Path.Combine(directory, "host-loop.md"), declaration)
+
+    let private installDisagreeingWaveModels (root: string) =
+        for skill, implementers in [ "drive-board", 4; "work-board", 3 ] do
             let directory = Path.Combine(root, ".claude", "skills", skill, "references")
             Directory.CreateDirectory directory |> ignore
-            File.WriteAllText(Path.Combine(directory, "host-loop.md"), declaration)
+            File.WriteAllText(Path.Combine(directory, "host-loop.md"), waveModelDeclaration implementers)
 
     [<Theory>]
     [<InlineData(6, true, 0, false)>]
@@ -2262,6 +2271,23 @@ module ApplicationServiceTests =
         )
 
         Assert.Equal(shortfall, err.Contains "WAVE SHORTFALL")
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#2096 installed driver contracts that disagree fail the occupancy read closed`` () =
+        let transport =
+            worldIn "Ready" (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) Map.empty false
+
+        let code, out, err =
+            runQueueWithKit
+                installDisagreeingWaveModels
+                transport
+                [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
+
+        Assert.Equal("[\"FS.GG.SDD#74\"]" + Environment.NewLine, out)
+        Assert.Contains("wave occupancy: unavailable", err)
+        Assert.Contains("declare different fsgg:wave-model:v1 values", err)
+        Assert.DoesNotContain("WAVE SHORTFALL", err)
         Assert.Equal(0, code)
 
     [<Fact>]
