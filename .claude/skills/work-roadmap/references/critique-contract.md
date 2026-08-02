@@ -17,6 +17,19 @@ The critic must cite concrete repository evidence. Style preferences and hypothe
 an observable failure mode are not findings. It may write `reviews/roadmap/<cycle-id>.json` and nothing
 else. It must not edit implementation, tests, SDD artifacts, feedback, or roadmap state.
 
+## Handoff-assertion provenance
+
+Any handoff assertion about a specific, checkable code, history, or external-source fact carries a
+`Verification:` field. Its value is either the basis actually used (for example a command, `file:line`,
+API call, or URL) or exactly `unverified`. `unverified` is a valid, non-pejorative result: it tells the
+receiver what still needs checking instead of making a guess look established. Do not infer a basis
+from surrounding prose.
+
+Before sending or relaying a handoff, use this checklist: for every such assertion, confirm that its
+`Verification:` field is present and is either a reproducible basis or `unverified`. A receiver rejects
+an assertion with no field as incomplete rather than treating it as checked. This applies equally to a
+worker or critic producing the assertion and to a host relaying it onward.
+
 Use `blocker` when the milestone cannot safely ship, `major` when acceptance, correctness, regression
 protection, or architecture materially fails, and `minor` for bounded non-acceptance debt. The worker
 must resolve every blocker/major finding in the milestone branch. A minor finding may be resolved or

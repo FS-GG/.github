@@ -15,6 +15,13 @@ complete item-driver contract, including the shared
 control-plane provenance guidance in the `pnext-item` contract. Do not hand it a second item. It MAY, after its done stamp, drain its
 OWN follow-up queue sequentially — one claim at a time, never interleaved.
 
+Every specific, checkable assertion included in a worker dispatch, worker report, or host relay must
+carry `Verification:` with the command, `file:line`, API call, or URL that established it, or exactly
+`unverified` when it was not checked. The latter is a valid, non-pejorative value. Before forwarding a
+handoff, check that each assertion has one of those two forms; a missing field is detectable incomplete
+evidence, not permission for the receiver to assume the claim was verified. This binds the host when it
+relays a worker's or critic's assertion as well as the original author.
+
 <!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->
 
 **Two concurrent waves, a fixed eight-slot cap.** Run two waves in parallel, not sequentially: each

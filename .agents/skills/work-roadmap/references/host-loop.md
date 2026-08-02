@@ -19,6 +19,14 @@ eleven or accept that artifact as passing.
 A host session, account, or parent identity is not a substitute for the worker identity. Check the
 worker's PR, merge, tests, release obligations, critique, feedback, and ledger update against
 repository state.
+
+When handing a claim forward — including relaying a worker's or critic's claim — preserve a
+`Verification:` field for every specific, checkable fact about code, history, or an external source.
+The field contains the actual command, `file:line`, API call, or URL used, or exactly `unverified` when
+the claim was not checked. Before sending, confirm each such assertion has that field; an assertion
+without one is incomplete, not verified. `unverified` is an acceptable and explicit handoff state, not
+a reason to invent evidence.
+
 Apply the exact fail-closed critique command in [critique-contract](critique-contract.md) to the
 merged artifact before accepting it; worker or critic prose is not verification. For a
 `game_functionality: true` milestone that command's `player_journeys` check IS the bot-driven
