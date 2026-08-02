@@ -13,7 +13,9 @@ module Driver =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
-    val parseReviewComments: comments: string list -> Result<ReviewChain, string list>
+    type ReviewComment = { Id: int64; Url: string; Body: string }
+
+    val parseReviewComments: comments: ReviewComment list -> Result<ReviewChain, string list>
 
     type Receipt =
         { ObservedAt: int64; SourceSha: string; Complete: bool; Review: ReviewChain option }
@@ -22,6 +24,12 @@ module Driver =
 
     type WorkerReturn =
         { ClaimLive: bool; ReviewReady: bool; ParkedOrDone: bool }
+
+    type PlanningReceipt =
+        { ObservedAt: int64; SourceSha: string; Complete: bool; ConsolidationApproved: bool
+          Housekeeping: Housekeeping; WorkerReturns: WorkerReturn list }
+
+    val planningReceiptFresh: now: int64 -> maxAgeSeconds: int64 -> sourceSha: string -> PlanningReceipt -> bool
 
     type Action =
         | RequestHostIdentity | ReapStaleClaims | RepairEngineCurrency | FlushPendingWrites

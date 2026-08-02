@@ -67,54 +67,6 @@ let private readInput (opts: Options) =
     | Some path -> File.ReadAllText path
     | None -> Console.In.ReadToEnd()
 
-/// Source-bound projection of a driver planning snapshot.  This intentionally reads the facts and
-/// receipts from one JSON document; callers cannot pass a precomputed action or free-form review errors.
-let private driver (opts: Options) =
-    try
-        use doc = System.Text.Json.JsonDocument.Parse(readInput opts)
-        let root = doc.RootElement
-        let getBool (name: string) = root.GetProperty(name).GetBoolean()
-        let getInt (name: string) = root.GetProperty(name).GetInt32()
-        let housekeeping: Driver.Housekeeping =
-            { HasHostIdentity = getBool "hasHostIdentity"
-              StaleClaim = getBool "staleClaim"
-              EngineCurrent = getBool "engineCurrent"
-              PendingWrites = getInt "pendingWrites"
-              ReconcileDryRunFresh = getBool "reconcileDryRunFresh"
-              ReconcileApplied = getBool "reconcileApplied"
-              ReconcileFresh = getBool "reconcileFresh"
-              TriageFresh = getBool "triageFresh"
-              CurrencyScoped = getBool "currencyScoped" }
-        let model: Batch.WaveModel =
-            { Waves = getInt "waves"
-              ImplementerSlotsPerWave = getInt "implementerSlotsPerWave"
-              ReviewSlots = getInt "reviewSlots"
-              ConsolidationThreshold = getInt "consolidationThreshold" }
-        let returns =
-            root.GetProperty("workerReturns").EnumerateArray()
-            |> Seq.map (fun x -> ({ ClaimLive = x.GetProperty("claimLive").GetBoolean(); ReviewReady = x.GetProperty("reviewReady").GetBoolean(); ParkedOrDone = x.GetProperty("parkedOrDone").GetBoolean() }: Driver.WorkerReturn))
-            |> Seq.toList
-        let review = root.GetProperty("reviewChain")
-        let chain: Driver.ReviewChain =
-            { MarkerValid = review.GetProperty("marker").GetString() = "fsgg:independent-review:v1"
-              CriticIdentity = review.GetProperty("critic").GetString() |> Option.ofObj
-              HeadSha = review.GetProperty("headSha").GetString() |> Option.ofObj
-              Rounds = review.GetProperty("rounds").EnumerateArray() |> Seq.map (fun x -> x.GetInt32()) |> Seq.toList
-              ChecksGreen = review.GetProperty("checksGreen").GetBoolean()
-              HostAccepted = review.GetProperty("hostAccepted").GetBoolean() }
-        let reviewErrors = Driver.validateReviewChain 3 chain
-        let action = Driver.nextAction model (getInt "activeItems") (getBool "consolidationApproved") housekeeping returns
-        let actionText = sprintf "%A" action
-        match opts.Render with
-        | Json ->
-            let errors = reviewErrors |> List.map (fun x -> System.Text.Json.JsonSerializer.Serialize x) |> String.concat ","
-            printfn "{\"schema\":\"fsgg.coord.driver/1\",\"action\":\"%s\",\"reviewSlotsReserved\":%d,\"reviewErrors\":[%s]}" actionText model.ReviewSlots errors
-        | Text -> printfn "%s" actionText
-        ExitGreen
-    with e ->
-        eprint $"fsgg-coord-engine: driver snapshot is malformed: %s{e.Message}"
-        ExitError
-
 /// THE PROTOCOL, EMITTED (ADR-0034 §4.5). It reads nothing and decides nothing — it states what the
 /// engine already enforces, so `scripts/generate-projections` can render the canonical doc and the four
 /// `SKILL.md` bodies FROM it rather than from somebody's memory of it.

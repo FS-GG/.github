@@ -585,6 +585,29 @@ module Reads =
 
                     Ok found
 
+    type CommentBody = { Id: int64; Url: string; Body: string }
+
+    let commentsWithIdentity (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
+        let subject = $"%s{owner}/%s{repo}#%d{number} comments"
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    doc.RootElement.EnumerateArray()
+                    |> Seq.map (fun c ->
+                        match c.TryGetProperty "id", str c "html_url", str c "body" with
+                        | (true, id), Some url, Some body when id.ValueKind = JsonValueKind.Number ->
+                            Ok { Id = id.GetInt64(); Url = url; Body = body }
+                        | _ -> Error(Malformed(subject, "a comment has no readable id, html_url, and body")))
+                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Result.map List.rev
+
     let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
         let subject = $"%s{owner}/%s{repo}#%d{number} comments"
         let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }

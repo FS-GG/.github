@@ -267,7 +267,7 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
-  driver [--snapshot FILE] [--json|--text]   plan one typed two-wave transition from a source snapshot
+  driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
@@ -690,7 +690,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> Only jsonReaders
         | FText -> Only textReaders
 
-        | FSnapshot -> Only [ Decide; LanesView ]
+        | FSnapshot -> Only [ Decide; DriverCmd; LanesView ]
         | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.

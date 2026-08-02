@@ -385,38 +385,73 @@ module ApplicationServiceTests =
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
                 | "GET", "repos/FS-GG/.github/commits/31cffe6-driver-head/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
-                    ok (JsonSerializer.Serialize [ {| id = 1; body = initial |}; {| id = 2; body = accepted |} ])
+                    ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
                 | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
         let previousOut, previousErr = Console.Out, Console.Error
-        use capturedOut = new StringWriter()
-        use capturedErr = new StringWriter()
-        let code, stdout, stderr =
-            try
-                Directory.CreateDirectory cache |> ignore
-                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
-                Console.SetOut capturedOut
-                Console.SetError capturedErr
-                let code = Client.driver (context transport) (options [ "driver"; "--repo"; ".github"; "--json" ])
-                Console.Out.Flush()
-                Console.Error.Flush()
-                code, capturedOut.ToString(), capturedErr.ToString()
-            finally
-                Console.SetOut previousOut
-                Console.SetError previousErr
-                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
-                try Directory.Delete(cache, true) with _ -> ()
-        if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code stderr transport.Log
-        Assert.Equal("", stderr)
-        use document = JsonDocument.Parse(stdout)
-        let evidence = document.RootElement.GetProperty("reviewEvidence").GetInt32()
-        if evidence <> 1 then failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
-        Assert.True(transport.Logged "comment-list FS-GG/.github 2140", $"log: %A{transport.Log}")
-        // The two #2127 reads are scan's claim checks.  The distinct #2140 read is review evidence; if the
-        // driver re-used the item thread, #2140 would have no comment read and this fails.
-        Assert.Equal(1, transport.Count "comment-list FS-GG/.github 2140")
-        Assert.Equal(2, transport.Count "comment-list FS-GG/.github 2127")
+        let invoke receipt =
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+            let args =
+                [ yield "driver"; yield "--repo"; yield ".github"; yield "--json"
+                  match receipt with
+                  | Some path -> yield "--snapshot"; yield path
+                  | None -> () ]
+            let code = Client.driver (context transport) (options args)
+            Console.Out.Flush()
+            Console.Error.Flush()
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            code, capturedOut.ToString(), capturedErr.ToString()
+        try
+            Directory.CreateDirectory cache |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+            let code, stdout, stderr = invoke None
+            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code stderr transport.Log
+            Assert.Equal("", stderr)
+            use document = JsonDocument.Parse(stdout)
+            let root = document.RootElement
+            let evidence = root.GetProperty("reviewEvidence").GetInt32()
+            if evidence <> 1 then failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
+            Assert.False(root.GetProperty("receiptValid").GetBoolean())
+            Assert.Equal("ReconcileBoard", root.GetProperty("action").GetString())
+            let sourceSha = root.GetProperty("sourceSha").GetString()
+            let receiptPath = Path.Combine(cache, "receipt.json")
+            let receipt approved returns observedAt source =
+                $"""{{"observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"housekeeping":{{"hasHostIdentity":true,"staleClaim":false,"engineCurrent":true,"pendingWrites":0,"reconcileDryRunFresh":true,"reconcileApplied":true,"reconcileFresh":true,"triageFresh":true,"currencyScoped":true}},"workerReturns":%s{returns}}}"""
+            let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            File.WriteAllText(receiptPath, receipt false "[]" now sourceSha)
+            let _, consolidate, _ = invoke (Some receiptPath)
+            use consolidateDoc = JsonDocument.Parse consolidate
+            Assert.True(consolidateDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            Assert.Equal("Consolidate", consolidateDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt true "[]" now sourceSha)
+            let _, dispatch, _ = invoke (Some receiptPath)
+            use dispatchDoc = JsonDocument.Parse dispatch
+            Assert.Equal("DispatchWave 3", dispatchDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt true "[{\"claimLive\":true,\"reviewReady\":false,\"parkedOrDone\":false}]" now sourceSha)
+            let _, resume, _ = invoke (Some receiptPath)
+            use resumeDoc = JsonDocument.Parse resume
+            Assert.Equal("ResumeSameWorker", resumeDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt true "[]" (now - 301L) sourceSha)
+            let _, stale, _ = invoke (Some receiptPath)
+            use staleDoc = JsonDocument.Parse stale
+            Assert.False(staleDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            Assert.Equal("ReconcileBoard", staleDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt true "[]" now "wrong-snapshot")
+            let _, mismatched, _ = invoke (Some receiptPath)
+            use mismatchedDoc = JsonDocument.Parse mismatched
+            Assert.False(mismatchedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            Assert.Equal("ReconcileBoard", mismatchedDoc.RootElement.GetProperty("action").GetString())
+            Assert.True(transport.Logged "comment-list FS-GG/.github 2140", $"log: %A{transport.Log}")
+        finally
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            try Directory.Delete(cache, true) with _ -> ()
 
     [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =

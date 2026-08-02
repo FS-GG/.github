@@ -726,13 +726,16 @@ module Client =
         | Ok request ->
             let candidates =
                 request.Candidates
-                |> List.choose (fun c -> c.Item.Claim |> Option.map (fun _ -> c.Item.Ref))
+                |> List.choose (fun c ->
+                    if c.Item.Claim.IsSome || c.Item.ItemPr.IsSome then Some c.Item.Ref else None)
 
             let reservations =
                 request.InFlight
                 |> List.choose (fun r ->
                     match r.Holder with
                     | Batch.LiveClaim(_, item, _, _) -> Some item
+                    | Batch.BatchMember item
+                    | Batch.Unowned item -> Some item
                     | _ -> None)
 
             Ok(candidates @ reservations |> List.distinct)
@@ -798,6 +801,48 @@ module Client =
 
                 ExitGreen
 
+    let private planningSourceSha (active: Ref list) =
+        // Bind the receipt to the exact occupancy fact `nextAction` consumes. Claim ages change every
+        // scan and are deliberately excluded: the same active set must remain usable for the bounded
+        // five-minute receipt lifetime, while any holder entering or leaving changes this digest.
+        active |> List.map _.Short |> List.sort |> String.concat "\n"
+        |> Text.Encoding.UTF8.GetBytes
+        |> Security.Cryptography.SHA256.HashData
+        |> Convert.ToHexString
+        |> fun value -> value.ToLowerInvariant()
+
+    let private parsePlanningReceipt (path: string) : Result<Driver.PlanningReceipt, string> =
+        try
+            use document = JsonDocument.Parse(File.ReadAllText path)
+            let root = document.RootElement
+            let housekeeping = root.GetProperty "housekeeping"
+            let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
+            let integer (name: string) (node: JsonElement) = node.GetProperty(name).GetInt32()
+            let receipt: Driver.PlanningReceipt =
+                { ObservedAt = root.GetProperty("observedAt").GetInt64()
+                  SourceSha = root.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Complete = bool "complete" root
+                  ConsolidationApproved = bool "consolidationApproved" root
+                  Housekeeping =
+                    { HasHostIdentity = bool "hasHostIdentity" housekeeping
+                      StaleClaim = bool "staleClaim" housekeeping
+                      EngineCurrent = bool "engineCurrent" housekeeping
+                      PendingWrites = integer "pendingWrites" housekeeping
+                      ReconcileDryRunFresh = bool "reconcileDryRunFresh" housekeeping
+                      ReconcileApplied = bool "reconcileApplied" housekeeping
+                      ReconcileFresh = bool "reconcileFresh" housekeeping
+                      TriageFresh = bool "triageFresh" housekeeping
+                      CurrencyScoped = bool "currencyScoped" housekeeping }
+                  WorkerReturns =
+                    root.GetProperty("workerReturns").EnumerateArray()
+                    |> Seq.map (fun item ->
+                        ({ ClaimLive = bool "claimLive" item;
+                          ReviewReady = bool "reviewReady" item;
+                          ParkedOrDone = bool "parkedOrDone" item }: Driver.WorkerReturn))
+                    |> Seq.toList }
+            Ok receipt
+        with error -> Error $"the driver receipt is malformed: %s{error.Message}"
+
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
@@ -807,6 +852,7 @@ module Client =
             match activeItemRefs doc with
             | Error e -> eprint e; ExitError
             | Ok active ->
+                let sourceSha = planningSourceSha active
                 let reviewEvidence =
                     match Snapshot.parse doc with
                     | Error _ -> []
@@ -818,22 +864,30 @@ module Client =
                                 match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
                                       Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
                                       Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
-                                      Reads.commentBodies ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                      Reads.commentsWithIdentity ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
                                 | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
+                                    let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
                                     match Driver.parseReviewComments comments with
-                                    | Ok review when review.HeadSha = Some head -> Some(pr, head, scan.Markers.Length)
+                                    | Ok review when review.HeadSha = Some head ->
+                                        Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
                                     | _ -> None
                                 | _ -> None
                             | None -> None)
+                let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
+                let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+                let failClosed: Driver.Housekeeping =
+                    { HasHostIdentity = true; StaleClaim = false; EngineCurrent = true; PendingWrites = 0
+                      ReconcileDryRunFresh = false; ReconcileApplied = false; ReconcileFresh = false
+                      TriageFresh = false; CurrencyScoped = true }
+                let housekeeping, consolidationApproved, workerReturns =
+                    match suppliedReceipt with
+                    | Some receipt when receiptValid -> receipt.Housekeeping, receipt.ConsolidationApproved, receipt.WorkerReturns
+                    | _ -> failClosed, false, []
                 let action =
-                    // A live board scan proves occupancy only.  It does NOT prove the multi-step
-                    // housekeeping chain, so missing durable receipts fail closed to reconciliation.
-                    Driver.nextAction model (List.length active) false
-                        { HasHostIdentity = false; StaleClaim = false; EngineCurrent = false; PendingWrites = 0
-                          ReconcileDryRunFresh = false; ReconcileApplied = false; ReconcileFresh = false
-                          TriageFresh = false; CurrencyScoped = false } []
+                    Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
                 match opts.Render with
-                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" (List.length active) model.ReviewSlots (List.length reviewEvidence) action
+                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
                 | Text -> printfn "%A" action
                 ExitGreen
 

@@ -33,13 +33,14 @@ verification boundary before the other wave's implementers start; that overlap i
 running two waves instead of one.
 
 `batch` reads the machine declaration above and emits `activeItems`, `waveCapacity`, and `openSlots`
-For deterministic rollover and housekeeping ordering, consume the coordination driver's typed next
-action/receipt validation when available; consolidation itself remains an explicit host judgement.
 beside its scheduling answer. When schedulable work and open slots coexist it also emits `WAVE
 SHORTFALL`; treat that headline as an immediate re-plan/dispatch instruction. The signal is advisory
 because an enforcing refusal would also prevent the dispatch that fills the slot, and ordinary
 drain-down can legitimately leave capacity open. Advisory does not mean optional: the host loop owns
 acting on the measured deficit.
+
+For deterministic rollover and housekeeping ordering, consume the coordination driver's typed next
+action/receipt validation when available; consolidation itself remains an explicit host judgement.
 
 **Consolidation.** Count the items being worked across both waves combined — claimed, in review, or
 newly dispatched; not yet-verified follow-ups. Three or fewer consolidates: fold every active item into

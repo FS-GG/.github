@@ -252,6 +252,9 @@ module Reads =
     /// Immutable head commit SHA for evidence binding.
     val prHeadSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
 
+    type CommentBody = { Id: int64; Url: string; Body: string }
+    val commentsWithIdentity: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
+
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 
