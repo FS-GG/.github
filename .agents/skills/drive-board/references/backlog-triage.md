@@ -74,12 +74,11 @@ both in one call:
 scripts/fsgg-coord set-field --batch <ref> Status=Blocked "Blocked by=<dependency-ref>"
 ```
 
-and verify the fresh row afterward — including that the field, not just the body, carries the ref. The
-engine refuses a bare `Status=Blocked` write that would leave the field empty and carry no
-`Blocked on: human/...` sentinel (`.github#2079`), but that gate does not yet reach every write path
-(`set-field --batch`'s aliased mutation among them), so do not rely on it in place of writing the field
-yourself. Topical relationships, temporary overlap, unreadable refs, and guessed blocker meaning do not
-qualify; surface those as judgement findings.
+and verify the fresh row afterward — including that the field, not just the body, carries the ref.
+Always write both fields yourself in the same call rather than depending on the engine to catch an
+omission: the coherent-park refusal (`.github#2079`) does not reliably cover every write path yet
+(`.github#2098` tracks closing the gap). Topical relationships, temporary overlap, unreadable refs, and
+guessed blocker meaning do not qualify; surface those as judgement findings.
 
 ### Await human judgement
 

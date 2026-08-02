@@ -50,9 +50,21 @@ reason is awaiting human judgement, not silently retained work.
 ### Set Blocked
 
 Set `Blocked` only when a parseable issue reference names a live implementation dependency that must
-land before this item can be authored. Preserve the valid `Blocked by:` edge, run
-`scripts/fsgg-coord set-field <ref> Status Blocked`, and verify the fresh row. Topical relationships,
-temporary path overlap, unreadable refs, and guessed blocker meaning do not qualify.
+land before this item can be authored. A park is **two writes, not one**: the `Status` column and the
+`Blocked by` **board field** — the Projects v2 field, never a body line. `Blocked by:` written into the
+issue body is inert: nothing that clears a blocker reads the body, so it looks like a declaration and
+does nothing (`.github#1933`) — the exact shape that twice let a fully-resolved, already-superseded field
+value survive a park because the real edge had gone into the body instead. Write both in one call:
+
+```
+scripts/fsgg-coord set-field --batch <ref> Status=Blocked "Blocked by=<dependency-ref>"
+```
+
+and verify the fresh row afterward — including that the field, not just the body, carries the ref.
+Always write both fields yourself in the same call rather than depending on the engine to catch an
+omission: the coherent-park refusal (`.github#2079`) does not reliably cover every write path yet
+(`.github#2098` tracks closing the gap). Topical relationships, temporary path overlap, unreadable refs,
+and guessed blocker meaning do not qualify.
 
 ### Await human judgement
 
