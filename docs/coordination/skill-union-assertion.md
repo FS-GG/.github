@@ -939,9 +939,11 @@ jobs:
 [`template-base-skill-union.yml`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/.github/workflows/template-base-skill-union.yml)
 (`product-path: template/base`, `manifest:` supplied). It audits a tree that is **committed** to the
 repository rather than scaffolded by it — neither a runtime root nor a generated output — which is a
-shape this document did not previously describe. It is a generated-product-shaped caller, so it does
-**not** satisfy Rendering's own `receives: skill-union` row: those are different subjects, and the
-roster's detector says so out loud rather than counting one as the other. See
+shape this document did not previously describe. It is a generated-product-shaped caller, a different
+subject from the committed-root union that Rendering's former `receives: skill-union` row named; the
+roster's detector says so out loud rather than conflating the two. That row no longer exists:
+[#1715](https://github.com/FS-GG/.github/issues/1715) removed it on 2026-07-28, in the same commit that
+retired the receiver caller it required. See
 [the ninth audited tree](#the-ninth-audited-tree-fsggrenderings-templatebase) below.
 
 #### The generated-subject shape, and why Templates is not a `uses:` caller
@@ -1250,12 +1252,14 @@ It is now gated by
 [Rendering PR #1083](https://github.com/FS-GG/FS.GG.Rendering/pull/1083); green there and on the merge
 commit as the context **`template-base-skill-union / skill-union`**.
 
-**This caller does not satisfy `FS.GG.Rendering`'s `receives: skill-union` row, and must never be read
-as doing so.** That row is satisfied by Rendering's *separate* `skill-union.yml` over the repository's
-own committed roots ([Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080)) — two
-subjects, two workflows, two greens, and per [#1504](https://github.com/FS-GG/.github/issues/1504) and
-[#628](https://github.com/FS-GG/.github/issues/628) one green never stands in for the other. It changes
-no gap count; see the paragraph above for why the count nevertheless moved.
+**This caller audits a different subject from the committed-root union that
+`FS.GG.Rendering`'s former `receives: skill-union` row named, and must never be read as the same
+thing.** The roster's detector keeps those subjects distinct rather than counting the
+generated-product-shaped caller as evidence about Rendering's own committed roots. The receiver row
+no longer exists: [#1715](https://github.com/FS-GG/.github/issues/1715) removed it on 2026-07-28, in the
+same commit that retired Rendering's separate `skill-union.yml` receiver caller
+([Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080)). It changes no gap count; see
+the paragraph above for why the count nevertheless moved.
 
 **It is also a caller shape this document had not described** — and, measured 2026-07-28, the **only
 live** generated-product-shaped `uses:` caller in the org. It audits a **committed subdirectory**, which
