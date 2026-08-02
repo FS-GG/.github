@@ -43,6 +43,35 @@ module Client =
 
     let blockerCycleVerdicts = LintApplication.blockerCycleVerdicts
 
+    /// The `Blocked by` BODY-VS-FIELD divergence (.github#2079) — the refs a body's `Blocked by:` line(s)
+    /// name that the FIELD does not, both sides canonicalized on `Blockers.canonicalizeBlockedBy`'s terms
+    /// so `#8`, `FS-GG/FS.GG.SDD#8` and the field's own rendering of the same ref compare equal.
+    ///
+    /// `[]` means coherent: the body declares no `Blocked by:` line, or everything it names is already in
+    /// the field. A non-empty result is the `FS.GG.Templates#348` shape — a park whose edge landed in the
+    /// wrong medium, leaving a field that satisfies `BLOCKED-NO-REASON` (it is non-empty) while naming
+    /// refs the reader cannot see. `lint`'s `BLOCKED-BY-INERT` and `reconcile`'s `BLOCKER-CLEARED`
+    /// withholding are the same predicate, asked twice for two different reasons — never two copies.
+    ///
+    /// MODULE-LEVEL, ABOVE `reconcile` (.github#1225-ish): both `reconcile` and `lint` need it, and F#
+    /// compiles top to bottom — a copy inside either command would be the second-copy shape #945/#972
+    /// argue against everywhere else in this file.
+    let blockedByBodyDivergence (owner: string) (repo: string) (fieldRaw: string) (body: string) : string list =
+        let canonRefs (raw: string) : Set<string> =
+            match Blockers.canonicalizeBlockedBy owner repo raw with
+            | Ok(Some canonical) -> canonical.Split(',') |> Array.map (fun s -> s.Trim()) |> Set.ofArray
+            | Ok None
+            | Error _ -> Set.empty
+
+        let fieldRefs = canonRefs fieldRaw
+
+        let bodyRefs =
+            HumanBlock.parseBlockedByLines body
+            |> List.collect (fun raw -> canonRefs raw |> Set.toList)
+            |> Set.ofList
+
+        Set.difference bodyRefs fieldRefs |> Set.toList |> List.sort
+
     /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
     /// module-level so a test can drive every shape the grammar can produce (.github#1651).
     let classVerdict = LintApplication.classVerdict
@@ -1246,6 +1275,61 @@ module Client =
                     |> List.map (fun c -> c.Item)
 
                 let chores = Chore.derive items
+
+                // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
+                // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
+                // field's all-resolved read is not trustworthy because the park's real edge landed only
+                // in the body. `Chore.derive` above is untouched and correct on the FIELD alone, which is
+                // the only fact `Item` carries; the body's RAW text is the one additional fact only this
+                // CLI layer has (read straight off the snapshot document, since `Item` has nowhere to put
+                // it), so the withholding happens here — one predicate, `blockedByBodyDivergence`, shared
+                // with `lint`'s `BLOCKED-BY-INERT` above, never a second copy that could disagree with it.
+                let bodyByRef: Map<Ref, string> =
+                    try
+                        use parsed = JsonDocument.Parse(doc)
+
+                        match parsed.RootElement.TryGetProperty "items" with
+                        | false, _ -> Map.empty
+                        | true, elItems ->
+                            elItems.EnumerateArray()
+                            |> Seq.choose (fun el ->
+                                match el.TryGetProperty "body" with
+                                | true, bodyEl when bodyEl.ValueKind = JsonValueKind.String ->
+                                    let owner = el.GetProperty("owner").GetString()
+                                    let repo = el.GetProperty("repo").GetString()
+                                    let number = el.GetProperty("number").GetInt32()
+
+                                    Some({ Owner = owner; Repo = repo; Number = number }, bodyEl.GetString())
+                                | _ -> None)
+                            |> Map.ofSeq
+                    with _ ->
+                        // FAIL OPEN INTO NO EVIDENCE, NOT INTO A CRASH (#266's other edge): a document this
+                        // read cannot make is a document this rule cannot act on, and the rule it defers to
+                        // is `Chore.derive`'s own — already computed above, already correct on the field.
+                        // This block only ever WITHHOLDS a promotion; it never grants one, so an empty map
+                        // here costs nothing but the withholding this issue exists to add.
+                        Map.empty
+
+                let blockedByRawByRef: Map<Ref, string> =
+                    rows |> List.map (fun r -> r.Ref, r.BlockedByRaw) |> Map.ofList
+
+                let divergenceOf (c: Chore.Chore) : string list =
+                    let fieldRaw = Map.tryFind c.Subject blockedByRawByRef |> Option.defaultValue ""
+                    let body = Map.tryFind c.Subject bodyByRef |> Option.defaultValue ""
+                    blockedByBodyDivergence c.Subject.Owner c.Subject.Repo fieldRaw body
+
+                let chores, blockerClearedWithheld =
+                    chores
+                    |> List.partition (fun c ->
+                        match c.Kind with
+                        | Chore.BlockerCleared _ -> List.isEmpty (divergenceOf c)
+                        | _ -> true)
+
+                for c in blockerClearedWithheld do
+                    let named = divergenceOf c |> String.concat ", "
+
+                    eprint
+                        $"fsgg-coord-engine: reconcile: withheld BLOCKER-CLEARED for %s{c.Subject.Short} — its body's `Blocked by:` line names %s{named}, which the FIELD does not carry, so the field's all-resolved read is not trustworthy (.github#2079). Run `lint` for the divergence (`BLOCKED-BY-INERT`), reconcile the FIELD to match, then re-run."
 
                 // The field write a chore implies — the SINGLE source for the write this phase performs,
                 // the `field`/`value` the receipt reports, AND the `remedy`/human-table prose below.
@@ -3198,6 +3282,111 @@ module Client =
 
                 Error ExitError
 
+    /// `release --blocked-by <ref>` (.github#2079): write the `Blocked by` FIELD FIRST — before the lock
+    /// drops, before the Status write, and before the coherence gate below even runs. An invalid ref
+    /// refuses the WHOLE call, at zero GraphQL spent on the lock (`gateField`'s own ordering, one call
+    /// earlier). Writing the field here rather than folding it into the Status-restore branch below means
+    /// the coherence gate that follows simply finds a row already coherent — one write path, not two that
+    /// could disagree about what landed.
+    let private writeBlockedByIfRequested
+        (ctx: Context)
+        (w: Identity.Worker)
+        (ref: Ref)
+        (blockedByArg: string option)
+        : Result<unit, int> =
+        match blockedByArg with
+        | None -> Ok()
+        | Some raw ->
+            match Blockers.canonicalizeBlockedBy ref.Owner ref.Repo raw with
+            | Error Blockers.Placeholder ->
+                eprint
+                    $"fsgg-coord-engine: release --blocked-by: '%s{raw.Trim()}' is a placeholder, not a ref — a Blocked park needs a real one. Nothing released."
+
+                Error ExitError
+            | Error Blockers.NotIssueRefs ->
+                eprint
+                    $"fsgg-coord-engine: release --blocked-by takes issue refs (owner/repo#n), not prose: '%s{raw}'. Nothing released."
+
+                Error ExitError
+            | Ok None ->
+                eprint
+                    "fsgg-coord-engine: release --blocked-by '' clears rather than parks — a Blocked park needs a real ref, not an empty one. Nothing released."
+
+                Error ExitError
+            | Ok(Some canonical) ->
+                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                | Error e ->
+                    eprint
+                        $"fsgg-coord-engine: release --blocked-by: the board could not be resolved (%s{Errors.explain e}) — nothing released."
+
+                    Error ExitError
+                | Ok board ->
+                    match
+                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Blocked by" (Board.Set canonical) w.Id
+                    with
+                    | Ok Board.Written -> Ok()
+                    | Ok Board.Deferred ->
+                        eprint
+                            "fsgg-coord-engine: release --blocked-by: the 'Blocked by' write is DEFERRED — the budget is exhausted, so it is QUEUED, not lost: scripts/fsgg-coord flush. Nothing released — retry once it has landed."
+
+                        Error Errors.ExRate
+                    | Ok Board.NotOnBoard ->
+                        eprint $"fsgg-coord-engine: release --blocked-by: %s{ref.Short} is not an item on this board. Nothing released."
+                        Error ExitError
+                    | Error e ->
+                        eprint
+                            $"fsgg-coord-engine: release --blocked-by: the 'Blocked by' write FAILED (%s{Errors.explain e}). Nothing released."
+
+                        Error ExitError
+
+    /// AC1 (.github#2079): **a `Blocked` park is coherent ONLY if the row will end with a non-empty
+    /// readable `Blocked by` field or a `Blocked on: human/...` sentinel.** A park is two independent
+    /// writes — the `Status` column and the `Blocked by` field — and nothing else bound them at write
+    /// time: `BLOCKED-NO-REASON` only reds the EMPTY-field case, so a stale-but-non-empty field (the
+    /// `FS.GG.Templates#348` shape — an edge that landed as a body line instead) satisfied every existing
+    /// check while naming refs that had all resolved, and `BLOCKER-CLEARED` promoted the row.
+    ///
+    /// Refuses BEFORE the lock drops — a refused write must not cost the caller their lock, `requestedStatus`'s
+    /// own timing argument, one clause over. A no-op for every OTHER `--status`, including none: this is
+    /// ADR-0045's park invariant, not a general field-write gate, and it never fires on a row this call is
+    /// not about to park.
+    ///
+    /// Called AFTER `writeBlockedByIfRequested`, so `--blocked-by` on this same call already landed and
+    /// the live read below sees it.
+    let requireCoherentParkIfBlocked (ctx: Context) (ref: Ref) (requested: BoardStatus option) : Result<unit, int> =
+        if requested <> Some BoardStatus.Blocked then
+            Ok()
+        else
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e ->
+                eprint
+                    $"fsgg-coord-engine: release --status Blocked: the board could not be resolved (%s{Errors.explain e}) — nothing released."
+
+                Error ExitError
+            | Ok board ->
+                match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
+                | Error e ->
+                    eprint
+                        $"fsgg-coord-engine: release --status Blocked: the live 'Blocked by' field could not be read (%s{Errors.explain e}) — a field this call could not read is not one it may assume is set (#266). Nothing released."
+
+                    Error ExitError
+                | Ok(Some fieldValue) when not (String.IsNullOrWhiteSpace fieldValue) -> Ok()
+                | Ok _ ->
+                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                    | Error e ->
+                        eprint
+                            $"fsgg-coord-engine: release --status Blocked: the body could not be read to check for a 'Blocked on:' sentinel (%s{Errors.explain e}) — nothing released."
+
+                        Error ExitError
+                    | Ok body ->
+                        match HumanBlock.parse body with
+                        | Some _ -> Ok()
+                        | None ->
+                            eprint
+                                $"fsgg-coord-engine: release --status Blocked refuses: the row would land with an EMPTY 'Blocked by' field and no 'Blocked on: human/...' sentinel — a park is two writes and nothing else binds them (.github#2079). Write the edge:  scripts/fsgg-coord set-field %s{ref.Short} 'Blocked by' '<refs>'  (or pass --blocked-by on this call), or record a human park: add a body line 'Blocked on: human/decision' or 'Blocked on: human/action'. Nothing released."
+
+                            Error ExitError
+
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
         | Error c, _
@@ -3212,6 +3401,17 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
+
+            // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
+            // BEFORE the lock drops, so a refused park costs the caller nothing.
+            match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
+            | Error c -> c
+            | Ok() ->
+
+            match requireCoherentParkIfBlocked ctx ref requested with
+            | Error c -> c
+            | Ok() ->
+
                 match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                 | Error e -> fail e
                 | Ok Writes.DoesNotHold ->
@@ -3651,6 +3851,16 @@ module Client =
                 match gateField ref field value with
                 | Error rc -> rc
                 | Ok write ->
+
+                // AC1 (.github#2079): `set-field <ref> Status Blocked` is `release --status Blocked`'s
+                // other door onto the same park invariant — refused BEFORE any write when the row would
+                // land with neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel.
+                // A no-op for every other field/value pair (`requireCoherentParkIfBlocked` itself is a
+                // no-op unless the resolved status is `Blocked`).
+                match requireCoherentParkIfBlocked ctx ref (if field = "Status" then Reads.statusOfName value else None) with
+                | Error rc -> rc
+                | Ok() ->
+
                 match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
                 | Ok board ->
@@ -6396,6 +6606,35 @@ module Client =
                     |> Option.map (mk "HUMAN-PARK-MACHINE-CLEARED" "note" r)
                     |> Option.toList
 
+                // BLOCKED-BY-INERT (.github#2079). `BLOCKED-NO-REASON` above reds ONLY when the `Blocked
+                // by` FIELD is empty — its own comment says an item with a real `Blocked by` ref "is
+                // silent here." This is what is not silent: a `Blocked` row whose BODY carries a
+                // `Blocked by:` line naming ref(s) the field does not — the `FS.GG.Templates#348` shape,
+                // where a park's real edge landed as a body line and the field kept a stale, unrelated
+                // (here, fully-resolved) set. A body line is never read by anything that clears a
+                // blocker — `Blocked by` is a board FIELD (ADR-0045/`.github#1933`) — so the declaration
+                // is INERT, and `reconcile` withholds `BLOCKER-CLEARED` on exactly this same predicate
+                // (see below): this finding is what makes that withholding legible rather than silent.
+                //
+                // Same population as `BLOCKED-NO-REASON` — an open `Blocked` row, whose body this pass
+                // already read for the sentinel check — because this shape is dangerous precisely where
+                // that one is silent, and reading every row's body for it would spend the budget that
+                // dies first (#418) on rows where the divergence cannot mislead `BLOCKER-CLEARED` at all.
+                let blockedByInertFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    if r.State = IssueState.Open && r.Status = BoardStatus.Blocked then
+                        match blockedByBodyDivergence r.Ref.Owner r.Ref.Repo r.BlockedByRaw body with
+                        | [] -> []
+                        | extra ->
+                            let named = String.concat ", " extra
+
+                            [ mk
+                                  "BLOCKED-BY-INERT"
+                                  "error"
+                                  r
+                                  $"body declares a `Blocked by:` line naming %s{named}, which the FIELD does not carry. A body line is never read by anything that clears a blocker — `Blocked by` is a board FIELD (ADR-0045/.github#1933) — so this declaration is INERT: `BLOCKER-CLEARED` cannot see it, and `reconcile` withholds the promotion on this same divergence. If %s{named} really blocks this item, write it into the field:  scripts/fsgg-coord set-field %s{r.Ref.Short} 'Blocked by' '<refs>'" ]
+                    else
+                        []
+
                 // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
                 // own text does not class it — either because it says nothing about HOW BAD it is (no
                 // `Class:` line, no `[decision]` title prefix, no ADR-0045 `Blocked on: human/decision`
@@ -6529,6 +6768,7 @@ module Client =
 
                             let hbFindings = humanBlockFindings r body
                             let humanPark = humanParkFindings r body
+                            let blockedByInert = blockedByInertFindings r body
 
                             let clsFindings = classFindings r body
 
@@ -6567,6 +6807,7 @@ module Client =
                                      @ tsFindings
                                      @ hbFindings
                                      @ humanPark
+                                     @ blockedByInert
                                      @ clsFindings
                                      @ statusUnsetFindings
                                      @ severityUnsetFindings

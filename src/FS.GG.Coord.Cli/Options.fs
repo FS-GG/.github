@@ -123,6 +123,13 @@ module Options =
           /// the caller stating the deliberate column, so it beats both the restore and the `Ready` fallback.
           /// No other command reads this field; `statusCommands` refuses it everywhere else.
           Status: string option
+          /// `release --status Blocked --blocked-by <ref>` — the edge to write into the `Blocked by`
+          /// FIELD in the SAME call (.github#2079), so a coherent park is one call rather than two the
+          /// caller must remember to pair. Canonicalized on `Blockers.canonicalizeBlockedBy`'s terms,
+          /// exactly as `set-field <ref> 'Blocked by' <value>` already is — a comma list, a bare `#n`, a
+          /// `repo#n`, or an issue URL, and prose or a placeholder is refused before anything is written.
+          /// Read ONLY by `release`; every other command refuses it.
+          BlockedBy: string option
           /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
           /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
           All: bool
@@ -335,7 +342,11 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              undiscoverable from the tool that refused)
   release <ref> [--worker W]                 drop the lock, restoring the column it overwrote;
           [--status S]                       --status lands it in S instead (#867: name the column you
-                                             mean, e.g. `--status Blocked`, or it goes back to Ready)
+          [--blocked-by REF]                  mean, e.g. `--status Blocked`, or it goes back to Ready).
+                                             `--status Blocked` refuses BEFORE the lock drops unless the
+                                             row will end with a `Blocked by` field or a `Blocked on:
+                                             human/...` sentinel (.github#2079); `--blocked-by REF` writes
+                                             the field in this same call so a coherent park is one call
   heartbeat <ref> [--worker W]               renew the lease
   adopt  <ref> [--worker W] [--json|--text]  take over an ORPHAN — a stale claim whose PR is FINISHED —
                                              and land it (#697/#720); reports the preconditions it checked,
@@ -617,6 +628,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FWarn
         | FIssue
         | FStatus
+        | FBlockedBy
         | FAll
         | FBatch
         | FStrict
@@ -686,6 +698,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // own reason: a `--status` accepted and ignored is a green exit telling the caller something
         // happened which did not.
         | FStatus -> Only [ Ready; Release; Add ]
+
+        // `release --blocked-by` (.github#2079) — the ONE call that pairs the `Blocked by` field write
+        // with `--status Blocked`, so `release` is its only reader; every other command refuses it.
+        | FBlockedBy -> Only [ Release ]
 
         | FMint -> Only [ WhoAmI ]
         | FLocal -> Only [ Who ]
@@ -782,6 +798,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FWarn -> "--warn", []
         | FIssue -> "--issue", []
         | FStatus -> "--status", []
+        | FBlockedBy -> "--blocked-by", []
         | FAll -> "--all", []
         | FBatch -> "--batch", []
         | FExplain -> "--explain", []
@@ -1014,6 +1031,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Warn then FWarn
           if o.Issue.IsSome then FIssue
           if o.Status.IsSome then FStatus
+          if o.BlockedBy.IsSome then FBlockedBy
           if o.All then FAll
           if o.Batch then FBatch
           if o.Strict then FStrict
@@ -1503,6 +1521,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--status" :: value :: t -> flags { acc with Status = Some value } t
             | [ "--status" ] -> Error "--status needs a value"
 
+            | "--blocked-by" :: value :: _ when value.StartsWith "-" ->
+                Error $"--blocked-by needs a value (got flag '%s{value}')"
+            | "--blocked-by" :: value :: t -> flags { acc with BlockedBy = Some value } t
+            | [ "--blocked-by" ] -> Error "--blocked-by needs a value"
+
             // `issues --label` / `--state` — a label may legitimately begin with a hyphen, but a bare
             // trailing `--label` with nothing after it is still an error, so the empty-tail guard stays.
             | "--label" :: value :: t -> flags { acc with Label = Some value } t
@@ -1655,6 +1678,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Warn = false
               Issue = None
               Status = None
+              BlockedBy = None
               All = false
               Batch = false
               Explain = false
