@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "31be8937f49f6b4656f3e2adfb75f23d9b24814595b0ad8eca2fe83c4787138c",
-      "tree-sha256": "f1df4278c164e3a850b3459cc81d17a93799f16f481527cbea50b8fd35167ac0",
+      "tree-sha256": "85b71bc4d703f85e751fe1c5f52c105337a788146ac61cffab48d91c727f315a",
       "files": [
         {
           "path": "SKILL.md",
@@ -29,7 +29,7 @@
         },
         {
           "path": "references/feedback-contract.md",
-          "sha256": "a975f8d1994fe57b48f5c05d45bfdee4fd959cd698c71027f702b297d0a378ae",
+          "sha256": "fb5640a2968193188609aa843fdc7155acca9db78b82cbcb839518feff65547d",
           "executable": false
         },
         {
@@ -60,7 +60,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "de4a9638b90f2c2c5ca0041865fa2ab881429d31da92022d84f4a4f2de3eeb69",
-      "tree-sha256": "5651ee7c205dd5e507178f63530932306dd35a0b8d7da75e9042d2b8a639361e",
+      "tree-sha256": "a124e827ee26765a6127f307e7a502178c160dfc2f7bf3dae7b93200e1e11332",
       "files": [
         {
           "path": "SKILL.md",
@@ -84,7 +84,7 @@
         },
         {
           "path": "references/feedback-contract.md",
-          "sha256": "cca471febecbd3f63cd29a5ec81c3af3ea1542a4e40ba1075208ec8416632f86",
+          "sha256": "c6a10e5888ee87fd5aedce9d3e3892451dfb3f6c6a10f2dd60c2e87e10f9ce1e",
           "executable": false
         },
         {
