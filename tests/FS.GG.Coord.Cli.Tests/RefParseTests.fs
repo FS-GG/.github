@@ -149,3 +149,70 @@ module RefParseTests =
         // standing in. That is the one thing the issue says to get right, and it is why this is not
         // simply `scopedRepo`. `None` here is what makes `parseRefIn` refuse.
         Assert.Equal(None, Client.defaultRepoForOwner owner slug)
+
+    // ---- .github#2107: a closing keyword next to the board's OWN shorthand ------------------------
+    //
+    // `.github#2095` is exactly `parse`'s `short` form — the one this file's own `every accepted ref
+    // form parses` theory confirms is a LEGAL board ref. It is also the one form GitHub's own
+    // closing-keyword grammar does not parse: GitHub wants a bare `#<n>` (same-repo) or `owner/repo#<n>`
+    // (cross-repo), and `.github#2095` is neither. Two confirmed occurrences (.github#2095/PR#2099,
+    // .github#2098/PR#2103) both merged with the issue left open, and both needed a manual close because
+    // editing a merged PR's body does not replay it.
+
+    [<Theory>]
+    // The real sentence from both confirmed occurrences.
+    [<InlineData("Closes .github#2095", "Closes .github#2095", ".github#2095", "2095")>]
+    [<InlineData("Closes .github#2098.", "Closes .github#2098", ".github#2098", "2098")>]
+    // Every keyword GitHub's own grammar recognises (check-closing-keywords.py's list), case-insensitive.
+    [<InlineData("closes FS.GG.Game#12", "closes FS.GG.Game#12", "FS.GG.Game#12", "12")>]
+    [<InlineData("CLOSED FS.GG.Game#12", "CLOSED FS.GG.Game#12", "FS.GG.Game#12", "12")>]
+    [<InlineData("Fix .github#1", "Fix .github#1", ".github#1", "1")>]
+    [<InlineData("fixes .github#1", "fixes .github#1", ".github#1", "1")>]
+    [<InlineData("Fixed .github#1", "Fixed .github#1", ".github#1", "1")>]
+    [<InlineData("Resolve .github#1", "Resolve .github#1", ".github#1", "1")>]
+    [<InlineData("resolves .github#1", "resolves .github#1", ".github#1", "1")>]
+    [<InlineData("Resolved .github#1", "Resolved .github#1", ".github#1", "1")>]
+    let ``a closing keyword next to board shorthand is caught, with the ref and number split out``
+        (body: string)
+        (matched: string)
+        (ref_: string)
+        (number: string)
+        =
+        match RefParsing.boardShorthandCloses body with
+        | [ f ] ->
+            Assert.Equal(matched, f.Matched)
+            Assert.Equal(ref_, f.Ref)
+            Assert.Equal(number, f.Number)
+        | other -> failwith $"expected exactly one finding, got %A{other}"
+
+    [<Theory>]
+    // The bare form — the same-repo GitHub keyword this org's own docs prescribe.
+    [<InlineData("Closes #2095")>]
+    [<InlineData("closes #2095.")>]
+    // The full cross-repo form — GitHub's other legal shape.
+    [<InlineData("Closes FS-GG/.github#2095")>]
+    [<InlineData("Fixes owner/repo#12")>]
+    // No keyword at all: a bare board ref mentioned in prose, not adjacent to a closing verb.
+    [<InlineData("See .github#2095 for context.")>]
+    // Prose that merely CONTAINS a keyword as a substring must not false-positive (#643's own trap, here
+    // for word-boundary correctness rather than negation).
+    [<InlineData("This unfixed problem predates .github#2095.")>]
+    [<InlineData("The closest match is .github#2095.")>]
+    let ``neither valid GitHub form nor keyword-free prose is ever flagged`` (body: string) =
+        Assert.Empty(RefParsing.boardShorthandCloses body)
+
+    [<Fact>]
+    let ``multiple defects in one body are ALL reported, in order — 'closes #1, #2' drops the second`` () =
+        // The doc precedent (pnext-item deep-detail.md) is that a caller must repeat the keyword for a
+        // second ref to bind at all — so this fixture repeats it, matching the only form that is even a
+        // candidate defect for BOTH refs.
+        let body = "Closes .github#1, closes .github#2."
+
+        match RefParsing.boardShorthandCloses body with
+        | [ a; b ] ->
+            Assert.Equal(".github#1", a.Ref)
+            Assert.Equal(".github#2", b.Ref)
+        | other -> failwith $"expected exactly two findings in order, got %A{other}"
+
+    [<Fact>]
+    let ``an empty body has no findings`` () = Assert.Empty(RefParsing.boardShorthandCloses "")

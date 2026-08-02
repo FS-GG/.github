@@ -250,6 +250,14 @@ module Reads =
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 
+    /// A pull request's DESCRIPTION (`.body` on `pulls/{n}`) — the text GitHub's markdown parser reads to
+    /// build `closingIssuesReferences` while the PR is open (.github#2107). `issueBody`'s exact sibling: a
+    /// `null` body (nobody wrote one) reads as `Ok ""`, a real, successfully-observed fact, never an error.
+    /// verify-paths uses this to catch a closing keyword written next to the board's OWN `<repo>#<n>`
+    /// shorthand — a form GitHub's grammar does not parse — WHILE the PR is still open, which is the one
+    /// moment fixing it is free.
+    val prBody: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+
     /// IS THIS OPEN PR FINISHED WORK? — #697/#720, over REST.
     ///
     /// Reads the PR (for `mergeable` + head SHA), the head SHA's WORKFLOW RUNS, and that SHA's CHECK RUNS,

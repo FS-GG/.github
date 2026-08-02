@@ -33,6 +33,7 @@
     <Compile Include="WhoLivenessTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
+    <Compile Include="VerifyPathsClosingKeywordTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
