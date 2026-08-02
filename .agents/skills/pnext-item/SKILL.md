@@ -96,6 +96,11 @@ not elaboration** — load it for the dedupe reads and the judgement boundaries.
 findings discovered before independent review begins. Once review starts, do not file the critic's
 findings or add them to a private follow-up queue; the critic owns their disposition.
 
+For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
+exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
+or documentation occurrence with an accountable disposition; compilation is not evidence that quoted
+protocol/example text was intended. An unresolved or stale receipt blocks host acceptance.
+
 ## 5. Independent critique
 
 Push the candidate, open its PR, and ask the host to assign a fresh critic agent. Keep the implementing worker and

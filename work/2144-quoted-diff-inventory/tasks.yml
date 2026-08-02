@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2144-quoted-diff-inventory
+  title: "Quoted semantic-diff receipt"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2144-quoted-diff-inventory/spec.md
+  sourceClarifications: work/2144-quoted-diff-inventory/clarifications.md
+  sourceChecklist: work/2144-quoted-diff-inventory/checklist.md
+  sourcePlan: work/2144-quoted-diff-inventory/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2144-quoted-diff-inventory/spec.md
+    digest: 60d0d40808c48cc896f21ae124a428efa454543ca41045844ab3c07344aed498
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2144-quoted-diff-inventory/clarifications.md
+    digest: 892407dae0ff3c3a8528583e086ce4ffb5fee9468ec39b52a124876db7e580fb
+    schemaVersion: 1
+  - label: checklist
+    path: work/2144-quoted-diff-inventory/checklist.md
+    digest: 12fad0ee57036c1120efffb32bd35b206826a70851e1b7b8f8c5a5597c2c5332
+    schemaVersion: 1
+  - label: plan
+    path: work/2144-quoted-diff-inventory/plan.md
+    digest: 23f28397094c102c5917614a3c50bda5ef4f9b128dfab55d629e8357684cbb88
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2144-quoted-diff-inventory."

@@ -15,7 +15,8 @@ module Driver =
     type ReviewChain =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool
-          RuntimeRouteEvidence: RuntimeRouteEvidence option }
+          RuntimeRouteEvidence: RuntimeRouteEvidence option
+          DiffAuditRequired: bool; DiffAuditHead: string option }
 
     type ReviewComment = { Id: int64; Url: string; Body: string }
 
@@ -127,6 +128,18 @@ module Driver =
                     match confirmations |> List.last |> fun c -> field "verdict" c.Body with
                     | Ok "pass" -> ()
                     | _ -> errors.Add "the latest review confirmation must have verdict pass"
+                let auditRequired =
+                    match field "diff-audit-required" first.Body with
+                    | Ok "true" -> true
+                    | Ok "false" | Error _ -> false
+                    | Ok _ -> errors.Add "diff-audit-required must be true or false"; false
+                let auditHead =
+                    if auditRequired then
+                        match field "diff-audit-receipt" accepted.Body, field "diff-audit-base" accepted.Body,
+                              field "diff-audit-head" accepted.Body, field "diff-audit-disposition" accepted.Body with
+                        | Ok "complete", Ok baseSha, Ok head, Ok "all-resolved" when not (System.String.IsNullOrWhiteSpace baseSha) && head = acceptedHead -> Some head
+                        | _ -> errors.Add "required diff-audit receipt is missing, stale, or has unresolved dispositions"; None
+                    else None
                 if accepted.Id <= previousReviewId then errors.Add "host acceptance must follow the latest review comment"
                 if acceptedHead <> previousHead then errors.Add "acceptance is not bound to the latest reviewed head"
                 if acceptedInitialUrl <> first.Url then errors.Add "acceptance is not bound to the initial review comment URL"
@@ -135,7 +148,8 @@ module Driver =
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. List.length confirmations ]
                     Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead
                          Rounds = rounds; ChecksGreen = false; HostAccepted = true
-                         RuntimeRouteEvidence = latestRouteEvidence }
+                         RuntimeRouteEvidence = latestRouteEvidence
+                         DiffAuditRequired = auditRequired; DiffAuditHead = auditHead }
                 else Error(List.ofSeq errors)
             | _ -> Error [ "review markers are malformed" ]
         | _ -> Error(List.ofSeq errors)
@@ -199,6 +213,7 @@ module Driver =
               "review rounds are not ordered from one"
           if List.length chain.Rounds > maxRounds then "review round ceiling exceeded"
           if Option.isNone chain.RuntimeRouteEvidence then "runtime-route applicability evidence is missing"
+          if chain.DiffAuditRequired && chain.DiffAuditHead <> chain.HeadSha then "required diff-audit receipt is missing, stale, or unresolved"
           if not chain.ChecksGreen then "review checks are not green"
           if not chain.HostAccepted then "host acceptance is missing" ]
 

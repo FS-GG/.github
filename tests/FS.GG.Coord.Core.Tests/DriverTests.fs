@@ -16,7 +16,8 @@ module DriverTests =
         let review =
             { MarkerValid = true; CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]
               ChecksGreen = true; HostAccepted = true
-              RuntimeRouteEvidence = Some(NotMeaningful "receipt freshness has no runtime-route subject") }
+              RuntimeRouteEvidence = Some(NotMeaningful "receipt freshness has no runtime-route subject")
+              DiffAuditRequired = false; DiffAuditHead = None }
         Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = Some review })
         Assert.False(receiptFresh 120L 30L { ObservedAt = 80L; SourceSha = "abc"; Complete = true; Review = Some review })
         Assert.False(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = None })
@@ -60,7 +61,7 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 review validation rejects marker sha rounds checks and acceptance defects`` () =
-        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 2 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
+        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 2 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None; DiffAuditRequired = false; DiffAuditHead = None }
         Assert.True(List.length errors >= 5)
 
     [<Fact>]
@@ -164,5 +165,16 @@ module DriverTests =
     [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
-        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
+        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None; DiffAuditRequired = false; DiffAuditHead = None }
         Assert.Equal(7, List.length errors)
+
+    [<Fact>]
+    let ``#2144 required diff audit binds the complete receipt to the accepted head`` () =
+        let review = comment 1L "https://reviews/1" ("<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: head\nverdict: pass\ndiff-audit-required: true" + notMeaningful)
+        let acceptance fields = comment 2L "https://reviews/2" ("<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1\n" + fields)
+        let valid = acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: head\ndiff-audit-disposition: all-resolved"
+        match parseReviewComments [ review; valid ] with
+        | Ok chain -> Assert.True(chain.DiffAuditRequired); Assert.Equal(Some "head", chain.DiffAuditHead)
+        | Error errors -> failwithf "%A" errors
+        Assert.True(Result.isError(parseReviewComments [ review; acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: old\ndiff-audit-disposition: all-resolved" ]))
+        Assert.True(Result.isError(parseReviewComments [ review; acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: head\ndiff-audit-disposition: unresolved" ]))
