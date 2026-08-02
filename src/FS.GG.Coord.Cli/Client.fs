@@ -801,11 +801,13 @@ module Client =
 
                 ExitGreen
 
-    let private planningSourceSha (active: Ref list) =
-        // Bind the receipt to the exact occupancy fact `nextAction` consumes. Claim ages change every
-        // scan and are deliberately excluded: the same active set must remain usable for the bounded
-        // five-minute receipt lifetime, while any holder entering or leaving changes this digest.
-        active |> List.map _.Short |> List.sort |> String.concat "\n"
+    let private planningSourceSha (facts: string list) =
+        // This is deliberately wider than occupancy.  The prior digest stayed identical when a pending
+        // write, triage fact, claim liveness or review result changed, so an old clean receipt could be
+        // replayed over a materially different board.  Every live read consumed by the transition is now
+        // one constituent.  Callers can carry the content-addressed receipts; they cannot choose the source
+        // against which this invocation validates them.
+        facts |> String.concat "\n\u001e\n"
         |> Text.Encoding.UTF8.GetBytes
         |> Security.Cryptography.SHA256.HashData
         |> Convert.ToHexString
@@ -815,30 +817,20 @@ module Client =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement
-            let housekeeping = root.GetProperty "housekeeping"
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
-            let integer (name: string) (node: JsonElement) = node.GetProperty(name).GetInt32()
             let receipt: Driver.PlanningReceipt =
                 { ObservedAt = root.GetProperty("observedAt").GetInt64()
                   SourceSha = root.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
                   Complete = bool "complete" root
                   ConsolidationApproved = bool "consolidationApproved" root
-                  Housekeeping =
-                    { HasHostIdentity = bool "hasHostIdentity" housekeeping
-                      StaleClaim = bool "staleClaim" housekeeping
-                      EngineCurrent = bool "engineCurrent" housekeeping
-                      PendingWrites = integer "pendingWrites" housekeeping
-                      ReconcileDryRunFresh = bool "reconcileDryRunFresh" housekeeping
-                      ReconcileApplied = bool "reconcileApplied" housekeeping
-                      ReconcileFresh = bool "reconcileFresh" housekeeping
-                      TriageFresh = bool "triageFresh" housekeeping
-                      CurrencyScoped = bool "currencyScoped" housekeeping }
-                  WorkerReturns =
-                    root.GetProperty("workerReturns").EnumerateArray()
+                  Observations =
+                    root.GetProperty("observations").EnumerateArray()
                     |> Seq.map (fun item ->
-                        ({ ClaimLive = bool "claimLive" item;
-                          ReviewReady = bool "reviewReady" item;
-                          ParkedOrDone = bool "parkedOrDone" item }: Driver.WorkerReturn))
+                        ({ Kind = item.GetProperty("kind").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ObservedAt = item.GetProperty("observedAt").GetInt64()
+                           SourceSha = item.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           Outcome = item.GetProperty("outcome").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ReceiptId = item.GetProperty("receiptId").GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
                     |> Seq.toList }
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"
@@ -852,11 +844,12 @@ module Client =
             match activeItemRefs doc with
             | Error e -> eprint e; ExitError
             | Ok active ->
-                let sourceSha = planningSourceSha active
-                let reviewEvidence =
-                    match Snapshot.parse doc with
-                    | Error _ -> []
-                    | Ok snapshot ->
+                match Snapshot.parse doc with
+                | Error errors ->
+                    errors |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+                    ExitError
+                | Ok snapshot ->
+                    let reviewEvidence =
                         snapshot.Candidates
                         |> List.choose (fun candidate ->
                             match candidate.Item.ItemPr with
@@ -873,23 +866,59 @@ module Client =
                                     | _ -> None
                                 | _ -> None
                             | None -> None)
-                let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
-                let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
-                let failClosed: Driver.Housekeeping =
-                    { HasHostIdentity = true; StaleClaim = false; EngineCurrent = true; PendingWrites = 0
-                      ReconcileDryRunFresh = false; ReconcileApplied = false; ReconcileFresh = false
-                      TriageFresh = false; CurrencyScoped = true }
-                let housekeeping, consolidationApproved, workerReturns =
-                    match suppliedReceipt with
-                    | Some receipt when receiptValid -> receipt.Housekeeping, receipt.ConsolidationApproved, receipt.WorkerReturns
-                    | _ -> failClosed, false, []
-                let action =
-                    Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
-                match opts.Render with
-                | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
-                | Text -> printfn "%A" action
-                ExitGreen
+                    let pending = Cache.pending ()
+                    let identity = Identity.resolve opts.Worker
+                    let staleClaim =
+                        snapshot.Candidates
+                        |> List.exists (fun candidate ->
+                            match candidate.Item.Claim with
+                            | Some(_, Types.LeaseExpiredNoPr) -> true
+                            | _ -> false)
+                    // Preserve full board/body/claim provenance while removing only the continuously
+                    // increasing age.  The derived stale/non-stale boundary is added separately, so the
+                    // receipt changes exactly when that age becomes actionable, not every second.
+                    let stableBoard =
+                        Text.RegularExpressions.Regex.Replace(doc, "\"ageSeconds\":-?[0-9]+", "\"ageSeconds\":0")
+                    let sourceSha =
+                        planningSourceSha
+                            [ "board:" + stableBoard
+                              "stale-claim:" + string staleClaim
+                              "pending:" + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
+                              "identity:" + (identity |> Result.map (fun value -> sprintf "%A" value) |> Result.defaultValue "UNRESOLVED")
+                              "review:" + sprintf "%A" reviewEvidence
+                              "engine:" + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId) ]
+                    let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
+                    let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+                    let pendingWrites = pending |> Result.map List.length |> Result.defaultValue 1
+                    let hasIdentity = Result.isOk identity
+                    let housekeeping: Driver.Housekeeping =
+                        { HasHostIdentity = hasIdentity
+                          StaleClaim = staleClaim
+                          EngineCurrent = receiptValid
+                          PendingWrites = pendingWrites
+                          ReconcileDryRunFresh = receiptValid
+                          ReconcileApplied = receiptValid
+                          ReconcileFresh = receiptValid
+                          TriageFresh = receiptValid
+                          CurrencyScoped = receiptValid }
+                    let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
+                    let workerReturns =
+                        snapshot.Candidates
+                        |> List.choose (fun candidate ->
+                            match candidate.Item.Claim with
+                            | Some(_, Types.LeaseHeld) ->
+                                Some
+                                    ({ ClaimLive = true
+                                       ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
+                                       ParkedOrDone = candidate.Item.Status = Types.Blocked || candidate.Item.Status = Types.Done }: Driver.WorkerReturn)
+                            | _ -> None)
+                    let consolidationApproved = suppliedReceipt |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
+                    let action = Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
+                    match opts.Render with
+                    | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
+                    | Text -> printfn "%A" action
+                    ExitGreen
 
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is

@@ -17,10 +17,19 @@ module DriverTests =
         Assert.False(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = None })
         let planning =
             { ObservedAt = 100L; SourceSha = "snapshot"; Complete = true; ConsolidationApproved = true
-              Housekeeping = clean; WorkerReturns = [] }
+              Observations =
+                [ for kind, outcome in
+                      [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
+                        "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ] do
+                      { Kind = kind; ObservedAt = 100L; SourceSha = "snapshot"; Outcome = outcome
+                        ReceiptId = observationReceiptId kind 100L "snapshot" outcome } ] }
         Assert.True(planningReceiptFresh 120L 30L "snapshot" planning)
         Assert.False(planningReceiptFresh 120L 30L "other" planning)
         Assert.False(planningReceiptFresh 140L 30L "snapshot" planning)
+        let replayed = { planning with Observations = planning.Observations |> List.map (fun observation -> { observation with SourceSha = "other" }) }
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" replayed)
+        let forged = { planning with Observations = planning.Observations |> List.map (fun observation -> { observation with ReceiptId = "caller-authored" }) }
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" forged)
 
     [<Fact>]
     let ``#2127 6 to 2 consolidates then dispatches a fresh three-slot wave`` () =
@@ -51,7 +60,7 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 review comment markers bind critic and identical reviewed accepted sha`` () =
-        let comments = [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: abc\nverdict: pass"; comment 2L "https://reviews/2" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc" ]
+        let comments = [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: abc\nverdict: pass"; comment 2L "https://reviews/2" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1" ]
         match parseReviewComments comments with
         | Ok chain -> Assert.Equal(Some "shrike", chain.CriticIdentity)
         | Error errors -> failwithf "%A" errors
@@ -62,7 +71,7 @@ module DriverTests =
         let comments =
             [ comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old\nverdict: changes-required"
               comment 2L "https://reviews/2" "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: shrike\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: new\nverdict: pass"
-              comment 3L "https://reviews/3" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
+              comment 3L "https://reviews/3" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/2" ]
         match parseReviewComments comments with
         | Ok chain -> Assert.Equal(Some "new", chain.HeadSha)
         | Error errors -> failwithf "%A" errors
@@ -73,7 +82,7 @@ module DriverTests =
             [ comment 10L "https://reviews/initial" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: a\nverdict: changes-required"
               comment 20L "https://reviews/round-1" "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/initial\ncritic: shrike\nround: 1\npreceding-review: https://reviews/initial\nreviewed-head: b\nverdict: changes-required"
               comment 30L "https://reviews/round-2" "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/initial\ncritic: shrike\nround: 2\npreceding-review: https://reviews/round-1\nreviewed-head: c\nverdict: pass"
-              comment 40L "https://reviews/accepted" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: c" ]
+              comment 40L "https://reviews/accepted" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: c\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/round-2" ]
         match parseReviewComments comments with
         | Ok chain ->
             Assert.Equal<int list>([ 1; 2 ], chain.Rounds)
@@ -83,7 +92,7 @@ module DriverTests =
     [<Fact>]
     let ``#2127 review confirmations fail closed unless one critic advances every linked round`` () =
         let initial = comment 1L "https://reviews/1" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: first\nverdict: changes-required"
-        let accepted head = comment 3L "https://reviews/3" $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}"
+        let accepted head = comment 3L "https://reviews/3" $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/2"
         let confirmation critic round initialUrl preceding head verdict =
             comment 2L "https://reviews/2" $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: %s{initialUrl}\ncritic: %s{critic}\nround: %s{round}\npreceding-review: %s{preceding}\nreviewed-head: %s{head}\nverdict: %s{verdict}"
         let rejects comments = Assert.True(Result.isError(parseReviewComments comments))
@@ -94,6 +103,25 @@ module DriverTests =
         rejects [ initial; confirmation "shrike" "1" "https://reviews/1" "https://reviews/1" "second" "changes-required"; accepted "second" ]
         rejects [ initial; comment 2L "https://reviews/2" "<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: shrike\nround: 1"; accepted "second" ]
         rejects [ initial; confirmation "shrike" "1" "https://reviews/1" "https://reviews/1" "second" "pass"; accepted "first" ]
+
+    [<Fact>]
+    let ``#2127 markers and acceptance links fail closed at the live parser`` () =
+        let initial = comment 10L "https://reviews/initial" "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: a\nverdict: changes-required"
+        let confirmation id round preceding head =
+            let verdict = if round = 4 then "pass" else "changes-required"
+            comment id $"https://reviews/round-%d{round}" $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/initial\ncritic: shrike\nround: %d{round}\npreceding-review: %s{preceding}\nreviewed-head: %s{head}\nverdict: %s{verdict}"
+        let acceptance body = comment 100L "https://reviews/accepted" ("<!-- fsgg:review-accepted:v1 -->\n" + body)
+        let rejects comments = Assert.True(Result.isError(parseReviewComments comments))
+        rejects [ comment 1L "https://reviews/quoted" "> <!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: a\nverdict: pass"; acceptance "accepted-head: a\ninitial-review: https://reviews/quoted\nlatest-confirmation: https://reviews/quoted" ]
+        rejects [ comment 1L "https://reviews/duplicate" "<!-- fsgg:independent-review:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: a\nverdict: pass"; acceptance "accepted-head: a\ninitial-review: https://reviews/duplicate\nlatest-confirmation: https://reviews/duplicate" ]
+        let rounds =
+            [ confirmation 20L 1 "https://reviews/initial" "b"
+              confirmation 30L 2 "https://reviews/round-1" "c"
+              confirmation 40L 3 "https://reviews/round-2" "d"
+              confirmation 50L 4 "https://reviews/round-3" "e" ]
+        rejects (initial :: rounds @ [ acceptance "accepted-head: e\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/round-4" ])
+        rejects [ initial; confirmation 20L 1 "https://reviews/initial" "b"; acceptance "accepted-head: b" ]
+        rejects [ initial; confirmation 20L 1 "https://reviews/initial" "b"; acceptance "accepted-head: b\ninitial-review: https://reviews/initial\nlatest-confirmation: wrong" ]
 
     [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =

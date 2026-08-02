@@ -25,9 +25,16 @@ module Driver =
     type WorkerReturn =
         { ClaimLive: bool; ReviewReady: bool; ParkedOrDone: bool }
 
+    /// A content-addressed result emitted by one deterministic housekeeping read/command.  Every
+    /// constituent is bound to the full live fact source; a same-occupancy state change invalidates it.
+    type PlanningObservation =
+        { Kind: string; ObservedAt: int64; SourceSha: string; Outcome: string; ReceiptId: string }
+
     type PlanningReceipt =
         { ObservedAt: int64; SourceSha: string; Complete: bool; ConsolidationApproved: bool
-          Housekeeping: Housekeeping; WorkerReturns: WorkerReturn list }
+          Observations: PlanningObservation list }
+
+    val observationReceiptId: kind: string -> observedAt: int64 -> sourceSha: string -> outcome: string -> string
 
     val planningReceiptFresh: now: int64 -> maxAgeSeconds: int64 -> sourceSha: string -> PlanningReceipt -> bool
 

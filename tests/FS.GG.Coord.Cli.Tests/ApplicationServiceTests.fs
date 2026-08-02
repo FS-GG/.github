@@ -358,9 +358,8 @@ module ApplicationServiceTests =
         // This drives the real `Client.driver` handler through scan, the PR liveness probe, the green
         // landability read and the PR conversation.  The backing issue deliberately has no review marker:
         // a handler that accidentally reads #2127's comments for review evidence therefore produces zero.
-        let head = "31cffe6-driver-head"
-        let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass"
-        let accepted = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}"
+        let mutable head = "31cffe6-driver-head"
+        let mutable claimed = false
         let boardItem =
             """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2127,"title":"driver","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
         let graph (query: string) =
@@ -379,12 +378,15 @@ module ApplicationServiceTests =
                     | _ -> Error(Errors.NotFound "graphql without a query")
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
                 | "GET", "repos/FS-GG/.github/issues/2127" -> ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
-                | "GET", "repos/FS-GG/.github/issues/2127/comments" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/issues/2127/comments" ->
+                    if claimed then ok (commentsFor (Map.ofList [ 2127, "worker-2127" ]) 2127) else ok "[]"
                 | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
                 | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
-                | "GET", "repos/FS-GG/.github/commits/31cffe6-driver-head/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
+                    let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass"
+                    let accepted = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
                     ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
                 | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
@@ -396,7 +398,7 @@ module ApplicationServiceTests =
             Console.SetOut capturedOut
             Console.SetError capturedErr
             let args =
-                [ yield "driver"; yield "--repo"; yield ".github"; yield "--json"
+                [ yield "driver"; yield "--repo"; yield ".github"; yield "--json"; yield "--worker"; yield "host-2127"
                   match receipt with
                   | Some path -> yield "--snapshot"; yield path
                   | None -> () ]
@@ -417,35 +419,67 @@ module ApplicationServiceTests =
             let evidence = root.GetProperty("reviewEvidence").GetInt32()
             if evidence <> 1 then failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
             Assert.False(root.GetProperty("receiptValid").GetBoolean())
-            Assert.Equal("ReconcileBoard", root.GetProperty("action").GetString())
+            Assert.Equal("RepairEngineCurrency", root.GetProperty("action").GetString())
             let sourceSha = root.GetProperty("sourceSha").GetString()
             let receiptPath = Path.Combine(cache, "receipt.json")
-            let receipt approved returns observedAt source =
-                $"""{{"observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"housekeeping":{{"hasHostIdentity":true,"staleClaim":false,"engineCurrent":true,"pendingWrites":0,"reconcileDryRunFresh":true,"reconcileApplied":true,"reconcileFresh":true,"triageFresh":true,"currencyScoped":true}},"workerReturns":%s{returns}}}"""
+            let receipt approved observedAt source =
+                let observation kind outcome =
+                    let id = Driver.observationReceiptId kind observedAt source outcome
+                    $"""{{"kind":"%s{kind}","observedAt":%d{observedAt},"sourceSha":"%s{source}","outcome":"%s{outcome}","receiptId":"%s{id}"}}"""
+                let observations =
+                    [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
+                      "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ]
+                    |> List.map (fun (kind, outcome) -> observation kind outcome)
+                    |> String.concat ","
+                $"""{{"observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}]}}"""
             let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            File.WriteAllText(receiptPath, receipt false "[]" now sourceSha)
+            File.WriteAllText(receiptPath, receipt false now sourceSha)
             let _, consolidate, _ = invoke (Some receiptPath)
             use consolidateDoc = JsonDocument.Parse consolidate
             Assert.True(consolidateDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("Consolidate", consolidateDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true "[]" now sourceSha)
+            File.WriteAllText(receiptPath, receipt true now sourceSha)
             let _, dispatch, _ = invoke (Some receiptPath)
             use dispatchDoc = JsonDocument.Parse dispatch
             Assert.Equal("DispatchWave 3", dispatchDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true "[{\"claimLive\":true,\"reviewReady\":false,\"parkedOrDone\":false}]" now sourceSha)
+            let queued: Cache.Deferred =
+                { Ref = ".github#2127"; Field = "Status"; Value = "Ready"; At = "2026-08-02T00:00:00Z"
+                  Worker = "host-2127"; Board = Some("FS-GG", "Coordination") }
+            Cache.defer (Errors.RateLimited(Errors.GraphQlBudget, None)) queued
+            |> Result.defaultWith (fun error -> failwithf "could not build pending-write provenance: %A" error)
+            let _, pendingChanged, _ = invoke (Some receiptPath)
+            use pendingChangedDoc = JsonDocument.Parse pendingChanged
+            Assert.False(pendingChangedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            let pendingSource = pendingChangedDoc.RootElement.GetProperty("sourceSha").GetString()
+            Assert.True(sourceSha <> pendingSource)
+            Cache.clearPending ()
+            // Same item count, different live facts: a claim makes the old receipt unreplayable.  A fresh
+            // content-addressed chain over the claimed state then reaches the derived worker-return arm.
+            claimed <- true
+            let _, changed, _ = invoke (Some receiptPath)
+            use changedDoc = JsonDocument.Parse changed
+            Assert.False(changedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            let claimedSource = changedDoc.RootElement.GetProperty("sourceSha").GetString()
+            File.WriteAllText(receiptPath, receipt true now claimedSource)
             let _, resume, _ = invoke (Some receiptPath)
             use resumeDoc = JsonDocument.Parse resume
             Assert.Equal("ResumeSameWorker", resumeDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true "[]" (now - 301L) sourceSha)
+            claimed <- false
+            File.WriteAllText(receiptPath, receipt true (now - 301L) sourceSha)
             let _, stale, _ = invoke (Some receiptPath)
             use staleDoc = JsonDocument.Parse stale
             Assert.False(staleDoc.RootElement.GetProperty("receiptValid").GetBoolean())
-            Assert.Equal("ReconcileBoard", staleDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true "[]" now "wrong-snapshot")
+            Assert.Equal("RepairEngineCurrency", staleDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt true now "wrong-snapshot")
             let _, mismatched, _ = invoke (Some receiptPath)
             use mismatchedDoc = JsonDocument.Parse mismatched
             Assert.False(mismatchedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
-            Assert.Equal("ReconcileBoard", mismatchedDoc.RootElement.GetProperty("action").GetString())
+            Assert.Equal("RepairEngineCurrency", mismatchedDoc.RootElement.GetProperty("action").GetString())
+            let malformed = (receipt true now sourceSha).Replace("\"receiptId\":\"", "\"receiptId\":\"malformed-")
+            File.WriteAllText(receiptPath, malformed)
+            let _, malformedOutput, _ = invoke (Some receiptPath)
+            use malformedDoc = JsonDocument.Parse malformedOutput
+            Assert.False(malformedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.True(transport.Logged "comment-list FS-GG/.github 2140", $"log: %A{transport.Log}")
         finally
             Console.SetOut previousOut
