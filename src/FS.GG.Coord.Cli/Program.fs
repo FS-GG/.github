@@ -348,6 +348,8 @@ let main argv =
             // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).
             | Predicate -> Client.predicate opts
 
+            | DiffAudit -> SemanticDiffApplication.run opts
+
             // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
             // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
             | Next

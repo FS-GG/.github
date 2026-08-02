@@ -110,6 +110,7 @@ module Options =
         /// the exit code (the `landable` shape). Assertion is positional or read from a filed
         /// `cross-repo-request` body on stdin. Call-site A of ADR-0050 (.github#1202).
         | Predicate
+        | DiffAudit
         | RoomOpen
 
         | Help
