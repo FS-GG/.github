@@ -29,7 +29,7 @@ def load_validator(path: Path):
 def artifact(rounds: int, *, escalation: bool = False) -> dict:
     commits = SHA[: rounds + 1]
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "cycle_id": CYCLE,
         "milestone": "M1 — example",
         "critic": "fresh critic identity",
@@ -56,6 +56,21 @@ def artifact(rounds: int, *, escalation: bool = False) -> dict:
             "unresolved_blocker_major": ["F1"],
             "action_required": "human must decide the acceptance boundary",
     } if escalation else None,
+        "game_functionality": False,
+        "player_journeys": [],
+        "uncovered_functionality": [],
+        "entry_point_not_test_ownable": False,
+        "entry_point_not_test_ownable_reason": None,
+    }
+
+
+def compliant_journey() -> dict:
+    return {
+        "functionality": "rogue3 starting-room descent",
+        "entry_point": "product-boot",
+        "input_surface": "player-control-messages",
+        "reached": True,
+        "evidence": ["headless run: reached starting room, descended one level"],
     }
 
 
@@ -111,7 +126,79 @@ def main() -> None:
         errors = validator.validate(mismatched, CYCLE)
         assert any("must match" in error for error in errors), f"{runtime}: mismatched escalation IDs accepted"
 
-    print("roadmap-critique-contract: ten rounds, ordered SHAs, and terminal human escalation hold")
+        # .github#2087 — the bot-driven player journey gate. Every leg below is falsifiable: it is
+        # run once and MUST report an error, not merely written and trusted.
+
+        # AC1: a game-functionality milestone with no journey evidence at all is blocked, not a silent pass.
+        no_evidence = artifact(0)
+        no_evidence["game_functionality"] = True
+        errors = validator.validate(no_evidence, CYCLE)
+        assert any("player_journeys must contain at least one entry" in error for error in errors), (
+            f"{runtime}: game milestone with zero journeys was not blocked"
+        )
+
+        # AC2: a journey driven by direct Msg injection (bypassing the real input surface) is REJECTED
+        # by the gate itself, not merely discouraged in prose.
+        bypass = artifact(0)
+        bypass["game_functionality"] = True
+        bypass_journey = compliant_journey()
+        bypass_journey["input_surface"] = "direct-msg-injection"
+        bypass["player_journeys"] = [bypass_journey]
+        errors = validator.validate(bypass, CYCLE)
+        assert any("input_surface must be one of" in error for error in errors), (
+            f"{runtime}: direct-Msg-injection journey was accepted as evidence"
+        )
+
+        # AC3/AC6: the Rogue3 starting-room shape — a journey seeded into a mid-game state that still
+        # CLAIMS the functionality was reached. Every other field is compliant; only the entry point is
+        # the unreachable-start defect this gate exists to catch. Must go red even though "reached" is
+        # true, proving the gate does not accept reachability claimed from an unreachable start.
+        unreachable_start = artifact(0)
+        unreachable_start["game_functionality"] = True
+        seeded_journey = compliant_journey()
+        seeded_journey["entry_point"] = "seeded-mid-game"
+        unreachable_start["player_journeys"] = [seeded_journey]
+        errors = validator.validate(unreachable_start, CYCLE)
+        assert any("entry_point must be one of" in error for error in errors), (
+            f"{runtime}: seeded mid-game start was accepted as the product's real entry point"
+        )
+
+        # AC7: an entry point that is not yet test-ownable fails closed with a named reason instead of
+        # silently passing by absence of journeys.
+        not_ownable_missing_reason = artifact(0)
+        not_ownable_missing_reason["game_functionality"] = True
+        not_ownable_missing_reason["entry_point_not_test_ownable"] = True
+        errors = validator.validate(not_ownable_missing_reason, CYCLE)
+        assert any("entry_point_not_test_ownable_reason must be a non-empty string" in error for error in errors), (
+            f"{runtime}: not-test-ownable escape hatch accepted with no reason"
+        )
+
+        not_ownable_with_reason = artifact(0)
+        not_ownable_with_reason["game_functionality"] = True
+        not_ownable_with_reason["entry_point_not_test_ownable"] = True
+        not_ownable_with_reason["entry_point_not_test_ownable_reason"] = "entry point not yet test-ownable, FS.GG.Game#565 follow-on"
+        assert validator.validate(not_ownable_with_reason, CYCLE) == [], (
+            f"{runtime}: fail-closed not-test-ownable declaration with a reason was rejected"
+        )
+
+        # Positive control: a fully compliant journey (real entry, real input surface, reached) passes.
+        compliant = artifact(0)
+        compliant["game_functionality"] = True
+        compliant["player_journeys"] = [compliant_journey()]
+        assert validator.validate(compliant, CYCLE) == [], f"{runtime}: fully compliant journey was rejected"
+
+        # A non-game milestone must not carry journeys — they would be unreviewed, unfalsifiable prose.
+        stray_journey = artifact(0)
+        stray_journey["player_journeys"] = [compliant_journey()]
+        errors = validator.validate(stray_journey, CYCLE)
+        assert any("player_journeys must be empty when game_functionality is false" in error for error in errors), (
+            f"{runtime}: non-game milestone accepted an unreviewed journey"
+        )
+
+    print(
+        "roadmap-critique-contract: ten rounds, ordered SHAs, terminal human escalation, and the "
+        "bot-driven player journey gate all hold"
+    )
 
 
 if __name__ == "__main__":

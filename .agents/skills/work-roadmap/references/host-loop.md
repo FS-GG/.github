@@ -20,7 +20,11 @@ A host session, account, or parent identity is not a substitute for the worker i
 worker's PR, merge, tests, release obligations, critique, feedback, and ledger update against
 repository state.
 Apply the exact fail-closed critique command in [critique-contract](critique-contract.md) to the
-merged artifact before accepting it; worker or critic prose is not verification.
+merged artifact before accepting it; worker or critic prose is not verification. For a
+`game_functionality: true` milestone that command's `player_journeys` check IS the bot-driven
+player journey gate (`.github#2087`): missing, empty (without a fail-closed
+`entry_point_not_test_ownable`), bypass-surfaced, or non-boot-entry journey evidence fails the
+merged artifact exactly as a missing critique field does — never a warning, never a pass.
 Apply the exact fail-closed commands in [feedback-contract](feedback-contract.md) to the merged cycle
 paths before accepting it; worker prose is not verification. Re-read the ledger after every completion;
 never schedule from the stale copy given to the previous worker.
