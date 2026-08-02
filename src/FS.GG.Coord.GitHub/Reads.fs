@@ -2300,42 +2300,42 @@ module Reads =
                         | true, _ -> Ok None
                         | _ ->
 
-                            match i.TryGetProperty "number" with
+                        match i.TryGetProperty "number" with
                             // AN ELEMENT NOBODY CAN NAME REFUSES THE WHOLE READ (.github#1794). It cannot be
                             // carried as an unreadable ENTRY the way a marker scan is keyed
                             // on the number, so there is no lock to look up, no ref to report, and nothing a
                             // caller could fail closed *about*. Dropping it was the fail-open — the issue
                             // vanished from the claim scan, its lock reserved nothing, and nothing anywhere
                             // said an element had been discarded. #266: never "I looked and it was fine".
-                            | true, n when n.ValueKind <> JsonValueKind.Number ->
-                                Error(
-                                    Malformed(
-                                        subject,
-                                        $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
-                                    )
+                        | true, n when n.ValueKind <> JsonValueKind.Number ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    $"element %d{index} of %d{total} has a `number` that is not a number (%A{n.ValueKind}) — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
                                 )
-                            | false, _ ->
-                                Error(
-                                    Malformed(
-                                        subject,
-                                        $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
-                                    )
+                            )
+                        | false, _ ->
+                            Error(
+                                Malformed(
+                                    subject,
+                                    $"element %d{index} of %d{total} carries no `number` — an issue that cannot be identified cannot be scanned for a lock, and dropping it would report every claim on it as free"
                                 )
-                            | true, n ->
-                                let body =
-                                    match i.TryGetProperty "body" with
-                                    | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
-                                    // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
-                                    // for an issue nobody wrote a description for; the issue exists and declares
-                                    // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
-                                    // .github#1794 names is not this line — it is that the two lines below used
-                                    // to be this line.
-                                    | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
-                                    | true, b ->
-                                        BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
-                                    | false, _ -> BodyUnread "the element carries no `body` field"
+                            )
+                        | true, n ->
+                            let body =
+                                match i.TryGetProperty "body" with
+                                | true, b when b.ValueKind = JsonValueKind.String -> BodyRead(b.GetString())
+                                // `"body": null` IS A SUCCESSFUL READ, AND IT STAYS ONE. GitHub serves null
+                                // for an issue nobody wrote a description for; the issue exists and declares
+                                // nothing, which is exactly what `TouchSet.parse ""` answers. The defect
+                                // .github#1794 names is not this line — it is that the two lines below used
+                                // to be this line.
+                                | true, b when b.ValueKind = JsonValueKind.Null -> BodyRead ""
+                                | true, b ->
+                                    BodyUnread $"the `body` field is a %A{b.ValueKind}, not a string or null"
+                                | false, _ -> BodyUnread "the element carries no `body` field"
 
-                                Ok(Some { Number = n.GetInt32(); Body = body })
+                            Ok(Some { Number = n.GetInt32(); Body = body })
 
                     // Short-circuit on the first refusal. `List.fold` would read the rest of the array to
                     // no purpose, and an `Error` is an answer about the WHOLE read, not about one element.
