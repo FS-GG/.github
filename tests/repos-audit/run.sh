@@ -2741,6 +2741,31 @@ cp "$HERE/../../scripts/fsgg_feed.py" "$SPARSEBOX/scripts/fsgg_feed.py"
 # are about, not on a dependency they never mentioned. Its own absence, and its own hoist, get their
 # own legs below.
 cp "$HERE/../../scripts/check-required-contexts.py" "$SPARSEBOX/scripts/check-required-contexts.py"
+# check-required-contexts.py deliberately gets its verdict and YAML harness from the canonical
+# module. The isolated subject must carry that runtime dependency too; copying the checker alone
+# turns this fixture red before it reaches the borrowed-interface leg it is meant to exercise.
+cp "$HERE/../../scripts/lib/gate.py" "$SPARSEBOX/scripts/lib/gate.py"
+# Pin the copied subject's dependency closure directly. Keep this as a failure-only assertion so it
+# does not inflate the fixture's stable assertion count; the audit legs below remain the behavioural
+# proof, while this gives a precise diagnosis if the sandbox becomes unimportable again.
+PYTHONPATH="$SPARSEBOX/scripts" python3 - "$SPARSEBOX/scripts/check-required-contexts.py" <<'PY' || {
+import importlib.util
+import pathlib
+import sys
+
+subject = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("isolated_required_contexts", subject)
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+from lib import gate
+
+assert module.ExitCode is gate.ExitCode
+assert module.GateError is gate.GateError
+PY
+  bad "sparse: the isolated required-context subject must resolve its canonical gate dependency"
+}
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 
 # (a) the rule file is GONE. Caught up front, beside the `gh` and `python3` checks, because a missing
