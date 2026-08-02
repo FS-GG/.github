@@ -86,6 +86,9 @@ module Reads =
     /// callers must pass it through `requireCompleteMarkerScan`.
     val markerScan: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<MarkerScan>
 
+    /// Raw issue/PR comment bodies, in API order; malformed comments fail closed.
+    val commentBodies: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<string list>
+
     /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
     /// error that names every unclassifiable comment.
     ///
@@ -246,6 +249,11 @@ module Reads =
     /// it to decide WHICH issue a PR implements, and guessing that from a failed read would stamp a
     /// touch-set verdict on a subject nobody identified.
     val prHeadRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+    /// Immutable head commit SHA for evidence binding.
+    val prHeadSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+
+    type CommentBody = { Id: int64; Url: string; Body: string }
+    val commentsWithIdentity: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<CommentBody list>
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>

@@ -327,6 +327,8 @@ let main argv =
                 printfn "%s" (Options.renderCommandContract ())
                 ExitGreen
 
+            | DriverCmd -> Client.run opts
+
             // `whoami` reads no board — identity is local, and `--mint` needs no token.
             | WhoAmI -> Client.whoami opts
 

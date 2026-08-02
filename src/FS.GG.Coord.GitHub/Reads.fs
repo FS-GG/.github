@@ -585,6 +585,46 @@ module Reads =
 
                     Ok found
 
+    type CommentBody = { Id: int64; Url: string; Body: string }
+
+    let commentsWithIdentity (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
+        let subject = $"%s{owner}/%s{repo}#%d{number} comments"
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    doc.RootElement.EnumerateArray()
+                    |> Seq.map (fun c ->
+                        match c.TryGetProperty "id", str c "html_url", str c "body" with
+                        | (true, id), Some url, Some body when id.ValueKind = JsonValueKind.Number ->
+                            Ok { Id = id.GetInt64(); Url = url; Body = body }
+                        | _ -> Error(Malformed(subject, "a comment has no readable id, html_url, and body")))
+                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Result.map List.rev
+
+    let commentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) =
+        let subject = $"%s{owner}/%s{repo}#%d{number} comments"
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"; Query = [ "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    doc.RootElement.EnumerateArray()
+                    |> Seq.map (fun c -> match str c "body" with Some body -> Ok body | None -> Error(Malformed(subject, "a comment has no readable body")))
+                    |> Seq.fold (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state) (Ok [])
+                    |> Result.map List.rev
+
     // ---- the issue body ---------------------------------------------------------------------------
 
     let issueBody
@@ -1129,6 +1169,32 @@ module Reads =
                     // #322: the API answered, but with no head ref we can name. That is a malformed answer,
                     // not "no branch" — refusing beats guessing which issue the PR implements.
                     | None -> Error(Malformed(subject, "the PR response carried no head.ref"))
+                | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
+
+    /// The immutable commit identity for evidence that must bind to the reviewed PR revision.
+    let prHeadSha
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"; Query = []; Body = NoBody
+              Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                match doc.RootElement.TryGetProperty "head" with
+                | true, head when head.ValueKind = JsonValueKind.Object ->
+                    match str head "sha" with
+                    | Some sha when not (String.IsNullOrWhiteSpace sha) -> Ok sha
+                    | _ -> Error(Malformed(subject, "the PR response carried no head.sha"))
                 | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
 
     let prFiles

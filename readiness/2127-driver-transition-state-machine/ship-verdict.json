@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2127-driver-transition-state-machine",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/0.32.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "b8b0e76cb06106ce43c02584c39616939c5d1073f478455fbd065b484e232a7a"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 10,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 10
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

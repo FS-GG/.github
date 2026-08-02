@@ -4,6 +4,7 @@ module Options =
 
     type Command =
         | Decide
+        | DriverCmd
         | Scan
         | LanesView
         | Facts
@@ -266,6 +267,7 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
+  driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
@@ -466,6 +468,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
         | Decide -> Both Json // Program.fs `decide`
+        | DriverCmd -> Both Json // Program.fs `driver`
         | LanesView -> Both Json // Program.fs `lanes`
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
         | BatchCmd -> Both Json // Client.fs `batch`
@@ -687,7 +690,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> Only jsonReaders
         | FText -> Only textReaders
 
-        | FSnapshot -> Only [ Decide; LanesView ]
+        | FSnapshot -> Only [ Decide; DriverCmd; LanesView ]
         | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
@@ -943,6 +946,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
+        | DriverCmd -> Reads
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
@@ -1074,6 +1078,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     let private commandName (c: Command) : string =
         match c with
         | Decide -> "decide"
+        | DriverCmd -> "driver"
         | Scan -> "scan"
         | LanesView -> "lanes"
         | Facts -> "facts"
@@ -1768,6 +1773,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match args with
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+        | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest

@@ -206,4 +206,9 @@ repair-phase), the host posts `<!-- fsgg:review-accepted:v1 -->` with the accept
 review URL, and confirmation URL when a repair occurred, and — for a repair-phase landing — the
 `fsgg:independent-review-repair-phase:v1` marker URL so acceptance evidence itself shows which path
 the item took.
+The ordinary marker's required machine fields are `accepted-head: <exact SHA>`,
+`initial-review: <initial review comment URL>`, and
+`latest-confirmation: <latest confirmation comment URL>`; when no repair occurred,
+`latest-confirmation` equals `initial-review`. Missing, duplicated, stale, or differently linked fields
+fail closed.
 The worker must observe that exact-SHA host marker before calling `landable` or merging.

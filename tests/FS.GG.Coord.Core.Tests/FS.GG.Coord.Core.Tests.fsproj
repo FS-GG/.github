@@ -30,6 +30,7 @@
     <Compile Include="SchedulabilityTests.fs" />
     <Compile Include="RankTests.fs" />
     <Compile Include="BatchTests.fs" />
+    <Compile Include="DriverTests.fs" />
     <Compile Include="ProtocolTests.fs" />
     <Compile Include="LanesTests.fs" />
     <Compile Include="LandableTests.fs" />

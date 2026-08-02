@@ -775,6 +775,7 @@ no_mutation "board" run board
 no_mutation "bootstrap" run bootstrap
 no_mutation "budget" run budget
 no_mutation "command-contract" run command-contract --json
+no_mutation "driver" run driver --repo FS.GG.SDD --json
 no_mutation "facts" run facts
 no_mutation "field-id" run field-id Status
 no_mutation "inbox" run inbox --repo FS.GG.SDD

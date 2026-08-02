@@ -34,6 +34,7 @@ module CommandSurfaceTests =
         [
           // DECISION — pure; read state on stdin and touch no network (ADR-0034).
           "decide", Decide
+          "driver", DriverCmd
           "scan", Scan
           "lanes", LanesView
           "facts", Facts

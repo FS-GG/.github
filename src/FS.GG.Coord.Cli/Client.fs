@@ -726,13 +726,16 @@ module Client =
         | Ok request ->
             let candidates =
                 request.Candidates
-                |> List.choose (fun c -> c.Item.Claim |> Option.map (fun _ -> c.Item.Ref))
+                |> List.choose (fun c ->
+                    if c.Item.Claim.IsSome || c.Item.ItemPr.IsSome then Some c.Item.Ref else None)
 
             let reservations =
                 request.InFlight
                 |> List.choose (fun r ->
                     match r.Holder with
                     | Batch.LiveClaim(_, item, _, _) -> Some item
+                    | Batch.BatchMember item
+                    | Batch.Unowned item -> Some item
                     | _ -> None)
 
             Ok(candidates @ reservations |> List.distinct)
@@ -797,6 +800,125 @@ module Client =
                 sayWaveOccupancy doc result
 
                 ExitGreen
+
+    let private planningSourceSha (facts: string list) =
+        // This is deliberately wider than occupancy.  The prior digest stayed identical when a pending
+        // write, triage fact, claim liveness or review result changed, so an old clean receipt could be
+        // replayed over a materially different board.  Every live read consumed by the transition is now
+        // one constituent.  Callers can carry the content-addressed receipts; they cannot choose the source
+        // against which this invocation validates them.
+        facts |> String.concat "\n\u001e\n"
+        |> Text.Encoding.UTF8.GetBytes
+        |> Security.Cryptography.SHA256.HashData
+        |> Convert.ToHexString
+        |> fun value -> value.ToLowerInvariant()
+
+    let private parsePlanningReceipt (path: string) : Result<Driver.PlanningReceipt, string> =
+        try
+            use document = JsonDocument.Parse(File.ReadAllText path)
+            let root = document.RootElement
+            let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
+            let receipt: Driver.PlanningReceipt =
+                { ObservedAt = root.GetProperty("observedAt").GetInt64()
+                  SourceSha = root.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Complete = bool "complete" root
+                  ConsolidationApproved = bool "consolidationApproved" root
+                  Observations =
+                    root.GetProperty("observations").EnumerateArray()
+                    |> Seq.map (fun item ->
+                        ({ Kind = item.GetProperty("kind").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ObservedAt = item.GetProperty("observedAt").GetInt64()
+                           SourceSha = item.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           Outcome = item.GetProperty("outcome").GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ReceiptId = item.GetProperty("receiptId").GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
+                    |> Seq.toList }
+            Ok receipt
+        with error -> Error $"the driver receipt is malformed: %s{error.Message}"
+
+    /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
+    let driver (ctx: Context) (opts: Options) : int =
+        match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
+        | Error e, _ -> eprint (Errors.explain e); ExitError
+        | _, Error e -> eprint e; ExitError
+        | Ok(_, doc, _), Ok model ->
+            match activeItemRefs doc with
+            | Error e -> eprint e; ExitError
+            | Ok active ->
+                match Snapshot.parse doc with
+                | Error errors ->
+                    errors |> List.iter (fun error -> eprint $"fsgg-coord-engine: %s{error.Path}: %s{error.Message}")
+                    ExitError
+                | Ok snapshot ->
+                    let reviewEvidence =
+                        snapshot.Candidates
+                        |> List.choose (fun candidate ->
+                            match candidate.Item.ItemPr with
+                            | Some pr ->
+                                match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
+                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                      Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                      Reads.commentsWithIdentity ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
+                                    let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                                    match Driver.parseReviewComments comments with
+                                    | Ok review when review.HeadSha = Some head ->
+                                        Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
+                                    | _ -> None
+                                | _ -> None
+                            | None -> None)
+                    let pending = Cache.pending ()
+                    let identity = Identity.resolve opts.Worker
+                    let staleClaim =
+                        snapshot.Candidates
+                        |> List.exists (fun candidate ->
+                            match candidate.Item.Claim with
+                            | Some(_, Types.LeaseExpiredNoPr) -> true
+                            | _ -> false)
+                    // Preserve full board/body/claim provenance while removing only the continuously
+                    // increasing age.  The derived stale/non-stale boundary is added separately, so the
+                    // receipt changes exactly when that age becomes actionable, not every second.
+                    let stableBoard =
+                        Text.RegularExpressions.Regex.Replace(doc, "\"ageSeconds\":-?[0-9]+", "\"ageSeconds\":0")
+                    let sourceSha =
+                        planningSourceSha
+                            [ "board:" + stableBoard
+                              "stale-claim:" + string staleClaim
+                              "pending:" + (pending |> Result.map (sprintf "%A") |> Result.defaultValue "UNREADABLE")
+                              "identity:" + (identity |> Result.map (fun value -> sprintf "%A" value) |> Result.defaultValue "UNRESOLVED")
+                              "review:" + sprintf "%A" reviewEvidence
+                              "engine:" + string (Reflection.Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId) ]
+                    let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    let suppliedReceipt = opts.SnapshotFile |> Option.bind (parsePlanningReceipt >> Result.toOption)
+                    let receiptValid = suppliedReceipt |> Option.exists (Driver.planningReceiptFresh now 300L sourceSha)
+                    let pendingWrites = pending |> Result.map List.length |> Result.defaultValue 1
+                    let hasIdentity = Result.isOk identity
+                    let housekeeping: Driver.Housekeeping =
+                        { HasHostIdentity = hasIdentity
+                          StaleClaim = staleClaim
+                          EngineCurrent = receiptValid
+                          PendingWrites = pendingWrites
+                          ReconcileDryRunFresh = receiptValid
+                          ReconcileApplied = receiptValid
+                          ReconcileFresh = receiptValid
+                          TriageFresh = receiptValid
+                          CurrencyScoped = receiptValid }
+                    let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
+                    let workerReturns =
+                        snapshot.Candidates
+                        |> List.choose (fun candidate ->
+                            match candidate.Item.Claim with
+                            | Some(_, Types.LeaseHeld) ->
+                                Some
+                                    ({ ClaimLive = true
+                                       ReviewReady = candidate.Item.ItemPr |> Option.exists reviewedPrs.Contains
+                                       ParkedOrDone = candidate.Item.Status = Types.Blocked || candidate.Item.Status = Types.Done }: Driver.WorkerReturn)
+                            | _ -> None)
+                    let consolidationApproved = suppliedReceipt |> Option.exists (fun receipt -> receiptValid && receipt.ConsolidationApproved)
+                    let action = Driver.nextAction model (List.length active) consolidationApproved housekeeping workerReturns
+                    match opts.Render with
+                    | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"sourceSha\":\"%s\",\"receiptValid\":%s,\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"reviewEvidence\":%d,\"action\":\"%A\"}" sourceSha (if receiptValid then "true" else "false") (List.length active) model.ReviewSlots (List.length reviewEvidence) action
+                    | Text -> printfn "%A" action
+                    ExitGreen
 
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
@@ -7273,6 +7395,7 @@ module Client =
             match opts.Command with
             | Next -> next ctx opts
             | BatchCmd -> batch ctx opts
+            | DriverCmd -> driver ctx opts
             | Ready -> ready ctx opts
             | Reconcile -> reconcile ctx opts
             | Who -> who ctx opts
