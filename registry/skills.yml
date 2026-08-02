@@ -205,7 +205,7 @@ skills:
   # fs-gg-game's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
   - { id: fs-gg-game-fable,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-fable/SKILL.md, sha256: 443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 91bb3a6a17d54680c5e86ac1dac12fb0093531baa1de2c71985c915d035b4423, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: e6c4f053e01d4a9ae930ef40d8580943fdf3b822df53c0e5cab3b3f4bcb59f03, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack" }
   # `fs-gg-feedback-report` is the retained report-only half of the former feedback pair. Its predicate
   # is `always` (Rendering#434): a reporter must ride EVERY lane. Rendering#951 / PR #952 removed
