@@ -5,8 +5,9 @@
 - **Amends:** [ADR-0071](0071-two-web-workspace-providers-one-template-package.md)
   §5 (Communication boundaries) and §6 (Toolchain, release, and activation). §5's
   Fable.Remoting clause and §6's Fable.Remoting pin entry are **superseded**; every
-  other clause of ADR-0071 — including §242's rejection of "Use only
-  Fable.Remoting", which this record does not revisit — **remains in force**.
+  other clause of ADR-0071 — including its "Alternatives considered" rejection of
+  "Use only Fable.Remoting", which this record does not revisit — **remains in
+  force**.
 - **Affects:** FS.GG.Templates (producer of `fs-gg-fable-game`), FS-GG/.github
   (registry, wizard, Coordination board), `EHotwagner/S.I.R.` (first forcing
   consumer)
@@ -45,14 +46,15 @@ ADR-0071 §5 made Fable.Remoting one of two deliberately separate adapters:
 > - **ASP.NET Core SignalR** owns connection/session-oriented traffic such as
 >   input, snapshots, presence, acknowledgement, reconnect, and resync.
 
-§242 rejected "Use only Fable.Remoting" *"because reconnect, presence,
-streaming state, backpressure, and resync are connection concerns"* — an
-argument about what Fable.Remoting **cannot** do, which has nothing to do with
-whether Fable.Remoting is what should do the request/response half. That
-reasoning is untouched: it is the reason SignalR keeps owning connection-
-oriented traffic below, unchanged by this record. What has changed is that the
-request/response half's chosen mechanism no longer compiles under the platform's
-pinned Fable compiler, on a defect this org does not own and cannot fix.
+ADR-0071's "Alternatives considered" rejected "Use only Fable.Remoting"
+*"because reconnect, presence, streaming state, backpressure, and resync are
+connection concerns"* — an argument about what Fable.Remoting **cannot** do,
+which has nothing to do with whether Fable.Remoting is what should do the
+request/response half. That reasoning is untouched: it is the reason SignalR
+keeps owning connection-oriented traffic below, unchanged by this record. What
+has changed is that the request/response half's chosen mechanism no longer
+compiles under the platform's pinned Fable compiler, on a defect this org does
+not own and cannot fix.
 
 ## Decision
 
@@ -99,10 +101,10 @@ NuGet package, the "no v1 contract added to FS.GG.Net" clause, and the rest of
 This keeps ADR-0071's own two-adapter shape — one mechanism for finite typed
 request/response, a separate connection-oriented mechanism for everything that
 needs a live channel — and changes only *which* mechanism carries the first
-half. §242's reasoning is what makes that split the right one to keep: nothing
-about the compile failure bears on whether request/response and connection-
-oriented traffic should be one mechanism or two, so this amendment does not
-reopen that question.
+half. The "Use only Fable.Remoting" rejection's reasoning is what makes that
+split the right one to keep: nothing about the compile failure bears on
+whether request/response and connection-oriented traffic should be one
+mechanism or two, so this amendment does not reopen that question.
 
 ### 3. The wire-contract discipline survives unchanged
 
@@ -185,8 +187,8 @@ in a new ADR the normal way; an upstream fix alone is not that case.
   Fable release could reintroduce even after a hypothetical upstream fix.
 - The two-adapter shape ADR-0071 §5 designed — one mechanism for request/
   response, a separate one for connection-oriented traffic — is preserved.
-  §242's reasoning for keeping them separate is reaffirmed by this record
-  rather than revisited.
+  The "Use only Fable.Remoting" rejection's reasoning for keeping them
+  separate is reaffirmed by this record rather than revisited.
 - FS.GG.Templates#348 gains a clear, unblocked transport contract to author
   against; it was not implementable against a contract that does not compile.
 - FS.GG.Templates owes a follow-up to `tests/fable-toolchain-spike/run.sh` and

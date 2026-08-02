@@ -2,8 +2,8 @@
 
 - **Status:** Accepted — §5's Fable.Remoting clause and §6's Fable.Remoting pin
   entry are **superseded by [ADR-0073](0073-plain-http-with-explicit-dtos-replaces-fable-remoting.md)**;
-  §242's rejection of "Use only Fable.Remoting" and every other decision in
-  this record remain in force.
+  the "Alternatives considered" rejection of "Use only Fable.Remoting" and
+  every other decision in this record remain in force.
 - **Date:** 2026-08-01
 - **Amended by:** [ADR-0072](0072-console-and-fable-bindings-are-separate-workspace-providers.md)
   §1 and §6 widen the unpublished package and wizard selector to include the
@@ -16,9 +16,9 @@
   compiler pin (`FS.GG.Templates#370`) is unfixed and unacknowledged, so plain
   HTTP endpoints with explicit versioned DTOs now own typed request/response
   instead. SignalR's ownership of connection-oriented traffic, the narrow
-  `@microsoft/signalr` binding, the rejection of `Fable.SignalR`, §242's
-  rejection of "Use only Fable.Remoting", and every other clause of §5/§6
-  stand unchanged — see ADR-0073 §1 for the precise cut.
+  `@microsoft/signalr` binding, the rejection of `Fable.SignalR`, the
+  "Alternatives considered" rejection of "Use only Fable.Remoting", and every
+  other clause of §5/§6 stand unchanged — see ADR-0073 §1 for the precise cut.
 - **Affects:** FS.GG.Templates (producer), FS.GG.SDD (provider contract and
   lifecycle), FS.GG.Game (shared lockstep contract and game skills),
   EHotwagner/S.I.R. (first consumer), FS-GG/.github (`new-sdd-workspace`,
