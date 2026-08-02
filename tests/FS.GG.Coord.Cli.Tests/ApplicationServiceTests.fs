@@ -1636,6 +1636,13 @@ module ApplicationServiceTests =
     ///
     /// Separately, because the whole question here is WHICH STREAM a fact went out on. A helper that merged
     /// them could not tell the fix from the defect.
+    ///
+    /// Identity is scrubbed for `runIn`'s reason (.github#1646, .github#1817) — `reconcileArgs` below
+    /// splices `--worker heron-1f20` into every leg that does not override it, and `reconcile --apply`
+    /// attributes the writes it makes to whichever worker resolves, so a harness-derived session id would
+    /// have every apply-phase assertion attribute to the wrong worker depending on which shell ran the
+    /// suite. Scrubbed here rather than per-call, for `runQueue`'s reason: it is the one place this fixture
+    /// touches process-global state, and the four ambient variables are exactly as global as `FSGG_COORD_CACHE`.
     let private runReconcileWith
         (transport: Fake.Recorder)
         (args: string list)
@@ -1644,6 +1651,13 @@ module ApplicationServiceTests =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1524-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+
+        let identityVars =
+            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+
+        let previousIdentity =
+            identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         let stderr = Console.Error
         use capturedOut = new StringWriter()
@@ -1651,6 +1665,10 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory dir |> ignore
+
+            for v, _ in previousIdentity do
+                Environment.SetEnvironmentVariable(v, null)
+
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
             Console.SetOut capturedOut
@@ -1671,6 +1689,9 @@ module ApplicationServiceTests =
             Console.SetError stderr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for v, previous in previousIdentity do
+                Environment.SetEnvironmentVariable(v, previous)
 
             try
                 Directory.Delete(dir, true)
@@ -1946,10 +1967,25 @@ module ApplicationServiceTests =
     /// the assertion rather than a convenience: the skip reasons and #428's starved banner belong on
     /// stderr in BOTH projections (that is `batch --json`'s landed dialect), and only separate streams can
     /// show that the document on stdout is alone there.
+    ///
+    /// Identity is scrubbed for `runIn`'s reason (.github#1646, .github#1817) — every leg below names its
+    /// worker with `--worker`, and `take`/`next`/`batch` do not check the derived identity against it TODAY
+    /// (unlike `claim`/`release`/`heartbeat`/`widen`, which refuse the disagreement outright), so this was
+    /// LATENT rather than live: it passed under CI, where no agent session variable exists, and would only
+    /// misbehave the day one of these verbs starts consulting `Worker.Derived` too — exactly the condition
+    /// the three shell harnesses in .github#1817's table were in until something did. Scrubbing here removes
+    /// the ambient dependency before that day arrives, rather than after.
     let private runQueue (transport: Fake.Recorder) (args: string list) : int * string * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1525-" + Guid.NewGuid().ToString "n")
         let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
         let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+
+        let identityVars =
+            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+
+        let previousIdentity =
+            identityVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+
         let stdout = Console.Out
         let stderr = Console.Error
         use capturedOut = new StringWriter()
@@ -1957,6 +1993,10 @@ module ApplicationServiceTests =
 
         try
             Directory.CreateDirectory dir |> ignore
+
+            for v, _ in previousIdentity do
+                Environment.SetEnvironmentVariable(v, null)
+
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
             Console.SetOut capturedOut
@@ -1984,6 +2024,9 @@ module ApplicationServiceTests =
             Console.SetError stderr
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
             Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for v, previous in previousIdentity do
+                Environment.SetEnvironmentVariable(v, previous)
 
             try
                 Directory.Delete(dir, true)
