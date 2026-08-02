@@ -23,6 +23,11 @@ Env, all optional (each parity leg spawns a fresh server):
   FSGG_PARITY_STATUS=<name>   the column the item-Status read returns BEFORE any write (default
                               "Backlog"); "" = on the board with NO Status set (`fieldValueByName` null).
                               A Status write moves it — seed the world, then let the engine act on it.
+  FSGG_PARITY_BLOCKED_BY=<v>  the `Blocked by` TEXT field's value BEFORE any write (default "" = empty,
+                              `fieldValueByName` null) — .github#2079's write-time park gate reads this
+                              LIVE before `release --status Blocked` / `set-field Status Blocked` may
+                              proceed, exactly as the item-Status read is modelled above. A `Blocked by`
+                              write moves it, on the same "answer reads from writes" rule.
   FSGG_PARITY_FAIL_STATUS=1   the item-Status read fails (a 502) — the corpus's GH_FAIL_ITEM_STATUS.
   FSGG_PARITY_DEFER_WRITE=1   the Status mutation is GraphQL-rate-limited, so Board.boardWrite queues it.
   FSGG_PARITY_MARKERS=<json>  a JSON array of pre-existing markers to seed, each
@@ -62,10 +67,14 @@ LOCK = threading.Lock()
 # The board's LIVE Status column, seeded from the env and moved by every Status write — see the module
 # docstring. A single cell is enough: each leg drives one item on one board.
 _STATUS = [os.environ.get("FSGG_PARITY_STATUS", "Backlog")]
+# The board's LIVE `Blocked by` TEXT field, on the SAME "answer reads from writes" rule (.github#2079).
+# Empty by default — the shape every pre-#2079 leg in this fixture already assumed.
+_BLOCKED_BY = [os.environ.get("FSGG_PARITY_BLOCKED_BY", "")]
 _STORE = {}          # issue number -> [ {id, body, user, updated_at} ]
 _NEXT_ID = [900]
 _WRITES = []         # [ {item, field, optionId} ] — every Status board write, in order
-_GQL = {"projectsV2": 0, "fields": 0, "itemId": 0, "itemStatus": 0, "boardScan": 0, "mutations": 0, "total": 0}
+_GQL = {"projectsV2": 0, "fields": 0, "itemId": 0, "itemStatus": 0, "itemBlockedBy": 0, "boardScan": 0,
+        "mutations": 0, "total": 0}
 
 
 def _now(offset_hours=0):
@@ -110,6 +119,17 @@ def graphql(query, variables):
                 "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []}}},
                 "rateLimit": RATE}}
         if "fieldValueByName" in query:
+            # `Board.itemBlockedBy`'s query (.github#2079's write-time park gate) ALSO carries
+            # `fieldValueByName` — over the TEXT fragment (`{ text }`) rather than the SINGLE_SELECT one
+            # (`{ name }`) — so it is discriminated by the field NAME it names, `"Blocked by"`, the same
+            # way the corpus's own `gh` stub keys `fieldValueByName` queries before the plain item-id
+            # lookup (harness.sh:512, the ORDER IS THE CONTRACT comment above).
+            if "Blocked by" in query:
+                _GQL["itemBlockedBy"] += 1
+                fv = None if _BLOCKED_BY[0] == "" else {"text": _BLOCKED_BY[0]}
+                return {"data": {"repository": {"issue": {"projectItems": {"nodes": [
+                    {"project": {"number": 7}, "fieldValueByName": {"text": "wrong board value"}},
+                    {"project": {"number": 12}, "fieldValueByName": fv}]}}}, "rateLimit": RATE}}
             _GQL["itemStatus"] += 1
             if FAIL_STATUS:
                 return ("FAIL_502", None)
@@ -125,20 +145,28 @@ def graphql(query, variables):
             _GQL["mutations"] += 1
             if DEFER_WRITE:
                 return {"errors": [{"message": "API rate limit exceeded for installation"}]}
+            field_id = variables.get("fieldId")
             opt = variables.get("optionId")
-            _WRITES.append({"item": variables.get("itemId"), "field": variables.get("fieldId"),
-                            "optionId": opt})
-            # THE WRITE MOVES THE COLUMN. Without this the fixture would report the seeded column forever,
-            # and a `claim`'s own `In progress` write would be invisible to the release-time read (#331).
-            if opt in _BY_ID:
+            text = variables.get("text")
+            _WRITES.append({"item": variables.get("itemId"), "field": field_id, "optionId": opt})
+            # THE WRITE MOVES THE COLUMN — OR THE FIELD. Without this the fixture would report the seeded
+            # value forever, and a `claim`'s own `In progress` write (or a `--blocked-by` write) would be
+            # invisible to a later read (#331, and .github#2079's own re-read inside `release`).
+            if field_id == "PVTF_blocked" and text is not None:
+                _BLOCKED_BY[0] = text
+            elif opt in _BY_ID:
                 _STATUS[0] = _BY_ID[opt]
             return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
         if "clearProjectV2ItemFieldValue" in query:
             _GQL["mutations"] += 1
-            # Clearing is a write too: it moves the column to "no Status set", the `fieldValueByName` null
-            # arm above. A fixture that answered reads from its writes for one mutation and not the other
-            # would be exactly as incoherent as the static cell this replaced.
-            _STATUS[0] = ""
+            # Clearing is a write too: it moves the column (or field) to "unset", the `fieldValueByName`
+            # null arm above. A fixture that answered reads from its writes for one mutation and not the
+            # other would be exactly as incoherent as the static cell this replaced. Routed by field, on
+            # the SAME `fieldId` the set-path above keys on.
+            if variables.get("fieldId") == "PVTF_blocked":
+                _BLOCKED_BY[0] = ""
+            else:
+                _STATUS[0] = ""
             return {"data": {"clearProjectV2ItemFieldValue": {"clientMutationId": None}}}
         return None
 

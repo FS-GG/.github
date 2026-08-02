@@ -1623,7 +1623,11 @@ fi
 #
 #     The claim records prev=Backlog, so a `release` that ignores `--status` writes opt_backlog — which is
 #     precisely the bug: it looked like a correct #481 restore, and exited 0.
-rsrv FSGG_PARITY_STATUS=Backlog --
+#
+#     FSGG_PARITY_BLOCKED_BY seeds a coherent `Blocked by` field (.github#2079): this leg's whole point is
+#     `--status` beating the recorded restore, not the park-coherence gate, so the row already carries a
+#     real edge and the gate is satisfied before #867's own question is even asked.
+rsrv FSGG_PARITY_STATUS=Backlog FSGG_PARITY_BLOCKED_BY=FS-GG/FS.GG.SDD#999 --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (k) bound a port"; else
   renv claim FS.GG.SDD#358 --force --worker pika-r01 >/dev/null 2>&1
   rout="$(renv release FS.GG.SDD#358 --worker pika-r01 --status Blocked 2>/dev/null)"; krc=$?
@@ -1665,7 +1669,11 @@ fi
 #     reach the same end state and be indistinguishable from one that preserved — so the observable has to be
 #     that `release` added nothing after the worker's own write. Pre-fix, the trailing write is `opt_ready`:
 #     the deliberate Blocked reverted, reported as `released → Ready`, exit 0. Verified to fire.
-rsrv FSGG_PARITY_STATUS=Ready --
+#
+#     FSGG_PARITY_BLOCKED_BY seeds a coherent `Blocked by` field (.github#2079): the `set-field ... Status
+#     Blocked` below is now itself gated on a coherent park, and this leg is about #331's PRESERVE
+#     behaviour, not that gate — so the row already carries a real edge before the park is attempted.
+rsrv FSGG_PARITY_STATUS=Ready FSGG_PARITY_BLOCKED_BY=FS-GG/FS.GG.SDD#999 --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (i) bound a port"; else
   renv claim FS.GG.SDD#374 --force --worker pika-r01 >/dev/null 2>&1
   renv set-field FS.GG.SDD#374 Status Blocked --worker pika-r01 >/dev/null 2>&1
@@ -1732,7 +1740,11 @@ fi
 #      states the end state has left no default to derive. Cheap to get wrong (read first, then notice the
 #      flag), and it would put a GraphQL point on the budget that dies first, per release, for an answer
 #      nothing consults.
-rsrv FSGG_PARITY_STATUS=Backlog --
+#
+#      FSGG_PARITY_BLOCKED_BY seeds a coherent `Blocked by` field (.github#2079), so `--status Blocked`
+#      clears the park-coherence gate via the FIELD read alone — a `itemBlockedBy` read, not `itemStatus`,
+#      so it does not disturb the zero-item-Status-reads count this leg pins.
+rsrv FSGG_PARITY_STATUS=Backlog FSGG_PARITY_BLOCKED_BY=FS-GG/FS.GG.SDD#999 --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (i3) bound a port"; else
   renv claim FS.GG.SDD#376 --force --worker pika-r01 >/dev/null 2>&1
   base="$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')"   # the claim's own pre-claim read

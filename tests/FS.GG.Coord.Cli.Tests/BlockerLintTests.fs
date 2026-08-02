@@ -352,3 +352,188 @@ module BlockerLintTests =
         Assert.DoesNotContain("BLOCKER-CLEARED", out)
         Assert.Contains("withheld BLOCKER-CLEARED", err)
         Assert.Contains("FS-GG/FS.GG.SDD#9", err)
+
+    // ---- `release --blocked-by` end to end (.github#2079 round-1 review, finding 2) -----------------
+    //
+    // `writeBlockedByIfRequested` performs a LIVE board write. It must never run for a caller who does
+    // not hold the row — `release <ref> --blocked-by <x>` reaches `writeBlockedByIfRequested` on argv
+    // whether or not the caller holds anything, so the write has to be gated on the SAME holder check
+    // `release` already makes, not ahead of it. These legs drive `Client.release` itself (not the pure
+    // gate above), because the defect was in the CALL ORDER inside `release`, which only a fixture that
+    // actually counts GraphQL calls across the whole command can see.
+    module private ReleaseBlockedByFixture =
+
+        let private ok (body: string) : Errors.IoResult<Response> =
+            Ok
+                { Status = 200
+                  Body = body
+                  ETag = None
+                  NextLink = None }
+
+        /// A live claim marker, or none — `Writes.verifyHeld`'s subject, `ForceStealTests.Thread` scaled
+        /// down to what this fixture needs (no POST, since `release` never adds a comment).
+        type private Thread(holder: string option) =
+            let comments = System.Collections.Generic.Dictionary<int64, string>()
+
+            do
+                match holder with
+                | Some w -> comments.[8042L] <- $"<!-- fsgg:claim worker=%s{w} lease=120 -->"
+                | None -> ()
+
+            member _.Json() =
+                let ts = System.DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+                comments
+                |> Seq.sortBy (fun kv -> kv.Key)
+                |> Seq.map (fun kv ->
+                    $"""{{"id":%d{kv.Key},"body":"%s{kv.Value}","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""")
+                |> String.concat ","
+                |> sprintf "[%s]"
+
+            member _.Remove(id: int64) = comments.Remove id |> ignore
+
+        /// The NON-HOLDER fixture. It answers ONLY `rate_limit` and the marker read — every OTHER
+        /// endpoint, GraphQL included, is a hard refusal. If the fix is correct, `release` never reaches
+        /// any of them: it refuses at `Writes.verifyHeld` before attempting a single board read or write.
+        let nonHolderTransport (heldBy: string option) =
+            let thread = Thread(heldBy)
+
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | m, p -> Error(Errors.NotFound $"the non-holder leg must touch NOTHING else — got %s{m} %s{p}"))
+
+        /// The HOLDER fixture: a full board (bootstrap, the `Blocked by` resolver read, the item-id
+        /// lookup, the field mutation, the marker delete) so `release --blocked-by --status Blocked` can
+        /// run to completion. `body` carries the `Blocked on:` sentinel, so the post-write coherence
+        /// check passes on the BODY path — this fixture is static and does not model the just-written
+        /// field's new value coming back on a re-read.
+        let holderTransport (body: string) =
+            let thread = Thread(Some "vole-418")
+
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
+                | "DELETE", p when p.StartsWith "repos/FS-GG/FS.GG.SDD/issues/comments/" ->
+                    thread.Remove(int64 (p.Substring(p.LastIndexOf '/' + 1)))
+                    ok ""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        if document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fieldValueByName" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+                        // The item-id lookup: `projectItems`, but with NEITHER `fieldValueByName` (that
+                        // arm above) NOR the mutation — checked last, after both.
+                        elif document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_42","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+        let sessionVars =
+            [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+
+        /// Drive `Client.release` as a real command line, isolated on its own cache and identity — see
+        /// `ForceStealTests.runClaim`, whose licence (`AssemblyInfo.fs` disables cross-class parallelism)
+        /// this reuses.
+        let run (transport: Fake.Recorder) (args: string list) : int * string =
+            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2079-release-" + System.Guid.NewGuid().ToString "n")
+            let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+            let previousKitRoot = System.Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+            let previousSessions = sessionVars |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+            let stdout = System.Console.Out
+            use captured = new System.IO.StringWriter()
+
+            try
+                System.IO.Directory.CreateDirectory dir |> ignore
+                System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+                System.Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+                System.Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+                System.Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+                System.Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "ed60050b")
+                System.Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-418")
+                System.Console.SetOut captured
+
+                let opts =
+                    match Options.parse args with
+                    | Ok o -> o
+                    | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+                let context: Client.Context =
+                    { Transport = transport
+                      Owner = "FS-GG"
+                      Title = "Coordination"
+                      DefaultRepo = Some "FS.GG.SDD"
+                      ChoreLocks = [] }
+
+                let code = Client.release context opts
+                System.Console.Out.Flush()
+                code, captured.ToString()
+            finally
+                System.Console.SetOut stdout
+                System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                System.Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+                for name, value in previousSessions do
+                    System.Environment.SetEnvironmentVariable(name, value)
+
+                try
+                    System.IO.Directory.Delete(dir, true)
+                with _ ->
+                    ()
+
+        let releaseArgs (extra: string list) =
+            [ "release"; "FS.GG.SDD#42"; "--worker"; "vole-418" ] @ extra
+
+    [<Fact>]
+    let ``release --blocked-by from a NON-HOLDER mutates NOTHING, and refuses`` () =
+        // Held by a DIFFERENT worker — `snipe-f893`, never `vole-418` — so `Writes.verifyHeld` answers
+        // `DoesNotHold`. Under the round-1 defect this fixture would reach the (refused) GraphQL calls
+        // BEFORE that answer; under the fix it never spends a single GraphQL point.
+        let transport = ReleaseBlockedByFixture.nonHolderTransport (Some "snipe-f893")
+
+        let code, _ =
+            ReleaseBlockedByFixture.run transport (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
+
+        Assert.NotEqual(0, code)
+        Assert.Equal(0, transport.GraphQlCalls)
+
+    [<Fact>]
+    let ``release --blocked-by from a worker holding NOTHING (no marker at all) also mutates NOTHING`` () =
+        let transport = ReleaseBlockedByFixture.nonHolderTransport None
+
+        let code, _ =
+            ReleaseBlockedByFixture.run transport (ReleaseBlockedByFixture.releaseArgs [ "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
+
+        Assert.NotEqual(0, code)
+        Assert.Equal(0, transport.GraphQlCalls)
+
+    [<Fact>]
+    let ``release --blocked-by from the HOLDER lands both the field write and the release`` () =
+        let transport = ReleaseBlockedByFixture.holderTransport "Blocked on: human/decision"
+
+        let code, out =
+            ReleaseBlockedByFixture.run
+                transport
+                (ReleaseBlockedByFixture.releaseArgs [ "--status"; "Blocked"; "--blocked-by"; "FS-GG/FS.GG.SDD#9" ])
+
+        Assert.Equal(0, code)
+        Assert.Contains("released", out)
+        // The field write DID happen — this is the positive half of the pair, proving the reordering
+        // did not turn into an over-correction that refuses a legitimate holder too.
+        Assert.True(transport.Logged "updateProjectV2ItemFieldValue" || transport.Logged "item-edit")

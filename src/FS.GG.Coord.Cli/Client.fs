@@ -3402,16 +3402,6 @@ module Client =
                 ExitError
             | Ok ref ->
 
-            // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
-            // BEFORE the lock drops, so a refused park costs the caller nothing.
-            match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
-            | Error c -> c
-            | Ok() ->
-
-            match requireCoherentParkIfBlocked ctx ref requested with
-            | Error c -> c
-            | Ok() ->
-
                 match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) (sessionOf w) ref with
                 | Error e -> fail e
                 | Ok Writes.DoesNotHold ->
@@ -3426,6 +3416,26 @@ module Client =
                 // the impersonation route that had to be closed.
                 | Ok(Writes.ImpersonatesHolder(derived, named)) -> impersonationRefusal "release" ref derived named
                 | Ok(Writes.Holds held) ->
+
+                // AC1 (.github#2079): `--blocked-by` lands the field FIRST, then the coherence gate — both
+                // AFTER the holder check above and BEFORE the lock drops below.
+                //
+                // THE ORDERING RELATIVE TO THE HOLDER CHECK IS LOAD-BEARING (round-1 review). A caller who
+                // does NOT hold this item still reaches `release <ref> --blocked-by <x>` on argv — `release`
+                // takes no lock to attempt the write, `--blocked-by` doesn't gate on holding — so a write
+                // BEFORE `Writes.verifyHeld` would land a live board mutation from a non-holder even though
+                // the release itself then correctly refuses with "does not hold". `release`'s whole contract
+                // is that it only touches rows it holds; that is worth more than the field write landing a
+                // few lines earlier. So both go HERE, inside `Ok(Writes.Holds held)`, after the ONLY check
+                // that establishes we may touch this row at all — never ahead of it.
+                match writeBlockedByIfRequested ctx w ref opts.BlockedBy with
+                | Error c -> c
+                | Ok() ->
+
+                match requireCoherentParkIfBlocked ctx ref requested with
+                | Error c -> c
+                | Ok() ->
+
                     match Writes.release ctx.Transport held with
                     | Error e -> fail e
                     | Ok previousStatus ->
