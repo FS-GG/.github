@@ -50,9 +50,27 @@ reason is awaiting human judgement, not silently retained work.
 ### Set Blocked
 
 Set `Blocked` only when a parseable issue reference names a live implementation dependency that must
-land before this item can be authored. Preserve the valid `Blocked by:` edge, run
-`scripts/fsgg-coord set-field <ref> Status Blocked`, and verify the fresh row. Topical relationships,
-temporary path overlap, unreadable refs, and guessed blocker meaning do not qualify.
+land before this item can be authored. A park is **two writes, not one**: the `Status` column and the
+`Blocked by` **board field** — the Projects v2 field, never a body line. `Blocked by:` written into the
+issue body is inert: nothing that clears a blocker reads the body, so it looks like a declaration and
+does nothing (`.github#1933`) — the exact shape that twice let a fully-resolved, already-superseded field
+value survive a park because the real edge had gone into the body instead. Write both in one call:
+
+```
+scripts/fsgg-coord set-field --batch <ref> Status=Blocked "Blocked by=<dependency-ref>"
+```
+
+and verify the fresh row afterward — including that the field, not just the body, carries the ref.
+Always write both fields yourself in the same call rather than depending on the engine to catch an
+omission — this is belt-and-braces, not a substitute for writing the edge. The engine refuses an
+incoherent `Blocked` write from `release --status Blocked`, the single-field
+`set-field <ref> Status Blocked`, and `set-field --batch` (`.github#2079`, extended to the batch form by
+`.github#2098`, merged) — but not from `add --status Blocked`, the filing-time write that boards a new
+row already `Blocked`; that gap is real and tracked separately. The instruction to write both fields
+predates all of these gates and stands regardless of what any of them catches: the brief that produced
+`FS.GG.Templates#348` said to set the dependency field without naming it, and a gate closing does not
+make that guidance unnecessary. Topical relationships, temporary path overlap, unreadable refs, and
+guessed blocker meaning do not qualify.
 
 ### Await human judgement
 

@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "ecc48594e21d7d86c2ff8df31342ace69733561d6ee64e6152af1ba5193a3b3e",
+      "tree-sha256": "a5b82a60112615a6d62ab20d23794065d81f31c9386130e48e80adc87b59871d",
       "files": [
         {
           "path": "SKILL.md",
@@ -28,7 +28,7 @@
         },
         {
           "path": "references/mechanical-reconciliation.md",
-          "sha256": "01d580f1066975585845d7796fc1eeb7593882f8f9a0e1d3fd0e7f167ae785a2",
+          "sha256": "cc5c29deb2291bb3498133d7ed0fd05721f96fb11e84ed3336c831e45c776c8c",
           "executable": false
         }
       ]
@@ -36,7 +36,7 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "537596ca4f8ac39e4bc12fcae92fb7cd970bbddd2db0127aea57d0afc126e1f0",
+      "tree-sha256": "5fdafeb231e30454a986837b5a50754ae1f55462b9ab24e13aeafb72c7fb1d03",
       "files": [
         {
           "path": "SKILL.md",
@@ -65,7 +65,7 @@
         },
         {
           "path": "references/mailbox-and-board.md",
-          "sha256": "b740c48e4fdacf168095f184c2d04d0bbdb2c0cafdb667ebb9ccfe8a8d4ed9fc",
+          "sha256": "eb79ab9a44c353f481a1dc297743cedb38072ca19a1a7a576f27ae6bb53037a2",
           "executable": false
         }
       ]
@@ -73,7 +73,7 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "27fa7ba513cb92921535dacef88011321e3164e2967e6d1aa2c6f455f0f063a6",
+      "tree-sha256": "93def7626bf2eaae5f4f249a62b430fc20aa77ae0876babe512858eed9427c93",
       "files": [
         {
           "path": "SKILL.md",
@@ -92,7 +92,7 @@
         },
         {
           "path": "references/protocol-facts.md",
-          "sha256": "42295214f6405b9f35f028c0441af7cdc218ea13d29980272fbf34b796b852b2",
+          "sha256": "f7a9b98b694ca1f9def0fdaf6a29bf050bc671a99aef1408573cc1e40feb8757",
           "executable": false
         },
         {

@@ -836,3 +836,77 @@ let ``#1598 an entry written before this existed reads as None, never as a zero 
         Assert.Equal(None, row.Phase)
         Assert.Equal(None, row.CreatedAt)
     | other -> failwith $"expected a row with neither rank input — got %A{other}"
+
+// ---- .github#1933: a body-only `Blocked by:` line is INERT — `blockers` reads the FIELD alone -----------
+//
+// `Blocked by` is a Projects v2 board FIELD; a `Blocked by:` line written into the issue BODY is a
+// different medium that nothing resolving a blocker ever reads (ADR-0045, `Rooms.fsi`, `HumanBlock.fsi`).
+// Two agents independently read a body-only line, found no field edge, and concluded there was none — one
+// filed a false defect (.github#1931), and a `reconcile` pass twice proposed promoting a row whose real
+// blocker was still open because its FIELD, unlike its body, had gone stale (`FS.GG.Templates#348`).
+//
+// `Scan.blockersOf` (the private function this pins from the outside) builds `blockers` from
+// `row.BlockedByRaw` alone — the field — and reads `body` on a completely separate call
+// (`Reads.issueBody`) for a DIFFERENT key on the wire. This is the AC1 claim of .github#1933, pinned as a
+// fixture rather than left to restate in prose: a body carrying `Blocked by: <ref>` with an EMPTY field
+// must produce `blockers: []`, and the body text must still be readable on `body` — proving the scan saw
+// the line and still would not treat it as an edge.
+[<Fact>]
+let ``#1933 a body-only 'Blocked by:' line with an EMPTY field yields blockers=[] - the field is the only edge`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let row = { scopeRow "FS.GG.SDD" 99 with Status = BoardStatus.Blocked; BlockedByRaw = "" }
+
+    let transport =
+        offBoardRoutes
+            "[]"
+            (fun _ -> "[]")
+            """{"number":99,"body":"Some park notes.\n\nBlocked by: FS-GG/FS.GG.SDD#77"}"""
+
+    match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"a readable body and an empty field must still produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(0, item.GetProperty("blockers").GetArrayLength())
+        Assert.Contains("Blocked by: FS-GG/FS.GG.SDD#77", item.GetProperty("body").GetString())
+
+// THE CONTROL. Without this leg, the test above could pass on an engine that dropped `blockers` for every
+// `Blocked` row regardless of the field — the same class of false-negative #1794's control guarded against.
+// Setting the FIELD (and nothing else) must make the edge appear, so the two legs together pin the field as
+// the only thing that moves the answer.
+//
+// The blocker (`#77`) is put ON THE BOARD, resolved for free (`onBoard`, .github#1933's own read of
+// `Scan.fs`), so this leg needs no extra REST route for it: its `PathRepo` differs from the subject's so
+// `--repo FS.GG.SDD` excludes it from `candidates` (`scope`, keyed on `PathRepo`) while `onBoard` — keyed
+// on the ISSUE ref, not the path repo — still resolves it.
+[<Fact>]
+let ``#1933 the SAME body, with the field set instead, yields the edge - the control`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0")
+
+    let row =
+        { scopeRow "FS.GG.SDD" 99 with
+            Status = BoardStatus.Blocked
+            BlockedByRaw = "FS-GG/FS.GG.SDD#77" }
+
+    let blocker =
+        { scopeRow "FS.GG.SDD" 77 with
+            State = IssueState.Open
+            PathRepo = "FS.GG.SDD-blockers-only" }
+
+    let transport =
+        offBoardRoutes
+            "[]"
+            (fun _ -> "[]")
+            """{"number":99,"state":"open","body":"Some park notes.\n\nBlocked by: FS-GG/FS.GG.SDD#77"}"""
+
+    match Scan.snapshot transport [ row; blocker ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"a readable body and a set field must still produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        let item = doc.RootElement.GetProperty("items").[0]
+
+        Assert.Equal(1, item.GetProperty("blockers").GetArrayLength())
