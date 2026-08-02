@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.18.0</Version>
+    <Version>0.19.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +96,37 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.18.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+    <PackageReleaseNotes>0.19.0 — MINOR on the 0.x line, the repository's signal for caller-observable change.
+
+This release carries fifteen engine commits after 0.18.0. The highest-weight change is the
+wire-surface review-policy expansion (#2086/#2136): the engine now validates durable runtime-route
+evidence and bounded independent-review/repair-phase marker vocabulary that receiver guidance
+already requires. Patch is not defensible: callers receive new authoritative scheduling outcomes,
+diagnostics, enforcement, and review/refusal contracts.
+
+BLOCKED-WORK CORRECTNESS (#2079/#2098/#1933): a pending Blocked-by clear is authoritative within a
+batch; a Blocked park is bound to its actual blocker; non-holder board writes preserve ordering; and
+the typed protocol now states that Blocked by is a board field rather than issue-body prose. The last
+change is emitted into worker guidance, so this package is the engine that makes that guidance true.
+
+SAFE COMMAND CONTRACTS (#2110): verify-paths rejects a closing keyword that uses the board's
+&lt;repo>#&lt;n> shorthand, because GitHub will not close an issue through that spelling.
+
+PLANNING DIAGNOSTICS (#2117): batch stderr reports active items, wave capacity, open slots, and a
+WAVE SHORTFALL without changing its machine-readable stdout.
+
+SCHEDULING AND LIFECYCLE CONTRACTS (#2119/#2140/#2154): newline-separated Paths tokens survive the
+wire, driver lifecycle transitions are deterministic, and generated operational facts expose the
+review policy and receipt keys the engine enforces.
+
+EXTERNAL-OWNER AND RECONCILIATION CORRECTNESS (#2147/#2163/#2171/#2172): board reads and writes retain
+the explicit external repository owner, take preserves it, and reconcile verifies its repairs from a
+fresh projection while failing closed on malformed pagination.
+
+Release-window commits: 445dcd9, 1c16276, df57b7b, 276e83c, 4a5bc86, 77e463f, aeb11d0, a7d9bac,
+baa9ce9, a75b5ef, ef7bd37, 12aed34, 66ef539, 72dfc58, and 15d978c.
+
+PREVIOUS RELEASE NOTES (0.18.0):
 
 Runtime changes merged after 0.17.0 make the packaged engine match the coordination and product-board
 guidance already carried by Kit 0.24.0 and the driver manifest.
