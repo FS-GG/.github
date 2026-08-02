@@ -6875,6 +6875,15 @@ module Client =
                     ExitError
                 | Ok explicitStatus ->
 
+                // #2109: `add --status Blocked` is a Status writer, not merely an add with a
+                // convenient flag. Establish the coherent-park invariant BEFORE item-add: after it,
+                // the otherwise-invalid board row already exists. Reuse the shared gate so the live
+                // `Blocked by` field and the human sentinel keep exactly the same meaning as the
+                // other explicit Status=Blocked doors.
+                match requireCoherentParkIfBlocked ctx ref (if explicitStatus = Some "Blocked" then Some BoardStatus.Blocked else None) with
+                | Error c -> c
+                | Ok() ->
+
                 match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
                 | Error e -> fail e
                 | Ok outcome ->

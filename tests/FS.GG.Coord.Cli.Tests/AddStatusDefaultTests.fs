@@ -60,8 +60,11 @@ module AddStatusDefaultTests =
     let private NewItemId = "PVTI_added42"
 
     /// The board: one `Status` single-select carrying the three columns these legs name.
-    let private FieldsAnswer =
+    let private FieldsAnswerWithoutBlocked =
         """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+
+    let private FieldsAnswer =
+        FieldsAnswerWithoutBlocked.Replace("\"In progress\"", "\"In progress\"},{\"id\":\"opt_blocked\",\"name\":\"Blocked\"")
 
     let private ProjectAnswer =
         """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
@@ -112,6 +115,9 @@ module AddStatusDefaultTests =
             ok ProjectAnswer
         elif document.Contains "fields(first" then
             ok FieldsAnswer
+        elif document.Contains "\"Blocked by\"" then
+            // #2109 checks this before item-add. These fixtures deliberately have no live edge.
+            ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
         elif document.Contains "fieldValueByName" then
             // `Board.itemStatus` — the read that decides whether the default may fire.
             match board.Column with
@@ -384,6 +390,30 @@ module AddStatusDefaultTests =
 
         Assert.Equal(0, code)
         Assert.True(transport.Logged(statusWrite ItemId "opt_ready"), $"log: %A{transport.Log}")
+
+    // ---- #2109 — `add --status Blocked` IS A COHERENT-PARK WRITE -------------------------------
+
+    [<Fact>]
+    let ``#2109 add --status Blocked refuses an incoherent new park before item-add`` () =
+        let transport = world NotOnBoard
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("", out.Trim())
+        Assert.Equal(0, transport.Count "item-add")
+        Assert.Equal(0, transport.Count "item-edit")
+
+    [<Fact>]
+    let ``#2109 add --status Blocked proceeds for a human sentinel park`` () =
+        let body = """{"number":42,"body":"Paths: src/Thing.fs\n\nBlocked on: human/action\n\nClass: defect"}"""
+        let transport = worldWithBody NotOnBoard body
+
+        let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
+
+        Assert.Equal(0, code)
+        Assert.Equal(NewItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite NewItemId "opt_blocked"), $"log: %A{transport.Log}")
 
     // ---- AC1 — AND IT SAYS SO ----------------------------------------------------------------------
 
