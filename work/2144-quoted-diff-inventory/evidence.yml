@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2144-quoted-diff-inventory
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2144-quoted-diff-inventory/spec.md
 sourceClarifications: work/2144-quoted-diff-inventory/clarifications.md
 sourceChecklist: work/2144-quoted-diff-inventory/checklist.md
@@ -31,11 +31,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2144-quoted-diff-inventory/tasks.yml
-    digest: a081783172f43bdd528ba7e161d3bac9001f21573c4e3f4f1ce3cd390b0fb351
+    digest: 141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -46,15 +46,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
-    result: missing
+    artifacts: [src/FS.GG.Coord.Core/SemanticDiff.fs, tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs]
+    sourceRefs: []
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      outcome: passed
+      passed: 577
+      failed: 0
+      skipped: 0
+    notes: [Semantic inventory tests passed.]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -65,15 +70,22 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV002]
-    artifacts: []
+    artifacts: [src/FS.GG.Coord.Core/Driver.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      outcome: passed
+      passed: 577
+      failed: 0
+      skipped: 0
+    notes: [Acceptance receipt gate tests passed.]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -84,15 +96,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV003]
-    artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
-    result: missing
+    artifacts: [tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs]
+    sourceRefs: []
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      outcome: passed
+      passed: 577
+      failed: 0
+      skipped: 0
+    notes: [Core evidence receipt passed.]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -103,15 +120,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV004]
-    artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
-    result: missing
+    artifacts: [src/FS.GG.Coord.Core/SemanticDiff.fsi]
+    sourceRefs: []
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      outcome: passed
+      passed: 577
+      failed: 0
+      skipped: 0
+    notes: [Versioned public receipt contract passed.]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -122,12 +144,17 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: []
-    sourceRefs:
-      - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
-    result: missing
+    artifacts: [".agents/skills/pnext-item/SKILL.md", docs/coordination/semantic-diff-audit.md]
+    sourceRefs: []
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      outcome: passed
+      passed: 577
+      failed: 0
+      skipped: 0
+    notes: [Generated guidance and semantic diff documentation are committed.]
 lifecycleNotes:
   - "Next lifecycle action: verify."

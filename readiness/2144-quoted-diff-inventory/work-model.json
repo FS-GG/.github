@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "ce76cc584ed86d8eb069c817980cb1d7c7e61576d10761ac3e459b25b9b9a3aa"
+        "value": "bf97e698cd0842d5a9f01873ecbe9ee9859cbafd3e9efcfd716b96792674ed4f"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "a081783172f43bdd528ba7e161d3bac9001f21573c4e3f4f1ce3cd390b0fb351"
+        "value": "141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004"
       }
     }
   ],
@@ -153,7 +153,7 @@
     {
       "id": "T001",
       "title": "Implement requirement FR-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -181,7 +181,7 @@
     {
       "id": "T002",
       "title": "Update contract surface PC-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -207,7 +207,7 @@
     {
       "id": "T003",
       "title": "Record verification evidence VO-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -235,7 +235,7 @@
     {
       "id": "T004",
       "title": "Handle migration posture PM-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -261,7 +261,7 @@
     {
       "id": "T005",
       "title": "Refresh generated view impact GV-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -288,7 +288,7 @@
   "evidence": [
     {
       "id": "EV001",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T001",
       "taskRefs": [
@@ -297,8 +297,11 @@
       "requirementRefs": [
         "FR-001"
       ],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/SemanticDiff.fs",
+        "tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -312,15 +315,18 @@
     },
     {
       "id": "EV002",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T002",
       "taskRefs": [
         "T002"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/Driver.fs",
+        "tests/FS.GG.Coord.Core.Tests/DriverTests.fs"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -334,15 +340,17 @@
     },
     {
       "id": "EV003",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T003",
       "taskRefs": [
         "T003"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -356,15 +364,17 @@
     },
     {
       "id": "EV004",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T004",
       "taskRefs": [
         "T004"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/SemanticDiff.fsi"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -378,15 +388,18 @@
     },
     {
       "id": "EV005",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T005",
       "taskRefs": [
         "T005"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
-      "result": "missing",
+      "artifactRefs": [
+        ".agents/skills/pnext-item/SKILL.md",
+        "docs/coordination/semantic-diff-audit.md"
+      ],
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -453,7 +466,7 @@
           "path": "work/2144-quoted-diff-inventory/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "ce76cc584ed86d8eb069c817980cb1d7c7e61576d10761ac3e459b25b9b9a3aa"
+            "value": "bf97e698cd0842d5a9f01873ecbe9ee9859cbafd3e9efcfd716b96792674ed4f"
           },
           "schemaVersion": 1
         },
@@ -477,14 +490,14 @@
           "path": "work/2144-quoted-diff-inventory/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "a081783172f43bdd528ba7e161d3bac9001f21573c4e3f4f1ce3cd390b0fb351"
+            "value": "141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "022759062224b3c0d176afb999a52f849d94387ad620844b0233e0e9ba414b03"
+        "value": "65d6dbb431ff45e7e87b98b3b290da955606585311ec9b1579ac2f29c50c94c8"
       },
       "currency": "current"
     }
