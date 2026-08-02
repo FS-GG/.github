@@ -24,6 +24,13 @@ module OptionsTests =
         | Error e -> e
 
     [<Fact>]
+    let ``diff audit consumes exact revisions and declared paths rather than accepting an implicit subject`` () =
+        let parsed = parse [ "diff-audit"; "base"; "head"; "oldName"; "newName"; "--repo"; "/tmp/fixture"; "--paths"; "Fixture.fs" ] |> ok
+        Assert.Equal(DiffAudit, parsed.Command)
+        Assert.Equal(Some "tmp/fixture", parsed.Repo)
+        Assert.Equal<string list>([ "Fixture.fs" ], parsed.Paths)
+
+    [<Fact>]
     let ``an unknown flag is NAMED and refused, never shrugged off`` () =
         let e = parse [ "decide"; "--engine=fs" ] |> rejected
         Assert.Contains("--engine=fs", e)
@@ -798,6 +805,7 @@ module OptionsTests =
           "command-contract", Json
           "board", Json
           "issues", Json
+          "diff-audit", Json
 
           // TEXT only — prose, a bare id, or one verdict word. These are the fifteen VERBS that moved
           // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
