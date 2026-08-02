@@ -979,13 +979,16 @@ could only ever name a path **committed to Templates** — which would be that r
 different subject entirely (see the gap-row note below). **This is a limit of this reusable workflow, not
 a Templates defect.**
 
-**None of this closes `FS.GG.Templates`' `receives: skill-union` row, and this correction must never be
-read as closing it.** That row is about **Templates' own committed runtime roots** and needs a
+**None of this closed `FS.GG.Templates`' `receives: skill-union` row, and this correction must never be
+read as having closed it.** That row was about **Templates' own committed runtime roots** and needed a
 committed-root caller — default `product-path`, ADR-0065's roots, and a trigger armed over those roots,
-all in **one** workflow file. Templates has no such workflow, so it remains one of the four open receiver
-gaps listed in [Rollout state](#rollout-state-measured-2026-07-27) below, and no gap count moves either
-way. Two subjects; per [#1504](https://github.com/FS-GG/.github/issues/1504) and
-[#628](https://github.com/FS-GG/.github/issues/628) one green never stands in for the other. Nor was any
+all in **one** workflow file. Templates never wired such a workflow, and
+[#1742](https://github.com/FS-GG/.github/issues/1742) (2026-07-28) closed the row itself rather than
+filling it — `registry/repos.yml` no longer declares `receives: skill-union` for Templates (or Game,
+Audio, Net), the capability records `receivers: none`, and `repos-audit` reports **zero** gaps for it
+(see [Rollout state](#rollout-state-measured-2026-07-27) below). Two subjects; per
+[#1504](https://github.com/FS-GG/.github/issues/1504) and
+[#628](https://github.com/FS-GG/.github/issues/628) one green never stood in for the other. Nor was any
 gap count ever affected by the wrong paragraph: `repos-audit`'s `caller:` detector reads workflows
 structurally (YAML→JSON), never via code search, so it was measuring correctly the whole time this
 document was not.
@@ -1080,8 +1083,11 @@ row is a claim about *its own commit*, and only the trees whose repo has wired t
 after it: `FS.GG.SDD`, `FS.GG.Governance` and `FS.GG.Rendering` had a gate that re-asserted theirs on
 every push, and `.github` asserts itself via
 [`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml). The other four —
-`FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, `FS.GG.Net` — are exactly the four open gaps below;
-their rows are **hand measurements that nothing has re-checked since**, and each could have drifted the
+`FS.GG.Templates`, `FS.GG.Game`, `FS.GG.Audio`, `FS.GG.Net` — never wired a caller, and per
+[#1742](https://github.com/FS-GG/.github/issues/1742) no longer declare the receiver row that would have
+required one (see [Rollout state](#rollout-state-measured-2026-07-27) below — the four open gaps these
+rows used to be are now closed, by deletion of the row rather than by wiring). Their rows above are
+still **hand measurements that nothing has re-checked since**, and each could have drifted the
 moment after it was taken without anything going red. That is not a footnote on the table, it *is* the
 remaining rollout: a coherent row and a wired gate are different facts, and only the second one keeps
 being true.
@@ -1170,15 +1176,26 @@ A producer-set description is a *guess about where the ids came from* wearing th
 measurement. Enumerate the set, or say the breakdown is unmeasured; do not name a producer and let a
 reader infer coverage from it.
 
-`skill-union` is rostered on all seven framework repos, and **three have wired it**: `FS.GG.SDD`
-(`a066e0b`), `FS.GG.Governance` (`c577961`) and now `FS.GG.Rendering` (`e2d860b`), each of which also
-made `skill-union / skill-union` required on its default branch. So the scheduled
-[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **4 gaps** — measured 2026-07-27 by
+At this measurement, `skill-union` was rostered on all seven framework repos, and **three had wired
+it**: `FS.GG.SDD` (`a066e0b`), `FS.GG.Governance` (`c577961`) and `FS.GG.Rendering` (`e2d860b`), each of
+which had also made `skill-union / skill-union` required on its default branch. So the scheduled
+[`repos-audit`](../../.github/workflows/repos-audit.yml) reported **4 gaps** — measured 2026-07-27 by
 running `scripts/repos-audit.sh` from this repo: 32 receiver-capability pairs, 28 wired, 4 gaps
 (Templates, Game, Audio, Net), 0 unrostered adopters, 0 undetermined, every other capability green.
-That is the ratchet [#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the
-rollout is complete only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes
-for every tree above **and** every receiver check is green.
+
+> **SUPERSEDED, 2026-07-28 ([`#1742`](https://github.com/FS-GG/.github/issues/1742)).** The 4 gaps
+> above are not open any more, and did not close by anyone wiring a caller: Templates, Game, Audio and
+> Net never wired one, and per [the retirement above](#the-required-receiver-caller--retired-2026-07-28-do-not-wire-a-new-one)
+> now never may. `#1742` deleted their `receives: skill-union` rows from `registry/repos.yml` instead of
+> filling them, so the capability records `receivers: none` and there is nothing left to gap. Measured
+> on `main` after `#1742`, `scripts/repos-audit.sh` prints, verbatim: `skill-union (a
+> .github/workflows/skill-union-assert.yml caller aimed at this repo's OWN committed .claude/.agents
+> skill roots) — 0 receivers, as recorded; every rostered repo was scanned and none adopts it. The claim
+> holds.`, and the org-wide summary line reads `0 gap(s)`. That is a **different** ratchet outcome than
+> [#1504](https://github.com/FS-GG/.github/issues/1504) originally asked for — this closed by retiring
+> the row rather than by every tree passing `skill-union-assert` — and the two paragraphs below, about
+> the 2026-07-27 measurement and why the count moved 5 → 4, are history of the shape that was decided
+> against, not a remaining plan.
 
 **The gap count moved 5 → 4, and it is worth being exact about why, because the obvious reason is the
 wrong one.** It did *not* move because `template/base/` came under audit. A gap is a **receiver**
@@ -1191,9 +1208,11 @@ Rendering wired its **own** `skill-union.yml` at `product-path` default `.` — 
 workflow. Counting the generated-product caller as a closed gap is precisely the error
 [#628](https://github.com/FS-GG/.github/issues/628) was filed about.
 
-All seven receivers are now root-coherent, and of those Governance, SDD and Rendering have also wired
-the caller, so the remaining four — Templates, Game, Audio and Net — need nothing but the block above.
-All three cross-repo rematerialization requests are now **closed**:
+All seven receivers were root-coherent at this measurement, and of those Governance, SDD and Rendering
+had also wired the caller. The remaining four — Templates, Game, Audio and Net — never wired it, and per
+[#1742](https://github.com/FS-GG/.github/issues/1742) their `receives: skill-union` rows are gone rather
+than outstanding: there is nothing left for them to do here, and the retirement above forbids wiring a
+new caller regardless. All three cross-repo rematerialization requests are now **closed**:
 [SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716),
 [Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326) and
 [Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080), their rematerializations having
