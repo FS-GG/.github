@@ -5,6 +5,7 @@ module SemanticDiff =
     open System.Security.Cryptography
     open System.Text
     open System.Text.RegularExpressions
+    open System.Text.Json
 
     type Classification = StringLiteral | CharacterLiteral | Comment | SerializedKey | GoldenText | TestText | Documentation | GeneratedArtifact
     type Disposition = IntendedContractChange | IntendedTestOrDocumentationUpdate | GeneratedOutput | AccidentalFixRequired | Unresolved
@@ -23,6 +24,14 @@ module SemanticDiff =
         | IntendedContractChange -> "intended-contract-change"
         | IntendedTestOrDocumentationUpdate -> "intended-test-doc-update"
         | GeneratedOutput -> "generated-output" | AccidentalFixRequired -> "accidental-fix-required" | Unresolved -> "unresolved"
+
+    let private dispositionOfName = function
+        | "intended-contract-change" -> Some IntendedContractChange
+        | "intended-test-doc-update" -> Some IntendedTestOrDocumentationUpdate
+        | "generated-output" -> Some GeneratedOutput
+        | "accidental-fix-required" -> Some AccidentalFixRequired
+        | "unresolved" -> Some Unresolved
+        | _ -> None
 
     let private containsToken (token: string) (text: string) =
         Regex.IsMatch(text, $@"(?<![A-Za-z0-9_]){Regex.Escape token}(?![A-Za-z0-9_])")
@@ -75,3 +84,46 @@ module SemanticDiff =
               if occurrence.Confidence < 0 || occurrence.Confidence > 100 then "diff-audit occurrence confidence is invalid"
               if occurrence.Disposition = Unresolved then
                   "diff-audit has an unresolved occurrence" ]
+
+    let toJson (receipt: Receipt) =
+        use stream = new IO.MemoryStream()
+        use writer = new Utf8JsonWriter(stream)
+        writer.WriteStartObject(); writer.WriteNumber("schemaVersion", receipt.SchemaVersion)
+        writer.WriteString("repository", receipt.Repository); writer.WriteString("baseSha", receipt.BaseSha); writer.WriteString("headSha", receipt.HeadSha)
+        writer.WriteBoolean("required", receipt.Required); writer.WriteStartArray("declaredPaths")
+        receipt.DeclaredPaths |> List.iter writer.WriteStringValue; writer.WriteEndArray(); writer.WriteStartArray("occurrences")
+        for occurrence in receipt.Occurrences do
+            writer.WriteStartObject(); writer.WriteString("id", occurrence.Id); writer.WriteString("path", occurrence.Path); writer.WriteNumber("line", occurrence.Line)
+            writer.WriteString("classification", classificationName occurrence.Classification); writer.WriteNumber("confidence", occurrence.Confidence)
+            writer.WriteString("before", occurrence.Before); writer.WriteString("after", occurrence.After); writer.WriteString("disposition", dispositionName occurrence.Disposition); writer.WriteEndObject()
+        writer.WriteEndArray(); writer.WriteEndObject(); writer.Flush()
+        Encoding.UTF8.GetString(stream.ToArray())
+
+    let ofJson (json: string) =
+        try
+            use document = JsonDocument.Parse json
+            let root = document.RootElement
+            let str (name: string) = root.GetProperty(name).GetString()
+            let classification = function
+                | "string-literal" -> Some StringLiteral | "character-literal" -> Some CharacterLiteral | "comment" -> Some Comment
+                | "serialized-key" -> Some SerializedKey | "golden-text" -> Some GoldenText | "test-text" -> Some TestText
+                | "documentation" -> Some Documentation | "generated-artifact" -> Some GeneratedArtifact | _ -> None
+            let rows =
+                [ for row in root.GetProperty("occurrences").EnumerateArray() do
+                    match classification (row.GetProperty("classification").GetString()), dispositionOfName (row.GetProperty("disposition").GetString()) with
+                    | Some kind, Some decision ->
+                        yield Ok { Id = row.GetProperty("id").GetString(); Path = row.GetProperty("path").GetString(); Line = row.GetProperty("line").GetInt32()
+                                   Classification = kind; Confidence = row.GetProperty("confidence").GetInt32(); Before = row.GetProperty("before").GetString()
+                                   After = row.GetProperty("after").GetString(); Disposition = decision }
+                    | _ -> yield Error "diff-audit occurrence classification or disposition is unknown" ]
+            let errors = rows |> List.choose (function Error e -> Some e | _ -> None)
+            if not errors.IsEmpty then Error errors else
+            Ok { SchemaVersion = root.GetProperty("schemaVersion").GetInt32(); Repository = str "repository"; BaseSha = str "baseSha"; HeadSha = str "headSha"
+                 DeclaredPaths = [ for p in root.GetProperty("declaredPaths").EnumerateArray() -> p.GetString() ]; Required = root.GetProperty("required").GetBoolean()
+                 Occurrences = rows |> List.choose (function Ok row -> Some row | _ -> None) }
+        with ex -> Error [ $"diff-audit receipt is malformed: %s{ex.Message}" ]
+
+    let toBase64 receipt = toJson receipt |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
+    let ofBase64 value =
+        try value |> Convert.FromBase64String |> Encoding.UTF8.GetString |> ofJson
+        with ex -> Error [ $"diff-audit receipt base64 is malformed: %s{ex.Message}" ]

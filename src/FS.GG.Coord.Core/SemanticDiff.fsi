@@ -15,5 +15,9 @@ module SemanticDiff =
     val inventory: path: string -> before: string -> after: string -> oldToken: string -> newToken: string -> Occurrence list
     val receipt: repository: string -> baseSha: string -> headSha: string -> declaredPaths: string list -> required: bool -> occurrences: Occurrence list -> Receipt
     val validate: expectedBase: string -> expectedHead: string -> Receipt -> string list
+    val toJson: Receipt -> string
+    val ofJson: string -> Result<Receipt, string list>
+    val toBase64: Receipt -> string
+    val ofBase64: string -> Result<Receipt, string list>
     val classificationName: Classification -> string
     val dispositionName: Disposition -> string

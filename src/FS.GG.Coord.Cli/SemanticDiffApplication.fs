@@ -20,7 +20,8 @@ module SemanticDiffApplication =
     /// declared path from the two immutable commits. A failed git read is an error, never an empty audit.
     let run (opts: Options.Options) =
         match opts.Args with
-        | [ baseSha; headSha; oldToken; newToken ] when not (List.isEmpty opts.Paths) ->
+        | [ baseSha; headSha; oldToken; newToken ]
+        | [ baseSha; headSha; oldToken; newToken; _ ] when not (List.isEmpty opts.Paths) ->
             // `--repo` is shared with board commands and normalizes a leading slash as a repository
             // spelling. Restore it only when that exact absolute directory exists; otherwise retain
             // the normal relative repository root.
@@ -36,7 +37,29 @@ module SemanticDiffApplication =
             match occurrences with
             | Error error -> eprintfn "fsgg-coord-engine: %s" error; 1
             | Ok rows ->
-                let receipt = receipt root baseSha headSha opts.Paths (not (List.isEmpty rows)) rows
-                printfn "{\"schemaVersion\":%d,\"repository\":\"%s\",\"baseSha\":\"%s\",\"headSha\":\"%s\",\"required\":%b,\"occurrenceCount\":%d,\"allResolved\":false}" receipt.SchemaVersion receipt.Repository receipt.BaseSha receipt.HeadSha receipt.Required receipt.Occurrences.Length
-                0
+                let threshold =
+                    match Environment.GetEnvironmentVariable "FSGG_DIFF_AUDIT_THRESHOLD" with
+                    | null | "" -> 5
+                    | value -> match Int32.TryParse value with true, n when n >= 0 -> n | _ -> -1
+                let commitDeclares = git root $"log -1 --format=%%B %s{headSha}" |> Result.exists (fun text -> text.Contains("Bulk rename: true", StringComparison.OrdinalIgnoreCase) || text.Contains("[bulk-rename]", StringComparison.OrdinalIgnoreCase))
+                let itemDeclares = String.Equals(Environment.GetEnvironmentVariable "FSGG_ITEM_BULK_RENAME", "true", StringComparison.OrdinalIgnoreCase)
+                if threshold < 0 then eprintfn "fsgg-coord-engine: FSGG_DIFF_AUDIT_THRESHOLD must be a non-negative integer"; 1 else
+                let required = rows.Length >= threshold || commitDeclares || itemDeclares
+                let inventoried = receipt root baseSha headSha opts.Paths required rows
+                let resolved =
+                    match opts.Args with
+                    | [ _; _; _; _; receiptPath ] ->
+                        match ofJson (IO.File.ReadAllText receiptPath) with
+                        | Error errors -> Error errors
+                        | Ok supplied ->
+                            let suppliedById = supplied.Occurrences |> List.map (fun row -> row.Id, row) |> Map.ofList
+                            if supplied.BaseSha <> baseSha || supplied.HeadSha <> headSha || supplied.DeclaredPaths <> inventoried.DeclaredPaths then Error [ "diff-audit disposition receipt is stale for this base/head/path scope" ]
+                            elif supplied.Occurrences.Length <> suppliedById.Count || suppliedById.Count <> rows.Length then Error [ "diff-audit dispositions are missing or duplicated" ] else
+                            Ok { inventoried with Occurrences = rows |> List.map (fun row -> match Map.tryFind row.Id suppliedById with Some supplied -> { row with Disposition = supplied.Disposition } | None -> row) }
+                    | _ -> Ok inventoried
+                match resolved with
+                | Error errors -> errors |> List.iter (eprintfn "fsgg-coord-engine: %s"); 1
+                | Ok result ->
+                    printfn "%s" (toJson result)
+                    if required && not (validate baseSha headSha result |> List.isEmpty) then 3 else 0
         | _ -> eprintfn "fsgg-coord-engine: diff-audit needs <base> <head> <old-token> <new-token> and --paths P..."; 1

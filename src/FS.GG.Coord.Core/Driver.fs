@@ -135,10 +135,12 @@ module Driver =
                     | Ok _ -> errors.Add "diff-audit-required must be true or false"; false
                 let auditHead =
                     if auditRequired then
-                        match field "diff-audit-receipt" accepted.Body, field "diff-audit-base" accepted.Body,
-                              field "diff-audit-head" accepted.Body, field "diff-audit-disposition" accepted.Body with
-                        | Ok "complete", Ok baseSha, Ok head, Ok "all-resolved" when not (System.String.IsNullOrWhiteSpace baseSha) && head = acceptedHead -> Some head
-                        | _ -> errors.Add "required diff-audit receipt is missing, stale, or has unresolved dispositions"; None
+                        match field "diff-audit-receipt-v1" accepted.Body with
+                        | Ok encoded ->
+                            match SemanticDiff.ofBase64 encoded with
+                            | Ok receipt when receipt.Required && SemanticDiff.validate receipt.BaseSha acceptedHead receipt |> List.isEmpty -> Some receipt.HeadSha
+                            | _ -> errors.Add "required typed diff-audit receipt is missing, stale, or has unresolved dispositions"; None
+                        | Error _ -> errors.Add "required typed diff-audit receipt is missing, stale, or has unresolved dispositions"; None
                     else None
                 if accepted.Id <= previousReviewId then errors.Add "host acceptance must follow the latest review comment"
                 if acceptedHead <> previousHead then errors.Add "acceptance is not bound to the latest reviewed head"

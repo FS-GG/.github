@@ -87,6 +87,7 @@ module CommandSurfaceTests =
           // The ADR-0050 registry-predicate oracle (#1202) — LOCAL: reads registry + producer manifests,
           // no board, no token.
           "predicate", Predicate
+          "diff-audit", DiffAudit
 
           // Coordination rooms (ADR-0051, #1215). The ONE two-word verb — a `room` namespace so
           // `room close`/`room list` have a home; the dispatch check below splits on whitespace for it.

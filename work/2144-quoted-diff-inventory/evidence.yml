@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      digest: "sha256:fe932b0ec85a13620c31bfac134047775cedc2817133e24a572153364045f82d"
       outcome: passed
-      passed: 577
+      passed: 578
       failed: 0
       skipped: 0
     notes: [Semantic inventory tests passed.]
@@ -78,9 +78,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      digest: "sha256:fe932b0ec85a13620c31bfac134047775cedc2817133e24a572153364045f82d"
       outcome: passed
-      passed: 577
+      passed: 578
       failed: 0
       skipped: 0
     notes: [Acceptance receipt gate tests passed.]
@@ -102,9 +102,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      digest: "sha256:fe932b0ec85a13620c31bfac134047775cedc2817133e24a572153364045f82d"
       outcome: passed
-      passed: 577
+      passed: 578
       failed: 0
       skipped: 0
     notes: [Core evidence receipt passed.]
@@ -126,9 +126,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      digest: "sha256:fe932b0ec85a13620c31bfac134047775cedc2817133e24a572153364045f82d"
       outcome: passed
-      passed: 577
+      passed: 578
       failed: 0
       skipped: 0
     notes: [Versioned public receipt contract passed.]
@@ -150,9 +150,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:bbe0ac12d1e42a7882947d6e9ef67c13fce0ac0453435c7bb396df605f12efaf"
+      digest: "sha256:fe932b0ec85a13620c31bfac134047775cedc2817133e24a572153364045f82d"
       outcome: passed
-      passed: 577
+      passed: 578
       failed: 0
       skipped: 0
     notes: [Generated guidance and semantic diff documentation are committed.]

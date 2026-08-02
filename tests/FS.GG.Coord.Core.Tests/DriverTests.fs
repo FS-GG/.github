@@ -172,9 +172,11 @@ module DriverTests =
     let ``#2144 required diff audit binds the complete receipt to the accepted head`` () =
         let review = comment 1L "https://reviews/1" ("<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: head\nverdict: pass\ndiff-audit-required: true" + notMeaningful)
         let acceptance fields = comment 2L "https://reviews/2" ("<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1\n" + fields)
-        let valid = acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: head\ndiff-audit-disposition: all-resolved"
+        let encoded = FS.GG.Coord.SemanticDiff.receipt "repo" "base" "head" [ "src/" ] true [] |> FS.GG.Coord.SemanticDiff.toBase64
+        let valid = acceptance $"diff-audit-receipt-v1: %s{encoded}"
         match parseReviewComments [ review; valid ] with
         | Ok chain -> Assert.True(chain.DiffAuditRequired); Assert.Equal(Some "head", chain.DiffAuditHead)
         | Error errors -> failwithf "%A" errors
-        Assert.True(Result.isError(parseReviewComments [ review; acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: old\ndiff-audit-disposition: all-resolved" ]))
-        Assert.True(Result.isError(parseReviewComments [ review; acceptance "diff-audit-receipt: complete\ndiff-audit-base: base\ndiff-audit-head: head\ndiff-audit-disposition: unresolved" ]))
+        let stale = FS.GG.Coord.SemanticDiff.receipt "repo" "base" "old" [ "src/" ] true [] |> FS.GG.Coord.SemanticDiff.toBase64
+        Assert.True(Result.isError(parseReviewComments [ review; acceptance $"diff-audit-receipt-v1: %s{stale}" ]))
+        Assert.True(Result.isError(parseReviewComments [ review; acceptance "diff-audit-receipt-v1: malformed" ]))

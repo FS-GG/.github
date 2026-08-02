@@ -36,3 +36,15 @@ module SemanticDiffTests =
         Assert.NotEmpty(validate "other" "head" (receipt "base" "head" [ complete ]))
         Assert.NotEmpty(validate "base" "other" (receipt "base" "head" [ complete ]))
         Assert.NotEmpty(validate "base" "head" (receipt "base" "head" [ complete; complete ]))
+
+    [<Fact>]
+    let ``versioned occurrence receipt round trips and malformed dispositions fail closed`` () =
+        let occurrence = inventory "Fixture.fs" "let x = \"oldName\"" "let x = \"newName\"" "oldName" "newName" |> List.exactlyOne
+        let complete = { occurrence with Disposition = IntendedContractChange }
+        let source = receipt "base" "head" [ complete ]
+        let encoded = source |> toBase64
+        match ofBase64 encoded with
+        | Ok parsed -> Assert.Empty(validate "base" "head" parsed); Assert.Equal(complete.Id, parsed.Occurrences.Head.Id)
+        | Error errors -> failwithf "%A" errors
+        let malformed = toJson source |> fun json -> json.Replace("intended-contract-change", "self-approved")
+        Assert.True(Result.isError(ofJson malformed))
