@@ -641,6 +641,69 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item-status response is missing `repository.issue.projectItems`"))
 
+    let private ItemBlockedByDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
+
+    /// Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
+    /// `.fsi` for why this is a resolver read and what `Ok None` covers.
+    let itemBlockedBy
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string option> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} Blocked by"
+
+        let request =
+            query
+                ItemBlockedByDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let issue = data.GetProperty("repository").GetProperty("issue")
+
+            if issue.ValueKind = JsonValueKind.Null then
+                Ok None
+            else
+
+            let ourNode =
+                issue.GetProperty("projectItems").GetProperty("nodes").EnumerateArray()
+                |> Seq.tryFind (fun n ->
+                    match n.TryGetProperty "project" with
+                    | true, p when p.ValueKind = JsonValueKind.Object ->
+                        match p.TryGetProperty "number" with
+                        | true, num when num.ValueKind = JsonValueKind.Number -> num.GetInt32() = board.Number
+                        | _ -> false
+                    | _ -> false)
+
+            match ourNode with
+            | None -> Ok None
+            | Some node ->
+                match node.TryGetProperty "fieldValueByName" with
+                // `fieldValueByName` is null when the item is on the board with the field genuinely
+                // unset — the same "nothing recorded" answer `itemStatus` reaches the other way.
+                | true, fv when fv.ValueKind = JsonValueKind.Object ->
+                    match fv.TryGetProperty "text" with
+                    | true, tx when tx.ValueKind = JsonValueKind.String -> Ok(Some(tx.GetString()))
+                    | _ -> Ok None
+                | _ -> Ok None
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
+
     // ---- one field write ----------------------------------------------------------------------------
 
     /// GraphQL string syntax IS JSON string syntax, so a JSON encoder is a correct GraphQL string encoder.

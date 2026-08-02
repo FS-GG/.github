@@ -173,6 +173,28 @@ module Board =
         number: int ->
             IoResult<BoardStatus option>
 
+    /// Read ONE item's live `Blocked by` column — `itemStatus`'s twin, over the TEXT fragment instead of
+    /// the single-select one (.github#2079).
+    ///
+    /// `release --status Blocked` must refuse to PARK before the lock drops when the row will end with
+    /// neither a non-empty `Blocked by` field nor a `Blocked on: human/...` sentinel — ADR-0045's park
+    /// invariant, made a write-time gate rather than a read-time report. That refusal needs the LIVE
+    /// value, not the scan's cache and not the marker, because the defect this closes is precisely a
+    /// field that already reads as fine while the edge that would make it so landed somewhere else.
+    ///
+    /// A RESOLVER READ, on `itemStatus`'s own terms and for its own reason: one point, one item, never
+    /// `Scan.board`'s full-board cost on a per-call gate.
+    ///
+    /// `Ok None` covers "not on this board" and "on the board with the field genuinely empty" alike, both
+    /// meaning there is no edge here today. A failed read is `Error`, never a manufactured absence.
+    val itemBlockedBy:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<string option>
+
     /// Write ONE field. Routes by the field's declared type; an empty `Set` is refused.
     ///
     /// A value that does not fit its field — an unknown single-select option, a NUMBER that is not a number

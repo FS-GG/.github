@@ -197,6 +197,10 @@ module Options =
           /// bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is OFF: asking to
           /// see a column is asking to see it, Done included.
           Status: string option
+          /// `--blocked-by <ref>` (`release --status Blocked`) — the edge to write into the `Blocked by`
+          /// FIELD in the SAME call (.github#2079), so a coherent park is one call. Canonicalized exactly
+          /// as `set-field <ref> 'Blocked by' <value>` already canonicalizes it.
+          BlockedBy: string option
           /// `--all` (`ready`) — widen past the "not Done" default without naming a column. `ready` is a
           /// TRUTH read (#520), so `--all` shows the whole board — Done, and closed-but-still-columned rows.
           All: bool
