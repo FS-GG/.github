@@ -3387,6 +3387,31 @@ module Client =
 
                             Error ExitError
 
+    /// #2098: `requireCoherentParkIfBlocked` alone is the wrong gate for `set-field --batch`. `release`
+    /// and single `set-field` write the `Blocked by` field as a SEPARATE step BEFORE calling it
+    /// (`writeBlockedByIfRequested`, `--blocked-by` above; the single-field write itself for the other
+    /// door), so by the time the gate's live read runs, a same-call edge has already landed and the read
+    /// sees it. `--batch` cannot borrow that trick: AC1 requires the WHOLE document to validate before
+    /// ANY alias is emitted (`setFieldBatchCmd`'s "one aliased mutation" contract — a pair that fails
+    /// validation must cost nothing), so there is no live write to read back. Calling the live-only gate
+    /// as-is would refuse the exact call the docs steer callers toward: `Status=Blocked` paired with a
+    /// non-empty `Blocked by=<ref>` in the SAME batch, because the live board has not seen that pair yet.
+    ///
+    /// So this batch-only wrapper is handed the batch's OWN pending `Blocked by` write and checks it
+    /// FIRST: a non-empty pending value makes the park coherent on its own, no live read needed. Every
+    /// other shape — no `Blocked by` pair in this batch, or one that CLEARS the field — defers entirely
+    /// to the live-read gate above, so a batch that never touches `Blocked by` behaves exactly as it did
+    /// before this issue.
+    let requireCoherentParkIfBlockedForBatch
+        (ctx: Context)
+        (ref: Ref)
+        (requested: BoardStatus option)
+        (pendingBlockedBy: Board.FieldWrite option)
+        : Result<unit, int> =
+        match pendingBlockedBy with
+        | Some(Board.Set v) when not (String.IsNullOrWhiteSpace v) -> Ok()
+        | _ -> requireCoherentParkIfBlocked ctx ref requested
+
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
         | Error c, _
@@ -3787,6 +3812,32 @@ module Client =
                     match gated with
                     | Error rc -> rc
                     | Ok writes ->
+
+                    // #2098 AC1: the SAME coherent-park invariant `release`/single `set-field` already
+                    // enforce, reached through the batch door — a `Status=Blocked` write must not land
+                    // with an empty `Blocked by` field and no `Blocked on: human/...` sentinel. Judged
+                    // against THIS batch's own pending writes (`requireCoherentParkIfBlockedForBatch`),
+                    // so a call pairing `Status=Blocked` with a non-empty `Blocked by=<ref>` in the SAME
+                    // document is coherent without a live read racing its own not-yet-emitted mutation.
+                    // Runs BEFORE any alias is emitted, same as `gateField` above — a refused batch must
+                    // cost nothing.
+                    let requestedStatus =
+                        writes
+                        |> List.tryPick (fun (field, write) ->
+                            if field = "Status" then
+                                match write with
+                                | Board.Set v -> Reads.statusOfName v
+                                | Board.Clear -> None
+                            else
+                                None)
+
+                    let pendingBlockedBy =
+                        writes
+                        |> List.tryPick (fun (field, write) -> if field = "Blocked by" then Some write else None)
+
+                    match requireCoherentParkIfBlockedForBatch ctx ref requestedStatus pendingBlockedBy with
+                    | Error rc -> rc
+                    | Ok() ->
 
                     match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                     | Error e -> fail e

@@ -229,6 +229,253 @@ module BlockerLintTests =
             with _ ->
                 ()
 
+    // ---- the BATCH door onto the same park gate (.github#2098) ----------------------------------------
+    //
+    // `set-field --batch <ref> Status=Blocked "Blocked by=<ref>"` is ONE aliased mutation: AC1
+    // (`.github#2098`) requires the whole document to validate before any alias is emitted, so there is
+    // no "write the field, then read it back" step for the gate to borrow from `release`/single
+    // `set-field`. `requireCoherentParkIfBlockedForBatch` is handed this batch's OWN pending `Blocked by`
+    // write and must judge the pair coherent WITHOUT a live read that cannot see a mutation that has not
+    // happened yet — these legs pin that it does, and that every other shape still defers to the
+    // existing live-read gate unchanged.
+
+    [<Fact>]
+    let ``batch pairing Status=Blocked with a non-empty Blocked by in the SAME call PROCEEDS with no live read at all`` () =
+        // An unreachable transport: if the wrapper fell through to the live-read gate here, this would
+        // fail on the very first call instead of returning Ok — so a passing assertion is also the proof
+        // that the pending pair short-circuited before any board read.
+        let unreachable = Fake.Recorder(fun _ -> Error(Errors.NotFound "the batch park gate must not read the board when this batch's own pending write is coherent"))
+        let ctx = ParkGateFixture.context unreachable
+
+        Assert.Equal(
+            Ok(),
+            Client.requireCoherentParkIfBlockedForBatch
+                ctx
+                ParkGateFixture.subject
+                (Some BoardStatus.Blocked)
+                (Some(Board.Set "FS-GG/FS.GG.SDD#9"))
+        )
+
+    [<Fact>]
+    let ``batch setting Status=Blocked with no Blocked by pair at all defers to the live gate, and refuses on an empty field with no sentinel`` () =
+        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-none-" + System.Guid.NewGuid().ToString "n")
+        let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+        try
+            System.IO.Directory.CreateDirectory dir |> ignore
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            let ctx = ParkGateFixture.context (ParkGateFixture.transport None "Paths: src/A.fs")
+
+            match Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Blocked) None with
+            | Ok() -> failwith "expected the batch gate to defer to the live read and refuse — the field is empty and the body has no sentinel"
+            | Error code -> Assert.NotEqual(0, code)
+        finally
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+
+            try
+                System.IO.Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``batch pairing Status=Blocked with a CLEARED Blocked by defers to the live gate — a clear is not a pending edge`` () =
+        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-clear-" + System.Guid.NewGuid().ToString "n")
+        let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+        try
+            System.IO.Directory.CreateDirectory dir |> ignore
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            let ctx = ParkGateFixture.context (ParkGateFixture.transport None "Paths: src/A.fs")
+
+            match Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Blocked) (Some Board.Clear) with
+            | Ok() -> failwith "expected the batch gate to defer to the live read and refuse — a CLEAR leaves the field empty, same as no pair at all"
+            | Error code -> Assert.NotEqual(0, code)
+        finally
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+
+            try
+                System.IO.Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``batch pairing Status=Blocked with a non-empty Blocked by PROCEEDS even when the live field is stale-empty`` () =
+        // The fixture's live field is unset and its body has no sentinel — the live gate ALONE would
+        // refuse this. A passing assertion proves the batch's own pending write is what carried it, not
+        // a live board that happened to already agree.
+        let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-batch-pending-" + System.Guid.NewGuid().ToString "n")
+        let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+
+        try
+            System.IO.Directory.CreateDirectory dir |> ignore
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            let ctx = ParkGateFixture.context (ParkGateFixture.transport None "Paths: src/A.fs")
+
+            Assert.Equal(
+                Ok(),
+                Client.requireCoherentParkIfBlockedForBatch
+                    ctx
+                    ParkGateFixture.subject
+                    (Some BoardStatus.Blocked)
+                    (Some(Board.Set "FS-GG/FS.GG.SDD#9"))
+            )
+        finally
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+
+            try
+                System.IO.Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    [<Fact>]
+    let ``the batch gate is a no-op for every OTHER --status, regardless of the pending Blocked by write`` () =
+        let unreachable = Fake.Recorder(fun _ -> Error(Errors.NotFound "the batch park gate must not call the transport for a non-Blocked status"))
+        let ctx = ParkGateFixture.context unreachable
+
+        Assert.Equal(Ok(), Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject None None)
+        Assert.Equal(Ok(), Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.Ready) (Some Board.Clear))
+        Assert.Equal(
+            Ok(),
+            Client.requireCoherentParkIfBlockedForBatch ctx ParkGateFixture.subject (Some BoardStatus.InProgress) (Some(Board.Set "x"))
+        )
+
+    // ---- AC2 (.github#2098): `set-field --batch` end to end, from raw argv to the aliased mutation ----
+    //
+    // The legs above pin `requireCoherentParkIfBlockedForBatch`'s PREDICATE. These drive
+    // `Client.setField` itself — the whole CLI verb, argv to GraphQL — because the defect this issue is
+    // about is in the WIRING inside `setFieldBatchCmd` (whether it computes the requested status and the
+    // pending `Blocked by` write from the batch's own pairs and calls the gate at all), which only a
+    // fixture that counts real GraphQL calls across the whole command can see. Same shape as
+    // `ReleaseBlockedByFixture` above, for the batch door instead of `release`'s.
+    module private SetFieldBatchParkFixture =
+
+        let private ok (body: string) : Errors.IoResult<Response> =
+            Ok
+                { Status = 200
+                  Body = body
+                  ETag = None
+                  NextLink = None }
+
+        /// A full board fixture for `Client.setField --batch`: discovery (`projectsV2`, `fields(first`),
+        /// the item-id lookup (`projectItems`), the aliased mutation itself
+        /// (`updateProjectV2ItemFieldValue`), and — for the leg that must fall back to the LIVE gate — the
+        /// `Blocked by` resolver read (`fieldValueByName`) and the REST issue body for the sentinel check.
+        /// `body` is served on the REST read; it is UNREACHABLE on the leg where a same-call pending
+        /// `Blocked by` write should short-circuit before any live read.
+        let transport (body: string) =
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" ->
+                    ok (System.Text.Json.JsonSerializer.Serialize {| number = 42; body = body |})
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(document, _) ->
+                        if document.Contains "projectsV2" then
+                            ok
+                                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fields(first" then
+                            ok
+                                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "fieldValueByName" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "updateProjectV2ItemFieldValue" then
+                            ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                        // The item-id lookup shares the `projectItems` substring with the resolver read
+                        // above — checked LAST, after both `fieldValueByName` and the mutation.
+                        elif document.Contains "projectItems" then
+                            ok
+                                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_42","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        else
+                            Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                    | _ -> Error(Errors.NotFound "a graphql call with no document")
+                | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+        let private sessionVars =
+            [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+
+        /// Drive `Client.setField` as a real command line, isolated on its own cache and identity — see
+        /// `ReleaseBlockedByFixture.run`, whose shape this reuses.
+        let run (transport: Fake.Recorder) (args: string list) : int * string * string =
+            let dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-2098-setfield-batch-" + System.Guid.NewGuid().ToString "n")
+            let previousCache = System.Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+            let previousKitRoot = System.Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+            let previousSessions = sessionVars |> List.map (fun v -> v, System.Environment.GetEnvironmentVariable v)
+            let stdout = System.Console.Out
+            let stderr = System.Console.Error
+            use capturedOut = new System.IO.StringWriter()
+            use capturedErr = new System.IO.StringWriter()
+
+            try
+                System.IO.Directory.CreateDirectory dir |> ignore
+                System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+                System.Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+                System.Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+                System.Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+                System.Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "2098setfieldbatch")
+                System.Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-2098")
+                System.Console.SetOut capturedOut
+                System.Console.SetError capturedErr
+
+                let opts =
+                    match Options.parse args with
+                    | Ok o -> o
+                    | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+                let context: Client.Context =
+                    { Transport = transport
+                      Owner = "FS-GG"
+                      Title = "Coordination"
+                      DefaultRepo = Some "FS.GG.SDD"
+                      ChoreLocks = [] }
+
+                let code = Client.setField context opts
+                System.Console.Out.Flush()
+                System.Console.Error.Flush()
+                code, capturedOut.ToString(), capturedErr.ToString()
+            finally
+                System.Console.SetOut stdout
+                System.Console.SetError stderr
+                System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                System.Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+                for name, value in previousSessions do
+                    System.Environment.SetEnvironmentVariable(name, value)
+
+                try
+                    System.IO.Directory.Delete(dir, true)
+                with _ ->
+                    ()
+
+        let batchArgs (pairs: string list) = [ "set-field"; "--batch"; "FS.GG.SDD#42" ] @ pairs
+
+    [<Fact>]
+    let ``AC2: set-field --batch Status=Blocked ALONE — no other pair, empty field, no sentinel — is refused and writes nothing`` () =
+        let transport = SetFieldBatchParkFixture.transport "Paths: src/A.fs"
+
+        let code, _, err = SetFieldBatchParkFixture.run transport (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked" ])
+
+        Assert.NotEqual(0, code)
+        Assert.Contains("2079", err)
+        Assert.False(transport.Logged "updateProjectV2ItemFieldValue")
+
+    [<Fact>]
+    let ``AC2: set-field --batch Status=Blocked WITH 'Blocked by=<ref>' in the SAME call succeeds and writes both`` () =
+        // The body carries no sentinel — if the fix wrongly fell through to a live read instead of
+        // trusting this batch's own pending pair, this would refuse exactly like the leg above.
+        let transport = SetFieldBatchParkFixture.transport "Paths: src/A.fs"
+
+        let code, out, _ =
+            SetFieldBatchParkFixture.run
+                transport
+                (SetFieldBatchParkFixture.batchArgs [ "Status=Blocked"; "Blocked by=FS-GG/FS.GG.SDD#9" ])
+
+        Assert.Equal(0, code)
+        Assert.Contains("Status = Blocked", out)
+        Assert.Contains("Blocked by = FS-GG/FS.GG.SDD#9", out)
+        Assert.True(transport.Logged "updateProjectV2ItemFieldValue")
+
     // ---- `reconcile` withholds BLOCKER-CLEARED on the divergence (.github#2079, leg 2) ---------------
     //
     // `FS.GG.SDD#42` is `Blocked`, its FIELD names one blocker, `FS.GG.SDD#8`, which is CLOSED — so
