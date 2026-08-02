@@ -4,10 +4,10 @@
   "workId": "2143-external-owner-refs",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/0.32.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "ffd041434b8162bb87403512dabb3a91d588dc9714c2c7504f1c242f0d395ce0"
+    "value": "c08e8f687be67373d4412362774fe0da429f487ebb354ed4155bedbf9838ea35"
   },
   "verificationReadiness": {
     "status": "verificationReady",

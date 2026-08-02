@@ -52,7 +52,8 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
+      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
       failed: 0
@@ -76,7 +77,8 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
+      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
       failed: 0
@@ -100,7 +102,8 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
+      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
       failed: 0
@@ -124,7 +127,8 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
+      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
       failed: 0
@@ -148,7 +152,8 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
+      digest: "sha256:aa4ab4622b93ea803624bfcbd8aeb514f5016824366782670fe2996fe89ca6ec"
+      digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
       failed: 0

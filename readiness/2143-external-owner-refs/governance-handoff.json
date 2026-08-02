@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/0.32.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
   "workId": "2143-external-owner-refs",
   "sources": [
     {
       "path": "readiness/2143-external-owner-refs/ship.json",
-      "digest": "sha256:ad2f6a43284f4509e820f994d578f715be6b3531db8d007f2800a48e2205bc34",
+      "digest": "sha256:8d87a805580cc94d54c1bc4af3a47b6e527b56170ba9dddbcf4343c33af58986",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2143-external-owner-refs/verify.json",
-      "digest": "sha256:e7325e9775c1548faf53e2e2b3dd2a7d179e63e82f46f56f464e386c5809472e",
+      "digest": "sha256:071efae019e56d8f6fe178726991db2705fed4a4af4cdf4608d15f3d28af7c97",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2143-external-owner-refs/work-model.json",
-      "digest": "sha256:e86aa42b1c04dae48c99490487c2385f4f8f812dbde9194b45fc21267c64326e",
+      "digest": "sha256:c8a7c53869288ed4bcdad024c262b969b8947f1cd630bd1a0764c4de1a12b9b6",
       "schemaVersion": 1
     }
   ],
