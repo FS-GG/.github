@@ -21,11 +21,15 @@ module Driver =
         let review = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:independent-review-confirmation:v1 -->") && value "verdict" c = Some "pass") |> List.tryLast
                      |> Option.orElseWith (fun () -> comments |> List.tryFind (fun c -> c.Contains("<!-- fsgg:independent-review:v1 -->")))
         let accepted = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:review-accepted:v1 -->")) |> List.tryLast
+        let rounds =
+            comments
+            |> List.filter (fun c -> c.Contains("<!-- fsgg:independent-review-confirmation:v1 -->") && value "verdict" c = Some "pass")
+            |> List.choose (fun c -> value "round" c |> Option.bind (fun n -> match System.Int32.TryParse n with | true, n -> Some n | _ -> None))
         match review, accepted with
         | Some r, Some a ->
             match value "critic" r, value "reviewed-head" r, value "accepted-head" a with
             | Some critic, Some reviewed, Some accepted when critic <> "" && reviewed <> "" && reviewed = accepted ->
-                Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some reviewed; Rounds = [ 1 ]; ChecksGreen = true; HostAccepted = true }
+                Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some reviewed; Rounds = rounds; ChecksGreen = true; HostAccepted = true }
             | _ -> Error [ "review markers are malformed or bind different heads" ]
         | _ -> Error [ "required independent-review and review-accepted markers are missing" ]
 
