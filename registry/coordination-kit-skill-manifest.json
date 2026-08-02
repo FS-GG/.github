@@ -105,11 +105,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "63948fbda00a36a899dff92567c9ac7fde8248ba23a9fad1df13da586ae34481",
+      "tree-sha256": "d69c7e29545fabc24a22c686ebbe1c251a1b17c5d51b990993ef0dcd8ef134fd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "571188078842c5e40137fc8aa383e34c0212d20528de8a1ecf5d90e473519ce7",
+          "sha256": "756f4d47eea1d0259af141b9336d22e30b29ba583ad803bce2f569a9399cfa0c",
           "executable": false
         },
         {
@@ -120,6 +120,11 @@
         {
           "path": "references/command-contracts.md",
           "sha256": "50e929b9dbc703bdf5b73066666dc6592129ef5c73f282eef45b106fd4193822",
+          "executable": false
+        },
+        {
+          "path": "references/control-plane-provenance.md",
+          "sha256": "0226e35852b9b32e61344885a1ac45a7774bbc8f83ea5d8f0e01c13a3f9feaed",
           "executable": false
         },
         {

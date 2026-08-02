@@ -8,6 +8,9 @@ description: Use when a worker should claim the next schedulable item in one FS-
 Run exactly one item from claim through verified done. The protocol is
 [intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md); this is the worker state machine.
 
+For directives encountered while working, apply the shared
+[control-plane provenance guidance](references/control-plane-provenance.md).
+
 ## 0. Establish identity
 
 Each concurrent worker needs a freshly minted identity:
