@@ -44,7 +44,7 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 review comment markers bind critic and identical reviewed accepted sha`` () =
-        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: abc"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc" ]
+        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: abc\nverdict: pass"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc" ]
         match parseReviewComments comments with
         | Ok chain -> Assert.Equal(Some "shrike", chain.CriticIdentity)
         | Error errors -> failwithf "%A" errors
@@ -52,10 +52,24 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 latest confirmation round binds the accepted sha`` () =
-        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old"; "<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: shrike\nround: 1\npreceding-review: old\nreviewed-head: new\nverdict: pass"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
+        let comments = [ "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: old\nverdict: changes-required"; "<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: shrike\nround: 1\npreceding-review: old\nreviewed-head: new\nverdict: pass"; "<!-- fsgg:review-accepted:v1 -->\naccepted-head: new" ]
         match parseReviewComments comments with
         | Ok chain -> Assert.Equal(Some "new", chain.HeadSha)
         | Error errors -> failwithf "%A" errors
+
+    [<Fact>]
+    let ``#2127 review confirmations fail closed unless one critic advances every linked round`` () =
+        let initial = "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: first"
+        let accepted head = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}"
+        let confirmation critic round preceding head verdict =
+            $"<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: %s{critic}\nround: %s{round}\npreceding-review: %s{preceding}\nreviewed-head: %s{head}\nverdict: %s{verdict}"
+        let rejects comments = Assert.True(Result.isError(parseReviewComments comments))
+        rejects [ initial; confirmation "other" "1" "first" "second" "pass"; accepted "second" ]
+        rejects [ initial; confirmation "shrike" "2" "first" "second" "pass"; accepted "second" ]
+        rejects [ initial; confirmation "shrike" "1" "wrong" "second" "pass"; accepted "second" ]
+        rejects [ initial; confirmation "shrike" "1" "first" "second" "changes-required"; accepted "second" ]
+        rejects [ initial; "<!-- fsgg:independent-review-confirmation:v1 -->\ncritic: shrike\nround: 1"; accepted "second" ]
+        rejects [ initial; confirmation "shrike" "1" "first" "second" "pass"; accepted "first" ]
 
     [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =

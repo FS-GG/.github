@@ -1148,6 +1148,32 @@ module Reads =
                     | None -> Error(Malformed(subject, "the PR response carried no head.ref"))
                 | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
 
+    /// The immutable commit identity for evidence that must bind to the reviewed PR revision.
+    let prHeadSha
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
+        let request =
+            { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"; Query = []; Body = NoBody
+              Budget = Rest; IfNoneMatch = None; Subject = subject }
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+                match doc.RootElement.TryGetProperty "head" with
+                | true, head when head.ValueKind = JsonValueKind.Object ->
+                    match str head "sha" with
+                    | Some sha when not (String.IsNullOrWhiteSpace sha) -> Ok sha
+                    | _ -> Error(Malformed(subject, "the PR response carried no head.sha"))
+                | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
+
     let prFiles
         (transport: IGitHubTransport)
         (owner: string)

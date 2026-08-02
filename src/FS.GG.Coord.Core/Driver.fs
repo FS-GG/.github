@@ -13,29 +13,50 @@ module Driver =
           Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
 
     let parseReviewComments (comments: string list) =
-        let value (key: string) (text: string) =
+        let marker name (text: string) = text.Contains($"<!-- fsgg:%s{name}:v1 -->")
+        let field key (text: string) =
             text.Split '\n'
-            |> Array.tryPick (fun line ->
+            |> Array.choose (fun line ->
+                let line = line.Trim()
                 let prefix = key + ":"
-                if line.TrimStart().StartsWith prefix then Some(line.Substring(line.IndexOf(':') + 1).Trim()) else None)
-        let review = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:independent-review-confirmation:v1 -->") && value "verdict" c = Some "pass") |> List.tryLast
-                     |> Option.orElseWith (fun () -> comments |> List.tryFind (fun c -> c.Contains("<!-- fsgg:independent-review:v1 -->")))
-        let accepted = comments |> List.filter (fun c -> c.Contains("<!-- fsgg:review-accepted:v1 -->")) |> List.tryLast
-        let rounds =
-            comments
-            |> List.filter (fun c -> c.Contains("<!-- fsgg:independent-review-confirmation:v1 -->") && value "verdict" c = Some "pass")
-            |> List.choose (fun c -> value "round" c |> Option.bind (fun n -> match System.Int32.TryParse n with | true, n -> Some n | _ -> None))
-        match review, accepted with
-        | Some r, Some a ->
-            match value "critic" r, value "reviewed-head" r, value "accepted-head" a with
-            | Some critic, Some reviewed, Some accepted when critic <> "" && reviewed <> "" && reviewed = accepted ->
-                let rounds = if List.isEmpty rounds then [ 1 ] else rounds
-                let sequential = rounds = [ 1 .. List.length rounds ]
-                if sequential then
-                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some reviewed; Rounds = rounds; ChecksGreen = true; HostAccepted = true }
-                else Error [ "review confirmation rounds are not sequential" ]
-            | _ -> Error [ "review markers are malformed or bind different heads" ]
-        | _ -> Error [ "required independent-review and review-accepted markers are missing" ]
+                if line.StartsWith prefix then Some(line.Substring(prefix.Length).Trim()) else None)
+            |> Array.toList
+            |> function [ value ] when not (System.String.IsNullOrWhiteSpace value) -> Ok value | _ -> Error $"missing or duplicate %s{key}"
+        let initial = comments |> List.filter (marker "independent-review")
+        let confirmations = comments |> List.filter (marker "independent-review-confirmation")
+        let acceptances = comments |> List.filter (marker "review-accepted")
+        let errors = ResizeArray<string>()
+        let requireOne what values =
+            match values with
+            | [ value ] -> Some value
+            | _ -> errors.Add $"exactly one %s{what} marker is required"; None
+        match requireOne "independent-review" initial, requireOne "review-accepted" acceptances with
+        | Some first, Some accepted ->
+            match field "critic" first, field "reviewed-head" first, field "verdict" first, field "accepted-head" accepted with
+            | Ok critic, Ok initialHead, Ok initialVerdict, Ok acceptedHead ->
+                if List.isEmpty confirmations && initialVerdict <> "pass" then
+                    errors.Add "an unconfirmed independent review must have verdict pass"
+                let mutable previousHead = initialHead
+                let mutable valid = true
+                for expectedRound, confirmation in confirmations |> List.indexed |> List.map (fun (i, c) -> i + 1, c) do
+                    match field "critic" confirmation, field "round" confirmation, field "preceding-review" confirmation,
+                          field "reviewed-head" confirmation, field "verdict" confirmation with
+                    | Ok confirmationCritic, Ok round, Ok preceding, Ok reviewedHead, Ok "pass"
+                        when confirmationCritic = critic && round = string expectedRound && preceding = previousHead && reviewedHead <> previousHead ->
+                        previousHead <- reviewedHead
+                    | Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                        valid <- false
+                        errors.Add $"review confirmation round %d{expectedRound} does not continue the same critic, round, preceding review, and new head"
+                    | _ ->
+                        valid <- false
+                        errors.Add $"review confirmation round %d{expectedRound} is malformed"
+                if acceptedHead <> previousHead then errors.Add "acceptance is not bound to the latest reviewed head"
+                if valid && errors.Count = 0 then
+                    let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. List.length confirmations ]
+                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead; Rounds = rounds; ChecksGreen = true; HostAccepted = true }
+                else Error(List.ofSeq errors)
+            | _ -> Error [ "review markers are malformed" ]
+        | _ -> Error(List.ofSeq errors)
 
     type Receipt =
         { ObservedAt: int64; SourceSha: string; Complete: bool; Review: ReviewChain option }

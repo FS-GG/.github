@@ -249,6 +249,8 @@ module Reads =
     /// it to decide WHICH issue a PR implements, and guessing that from a failed read would stamp a
     /// touch-set verdict on a subject nobody identified.
     val prHeadRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+    /// Immutable head commit SHA for evidence binding.
+    val prHeadSha: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>

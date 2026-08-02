@@ -355,11 +355,68 @@ module ApplicationServiceTests =
 
     [<Fact>]
     let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =
-        // The full driver fixture is intentionally anchored on the PR id: review markers live on the
-        // pull request conversation, never on the backing issue.
-        let pr = 2140
-        let expected = $"repos/FS-GG/.github/issues/%d{pr}/comments"
-        Assert.EndsWith("issues/2140/comments", expected)
+        // This drives the real `Client.driver` handler through scan, the PR liveness probe, the green
+        // landability read and the PR conversation.  The backing issue deliberately has no review marker:
+        // a handler that accidentally reads #2127's comments for review evidence therefore produces zero.
+        let head = "31cffe6-driver-head"
+        let initial = $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-7194\nreviewed-head: %s{head}\nverdict: pass"
+        let accepted = $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}"
+        let boardItem =
+            """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2127,"title":"driver","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+        let graph (query: string) =
+            if query.Contains "projectsV2" then
+                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            elif query.Contains "fields(first" then
+                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            else
+                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+        let transport =
+            Fake.Recorder(fun (req: Request) ->
+                match req.Method, req.Path.Trim '/' with
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(query, _) -> ok (graph query)
+                    | _ -> Error(Errors.NotFound "graphql without a query")
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/issues/2127" -> ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
+                | "GET", "repos/FS-GG/.github/issues/2127/comments" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
+                | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
+                | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
+                | "GET", "repos/FS-GG/.github/commits/31cffe6-driver-head/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
+                    ok (JsonSerializer.Serialize [ {| id = 1; body = initial |}; {| id = 2; body = accepted |} ])
+                | method', path -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{path}"))
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2127-driver-" + Guid.NewGuid().ToString "n")
+        let previousOut, previousErr = Console.Out, Console.Error
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+        let code, stdout, stderr =
+            try
+                Directory.CreateDirectory cache |> ignore
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+                Console.SetOut capturedOut
+                Console.SetError capturedErr
+                let code = Client.driver (context transport) (options [ "driver"; "--repo"; ".github"; "--json" ])
+                Console.Out.Flush()
+                Console.Error.Flush()
+                code, capturedOut.ToString(), capturedErr.ToString()
+            finally
+                Console.SetOut previousOut
+                Console.SetError previousErr
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                try Directory.Delete(cache, true) with _ -> ()
+        if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code stderr transport.Log
+        Assert.Equal("", stderr)
+        use document = JsonDocument.Parse(stdout)
+        let evidence = document.RootElement.GetProperty("reviewEvidence").GetInt32()
+        if evidence <> 1 then failwithf "evidence=%d; stdout=%s; log=%A" evidence stdout transport.Log
+        Assert.True(transport.Logged "comment-list FS-GG/.github 2140", $"log: %A{transport.Log}")
+        // The two #2127 reads are scan's claim checks.  The distinct #2140 read is review evidence; if the
+        // driver re-used the item thread, #2140 would have no comment read and this fails.
+        Assert.Equal(1, transport.Count "comment-list FS-GG/.github 2140")
+        Assert.Equal(2, transport.Count "comment-list FS-GG/.github 2127")
 
     [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
