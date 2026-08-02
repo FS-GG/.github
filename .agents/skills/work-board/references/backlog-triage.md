@@ -62,9 +62,11 @@ scripts/fsgg-coord set-field --batch <ref> Status=Blocked "Blocked by=<dependenc
 
 and verify the fresh row afterward — including that the field, not just the body, carries the ref.
 Always write both fields yourself in the same call rather than depending on the engine to catch an
-omission: the coherent-park refusal (`.github#2079`) does not reliably cover every write path yet
-(`.github#2098` tracks closing the gap). Topical relationships, temporary path overlap, unreadable refs,
-and guessed blocker meaning do not qualify.
+omission — this is belt-and-braces, not a substitute for writing the edge. The engine does now refuse an
+incoherent `Blocked` write on every write path, including `set-field --batch` (`.github#2079`, extended
+by `.github#2098`, merged), but the mistake this item is about was a brief that said "set `Blocked by`"
+without naming the field, and a gate closing does not make that guidance unnecessary. Topical
+relationships, temporary path overlap, unreadable refs, and guessed blocker meaning do not qualify.
 
 ### Await human judgement
 
