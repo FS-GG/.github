@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "dce2f742a31833fdc70529de1f782d8b49ef11fcca27ff2946aba2d158d2b0c2"
+        "value": "a652d5aac02d2f4934c783d606653499085e0b528a7b6f800eb95d8a074e1fc7"
       }
     },
     {
@@ -89,7 +89,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "8500a10c624b5e31ee01252a2480f6898eb996de521d556200c895db64c34907"
+        "value": "7a6bedd157418032f5703e9499277fa227c15a66fceb9b2b1acaf8dc66de3036"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "974751fba0e1ed3f52244c3c33ee3485b54d5e8cf85a9e5695c430b87a1a5b5e"
+        "value": "414eb004ac2ae5071dc94d5e3a27ab583cb9c11530d30f625465343abf5ecadb"
       }
     }
   ],
@@ -328,7 +328,9 @@
         "FR-001"
       ],
       "artifactRefs": [
-        "tests/skill-quality/review-round-contract.py"
+        "src/FS.GG.Coord.Core/Driver.fs",
+        "src/FS.GG.Coord.Core/Driver.fsi",
+        "tests/FS.GG.Coord.Core.Tests/DriverTests.fs"
       ],
       "result": "pass",
       "synthetic": false,
@@ -352,7 +354,8 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "tests/skill-quality/review-round-contract.py"
+        ".agents/skills/pnext-item/references/independent-review.md",
+        ".claude/skills/pnext-item/references/independent-review.md"
       ],
       "result": "pass",
       "synthetic": false,
@@ -376,7 +379,8 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [
-        "tests/skill-quality/review-round-contract.py"
+        "tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs",
+        "tests/FS.GG.Coord.Core.Tests/DriverTests.fs"
       ],
       "result": "pass",
       "synthetic": false,
@@ -518,7 +522,7 @@
           "path": "work/2086-independent-review-runtime-route/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "dce2f742a31833fdc70529de1f782d8b49ef11fcca27ff2946aba2d158d2b0c2"
+            "value": "a652d5aac02d2f4934c783d606653499085e0b528a7b6f800eb95d8a074e1fc7"
           },
           "schemaVersion": 1
         },
@@ -526,7 +530,7 @@
           "path": "work/2086-independent-review-runtime-route/plan.md",
           "digest": {
             "algorithm": "sha256",
-            "value": "8500a10c624b5e31ee01252a2480f6898eb996de521d556200c895db64c34907"
+            "value": "7a6bedd157418032f5703e9499277fa227c15a66fceb9b2b1acaf8dc66de3036"
           },
           "schemaVersion": 1
         },
@@ -542,14 +546,14 @@
           "path": "work/2086-independent-review-runtime-route/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "974751fba0e1ed3f52244c3c33ee3485b54d5e8cf85a9e5695c430b87a1a5b5e"
+            "value": "414eb004ac2ae5071dc94d5e3a27ab583cb9c11530d30f625465343abf5ecadb"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "09f9cff78f42c9ee356218e1dd980955a7559c8d6fda7c642a982a8eb2072d25"
+        "value": "0f9c7c69522ddcf193bf8df4f858d760b29d9deb2e768bea59f8de7f48064e84"
       },
       "currency": "current"
     }

@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2086-independent-review-runtime-route/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "999df28905bcb5e9d77f73ed29b3460bb53835d29de23a9209dd5b1e335ea018"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2086-independent-review-runtime-route/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -61,7 +71,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "8500a10c624b5e31ee01252a2480f6898eb996de521d556200c895db64c34907"
+        "value": "7a6bedd157418032f5703e9499277fa227c15a66fceb9b2b1acaf8dc66de3036"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "974751fba0e1ed3f52244c3c33ee3485b54d5e8cf85a9e5695c430b87a1a5b5e"
+        "value": "414eb004ac2ae5071dc94d5e3a27ab583cb9c11530d30f625465343abf5ecadb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -356,7 +366,7 @@
     {
       "path": "readiness/2086-independent-review-runtime-route/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

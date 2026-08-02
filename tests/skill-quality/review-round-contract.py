@@ -67,6 +67,15 @@ def main() -> None:
         "critic **must execute or measure** at least one comparison",
         "production route against the built artifact",
         "A report that cites only source reading for such a claim is incomplete",
+        "Every **passing** initial or confirmation marker carries exactly one machine-readable applicability shape",
+        "route-applicability: meaningful",
+        "built-artifact: <artifact exercised>",
+        "executed-command: <command or measurement performed>",
+        "compared-routes: <production route and comparison route>",
+        "observed-result: <observed equality or divergence>",
+        "route-applicability: not-meaningful",
+        "route-not-meaningful-reason: <bounded reason tied to this review subject>",
+        "fail the live review-marker parser",
         "built product route emitted `[]` while direct dispatch emitted `[PlaySfx",
     ):
         require(literal in normalized, f"review contract is missing runtime-route evidence invariant: {literal}")

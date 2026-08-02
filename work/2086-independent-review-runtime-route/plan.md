@@ -22,6 +22,8 @@ Prose status: planned
 
 ## Plan Scope
 - Extend the canonical `pnext-item` independent-review contract in both supported skill roots.
+- Extend the live `Driver.parseReviewComments` acceptance boundary so a passing review marker carries
+  a machine-readable route-applicability decision and the corresponding evidence shape.
 - Require runtime-route comparison only when the PR's review subject has meaningful behavior reachable
   through more than one route; retain source review as an independent requirement.
 - Add the worker handoff expectation, a portable Rogue3-derived example, and a falsifiable contract
@@ -34,16 +36,20 @@ Prose status: planned
   certification as incomplete; a no-comparison boundary must be explicit rather than silently passing.
 - PD-002 [AC-001] [FR-001] complete: Phrase the Rogue3 audio-route observation as a reusable example
   of route divergence, not a specialized audio rule.
-- PD-003 [AC-001] [FR-001] complete: Make the contract test fail if the executable-route, built-artifact,
-  or source-only-incomplete requirements disappear from either authored root.
+- PD-003 [AC-001] [FR-001] complete: Require every passing initial/confirmation marker to declare
+  `route-applicability`; the meaningful case carries the built artifact, executed command or
+  measurement, compared routes, and observed result, while the not-meaningful case carries a bounded
+  reason. Reject missing, duplicate, empty, unknown, or cross-case fields in the typed parser.
 
 ## Contract Impact
-- PC-001 [PD-001] skill contract: Materialized `pnext-item` gives workers, critics, and hosts a new
-  mandatory review-evidence obligation; `FS.GG.Kit` advances 0.30.0 to 0.31.0.
+- PC-001 [PD-001] skill and marker contract: Materialized `pnext-item` gives workers, critics, and hosts
+  a new mandatory review-evidence obligation; the live marker parser enforces its applicability/evidence
+  union; `FS.GG.Kit` advances 0.30.0 to 0.31.0.
 
 ## Verification Obligations
 - VO-001 [PD-001] [PC-001] semanticTest: `review-round-contract.py` proves both authored roots match
-  and fails when any runtime-route gate literal is removed.
+  and Core/CLI tests prove meaningful and not-meaningful positive cases plus source-only, incomplete,
+  duplicate, empty, unknown, and mismatched-shape negative cases at the live acceptance parser.
 - VO-002 [PD-003] [PC-001] integrationTest: Run `tests/skill-quality/run.sh`, generated projection
   freshness, registry reconciliation/check, and `FS.GG.Kit` package verification.
 

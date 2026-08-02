@@ -24,6 +24,29 @@ incomplete; it cannot be accepted as evidence that the routes agree. If no meani
 comparison exists for the review subject, the critic states that boundary and why under `Verification:`;
 that exception does not waive the rest of the required source review.
 
+Every **passing** initial or confirmation marker carries exactly one machine-readable applicability
+shape; a `changes-required` marker may carry one, but cannot confer acceptance without a later passing
+marker that does. The meaningful shape is:
+
+```text
+route-applicability: meaningful
+built-artifact: <artifact exercised>
+executed-command: <command or measurement performed>
+compared-routes: <production route and comparison route>
+observed-result: <observed equality or divergence>
+```
+
+The not-meaningful shape is:
+
+```text
+route-applicability: not-meaningful
+route-not-meaningful-reason: <bounded reason tied to this review subject>
+```
+
+Missing, duplicate, empty, unknown, mixed-shape, or overlong reason fields fail the live review-marker
+parser. A prose claim or `Verification:` line does not substitute for these fields; source-only review
+therefore cannot produce a valid passing chain when the critic declares the comparison meaningful.
+
 This is reusable guidance, not an audio-specific recipe. Rogue3 exposed the shape when a built product
 route emitted `[]` while direct dispatch emitted `[PlaySfx (SoundId "floor-descend", 0.8)]`: the cue map
 looked correct in isolation, but executing both routes revealed the defect. Apply the same comparison

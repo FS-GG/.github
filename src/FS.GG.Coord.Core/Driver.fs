@@ -8,9 +8,14 @@ module Driver =
           ReconcileDryRunFresh: bool; ReconcileApplied: bool; ReconcileFresh: bool
           TriageFresh: bool; CurrencyScoped: bool }
 
+    type RuntimeRouteEvidence =
+        | Meaningful of builtArtifact: string * executedCommand: string * comparedRoutes: string * observedResult: string
+        | NotMeaningful of reason: string
+
     type ReviewChain =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
-          Rounds: int list; ChecksGreen: bool; HostAccepted: bool }
+          Rounds: int list; ChecksGreen: bool; HostAccepted: bool
+          RuntimeRouteEvidence: RuntimeRouteEvidence option }
 
     type ReviewComment = { Id: int64; Url: string; Body: string }
 
@@ -35,14 +40,36 @@ module Driver =
                          || (text[expected.Length] = '\r' && text.Length > expected.Length + 1 && text[expected.Length + 1] = '\n') -> true
             | _ -> false
         let malformedMarker name (text: string) = text.Contains(markerText name) && not (marker name text)
-        let field key (text: string) =
+        let fieldValues key (text: string) =
             text.Split '\n'
             |> Array.choose (fun line ->
                 let line = line.Trim()
                 let prefix = key + ":"
                 if line.StartsWith prefix then Some(line.Substring(prefix.Length).Trim()) else None)
             |> Array.toList
+        let field key text =
+            fieldValues key text
             |> function [ value ] when not (System.String.IsNullOrWhiteSpace value) -> Ok value | _ -> Error $"missing or duplicate %s{key}"
+        let hasField key text = fieldValues key text |> List.isEmpty |> not
+        let meaningfulFields = [ "built-artifact"; "executed-command"; "compared-routes"; "observed-result" ]
+        let routeEvidence (text: string) =
+            match field "route-applicability" text with
+            | Ok "meaningful" when hasField "route-not-meaningful-reason" text ->
+                Error "meaningful route evidence must not carry route-not-meaningful-reason"
+            | Ok "meaningful" ->
+                match field "built-artifact" text, field "executed-command" text,
+                      field "compared-routes" text, field "observed-result" text with
+                | Ok artifact, Ok command, Ok routes, Ok result -> Ok(Meaningful(artifact, command, routes, result))
+                | _ -> Error "meaningful route evidence requires one non-empty built-artifact, executed-command, compared-routes, and observed-result field"
+            | Ok "not-meaningful" when meaningfulFields |> List.exists (fun key -> hasField key text) ->
+                Error "not-meaningful route evidence must not carry meaningful comparison fields"
+            | Ok "not-meaningful" ->
+                match field "route-not-meaningful-reason" text with
+                | Ok reason when reason.Length <= 500 -> Ok(NotMeaningful reason)
+                | Ok _ -> Error "route-not-meaningful-reason exceeds 500 characters"
+                | Error _ -> Error "not-meaningful route evidence requires one non-empty route-not-meaningful-reason field"
+            | Ok value -> Error $"unknown route-applicability '%s{value}'"
+            | Error _ -> Error "a passing review marker requires one route-applicability field"
         let ordered = comments |> List.sortBy _.Id
         let initial = ordered |> List.filter (fun c -> marker "independent-review" c.Body)
         let confirmations = ordered |> List.filter (fun c -> marker "independent-review-confirmation" c.Body)
@@ -63,8 +90,17 @@ module Driver =
                   field "accepted-head" accepted.Body, field "initial-review" accepted.Body, field "latest-confirmation" accepted.Body with
             | Ok critic, Ok initialHead, Ok initialVerdict, Ok acceptedHead, Ok acceptedInitialUrl, Ok acceptedLatestUrl ->
                 if System.String.IsNullOrWhiteSpace first.Url then errors.Add "the initial review comment URL is missing"
+                if initialVerdict <> "pass" && initialVerdict <> "changes-required" then
+                    errors.Add "the initial independent review verdict must be pass or changes-required"
                 if List.isEmpty confirmations && initialVerdict <> "pass" then
                     errors.Add "an unconfirmed independent review must have verdict pass"
+                let mutable latestRouteEvidence = None
+                let validateRouteEvidence label verdict body =
+                    if verdict = "pass" || hasField "route-applicability" body then
+                        match routeEvidence body with
+                        | Ok evidence -> latestRouteEvidence <- Some evidence
+                        | Error error -> errors.Add $"%s{label}: %s{error}"
+                validateRouteEvidence "initial review" initialVerdict first.Body
                 let mutable previousHead = initialHead
                 let mutable previousReviewUrl = first.Url
                 let mutable previousReviewId = first.Id
@@ -77,6 +113,7 @@ module Driver =
                              && preceding = previousReviewUrl && not (System.String.IsNullOrWhiteSpace confirmation.Url)
                              && confirmation.Id > previousReviewId
                              && (verdict = "pass" || verdict = "changes-required") ->
+                        validateRouteEvidence $"review confirmation round %d{expectedRound}" verdict confirmation.Body
                         previousHead <- reviewedHead
                         previousReviewUrl <- confirmation.Url
                         previousReviewId <- confirmation.Id
@@ -96,7 +133,9 @@ module Driver =
                 if acceptedLatestUrl <> previousReviewUrl then errors.Add "acceptance is not bound to the latest confirmation comment URL"
                 if valid && errors.Count = 0 then
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. List.length confirmations ]
-                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead; Rounds = rounds; ChecksGreen = false; HostAccepted = true }
+                    Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead
+                         Rounds = rounds; ChecksGreen = false; HostAccepted = true
+                         RuntimeRouteEvidence = latestRouteEvidence }
                 else Error(List.ofSeq errors)
             | _ -> Error [ "review markers are malformed" ]
         | _ -> Error(List.ofSeq errors)
@@ -159,6 +198,7 @@ module Driver =
           if List.isEmpty chain.Rounds || chain.Rounds <> [ 1 .. List.length chain.Rounds ] then
               "review rounds are not ordered from one"
           if List.length chain.Rounds > maxRounds then "review round ceiling exceeded"
+          if Option.isNone chain.RuntimeRouteEvidence then "runtime-route applicability evidence is missing"
           if not chain.ChecksGreen then "review checks are not green"
           if not chain.HostAccepted then "host acceptance is missing" ]
 

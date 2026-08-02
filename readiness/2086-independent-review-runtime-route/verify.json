@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "8373d00d11e36f6d37e11e20be995765196a1579b5d9e92d7238b02ec31cd7ce"
+        "value": "d4d7304de2037aa7b8b62b57b3e05581ee6a1c05cbd48d7bc12a61a0bf5e3948"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "workModel",
       "digest": {
         "algorithm": "sha256",
-        "value": "ccc406cfbe9d18c4203f38297788afbbeae546be5a01294e51b7aed5b07c1b56"
+        "value": "aa561c3c987ef3f1077c5e72eac5fe642401204e91932700d4746d664f2df44c"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "dce2f742a31833fdc70529de1f782d8b49ef11fcca27ff2946aba2d158d2b0c2"
+        "value": "a652d5aac02d2f4934c783d606653499085e0b528a7b6f800eb95d8a074e1fc7"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "8500a10c624b5e31ee01252a2480f6898eb996de521d556200c895db64c34907"
+        "value": "7a6bedd157418032f5703e9499277fa227c15a66fceb9b2b1acaf8dc66de3036"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -111,7 +111,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "974751fba0e1ed3f52244c3c33ee3485b54d5e8cf85a9e5695c430b87a1a5b5e"
+        "value": "414eb004ac2ae5071dc94d5e3a27ab583cb9c11530d30f625465343abf5ecadb"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -472,10 +472,24 @@
       "path": "readiness/2086-independent-review-runtime-route/work-model.json",
       "kind": "workModel",
       "currency": "current",
-      "diagnosticIds": []
+      "diagnosticIds": [
+        "staleGeneratedView"
+      ]
     }
   ],
-  "findings": [],
+  "findings": [
+    {
+      "id": "VF001",
+      "severity": "warning",
+      "category": "warning",
+      "path": "readiness/2086-independent-review-runtime-route/work-model.json",
+      "relatedIds": [
+        "readiness/2086-independent-review-runtime-route/work-model.json"
+      ],
+      "message": "Generated view \u0027readiness/2086-independent-review-runtime-route/work-model.json\u0027 is stale.",
+      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources."
+    }
+  ],
   "governanceCompatibility": [
     {
       "path": ".fsgg/policy.yml",
@@ -499,7 +513,18 @@
       "diagnosticIds": []
     }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "id": "staleGeneratedView",
+      "severity": "warning",
+      "artifact": "readiness/2086-independent-review-runtime-route/work-model.json",
+      "message": "Generated view \u0027readiness/2086-independent-review-runtime-route/work-model.json\u0027 is stale.",
+      "correction": "Regenerate readiness/\u003Cid\u003E/work-model.json from current lifecycle sources.",
+      "relatedIds": [
+        "readiness/2086-independent-review-runtime-route/work-model.json"
+      ]
+    }
+  ],
   "readiness": "verificationReady",
   "nextAction": {
     "actionId": "verify.next.ship",
