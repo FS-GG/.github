@@ -3503,6 +3503,7 @@ module Client =
           DeliberatePark "set-field Status Blocked"
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
+          DeliberatePark "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
           RecordedRestore "release (recorded previous Status=Blocked)"
           RecordedRestore "reap (recorded previous Status=Blocked)" ]
 

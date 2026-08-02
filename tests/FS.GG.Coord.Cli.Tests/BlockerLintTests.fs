@@ -30,6 +30,7 @@ module BlockerLintTests =
         Assert.Equal<string list>(
             [ "add --status Blocked"
               "release --status Blocked"
+              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
               "set-field --batch Status=Blocked"
               "set-field Status Blocked" ],
             deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
@@ -53,8 +54,11 @@ module BlockerLintTests =
             else repoRoot (Directory.GetParent(dir).FullName)
 
         let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
+        let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(5, directStatusWrites)
+        Assert.Contains("StatusNotBlocked", chore)
+        Assert.Contains("(\"Status\", Blocked)", chore)
 
     [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
