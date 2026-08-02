@@ -63,6 +63,8 @@
     <Compile Include="Protocol.fs" />
     <Compile Include="Batch.fsi" />
     <Compile Include="Batch.fs" />
+    <Compile Include="Driver.fsi" />
+    <Compile Include="Driver.fs" />
     <Compile Include="Lanes.fsi" />
     <Compile Include="Lanes.fs" />
     <Compile Include="Landable.fsi" />

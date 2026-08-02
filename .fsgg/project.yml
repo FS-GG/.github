@@ -1,0 +1,7 @@
+schemaVersion: 1
+project:
+  id: .github-2127
+  defaultWorkRoot: work
+sdd:
+  config: .fsgg/sdd.yml
+  agents: .fsgg/agents.yml
