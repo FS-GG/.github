@@ -86,6 +86,9 @@ module Reads =
     /// callers must pass it through `requireCompleteMarkerScan`.
     val markerScan: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<MarkerScan>
 
+    /// Raw issue/PR comment bodies, in API order; malformed comments fail closed.
+    val commentBodies: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<string list>
+
     /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
     /// error that names every unclassifiable comment.
     ///
