@@ -52,7 +52,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
+      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
       outcome: passed
       passed: 442
       failed: 0
@@ -76,7 +76,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
+      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
       outcome: passed
       passed: 442
       failed: 0
@@ -100,12 +100,12 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
+      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
       outcome: passed
       passed: 442
       failed: 0
       skipped: 0
-    notes: [Focused GitHub board and cache suite passed 126 tests.]
+    notes: [Focused GitHub board and cache suite passed 127 tests.]
   - id: EV004
     kind: verification
     subject:
@@ -124,7 +124,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
+      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
       outcome: passed
       passed: 442
       failed: 0
@@ -148,7 +148,7 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.GitHub.Tests/TestResults/coord-github-2143.trx
-      digest: "sha256:2ac537ce6a458eee794d9beaf410c0ab279f9e7945e9efa790af5f322687d97b"
+      digest: "sha256:2b164040d8c00b2362305b26b1bf32c8aeaad184955c583c62177eb69d3feac5"
       outcome: passed
       passed: 442
       failed: 0
