@@ -34,6 +34,17 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-08-02** — RECONCILE (manual; owner `.github`; .github#2080, repair round 1): rebased onto
+  `main` post-`2bc14fe` (`.github#2078`/`#2095`'s landed reconcile, which brought
+  `skill-registry-coherence` to 0 findings) and **regenerated** — not text-merged — the six rows this
+  item's `SKILL.md` edits affect (`drive-board`, `drive-board-best`, `drive-board-normal`, `work-board`,
+  `work-board-best`, `work-board-normal`) against their current post-#2080 bodies. Digests computed with
+  `fsgg-skill-registry-check --digest` on the post-rebase tree, superseding the pre-rebase values (which
+  collided with `#2078` on the same two rows, `work-board`/`drive-board`, to different final digests —
+  a genuine three-way conflict, not adjacent text). `--write` still could not run end-to-end (needs
+  `--repos-root` producer checkouts not present here); done by hand because `skill-registry-autofix` was
+  wedged (.github#2095) when this reconcile began. registry = manifest = bytes for these six rows.
+
 - **2026-08-02** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 11 sha256 row(s) and 0 materializes-when value(s); homed 1 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-08-02** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.

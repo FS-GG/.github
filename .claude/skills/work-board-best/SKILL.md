@@ -20,3 +20,11 @@ subagent spawn:
 Never let a host default choose the model or effort. If the active runtime cannot request this exact
 model and effort, report the unsupported route and stop before dispatching a worker; do not downgrade,
 fall back, or continue a partial wave.
+
+**Repair-phase route.** When the operator authorizes
+[repair-phase](../pnext-item/references/independent-review.md#repair-phase) entry after an exhausted
+three-round chain, dispatch the fresh implementer and fresh critic at this same route — `work-board-best`
+already names the top capability tier this org's routing tables define, so its repair-phase route is
+identical to its ordinary route above; the escalation is the fresh attempt and the higher round ceiling,
+not a stronger model. The unsupported-route rule above applies to the repair-phase dispatch without
+exception.

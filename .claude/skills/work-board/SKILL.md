@@ -25,11 +25,17 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    - `Active: <item> — <current activity/gate>; ...` listing every currently active item and its
      current activity or gate.
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
-   item remains active, continue the host loop, and report each transition when it occurs.
+   item remains active, continue the host loop, and report each transition when it occurs. A `Done`
+   transition that landed via the repair phase names it explicitly — `<item> — Done (repair phase):
+   <PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one.
 6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
-   Refuse a fourth round or merge after an exhausted third round, and verify the human-action park,
-   released claim, and escalation marker instead. Then run the exact
+   After an exhausted third round, refuse a fourth round of that same chain; dispatch the repair phase
+   instead only under [host-loop](references/host-loop.md)'s operator-authorization and
+   escalated-route rules — never infer entry — and verify its own chain, fresh critic, and repair-phase
+   marker exactly as host-loop describes. Absent authorization, or once the repair phase itself
+   exhausts, refuse further rounds or merge and verify the human-action park, released claim, and
+   escalation marker instead. Then run the exact
    checkpoint, schema-v2 report, and activation-envelope validators against merged paths. Missing,
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.

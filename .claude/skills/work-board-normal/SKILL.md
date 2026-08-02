@@ -20,3 +20,18 @@ subagent spawn:
 Never let a host default choose the model or effort. If the active runtime cannot request this exact
 model and effort, report the unsupported route and stop before dispatching a worker; do not downgrade,
 fall back, or continue a partial wave.
+
+**Repair-phase route.** When the operator authorizes
+[repair-phase](../pnext-item/references/independent-review.md#repair-phase) entry after an exhausted
+three-round chain, dispatch the fresh implementer and fresh critic at `work-board-best`'s route instead
+of the table above:
+
+| runtime | model | effort |
+|---|---|---|
+| Codex | `gpt-5.6-sol` | `medium` |
+| Claude Code | `opus` | `high` |
+
+Never let a host default choose the model or effort for the repair-phase dispatch either. If the active
+runtime cannot request this exact model and effort, report the unsupported route and stop before
+dispatching a repair-phase worker; do not downgrade, fall back, or continue a partial repair-phase
+chain.

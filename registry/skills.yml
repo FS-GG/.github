@@ -251,7 +251,7 @@ skills:
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 0082fdb6b891227415707cb0d4cc4938e3c8eeb1ef9cb305097e890ebd744274, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: de4a9638b90f2c2c5ca0041865fa2ab881429d31da92022d84f4a4f2de3eeb69, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -259,11 +259,11 @@ skills:
   # work-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board-best,        scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-best/SKILL.md, sha256: 2b0577726f7cab6aa27169888c0f47370ad26ddadbcb6fda300acf1a00e754e3, materializes-when: always }
+  - { id: work-board-best,        scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-best/SKILL.md, sha256: f53a9b2d6115c260b5865756102f24d267f06d5143502f50c17968650e9c9206, materializes-when: always }
   # work-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: 4649b17f1e05e2302626927b77462eee91ba41ceb3eb7b72df8d933fbd5863db, materializes-when: always }
+  - { id: work-board-normal,      scope: driver,  owner: .github,         source: .github/.claude/skills/work-board-normal/SKILL.md, sha256: a12d84ec0be4ca48b7260939dd96f893db9a37fa312cca0bd4c2fd44629340fa, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -276,7 +276,7 @@ skills:
   # justified downstream omission` — no gate change. The scope value's job is the CATALOG; the
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
-  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 6356cb759528c0d157040f647600a56b7074611670100cb3b5af1b8943345365, materializes-when: "false" }
+  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 1fa7aa8eb5130f594f5d57507aa5fa50224c6c2ddab57bdb12bbf833421ecef5, materializes-when: "false" }
   - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 9f33de197a91ba0541e7277e6a5a39c7ff335f1729bcd47b939b69cf4b8cdcc9, materializes-when: "false" }
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
@@ -293,8 +293,8 @@ skills:
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: drive-board-best,       scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-best/SKILL.md, sha256: ca0b74257274b66b84ecf3ef21afef45f128c2f924606cd828ad73b9e8ceb4fa, materializes-when: "false" }
+  - { id: drive-board-best,       scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-best/SKILL.md, sha256: 942c4d31f6c591d8787cbb1c2031e42fa482dc5f10c018322f1763ea16dc1cec, materializes-when: "false" }
   # drive-board-normal — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: 615bf16ba0a9f4c05cc5819e62a677a6d5c2d087bbfb4e715f5ee32d85121e75, materializes-when: "false" }
+  - { id: drive-board-normal,     scope: operator,owner: .github,         source: .github/.claude/skills/drive-board-normal/SKILL.md, sha256: 9e2e5bb6b1ab7f83e75ccf6c5eab80c10496970c5ee8403268902bb286952833, materializes-when: "false" }
