@@ -816,8 +816,9 @@ module Client =
                             match candidate.Item.ItemPr with
                             | Some pr ->
                                 match Reads.markerScan ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo candidate.Item.Ref.Number,
-                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
-                                | Ok scan, PrGreen when List.isEmpty scan.Unreadable -> Some(pr, scan.Markers.Length)
+                                      Reads.prLandable ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
+                                      Reads.prHeadRef ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
+                                | Ok scan, PrGreen, Ok head when List.isEmpty scan.Unreadable -> Some(pr, head, scan.Markers.Length)
                                 | _ -> None
                             | None -> None)
                 let action =
