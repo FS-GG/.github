@@ -808,10 +808,12 @@ module Client =
             | Error e -> eprint e; ExitError
             | Ok active ->
                 let action =
+                    // A live board scan proves occupancy only.  It does NOT prove the multi-step
+                    // housekeeping chain, so missing durable receipts fail closed to reconciliation.
                     Driver.nextAction model (List.length active) false
-                        { HasHostIdentity = true; StaleClaim = false; EngineCurrent = true; PendingWrites = 0
-                          ReconcileDryRunFresh = true; ReconcileApplied = true; ReconcileFresh = true
-                          TriageFresh = true; CurrencyScoped = true } []
+                        { HasHostIdentity = false; StaleClaim = false; EngineCurrent = false; PendingWrites = 0
+                          ReconcileDryRunFresh = false; ReconcileApplied = false; ReconcileFresh = false
+                          TriageFresh = false; CurrencyScoped = false } []
                 match opts.Render with
                 | Json -> printfn "{\"schema\":\"fsgg.coord.driver-live/1\",\"activeItems\":%d,\"reviewSlotsReserved\":%d,\"action\":\"%A\"}" (List.length active) model.ReviewSlots action
                 | Text -> printfn "%A" action
