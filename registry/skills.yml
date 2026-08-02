@@ -137,7 +137,7 @@ skills:
   # fs-gg-game-shell — homed beside its owner+predicate siblings and reconciled verbatim from
   # fs-gg-rendering's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: fs-gg-game-shell,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-game-shell/SKILL.md, sha256: c54e19c95ff8d881bdaa0eca2b04aed9b7e066412a159db5d334510e385ad690, materializes-when: "profile in [app, game]" }
+  - { id: fs-gg-game-shell,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-game-shell/SKILL.md, sha256: f96f9d61176f94265a19d815194bcad38eda4447bf3714add88edbb07d88521b, materializes-when: "profile in [app, game]" }
   # GAME-SIM product skills — Rendering-owned. Authored 2026-07-05 (FS.GG.Rendering#125/#128/#130/
   # #132) and shipped in fs-gg-ui-template 0.1.65-preview.1, but NEVER reconciled into this catalog.
   # They stayed invisible for five days: the skill-registry gate emitted only predicates over rows
