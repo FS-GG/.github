@@ -60,6 +60,16 @@ unverified assertion says so explicitly and cannot support a clean conclusion.
 3. Interpret the shared gate outcome: clean is a completed comparison with no
    findings; a finding is a readable discrepancy; a no-verdict is incomplete
    evidence.  The skill publishes all three outcomes and the population count.
+   For the architecture leg it also emits one complete-population,
+   per-repository record with both `gateOutcome` and
+   `architectureDisposition` — exactly `no change`, `targeted
+   simplification`, `rewrite worth it`, or `no-verdict`.  `no change` carries
+   the bounded alternatives considered and why their expected profit does not
+   exceed migration, compatibility, operational, and verification cost.
+   `targeted simplification` and `rewrite worth it` both carry the affected
+   surfaces plus concrete cost and profit evidence; a style preference or
+   “newer” design is not profit.  Insufficient decision evidence remains
+   `no-verdict`, even where the shared gate result is otherwise readable.
 4. For a mechanical suspect, hand the stable subject and source rows to the
    bounded detective procedure.  Only a reproduced root cause can become a
    coordination item; an exoneration and a no-verdict remain visible in the
@@ -87,6 +97,7 @@ copy their checks into prose or a second shell implementation.
 | Malformed evidence negative control | A required normalized row lacks its subject, revision, or provenance locator | `GateError`, permanent no-verdict (exit 3) | Example shows the shared error path, not a custom exit table |
 | S-rule contrasting controls | For each S1–S8 rule, one planted suspect and one complete clean corpus | stable rule/subject/evidence for suspect; no suspect for clean corpus | The skill points to `healthcheck-suspects` fixtures and shows how to inspect their records |
 | Architecture route negative control | A repository names reachable functionality but supplies no built route and player/test journey | `GateError`, permanent no-verdict (exit 3) | The skill links the architecture-verdict fixture rather than teaching source-only certification |
+| Gate-history liveness control | A retained-run corpus with a gate never red, a standing red beyond its threshold, and a complete contrasting exercised row | stable history verdicts; low-sample/reusable/unread rows remain unmeasured rather than clean | The skill invokes the real `check-gate-finding-history` fixture and exposes its mutation-proven results |
 
 These are executable-contract requirements, not illustrative prose.  For
 example, an S4 fixture with anomalous proposals must preserve the corrected
@@ -100,6 +111,12 @@ reimplements `ExitCode` or `GateError`.
 
 The skill starts with reports that already own their domain facts:
 
+- `2026-07-28-gate-finding-history.md` owns healthcheck legs 1–2: retained
+  gate-liveness, never-found, and standing-red-duration observations.
+  `scripts/check-gate-finding-history.py` is the already-landed real
+  shared-gate consumer, and `tests/gate-finding-history/run.sh` is its
+  planted/contrasting and source-mutation fixture.  The final skill exposes
+  this leg and its runnable fixture; it is not an optional historical report.
 - `2026-08-02-required-context-reconciliation.md` owns its authenticated
   branch-protection boundary.
 - `2026-08-02-sparse-checkout-closure-fleet.md`,
@@ -130,10 +147,18 @@ this design when it:
    it with the missing-population and malformed-evidence fixtures;
 3. carries one planted suspect and one clean contrasting corpus for every
    selected S-rule, asserting subject and evidence rather than text matches;
-4. exposes reports, fixtures, and runnable examples as mutually linked durable
-   skill inputs; and
-5. preserves a complete population/revision/evidence record so a clean result
-   cannot overclaim beyond what the run observed.
+4. exposes healthcheck legs 1–2 through the landed
+   `check-gate-finding-history` executable and its runnable mutation fixture,
+   alongside the later leg reports rather than silently omitting liveness and
+   standing-red-duration evidence;
+5. emits the architecture leg's per-repository `gateOutcome` and mandatory
+   `architectureDisposition`.  A `no change` record gives the bounded
+   cost/profit rationale; targeted simplification and rewrite records give
+   concrete affected surfaces plus cost/profit evidence; insufficient decision
+   evidence stays `no-verdict`; and
+6. exposes reports, fixtures, and runnable examples as mutually linked durable
+   skill inputs while preserving a complete population/revision/evidence
+   record so a clean result cannot overclaim beyond what the run observed.
 
 That implementation is deliberately outside this item's `docs/reports` touch
 set.  If authoring it requires scripts, generated contracts, or runtime work,
