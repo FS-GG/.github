@@ -333,18 +333,18 @@ echo "== §12 PROJECTION INVENTORY — all three skill roots are complete"
 
 projection_inventory="$("$REPO_ROOT/scripts/generate-projections" --list)"
 projection_count="$(grep -c . <<<"$projection_inventory")"
-if [ "$projection_count" -eq 27 ]; then
-  ok "§12 the progressive-disclosure inventory has exactly 27 generated regions"
+if [ "$projection_count" -eq 39 ]; then
+  ok "§12 the progressive-disclosure inventory has exactly 39 generated regions"
 else
-  bad "§12 expected exactly 27 generated regions, found $projection_count" "$projection_inventory"
+  bad "§12 expected exactly 39 generated regions, found $projection_count" "$projection_inventory"
 fi
 
 for root in .claude .agents; do
   root_count="$(awk -F '\t' -v prefix="$root/skills/" 'index($2, prefix) == 1 { n++ } END { print n + 0 }' <<<"$projection_inventory")"
-  if [ "$root_count" -eq 10 ]; then
-    ok "§12 $root carries all 10 generated skill-reference regions"
+  if [ "$root_count" -eq 16 ]; then
+    ok "§12 $root carries all 16 generated skill-reference regions"
   else
-    bad "§12 $root expected 10 generated skill-reference regions, found $root_count"
+    bad "§12 $root expected 16 generated skill-reference regions, found $root_count"
   fi
 done
 
@@ -356,7 +356,7 @@ normalized_skill_inventory="$(
 )"
 normalized_unique_count="$(uniq <<<"$normalized_skill_inventory" | wc -l)"
 normalized_triplicate_count="$(uniq -c <<<"$normalized_skill_inventory" | awk '$1 == 2 { n++ } END { print n + 0 }')"
-if [ "$normalized_unique_count" -eq 10 ] && [ "$normalized_triplicate_count" -eq 10 ]; then
+if [ "$normalized_unique_count" -eq 16 ] && [ "$normalized_triplicate_count" -eq 16 ]; then
   ok "§12 each generated skill-reference region has one byte-equivalent target in every active root"
 else
   bad "§12 generated skill-reference rows are not exact two-root duplicates" "$normalized_skill_inventory"
