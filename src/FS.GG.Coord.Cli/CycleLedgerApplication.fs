@@ -51,14 +51,14 @@ module CycleLedgerApplication =
         let merged = property "mergedPr" node
         let mergedPr = match merged.ValueKind with | JsonValueKind.Null -> None | _ -> match merged.TryGetInt32() with | true, value -> Some value | _ -> invalidArg "mergedPr" "must be integer or null"
         let mergeHead = match (property "mergeHead" node).ValueKind with | JsonValueKind.Null -> None | JsonValueKind.String -> Some(text "mergeHead" node) | _ -> invalidArg "mergeHead" "must be string or null"
-        { ImplementationHead = text "implementationHead" node; ReviewHead = text "reviewHead" node; FeedbackCycle = text "feedbackCycle" node; FeedbackActive = bool "feedbackActive" node; MergedPr = mergedPr; MergeHead = mergeHead }
+        { ImplementationHead = text "implementationHead" node; ReviewHead = text "reviewHead" node; FeedbackCycle = text "feedbackCycle" node; FeedbackActive = bool "feedbackActive" node; MergedPr = mergedPr; MergeHead = mergeHead; EvidencePaths = strings "evidencePaths" node; Dispositions = strings "dispositions" node }
     let private render options action =
-        let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
+        let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Update cycle -> {| action = "update"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
         match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
         ExitCode.toInt ExitCode.Green
     let run options =
         try
-            let action = match options.Args with | [ value ] -> value | _ -> invalidArg "cycle" "requires exactly one action: inspect, register, advance, or complete"
+            let action = match options.Args with | [ value ] -> value | _ -> invalidArg "cycle" "requires exactly one action: inspect, register, advance, update, or complete"
             use document = JsonDocument.Parse(input options)
             let root = document.RootElement
             let model = ledger root
@@ -76,7 +76,8 @@ module CycleLedgerApplication =
                 | Error errors -> fail (String.concat "; " errors)
             | "complete" ->
                 let accepted = (property "acceptedCycles" root).EnumerateArray() |> Seq.map cycle |> List.ofSeq
-                match complete model accepted (strings "rollupCycleIds" root) with
+                let guarded = (property "guardedUpdates" root).EnumerateArray() |> Seq.map cycle |> List.ofSeq
+                match complete model accepted guarded (strings "rollupCycleIds" root) with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
             | "advance" ->
@@ -84,5 +85,10 @@ module CycleLedgerApplication =
                 match advance model target (receipt (property "implementation" root)) (receipt (property "review" root)) (receipt (property "feedback" root)) (evidence (property "evidence" root)) with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
-            | _ -> fail "unknown action; expected inspect, register, advance, or complete"
+            | "update" ->
+                let target = cycle (property "cycle" root)
+                match update model target (evidence (property "evidence" root)) with
+                | Ok transition -> render options transition
+                | Error errors -> fail (String.concat "; " errors)
+            | _ -> fail "unknown action; expected inspect, register, advance, update, or complete"
         with error -> fail error.Message

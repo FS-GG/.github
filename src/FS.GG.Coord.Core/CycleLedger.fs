@@ -13,8 +13,8 @@ module CycleLedger =
           CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
-          MergedPr: int option; MergeHead: string option }
-    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Escalate of Cycle | Complete
+          MergedPr: int option; MergeHead: string option; EvidencePaths: string list; Dispositions: string list }
+    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Update of Cycle | Escalate of Cycle | Complete
 
     let private required name value =
         if String.IsNullOrWhiteSpace value then Some $"%s{name} is required" else None
@@ -102,7 +102,17 @@ module CycleLedger =
         if review.Round = 10 && review.Verdict <> "pass" && errors |> List.forall (fun error -> error = "provider receipt verdict is not pass" || error = "tenth review round requires escalation rather than advancement") then Ok(Escalate cycle)
         elif List.isEmpty errors then Ok(Advance cycle) else Error errors
 
-    let complete ledger accepted rollupCycleIds =
+    let update (ledger: Ledger) cycle evidence =
+        let errors =
+            [ if cycle.BaseCommit <> ledger.SourceRevision then yield "guarded update cycle is stale against ledger source revision"
+              if cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit then yield "guarded update cycle identity is invalid"
+              if evidence.MergedPr.IsNone || evidence.MergeHead <> Some evidence.ImplementationHead then yield "guarded update requires a merged head-bound pull request"
+              if evidence.ReviewHead <> evidence.ImplementationHead || evidence.FeedbackCycle <> cycle.Id || not evidence.FeedbackActive then yield "guarded update evidence chain is incomplete"
+              if List.isEmpty evidence.EvidencePaths || evidence.EvidencePaths |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires evidence paths"
+              if List.isEmpty evidence.Dispositions || evidence.Dispositions |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires checkpoint and finding dispositions" ]
+        if List.isEmpty errors then Ok(Update cycle) else Error errors
+
+    let complete ledger accepted guardedUpdates rollupCycleIds =
         match inspect ledger with
         | Error errors -> Error errors
         | Ok _ ->
@@ -116,9 +126,12 @@ module CycleLedger =
                 accepted |> List.filter (fun cycle ->
                     cycle.BaseCommit <> ledger.SourceRevision
                     || cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit)
+            let acceptedIds = accepted |> List.map _.Id |> Set.ofList
+            let guardedIds = guardedUpdates |> List.map _.Id |> Set.ofList
             if not (List.isEmpty unchecked) then Error [ "required units are not checked with evidence: " + String.concat ", " unchecked ]
             elif duplicateAccepted then Error [ "accepted cycles must cover each unit exactly once" ]
             elif not (List.isEmpty invalidCycles) then Error [ "accepted cycles are not source-bound registered cycle identities" ]
+            elif acceptedIds <> guardedIds then Error [ "final roll-up requires one guarded update for every accepted cycle" ]
             elif not (List.isEmpty missing) then Error [ "required units are missing accepted cycles: " + String.concat ", " missing ]
             elif not (List.isEmpty missingRollup) then Error [ "accepted cycles are missing from roll-up: " + String.concat ", " missingRollup ]
             else Ok Complete

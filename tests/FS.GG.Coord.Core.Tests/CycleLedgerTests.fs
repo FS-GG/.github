@@ -20,7 +20,7 @@ module CycleLedgerTests =
         let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None; JourneyRequired = true }
         Assert.True(validateProvider "work" cycle "current" "head" "critique" "fsgg.critique.report/1" receipt |> Result.isError)
         let good = { receipt with SourceRevision = "base"; PlayerJourney = Some true }
-        let evidence = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = Some 7; MergeHead = Some "head" }
+        let evidence = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = Some 7; MergeHead = Some "head"; EvidencePaths = [ "evidence" ]; Dispositions = [ "accepted" ] }
         let implementation = { good with Provider = "fsgg-sdd"; Schema = "fsgg.sdd.report/1"; PlayerJourney = Some true }
         let feedback = { good with Provider = "feedback"; Schema = "fsgg.feedback.report/2"; PlayerJourney = Some true }
         Assert.Equal(Advance cycle, advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle implementation good feedback evidence |> unwrap)
@@ -31,7 +31,7 @@ module CycleLedgerTests =
     let ``completion rejects a missing roll-up cycle`` () =
         let doneLedger = { ledger with Units = ledger.Units |> List.map (fun item -> { item with Completed = true; Evidence = [ "evidence" ] }) }
         let cycles = [ { Id = "one"; UnitId = "first"; Executor = "w"; Repository = "r"; BaseCommit = "b" }; { Id = "two"; UnitId = "second"; Executor = "w"; Repository = "r"; BaseCommit = "b" } ]
-        Assert.True(complete doneLedger cycles [ "one" ] |> Result.isError)
+        Assert.True(complete doneLedger cycles cycles [ "one" ] |> Result.isError)
 
     [<Fact>]
     let ``parallel ready units require explicit operator scheduling`` () =
@@ -43,7 +43,7 @@ module CycleLedgerTests =
     let ``advancement requires a matching merged head and rejects an eleventh round`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
         let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true; JourneyRequired = true }
-        let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None }
+        let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None; EvidencePaths = []; Dispositions = [] }
         Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle receipt receipt receipt incomplete |> Result.isError)
 
     [<Fact>]
@@ -51,4 +51,4 @@ module CycleLedgerTests =
         let cyclic = { SourceRevision = "source"; Units = [ unit "a" [ "b" ] false; unit "b" [ "a" ] false ] }
         Assert.True(inspect cyclic |> Result.isError)
         let accepted = [ { Id = "a"; UnitId = "a"; Executor = "w"; Repository = "r"; BaseCommit = "source" } ]
-        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted [ "a" ] |> Result.isError)
+        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted accepted [ "a" ] |> Result.isError)
