@@ -949,9 +949,13 @@ printf '%s' "$blocker_cleared" | jq -e '
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-47-partial" >/dev/null
 partial="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json 2>/dev/null)"; partial_rc=$?
-printf '%s' "$partial" | jq -e 'map(select(.subject == "FS.GG.SDD#47")) | length == 1 and .[0].outcome == "failed" and (.[0].error | contains("Blocked by")) and .[0].observed == []' >/dev/null 2>&1 \
+printf '%s' "$partial" | jq -e '
+  map(select(.subject == "FS.GG.SDD#47")) | length == 1 and
+  .[0].outcome == "failed" and
+  (.[0].error | contains("Blocked by")) and
+  .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":"FS-GG/FS.GG.SDD#45"}]' >/dev/null 2>&1 \
   && [ "$partial_rc" -ne 0 ] \
-  && ok "#2157: partial Status-only projection cannot masquerade as BLOCKER-CLEARED convergence" \
+  && ok "#2157: partial Status-only projection fails closed and retains both fresh observations" \
   || bad "#2157: partial BLOCKER-CLEARED must fail closed" "rc=$partial_rc receipt=$partial"
 
 # Negative control 2: if the row disappears between acknowledgement and the fresh scan, there is no

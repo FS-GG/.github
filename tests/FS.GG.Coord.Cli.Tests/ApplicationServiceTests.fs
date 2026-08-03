@@ -1978,6 +1978,50 @@ module ApplicationServiceTests =
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    /// A BLOCKER-CLEARED apply whose accepted batch projects Status=Ready but leaves Blocked by stale.
+    /// The second board scan is a real fresh transport response, not a renderer-only synthetic row.
+    let private partialBlockerReconcileWorld () =
+        let mutable mutationAccepted = false
+        let staleBlocker = "FS-GG/FS.GG.SDD#45"
+
+        let items () =
+            let status = if mutationAccepted then "Ready" else "Blocked"
+
+            [ boardItemIn status 47 "blocked item" (Some staleBlocker) "OPEN"
+              boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
+            |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        mutationAccepted <- true
+                        ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok """{"number":47,"body":"Paths: none"}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
     /// A board with ONE OPEN item that declares `Class: defect` in its body and carries NO `Class`
     /// column — so `CLASS-PROJECTION-LAG` is the single chore (.github#1588).
     ///
@@ -2132,6 +2176,28 @@ module ApplicationServiceTests =
     /// comes back, so the tripwire survives the pin it replaced.
     let private runApplyJson (transport: Fake.Recorder) =
         runReconcile transport (reconcileArgs [ "--apply"; "--json" ])
+
+    [<Fact>]
+    let ``#2157 partial BLOCKER-CLEARED receipt retains both freshly observed values`` () =
+        let code, out, err = runApplyJson (partialBlockerReconcileWorld ())
+
+        if String.IsNullOrWhiteSpace out then
+            failwithf "#2157 fixture emitted no receipt (exit %d): %s" code err
+
+        let row = parsedArray out |> List.find (fun r -> str "subject" r = "FS.GG.SDD#47")
+        let intended = row.GetProperty("writes").EnumerateArray() |> List.ofSeq
+        let observed = row.GetProperty("observed").EnumerateArray() |> List.ofSeq
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("failed", str "outcome" row)
+        Assert.Contains("Blocked by", str "error" row)
+        Assert.Contains("fresh verification failed", err)
+        Assert.Equal(2, List.length intended)
+        Assert.Equal(2, List.length observed)
+        Assert.Equal("Status", str "field" observed.[0])
+        Assert.Equal("Ready", str "value" observed.[0])
+        Assert.Equal("Blocked by", str "field" observed.[1])
+        Assert.Equal("FS-GG/FS.GG.SDD#45", str "value" observed.[1])
 
     [<Fact>]
     let ``reconcile --apply --json puts the whole stream in ONE document`` () =

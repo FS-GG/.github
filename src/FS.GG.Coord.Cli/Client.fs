@@ -1677,10 +1677,10 @@ module Client =
                         // fresh scan that proves the projected row contains every requested value.
                         let verifyWrites (chore: Chore.Chore) (writes: (string * Board.FieldWrite) list) =
                             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
-                            | Error e -> Error(Errors.explain e)
+                            | Error e -> Error(None, Errors.explain e)
                             | Ok freshRows ->
                                 match freshRows |> List.tryFind (fun row -> row.Ref = chore.Subject) with
-                                | None -> Error "the item left the board before fresh verification"
+                                | None -> Error(None, "the item left the board before fresh verification")
                                 | Some row ->
                                     let observed field =
                                         match field with
@@ -1688,6 +1688,9 @@ module Client =
                                         | "Blocked by" -> row.BlockedByRaw
                                         | "Class" -> row.BoardClass |> Option.map itemClassWireName |> Option.defaultValue ""
                                         | _ -> ""
+
+                                    let observedValues =
+                                        writes |> List.map (fun (field, _) -> field, observed field)
 
                                     let mismatches =
                                         writes
@@ -1697,9 +1700,12 @@ module Client =
                                             if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
 
                                     if List.isEmpty mismatches then
-                                        Ok(writes |> List.map (fun (field, _) -> field, observed field))
+                                        Ok observedValues
                                     else
-                                        Error(String.concat "; " mismatches)
+                                        // A failed comparison is still a successful fresh observation. Keep
+                                        // every actual field/value pair in the receipt so an operator can see
+                                        // which half of a coupled repair projected and which half stayed stale.
+                                        Error(Some observedValues, String.concat "; " mismatches)
 
                         // `BoardClass = None` has two different meanings at two different boundaries:
                         // this scan's row may have an UNSET `Class` value, while this map can prove that
@@ -1873,10 +1879,10 @@ module Client =
                                               | Json -> ()
 
                                               { reconcileRow chore (Some Written) with Observed = Some observed }
-                                          | Error reason ->
+                                          | Error(observed, reason) ->
                                               eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
                                               failed <- true
-                                              reconcileRow chore (Some(Failed reason))
+                                              { reconcileRow chore (Some(Failed reason)) with Observed = observed }
                                       | Ok Board.Deferred ->
                                           match opts.Render with
                                           | Text ->
