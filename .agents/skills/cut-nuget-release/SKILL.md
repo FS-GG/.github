@@ -35,7 +35,10 @@ Use the repository-owned F# scripts for repeatable evidence:
   `inspect --run <run.json> --audit <audit.json> --workflows <workflows.json> --registry registry/dependencies.yml`.
   Use `plan --run <run.json>` to receive its one typed next action, `advance --release-id <id>` only to record an
   explicit `release-owed`, `semver-effect`, or `human-blocker` decision with its subject commit and
-  evidence, and `verify --run <run.json> --verification <verify.json>` to import package evidence.
+  evidence plus `--workflow-receipt <json>` for a successful producer run. The receipt must contain
+  `releaseId`, `subjectCommit`, `workflowRun`, and `conclusion: "success"`; the coordinator stores its
+  digest and refuses a stale or mismatched receipt on every resumed command, and
+  `verify --run <run.json> --verification <verify.json>` to import package evidence.
   A `human-escalation` action for `org-only`, `public-only`, or `disagree` is terminal: inspect the
   immutable artifacts and record the human decision; do not retry publication from the coordinator.
 
