@@ -159,6 +159,28 @@ expect_ok "a public board carries an explicit writer allowlist" -- "$TGT" P --pu
 expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
 
+# Production recovery route: a typed successful `secure <workspace> --repo` must clear ONLY its
+# matching durable repository obligation. This drives the built CLI through a hermetic gh GraphQL
+# response, rather than testing the JSON helper in isolation.
+SECURE="$WORK/secure-workspace"; mkdir -p "$SECURE/.fsgg" "$WORK/secure-bin"
+printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"},{"kind":"project-access","target":"acme/Roadmap"}]}' > "$SECURE/.fsgg/scaffold-provenance.json"
+cat > "$WORK/secure-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in
+  *'mutation('* ) printf '%s\n' '{"data":{"updateRepository":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY"}}}}' ;;
+  * ) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"COLLABORATORS_ONLY"}}}' ;;
+esac
+EOF
+chmod +x "$WORK/secure-bin/gh"
+set +e
+secure_out="$(PATH="$WORK/secure-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SECURE" --repo acme/app 2>&1)"; secure_rc=$?
+set -e
+if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && ! grep -q 'repository-issue-policy' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q 'project-access' "$SECURE/.fsgg/scaffold-provenance.json"; then
+  ok "secure resume clears only its verified repository obligation"
+else
+  bad "secure resume must converge matching provenance" "rc=$secure_rc: $secure_out"
+fi
+
 # ── Execution leg: a local descriptor server + stub fsgg-sdd prove real provider routing ─────────
 # Parser acceptance alone is insufficient: each invocation below fetches the selected descriptor,
 # runs the actual orchestrator, and records the scaffold/doctor argv in the stub. The local HTTP
