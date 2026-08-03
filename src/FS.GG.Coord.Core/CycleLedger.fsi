@@ -10,12 +10,13 @@ module CycleLedger =
           CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
-          MergedPr: int option; MergeHead: string option }
-    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Escalate of Cycle | Complete
+          MergedPr: int option; MergeHead: string option; EvidencePaths: string list; Dispositions: string list }
+    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Update of Cycle | Escalate of Cycle | Complete
 
     val cycleId: unitId: string -> executor: string -> repository: string -> baseCommit: string -> string
     val inspect: Ledger -> Result<Unit list, string list>
     val register: Ledger -> executor: string -> repository: string -> baseCommit: string -> selectedUnit: string option -> parallelAuthorized: bool -> disjointTouchSets: bool -> live: Cycle list -> Result<Action, string list>
     val validateProvider: expectedWorkId: string -> expectedCycle: Cycle -> expectedSourceRevision: string -> expectedHead: string -> expectedProvider: string -> expectedSchema: string -> ProviderReceipt -> Result<unit, string list>
     val advance: Ledger -> Cycle -> ProviderReceipt -> ProviderReceipt -> ProviderReceipt -> Evidence -> Result<Action, string list>
-    val complete: Ledger -> accepted: Cycle list -> rollupCycleIds: string list -> Result<Action, string list>
+    val update: Ledger -> Cycle -> Evidence -> Result<Action, string list>
+    val complete: Ledger -> accepted: Cycle list -> guardedUpdates: Cycle list -> rollupCycleIds: string list -> Result<Action, string list>
