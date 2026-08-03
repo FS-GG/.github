@@ -6,6 +6,7 @@ module Options =
         | Decide
         | DeliveryCmd
         | DriverCmd
+        | CycleCmd
         | Scan
         | LanesView
         | Facts
@@ -273,6 +274,8 @@ DECISION (pure — no board, no network):
                                              freshness-bound action; --apply performs only guarded landing
   delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
+  cycle <inspect|register|complete> [--snapshot FILE] [--json|--text]
+                                             inspect or advance one source-bound roadmap/workspace cycle ledger
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
@@ -475,6 +478,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Decide -> Both Json // Program.fs `decide`
         | DeliveryCmd -> Both Json // Program.fs `delivery`
         | DriverCmd -> Both Json // Program.fs `driver`
+        | CycleCmd -> Both Json // Program.fs `CycleLedgerApplication`
         | LanesView -> Both Json // Program.fs `lanes`
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
         | BatchCmd -> Both Json // Client.fs `batch`
@@ -696,7 +700,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> Only jsonReaders
         | FText -> Only textReaders
 
-        | FSnapshot -> Only [ Decide; DeliveryCmd; DriverCmd; LanesView ]
+        | FSnapshot -> Only [ Decide; DeliveryCmd; DriverCmd; CycleCmd; LanesView ]
         | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
@@ -954,6 +958,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Decide -> Reads
         | DeliveryCmd -> WritesIf(OnlyWhenGiven FApply)
         | DriverCmd -> Reads
+        | CycleCmd -> Reads
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
@@ -1087,6 +1092,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Decide -> "decide"
         | DeliveryCmd -> "delivery"
         | DriverCmd -> "driver"
+        | CycleCmd -> "cycle"
         | Scan -> "scan"
         | LanesView -> "lanes"
         | Facts -> "facts"
@@ -1783,6 +1789,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
         | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
         | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
+        | "cycle" :: rest -> flags (start { defaults with Command = CycleCmd }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
