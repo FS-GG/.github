@@ -33,7 +33,7 @@ Schema: `fsgg.coord.planning-receipt/1`.
 
 Observation fields: `kind`, `observedAt`, `sourceSha`, `outcome`, `receiptId`.
 
-Receipt fields: `observedAt`, `sourceSha`, `complete`, `consolidationApproved`, `observations`.
+Receipt fields: `schema`, `observedAt`, `sourceSha`, `complete`, `consolidationApproved`, `observations`.
 
 <!-- END GENERATED: fsgg-protocol:ledger-policy -->
 

@@ -241,7 +241,21 @@ else
 fi
 
 # `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
-# today. Mutating the producer set without touching the skill must make that generated region stale.
+# today. Each registry mutation below must make that generated region stale without touching the skill.
+expect_projection_stale() {
+  local label="$1" evidence="$2"
+  local rc=0
+  bash "$WORK/tree/scripts/generate-projections" --check >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted generated diff containing: $evidence; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
 seed
 python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
 import sys
@@ -249,19 +263,86 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
+repo_anchor = '  net:        { name: FS.GG.Net,'
+repo_start = text.find(repo_anchor)
+if repo_start < 0:
+    raise SystemExit("fixture producer roster anchor missing")
+repo_end = text.find("\n", repo_start)
+text = text[:repo_end + 1] + '  fixture-producer: { name: FS.GG.Fixture, role: "fixture release producer" }\n' + text[repo_end + 1:]
+addition = '''  - id: fixture-release-tool
+    version: "1.0.0"
+    package-version: "1.0.0"
+    owner: fixture-producer
+    surface: "fixture package-bearing producer"
+    consumers: []
+'''
 needle = "  - id: new-sdd-workspace\n"
 if needle not in text:
-    raise SystemExit("fixture producer row missing")
-path.write_text(text.replace(needle, "  - id: new-sdd-workspace-fixture\n", 1))
+    raise SystemExit("fixture insertion anchor missing")
+path.write_text(text.replace(needle, addition + needle, 1))
 PY
-rc=0
-bash "$WORK/tree/scripts/generate-projections" --check >"$WORK/out" 2>&1 || rc=$?
-if [ "$rc" -eq 1 ] && grep -Fq -- "new-sdd-workspace-fixture" "$WORK/out"; then
-  echo "PASS  registry producer mutation makes release inventory stale without prose edits"
+expect_projection_stale "adding a package producer changes inventory membership and producer count" \
+  "fixture-producer:1.0.0"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: fs-gg-net\n")
+if start < 0:
+    raise SystemExit("fixture package producer missing")
+end = text.find("\n  - id:", start + 1)
+if end < 0:
+    raise SystemExit("fixture package producer has no bounded successor")
+path.write_text(text[:start] + text[end + 1:])
+PY
+expect_projection_stale "removing a package producer changes inventory membership" "fs-gg-net"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: game-scene-adapter\n")
+if start < 0:
+    raise SystemExit("fixture coherent-set producer missing")
+package = text.find('    package-version: "0.13.0"', start)
+if package < 0:
+    raise SystemExit("fixture coherent-set package version missing")
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.13.0"', '    package-version: "0.13.1"', 1))
+PY
+expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:0.13.1"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: fs-gg-audio\n")
+if start < 0:
+    raise SystemExit("fixture audio producer missing")
+package = text.find('    package-version: "0.5.0"', start)
+if package < 0:
+    raise SystemExit("fixture audio package version missing")
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.5.0"', '    package-version: "0.5.1"', 1))
+PY
+expect_projection_stale "changing a published package version changes its real release grouping" "audio:0.5.1"
+
+seed
+bash "$WORK/tree/scripts/generate-projections"
+if grep -Fq -- 'audio:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md" \
+  && grep -Fq -- 'net:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md"; then
+  echo "PASS  same-version Audio and Net remain independent coherent sets"
   pass=$((pass+1))
 else
-  echo "FAIL  registry producer mutation did not invalidate release inventory (exit $rc)" >&2
-  sed 's/^/    | /' "$WORK/out" >&2
+  echo "FAIL  same-version Audio and Net collapsed into one coherent set" >&2
   fail=$((fail+1))
 fi
 
