@@ -34,7 +34,7 @@ compiled engine, over HTTP, returns the answer the shell corpus **certifies** �
 not bash-at-runtime. The engine's answer is no longer *compared to* bash's; it **is** the answer, held to
 the certified golden. Comparing it to a second, now-deleted implementation adds nothing the certified
 corpus does not already hold it to. (`tests/coord-engine-parity/run.sh` case 22: `batch --repo rendering →
-["FS.GG.SDD#70","FS.GG.SDD#74"]`, and the exit-code contract in case 52 / `52-take-exit-codes-585`.)
+["FS-GG/FS.GG.SDD#70","FS-GG/FS.GG.SDD#74"]`, and the exit-code contract in case 52 / `52-take-exit-codes-585`.)
 
 ## The `--engine bash` escape-hatch triple — **RETIRED**
 

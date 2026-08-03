@@ -1,0 +1,106 @@
+schemaVersion: 1
+work:
+  id: 2155-external-owner-identity
+  title: "Preserve canonical external-owner identity across scheduler and claim paths"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2155-external-owner-identity/spec.md
+  sourceClarifications: work/2155-external-owner-identity/clarifications.md
+  sourceChecklist: work/2155-external-owner-identity/checklist.md
+  sourcePlan: work/2155-external-owner-identity/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2155-external-owner-identity/spec.md
+    digest: 5fc315b65d8a712f1584e21456228bf5faeb0f5d145091d6c18ca87eca453d50
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2155-external-owner-identity/clarifications.md
+    digest: 252385ab9f3c71ac9e851a47d9349075050543ce0078534e6c0277e022862f9d
+    schemaVersion: 1
+  - label: checklist
+    path: work/2155-external-owner-identity/checklist.md
+    digest: a3c0e45baa3b8fa3a1ec3ddfee5b9d06d59b3fced9ba91a324db278a556459ec
+    schemaVersion: 1
+  - label: plan
+    path: work/2155-external-owner-identity/plan.md
+    digest: d284ad321401899d2d6174687c426ebb1d93f0fba1699f1cc310fa48c1bc4896
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV007]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2155-external-owner-identity."

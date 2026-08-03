@@ -650,7 +650,7 @@ module Client =
 
     /// `batch --explain` (.github#1598 AC5) — STDERR, on `sayWhyNothing`'s terms and for its reason.
     ///
-    /// `batch`'s stdout is a machine contract (`["FS.GG.SDD#70",…]`) that `take` parses, so an explanation
+    /// `batch`'s stdout is a machine contract (`["FS-GG/FS.GG.SDD#70",…]`) that `take` parses, so an explanation
     /// printed there would corrupt the answer it explains. It rides beside the per-item refusal prose and
     /// #428's banner, which is where every other "why" this verb produces already goes — and it means
     /// `batch --json --explain` is a legitimate spelling rather than a contradiction.
@@ -773,13 +773,13 @@ module Client =
             | Ok result ->
                 match opts.Render with
                 | Json ->
-                    // THE MACHINE CONTRACT — the array of chosen ids `take` consumes, byte-identical to the
-                    // bash client's `batch --json`: `["FS.GG.SDD#70","FS.GG.SDD#74"]`, short form, sorted as
-                    // the scheduler chose them. This is the one output where byte-parity is not a nicety: a
-                    // `take` that parses it must read the same array from either engine.
+                    // THE MACHINE CONTRACT — canonical owner/repo/number refs, sorted as the scheduler
+                    // chose them. The array-of-strings shape stays compatible with ref consumers, while the
+                    // strings no longer collapse same-repo/number rows owned by different accounts (#2155).
+                    // Human text continues to use `Short`; machine decisions must be unambiguous.
                     let ids =
                         result.Chosen
-                        |> List.map (fun item -> "\"" + item.Ref.Short + "\"")
+                        |> List.map (fun item -> "\"" + item.Ref.Canonical + "\"")
                         |> String.concat ","
 
                     printfn "[%s]" ids
@@ -3921,6 +3921,11 @@ module Client =
                         printfn "heartbeat %s by worker %s" ref.Short w.Id
                         ExitGreen
 
+    /// The claim argv derived from a selected scheduler item.  The scheduler has already resolved this
+    /// identity; this boundary must preserve it rather than reinterpret a display ref in the board owner's
+    /// context (#2155).
+    let claimArgsForSelected (item: Item) = [ item.Ref.Canonical ]
+
     let take (ctx: Context) (opts: Options) : int =
         match worker opts with
         | Error c -> c
@@ -3987,7 +3992,10 @@ module Client =
                         // exhausted budget passes through as EX_RATE (back off until reset), and any other
                         // failure is a LOST RACE (EX_CONTENDED): the item was startable when we picked it,
                         // so a failure to take it means someone else got there first.
-                        match claim ctx { opts with Args = [ item.Ref.Short ] } with
+                        // Pass the selected typed identity through the mutating path.  `Short` is a display
+                        // projection and parsing it here used `ctx.Owner` as a new default, turning an
+                        // offered external row into an attempt to claim an unrelated default-owner twin.
+                        match claim ctx { opts with Args = claimArgsForSelected item } with
                         | code when code = ExitGreen -> ExitGreen
                         | code when code = Errors.ExRate -> code
                         | _ -> ExitContended

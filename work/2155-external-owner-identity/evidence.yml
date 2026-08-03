@@ -1,0 +1,220 @@
+schemaVersion: 1
+workId: 2155-external-owner-identity
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2155-external-owner-identity/spec.md
+sourceClarifications: work/2155-external-owner-identity/clarifications.md
+sourceChecklist: work/2155-external-owner-identity/checklist.md
+sourcePlan: work/2155-external-owner-identity/plan.md
+sourceTasks: work/2155-external-owner-identity/tasks.yml
+sourceAnalysis: readiness/2155-external-owner-identity/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2155-external-owner-identity/analysis.json
+    digest: 4ce6c298d108600712b69eab4f990c9f58108b317614d4d18e051094f71c458f
+    schemaVersion: 1
+  - label: checklist
+    path: work/2155-external-owner-identity/checklist.md
+    digest: a3c0e45baa3b8fa3a1ec3ddfee5b9d06d59b3fced9ba91a324db278a556459ec
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2155-external-owner-identity/clarifications.md
+    digest: 252385ab9f3c71ac9e851a47d9349075050543ce0078534e6c0277e022862f9d
+    schemaVersion: 1
+  - label: plan
+    path: work/2155-external-owner-identity/plan.md
+    digest: d284ad321401899d2d6174687c426ebb1d93f0fba1699f1cc310fa48c1bc4896
+    schemaVersion: 1
+  - label: spec
+    path: work/2155-external-owner-identity/spec.md
+    digest: 5fc315b65d8a712f1584e21456228bf5faeb0f5d145091d6c18ca87eca453d50
+    schemaVersion: 1
+  - label: tasks
+    path: work/2155-external-owner-identity/tasks.yml
+    digest: 707de108632b8999bf96daf8aac33cba6fb475321d7f23936ccacd4b792a5f63
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: ["The selected external Ref enters claim as EHotwagner/rogue3#96", never the ambiguous display ref.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: [The direct typed scheduler-to-claim handoff preserves the selected owner while default-owner twins remain distinct.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs, tests/coord-engine-parity/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: [The batch JSON contract remains an array of strings but each value is now the unambiguous canonical owner/repo#number; the typed claim receipt also exposes owner and repo.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: ["No persisted-board migration is needed. The batch JSON container schema remains an array of strings while its identity values become canonical."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: [0 failed, 0 skipped.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: [Human display compatibility is retained while JSON and mutation paths use canonical Ref identity.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [readiness/2155-external-owner-identity/analysis.json]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
+      outcome: passed
+      passed: 568
+      failed: 0
+      skipped: 0
+    notes: [Generated readiness views refreshed after authored lifecycle changes.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
