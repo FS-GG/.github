@@ -778,6 +778,7 @@ module OptionsTests =
           "decide", Json
           "delivery", Json
           "driver", Json
+          "cycle", Json
           "lanes", Json
           "facts", Json
           "batch", Json

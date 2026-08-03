@@ -36,6 +36,7 @@ module CommandSurfaceTests =
           "decide", Decide
           "delivery", DeliveryCmd
           "driver", DriverCmd
+          "cycle", CycleCmd
           "scan", Scan
           "lanes", LanesView
           "facts", Facts

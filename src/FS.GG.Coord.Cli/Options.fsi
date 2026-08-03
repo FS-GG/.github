@@ -20,6 +20,7 @@ module Options =
         | Decide
         | DeliveryCmd
         | DriverCmd
+        | CycleCmd
         | Scan
         | LanesView
         | Facts
