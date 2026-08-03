@@ -1,0 +1,322 @@
+#load "release-train-lib.fsx"
+
+/// Durable, fail-closed coordination over the producer-owned release evidence.
+/// It intentionally does not pack, publish, tag, or edit a registry: those effects stay with
+/// producer workflows.  It records the facts and tells an operator the one receipt still needed.
+open System
+open System.Collections.Generic
+open System.IO
+open System.Security.Cryptography
+open System.Text.Json
+open System.Text.Json.Nodes
+open ReleaseTrain
+
+let usage () =
+    eprintfn "Usage: dotnet fsi scripts/release-train-state.fsx -- inspect --run FILE --audit FILE --workflows FILE [--registry FILE]"
+    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- plan --run FILE"
+    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- advance --run FILE --release-id ID --decision KIND --subject-commit SHA --evidence URL"
+    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- verify --run FILE --verification FILE [--verification FILE ...]"
+
+let args = normalizedArgs ()
+
+let option name = parseSimpleOption name args
+let options name = optionValues name args
+let require name = option name |> Option.defaultWith (fun () -> failwith $"{name} is required")
+let requireFile name =
+    let path = require name |> Path.GetFullPath
+    if not (File.Exists path) then failwith $"{name} does not exist: {path}"
+    path
+
+let write path (node: JsonNode) =
+    let settings = JsonSerializerOptions(WriteIndented = true)
+    File.WriteAllText(path, node.ToJsonString(settings) + Environment.NewLine)
+
+let read path =
+    let text = File.ReadAllText path
+    JsonNode.Parse text |> Option.ofObj |> Option.defaultWith (fun () -> failwith $"run state is empty: {path}")
+
+let obj (node: JsonNode) =
+    match node with
+    | :? JsonObject as value -> value
+    | _ -> failwith "expected JSON object"
+
+let array (node: JsonNode) =
+    match node with
+    | :? JsonArray as value -> value
+    | _ -> failwith "expected JSON array"
+
+let tryProperty (name: string) (source: JsonObject) =
+    match source[name] with
+    | null -> None
+    | value -> Some value
+
+let property (name: string) (source: JsonObject) =
+    tryProperty name source |> Option.defaultWith (fun () -> failwith $"state requires `{name}`")
+
+let stringProperty (name: string) (source: JsonObject) =
+    let value = property name source
+    match value.GetValueKind() with
+    | JsonValueKind.String -> value.GetValue<string>()
+    | _ -> failwith $"state property `{name}` must be a string"
+
+let intProperty (name: string) (source: JsonObject) =
+    let value = property name source
+    match value.GetValueKind() with
+    | JsonValueKind.Number -> value.GetValue<int>()
+    | _ -> failwith $"state property `{name}` must be a number"
+
+let boolProperty fallback (name: string) (source: JsonObject) =
+    match tryProperty name source with
+    | Some value when value.GetValueKind() = JsonValueKind.True -> true
+    | Some value when value.GetValueKind() = JsonValueKind.False -> false
+    | _ -> fallback
+
+let stringOr fallback (name: string) (source: JsonObject) =
+    match tryProperty name source with
+    | Some value when value.GetValueKind() = JsonValueKind.String -> value.GetValue<string>()
+    | _ -> fallback
+
+let sha256 (path: string) =
+    File.ReadAllBytes path |> SHA256.HashData |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+
+let evidence (path: string) =
+    JsonObject(
+        [ KeyValuePair("path", JsonValue.Create(path) :> JsonNode)
+          KeyValuePair("sha256", JsonValue.Create(sha256 path) :> JsonNode) ])
+
+let command = args |> List.tryHead |> Option.defaultWith (fun () -> usage (); failwith "a command is required")
+
+let orderedReleases (items: JsonArray) =
+    let byId =
+        items
+        |> Seq.map (fun item -> let release = obj item in stringProperty "id" release, release)
+        |> Map.ofSeq
+    let rec visit visited visiting id =
+        if Set.contains id visiting then failwith $"release dependency cycle includes `{id}`"
+        elif Set.contains id visited then visited, []
+        else
+            let release = byId |> Map.tryFind id |> Option.defaultWith (fun () -> failwith $"unknown release dependency `{id}`")
+            let dependencies =
+                match tryProperty "dependsOn" release with
+                | Some values -> array values |> Seq.map (fun value -> value.GetValue<string>()) |> Seq.toList
+                | _ -> []
+            let visited, ordered =
+                dependencies
+                |> List.fold (fun (seen, result) dependency ->
+                    let nextSeen, next = visit seen (Set.add id visiting) dependency
+                    nextSeen, result @ next) (visited, [])
+            Set.add id visited, ordered @ [ release ]
+    items
+    |> Seq.fold (fun (seen, result) item ->
+        let seen, next = visit seen Set.empty (stringProperty "id" (obj item))
+        seen, result @ next) (Set.empty, [])
+    |> snd
+    |> List.distinctBy (stringProperty "id")
+
+let action (kind: string) (releaseId: string option) (missing: string) (terminal: bool) =
+    JsonObject(
+        [ KeyValuePair("kind", JsonValue.Create(kind) :> JsonNode)
+          KeyValuePair("releaseId", match releaseId with Some value -> JsonValue.Create(value) :> JsonNode | None -> null)
+          KeyValuePair("missingReceipt", JsonValue.Create(missing) :> JsonNode)
+          KeyValuePair("terminal", JsonValue.Create(terminal) :> JsonNode) ])
+
+let feedState (release: JsonObject) = stringOr "none" "feedState" release
+
+let rec nextAction (state: JsonObject) =
+    let registry = obj (property "registry" state)
+    let allReleases = array (property "releases" state) |> orderedReleases
+    let decisions =
+        match tryProperty "decisions" state with
+        | Some values -> array values |> Seq.map obj |> Seq.toList
+        | None -> []
+    let decision kind releaseId =
+        decisions
+        |> List.exists (fun item ->
+            stringProperty "kind" item = kind
+            && stringOr "" "releaseId" item = releaseId)
+    let blocked =
+        decisions
+        |> List.tryFind (fun item -> stringProperty "kind" item = "human-blocker")
+    match blocked with
+    | Some item ->
+        action "human-escalation" (Some(stringOr "" "releaseId" item))
+            "explicit human-blocker decision and its evidence must be resolved" true
+    | None when boolProperty false "requiresClassification" state ->
+        match allReleases |> List.tryFind (fun release ->
+            let id = stringProperty "id" release
+            not (decision "release-owed" id) && not (decision "no-release" id)) with
+        | Some release ->
+            action "classify-release" (Some(stringProperty "id" release))
+                "explicit release-owed or no-release classification bound to the current merged-main commit" false
+        | None ->
+            let releases = allReleases |> List.filter (fun release -> decision "release-owed" (stringProperty "id" release))
+            let scoped = JsonArray(releases |> List.map (fun release -> release.DeepClone()) |> List.toArray)
+            let state = JsonObject([ KeyValuePair("registry", registry.DeepClone()); KeyValuePair("releases", scoped :> JsonNode) ])
+            nextAction state
+    | None ->
+        let releases = allReleases
+        let terminalFeed =
+            releases
+            |> List.tryFind (fun release -> [ "org-only"; "public-only"; "disagree" ] |> List.contains (feedState release))
+        match terminalFeed with
+        | Some release ->
+            action "human-escalation" (Some(stringProperty "id" release))
+                $"dual-feed receipt is `{feedState release}`; inspect immutable artifacts and record a human decision" true
+        | None ->
+            match releases |> List.tryFind (fun release -> intProperty "expectedPackages" release <> intProperty "observedPackages" release) with
+            | Some release -> action "verify-packages" (Some(stringProperty "id" release)) "expected-versus-observed package count receipt" false
+            | None ->
+                match releases |> List.tryFind (fun release -> stringOr "" "mainCommit" release <> stringOr "" "tagCommit" release) with
+                | Some release -> action "verify-tag" (Some(stringProperty "id" release)) "exact tag-to-merged-main commit receipt" false
+                | None ->
+                    match releases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
+                    | Some release -> action "await-workflow" (Some(stringProperty "id" release)) "successful producer workflow run bound to the release commit" false
+                    | None ->
+                        let ready id =
+                            let producer = releases |> List.find (fun release -> stringProperty "id" release = id)
+                            feedState producer = "both-equivalent"
+                            && boolProperty false "artifactVerified" producer
+                        let consumerBlocked =
+                            releases
+                            |> List.tryFind (fun release ->
+                                stringOr "producer" "kind" release = "consumer"
+                                && (match tryProperty "dependsOn" release with
+                                    | Some value -> array value |> Seq.exists (fun dependency -> not (ready (dependency.GetValue<string>())))
+                                    | _ -> false))
+                        match consumerBlocked with
+                        | Some release -> action "await-producer" (Some(stringProperty "id" release)) "verified producer artifact and consumer pin receipt" false
+                        | None ->
+                            match releases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
+                            | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
+                            | None ->
+                                match releases |> List.tryFind (fun release -> stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release)) with
+                                | Some release -> action "verify-consumer" (Some(stringProperty "id" release)) "fresh consumer or retrofit materialization receipt" false
+                                | None ->
+                                    match releases |> List.tryFind (fun release -> not (boolProperty false "downstreamVerified" release)) with
+                                    | Some release -> action "verify-propagation" (Some(stringProperty "id" release)) "dispatch or Renovate propagation receipt" false
+                                    | None when not (boolProperty false "canonicalMerged" registry) ->
+                                        action "flip-registry" None "re-read merged canonical registry/projection after all packages are live" false
+                                    | None -> action "complete" None "all release, consumer, propagation, and canonical-registry receipts are present" true
+
+let inspect () =
+    let run = require "--run" |> Path.GetFullPath
+    let auditPath = requireFile "--audit"
+    let workflowPath = requireFile "--workflows"
+    let registryPath = option "--registry" |> Option.defaultValue "registry/dependencies.yml" |> Path.GetFullPath
+    if not (File.Exists registryPath) then failwith $"registry does not exist: {registryPath}"
+    use audit = JsonDocument.Parse(File.ReadAllText auditPath)
+    let releases = JsonArray()
+    for repository in audit.RootElement.GetProperty("repositories").EnumerateArray() do
+        let packages = repository.GetProperty("packages")
+        if packages.GetArrayLength() > 0 then
+            let id = repository.GetProperty("id").GetString()
+            let tag = repository.GetProperty("baselineTag").GetString()
+            let commit = repository.GetProperty("originMain").GetString()
+            releases.Add(JsonObject(
+                [ KeyValuePair("id", JsonValue.Create(id) :> JsonNode)
+                  KeyValuePair("kind", JsonValue.Create("producer") :> JsonNode)
+                  KeyValuePair("dependsOn", JsonArray() :> JsonNode)
+                  KeyValuePair("expectedPackages", JsonValue.Create(packages.GetArrayLength()) :> JsonNode)
+                  KeyValuePair("observedPackages", JsonValue.Create(0) :> JsonNode)
+                  KeyValuePair("mainCommit", JsonValue.Create(commit) :> JsonNode)
+                  KeyValuePair("tag", JsonValue.Create(tag) :> JsonNode)
+                  KeyValuePair("tagCommit", JsonValue.Create("") :> JsonNode)
+                  KeyValuePair("workflowRun", JsonValue.Create("") :> JsonNode)
+                  KeyValuePair("feedState", JsonValue.Create("none") :> JsonNode)
+                  KeyValuePair("artifactVerified", JsonValue.Create(false) :> JsonNode)
+                  KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(true) :> JsonNode)
+                  KeyValuePair("downstreamVerified", JsonValue.Create(false) :> JsonNode) ]))
+    let runId = option "--id" |> Option.defaultValue (Path.GetFileNameWithoutExtension run)
+    let state = JsonObject(
+        [ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode)
+          KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
+          KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("decisions", JsonArray() :> JsonNode)
+          KeyValuePair("requiresClassification", JsonValue.Create(true) :> JsonNode)
+          KeyValuePair("releases", releases :> JsonNode) ])
+    state["nextAction"] <- nextAction state
+    write run state
+    printfn "%s" (state.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+let plan () =
+    let path = requireFile "--run"
+    let state = obj (read path)
+    if intProperty "schemaVersion" state <> 1 then failwith "unsupported release-run schemaVersion"
+    state["nextAction"] <- nextAction state
+    write path state
+    printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+let advance () =
+    let path = requireFile "--run"
+    let state = obj (read path)
+    let decision = require "--decision"
+    if not ([ "release-owed"; "no-release"; "semver-effect"; "human-blocker" ] |> List.contains decision) then
+        failwith "--decision must be release-owed, no-release, semver-effect, or human-blocker"
+    let decisions = array (property "decisions" state)
+    let subjectCommit = require "--subject-commit"
+    let proof = require "--evidence"
+    let releaseId = require "--release-id"
+    let duplicate =
+        decisions |> Seq.exists (fun item -> let existing = obj item in stringProperty "kind" existing = decision && stringProperty "subjectCommit" existing = subjectCommit && stringOr "" "releaseId" existing = releaseId)
+    if not duplicate then
+        decisions.Add(JsonObject([ KeyValuePair("kind", JsonValue.Create(decision) :> JsonNode); KeyValuePair("releaseId", JsonValue.Create(releaseId) :> JsonNode); KeyValuePair("subjectCommit", JsonValue.Create(subjectCommit) :> JsonNode); KeyValuePair("evidence", JsonValue.Create(proof) :> JsonNode) ]))
+    state["nextAction"] <- nextAction state
+    write path state
+    printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+let verify () =
+    let path = requireFile "--run"
+    let state = obj (read path)
+    let releases = array (property "releases" state)
+    let evidenceRoot = obj (property "evidence" state)
+    let reports = array (property "verifications" evidenceRoot)
+    for reportPath in options "--verification" do
+        let full = Path.GetFullPath reportPath
+        if not (File.Exists full) then failwith $"--verification does not exist: {full}"
+        use report = JsonDocument.Parse(File.ReadAllText full)
+        let root = report.RootElement
+        let name = root.GetProperty("name").GetString()
+        let release = releases |> Seq.map obj |> Seq.tryFind (fun candidate -> stringProperty "id" candidate = name) |> Option.defaultWith (fun () -> failwith $"verification names unknown release `{name}`")
+        release["expectedPackages"] <- JsonValue.Create(root.GetProperty("expectedPackages").GetInt32())
+        release["observedPackages"] <- JsonValue.Create(root.GetProperty("observedPackages").GetInt32())
+        release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
+        let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
+        let equivalent = root.GetProperty("packages").EnumerateArray() |> Seq.forall (fun package -> package.GetProperty("payloadIdentical").GetBoolean())
+        release["feedState"] <- JsonValue.Create(if matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release then "both-equivalent" else "disagree")
+        release["artifactVerified"] <- JsonValue.Create(matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release)
+        reports.Add(evidence full)
+    state["nextAction"] <- nextAction state
+    write path state
+    printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+let selftest () =
+    let release (id: string) (kind: string) (dependencies: string list) (feed: string) (expected: int) (observed: int) (tag: string) (tagCommit: string) (workflow: string) (artifact: bool) (embedding: bool) (downstream: bool) =
+        JsonObject([ KeyValuePair("id", JsonValue.Create(id) :> JsonNode); KeyValuePair("kind", JsonValue.Create(kind) :> JsonNode); KeyValuePair("dependsOn", JsonArray(dependencies |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode); KeyValuePair("expectedPackages", JsonValue.Create(expected) :> JsonNode); KeyValuePair("observedPackages", JsonValue.Create(observed) :> JsonNode); KeyValuePair("mainCommit", JsonValue.Create(tag) :> JsonNode); KeyValuePair("tagCommit", JsonValue.Create(tagCommit) :> JsonNode); KeyValuePair("workflowRun", JsonValue.Create(workflow) :> JsonNode); KeyValuePair("feedState", JsonValue.Create(feed) :> JsonNode); KeyValuePair("artifactVerified", JsonValue.Create(artifact) :> JsonNode); KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(embedding) :> JsonNode); KeyValuePair("downstreamVerified", JsonValue.Create(downstream) :> JsonNode) ])
+    let state (releases: JsonObject list) (canonical: bool) = JsonObject([ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode); KeyValuePair("runId", JsonValue.Create("fixture") :> JsonNode); KeyValuePair("registry", JsonObject([ KeyValuePair("canonicalMerged", JsonValue.Create(canonical) :> JsonNode) ]) :> JsonNode); KeyValuePair("releases", JsonArray(releases |> List.map (fun value -> value.DeepClone()) |> List.toArray) :> JsonNode) ])
+    let kind value = obj (nextAction value) |> stringProperty "kind"
+    if kind (state [] true) <> "complete" then failwith "current/no-release fixture failed"
+    let producer = release "producer" "producer" [] "both-equivalent" 1 1 "a" "a" "run" true true true
+    let consumer = release "consumer" "consumer" [ "producer" ] "none" 1 0 "b" "" "" false false false
+    if kind (state [ consumer; producer ] false) <> "verify-packages" then failwith "ordered multi-producer fixture failed"
+    if kind (state [ release "missing" "producer" [] "both-equivalent" 2 1 "a" "a" "run" true true true ] false) <> "verify-packages" then failwith "missing package fixture failed"
+    if kind (state [ release "partial" "producer" [] "org-only" 1 1 "a" "a" "run" true true true ] false) <> "human-escalation" then failwith "partial publication fixture failed"
+    if kind (state [ release "tag" "producer" [] "both-equivalent" 1 1 "a" "b" "run" true true true ] false) <> "verify-tag" then failwith "tag mismatch fixture failed"
+    if kind (state [ producer ] false) <> "flip-registry" then failwith "stale registry fixture failed"
+    if kind (state [ release "embed" "consumer" [] "both-equivalent" 1 1 "a" "a" "run" true false true ] true) <> "verify-consumer" then failwith "missing consumer embedding fixture failed"
+    if kind (state [ producer ] true) <> "complete" then failwith "complete train fixture failed"
+    printfn "release-train-state: self-test passed"
+
+try
+    match command with
+    | "inspect" -> inspect ()
+    | "plan" -> plan ()
+    | "advance" -> advance ()
+    | "verify" -> verify ()
+    | "selftest" -> selftest ()
+    | "--help" | "-h" -> usage ()
+    | _ -> usage (); failwith $"unknown command: {command}"
+    exit exitOk
+with ex ->
+    eprintfn "release-train-state: %s" ex.Message
+    exit exitFinding

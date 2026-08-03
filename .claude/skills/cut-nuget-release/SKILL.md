@@ -31,8 +31,15 @@ Use the repository-owned F# scripts for repeatable evidence:
 - `release-train-status.fsx` summarizes `--audit`, `--workflows`, and repeated `--verification`
   evidence files. Repeat `--verification` for each coherent set; pass `--registry complete` only
   after merged canonical truth is verified.
+- `release-train-state.fsx` is the durable coordinator over those reports. Start it with
+  `inspect --run <run.json> --audit <audit.json> --workflows <workflows.json> --registry registry/dependencies.yml`.
+  Use `plan --run <run.json>` to receive its one typed next action, `advance --release-id <id>` only to record an
+  explicit `release-owed`, `semver-effect`, or `human-blocker` decision with its subject commit and
+  evidence, and `verify --run <run.json> --verification <verify.json>` to import package evidence.
+  A `human-escalation` action for `org-only`, `public-only`, or `disagree` is terminal: inspect the
+  immutable artifacts and record the human decision; do not retry publication from the coordinator.
 
-Keep the JSON files as the resumable run ledger. Rerun commands to refresh live evidence. These scripts
+Keep the release-run JSON file and its evidence as the resumable run ledger. Rerun commands to refresh live evidence. These scripts
 are accelerators, not policy authorities: inspect and improve them when repository-specific behavior
 warrants it. In particular, the audit's newest reachable tag is only a baseline candidate; select the
 latest successful tag separately for every coherent set and override the candidate in the human audit.
