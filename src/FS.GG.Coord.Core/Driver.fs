@@ -73,13 +73,17 @@ module Driver =
         let ordered = comments |> List.sortBy _.Id
         let initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
         let confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
+        let escalations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.EscalationMarker c.Body)
+        let repairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
         let acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body)
         let errors = ResizeArray<string>()
         for comment in ordered do
-            for name in [ Protocol.reviewPolicy.InitialMarker; Protocol.reviewPolicy.ConfirmationMarker; Protocol.reviewPolicy.AcceptanceMarker ] do
+            for name in [ Protocol.reviewPolicy.InitialMarker; Protocol.reviewPolicy.ConfirmationMarker; Protocol.reviewPolicy.AcceptanceMarker; Protocol.reviewPolicy.EscalationMarker; Protocol.reviewPolicy.RepairPhaseMarker ] do
                 if malformedMarker name comment.Body then
                     errors.Add $"%s{name} marker must be the single canonical leading standalone marker"
         if List.length confirmations > Protocol.reviewPolicy.MaxAutomatedRepairRounds then errors.Add "review confirmation round ceiling exceeded"
+        if List.length repairPhases > Protocol.reviewPolicy.RepairPhaseMaxRounds then errors.Add "review repair-phase ceiling exceeded"
+        if not (List.isEmpty escalations) && List.isEmpty repairPhases then errors.Add "review escalation requires a repair-phase marker"
         let requireOne what values =
             match values with
             | [ value ] -> Some value
