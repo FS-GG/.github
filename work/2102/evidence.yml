@@ -52,6 +52,13 @@ evidence:
         path: docs/coordination/receiver-proj-migration-shape.md
     result: pass
     synthetic: false
+    observedRun:
+      source: artifacts/test-results/2102/2102-sdd-lifecycle.trx
+      digest: "sha256:08357a9075490c2fc3e3166badac3dd7bb37a916cc5ece74e5cb530b8eeef789"
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
     notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV002
     kind: verification
@@ -71,6 +78,13 @@ evidence:
         path: docs/coordination/receiver-proj-migration-shape.md
     result: pass
     synthetic: false
+    observedRun:
+      source: artifacts/test-results/2102/2102-sdd-lifecycle.trx
+      digest: "sha256:08357a9075490c2fc3e3166badac3dd7bb37a916cc5ece74e5cb530b8eeef789"
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
     notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV003
     kind: verification
@@ -90,6 +104,13 @@ evidence:
         path: docs/coordination/receiver-proj-migration-shape.md
     result: pass
     synthetic: false
+    observedRun:
+      source: artifacts/test-results/2102/2102-sdd-lifecycle.trx
+      digest: "sha256:08357a9075490c2fc3e3166badac3dd7bb37a916cc5ece74e5cb530b8eeef789"
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
     notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV004
     kind: verification
@@ -109,6 +130,13 @@ evidence:
         path: docs/coordination/receiver-proj-migration-shape.md
     result: pass
     synthetic: false
+    observedRun:
+      source: artifacts/test-results/2102/2102-sdd-lifecycle.trx
+      digest: "sha256:08357a9075490c2fc3e3166badac3dd7bb37a916cc5ece74e5cb530b8eeef789"
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
     notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV005
     kind: verification
@@ -128,6 +156,13 @@ evidence:
         path: docs/coordination/receiver-proj-migration-shape.md
     result: pass
     synthetic: false
+    observedRun:
+      source: artifacts/test-results/2102/2102-sdd-lifecycle.trx
+      digest: "sha256:08357a9075490c2fc3e3166badac3dd7bb37a916cc5ece74e5cb530b8eeef789"
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
     notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
