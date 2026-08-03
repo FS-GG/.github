@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "23388ae0054db3ba5f4e5e5d359ad35409f201c1c9086913c6d12c8bbdff3a9c"
+        "value": "fbfa65f0105f03f1e3a4a9062141be423bfc6da9e285c29b606d26eec198b4a4"
       }
     },
     {
@@ -346,7 +346,9 @@
       "requirementRefs": [
         "FR-001"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/core-release.bom-free.trx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -370,7 +372,9 @@
       "requirementRefs": [
         "FR-002"
       ],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/cli-release.bom-free.trx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -392,7 +396,9 @@
         "T003"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/github-release.bom-free.trx"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -414,7 +420,9 @@
         "T004"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/projection-fixture.txt"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -436,7 +444,9 @@
         "T005"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/skill-quality-fixture.txt"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -458,7 +468,9 @@
         "T006"
       ],
       "requirementRefs": [],
-      "artifactRefs": [],
+      "artifactRefs": [
+        "work/2136-generated-facts/test-results/package-verification.txt"
+      ],
       "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
@@ -479,7 +491,7 @@
       "schemaVersion": 1,
       "generator": {
         "id": "FS.GG.SDD.Artifacts",
-        "version": "0.32.0"
+        "version": "1.0.0"
       },
       "sources": [
         {
@@ -526,7 +538,7 @@
           "path": "work/2136-generated-facts/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "23388ae0054db3ba5f4e5e5d359ad35409f201c1c9086913c6d12c8bbdff3a9c"
+            "value": "fbfa65f0105f03f1e3a4a9062141be423bfc6da9e285c29b606d26eec198b4a4"
           },
           "schemaVersion": 1
         },
@@ -557,7 +569,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "deb3e8ff2174e7e8c89e1e41c3cf7261d4e1d8d50643784b3ea49bcc25836c53"
+        "value": "f0c67676ffe4cbfdbfb1ce46a54d93c2adaab0d6622bafa2b3e1c78a4b48d15d"
       },
       "currency": "current"
     }
