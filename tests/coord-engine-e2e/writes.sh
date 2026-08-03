@@ -802,6 +802,15 @@ printf '%s\n' \
   '{"sourceRevision":"fixture-source","units":[{"id":"first","dependencies":[],"completed":false,"evidence":[]}]}' \
   >"$CYCLE_SNAPSHOT"
 no_mutation "cycle" run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json
+printf '%s\n' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"a","dependencies":["b"],"completed":false,"evidence":[]},{"id":"b","dependencies":["a"],"completed":false,"evidence":[]}]}' \
+  >"$CYCLE_SNAPSHOT"
+cycle_bad="$(run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_bad_rc=$?
+if [ "$cycle_bad_rc" -ne 0 ] && printf '%s' "$cycle_bad" | grep -q 'dependency cycle'; then
+  ok "#2133: cycle production route rejects a cyclic ledger"
+else
+  bad "#2133: cycle production route must reject a cyclic ledger" "rc=$cycle_bad_rc output=$cycle_bad"
+fi
 
 # `followup add` is intentionally a local-file write, not a shared-board write.  It is a valid
 # (and therefore non-vacuous) driver for the command-contract row; `list` then proves the add

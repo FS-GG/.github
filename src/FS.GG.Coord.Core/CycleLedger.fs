@@ -14,7 +14,7 @@ module CycleLedger =
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option }
-    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Complete
+    type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Escalate of Cycle | Complete
 
     let private required name value =
         if String.IsNullOrWhiteSpace value then Some $"%s{name} is required" else None
@@ -36,7 +36,12 @@ module CycleLedger =
                   for dependency in unit.Dependencies do
                       if not (List.contains dependency ids) then yield $"unit %s{unit.Id} names unknown dependency %s{dependency}"
                       if dependency = unit.Id then yield $"unit %s{unit.Id} depends on itself"
-              if ids |> List.distinct |> List.length <> ids.Length then yield "ledger unit ids must be unique" ]
+              if ids |> List.distinct |> List.length <> ids.Length then yield "ledger unit ids must be unique"
+              let rec reaches seen id =
+                  if List.contains id seen then true
+                  else ledger.Units |> List.tryFind (fun unit -> unit.Id = id) |> Option.exists (fun unit -> unit.Dependencies |> List.exists (reaches (id :: seen)))
+              for unit in ledger.Units do
+                  if unit.Dependencies |> List.exists (reaches [ unit.Id ]) then yield $"unit %s{unit.Id} participates in a dependency cycle" ]
         if not (List.isEmpty errors) then Error errors
         else
             let complete id = ledger.Units |> List.exists (fun unit -> unit.Id = id && unit.Completed)
@@ -59,35 +64,38 @@ module CycleLedger =
                     | _ -> Error [ $"unit %s{unit.Id} has an incompatible live cycle" ]
             | _ -> Error [ "multiple dependency-ready units require explicit operator scheduling" ]
 
-    let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead receipt =
+    let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead expectedProvider expectedSchema receipt =
         let errors =
             [ yield! required "provider schema" receipt.Schema |> Option.toList
               yield! required "provider" receipt.Provider |> Option.toList
+              if receipt.Provider <> expectedProvider then yield $"provider receipt must be from %s{expectedProvider}"
+              if receipt.Schema <> expectedSchema then yield $"provider receipt schema must be %s{expectedSchema}"
               if receipt.WorkId <> expectedWorkId then yield "provider receipt work id does not match"
               if receipt.CycleId <> expectedCycle.Id then yield "provider receipt cycle id does not match"
-              if not (receipt.Schema.EndsWith("/1", StringComparison.Ordinal)) then yield "provider receipt schema version is unsupported"
               if receipt.SourceRevision <> expectedSourceRevision then yield "provider receipt source revision is stale"
               if receipt.CandidateHead <> expectedHead then yield "provider receipt candidate head does not match"
               if receipt.Verdict <> "pass" then yield "provider receipt verdict is not pass"
               if receipt.Round < 0 || receipt.Round > 10 then yield "provider receipt round is outside the supported range" ]
         let errors =
-            if receipt.Provider = "critique" && receipt.PlayerJourney <> Some true then
+            if expectedProvider = "critique" && receipt.PlayerJourney <> Some true then
                 errors @ [ "critique receipt is missing a passing player journey" ]
             else errors
         if List.isEmpty errors then Ok () else Error errors
 
-    let advance cycle implementation review feedback evidence =
+    let advance (ledger: Ledger) cycle implementation review feedback evidence =
         let expected = evidence.ImplementationHead
-        let validate receipt = validateProvider cycle.UnitId cycle cycle.BaseCommit expected receipt
+        let validate provider schema receipt = validateProvider cycle.UnitId cycle ledger.SourceRevision expected provider schema receipt
         let errors =
-            [ for receipt in [ implementation; review; feedback ] do
-                  match validate receipt with Error reasons -> yield! reasons | Ok () -> ()
+            [ if cycle.BaseCommit <> ledger.SourceRevision then yield "cycle base commit is stale against ledger source revision"
+              for provider, schema, receipt in [ "fsgg-sdd", "fsgg.sdd.report/1", implementation; "critique", "fsgg.critique.report/1", review; "feedback", "fsgg.feedback.report/2", feedback ] do
+                  match validate provider schema receipt with Error reasons -> yield! reasons | Ok () -> ()
               if evidence.ReviewHead <> expected then yield "review evidence head does not match implementation head"
               if evidence.FeedbackCycle <> cycle.Id then yield "feedback evidence cycle does not match"
               if not evidence.FeedbackActive then yield "feedback activation is missing"
               if evidence.MergedPr.IsNone || evidence.MergeHead <> Some expected then yield "merged evidence does not bind the implementation head"
               if review.Round = 10 && review.Verdict <> "pass" then yield "tenth review round requires escalation rather than advancement" ]
-        if List.isEmpty errors then Ok(Advance cycle) else Error errors
+        if review.Round = 10 && review.Verdict <> "pass" && errors |> List.forall (fun error -> error = "provider receipt verdict is not pass" || error = "tenth review round requires escalation rather than advancement") then Ok(Escalate cycle)
+        elif List.isEmpty errors then Ok(Advance cycle) else Error errors
 
     let complete ledger accepted rollupCycleIds =
         match inspect ledger with
@@ -97,6 +105,10 @@ module CycleLedger =
             let required = ledger.Units |> List.map _.Id
             let missing = required |> List.filter (fun id -> not (List.contains id acceptedUnits))
             let missingRollup = accepted |> List.map _.Id |> List.filter (fun id -> not (List.contains id rollupCycleIds))
-            if not (List.isEmpty missing) then Error [ "required units are missing accepted cycles: " + String.concat ", " missing ]
+            let unchecked = ledger.Units |> List.filter (fun unit -> not unit.Completed || List.isEmpty unit.Evidence) |> List.map _.Id
+            let duplicateAccepted = acceptedUnits |> List.distinct |> List.length <> acceptedUnits.Length
+            if not (List.isEmpty unchecked) then Error [ "required units are not checked with evidence: " + String.concat ", " unchecked ]
+            elif duplicateAccepted then Error [ "accepted cycles must cover each unit exactly once" ]
+            elif not (List.isEmpty missing) then Error [ "required units are missing accepted cycles: " + String.concat ", " missing ]
             elif not (List.isEmpty missingRollup) then Error [ "accepted cycles are missing from roll-up: " + String.concat ", " missingRollup ]
             else Ok Complete

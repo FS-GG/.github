@@ -51,7 +51,7 @@ module CycleLedgerApplication =
         let mergeHead = match (property "mergeHead" node).ValueKind with | JsonValueKind.Null -> None | JsonValueKind.String -> Some(text "mergeHead" node) | _ -> invalidArg "mergeHead" "must be string or null"
         { ImplementationHead = text "implementationHead" node; ReviewHead = text "reviewHead" node; FeedbackCycle = text "feedbackCycle" node; FeedbackActive = bool "feedbackActive" node; MergedPr = mergedPr; MergeHead = mergeHead }
     let private render options action =
-        let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
+        let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
         match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
         ExitCode.toInt ExitCode.Green
     let run options =
@@ -79,7 +79,7 @@ module CycleLedgerApplication =
                 | Error errors -> fail (String.concat "; " errors)
             | "advance" ->
                 let target = cycle (property "cycle" root)
-                match advance target (receipt (property "implementation" root)) (receipt (property "review" root)) (receipt (property "feedback" root)) (evidence (property "evidence" root)) with
+                match advance model target (receipt (property "implementation" root)) (receipt (property "review" root)) (receipt (property "feedback" root)) (evidence (property "evidence" root)) with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
             | _ -> fail "unknown action; expected inspect, register, advance, or complete"
