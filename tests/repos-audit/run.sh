@@ -332,7 +332,9 @@ set -uo pipefail
 # collaborator-only; individual policy failure/no-verdict legs can replace this shim response when
 # they need to exercise those dispositions.
 if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
-  printf '%s\n' '{"data":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true}}}'
+  [ "${FSGG_FIX_ISSUE_POLICY:-}" != unreadable ] || { echo 'gh: API rate limit exceeded (HTTP 403)' >&2; exit 1; }
+  policy="${FSGG_FIX_ISSUE_POLICY:-COLLABORATORS_ONLY}"
+  printf '{"data":{"repository":{"issueCreationPolicy":"%s","hasIssuesEnabled":true}}}\n' "$policy"
   exit 0
 fi
 # args: api [-H ...] <path> [--jq ...]
@@ -3849,6 +3851,19 @@ AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
   && ok "build-config coherence: SOURCE-MUTANT-PROVEN — removing comparison kills the red control" \
   || bad "fixture must detect a removed materialized-vs-graded comparison" "rc=$rc: $out"
 wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml
+
+# The typed repository policy has three distinct outcomes. A repository with Issues enabled but
+# unrestricted creation is noncompliant (finding); an unread GraphQL result is no-verdict. Neither
+# may borrow the old workflow-wiring verdict or silently pass.
+out="$(FSGG_FIX_ISSUE_POLICY=EVERYONE run_reg "$REG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'issue creation policy is EVERYONE' && printf '%s' "$out" | grep -q 'allow issue creation beyond collaborators'; } \
+  && ok "issue intake: non-collaborator policy is a finding" \
+  || bad "open issue creation must fail the roster audit" "rc=$rc: $out"
+
+out="$(FSGG_FIX_ISSUE_POLICY=unreadable run_reg "$REG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'issue-creation policy no-verdict' && printf '%s' "$out" | grep -q 'Nothing was proven about public issue intake'; } \
+  && ok "issue intake: unread policy is a retryable no-verdict" \
+  || bad "unread issue policy must not render as compliant" "rc=$rc: $out"
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
