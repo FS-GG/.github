@@ -81,6 +81,10 @@ type Options =
       /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
       BoardOwner: string
       BoardTitle: string
+      /// Explicit public/private intent for a product Project. None preserves an existing board.
+      PublicBoard: bool option
+      /// Named team/user writer identities. Required whenever `--public-board` is requested.
+      TrustedWriters: string list
       /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
       /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
       ChoreLocks: string option }
@@ -120,6 +124,8 @@ let assembleWizardOptions
       WorkspaceRepo = Some workspaceRepo
       BoardOwner = boardOwner
       BoardTitle = boardTitle
+      PublicBoard = None
+      TrustedWriters = []
       ChoreLocks = choreLocks }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
@@ -459,7 +465,11 @@ let private recordSecurityObligations (opts: Options) (outcome: Outcome) =
         let project = JsonObject()
         project.["kind"] <- JsonValue.Create "project-access"
         project.["target"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
+        project.["requestedVisibility"] <- JsonValue.Create(match opts.PublicBoard with Some true -> "public" | Some false -> "private" | None -> "preserve")
         project.["expectedBasePermission"] <- JsonValue.Create "READ"
+        let writers = JsonArray()
+        opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
+        project.["trustedWriters"] <- writers
         project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist."
         project.["state"] <- JsonValue.Create "pending-human-verification"
         obligations.Add project
@@ -1001,6 +1011,9 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
     AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
     AnsiConsole.MarkupLine "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
+    AnsiConsole.MarkupLine "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
+    AnsiConsole.MarkupLine "  [green]--private-board[/]       request a private product Project"
+    AnsiConsole.MarkupLine "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
     AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
     AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
@@ -1416,6 +1429,15 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--repo needs a value (got flag '%s')" value)
         | "--repo" :: value :: t -> flags { acc with WorkspaceRepo = Some value } t
         | [ "--repo" ] -> Error "--repo needs a value"
+        | "--public-board" :: t -> flags { acc with PublicBoard = Some true } t
+        | "--private-board" :: t -> flags { acc with PublicBoard = Some false } t
+        | "--trusted-writers" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--trusted-writers needs a value (got flag '%s')" value)
+        | "--trusted-writers" :: value :: t ->
+            let writers = value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun v -> v.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray
+            if List.isEmpty writers then Error "--trusted-writers needs at least one team or user"
+            else flags { acc with TrustedWriters = writers } t
+        | [ "--trusted-writers" ] -> Error "--trusted-writers needs a value"
         | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
         | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
@@ -1443,8 +1465,14 @@ let private parse (argv: string list) : Result<Options, string> =
               WorkspaceRepo = None
               BoardOwner = "FS-GG"
               BoardTitle = "Coordination"
+              PublicBoard = None
+              TrustedWriters = []
               ChoreLocks = None }
             rest
+        |> Result.bind (fun opts ->
+            match opts.PublicBoard with
+            | Some true when List.isEmpty opts.TrustedWriters -> Error "--public-board requires an explicit --trusted-writers allowlist"
+            | _ -> Ok opts)
     | _ -> Error "target dir and product name are required"
 
 /// Parse `retrofit <target> [options]` — the coordination-retrofit subcommand. Only the coordination
