@@ -119,18 +119,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV004]
-    artifacts: [work/2136-generated-facts/test-results/projection-fixture.txt]
+    artifacts: [work/2136-generated-facts/test-results/projection-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/projection/run.sh
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/projection-fixture.txt
-      digest: "sha256:c2d662c6ff5403c165a7a0fd356c286a73daf1330c9186fbf441b1bf8bcedc03"
+      source: work/2136-generated-facts/test-results/projection-junit.xml
+      digest: "sha256:8edce26e802947791baa13ede1eb3093a51a8e85700768e97b8d1f1d4d79f263"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 27
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -146,18 +146,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV005]
-    artifacts: [work/2136-generated-facts/test-results/skill-quality-fixture.txt]
+    artifacts: [work/2136-generated-facts/test-results/skill-quality-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/run.sh
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/skill-quality-fixture.txt
-      digest: "sha256:f8a0df817918c64402f230b0346213afc97129466bddbfb27b7c5eccf9566a61"
+      source: work/2136-generated-facts/test-results/skill-quality-junit.xml
+      digest: "sha256:3f17cd66843322b36a289680d2ce6a906138581142c155c124edacb135926750"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 20
+      passed: 1
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
