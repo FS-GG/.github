@@ -22,7 +22,11 @@ PASS  the two host-loop copies cannot state the wave model differently
 PASS  a routed variant cannot restate the two-wave contract instead of inheriting it
 PASS  an unsupported contract schema cannot silently disarm the polarity gate
 PASS  stale generated board/version truth is rejected
-PASS  registry producer mutation makes release inventory stale without prose edits
+PASS  adding a package producer changes inventory membership and producer count
+PASS  removing a package producer changes inventory membership
+PASS  splitting one producer's package versions splits its coherent set
+PASS  changing a published package version changes its real release grouping
+PASS  same-version Audio and Net remain independent coherent sets
 PASS  hand-authored duplicate wave literals are rejected
-skill-quality fixture: all 20 rejection cases passed
+skill-quality fixture: all 24 rejection cases passed
 ]]></system-out></testcase></testsuite>

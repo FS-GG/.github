@@ -54,7 +54,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/core-release.bom-free.trx
-      digest: "sha256:14d74e245eabc39d002e0f8759c7b36631b5af94a824547857ee1bf3da6f4aef"
+      digest: "sha256:df8b85929cb5ac10fcea0b8af913f85c5a91815b06b9b8e5cd2c9ff08a63cda4"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 574
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/cli-release.bom-free.trx
-      digest: "sha256:3c60d09fe0b623deacb0069450016bfa4f24934728e5e05f738fb9ce00e18d48"
+      digest: "sha256:fadbd242a15c48e82c75310aaa3c51b07e912a3ce8eaa7fc73a058719c9d88ad"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 564
@@ -108,7 +108,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/github-release.bom-free.trx
-      digest: "sha256:abffdbd988b5634c4f00821bd4e0bff3d726077de5be41d0b95f02ec4beecd68"
+      digest: "sha256:58240bc9740e910d213a6a9d23f76aa3959b33540211f43c7e75ac41096dfda8"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 442
@@ -162,7 +162,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/skill-quality-junit.xml
-      digest: "sha256:3f17cd66843322b36a289680d2ce6a906138581142c155c124edacb135926750"
+      digest: "sha256:25784c48bd974e7dc11232e88561ef4c432788bd8a13149b8cca2554bccc79e5"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
