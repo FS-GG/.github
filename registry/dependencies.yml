@@ -853,8 +853,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.19.1" # SOURCE SemVer: coherent Blocked-status enforcement patch (#2109/#2184), queued for coord-engine/v0.19.1 after the 0.19.0 cut.
-    package-version: "0.19.0" # Run 30848837879 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; both feeds and a public install were verified. PRIOR 0.18.0.
+    version: "0.19.1" # SOURCE SemVer: coherent Blocked-status enforcement patch (#2109/#2184), released from coord-engine/v0.19.1 at 5b21e5a4461166a89c7336e64c48a9d744a70c92.
+    package-version: "0.19.1" # Run 30853358886 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 31 unsigned payload entries and a public install were verified. PRIOR 0.19.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
