@@ -49,7 +49,10 @@
     <!-- 0.15.0 -> 0.16.0, a MINOR (.github#2132): the release-train operator contract and its
          packaged manifest gain resumable typed release coordination while existing identities and
          package layout hold. The manifest bytes are receiver-visible even for operator-only rows. -->
-    <Version>0.16.0</Version>
+    <!-- 0.16.0 -> 0.16.1, a PATCH (.github#2180): materialized board variants retain the same
+         automatic repair-phase policy but no longer link across the package boundary to withheld
+         operator-only bytes; package and consumer closure are now verified. -->
+    <Version>0.16.1</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>

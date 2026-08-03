@@ -22,7 +22,7 @@ model and effort, report the unsupported route and stop before dispatching a wor
 fall back, or continue a partial wave.
 
 **Repair-phase route.** When an ordinary three-round chain exhausts, automatically enter the
-[repair phase](../pnext-item/references/independent-review.md#repair-phase) and dispatch its fresh
+repair phase and dispatch its fresh
 implementer and fresh critic at `work-board-best`'s route instead
 of the table above:
 

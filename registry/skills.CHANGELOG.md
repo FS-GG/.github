@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-08-03** — DRIVER PACKAGE CLOSURE (`work-board-best`, `work-board-normal`; owner `.github`; .github#2180, parent .github#2132): reconciled both driver digests after removing their dead link into operator-only `pnext-item` bytes. The routed variants retain the same automatic repair-phase rule; FS.GG.Drivers 0.16.1 adds staged-package and consumer-materialization relative-link closure fixtures.
+
 - **2026-08-03** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 3 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-08-03** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 6 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
