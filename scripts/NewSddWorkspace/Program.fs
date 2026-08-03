@@ -610,7 +610,18 @@ let private projectReceiptJson (project: string) (projectId: string) (isPublic: 
     receipt.["trustedWriters"] <- writerRows
     receipt
 
-let private projectBaseAccessObligation (project: string) (writers: ResolvedProjectWriter list) =
+let private shellQuote (value: string) =
+    "'" + value.Replace("'", "'\"'\"'") + "'"
+
+/// Render a durable recovery command whose workspace identity survives a change of cwd.
+/// Every dynamic argument is POSIX-shell quoted because the receipt is intended to be copied and
+/// executed, not interpreted as placeholder prose.
+let securityResumeCommand (workspace: string) (args: string list) =
+    let target = workspace |> Path.GetFullPath |> shellQuote
+    let suffix = args |> List.map shellQuote |> String.concat " "
+    sprintf "new-sdd-workspace secure %s %s" target suffix
+
+let private projectBaseAccessObligation (workspace: string) (project: string) (writers: ResolvedProjectWriter list) =
     let obligation = JsonObject()
     obligation.["kind"] <- JsonValue.Create "project-base-access-human-verification"
     obligation.["target"] <- JsonValue.Create project
@@ -620,7 +631,13 @@ let private projectBaseAccessObligation (project: string) (writers: ResolvedProj
     writers |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
     obligation.["trustedWriters"] <- trustedWriters
     obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read AND that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist."
-    obligation.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure <workspace> --project %s --trusted-writers %s --verified-base-permission READ --verified-exclusive-writers %s" project requested requested)
+    obligation.["resume"] <-
+        JsonValue.Create(
+            securityResumeCommand workspace
+                [ "--project"; project
+                  "--trusted-writers"; requested
+                  "--verified-base-permission"; "READ"
+                  "--verified-exclusive-writers"; requested ])
     obligation.["state"] <- JsonValue.Create "pending-human-verification"
     obligation
 
@@ -644,7 +661,10 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
         repo.["kind"] <- JsonValue.Create "repository-issue-policy"
         repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
         repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
-        repo.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure --repo %s" (opts.WorkspaceRepo |> Option.defaultValue "owner/repository"))
+        repo.["resume"] <-
+            JsonValue.Create(
+                securityResumeCommand opts.Target
+                    [ "--repo"; opts.WorkspaceRepo |> Option.defaultValue "owner/repository" ])
         match report.Repository with
         | Some(RepositorySecured(repository, prior, actor)) ->
             let receipt = JsonObject()
@@ -662,7 +682,7 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
         match report.Project with
         | ProjectPartiallyVerified(project, id, isPublic, actor, writers) ->
             upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None None)
-            obligations.Add(projectBaseAccessObligation project writers)
+            obligations.Add(projectBaseAccessObligation opts.Target project writers)
         | _ ->
             let project = JsonObject()
             project.["kind"] <- JsonValue.Create "project-access"
@@ -673,6 +693,11 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
             opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
             project.["trustedWriters"] <- writers
             project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/requested-grant verification, then its exact two-fact resume command."
+            let retryArgs =
+                [ "--project"; projectTarget ]
+                @ (match opts.PublicBoard with Some true -> [ "--public-board" ] | Some false -> [ "--private-board" ] | None -> [])
+                @ [ "--trusted-writers"; String.concat "," opts.TrustedWriters ]
+            project.["resume"] <- JsonValue.Create(securityResumeCommand opts.Target retryArgs)
             project.["state"] <- JsonValue.Create "pending-human-verification"
             obligations.Add project
         root.["securityObligations"] <- obligations
@@ -2133,7 +2158,7 @@ let private persistProjectSecurityReceipt (target: string) (project: string) (pr
                     with _ -> true)
                 |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             | _ -> ()
-            if basePermission.IsNone || effectiveWriters.IsNone then kept.Add(projectBaseAccessObligation project writers)
+            if basePermission.IsNone || effectiveWriters.IsNone then kept.Add(projectBaseAccessObligation target project writers)
             root.["securityObligations"] <- kept
             upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
@@ -2236,10 +2261,12 @@ let main argv =
         runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
     | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
         runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers ] ->
+        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
     | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission; "--verified-exclusive-writers"; exclusiveWriters ] ->
         runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission) (Some(exclusiveWriters.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray))
     | "secure" :: _ ->
-        AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
+        AnsiConsole.MarkupLine "[red]error:[/] secure requires a workspace target plus --repo owner/repository, or a complete --project recovery route"
         2
     | args ->
         match parse args with

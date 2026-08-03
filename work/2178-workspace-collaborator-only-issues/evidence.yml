@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2178-workspace-collaborator-only-issues/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2178-workspace-collaborator-only-issues/analysis.json
-    digest: 86858c210e0464e854bc160cf1e205cc91f307992444f44121810963cc1275e9
+    digest: 3d7ddca91e8e9d26be0960af639bec8a63fe0512442574d9cb570221adbb7e3c
     schemaVersion: 1
   - label: checklist
     path: work/2178-workspace-collaborator-only-issues/checklist.md
@@ -23,7 +23,7 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2178-workspace-collaborator-only-issues/plan.md
-    digest: ad3e6ae64dfeb261b642951fa15c677bb2dabb5ee9a8b8e1ee64e066967bf804
+    digest: 40cf2bfe6333aae7e1d034a594016124c174b42fc502ce0ad8cae8de4fceccbc
     schemaVersion: 1
   - label: spec
     path: work/2178-workspace-collaborator-only-issues/spec.md
@@ -109,7 +109,7 @@ evidence:
         path: tests/new-sdd-workspace/run.sh
     result: pass
     synthetic: false
-    notes: [Missing, and persistence-failure routes passed., mutation-failure, stale-reread, unreadable]
+    notes: [Missing, "and persistence-failure routes passed. The built fixture executes the exact recorded Project command from a workspace path containing whitespace and an apostrophe; the command clears only its matching obligation. The public command-rendering seam also pins the repository route's absolute workspace identity and quoting.", mutation-failure, stale-reread, unreadable]
   - id: EV005
     kind: verification
     subject:

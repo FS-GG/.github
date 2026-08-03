@@ -147,7 +147,7 @@ done
 # requires a typed collaborator variable, nested gh fields for JSON object serialization, a selected
 # mutation payload, and forbids node ids in GraphQL source. It also returns the same payload shape as
 # GitHub's live ProjectV2 schema so durable state assertions exercise the built CLI, not a substring.
-PROJECT_WORK="$WORK/project-workspace"; mkdir -p "$PROJECT_WORK/.fsgg" "$WORK/project-bin"
+PROJECT_WORK="$WORK/project workspace's"; mkdir -p "$PROJECT_WORK/.fsgg" "$WORK/project-bin"
 printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"},{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$PROJECT_WORK/.fsgg/scaffold-provenance.json"
 cat > "$WORK/project-bin/gh" <<'EOF'
 #!/usr/bin/env bash
@@ -184,6 +184,11 @@ case "$all" in
 esac
 EOF
 chmod +x "$WORK/project-bin/gh"
+cat > "$WORK/project-bin/new-sdd-workspace" <<'EOF'
+#!/usr/bin/env bash
+exec dotnet "${NEW_SDD_DLL:?}" "$@"
+EOF
+chmod +x "$WORK/project-bin/new-sdd-workspace"
 
 if python3 "$HERE/validate_project_graphql.py" \
   'query=mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators{totalCount}}' \
@@ -196,7 +201,7 @@ fi
 run_project() {
   local mode="$1"; shift
   local rc=0
-  PROJECT_MODE="$mode" PROJECT_STATE="$WORK/project-state-$mode" PROJECT_LOG="$WORK/project.log" PROJECT_GRAPHQL_VALIDATOR="$HERE/validate_project_graphql.py" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
+  PROJECT_MODE="$mode" PROJECT_STATE="$WORK/project-state-$mode" PROJECT_LOG="$WORK/project.log" PROJECT_GRAPHQL_VALIDATOR="$HERE/validate_project_graphql.py" NEW_SDD_DLL="$DLL" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
     dotnet "$DLL" "$@" >"$WORK/project.out" 2>&1 || rc=$?
   return "$rc"
 }
@@ -228,14 +233,18 @@ if [ "$project_rc" -ne 0 ] && [ "$(jq '[.securityObligations[] | select(.kind=="
 else
   bad "human completion must reject an effective writer outside the allowlist" "rc=$project_rc: $(cat "$WORK/project.out")"
 fi
-project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ --verified-exclusive-writers alice,team:platform || project_rc=$?
+project_resume="$(jq -r '.securityObligations[] | select(.kind=="project-base-access-human-verification") | .resume' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")"
+project_rc=0
+PROJECT_MODE=success PROJECT_STATE="$WORK/project-state-success" PROJECT_LOG="$WORK/project.log" PROJECT_GRAPHQL_VALIDATOR="$HERE/validate_project_graphql.py" NEW_SDD_DLL="$DLL" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
+  bash -c "$project_resume" >"$WORK/project.out" 2>&1 || project_rc=$?
 if [ "$project_rc" -eq 0 ] \
+  && [[ "$project_resume" != *'<workspace>'* ]] \
   && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 0 ] \
   && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-access-review" and .basePermission=="READ" and (.humanVerifiedFacts.effectiveExclusiveWriters | length)==2)' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
   && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
-  ok "Project human verification resume rechecks supported facts and clears only its base obligation"
+  ok "recorded Project resume preserves its workspace identity, executes, and clears only its base obligation"
 else
-  bad "Project human verification resume must converge exact provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+  bad "recorded Project human-verification resume must converge exact provenance" "command=$project_resume; rc=$project_rc: $(cat "$WORK/project.out")"
 fi
 
 # Production no-verdict matrix: each route must leave provenance byte-identical and redact tool

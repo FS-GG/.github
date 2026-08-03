@@ -30,7 +30,7 @@ Prose status: planned
 - PD-001 [AC-001] [FR-001] complete: Read the typed repository policy before mutation, re-read after mutation, and persist prior/final/actor/source; grade collaborator policy only when `hasIssuesEnabled` is true.
 - PD-002 [AC-001] [FR-002] complete: Resolve trusted users/teams to node IDs and send them only as structured GraphQL variables; validate requested-grant payload identity/cardinality without representing it as an effective-access read.
 - PD-003 [AC-001] [FR-003] complete: Persist visibility and requested-grant facts as a partial receipt, plus one deduplicated obligation for the unobservable organization base permission and effective/exclusive writer set. Clear it only when both human assertions match the requested state.
-- PD-004 [AC-001] [FR-004] complete: Preserve repository and Project obligations independently when either resource is absent or unreadable, and make every resume transition target-specific and idempotent.
+- PD-004 [AC-001] [FR-004] complete: Preserve repository and Project obligations independently when either resource is absent or unreadable. Persist each recovery command with an absolute, shell-quoted workspace identity and verify that executing the recorded command changes only its target-specific obligation idempotently.
 - PD-005 [AC-001] [FR-005] complete: Exercise the built CLI through a GraphQL parser/structured-variable seam and independently model API grant payloads, human effective writers, visibility mutation/reread state, persistence, failure, and redaction.
 - PD-006 [AC-001] [FR-006] complete: Publish and verify the byte-identical 0.9.0 package on both feeds before a separate registry-adoption receipt advances dependency truth.
 
