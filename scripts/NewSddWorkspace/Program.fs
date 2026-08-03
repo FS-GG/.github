@@ -1853,9 +1853,26 @@ let private runRetrofit (opts: RetrofitOptions) : int =
 /// Re-run just the repository policy after a freshly scaffolded repository has been created or
 /// an operator has received the required administration grant. This is the resumable half of the
 /// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
-let private runSecure (repository: string) : int =
+let private clearRepositorySecurityObligation (target: string) (repository: string) =
+    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+    if File.Exists path then
+        let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+        match root.["securityObligations"] with
+        | :? JsonArray as obligations ->
+            let kept = JsonArray()
+            obligations
+            |> Seq.filter (fun entry ->
+                let row = entry.AsObject()
+                not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository))
+            |> Seq.iter kept.Add
+            root.["securityObligations"] <- kept
+            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+        | _ -> ()
+
+let private runSecure (target: string option) (repository: string) : int =
     match secureRepository repository with
     | RepositorySecured(repo, prior, actor) ->
+        target |> Option.iter (fun workspace -> clearRepositorySecurityObligation workspace repo)
         AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
         0
     | RepositoryPending(repo, reason) ->
@@ -1888,7 +1905,8 @@ let main argv =
             AnsiConsole.WriteLine()
             usage ()
             2
-    | [ "secure"; "--repo"; repository ] -> runSecure repository
+    | [ "secure"; "--repo"; repository ] -> runSecure None repository
+    | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
     | "secure" :: _ ->
         AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
         2
