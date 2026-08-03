@@ -374,7 +374,12 @@ jq '.packages += [.packages[0]] | .expectedPackages = 2 | .observedPackages = 2'
 jq '.packages += [(.packages[0] | .packageId = "FS.GG.Kit" | .version = "0.35.0")] | .expectedPackages = 2 | .observedPackages = 2' "$WORK/correct-drivers.json" > "$WORK/extra-package.json"
 jq '.expectedPackages = 99' "$WORK/correct-drivers.json" > "$WORK/forged-expected-count.json"
 jq '.observedPackages = 99' "$WORK/correct-drivers.json" > "$WORK/forged-observed-count.json"
-for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count; do
+jq '.nuGetAvailable = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-org-only.json"
+jq '.gitHubAvailable = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-public-only.json"
+jq '.packages[0].gitHubAvailable = false | .packages[0].payloadIdentical = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-disagree.json"
+jq '.gitHubAvailable = false | .nuGetAvailable = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-unavailable.json"
+jq '.gitHubAvailable = false | .nuGetAvailable = false | .packages[0].gitHubAvailable = false | .packages[0].nuGetAvailable = false' "$WORK/correct-drivers.json" > "$WORK/unavailable-equivalent.json"
+for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count contradictory-org-only contradictory-public-only contradictory-disagree contradictory-unavailable unavailable-equivalent; do
   cp "$WORK/multiset-run.json" "$WORK/multiset-before-invalid.json"
   set +e
   dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/$invalid.json" > /dev/null
@@ -388,6 +393,21 @@ for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-pack
 done
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
 jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
+
+printf '%s\n' \
+  '{"repositories":[{"id":"feed-multi","baselineTag":"v1","originMain":"feed-commit","packages":[{"packageId":"Feed.One","version":"1.0.0"},{"packageId":"Feed.Two","version":"2.0.0"}],"findings":[]}]}' \
+  > "$WORK/feed-multi-audit.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
+  --run "$WORK/feed-multi-run.json" \
+  --audit "$WORK/feed-multi-audit.json" \
+  --workflows "$WORK/multiset-workflows.json" \
+  --registry "$MULTI/registry/dependencies.yml" \
+  > /dev/null
+printf '%s\n' \
+  '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"feed-multi","expectedPackages":2,"observedPackages":2,"tag":"v1","expectedCommit":"feed-commit","subjectCommit":"feed-commit","tagCommit":"feed-commit","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"Feed.One","version":"1.0.0","gitHubUrl":"https://github.test/one","nuGetUrl":"https://nuget.test/one","gitHubArchiveSha256":"a","nuGetArchiveSha256":"a","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true},{"packageId":"Feed.Two","version":"2.0.0","gitHubUrl":"https://github.test/two","nuGetUrl":"https://nuget.test/two","gitHubArchiveSha256":"b","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
+  > "$WORK/feed-multi-correct.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/feed-multi-run.json" --verification "$WORK/feed-multi-correct.json" > /dev/null
+jq -e '.releases[] | select(.id == "feed-multi" and .expectedPackages == 2 and .observedPackages == 2 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/feed-multi-run.json" >/dev/null
 fi
 
 echo "release-train-tooling fixture: passed"

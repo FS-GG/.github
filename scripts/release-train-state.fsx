@@ -583,6 +583,19 @@ let verify () =
             |> Seq.map (fun package -> package.GetProperty("packageId").GetString(), package.GetProperty("version").GetString())
             |> Seq.sort
             |> Seq.toList
+        let packageFeedFacts =
+            root.GetProperty("packages").EnumerateArray()
+            |> Seq.map (fun package ->
+                package.GetProperty("gitHubAvailable").GetBoolean(),
+                package.GetProperty("nuGetAvailable").GetBoolean(),
+                package.GetProperty("payloadIdentical").GetBoolean())
+            |> Seq.toList
+        if packageFeedFacts |> List.exists (fun (github, nuget, identical) -> identical && not (github && nuget)) then
+            failwith $"verification receipt package for release `{name}` claims equivalent payloads without both feeds"
+        let derivedGithubAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (github, _, _) -> github))
+        let derivedNugetAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (_, nuget, _) -> nuget))
+        if githubAvailable <> derivedGithubAvailable || nugetAvailable <> derivedNugetAvailable then
+            failwith $"verification receipt aggregate feed availability does not match release `{name}` package rows"
         let auditedExpectedCount = intProperty "expectedPackages" release
         if not expectedArtifacts.IsEmpty && expectedArtifacts.Length <> auditedExpectedCount then
             failwith $"release `{name}` expected package count does not match its audited artifact set"
@@ -597,10 +610,10 @@ let verify () =
         release["observedPackages"] <- JsonValue.Create(observedArtifacts.Length)
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
         let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
-        let equivalent = root.GetProperty("packages").EnumerateArray() |> Seq.forall (fun package -> package.GetProperty("payloadIdentical").GetBoolean())
+        let equivalent = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (_, _, identical) -> identical))
         let complete = matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release
         let feed =
-            match githubAvailable, nugetAvailable with
+            match derivedGithubAvailable, derivedNugetAvailable with
             | true, true when complete -> "both-equivalent"
             | true, true -> "disagree"
             | true, false -> "org-only"
