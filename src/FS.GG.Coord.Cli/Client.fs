@@ -1670,6 +1670,24 @@ module Client =
     /// Reconcile the board projection from the same typed mechanical rules used by the deferred chore
     /// queue. The bare command is a dry run. `--apply` may perform only remedies represented by
     /// `ChoreKind`; findings that require judgement remain report-only in `lint`.
+    /// Shared write-time boundary for every resolved `Status=Blocked` mutation, including the
+    /// generic reconcile dispatcher.  A scan's earlier blocker observation is not a substitute: the
+    /// field can change before this mutation is emitted.
+    let private requireCoherentBlockedWrite (ctx: Context) (ref: Ref) (status: BoardStatus option) : Result<unit, int> =
+        if status <> Some BoardStatus.Blocked then Ok()
+        else
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: board unreadable ({Errors.explain e})"; Error ExitError
+            | Ok board ->
+                match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
+                | Ok(Some value) when not (String.IsNullOrWhiteSpace value) -> Ok()
+                | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: Blocked by unreadable ({Errors.explain e})"; Error ExitError
+                | Ok _ ->
+                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                    | Ok body when HumanBlock.parse body |> Option.isSome -> Ok()
+                    | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
+                    | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
+
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
         | Error e -> fail e
@@ -2028,12 +2046,26 @@ module Client =
                                   | Some(field, value) ->
                                       let writes = writesFor chore
 
+                                      // `ChoreKind.Write` deliberately carries a variable field/value so
+                                      // reconciliation can project more than Status.  When that resolved
+                                      // pair is `Status=Blocked`, re-check coherence immediately before the
+                                      // transport mutation: the scan that derived this chore is stale by
+                                      // definition once another actor can clear `Blocked by`.
+                                      let gate =
+                                          if field = "Status" then
+                                              requireCoherentBlockedWrite ctx chore.Subject (Reads.statusOfName value)
+                                          else
+                                              Ok()
+
                                       let outcome =
-                                          match chore.Kind with
-                                          | Chore.BlockerCleared _ ->
-                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
-                                          | _ ->
-                                              Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
+                                          match gate with
+                                          | Error _ -> Ok Board.NotOnBoard
+                                          | Ok() ->
+                                              match chore.Kind with
+                                              | Chore.BlockerCleared _ ->
+                                                  Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
+                                              | _ ->
+                                                  Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
 
                                       match outcome with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
@@ -2074,6 +2106,9 @@ module Client =
                                           | Json -> ()
 
                                           reconcileRow chore (Some Deferred)
+                                      | Ok Board.NotOnBoard when Result.isError gate ->
+                                          failed <- true
+                                          reconcileRow chore (Some(Failed "Status=Blocked coherence gate refused the stale reconcile write"))
                                       | Ok Board.NotOnBoard ->
                                           eprint
                                               $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
@@ -2657,30 +2692,7 @@ module Client =
     /// explicit park, a recorded claim restore, or reconciliation; none may write the column until
     /// this verifies that the resulting row carries either a machine edge or a human sentinel.
     let requireCoherentParkIfBlocked (ctx: Context) (ref: Ref) (requested: BoardStatus option) : Result<unit, int> =
-        if requested <> Some BoardStatus.Blocked then
-            Ok()
-        else
-            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-            | Error e ->
-                eprint $"fsgg-coord-engine: Status=Blocked: the board could not be resolved (%s{Errors.explain e}) — nothing written."
-                Error ExitError
-            | Ok board ->
-                match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e ->
-                    eprint $"fsgg-coord-engine: Status=Blocked: the live 'Blocked by' field could not be read (%s{Errors.explain e}) — nothing written."
-                    Error ExitError
-                | Ok(Some fieldValue) when not (String.IsNullOrWhiteSpace fieldValue) -> Ok()
-                | Ok _ ->
-                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
-                    | Error e ->
-                        eprint $"fsgg-coord-engine: Status=Blocked: the body could not be read to check for a 'Blocked on:' sentinel (%s{Errors.explain e}) — nothing written."
-                        Error ExitError
-                    | Ok body ->
-                        match HumanBlock.parse body with
-                        | Some _ -> Ok()
-                        | None ->
-                            eprint $"fsgg-coord-engine: Status=Blocked refuses: the row would land with an EMPTY 'Blocked by' field and no 'Blocked on: human/...' sentinel (.github#2079). Nothing written."
-                            Error ExitError
+        requireCoherentBlockedWrite ctx ref requested
 
     /// #581 — collect expired claims whose WORK is dead, and REFUSE any whose work is alive.
     ///
