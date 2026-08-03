@@ -5257,7 +5257,11 @@ as_col() { printf '%s' "$1" | jq -r --arg n "$2" '.[$n] // "«unset»"' 2>/dev/n
 as_wrote() { printf '%s' "$1" | jq --arg i "$2" '[.[] | select(.item==$i)] | length' 2>/dev/null; }
 
 AS_OUT="$(mktemp)"; AS_CACHE="$(mktemp -d)"
-python3 "$HERE/addstatus_server.py" >"$AS_OUT" 2>/dev/null & AS_SRV=$!
+# #2109: the explicit `Blocked` override is still authoritative, but now it must carry the same
+# coherent reason required by every other Status=Blocked writer.  Seed #903 with a real edge so this
+# #1823 parity leg continues to isolate explicit-over-default precedence rather than testing an
+# intentionally incoherent park.
+ADDSTATUS_BLOCKED_BY_903=FS-GG/FS.GG.SDD#999 python3 "$HERE/addstatus_server.py" >"$AS_OUT" 2>/dev/null & AS_SRV=$!
 AS_PORT=""; for _ in $(seq 1 50); do AS_PORT="$(head -n1 "$AS_OUT" 2>/dev/null)"; [ -n "$AS_PORT" ] && break; sleep 0.1; done
 rm -f "$AS_OUT"
 

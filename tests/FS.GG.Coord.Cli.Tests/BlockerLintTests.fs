@@ -1,5 +1,7 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System.IO
+open System.Text.RegularExpressions
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -10,6 +12,60 @@ open FS.GG.Coord.Cli
 module BlockerLintTests =
 
     let private ref' n : Ref = { Owner = "FS-GG"; Repo = ".github"; Number = n }
+
+    [<Fact>]
+    let ``#2109 the Status=Blocked writer inventory is exhaustive and classifies every restore`` () =
+        let deliberate, other =
+            Client.blockedStatusWriterCoverage
+            |> List.partition (function
+                | Client.DeliberatePark _ -> true
+                | _ -> false)
+
+        let restores, impossible =
+            other
+            |> List.partition (function
+                | Client.GuardedRestore _ -> true
+                | _ -> false)
+
+        Assert.Equal<string list>(
+            [ "add --status Blocked"
+              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
+              "release --status Blocked"
+              "set-field --batch Status=Blocked"
+              "set-field Status Blocked" ],
+            deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+        Assert.Equal<string list>(
+            [ "reap (recorded previous Status=Blocked)"
+              "release (recorded previous Status=Blocked)" ],
+            restores |> List.map (function Client.GuardedRestore name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+        Assert.Equal<string list>(
+            [ "claim (Status=In progress)"; "done (Status=Done)" ],
+            impossible |> List.map (function Client.CannotWriteBlocked name -> name | _ -> failwith "unreachable") |> List.sort
+        )
+
+        // The inventory is not a list tested against itself.  Count ALL transport shapes, not merely
+        // the literal Status spellings: a generic `field/value` writer is precisely how reconcile
+        // escaped the first inventory.  A new independent single/batch transport site now fails this
+        // gate; routing through the shared boundary is the only way to avoid a new classification.
+        let rec repoRoot dir =
+            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
+            else repoRoot (Directory.GetParent(dir).FullName)
+
+        let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
+        let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
+        let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
+        Assert.Equal(4, directStatusWrites)
+        Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(2, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
+        Assert.Equal(4, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
+        Assert.Contains("StatusNotBlocked", chore)
+        // `ChoreKind.Write` owns the indirect reconcile write.  It deliberately renders the
+        // discriminated union through `statusWireName`, so pin the actual production mapping rather
+        // than a source spelling that only existed in an earlier draft of this test.
+        Assert.Contains("StatusNotBlocked _ -> Some(\"Status\", statusWireName Blocked)", chore)
 
     [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
