@@ -152,13 +152,44 @@ let validateCompletionReceipt path =
     let kind = requireStringElement path "kind" root
     if requireStringElement path "conclusion" root <> "success" then failwith $"completion receipt {path} is not successful"
     match kind with
-    | "consumer-embedding" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), Some(requireStringElement path "producerId" root), None, None
-    | "propagation" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), None, None, None
+    | "consumer-embedding" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), Some(requireStringElement path "producerId" root), None, None, None
+    | "propagation" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), None, None, None, None
     | "canonical-registry" ->
         if not (requireBooleanElement path "canonicalMerged" root) || not (requireBooleanElement path "projectionCurrent" root) then
             failwith $"canonical registry receipt {path} does not attest merged canonical registry and current projection"
-        kind, None, None, None, Some(requireStringElement path "registryPath" root |> Path.GetFullPath), Some(requireStringElement path "registrySha256" root)
+        kind, None, None, None, Some(requireStringElement path "registryPath" root |> Path.GetFullPath), Some(requireStringElement path "registrySha256" root), Some(requireStringElement path "registryTopologySha256" root)
     | _ -> failwith $"completion receipt {path} has unsupported kind `{kind}`"
+
+let registryEdges path =
+    let mutable currentId = ""
+    let mutable owner = ""
+    let rows = ResizeArray<string * string * string list>()
+    let mutable consumers = []
+    let emitCurrent () =
+        if currentId <> "" && owner <> "" then rows.Add(currentId, owner, consumers)
+    for line in File.ReadLines path do
+        let contract = Regex.Match(line, @"^\s*-\s+id:\s*([^\s#]+)")
+        let ownerMatch = Regex.Match(line, @"^\s+owner:\s*([^\s#]+)")
+        let consumersMatch = Regex.Match(line, @"^\s+consumers:\s*\[([^\]]*)\]")
+        if contract.Success then
+            emitCurrent (); currentId <- contract.Groups[1].Value; owner <- ""; consumers <- []
+        elif ownerMatch.Success && currentId <> "" then owner <- ownerMatch.Groups[1].Value
+        elif consumersMatch.Success && currentId <> "" then
+            consumers <- consumersMatch.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun value -> value.Trim()) |> Array.toList
+    emitCurrent ()
+    rows |> Seq.toList
+
+let topologySha256 path =
+    registryEdges path
+    |> List.sort
+    |> List.map (fun (contract, owner, consumers) ->
+        let consumerIds = String.concat "," consumers
+        $"{contract}|{owner}|{consumerIds}")
+    |> String.concat "\n"
+    |> System.Text.Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> fun value -> value.ToLowerInvariant()
 
 let validateEvidence requireRegistry (state: JsonObject) =
     let evidenceRoot = obj (property "evidence" state)
@@ -199,7 +230,7 @@ let validateEvidence requireRegistry (state: JsonObject) =
             validateCompletionReceipt (stringProperty "path" receipt))
         |> Seq.toList
     let hasCompletion kind releaseId subjectCommit =
-        completions |> List.exists (fun (receiptKind, receiptRelease, receiptCommit, _, _, _) -> receiptKind = kind && receiptRelease = Some releaseId && receiptCommit = Some subjectCommit)
+        completions |> List.exists (fun (receiptKind, receiptRelease, receiptCommit, _, _, _, _) -> receiptKind = kind && receiptRelease = Some releaseId && receiptCommit = Some subjectCommit)
     array (property "releases" state)
     |> Seq.map obj
     |> Seq.iter (fun release ->
@@ -212,27 +243,11 @@ let validateEvidence requireRegistry (state: JsonObject) =
     if boolProperty false "canonicalMerged" registry then
         let path = stringProperty "path" registry
         let hash = stringProperty "sha256" registry
-        if not (completions |> List.exists (fun (kind, _, _, _, receiptPath, receiptHash) -> kind = "canonical-registry" && receiptPath = Some path && receiptHash = Some hash)) then
+        let canonicalPath = stringProperty "canonicalPath" registry
+        let topology = stringProperty "canonicalTopologySha256" registry
+        if path <> canonicalPath || topologySha256 path <> topology then failwith "canonical registry no longer matches the run's inspected identity and topology"
+        if not (completions |> List.exists (fun (kind, _, _, _, receiptPath, receiptHash, receiptTopology) -> kind = "canonical-registry" && receiptPath = Some path && receiptHash = Some hash && receiptTopology = Some topology)) then
             failwith "registry is marked canonical without a current canonical-registry receipt"
-
-let registryEdges path =
-    let mutable currentId = ""
-    let mutable owner = ""
-    let rows = ResizeArray<string * string * string list>()
-    let mutable consumers = []
-    let emitCurrent () =
-        if currentId <> "" && owner <> "" then rows.Add(currentId, owner, consumers)
-    for line in File.ReadLines path do
-        let contract = Regex.Match(line, @"^\s*-\s+id:\s*([^\s#]+)")
-        let ownerMatch = Regex.Match(line, @"^\s+owner:\s*([^\s#]+)")
-        let consumersMatch = Regex.Match(line, @"^\s+consumers:\s*\[([^\]]*)\]")
-        if contract.Success then
-            emitCurrent (); currentId <- contract.Groups[1].Value; owner <- ""; consumers <- []
-        elif ownerMatch.Success && currentId <> "" then owner <- ownerMatch.Groups[1].Value
-        elif consumersMatch.Success && currentId <> "" then
-            consumers <- consumersMatch.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun value -> value.Trim()) |> Array.toList
-    emitCurrent ()
-    rows |> Seq.toList
 
 let command = args |> List.tryHead |> Option.defaultWith (fun () -> usage (); failwith "a command is required")
 
@@ -386,7 +401,7 @@ let inspect () =
     let state = JsonObject(
         [ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode)
           KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
-          KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalPath", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("canonicalTopologySha256", JsonValue.Create(topologySha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
           KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode); KeyValuePair("completionReceipts", JsonArray() :> JsonNode) ]) :> JsonNode)
           KeyValuePair("decisions", JsonArray() :> JsonNode)
           KeyValuePair("requiresClassification", JsonValue.Create(true) :> JsonNode)
@@ -487,15 +502,15 @@ let importReceipt () =
     let path = requireFile "--run"
     let state = obj (read path)
     let full = requireFile "--receipt"
-    let kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash = validateCompletionReceipt full
+    let kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash, registryTopology = validateCompletionReceipt full
     if kind = "canonical-registry" then validateEvidence false state else validateEvidence true state
     let registry = obj (property "registry" state)
     let releases = array (property "releases" state) |> Seq.map obj |> Seq.toList
     let release id =
         releases |> List.tryFind (fun item -> stringProperty "id" item = id)
         |> Option.defaultWith (fun () -> failwith $"completion receipt names unknown release `{id}`")
-    match kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash with
-    | "consumer-embedding", Some id, Some commit, Some producer, _, _ ->
+    match kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash, registryTopology with
+    | "consumer-embedding", Some id, Some commit, Some producer, _, _, _ ->
         let consumer = release id
         if stringOr "producer" "kind" consumer <> "consumer" || commit <> stringProperty "mainCommit" consumer then
             failwith "consumer embedding receipt must bind the consumer's merged-main commit"
@@ -505,13 +520,17 @@ let importReceipt () =
         if feedState upstream <> "both-equivalent" || not (boolProperty false "artifactVerified" upstream) then
             failwith "consumer embedding receipt requires the producer's verified dual-feed artifact"
         consumer["consumerEmbeddingVerified"] <- JsonValue.Create(true)
-    | "propagation", Some id, Some commit, _, _, _ ->
+    | "propagation", Some id, Some commit, _, _, _, _ ->
         let target = release id
         if commit <> stringProperty "mainCommit" target then failwith "propagation receipt must bind the release's merged-main commit"
         target["downstreamVerified"] <- JsonValue.Create(true)
-    | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash ->
-        if not (File.Exists receiptPath) || sha256 receiptPath <> receiptHash then failwith "canonical registry receipt is stale or does not match its registry snapshot"
-        registry["path"] <- JsonValue.Create(receiptPath)
+    | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash, Some receiptTopology ->
+        let canonicalPath = stringProperty "canonicalPath" registry
+        let expectedTopology = stringProperty "canonicalTopologySha256" registry
+        if receiptPath <> canonicalPath then failwith "canonical registry receipt path must equal the inspected canonical registry target"
+        if not (File.Exists canonicalPath) || sha256 canonicalPath <> receiptHash then failwith "canonical registry receipt is stale or does not match the inspected canonical target"
+        if receiptTopology <> expectedTopology || topologySha256 canonicalPath <> expectedTopology then
+            failwith "canonical registry receipt does not preserve the inspected registry topology"
         registry["sha256"] <- JsonValue.Create(receiptHash)
         registry["canonicalMerged"] <- JsonValue.Create(true)
     | _ -> failwith "completion receipt fields are inconsistent"
