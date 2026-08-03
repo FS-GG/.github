@@ -1864,7 +1864,7 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
             |> Seq.filter (fun entry ->
                 let row = entry.AsObject()
                 not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository))
-            |> Seq.iter kept.Add
+            |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             root.["securityObligations"] <- kept
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | _ -> ()
