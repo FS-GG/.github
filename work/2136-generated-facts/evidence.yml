@@ -126,11 +126,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/core-release.bom-free.trx
-      digest: "sha256:14d74e245eabc39d002e0f8759c7b36631b5af94a824547857ee1bf3da6f4aef"
+      source: work/2136-generated-facts/test-results/projection-fixture.txt
+      digest: "sha256:c2d662c6ff5403c165a7a0fd356c286a73daf1330c9186fbf441b1bf8bcedc03"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 574
+      passed: 27
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -153,11 +153,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/core-release.bom-free.trx
-      digest: "sha256:14d74e245eabc39d002e0f8759c7b36631b5af94a824547857ee1bf3da6f4aef"
+      source: work/2136-generated-facts/test-results/skill-quality-fixture.txt
+      digest: "sha256:f8a0df817918c64402f230b0346213afc97129466bddbfb27b7c5eccf9566a61"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 574
+      passed: 20
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -180,11 +180,11 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/core-release.bom-free.trx
-      digest: "sha256:14d74e245eabc39d002e0f8759c7b36631b5af94a824547857ee1bf3da6f4aef"
+      source: work/2136-generated-facts/test-results/package-verification.txt
+      digest: "sha256:5d040273ce63e9d5dd37e747c38b482f539b6318a759f709115c40b4f80115bd"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 574
+      passed: 2
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
