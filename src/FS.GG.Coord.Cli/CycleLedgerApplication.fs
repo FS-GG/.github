@@ -46,7 +46,7 @@ module CycleLedgerApplication =
         let round = property "round" node
         match round.TryGetInt32() with
         | false, _ -> invalidArg "round" "must be an integer"
-        | true, value -> { Schema = text "schema" node; Provider = text "provider" node; WorkId = text "workId" node; CycleId = text "cycleId" node; SourceRevision = text "sourceRevision" node; CandidateHead = text "candidateHead" node; Verdict = text "verdict" node; Round = value; PlayerJourney = journey }
+        | true, value -> { Schema = text "schema" node; Provider = text "provider" node; WorkId = text "workId" node; CycleId = text "cycleId" node; SourceRevision = text "sourceRevision" node; CandidateHead = text "candidateHead" node; Verdict = text "verdict" node; Round = value; PlayerJourney = journey; JourneyRequired = optionalBool "journeyRequired" node }
     let private evidence node =
         let merged = property "mergedPr" node
         let mergedPr = match merged.ValueKind with | JsonValueKind.Null -> None | _ -> match merged.TryGetInt32() with | true, value -> Some value | _ -> invalidArg "mergedPr" "must be integer or null"
