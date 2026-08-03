@@ -181,6 +181,38 @@ else
   bad "secure resume must converge matching provenance" "rc=$secure_rc: $secure_out"
 fi
 
+# Production failure matrix: the secure route must fail closed for a mutation failure and for a
+# stale post-write read, leaving the exact durable obligation in place and never echoing a token.
+for secure_case in mutation-failure stale-reread; do
+  CASE_WORK="$WORK/$secure_case-workspace"; mkdir -p "$CASE_WORK/.fsgg" "$WORK/$secure_case-bin"
+  printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CASE_WORK/.fsgg/scaffold-provenance.json"
+  cat > "$WORK/$secure_case-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case " \$* " in
+  *'mutation('* ) printf '%s\n' '{"errors":[{"message":"TOKEN-SHOULD-NOT-LEAK"}]}' ; exit 1 ;;
+  * ) printf '%s\\n' '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"OPEN"}}}' ;;
+esac
+EOF
+  if [ "$secure_case" = stale-reread ]; then
+    cat > "$WORK/$secure_case-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in
+  *'mutation('* ) printf '%s\n' '{"data":{"updateRepository":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY"}}}}' ;;
+  * ) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"OPEN"}}}' ;;
+esac
+EOF
+  fi
+  chmod +x "$WORK/$secure_case-bin/gh"
+  set +e
+  case_out="$(PATH="$WORK/$secure_case-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CASE_WORK" --repo acme/app 2>&1)"; case_rc=$?
+  set -e
+  if [ "$case_rc" -ne 0 ] && grep -q 'repository-issue-policy' "$CASE_WORK/.fsgg/scaffold-provenance.json" && ! printf '%s' "$case_out" | grep -q 'TOKEN-SHOULD-NOT-LEAK'; then
+    ok "secure $secure_case fails closed and preserves its obligation without token output"
+  else
+    bad "secure $secure_case must fail closed" "rc=$case_rc: $case_out"
+  fi
+done
+
 # ── Execution leg: a local descriptor server + stub fsgg-sdd prove real provider routing ─────────
 # Parser acceptance alone is insufficient: each invocation below fetches the selected descriptor,
 # runs the actual orchestrator, and records the scaffold/doctor argv in the stub. The local HTTP

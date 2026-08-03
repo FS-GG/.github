@@ -439,6 +439,38 @@ let private applyProjectVisibility (owner: string) (title: string) (desired: boo
             | ProjectObserved(_, _, actual) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
             | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project visibility read failed: " + reason)
 
+/// GitHub's supported ProjectV2 collaborator mutation is used for the explicit writer allowlist.
+/// Collaborator ids cannot be safely guessed from display names, so the typed API's own read is
+/// the authority: when it cannot expose the collaborators we retain a pending human obligation.
+let private applyProjectWriters (owner: string) (title: string) (desired: string list) : ProjectAccessReceipt =
+    match applyProjectVisibility owner title None with
+    | ProjectPending _ as receipt -> receipt
+    | ProjectObserved(project, id, _) ->
+        // ProjectV2 accepts actor ids, not names. Resolve each supplied user identity through the
+        // typed API; teams use the same explicit `team:` spelling as the command contract.
+        let resolve writer =
+            let query = "query($login:String!){user(login:$login){id}}"
+            let code, output = graphql query [ "login", writer ]
+            if code <> 0 then None
+            else
+                try Some(JsonNode.Parse(output).AsObject().["data"].AsObject().["user"].AsObject().["id"].GetValue<string>())
+                with _ -> None
+        let collaborators =
+            desired
+            |> List.map (fun writer -> resolve writer |> Option.map (fun id -> sprintf "{userId:%s,role:WRITE}" id))
+        if collaborators |> List.exists Option.isNone then
+            ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
+        else
+            let collaborators = collaborators |> List.choose (fun value -> value) |> String.concat ","
+            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2CollaboratorInput!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){projectV2{id}}}"
+            let code, _ = graphql mutation [ "id", id; "collaborators", "[" + collaborators + "]" ]
+            if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
+            else
+                match inspectProject owner title with
+                | ProjectObserved(_, _, _) ->
+                    ProjectPending(project, "GitHub's typed ProjectV2 query does not expose effective writers for a post-write allowlist read; verify Project → Settings → Manage access")
+                | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
+
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
 /// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
 /// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
@@ -452,8 +484,11 @@ let private workspaceSecurity (opts: Options) : Outcome =
             | RepositoryPending(repo, reason) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
     let projectMessage =
         match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
-        | ProjectObserved(project, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist still require the recorded human verification" project
-        | ProjectObserved(project, _, false) -> sprintf "Project %s is private (preserved); base access still requires the recorded human verification" project
+        | ProjectObserved(project, _, _) ->
+            match applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters with
+            | ProjectObserved(_, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
+            | ProjectObserved(_, _, false) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
+            | ProjectPending(_, reason) -> sprintf "Project access pending for %s — %s" project reason
         | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
     Warned(repositoryMessage + "; " + projectMessage)
 
@@ -462,7 +497,7 @@ let private workspaceSecurity (opts: Options) : Outcome =
 /// The Project obligation is retained even after repository policy succeeds: GitHub's ordinary
 /// ProjectV2 read does not expose an effective/base access verdict, so visibility or
 /// `viewerCanUpdate` cannot safely clear it.
-let private recordSecurityObligations (opts: Options) (outcome: Outcome) =
+let private recordSecurityObligations (opts: Options) (_outcome: Outcome) =
     let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
     try
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
@@ -478,8 +513,15 @@ let private recordSecurityObligations (opts: Options) (outcome: Outcome) =
         repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
         repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
         repo.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure --repo %s" (opts.WorkspaceRepo |> Option.defaultValue "owner/repository"))
-        repo.["state"] <- JsonValue.Create(match outcome with Succeeded -> "verified" | _ -> "pending")
-        obligations.Add repo
+        let repositoryVerified =
+            match opts.WorkspaceRepo with
+            | Some repository ->
+                match secureRepository repository with
+                | RepositorySecured _ -> true
+                | RepositoryPending _ -> false
+            | None -> false
+        repo.["state"] <- JsonValue.Create(if repositoryVerified then "verified" else "pending")
+        if not repositoryVerified then obligations.Add repo
         let project = JsonObject()
         project.["kind"] <- JsonValue.Create "project-access"
         project.["target"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
@@ -488,7 +530,7 @@ let private recordSecurityObligations (opts: Options) (outcome: Outcome) =
         let writers = JsonArray()
         opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
         project.["trustedWriters"] <- writers
-        project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist."
+        project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist. Re-run new-sdd-workspace secure <workspace> --project owner/title --public-board|--private-board --trusted-writers ids after verification."
         project.["state"] <- JsonValue.Create "pending-human-verification"
         obligations.Add project
         root.["securityObligations"] <- obligations
@@ -1009,7 +1051,7 @@ let private usage () =
     AnsiConsole.MarkupLine "[bold]Usage[/]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
-    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]--repo owner/repository[/]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
@@ -1017,6 +1059,8 @@ let private usage () =
     AnsiConsole.MarkupLine "                        inverse of the scaffold-time step): vendor the kit + write the board"
     AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
     AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
+    AnsiConsole.MarkupLine "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
@@ -1059,6 +1103,8 @@ type private Draft =
       WorkspaceRepo: string option
       BoardOwner: string option
       BoardTitle: string option
+      PublicBoard: bool option
+      TrustedWriters: string list option
       ChoreLocks: string option }
 
 let private emptyDraft =
@@ -1075,6 +1121,8 @@ let private emptyDraft =
       WorkspaceRepo = None
       BoardOwner = None
       BoardTitle = None
+      PublicBoard = None
+      TrustedWriters = None
       ChoreLocks = None }
 
 /// Require a non-blank answer — the shared validator for the text prompts.
@@ -1127,6 +1175,11 @@ let private paramsPanel (d: Draft) =
          match d.WorkspaceRepo with
          | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
          | None -> sprintf "%s [grey](default on)[/]" board)
+    row "Project visibility"
+        (match d.PublicBoard with Some true -> "[green]public-readable[/]" | Some false -> "[aqua]private[/]" | None -> pendingCell)
+    row "Project base permission" "[yellow]Read (human verification required)[/]"
+    row "Project writers"
+        (d.TrustedWriters |> Option.map (fun writers -> sprintf "[green]%s[/]" (Markup.Escape(String.Join(", ", writers)))) |> Option.defaultValue pendingCell)
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
     panel.Border <- BoxBorder.Rounded
@@ -1191,6 +1244,13 @@ let private previewPanel (d: Draft) =
     let coordination =
         tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
     coordination.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
+    let access = tree.AddNode "[yellow]Project access boundary[/]  [grey](base Read requires operator verification)[/]"
+    access.AddNode(
+        match d.PublicBoard with
+        | Some true -> "[green]public-readable[/]"
+        | Some false -> "[aqua]private[/]"
+        | None -> pendingCell) |> ignore
+    access.AddNode(sprintf "writers: %s" (d.TrustedWriters |> Option.map (String.concat ", " >> Markup.Escape) |> Option.defaultValue pendingCell)) |> ignore
 
     let panel = Panel(tree)
     panel.Header <- PanelHeader "[bold]scaffold preview[/]"
@@ -1216,6 +1276,8 @@ let private equivalentCommand (d: Draft) =
     (match d.WorkspaceRepo with
      | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
      | _ -> ())
+    (match d.PublicBoard with Some true -> parts.Add "--public-board" | Some false -> parts.Add "--private-board" | None -> ())
+    (match d.TrustedWriters with Some writers -> parts.Add(sprintf "--trusted-writers %s" (String.Join(",", writers))) | None -> ())
     (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
     (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
     (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
@@ -1362,17 +1424,38 @@ let private interactive () : Options option =
                         .AllowEmpty())
                 .Trim()
         if String.IsNullOrWhiteSpace raw then None else Some raw
+    draftView draft
+    let publicBoard =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Product Project [green]visibility[/]?")
+                .AddChoices([| "private — preserve private access"; "public — public-readable, never public-writable" |]))
+            .StartsWith "public"
+    draft <- { draft with PublicBoard = Some publicBoard }
+    draftView draft
+    let trustedWriters =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("  Explicit Project [green]writers[/] [grey](team/user ids, comma-separated)[/]?")
+                .Validate(fun (s: string) -> required "trusted writer allowlist" s))
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        |> Array.map (fun s -> s.Trim())
+        |> Array.filter (String.IsNullOrWhiteSpace >> not)
+        |> List.ofArray
     draft <-
         { draft with
             WorkspaceRepo = Some workspaceRepo
             BoardOwner = Some boardOwner
             BoardTitle = Some boardTitle
+            PublicBoard = Some publicBoard
+            TrustedWriters = Some trustedWriters
             ChoreLocks = choreLocks }
 
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some(assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks)
+        Some({ assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks with
+                 PublicBoard = Some publicBoard
+                 TrustedWriters = trustedWriters })
     else
         None
 
@@ -1869,6 +1952,22 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | _ -> ()
 
+let private clearProjectSecurityObligation (target: string) (project: string) =
+    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+    if File.Exists path then
+        let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+        match root.["securityObligations"] with
+        | :? JsonArray as obligations ->
+            let kept = JsonArray()
+            obligations
+            |> Seq.filter (fun entry ->
+                let row = entry.AsObject()
+                not (row.["kind"].GetValue<string>() = "project-access" && row.["target"].GetValue<string>() = project))
+            |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            root.["securityObligations"] <- kept
+            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+        | _ -> ()
+
 let private runSecure (target: string option) (repository: string) : int =
     match secureRepository repository with
     | RepositorySecured(repo, prior, actor) ->
@@ -1878,6 +1977,24 @@ let private runSecure (target: string option) (repository: string) : int =
     | RepositoryPending(repo, reason) ->
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
         1
+
+let private runSecureProject (target: string) (board: string) (isPublic: bool) (writers: string list) : int =
+    let owner, title = parseBoard board
+    match applyProjectVisibility owner title (Some isPublic) with
+    | ProjectPending(project, reason) ->
+        AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+        1
+    | ProjectObserved(project, _, _) ->
+        match applyProjectWriters owner title writers with
+        | ProjectObserved(_, _, _) ->
+            // The supported API cannot prove the organization base permission.  Keep the durable
+            // human obligation rather than falsely clearing it; the observable visibility/writers
+            // receipt is nevertheless emitted for the operator's Manage access verification.
+            AnsiConsole.MarkupLine(sprintf "[yellow]pending human verification:[/] %s; requested writers [%s]; verify base Read at Project → Settings → Manage access" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+            1
+        | ProjectPending(_, reason) ->
+            AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+            1
 
 [<EntryPoint>]
 let main argv =
@@ -1907,6 +2024,10 @@ let main argv =
             2
     | [ "secure"; "--repo"; repository ] -> runSecure None repository
     | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
+    | [ "secure"; target; "--project"; board; "--public-board"; "--trusted-writers"; writers ] ->
+        runSecureProject target board true (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray)
+    | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
+        runSecureProject target board false (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray)
     | "secure" :: _ ->
         AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
         2
