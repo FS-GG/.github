@@ -337,6 +337,111 @@ let private parseBoard (value: string) : string * string =
     | -1 -> value, "Coordination"
     | i -> value.Substring(0, i), value.Substring(i + 1)
 
+/// Parse the only repository identity accepted by the policy client. Keeping this typed at the
+/// boundary prevents a shell fragment or a prose URL from reaching `gh` as an authority.
+let private parseRepository (value: string) : Result<string * string, string> =
+    match value.Split('/', StringSplitOptions.RemoveEmptyEntries) with
+    | [| owner; name |] when not (String.IsNullOrWhiteSpace owner) && not (String.IsNullOrWhiteSpace name) ->
+        Ok(owner, name)
+    | _ -> Error "--repo must be an owner/repository identity"
+
+/// A repository-policy result is deliberately separate from the orchestration outcome: a failed
+/// read is a no-verdict, never evidence that issue intake is restricted.
+type private RepositoryPolicyReceipt =
+    | RepositorySecured of repository: string * prior: string * actor: string
+    | RepositoryPending of repository: string * reason: string
+
+let private graphql (query: string) (variables: (string * string) list) =
+    let args =
+        [ yield "api"; yield "graphql"; yield "-f"; yield "query=" + query
+          for name, value in variables do
+              yield "-F"
+              yield sprintf "%s=%s" name value ]
+    runProcess false "gh" args
+
+/// Apply the repository's typed `IssueCreationPolicy` only after reading it, then re-read the
+/// exact field. This is intentionally not a best-effort security claim: unavailable `gh`, a 404,
+/// permission failure, mutation failure, or stale post-write read becomes `RepositoryPending`.
+let private secureRepository (repository: string) : RepositoryPolicyReceipt =
+    match parseRepository repository with
+    | Error reason -> RepositoryPending(repository, reason)
+    | Ok(owner, name) ->
+        let read = "query($owner:String!,$name:String!){viewer{login} repository(owner:$owner,name:$name){id issueCreationPolicy}}"
+        let code, output = graphql read [ "owner", owner; "name", name ]
+        if code <> 0 then
+            RepositoryPending(repository, "repository policy could not be read (missing repository or administration permission)")
+        else
+            try
+                let root = JsonNode.Parse(output).AsObject()
+                let repo = root.["data"].AsObject().["repository"].AsObject()
+                let id = repo.["id"].GetValue<string>()
+                let prior = repo.["issueCreationPolicy"].GetValue<string>()
+                let actor = root.["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+                if prior = "COLLABORATORS_ONLY" then
+                    RepositorySecured(repository, prior, actor)
+                else
+                    let mutation = "mutation($id:ID!){updateRepository(input:{repositoryId:$id,issueCreationPolicy:COLLABORATORS_ONLY}){repository{issueCreationPolicy}}}"
+                    let changed, _ = graphql mutation [ "id", id ]
+                    if changed <> 0 then
+                        RepositoryPending(repository, "IssueCreationPolicy mutation failed")
+                    else
+                        let reread, verified = graphql read [ "owner", owner; "name", name ]
+                        if reread <> 0 then
+                            RepositoryPending(repository, "post-write repository policy read failed")
+                        else
+                            let finalPolicy = JsonNode.Parse(verified).AsObject().["data"].AsObject().["repository"].AsObject().["issueCreationPolicy"].GetValue<string>()
+                            if finalPolicy = "COLLABORATORS_ONLY" then RepositorySecured(repository, prior, actor)
+                            else RepositoryPending(repository, sprintf "post-write policy was %s, not COLLABORATORS_ONLY" finalPolicy)
+            with _ ->
+                RepositoryPending(repository, "repository policy response was not a typed GitHub result")
+
+/// Secure repository issue intake where the resource exists. Project access remains an explicit
+/// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
+/// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
+let private workspaceSecurity (opts: Options) : Outcome =
+    match opts.WorkspaceRepo with
+    | None -> Warned "repository security pending — pass --repo owner/repository after the repository exists"
+    | Some repository ->
+        match secureRepository repository with
+        | RepositorySecured(repo, prior, actor) ->
+            Warned(sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s); Project access still requires its explicit typed allowlist verification" repo prior actor)
+        | RepositoryPending(repo, reason) ->
+            Warned(sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason)
+
+/// Persist the security facts that could not be established. This lives beside the scaffold's
+/// provenance rather than in console prose so a later operator has one exact recovery target.
+/// The Project obligation is retained even after repository policy succeeds: GitHub's ordinary
+/// ProjectV2 read does not expose an effective/base access verdict, so visibility or
+/// `viewerCanUpdate` cannot safely clear it.
+let private recordSecurityObligations (opts: Options) (outcome: Outcome) =
+    let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
+    try
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+        let root =
+            if File.Exists dest then
+                match JsonNode.Parse(File.ReadAllText dest) with
+                | :? JsonObject as o -> o
+                | _ -> JsonObject()
+            else JsonObject()
+        let obligations = JsonArray()
+        let repo = JsonObject()
+        repo.["kind"] <- JsonValue.Create "repository-issue-policy"
+        repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
+        repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+        repo.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure --repo %s" (opts.WorkspaceRepo |> Option.defaultValue "owner/repository"))
+        repo.["state"] <- JsonValue.Create(match outcome with Succeeded -> "verified" | _ -> "pending")
+        obligations.Add repo
+        let project = JsonObject()
+        project.["kind"] <- JsonValue.Create "project-access"
+        project.["target"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
+        project.["expectedBasePermission"] <- JsonValue.Create "READ"
+        project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist."
+        project.["state"] <- JsonValue.Create "pending-human-verification"
+        obligations.Add project
+        root.["securityObligations"] <- obligations
+        File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+    with _ -> ()
+
 /// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
 /// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
 let private fetchText (url: string) : Result<string, string> =
@@ -851,12 +956,14 @@ let private usage () =
     AnsiConsole.MarkupLine "[bold]Usage[/]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]--repo owner/repository[/]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
     AnsiConsole.MarkupLine "  [aqua]retrofit[/] <target-dir>   idempotently wire coordination ONTO an existing workspace (the"
     AnsiConsole.MarkupLine "                        inverse of the scaffold-time step): vendor the kit + write the board"
     AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
@@ -1508,6 +1615,20 @@ let private run (opts: Options) : int =
              | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
             results.Add { Title = "coordination"; Outcome = outcome }
 
+        // 5b · repository issue-intake policy. This is intentionally a distinct, typed step from
+        // board wiring: a board can be readable while its repository has not been created yet, and
+        // that must produce a durable pending security result rather than a false secured summary.
+        if opts.Coordinate && not fatal then
+            step 5 "repository security"
+            let outcome = workspaceSecurity opts
+            recordSecurityObligations opts outcome
+            match outcome with
+            | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] repository issue policy verified"
+            | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
+            | Skipped reason -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape reason))
+            | Failed note -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
+            results.Add { Title = "repository security"; Outcome = outcome }
+
         // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
             step 6 "fsgg-sdd doctor"
@@ -1658,6 +1779,18 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.Write panel
             1
 
+/// Re-run just the repository policy after a freshly scaffolded repository has been created or
+/// an operator has received the required administration grant. This is the resumable half of the
+/// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
+let private runSecure (repository: string) : int =
+    match secureRepository repository with
+    | RepositorySecured(repo, prior, actor) ->
+        AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+        0
+    | RepositoryPending(repo, reason) ->
+        AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
+        1
+
 [<EntryPoint>]
 let main argv =
     match List.ofArray argv with
@@ -1684,6 +1817,10 @@ let main argv =
             AnsiConsole.WriteLine()
             usage ()
             2
+    | [ "secure"; "--repo"; repository ] -> runSecure repository
+    | "secure" :: _ ->
+        AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
+        2
     | args ->
         match parse args with
         | Ok opts -> run opts

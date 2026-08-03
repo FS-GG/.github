@@ -54,6 +54,24 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
 
+### Public-content and board-access boundary
+
+When `--repo owner/repository` names an existing repository, the scaffolder reads
+its typed GitHub `IssueCreationPolicy`, changes it to
+`COLLABORATORS_ONLY` only when needed, and re-reads the policy before reporting a
+receipt. An unreadable repository, inadequate administration permission, failed
+mutation, or stale post-write result is reported as **pending**, never as secured.
+Fresh workspaces that do not yet have a GitHub repository likewise remain pending
+until the repository exists and the command is rerun with `--repo`.
+
+Project access is a separate boundary: public visibility means internet-readable,
+not internet-writable. The supported configuration is organization base permission
+`Read`, with `Write` granted only to explicit trusted teams or people; `Admin`
+remains narrower. Project `Write` authorizes project-only draft issues—GitHub does
+not offer a draft-item `COLLABORATORS_ONLY` switch. See the durable
+[public-content trust boundary](../../docs/coordination/untrusted-content-boundary.md)
+for the remaining untrusted inputs and operator verification path.
+
 ### Coordination by default (ADR-0019)
 
 By default, **step 5 wires the workspace to a coordination board** so `/pnext-item` and `/check-board`
