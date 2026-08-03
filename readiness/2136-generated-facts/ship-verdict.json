@@ -4,10 +4,10 @@
   "workId": "2136-generated-facts",
   "stage": "ship",
   "status": "shipReady",
-  "generator": "FS.GG.SDD.Artifacts/0.32.0",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
   "sourcesDigest": {
     "algorithm": "sha256",
-    "value": "dadc00de7ca9311844af111b6cf2ea0f65343046cdbfef69adad4d1bfb98b2b6"
+    "value": "dc102747243f83e225f244b56dee4ef1ae0db8ab36fd3174d55d11c238ecf29f"
   },
   "verificationReadiness": {
     "status": "verificationReady",

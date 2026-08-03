@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/0.32.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
   "workId": "2136-generated-facts",
   "sources": [
     {
       "path": "readiness/2136-generated-facts/ship.json",
-      "digest": "sha256:3624e14114144cd49432f166f5e2970f056a3b055bb7880ed511be9e32f3b0d1",
+      "digest": "sha256:d19b8632751e662a0fdc817384f32abb0315377855f0d4e306cebad16ff0d937",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2136-generated-facts/verify.json",
-      "digest": "sha256:7ad78618901818937df2986e974d783f790a3640f455e363855423022b7502ca",
+      "digest": "sha256:8b78acf4649dce7c2a59cb6ccda65d467fe4eba40cccce544c5b81080d960330",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2136-generated-facts/work-model.json",
-      "digest": "sha256:da6e0e3ad12023f5dc1795d3078c51bfa258970d12b8758a01afdd51bf9451b0",
+      "digest": "sha256:51ee39f1ad28975dd937640c589d43eb52feed063109e562f8f854dae90f2ca4",
       "schemaVersion": 1
     }
   ],
