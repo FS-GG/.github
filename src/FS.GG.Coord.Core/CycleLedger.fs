@@ -47,7 +47,7 @@ module CycleLedger =
             let complete id = ledger.Units |> List.exists (fun unit -> unit.Id = id && unit.Completed)
             ledger.Units |> List.filter (fun unit -> not unit.Completed && (unit.Dependencies |> List.forall complete)) |> Ok
 
-    let register ledger executor repository baseCommit live =
+    let register ledger executor repository baseCommit selectedUnit parallelAuthorized disjointTouchSets live =
         match inspect ledger with
         | Error errors -> Error errors
         | Ok ready ->
@@ -62,7 +62,12 @@ module CycleLedger =
                     | [] -> Ok(Register { Id = id; UnitId = unit.Id; Executor = executor; Repository = repository; BaseCommit = baseCommit })
                     | [ cycle ] when cycle.Id = id -> Ok(Resume cycle)
                     | _ -> Error [ $"unit %s{unit.Id} has an incompatible live cycle" ]
-            | _ -> Error [ "multiple dependency-ready units require explicit operator scheduling" ]
+            | ready ->
+                match selectedUnit |> Option.bind (fun id -> ready |> List.tryFind (fun unit -> unit.Id = id)) with
+                | Some unit when parallelAuthorized && disjointTouchSets ->
+                    let id = cycleId unit.Id executor repository baseCommit
+                    Ok(Register { Id = id; UnitId = unit.Id; Executor = executor; Repository = repository; BaseCommit = baseCommit })
+                | _ -> Error [ "multiple dependency-ready units require selected unit, explicit operator authorization, and disjoint touch-sets" ]
 
     let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead expectedProvider expectedSchema receipt =
         let errors =
@@ -107,8 +112,13 @@ module CycleLedger =
             let missingRollup = accepted |> List.map _.Id |> List.filter (fun id -> not (List.contains id rollupCycleIds))
             let unchecked = ledger.Units |> List.filter (fun unit -> not unit.Completed || List.isEmpty unit.Evidence) |> List.map _.Id
             let duplicateAccepted = acceptedUnits |> List.distinct |> List.length <> acceptedUnits.Length
+            let invalidCycles =
+                accepted |> List.filter (fun cycle ->
+                    cycle.BaseCommit <> ledger.SourceRevision
+                    || cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit)
             if not (List.isEmpty unchecked) then Error [ "required units are not checked with evidence: " + String.concat ", " unchecked ]
             elif duplicateAccepted then Error [ "accepted cycles must cover each unit exactly once" ]
+            elif not (List.isEmpty invalidCycles) then Error [ "accepted cycles are not source-bound registered cycle identities" ]
             elif not (List.isEmpty missing) then Error [ "required units are missing accepted cycles: " + String.concat ", " missing ]
             elif not (List.isEmpty missingRollup) then Error [ "accepted cycles are missing from roll-up: " + String.concat ", " missingRollup ]
             else Ok Complete
