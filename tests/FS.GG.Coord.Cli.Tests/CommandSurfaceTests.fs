@@ -34,6 +34,7 @@ module CommandSurfaceTests =
         [
           // DECISION — pure; read state on stdin and touch no network (ADR-0034).
           "decide", Decide
+          "delivery", DeliveryCmd
           "driver", DriverCmd
           "scan", Scan
           "lanes", LanesView
@@ -516,7 +517,7 @@ module CommandSurfaceTests =
         // change was being written, an emitter deliberately broken to drop every `writesWhen` object turned
         // the test above red and left THIS one green. A gate that survives its own incident is the shape
         // #266 names. So the flag-gated verbs are named: `reap` and `reconcile` are the pair #1534 was filed
-        // about, and `flush` is the opposite polarity.
+        // about, `flush` is the opposite polarity, and `delivery` is the head-SHA-guarded merge path.
         let flagGated =
             rows
             |> Map.filter (fun _ row ->
@@ -526,7 +527,7 @@ module CommandSurfaceTests =
             |> Map.keys
             |> Set.ofSeq
 
-        Assert.Equal<Set<string>>(set [ "flush"; "reap"; "reconcile" ], flagGated)
+        Assert.Equal<Set<string>>(set [ "delivery"; "flush"; "reap"; "reconcile" ], flagGated)
 
         let bad =
             [ for verb, row in Map.toList rows do

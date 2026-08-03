@@ -4,6 +4,7 @@ module Options =
 
     type Command =
         | Decide
+        | DeliveryCmd
         | DriverCmd
         | Scan
         | LanesView
@@ -267,6 +268,10 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
+  delivery <ref> [--pr N] [--apply] [--json|--text]
+                                             re-read one claimed item's delivery facts and emit its sole
+                                             freshness-bound action; --apply performs only guarded landing
+  delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
@@ -468,6 +473,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
         | Decide -> Both Json // Program.fs `decide`
+        | DeliveryCmd -> Both Json // Program.fs `delivery`
         | DriverCmd -> Both Json // Program.fs `driver`
         | LanesView -> Both Json // Program.fs `lanes`
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
@@ -690,7 +696,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> Only jsonReaders
         | FText -> Only textReaders
 
-        | FSnapshot -> Only [ Decide; DriverCmd; LanesView ]
+        | FSnapshot -> Only [ Decide; DeliveryCmd; DriverCmd; LanesView ]
         | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
@@ -711,7 +717,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FAllRepos -> Only [ Who ]
         | FAll -> Only [ Ready ]
         | FActive -> Only [ Overlap ]
-        | FApply -> Only [ Reap; Reconcile; Followup ]
+        | FApply -> Only [ DeliveryCmd; Reap; Reconcile; Followup ]
         | FPeek -> Only [ Inbox ]
         | FDryRun -> Only [ Flush ]
         | FStrict -> Only [ LintCmd ]
@@ -722,7 +728,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FEvidence -> Only [ DoneCmd ]
         | FFlip -> Only [ DoneCmd ]
         | FPartial -> Only [ DoneCmd ]
-        | FPr -> Only [ DoneCmd; VerifyPaths ]
+        | FPr -> Only [ DeliveryCmd; DoneCmd; VerifyPaths ]
         | FIssue -> Only [ VerifyPaths ]
         | FWarn -> Only [ VerifyPaths ]
         | FWait -> Only [ Landable ]
@@ -946,6 +952,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
+        | DeliveryCmd -> WritesIf(OnlyWhenGiven FApply)
         | DriverCmd -> Reads
         | LanesView -> Reads
         | Facts -> Reads
@@ -1078,6 +1085,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     let private commandName (c: Command) : string =
         match c with
         | Decide -> "decide"
+        | DeliveryCmd -> "delivery"
         | DriverCmd -> "driver"
         | Scan -> "scan"
         | LanesView -> "lanes"
@@ -1773,6 +1781,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match args with
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+        | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
         | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest

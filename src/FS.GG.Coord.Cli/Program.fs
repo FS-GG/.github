@@ -319,6 +319,9 @@ let main argv =
 
             | Decide -> decide opts
 
+            | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
+            | DeliveryCmd -> Client.run opts
+
             | LanesView -> lanes opts
 
             | Facts -> facts opts

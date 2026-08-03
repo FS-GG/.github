@@ -184,6 +184,8 @@ the worker's own heartbeat/release/done operations. Neither behavior is claimed 
     <Compile Include="Snapshot.fs" />
     <Compile Include="Options.fsi" />
     <Compile Include="Options.fs" />
+    <Compile Include="DeliveryApplication.fsi" />
+    <Compile Include="DeliveryApplication.fs" />
     <Compile Include="Identity.fsi" />
     <Compile Include="Identity.fs" />
     <Compile Include="RefParsing.fsi" />

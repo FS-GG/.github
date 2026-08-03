@@ -18,6 +18,7 @@ module Options =
     /// adapter — they are the surface the shim (ADR-0034 §4.4) execs in place of the bash client.
     type Command =
         | Decide
+        | DeliveryCmd
         | DriverCmd
         | Scan
         | LanesView

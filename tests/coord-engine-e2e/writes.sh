@@ -825,6 +825,31 @@ no_mutation_snapshot() {
 no_mutation_snapshot "decide" decide
 no_mutation_snapshot "lanes" lanes
 
+# `delivery --snapshot` is the hermetic no-IO boundary for the lifecycle decision.  Exercise both
+# contract polarities against a complete accepted/guarded-land fact set: `--apply` is meaningful only
+# for the live adapter, so the snapshot boundary must still return the same decision without issuing a
+# merge.  This makes the newly advertised command and its conditional argv surface executable without
+# inventing a second HTTP fixture solely for the pure adapter.
+delivery_snapshot='{"freshness":{"itemRef":"FS-GG/.github#2131","claimGeneration":"fixture-claim","executor":"vole-418","branch":"item/2131-fixture","worktree":"/tmp/fixture","pullRequest":42,"headSha":"fixture-head","declaredPaths":["tests/coord-engine-e2e"],"boardState":"In review"},"itemBranchCanonical":true,"closingLinkageCanonical":true,"pathsVerified":true,"inReview":true,"review":{"markerValid":true,"criticIdentity":"curlew-ced5","headSha":"fixture-head","rounds":[1],"repairPhase":false,"checksGreen":true,"hostAccepted":true,"routeNotMeaningfulReason":"hermetic fixture"},"landable":true,"merged":false,"mergeReachable":false,"issueClosed":false,"boardDone":false,"claimReleased":false,"pendingWrites":0,"cleanupEligible":false,"obligationsDeclared":true,"obligations":[],"parkedReason":null}'
+mark_contract "delivery" "snapshot-conditional-driver"
+for delivery_mode in bare apply; do
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  if [ "$delivery_mode" = apply ]; then
+    delivery_out="$(printf '%s' "$delivery_snapshot" | run delivery --snapshot /dev/stdin --apply --json 2>&1)"; delivery_rc=$?
+  else
+    delivery_out="$(printf '%s' "$delivery_snapshot" | run delivery --snapshot /dev/stdin --json 2>&1)"; delivery_rc=$?
+  fi
+  delivery_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  if [ "$delivery_rc" -eq 0 ] \
+     && printf '%s' "$delivery_out" | jq -e '.verdict == "next" and .action == "guardedLand"' >/dev/null \
+     && [ "$(printf '%s' "$delivery_ledger" | jq -r .count)" = 0 ]; then
+    mark_mode delivery "$delivery_mode"
+    ok "#2131: delivery --snapshot $delivery_mode executes its lifecycle decision without a wire mutation"
+  else
+    bad "#2131: delivery --snapshot $delivery_mode must execute without a wire mutation" "rc=$delivery_rc output=$delivery_out ledger=$delivery_ledger"
+  fi
+done
+
 # `predicate` is local too, but its successful arm needs a registry and its owning manifest.
 # The dedicated predicate suite owns the broader truth table; this small fixture merely makes the
 # command-contract driver's no-wire claim executable here.
@@ -991,7 +1016,7 @@ else
   duplicates="$(printf '%s\n' "${!CONTRACT_DRIVEN[@]}" | sort | uniq -d)"
   bad "#1569: command-contract coverage must be exact and non-vacuous" "missing: ${missing:-none}\nunexpected: ${unexpected:-none}\nduplicate driven rows: ${duplicates:-none}"
 fi
-for mode in 'flush:dry-run' 'flush:apply' 'reap:bare' 'reap:apply' 'reconcile:bare' 'reconcile:apply' 'next:argvCannotSay'; do
+for mode in 'delivery:bare' 'delivery:apply' 'flush:dry-run' 'flush:apply' 'reap:bare' 'reap:apply' 'reconcile:bare' 'reconcile:apply' 'next:argvCannotSay'; do
   if [ -n "${CONDITIONAL_MODES[$mode]:-}" ]; then
     ok "#1569: conditional contract polarity exercised: $mode"
   else
