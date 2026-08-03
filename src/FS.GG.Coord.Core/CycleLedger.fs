@@ -3,6 +3,7 @@ namespace FS.GG.Coord
 open System
 open System.Security.Cryptography
 open System.Text
+open System.Text.RegularExpressions
 
 module CycleLedger =
     type Unit = { Id: string; Dependencies: string list; Completed: bool; Evidence: string list }
@@ -80,7 +81,8 @@ module CycleLedger =
               if receipt.Provider <> expectedProvider then yield $"provider receipt must be from %s{expectedProvider}"
               if receipt.Schema <> expectedSchema then yield $"provider receipt schema must be %s{expectedSchema}"
               if receipt.GeneratorId <> expectedGenerator then yield $"provider generator must be %s{expectedGenerator}"
-              if not (receipt.ArtifactDigest.StartsWith("sha256:", StringComparison.Ordinal)) then yield "provider artifact digest is not sha256 provenance"
+              if not (Regex.IsMatch(receipt.ArtifactDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)) then yield "provider artifact digest is not exact sha256 provenance"
+              if not (Regex.IsMatch(receipt.GeneratorVersion, "^[0-9]+\\.[0-9]+\\.[0-9]+([-.][0-9A-Za-z.-]+)?$", RegexOptions.CultureInvariant)) then yield "provider generator version is not a concrete semantic version"
               if receipt.WorkId <> expectedWorkId then yield "provider receipt work id does not match"
               if receipt.CycleId <> expectedCycle.Id then yield "provider receipt cycle id does not match"
               if receipt.SourceRevision <> expectedSourceRevision then yield "provider receipt source revision is stale"
@@ -98,6 +100,7 @@ module CycleLedger =
         let validate provider schema generator receipt = validateProvider cycle.UnitId cycle ledger.SourceRevision expected provider schema generator receipt
         let errors =
             [ if cycle.BaseCommit <> ledger.SourceRevision then yield "cycle base commit is stale against ledger source revision"
+              if cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit then yield "cycle identity is not the stable source-bound identity"
               for provider, schema, generator, receipt in [ "fsgg-sdd", "fsgg.sdd.report/1", "FS.GG.SDD.Artifacts", implementation; "critique", "fsgg.critique.report/3", "FS.GG.Critique", review; "feedback", "fsgg.feedback.report/2", "FS.GG.Feedback", feedback ] do
                   match validate provider schema generator receipt with Error reasons -> yield! reasons | Ok () -> ()
               if evidence.ReviewHead <> expected then yield "review evidence head does not match implementation head"
