@@ -7,7 +7,7 @@ module CycleLedger =
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
         { Schema: string; Provider: string; WorkId: string; CycleId: string; SourceRevision: string
-          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option }
+          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option }

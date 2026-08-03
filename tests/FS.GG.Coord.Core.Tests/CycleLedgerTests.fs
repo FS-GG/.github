@@ -17,7 +17,7 @@ module CycleLedgerTests =
     [<Fact>]
     let ``provider receipts fail closed on stale source wrong cycle and missing player journey`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None }
+        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None; JourneyRequired = true }
         Assert.True(validateProvider "work" cycle "current" "head" "critique" "fsgg.critique.report/1" receipt |> Result.isError)
         let good = { receipt with SourceRevision = "base"; PlayerJourney = Some true }
         let evidence = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = Some 7; MergeHead = Some "head" }
@@ -42,7 +42,7 @@ module CycleLedgerTests =
     [<Fact>]
     let ``advancement requires a matching merged head and rejects an eleventh round`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true }
+        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true; JourneyRequired = true }
         let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None }
         Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle receipt receipt receipt incomplete |> Result.isError)
 

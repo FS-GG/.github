@@ -10,7 +10,7 @@ module CycleLedger =
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
         { Schema: string; Provider: string; WorkId: string; CycleId: string; SourceRevision: string
-          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option }
+          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option }
@@ -82,7 +82,7 @@ module CycleLedger =
               if receipt.Verdict <> "pass" then yield "provider receipt verdict is not pass"
               if receipt.Round < 0 || receipt.Round > 10 then yield "provider receipt round is outside the supported range" ]
         let errors =
-            if expectedProvider = "critique" && receipt.PlayerJourney <> Some true then
+            if expectedProvider = "critique" && receipt.JourneyRequired && receipt.PlayerJourney <> Some true then
                 errors @ [ "critique receipt is missing a passing player journey" ]
             else errors
         if List.isEmpty errors then Ok () else Error errors
