@@ -422,7 +422,7 @@ module ApplicationServiceTests =
             Assert.Equal("RepairEngineCurrency", root.GetProperty("action").GetString())
             let sourceSha = root.GetProperty("sourceSha").GetString()
             let receiptPath = Path.Combine(cache, "receipt.json")
-            let receipt approved observedAt source =
+            let receipt schema approved observedAt source =
                 let observation kind outcome =
                     let id = Driver.observationReceiptId kind observedAt source outcome
                     $"""{{"kind":"%s{kind}","observedAt":%d{observedAt},"sourceSha":"%s{source}","outcome":"%s{outcome}","receiptId":"%s{id}"}}"""
@@ -431,17 +431,23 @@ module ApplicationServiceTests =
                       "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ]
                     |> List.map (fun (kind, outcome) -> observation kind outcome)
                     |> String.concat ","
-                $"""{{"observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}]}}"""
+                $"""{{"schema":"%s{schema}","observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}]}}"""
             let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            File.WriteAllText(receiptPath, receipt false now sourceSha)
+            let schema = Protocol.ledgerPolicy.Schema
+            File.WriteAllText(receiptPath, receipt schema false now sourceSha)
             let _, consolidate, _ = invoke (Some receiptPath)
             use consolidateDoc = JsonDocument.Parse consolidate
             Assert.True(consolidateDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("Consolidate", consolidateDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true now sourceSha)
+            File.WriteAllText(receiptPath, receipt schema true now sourceSha)
             let _, dispatch, _ = invoke (Some receiptPath)
             use dispatchDoc = JsonDocument.Parse dispatch
             Assert.Equal("DispatchWave 3", dispatchDoc.RootElement.GetProperty("action").GetString())
+            File.WriteAllText(receiptPath, receipt "fsgg.coord.planning-receipt/0" true now sourceSha)
+            let _, wrongSchema, _ = invoke (Some receiptPath)
+            use wrongSchemaDoc = JsonDocument.Parse wrongSchema
+            Assert.False(wrongSchemaDoc.RootElement.GetProperty("receiptValid").GetBoolean())
+            File.WriteAllText(receiptPath, receipt schema true now sourceSha)
             let queued: Cache.Deferred =
                 { Ref = ".github#2127"; Field = "Status"; Value = "Ready"; At = "2026-08-02T00:00:00Z"
                   Worker = "host-2127"; Board = Some("FS-GG", "Coordination") }
@@ -460,22 +466,22 @@ module ApplicationServiceTests =
             use changedDoc = JsonDocument.Parse changed
             Assert.False(changedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             let claimedSource = changedDoc.RootElement.GetProperty("sourceSha").GetString()
-            File.WriteAllText(receiptPath, receipt true now claimedSource)
+            File.WriteAllText(receiptPath, receipt schema true now claimedSource)
             let _, resume, _ = invoke (Some receiptPath)
             use resumeDoc = JsonDocument.Parse resume
             Assert.Equal("ResumeSameWorker", resumeDoc.RootElement.GetProperty("action").GetString())
             claimed <- false
-            File.WriteAllText(receiptPath, receipt true (now - 301L) sourceSha)
+            File.WriteAllText(receiptPath, receipt schema true (now - 301L) sourceSha)
             let _, stale, _ = invoke (Some receiptPath)
             use staleDoc = JsonDocument.Parse stale
             Assert.False(staleDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("RepairEngineCurrency", staleDoc.RootElement.GetProperty("action").GetString())
-            File.WriteAllText(receiptPath, receipt true now "wrong-snapshot")
+            File.WriteAllText(receiptPath, receipt schema true now "wrong-snapshot")
             let _, mismatched, _ = invoke (Some receiptPath)
             use mismatchedDoc = JsonDocument.Parse mismatched
             Assert.False(mismatchedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.Equal("RepairEngineCurrency", mismatchedDoc.RootElement.GetProperty("action").GetString())
-            let malformed = (receipt true now sourceSha).Replace("\"receiptId\":\"", "\"receiptId\":\"malformed-")
+            let malformed = (receipt schema true now sourceSha).Replace("\"receiptId\":\"", "\"receiptId\":\"malformed-")
             File.WriteAllText(receiptPath, malformed)
             let _, malformedOutput, _ = invoke (Some receiptPath)
             use malformedDoc = JsonDocument.Parse malformedOutput

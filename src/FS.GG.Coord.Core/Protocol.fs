@@ -681,7 +681,7 @@ module Protocol =
     let ledgerPolicy =
         { Schema = "fsgg.coord.planning-receipt/1"
           ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
-          ReceiptFields = [ "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ]
+          ReceiptFields = [ "schema"; "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ]
           RequiredObservations =
             [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
               "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ] }
