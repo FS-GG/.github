@@ -162,7 +162,7 @@ chmod +x "$WORK/project-bin/gh"
 set +e
 project_out="$(PROJECT_LOG="$WORK/project.log" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform 2>&1)"; project_rc=$?
 set -e
-if [ "$project_rc" -eq 1 ] && printf '%s' "$project_out" | grep -q 'pending:' && grep -q 'updateProjectV2Collaborators' "$WORK/project.log" && grep -q 'teamId' "$WORK/project.log"; then
+if [ "$project_rc" -eq 1 ] && printf '%s' "$project_out" | grep -q 'partial verified receipt:' && grep -q 'updateProjectV2Collaborators' "$WORK/project.log" && grep -q 'teamId' "$WORK/project.log"; then
   ok "secure Project route resolves users/teams, mutates, and fails closed on unreadable effective writers"
 else
   bad "secure Project production route must reach typed mutation and retain no-verdict" "rc=$project_rc: $project_out"
