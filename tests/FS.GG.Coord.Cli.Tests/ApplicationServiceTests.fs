@@ -1909,10 +1909,16 @@ module ApplicationServiceTests =
     /// `rateLimited` meets an exhausted GraphQL budget on its item-id lookup, which is what makes its board
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
-        let items =
+        // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
+        // fixture therefore models the projection separately: only a subsequent scan after an accepted
+        // mutation observes Done.  The rate-limited item never reaches that transition.
+        let mutable written: Set<int> = Set.empty
+
+        let items () =
             closed
             |> List.map (fun n ->
-                $"""{{"status":{{"name":"In progress"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
+                let status = if written.Contains n then "Done" else "In progress"
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -1942,6 +1948,12 @@ module ApplicationServiceTests =
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         | None -> Error(Errors.NotFound "an item-id lookup with no number")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
+                        variables
+                        |> List.tryPick (fun (_, v) ->
+                            match v with
+                            | VId id when id.StartsWith "PVTI_" -> id.Substring("PVTI_".Length) |> Int32.TryParse |> function | true, n -> Some n | _ -> None
+                            | _ -> None)
+                        |> Option.iter (fun n -> written <- written.Add n)
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     elif document.Contains "projectsV2" then
                         ok
@@ -1953,7 +1965,7 @@ module ApplicationServiceTests =
                             """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
                         ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -1977,8 +1989,11 @@ module ApplicationServiceTests =
     /// because the four older kinds all write `Status` and so the hardcoded word was right for all of them.
     /// A rule exercised only where it is DERIVED is a rule nobody has watched run.
     let private classWorld (withClass: bool) =
-        let item =
-            """{"status":{"name":"Ready"},"blockedBy":null,"class":null,"content":{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
+        let mutable classWritten = false
+
+        let item () =
+            let boardClass = if classWritten then "{\"name\":\"defect\"}" else "null"
+            $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":%s{boardClass},"content":{{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
         Fake.Recorder(fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
@@ -1989,6 +2004,7 @@ module ApplicationServiceTests =
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "updateProjectV2ItemFieldValue" then
+                        classWritten <- true
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     elif document.Contains "projectsV2" then
                         ok
@@ -2004,7 +2020,7 @@ module ApplicationServiceTests =
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
-                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
