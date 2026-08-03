@@ -76,11 +76,13 @@ UNREADABLE = {int(n) for n in os.environ.get("ADDSTATUS_STATUS_UNREADABLE", "").
 
 LOCK = threading.Lock()
 
-# number -> {"item": item id or None (not on the board), "status": column name or None (unset)}
+# number -> {"item": item id or None (not on the board), "status": column name or None (unset),
+#            "blocked_by": coherent edge text when a Status=Blocked test needs one}
 BOARD = {
     901: {"item": None, "status": None},
     902: {"item": "PVTI_902", "status": None},
-    903: {"item": "PVTI_903", "status": "In progress"},
+    903: {"item": "PVTI_903", "status": "In progress",
+          "blocked_by": os.environ.get("ADDSTATUS_BLOCKED_BY_903", "")},
     904: {"item": "PVTI_904", "status": None},
     905: {"item": "PVTI_905", "status": "Ready"},
     906: {"item": "PVTI_906", "status": None},
@@ -182,7 +184,11 @@ def graphql(q, variables):
             row = BOARD.get(n)
         if not row or row["item"] is None:
             return {"data": {"repository": {"issue": {"projectItems": {"nodes": []}}}}, "rateLimit": RATE}
-        value = {"name": row["status"]} if row["status"] else None
+        value = (
+            {"text": row.get("blocked_by", "")}
+            if "Blocked by" in q
+            else ({"name": row["status"]} if row["status"] else None)
+        )
         return {
             "data": {"repository": {"issue": {"projectItems": {"nodes": [
                 {"project": {"number": PROJECT}, "fieldValueByName": value}]}}}},

@@ -422,13 +422,16 @@ module AddStatusDefaultTests =
     [<Fact>]
     let ``#2109 add --status Blocked proceeds for a live Blocked by edge without reading the body twice`` () =
         let body = """{"number":42,"body":"Paths: src/Thing.fs\n\nClass: defect"}"""
-        let transport = worldWithBodyAndBlockedBy NotOnBoard body (Some "FS-GG/FS.GG.SDD#9")
+        // A live board field exists only on an already-boarded item.  This is the explicit override
+        // route that previously held `In progress`, so the assertion proves both coherence and that
+        // `add --status Blocked` still wins over an existing column once the reason is real.
+        let transport = worldWithBodyAndBlockedBy (OnBoardSet "In progress") body (Some "FS-GG/FS.GG.SDD#9")
 
         let code, out = runAdd transport [ "add"; "FS.GG.SDD#42"; "--status"; "Blocked" ]
 
         Assert.Equal(0, code)
-        Assert.Equal(NewItemId, out.Trim())
-        Assert.True(transport.Logged(statusWrite NewItemId "opt_blocked"), $"log: %A{transport.Log}")
+        Assert.Equal(ItemId, out.Trim())
+        Assert.True(transport.Logged(statusWrite ItemId "opt_blocked"), $"log: %A{transport.Log}")
         Assert.Equal(1, transport.Count "issue-get FS-GG/FS.GG.SDD 42")
 
     // ---- AC1 — AND IT SAYS SO ----------------------------------------------------------------------
