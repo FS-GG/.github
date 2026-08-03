@@ -1,0 +1,228 @@
+schemaVersion: 1
+workId: 2133-resumable-cycle-ledger
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/2133-resumable-cycle-ledger/spec.md
+sourceClarifications: work/2133-resumable-cycle-ledger/clarifications.md
+sourceChecklist: work/2133-resumable-cycle-ledger/checklist.md
+sourcePlan: work/2133-resumable-cycle-ledger/plan.md
+sourceTasks: work/2133-resumable-cycle-ledger/tasks.yml
+sourceAnalysis: readiness/2133-resumable-cycle-ledger/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2133-resumable-cycle-ledger/analysis.json
+    digest: 7790e1dae4c05e75a57de5e945bb7b8c780f4787048686fd336a00ace1921935
+    schemaVersion: 1
+  - label: checklist
+    path: work/2133-resumable-cycle-ledger/checklist.md
+    digest: ff569f33ae2920cb34f082b2d86d367d546c7a818e1a5639a991ee6ba6b4e031
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2133-resumable-cycle-ledger/clarifications.md
+    digest: 48dc9d5c34edaa5979fab0e119bd50c49b2927c23a89703cad1973768e5051f7
+    schemaVersion: 1
+  - label: plan
+    path: work/2133-resumable-cycle-ledger/plan.md
+    digest: b0c1686271297720baeb362dd133bf9b7cafc5b0f28ba347a7b1b71db65d1388
+    schemaVersion: 1
+  - label: spec
+    path: work/2133-resumable-cycle-ledger/spec.md
+    digest: 1ee64206ad8c4657c7ecb82ad2c1cd0a2d832c6ddffd371b8bf91ce3d1b0ab66
+    schemaVersion: 1
+  - label: tasks
+    path: work/2133-resumable-cycle-ledger/tasks.yml
+    digest: c3f1cd7a315feb22a4e58b159a8c9f6bda27b86c54fe83dc5dcf86b1e17ca71b
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: missing
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: missing
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: missing
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: missing
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: missing
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: missing
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: missing
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: missing
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: missing
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: missing
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
