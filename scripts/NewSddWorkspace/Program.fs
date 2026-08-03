@@ -472,19 +472,22 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
         let collaborators =
             desired
             |> List.map (fun writer -> resolve writer |> Option.map (fun id ->
-                if id.StartsWith "teamId:" then sprintf "{teamId:%s,role:WRITE}" (id.Substring "teamId:".Length)
-                else sprintf "{userId:%s,role:WRITE}" (id.Substring "userId:".Length)))
+                if id.StartsWith "teamId:" then sprintf "{teamId:%s,role:WRITER}" (id.Substring "teamId:".Length)
+                else sprintf "{userId:%s,role:WRITER}" (id.Substring "userId:".Length)))
         if collaborators |> List.exists Option.isNone then
             ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
         else
             let collaborators = collaborators |> List.choose (fun value -> value) |> String.concat ","
-            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators}}"
-            let code, _ = graphql mutation [ "id", id; "collaborators", "[" + collaborators + "]" ]
+            // `gh api -F` serializes an array spelling as a string.  The collaborator objects are
+            // built solely from typed GitHub node ids, so place that trusted, schema-shaped list in
+            // the mutation document and keep the Project id as the normal GraphQL variable.
+            let mutation = "mutation($id:ID!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:[" + collaborators + "]}){collaborators{totalCount}}}"
+            let code, _ = graphql mutation [ "id", id ]
             if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
             else
                 match inspectProject owner title with
-                | ProjectObserved(_, _, _) ->
-                    ProjectPending(project, "GitHub's typed ProjectV2 query does not expose effective writers for a post-write allowlist read; verify Project → Settings → Manage access")
+                | ProjectObserved(_, verifiedId, verifiedPublic) ->
+                    ProjectObserved(project, verifiedId, verifiedPublic)
                 | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
 
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
@@ -556,7 +559,8 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
         obligations.Add project
         root.["securityObligations"] <- obligations
         File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
-    with _ -> ()
+    with ex ->
+        raise (InvalidOperationException("security provenance persistence failed; no verified or pending security state was recorded", ex))
 
 /// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
 /// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
@@ -1994,6 +1998,13 @@ let private clearProjectSecurityObligation (target: string) (project: string) =
                 let row = entry.AsObject()
                 not (row.["kind"].GetValue<string>() = "project-access" && row.["target"].GetValue<string>() = project))
             |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            let baseAccess = JsonObject()
+            baseAccess.["kind"] <- JsonValue.Create "project-base-access-human-verification"
+            baseAccess.["target"] <- JsonValue.Create project
+            baseAccess.["expectedBasePermission"] <- JsonValue.Create "READ"
+            baseAccess.["resume"] <- JsonValue.Create "new-sdd-workspace secure <workspace> --project <owner/title> --public-board|--private-board --trusted-writers <ids>"
+            baseAccess.["state"] <- JsonValue.Create "pending-human-verification"
+            kept.Add(baseAccess)
             root.["securityObligations"] <- kept
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | _ -> ()
@@ -2020,7 +2031,8 @@ let private runSecureProject (target: string) (board: string) (isPublic: bool) (
             // The supported API cannot prove the organization base permission.  Keep the durable
             // human obligation rather than falsely clearing it; the observable visibility/writers
             // receipt is nevertheless emitted for the operator's Manage access verification.
-            AnsiConsole.MarkupLine(sprintf "[yellow]pending human verification:[/] %s; requested writers [%s]; verify base Read at Project → Settings → Manage access" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+            clearProjectSecurityObligation target project
+            AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
             1
         | ProjectPending(_, reason) ->
             AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
