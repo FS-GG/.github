@@ -1,0 +1,68 @@
+name: kit-auto-publish
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '11 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Observe and decide only; never tag or open/update a PR.'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: kit-auto-publish
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Test the fail-closed state machine
+        run: bash tests/kit-auto-publish/run.sh
+      # The observation adapter is intentionally the only unfinished integration seam in this first
+      # commit: it must obtain both feeds, merged-PR/pr-arm provenance, and release-run facts in one
+      # fail-closed JSON document before the decision engine can expose `tag`.
+      - name: Refuse live mutation until all observed facts are available
+        id: observe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(dotnet msbuild src/FS.GG.Kit/FS.GG.Kit.csproj -getProperty:Version | tr -d '[:space:]')"
+          [ -n "$version" ] || { echo '::error::version unreadable'; exit 1; }
+          # Deliberately require a checked-in observation document until the authenticated org-feed
+          # reader and public nuget reader are wired as one atomic observation.  Absence is refusal,
+          # never "both absent"; this prevents a transient API outage from minting a tag.
+          facts="${RUNNER_TEMP}/kit-auto-publish-facts.json"
+          printf '{"version":"%s","mergedPrReachable":false,"prArm":"unknown","orgFeed":"unknown","nugetFeed":"unknown"}\n' "$version" > "$facts"
+          python3 scripts/kit-auto-publish.py --facts "$facts" --json | tee decision.json
+          action="$(python3 -c 'import json; print(json.load(open("decision.json"))["action"])')"
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          [ "$action" = tag ] || exit 1
+      - name: Sticky escalation for a refused observation
+        if: failure() && steps.observe.outcome == 'failure'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          marker='<!-- fsgg:kit-auto-publish-escalation -->'
+          issue=2106
+          gh issue edit "$issue" --repo "$REPO" --add-label blocked || true
+          printf '%s\n\nAuto-publish refused a live observation and performed **no tag, feed, or PR write**. See [run](%s). This marker comment is patched in place, not repeated.\n' "$marker" "$RUN_URL" > comment.md
+          matches="$(gh api "repos/$REPO/issues/$issue/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id')"
+          existing="${matches%%$'\n'*}"
+          if [ -n "$existing" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null; else gh api "repos/$REPO/issues/$issue/comments" -F body=@comment.md >/dev/null; fi
