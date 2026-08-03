@@ -358,7 +358,7 @@ type private RepositoryPolicyReceipt =
     | RepositoryPending of repository: string * reason: string
 
 type private ProjectAccessReceipt =
-    | ProjectObserved of project: string * isPublic: bool
+    | ProjectObserved of project: string * projectId: string * isPublic: bool
     | ProjectPending of project: string * reason: string
 
 let private graphql (query: string) (variables: (string * string) list) =
@@ -418,8 +418,26 @@ let private inspectProject (owner: string) (title: string) : ProjectAccessReceip
             let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["organization"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
             match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
             | None -> ProjectPending(project, "configured Project does not exist yet")
-            | Some node -> ProjectObserved(project, node.AsObject().["public"].GetValue<bool>())
+            | Some node -> ProjectObserved(project, node.AsObject().["id"].GetValue<string>(), node.AsObject().["public"].GetValue<bool>())
         with _ -> ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
+
+/// Update only the visibility fact GitHub exposes and then re-read it. Access base permission and
+/// collaborators are intentionally outside this success result: their absence from the read model
+/// means a visibility green cannot certify Project write access.
+let private applyProjectVisibility (owner: string) (title: string) (desired: bool option) : ProjectAccessReceipt =
+    match inspectProject owner title, desired with
+    | receipt, None -> receipt
+    | ProjectPending _ as receipt, _ -> receipt
+    | (ProjectObserved(_, _, current) as receipt), Some wanted when current = wanted -> receipt
+    | ProjectObserved(project, id, _), Some wanted ->
+        let mutation = "mutation($id:ID!,$public:Boolean!){updateProjectV2(input:{projectId:$id,public:$public}){projectV2{public}}}"
+        let code, _ = graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
+        if code <> 0 then ProjectPending(project, "Project visibility mutation failed")
+        else
+            match inspectProject owner title with
+            | ProjectObserved(_, verifiedId, actual) when actual = wanted -> ProjectObserved(project, verifiedId, actual)
+            | ProjectObserved(_, _, actual) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
+            | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project visibility read failed: " + reason)
 
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
 /// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
@@ -433,9 +451,9 @@ let private workspaceSecurity (opts: Options) : Outcome =
             | RepositorySecured(repo, prior, actor) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
             | RepositoryPending(repo, reason) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
     let projectMessage =
-        match inspectProject opts.BoardOwner opts.BoardTitle with
-        | ProjectObserved(project, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist still require the recorded human verification" project
-        | ProjectObserved(project, false) -> sprintf "Project %s is private (preserved); base access still requires the recorded human verification" project
+        match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
+        | ProjectObserved(project, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist still require the recorded human verification" project
+        | ProjectObserved(project, _, false) -> sprintf "Project %s is private (preserved); base access still requires the recorded human verification" project
         | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
     Warned(repositoryMessage + "; " + projectMessage)
 
