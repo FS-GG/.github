@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/core-release.bom-free.trx
-      digest: "sha256:df8b85929cb5ac10fcea0b8af913f85c5a91815b06b9b8e5cd2c9ff08a63cda4"
+      digest: "sha256:2ec7b993f30498757a54318ba3da78162824cf357a69853c52232e49272375ae"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 574
+      passed: 575
       failed: 0
       skipped: 0
     notes: [Evidence required before verify.]
@@ -81,7 +81,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2136-generated-facts/test-results/cli-release.bom-free.trx
-      digest: "sha256:fadbd242a15c48e82c75310aaa3c51b07e912a3ce8eaa7fc73a058719c9d88ad"
+      digest: "sha256:1ce02d091ad5d9cd2c714fc6995e58f696ccd0ae8aab39f14051bc6728b81115"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 564

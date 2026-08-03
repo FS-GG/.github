@@ -14,7 +14,7 @@ module DriverTests =
     [<Fact>]
     let ``#2127 receipts are source-bound complete and fresh`` () =
         let review =
-            { MarkerValid = true; CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]
+            { MarkerValid = true; CriticIdentity = Some "shrike"; HeadSha = Some "abc"; Rounds = [1]; RepairPhase = false
               ChecksGreen = true; HostAccepted = true
               RuntimeRouteEvidence = Some(NotMeaningful "receipt freshness has no runtime-route subject") }
         Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "abc"; Complete = true; Review = Some review })
@@ -60,7 +60,7 @@ module DriverTests =
 
     [<Fact>]
     let ``#2127 review validation rejects marker sha rounds checks and acceptance defects`` () =
-        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 2 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
+        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 2 ]; RepairPhase = false; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
         Assert.True(List.length errors >= 5)
 
     [<Fact>]
@@ -162,7 +162,41 @@ module DriverTests =
         rejects [ initial; confirmation 20L 1 "https://reviews/initial" "b"; acceptance "accepted-head: b\ninitial-review: https://reviews/initial\nlatest-confirmation: wrong" ]
 
     [<Fact>]
+    let ``#2136 repair-phase confirmation ceilings are typed and marker comments are not rounds`` () =
+        let initial = comment 10L "https://reviews/initial" "<!-- fsgg:independent-review:v1 -->\ncritic: kestrel\nreviewed-head: initial\nverdict: changes-required"
+        let repairMarker id = comment id $"https://reviews/repair-phase-%d{id}" "<!-- fsgg:independent-review-repair-phase:v1 -->"
+        let chain count markers =
+            let confirmations =
+                [ for round in 1 .. count do
+                    let preceding = if round = 1 then "https://reviews/initial" else $"https://reviews/round-%d{round - 1}"
+                    let verdict = if round = count then "pass" else "changes-required"
+                    let route = if verdict = "pass" then notMeaningful else ""
+                    yield comment (int64 (20 + round)) $"https://reviews/round-%d{round}" ($"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/initial\ncritic: kestrel\nround: %d{round}\npreceding-review: %s{preceding}\nreviewed-head: head-%d{round}\nverdict: %s{verdict}" + route) ]
+            initial :: markers @ confirmations @
+                [ comment 200L "https://reviews/accepted" $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-%d{count}\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/round-%d{count}" ]
+        let parsed count markers =
+            match parseReviewComments (chain count markers) with
+            | Ok review -> review
+            | Error errors -> failwithf "expected accepted repair chain: %A" errors
+        // Ordinary chains retain their smaller ceiling.
+        Assert.True(Result.isError (parseReviewComments (chain 4 [])))
+        let repairFour = parsed 4 [ repairMarker 1L ]
+        Assert.True(repairFour.RepairPhase)
+        Assert.Equal<int list>([ 1 .. 4 ], repairFour.Rounds)
+        let repairTen = parsed 10 [ repairMarker 1L ]
+        Assert.Equal<int list>([ 1 .. 10 ], repairTen.Rounds)
+        Assert.True(receiptFresh 120L 30L { ObservedAt = 100L; SourceSha = "repair-head"; Complete = true; Review = Some { repairTen with ChecksGreen = true } })
+        Assert.True(Result.isError (parseReviewComments (chain 11 [ repairMarker 1L ])))
+        // Missing or non-canonical repair designations leave the chain ordinary and fail closed.
+        Assert.True(Result.isError (parseReviewComments (chain 4 [])))
+        Assert.True(Result.isError (parseReviewComments (chain 4 [ comment 1L "https://reviews/bad-phase" "> <!-- fsgg:independent-review-repair-phase:v1 -->" ])))
+        // Multiple durable designations retain the phase boolean; neither marker consumes a confirmation.
+        let multipleMarkers = parsed 10 [ repairMarker 1L; repairMarker 2L ]
+        Assert.True(multipleMarkers.RepairPhase)
+        Assert.Equal<int list>([ 1 .. 10 ], multipleMarkers.Rounds)
+
+    [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
-        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
+        let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; RepairPhase = false; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None }
         Assert.Equal(7, List.length errors)
