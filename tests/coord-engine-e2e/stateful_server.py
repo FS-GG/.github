@@ -102,6 +102,7 @@ DEFER_FIELD_WRITES = [0]
 # without that assertion "failed" and "deferred" are indistinguishable from the outside, and the leg would
 # be re-testing the deferral queue while claiming to test the case the queue cannot reach.
 FAIL_FIELD_WRITES = [0]
+RECONCILE_45_PROJECTION = [0]
 
 # .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
 # per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
@@ -227,7 +228,7 @@ def graphql(query: str, variables: dict):
                 "rateLimit": RATE_LIMIT,
             }
         }
-    if "projectItems" in query:
+    if "projectItems" in query and "mutation" not in query:
         # item-id lookup. Every issue is on our board EXCEPT an `off_board` one, which answers with no
         # node — `Board.itemId`'s `Ok None`, which `boardWrite` turns into `NotOnBoard` (.github#1779).
         # int(): the wire carries the number as a JSON number, so Python hands us 46.0, and 46.0 misses an
@@ -266,6 +267,22 @@ def graphql(query: str, variables: dict):
             if FAIL_FIELD_WRITES[0] > 0:
                 FAIL_FIELD_WRITES[0] -= 1
                 return {"errors": [{"message": "fixture: the field write failed permanently"}]}
+            # Model the projection separately from the acknowledgement: a successful mutation becomes
+            # visible on the next board scan for its specific item.
+            item_id = str(variables.get("itemId", ""))
+            if item_id.startswith("PVTI_"):
+                try:
+                    n = int(item_id.removeprefix("PVTI_"))
+                    value = json.dumps(variables)
+                    if "opt_done" in value:
+                        ISSUES[n]["status"] = "Done"
+                    elif "opt_ready" in value:
+                        ISSUES[n]["status"] = "Ready"
+                except (ValueError, KeyError):
+                    pass
+            if RECONCILE_45_PROJECTION[0] > 0 and "opt_done" in json.dumps(variables):
+                RECONCILE_45_PROJECTION[0] -= 1
+                ISSUES[45]["status"] = "Done"
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
     if "addProjectV2ItemById" in query:
         return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_added"}}}}
@@ -459,6 +476,16 @@ class Handler(BaseHTTPRequestHandler):
                 spent = list(MUTATIONS)
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
+
+        if path.rstrip("/") == "/_fixture/reset-reconcile-45":
+            with LOCK:
+                ISSUES[45]["status"] = "Ready"
+            return self._send(200, {"number": 45, "status": "Ready"})
+
+        if path.rstrip("/") == "/_fixture/arm-reconcile-45-projection":
+            with LOCK:
+                RECONCILE_45_PROJECTION[0] += 1
+            return self._send(200, {"armed": RECONCILE_45_PROJECTION[0]})
 
         # #1569: `reap --apply` must see a genuinely expired marker.  Claims use the real wall
         # clock so all normal CAS legs remain live; this narrow test-only route ages the existing

@@ -923,6 +923,8 @@ must_mutate "reap --apply (expired claim)" "$ENGINE" reap --repo FS.GG.SDD --app
 
 # #45 is CLOSED while its board projection is still Ready: the typed CLOSED-ISSUE-NOT-DONE
 # chore is mechanically safe.  Bare reconcile reports it; --apply writes Status=Done.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-45" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-45-projection" >/dev/null
 no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --worker reconcile-probe
 must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
 
