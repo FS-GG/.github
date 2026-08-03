@@ -1909,10 +1909,16 @@ module ApplicationServiceTests =
     /// `rateLimited` meets an exhausted GraphQL budget on its item-id lookup, which is what makes its board
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
-        let items =
+        // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
+        // fixture therefore models the projection separately: only a subsequent scan after an accepted
+        // mutation observes Done.  The rate-limited item never reaches that transition.
+        let mutable written: Set<int> = Set.empty
+
+        let items () =
             closed
             |> List.map (fun n ->
-                $"""{{"status":{{"name":"In progress"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
+                let status = if written.Contains n then "Done" else "In progress"
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":%d{n},"title":"item %d{n}","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}""")
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -1942,6 +1948,12 @@ module ApplicationServiceTests =
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         | None -> Error(Errors.NotFound "an item-id lookup with no number")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
+                        variables
+                        |> List.tryPick (fun (_, v) ->
+                            match v with
+                            | VId id when id.StartsWith "PVTI_" -> id.Substring("PVTI_".Length) |> Int32.TryParse |> function | true, n -> Some n | _ -> None
+                            | _ -> None)
+                        |> Option.iter (fun n -> written <- written.Add n)
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     elif document.Contains "projectsV2" then
                         ok
@@ -1953,7 +1965,7 @@ module ApplicationServiceTests =
                             """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
                         ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -1964,6 +1976,50 @@ module ApplicationServiceTests =
             // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
             // exists only to keep an unexpected REST call loud rather than silently empty.
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    /// A BLOCKER-CLEARED apply whose accepted batch projects Status=Ready but leaves Blocked by stale.
+    /// The second board scan is a real fresh transport response, not a renderer-only synthetic row.
+    let private partialBlockerReconcileWorld () =
+        let mutable mutationAccepted = false
+        let staleBlocker = "FS-GG/FS.GG.SDD#45"
+
+        let items () =
+            let status = if mutationAccepted then "Ready" else "Blocked"
+
+            [ boardItemIn status 47 "blocked item" (Some staleBlocker) "OPEN"
+              boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
+            |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        mutationAccepted <- true
+                        ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok """{"number":47,"body":"Paths: none"}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     /// A board with ONE OPEN item that declares `Class: defect` in its body and carries NO `Class`
@@ -1977,8 +2033,11 @@ module ApplicationServiceTests =
     /// because the four older kinds all write `Status` and so the hardcoded word was right for all of them.
     /// A rule exercised only where it is DERIVED is a rule nobody has watched run.
     let private classWorld (withClass: bool) =
-        let item =
-            """{"status":{"name":"Ready"},"blockedBy":null,"class":null,"content":{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}"""
+        let mutable classWritten = false
+
+        let item () =
+            let boardClass = if classWritten then "{\"name\":\"defect\"}" else "null"
+            $"""{{"status":{{"name":"Ready"}},"blockedBy":null,"class":%s{boardClass},"content":{{"__typename":"Issue","number":301,"title":"ordinary title, class is in the body","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
         Fake.Recorder(fun (req: Request) ->
             match req.Method, req.Path.Trim '/' with
@@ -1989,6 +2048,7 @@ module ApplicationServiceTests =
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "updateProjectV2ItemFieldValue" then
+                        classWritten <- true
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
                     elif document.Contains "projectsV2" then
                         ok
@@ -2004,7 +2064,7 @@ module ApplicationServiceTests =
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                     elif document.Contains "items(first" then
-                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        ok $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{item ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -2118,6 +2178,28 @@ module ApplicationServiceTests =
         runReconcile transport (reconcileArgs [ "--apply"; "--json" ])
 
     [<Fact>]
+    let ``#2157 partial BLOCKER-CLEARED receipt retains both freshly observed values`` () =
+        let code, out, err = runApplyJson (partialBlockerReconcileWorld ())
+
+        if String.IsNullOrWhiteSpace out then
+            failwithf "#2157 fixture emitted no receipt (exit %d): %s" code err
+
+        let row = parsedArray out |> List.find (fun r -> str "subject" r = "FS.GG.SDD#47")
+        let intended = row.GetProperty("writes").EnumerateArray() |> List.ofSeq
+        let observed = row.GetProperty("observed").EnumerateArray() |> List.ofSeq
+
+        Assert.NotEqual(0, code)
+        Assert.Equal("failed", str "outcome" row)
+        Assert.Contains("Blocked by", str "error" row)
+        Assert.Contains("fresh verification failed", err)
+        Assert.Equal(2, List.length intended)
+        Assert.Equal(2, List.length observed)
+        Assert.Equal("Status", str "field" observed.[0])
+        Assert.Equal("Ready", str "value" observed.[0])
+        Assert.Equal("Blocked by", str "field" observed.[1])
+        Assert.Equal("FS-GG/FS.GG.SDD#45", str "value" observed.[1])
+
+    [<Fact>]
     let ``reconcile --apply --json puts the whole stream in ONE document`` () =
         let code, out, _ = runApplyJson (reconcileWorld [ 101; 102 ] (Set.ofList [ 102 ]))
 
@@ -2136,6 +2218,13 @@ module ApplicationServiceTests =
         Assert.Equal("Status", str "field" landed)
         Assert.Equal("Done", str "value" landed)
         Assert.Equal(JsonValueKind.Null, landed.GetProperty("error").ValueKind)
+        let intended = landed.GetProperty("writes").EnumerateArray() |> List.ofSeq
+        let observed = landed.GetProperty("observed").EnumerateArray() |> List.ofSeq
+        Assert.Single intended |> ignore
+        Assert.Single observed |> ignore
+        Assert.Equal("Status", str "field" intended.[0])
+        Assert.Equal("Done", str "value" intended.[0])
+        Assert.Equal("Done", str "value" observed.[0])
 
         // THE QUEUED WRITE — the leg whose loss is unrecoverable, and the reason this issue was filed. It
         // is a DISTINCT VALUE of a closed set, not a sentence a consumer greps for the word "queued" in.

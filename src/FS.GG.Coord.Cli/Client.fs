@@ -1583,6 +1583,17 @@ module Client =
                 // #983 argument one call deeper.
                 let write (chore: Chore.Chore) = chore.Kind.Write
 
+                // A cleared dependency is a two-field projection.  Keeping the old `Blocked by` text
+                // beside a Ready status creates the half-converged shape this reconciler is meant to
+                // remove, so send both values in one aliased mutation.
+                let writesFor (chore: Chore.Chore) =
+                    match chore.Kind with
+                    | Chore.BlockerCleared _ -> [ "Status", Board.Set(statusWireName FS.GG.Coord.Types.Ready); "Blocked by", Board.Clear ]
+                    | _ ->
+                        match write chore with
+                        | Some(field, value) -> [ field, Board.Set value ]
+                        | None -> []
+
                 // DERIVED from `write`, not matched a second time. These are the same fact in two
                 // renderings — the `remedy` key and the `field`/`value` pair of the SAME JSON object, plus
                 // the human table's third column — and a second hand-maintained `match` over `ChoreKind`
@@ -1601,6 +1612,8 @@ module Client =
                       Remedy = target chore
                       Statement = chore.Statement
                       Write = write chore
+                      Writes = writesFor chore |> List.map (fun (field, write) -> field, match write with | Board.Set value -> value | Board.Clear -> "")
+                      Observed = None
                       Outcome = outcome }
 
                 /// Emit the machine document, ONCE, and only under `--json`.
@@ -1658,6 +1671,41 @@ module Client =
                     | Ok w, Ok board ->
                         let mutable failed = false
                         let reapExit = Collections.Generic.Dictionary<string, int>()
+
+                        // A mutation acknowledgement is not a board observation.  Reconciliation is a
+                        // truth operation, therefore each accepted field mutation must be followed by a
+                        // fresh scan that proves the projected row contains every requested value.
+                        let verifyWrites (chore: Chore.Chore) (writes: (string * Board.FieldWrite) list) =
+                            match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                            | Error e -> Error(None, Errors.explain e)
+                            | Ok freshRows ->
+                                match freshRows |> List.tryFind (fun row -> row.Ref = chore.Subject) with
+                                | None -> Error(None, "the item left the board before fresh verification")
+                                | Some row ->
+                                    let observed field =
+                                        match field with
+                                        | "Status" -> statusWireName row.Status
+                                        | "Blocked by" -> row.BlockedByRaw
+                                        | "Class" -> row.BoardClass |> Option.map itemClassWireName |> Option.defaultValue ""
+                                        | _ -> ""
+
+                                    let observedValues =
+                                        writes |> List.map (fun (field, _) -> field, observed field)
+
+                                    let mismatches =
+                                        writes
+                                        |> List.choose (fun (field, requested) ->
+                                            let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
+                                            let actual = observed field
+                                            if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
+
+                                    if List.isEmpty mismatches then
+                                        Ok observedValues
+                                    else
+                                        // A failed comparison is still a successful fresh observation. Keep
+                                        // every actual field/value pair in the receipt so an operator can see
+                                        // which half of a coupled repair projected and which half stayed stale.
+                                        Error(Some observedValues, String.concat "; " mismatches)
 
                         // `BoardClass = None` has two different meanings at two different boundaries:
                         // this scan's row may have an UNSET `Class` value, while this map can prove that
@@ -1798,17 +1846,16 @@ module Client =
                                       | _ ->
                                           reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
                                   | Some(field, value) ->
-                                      match
-                                          Board.boardWrite
-                                              ctx.Transport
-                                              board
-                                              chore.Subject.Owner
-                                              chore.Subject.Repo
-                                              chore.Subject.Number
-                                              field
-                                              (Board.Set value)
-                                              w.Id
-                                      with
+                                      let writes = writesFor chore
+
+                                      let outcome =
+                                          match chore.Kind with
+                                          | Chore.BlockerCleared _ ->
+                                              Board.boardWriteBatch ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number writes w.Id
+                                          | _ ->
+                                              Board.boardWrite ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field (Board.Set value) w.Id
+
+                                      match outcome with
                                       // The two lines .github#1524 is about. They are the HUMAN projection
                                       // and every recipe reads them.
                                       //
@@ -1825,11 +1872,17 @@ module Client =
                                       // Status column, and `--json`'s `write` object said `Class` the whole
                                       // time, so the two projections of one fact disagreed.
                                       | Ok Board.Written ->
-                                          match opts.Render with
-                                          | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
-                                          | Json -> ()
+                                          match verifyWrites chore writes with
+                                          | Ok observed ->
+                                              match opts.Render with
+                                              | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                              | Json -> ()
 
-                                          reconcileRow chore (Some Written)
+                                              { reconcileRow chore (Some Written) with Observed = Some observed }
+                                          | Error(observed, reason) ->
+                                              eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
+                                              failed <- true
+                                              { reconcileRow chore (Some(Failed reason)) with Observed = observed }
                                       | Ok Board.Deferred ->
                                           match opts.Render with
                                           | Text ->

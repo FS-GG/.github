@@ -200,6 +200,10 @@ module Render =
           /// remedy is a marker collection delegated to `reap`, not a field write. ONE option over the
           /// PAIR, so "which field" and "which value" cannot be present independently of each other.
           Write: (string * string) option
+          /// All intended field values for an apply receipt.  BLOCKER-CLEARED is deliberately two writes.
+          Writes: (string * string) list
+          /// Values observed on the fresh verification read; absent when no fresh observation was possible.
+          Observed: (string * string) list option
           /// `None` on a DRY RUN, where nothing was attempted and therefore nothing is known.
           Outcome: ReconcileOutcome option }
 
@@ -527,6 +531,21 @@ module Render =
             w.WriteString("subject", r.Subject.Short)
 
             if includeOutcome then
+                w.WriteStartArray("writes")
+                for field, value in r.Writes do
+                    w.WriteStartObject()
+                    w.WriteString("field", field)
+                    w.WriteString("value", value)
+                    w.WriteEndObject()
+                w.WriteEndArray()
+
+                w.WriteStartArray("observed")
+                for field, value in r.Observed |> Option.defaultValue [] do
+                    w.WriteStartObject()
+                    w.WriteString("field", field)
+                    w.WriteString("value", value)
+                    w.WriteEndObject()
+                w.WriteEndArray()
                 match r.Write with
                 | Some(field, value) ->
                     w.WriteString("field", field)
