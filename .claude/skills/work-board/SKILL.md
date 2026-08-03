@@ -30,12 +30,12 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    <PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one.
 6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
-   After an exhausted third round, refuse a fourth round of that same chain; dispatch the repair phase
-   instead only under [host-loop](references/host-loop.md)'s operator-authorization and
-   escalated-route rules — never infer entry — and verify its own chain, fresh critic, and repair-phase
-   marker exactly as host-loop describes. Absent authorization, or once the repair phase itself
-   exhausts, refuse further rounds or merge and verify the human-action park, released claim, and
-   escalation marker instead. Then run the exact
+   After an exhausted third round, refuse a fourth round of that same chain and automatically dispatch
+   the repair phase under [host-loop](references/host-loop.md)'s validated-exhaustion and
+   escalated-route rules. Verify its own chain, fresh critic, and repair-phase marker exactly as
+   host-loop describes. If the required route is unavailable, or once the repair phase itself exhausts,
+   refuse further rounds or merge and verify the human-action park, released claim, and escalation
+   marker instead. Then run the exact
    checkpoint, schema-v2 report, and activation-envelope validators against merged paths. Missing,
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.

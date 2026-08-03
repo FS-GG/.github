@@ -373,7 +373,10 @@
     <!-- 0.31.0 -> 0.32.0 (.github#2136): the packed pnext-item review contract now projects
          typed marker/lifecycle/ledger facts. Receiver-visible coordination guidance changed, so this
          is a minor delivery bump rather than an invisible prose repair. -->
-    <Version>0.32.0</Version>
+    <!-- 0.32.0 -> 0.33.0, a MINOR (.github#2167): ordinary three-round review exhaustion now
+         automatically enters one bounded fresh repair phase. This changes receiver-visible worker and
+         host behavior while preserving the packed member set and destinations. -->
+    <Version>0.33.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

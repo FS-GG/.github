@@ -106,9 +106,11 @@ searches code/history and existing work for each candidate root cause; and files
 distinct **material** work. For a meaningful runtime behavior reachable through more than one route,
 the handoff supplies a built artifact and runnable production-route evidence so the critic can execute
 or measure the comparison required by `independent-review`, not infer it from source alone. The same
-critic reviews up to three numbered repair rounds. If material
-findings remain after round three, park the item on `Blocked on: human/action`, release the claim, and
-escalate to a human; never start round four or merge.
+critic reviews up to three numbered repair rounds. If material findings remain after round three,
+never start round four or merge that PR: close it without merging and automatically enter the one
+fresh-worker, fresh-critic repair phase defined by `independent-review`. Park the item on `Blocked on:
+human/action` and release the claim only if that repair phase exhausts or its required route is
+unavailable.
 
 [independent-review](references/independent-review.md) is the binding contract for materiality, critic
 ownership, the durable PR marker, direct filing, confirmation, and host verification. Do not merge
