@@ -436,7 +436,7 @@ render_review_policy() {
 render_lifecycle_policy() {
   echo "*Generated lifecycle boundary. These are machine-owned prerequisites; judgement about the work remains authored.*"
   echo ""
-  jq -r '"Required housekeeping: " + (.lifecyclePolicy.requiredHousekeeping | map("`" + . + "`") | join(", ")) + ".\n\nTerminal transition evidence: " + (.lifecyclePolicy.terminalActions | map("`" + . + "`") | join(" → ")) + "."' "$FACTS"
+  jq -r '"Required housekeeping: " + (.lifecyclePolicy.requiredHousekeeping | map("`" + . + "`") | join(", ")) + ".\n\nHost acceptance fields: " + (.lifecyclePolicy.hostAcceptanceFields | map("`" + . + "`") | join(", ")) + ".\n\nTerminal transition evidence: " + (.lifecyclePolicy.terminalActions | map("`" + . + "`") | join(" → ")) + "."' "$FACTS"
   echo ""
 }
 
@@ -450,14 +450,14 @@ render_ledger_policy() {
 render_release_inventory() {
   echo '*Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*'
   echo ""
-  jq -r '([.contracts[] | select(has("package-version"))] | "Registry release inventory: \(length) package-bearing contracts across \(map(.owner) | unique | length) producers; \(map(.packageTag // .["package-version"]) | unique | length) coherent release sets.")' "$REG"
+  jq -r '([.contracts[] | select(has("package-version"))] | "Registry release inventory: \(length) package-bearing contracts across \(map(.owner) | unique | length) producers; \(map(.owner + ":" + (."package-tag" // .id)) | unique | length) coherent release sets.")' "$REG"
   echo ""
   echo "| owner | contract | source version | published version | coherent set | surface |"
   echo "|---|---|---|---|---|---|"
   jq -r '
     .contracts[]
     | select(has("package-version"))
-    | "| `\(.owner)` | `\(.id)` | `\(.version)` | `\(.["package-version"])` | `\(.packageTag // .["package-version"])` | \(.surface | gsub("\\|"; "\\\\|") | gsub("\\n"; " ")) |"' "$REG"
+    | "| `\(.owner)` | `\(.id)` | `\(.version)` | `\(.["package-version"])` | `\(.owner + ":" + (."package-tag" // .id))` | \(.surface | gsub("\\|"; "\\\\|") | gsub("\\n"; " ")) |"' "$REG"
   echo ""
 }
 

@@ -20,6 +20,8 @@
 
 Required housekeeping: `host-identity`, `stale-claim`, `engine-currency`, `pending-writes`, `reconcile`, `triage`.
 
+Host acceptance fields: `accepted-head`, `initial-review`, `latest-confirmation`.
+
 Terminal transition evidence: `merge` → `post-merge-obligations` → `done-stamp`.
 
 <!-- END GENERATED: fsgg-protocol:lifecycle-policy -->
