@@ -43,10 +43,10 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -794,6 +794,14 @@ no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
 no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
+
+# `cycle` is another pure snapshot boundary.  Feed it a valid one-unit ledger, rather than a
+# parser refusal, so command-contract coverage proves the command reaches its actual decision
+# path while the fixture's HTTP mutation ledger remains empty.
+printf '%s\n' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"first","dependencies":[],"completed":false,"evidence":[]}]}' \
+  >"$CYCLE_SNAPSHOT"
+no_mutation "cycle" run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json
 
 # `followup add` is intentionally a local-file write, not a shared-board write.  It is a valid
 # (and therefore non-vacuous) driver for the command-contract row; `list` then proves the add
