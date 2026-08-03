@@ -853,8 +853,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.18.0" # SOURCE SemVer: product-workspace coordination and release-train propagation update, released from coord-engine/v0.18.0 at fb60ac015b2b823936718304270d2adba08fa74b.
-    package-version: "0.18.0" # Both feeds independently opened after run 30562881562; all 31 unsigned payload entries match byte-for-byte and both nuspecs record fb60ac015b2b823936718304270d2adba08fa74b. PRIOR 0.17.0.
+    version: "0.19.0" # SOURCE SemVer: caller-visible wire and delivery-lifecycle contract release, cut from coord-engine/v0.19.0 at 5af21e26f8de7234194c4d163d54512d6b44a604.
+    package-version: "0.19.0" # Run 30848837879 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; both feeds and a public install were verified. PRIOR 0.18.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
