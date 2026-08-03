@@ -23,7 +23,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 verification_report() {
   local target="$1" name="$2" commit="$3" github="$4" nuget="$5" identical="$6"
-  printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"%s","expectedPackages":1,"observedPackages":1,"tag":"v1","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":%s,"nuGetAvailable":%s,"packages":[{"packageId":"Example","version":"1.0.0","gitHubUrl":"https://github.test/example","nuGetUrl":"https://nuget.test/example","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":%s,"differences":[],"gitHubAvailable":%s,"nuGetAvailable":%s}]}' "$name" "$commit" "$commit" "$commit" "$github" "$nuget" "$identical" "$github" "$nuget" > "$target"
+  local differences='["payloads differ or a feed is unavailable"]'
+  if [ "$identical" = true ]; then differences='[]'; fi
+  printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"%s","expectedPackages":1,"observedPackages":1,"tag":"v1","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":%s,"nuGetAvailable":%s,"packages":[{"packageId":"Example","version":"1.0.0","gitHubUrl":"https://github.test/example","nuGetUrl":"https://nuget.test/example","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":%s,"differences":%s,"gitHubAvailable":%s,"nuGetAvailable":%s}]}' "$name" "$commit" "$commit" "$commit" "$github" "$nuget" "$identical" "$differences" "$github" "$nuget" > "$target"
 }
 
 if [ "$MODE" = all ] || [ "$MODE" = workflow ]; then
@@ -379,7 +381,11 @@ jq '.gitHubAvailable = false' "$WORK/correct-drivers.json" > "$WORK/contradictor
 jq '.packages[0].gitHubAvailable = false | .packages[0].payloadIdentical = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-disagree.json"
 jq '.gitHubAvailable = false | .nuGetAvailable = false' "$WORK/correct-drivers.json" > "$WORK/contradictory-unavailable.json"
 jq '.gitHubAvailable = false | .nuGetAvailable = false | .packages[0].gitHubAvailable = false | .packages[0].nuGetAvailable = false' "$WORK/correct-drivers.json" > "$WORK/unavailable-equivalent.json"
-for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count contradictory-org-only contradictory-public-only contradictory-disagree contradictory-unavailable unavailable-equivalent; do
+jq '.packages[0].differences = ["drivers/driver-skill-manifest.json differs"]' "$WORK/correct-drivers.json" > "$WORK/identical-with-differences.json"
+jq '.packages[0].payloadIdentical = false' "$WORK/correct-drivers.json" > "$WORK/nonidentical-without-differences.json"
+jq '.packages[0].differences = "not-an-array"' "$WORK/correct-drivers.json" > "$WORK/nonarray-differences.json"
+jq '.packages[0].differences = [""]' "$WORK/correct-drivers.json" > "$WORK/empty-difference.json"
+for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count contradictory-org-only contradictory-public-only contradictory-disagree contradictory-unavailable unavailable-equivalent identical-with-differences nonidentical-without-differences nonarray-differences empty-difference; do
   cp "$WORK/multiset-run.json" "$WORK/multiset-before-invalid.json"
   set +e
   dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/$invalid.json" > /dev/null
@@ -391,6 +397,10 @@ for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-pack
   fi
   cmp "$WORK/multiset-before-invalid.json" "$WORK/multiset-run.json"
 done
+cp "$WORK/multiset-run.json" "$WORK/multiset-disagree-run.json"
+jq '.packages[0].payloadIdentical = false | .packages[0].differences = ["drivers/driver-skill-manifest.json differs"]' "$WORK/correct-drivers.json" > "$WORK/disagree-drivers.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-disagree-run.json" --verification "$WORK/disagree-drivers.json" > /dev/null
+jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == false and .feedState == "disagree")' "$WORK/multiset-disagree-run.json" >/dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
 jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
 

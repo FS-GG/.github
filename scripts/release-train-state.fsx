@@ -143,7 +143,13 @@ let validateVerificationReceipt path =
     packages.EnumerateArray()
     |> Seq.iter (fun package ->
         [ "packageId"; "version"; "gitHubUrl"; "nuGetUrl"; "gitHubArchiveSha256"; "nuGetArchiveSha256"; "payloadFiles"; "payloadIdentical"; "differences"; "gitHubAvailable"; "nuGetAvailable" ]
-        |> List.iter (fun field -> if tryElement field package |> Option.isNone then failwith $"verification receipt {path} package is missing `{field}`"))
+        |> List.iter (fun field -> if tryElement field package |> Option.isNone then failwith $"verification receipt {path} package is missing `{field}`")
+        let differences = package.GetProperty("differences")
+        if differences.ValueKind <> JsonValueKind.Array then failwith $"verification receipt {path} package has non-array `differences`"
+        differences.EnumerateArray()
+        |> Seq.iter (fun difference ->
+            if difference.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(difference.GetString()) then
+                failwith $"verification receipt {path} package has a non-string or empty difference"))
     name, subjectCommit, requireBooleanElement path "gitHubAvailable" root, requireBooleanElement path "nuGetAvailable" root
 
 let validateCompletionReceipt path =
@@ -588,12 +594,13 @@ let verify () =
             |> Seq.map (fun package ->
                 package.GetProperty("gitHubAvailable").GetBoolean(),
                 package.GetProperty("nuGetAvailable").GetBoolean(),
-                package.GetProperty("payloadIdentical").GetBoolean())
+                package.GetProperty("payloadIdentical").GetBoolean(),
+                (package.GetProperty("differences").EnumerateArray() |> Seq.length))
             |> Seq.toList
-        if packageFeedFacts |> List.exists (fun (github, nuget, identical) -> identical && not (github && nuget)) then
-            failwith $"verification receipt package for release `{name}` claims equivalent payloads without both feeds"
-        let derivedGithubAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (github, _, _) -> github))
-        let derivedNugetAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (_, nuget, _) -> nuget))
+        if packageFeedFacts |> List.exists (fun (github, nuget, identical, differenceCount) -> identical <> (github && nuget && differenceCount = 0)) then
+            failwith $"verification receipt package equivalence for release `{name}` contradicts feed availability or payload differences"
+        let derivedGithubAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (github, _, _, _) -> github))
+        let derivedNugetAvailable = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (_, nuget, _, _) -> nuget))
         if githubAvailable <> derivedGithubAvailable || nugetAvailable <> derivedNugetAvailable then
             failwith $"verification receipt aggregate feed availability does not match release `{name}` package rows"
         let auditedExpectedCount = intProperty "expectedPackages" release
@@ -610,7 +617,7 @@ let verify () =
         release["observedPackages"] <- JsonValue.Create(observedArtifacts.Length)
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
         let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
-        let equivalent = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (_, _, identical) -> identical))
+        let equivalent = not packageFeedFacts.IsEmpty && (packageFeedFacts |> List.forall (fun (github, nuget, _, differenceCount) -> github && nuget && differenceCount = 0))
         let complete = matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release
         let feed =
             match derivedGithubAvailable, derivedNugetAvailable with
