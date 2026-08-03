@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli
 /// Pure JSON boundary for resumable roadmap/workspace cycle ledgers.
 module CycleLedgerApplication =
     open System
+    open System.Diagnostics
     open System.IO
     open System.Text.Json
     open FS.GG.Coord
@@ -35,6 +36,7 @@ module CycleLedgerApplication =
             (property "units" root).EnumerateArray()
             |> Seq.map (fun unit ->
                 { Id = text "id" unit
+                  ProviderCycleId = text "providerCycleId" unit
                   Dependencies = strings "dependencies" unit
                   Completed = bool "completed" unit
                   Evidence = strings "evidence" unit })
@@ -58,10 +60,66 @@ module CycleLedgerApplication =
           Dispositions = strings "dispositions" node
           Nonce = text "nonce" node
           EvidenceDigest = text "evidenceDigest" node }
-    let private receipt expectedWorkId target source head provider node =
+    let private providerRoot node =
+        optionalText "rootPath" node
+        |> Option.defaultValue "."
+        |> Path.GetFullPath
+
+    let private runValidator workingDirectory executable arguments =
+        let start = ProcessStartInfo(executable)
+        start.WorkingDirectory <- workingDirectory
+        start.UseShellExecute <- false
+        start.RedirectStandardOutput <- true
+        start.RedirectStandardError <- true
+        for argument in arguments do start.ArgumentList.Add argument
+        use child = Process.Start start
+        let output = child.StandardOutput.ReadToEnd()
+        let error = child.StandardError.ReadToEnd()
+        child.WaitForExit()
+        if child.ExitCode <> 0 then
+            invalidArg "artifactPath" $"provider validator refused the artifact: %s{error.Trim()}"
+        output
+
+    let private relativeArtifact root path =
+        let absolute = Path.GetFullPath(path, root)
+        let relative = Path.GetRelativePath(root, absolute)
+        if relative = ".." || relative.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal) then
+            invalidArg "artifactPath" "must resolve beneath rootPath"
+        relative.Replace(Path.DirectorySeparatorChar, '/')
+
+    let private validateProviderArtifact expectedIdentity provider node =
+        let root = providerRoot node
         let path = text "artifactPath" node
-        if not (File.Exists path) then invalidArg "artifactPath" $"does not exist: %s{path}"
-        match parseProviderReceipt expectedWorkId target source head provider (File.ReadAllBytes path) with
+        let relative = relativeArtifact root path
+        match provider with
+        | "fsgg-sdd" ->
+            let expected = $"readiness/%s{expectedIdentity}/verify.json"
+            if relative <> expected then invalidArg "artifactPath" $"SDD verification artifact must be %s{expected}"
+            let output = runValidator root "fsgg-sdd" [ "verify"; "--root"; root; "--work"; expectedIdentity; "--require-observed"; "--dry-run" ]
+            use report = JsonDocument.Parse output
+            let result = report.RootElement
+            if not (bool "coherent" result) || text "outcome" result <> "noChange" then
+                invalidArg "artifactPath" "fsgg-sdd verify did not confirm a coherent, byte-current provider view"
+        | "critique" ->
+            let script = Path.Combine(root, ".agents", "skills", "work-roadmap", "scripts", "validate-critique-state.py")
+            if not (File.Exists script) then invalidArg "rootPath" "does not contain the canonical schema-v3 critique validator"
+            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--artifact"; relative ] |> ignore
+        | "feedback" ->
+            let script = Path.Combine(root, ".agents", "skills", "work-roadmap", "scripts", "validate-feedback-state.py")
+            if not (File.Exists script) then invalidArg "rootPath" "does not contain the canonical schema-v2 feedback validator"
+            let audit = text "auditPath" node |> relativeArtifact root
+            let phases = strings "phases" node
+            if List.isEmpty phases || phases |> List.exists String.IsNullOrWhiteSpace then invalidArg "phases" "must contain the exercised feedback phases"
+            runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--report"; relative; "--audit"; audit; "--phases"; String.concat "," phases ] |> ignore
+        | _ -> invalidArg "provider" $"unsupported provider adapter: %s{provider}"
+
+    let private receipt expectedIdentity target source head provider node =
+        validateProviderArtifact expectedIdentity provider node
+        let root = providerRoot node
+        let path = text "artifactPath" node
+        let absolute = Path.GetFullPath(path, root)
+        if not (File.Exists absolute) then invalidArg "artifactPath" $"does not exist: %s{absolute}"
+        match parseProviderReceipt expectedIdentity target source head provider (File.ReadAllBytes absolute) with
         | Ok parsed -> parsed
         | Error errors -> invalidArg "artifactPath" (String.concat "; " errors)
     let private evidence node =
@@ -100,7 +158,9 @@ module CycleLedgerApplication =
     let private journalPath () =
         match Environment.GetEnvironmentVariable "FSGG_CYCLE_JOURNAL" with
         | value when not (String.IsNullOrWhiteSpace value) -> value
-        | _ -> Path.Combine(".git", "fsgg-cycle-journal.json")
+        | _ ->
+            let resolved = runValidator Environment.CurrentDirectory "git" [ "rev-parse"; "--git-path"; "fsgg-cycle-journal.json" ]
+            resolved.Trim()
 
     let private readJournal () =
         let path = journalPath ()
@@ -148,9 +208,13 @@ module CycleLedgerApplication =
                     | Error errors -> fail (String.concat "; " errors)
             | "advance" ->
                 let target = cycle (property "cycle" root)
+                let unit =
+                    model.Units
+                    |> List.tryFind (fun unit -> unit.Id = target.UnitId)
+                    |> Option.defaultWith (fun () -> invalidArg "cycle.unitId" "does not identify a ledger unit")
                 let proof = evidence (property "evidence" root)
                 let expected = proof.ImplementationHead
-                match advance model target (receipt target.UnitId target model.SourceRevision expected "fsgg-sdd" (property "implementation" root)) (receipt target.UnitId target model.SourceRevision expected "critique" (property "review" root)) (receipt target.UnitId target model.SourceRevision expected "feedback" (property "feedback" root)) proof with
+                match advance model target (receipt target.UnitId target model.SourceRevision expected "fsgg-sdd" (property "implementation" root)) (receipt unit.ProviderCycleId target model.SourceRevision expected "critique" (property "review" root)) (receipt unit.ProviderCycleId target model.SourceRevision expected "feedback" (property "feedback" root)) proof with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
             | "update" ->

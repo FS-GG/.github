@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2133-resumable-cycle-ledger/ship.json",
-      "digest": "sha256:3456e17351bb5e0ca0c0dec5ddf8897e88a327048fe25c0881a178d19bfc9834",
+      "digest": "sha256:70fa4a7da4a13c35253f3734f6a64528b5d296061794ffc9e5447193e565dee2",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2133-resumable-cycle-ledger/verify.json",
-      "digest": "sha256:13c9611cf6b15a4b601a23d795fc60044e878cdea7331c7a766b541eda673bce",
+      "digest": "sha256:e995442cd83621ff65ef4b96142588dc86b789c2dcde968ec81886b9ec8dd52b",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2133-resumable-cycle-ledger/work-model.json",
-      "digest": "sha256:63d3d42e42821d54b2845c98314c958b96f187632e30d5c28f0617af6bb77abb",
+      "digest": "sha256:7c5e73a950126024a3cd36b335e9cb75def2180e99e43e9a91a59607e80a2650",
       "schemaVersion": 1
     }
   ],

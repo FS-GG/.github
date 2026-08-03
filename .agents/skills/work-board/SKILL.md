@@ -20,10 +20,13 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    performance-first planning gate before implementation begins.
    Persist a typed cycle envelope beside the board before scheduling: fresh-read the board into its
    source revision and units, run `fsgg-coord cycle inspect`, then `register` (or resume its exact
-   stable id) for the selected unit. After implementation, pass the actual generated SDD verification,
-   validated schema-v3 critique, and validated schema-v2 feedback artifacts by `artifactPath` to
-   `advance`; normalized caller-authored envelopes are not provider evidence, and journey applicability
-   comes from the validated critique artifact. Persist the `updateReceipt` emitted and durably journaled
+   stable id) for the selected unit. Bind each unit's stable external feedback/critique identity as
+   `providerCycleId`, then pass the actual generated SDD verification, validated schema-v3 critique,
+   and validated schema-v2 feedback artifacts to `advance`. Each provider input names `rootPath` and
+   `artifactPath`; feedback additionally names its `auditPath` and ordered `phases`. The engine reruns
+   `fsgg-sdd verify` and the canonical critique/feedback validators itself; normalized or minimally
+   shaped caller-authored envelopes are not provider evidence, and journey applicability comes from
+   the validated critique artifact. Persist the `updateReceipt` emitted and durably journaled
    by the guarded merged-head/checkpoint `update` and pass that exact receipt to `complete`, then
    fresh-read and inspect again. Multiple ready units require an explicit operator
    parallel authorization and recorded disjoint touch-sets; otherwise schedule one. Missing receipts,

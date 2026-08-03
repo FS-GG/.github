@@ -8,6 +8,7 @@ open FS.GG.Coord.CycleLedger
 module CycleLedgerTests =
     let unit id dependencies completed =
         { Id = id
+          ProviderCycleId = "roadmap-cycle-ledger-m1-" + id
           Dependencies = dependencies
           Completed = completed
           Evidence = [] }
@@ -29,8 +30,8 @@ module CycleLedgerTests =
 
     let feedbackBytes cycleId =
         [ "---"
-          "schemaVersion: 2"
-          $"cycleId: %s{cycleId}"
+          "feedbackSchema: 2"
+          $"cycle: %s{cycleId}"
           "---"
           "## §1 Provenance and confidence"
           "- **activation:** active"
@@ -68,7 +69,8 @@ module CycleLedgerTests =
     [<Fact>]
     let ``provider artifacts are byte-bound and reject unsupported generator provenance`` () =
         let target = cycle "work" "base"
-        let valid = receipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" false false)
+        let providerCycle = "roadmap-cycle-ledger-m1-work"
+        let valid = receipt providerCycle target "base" "head" "critique" (critiqueBytes providerCycle "head" false false)
         Assert.True(validateProvider "work" target "base" "head" "critique" "fsgg.critique.report/3" "FS.GG.Critique.Validator" valid |> Result.isOk)
 
         let normalizedForgery = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.critique.report/3","provider":"critique","workId":"work","cycleId":"%s{target.Id}","sourceRevision":"base","candidateHead":"head","verdict":"pass","round":0,"playerJourney":null,"generator":{{"id":"FS.GG.Critique.Validator","version":"1.0.0"}}}}"""
@@ -79,10 +81,11 @@ module CycleLedgerTests =
     let ``player journey applicability is derived from the ledger unit`` () =
         let target = cycle "work" "base"
         let model = { SourceRevision = "base"; Units = [ unit "work" [] false ] }
+        let providerCycle = model.Units.Head.ProviderCycleId
         let implementation = receipt "work" target "base" "head" "fsgg-sdd" (sddBytes "work")
-        let feedback = receipt "work" target "base" "head" "feedback" (feedbackBytes target.Id)
-        Assert.True(parseProviderReceipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" true false) |> Result.isError)
-        let passingReview = receipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" true true)
+        let feedback = receipt providerCycle target "base" "head" "feedback" (feedbackBytes providerCycle)
+        Assert.True(parseProviderReceipt providerCycle target "base" "head" "critique" (critiqueBytes providerCycle "head" true false) |> Result.isError)
+        let passingReview = receipt providerCycle target "base" "head" "critique" (critiqueBytes providerCycle "head" true true)
         Assert.Equal(Advance target, advance model target implementation passingReview feedback (evidence target "head") |> unwrap)
 
     [<Fact>]

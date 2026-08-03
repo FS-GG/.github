@@ -7,7 +7,12 @@ open System.Text.Json
 open System.Text.RegularExpressions
 
 module CycleLedger =
-    type Unit = { Id: string; Dependencies: string list; Completed: bool; Evidence: string list }
+    type Unit =
+        { Id: string
+          ProviderCycleId: string
+          Dependencies: string list
+          Completed: bool
+          Evidence: string list }
     type Ledger = { SourceRevision: string; Units: Unit list }
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
@@ -80,13 +85,13 @@ module CycleLedger =
                 if generator <> "FS.GG.SDD.Artifacts/1.0.0" then invalidArg "generator" "is unsupported"
                 let diagnostics = jsonProperty "diagnostics" root
                 if diagnostics.ValueKind <> JsonValueKind.Array || diagnostics.GetArrayLength() <> 0 then invalidArg "diagnostics" "SDD verification report has diagnostics"
-                Ok { Schema = "fsgg.sdd.verify/1"; Provider = expectedProvider; WorkId = expectedWorkId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.SDD.Artifacts"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
+                Ok { Schema = "fsgg.sdd.verify/1"; Provider = expectedProvider; WorkId = expectedCycle.UnitId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.SDD.Artifacts"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
             | "critique" ->
                 use document = JsonDocument.Parse(ReadOnlyMemory<byte>(artifactBytes))
                 let root = document.RootElement
                 if root.TryGetProperty("provider") |> fst then invalidArg "artifact" "self-authored normalized provider envelopes are unsupported"
                 if (jsonProperty "schema_version" root).GetInt32() <> 3 then invalidArg "schema_version" "must be 3"
-                if jsonText "cycle_id" root <> expectedCycle.Id then invalidArg "cycle_id" "does not match"
+                if jsonText "cycle_id" root <> expectedWorkId then invalidArg "cycle_id" "does not match the ledger-bound provider cycle"
                 let rounds = (jsonProperty "repair_rounds" root).GetInt32()
                 if rounds < 0 || rounds > 10 then invalidArg "repair_rounds" "is outside 0 through 10"
                 let confirmation = jsonProperty "confirmation" root
@@ -102,7 +107,7 @@ module CycleLedger =
                 Ok
                     { Schema = "fsgg.critique.report/3"
                       Provider = expectedProvider
-                      WorkId = expectedWorkId
+                      WorkId = expectedCycle.UnitId
                       CycleId = expectedCycle.Id
                       SourceRevision = expectedSourceRevision
                       CandidateHead = expectedHead
@@ -116,11 +121,11 @@ module CycleLedger =
             | "feedback" ->
                 let text = Encoding.UTF8.GetString artifactBytes
                 let require pattern message = if not (Regex.IsMatch(text, pattern, RegexOptions.Multiline ||| RegexOptions.CultureInvariant)) then invalidArg "feedback" message
-                require "(?m)^schemaVersion:\\s*2\\s*$" "report must declare schemaVersion: 2"
-                require ("(?m)^cycleId:\\s*" + Regex.Escape(expectedCycle.Id) + "\\s*$") "report cycle does not match"
+                require "(?m)^feedbackSchema:\\s*2\\s*$" "report must declare feedbackSchema: 2"
+                require ("(?m)^cycle:\\s*" + Regex.Escape(expectedWorkId) + "\\s*$") "report cycle does not match the ledger-bound provider cycle"
                 require "(?mi)^-\\s+\\*\\*activation:\\*\\*\\s+active\\s*$" "report activation is not active"
                 require "(?mi)^-\\s+\\*\\*phases:\\*\\*\\s+.+$" "report phases are missing"
-                Ok { Schema = "fsgg.feedback.report/2"; Provider = expectedProvider; WorkId = expectedWorkId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.Feedback.Validator"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
+                Ok { Schema = "fsgg.feedback.report/2"; Provider = expectedProvider; WorkId = expectedCycle.UnitId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.Feedback.Validator"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
             | _ -> Error [ "unsupported provider adapter: " + expectedProvider ]
         with error -> Error [ "provider artifact is invalid: " + error.Message ]
 
@@ -138,6 +143,7 @@ module CycleLedger =
             [ yield! required "ledger source revision" ledger.SourceRevision |> Option.toList
               for unit in ledger.Units do
                   yield! required "unit id" unit.Id |> Option.toList
+                  yield! required "unit provider cycle id" unit.ProviderCycleId |> Option.toList
                   for dependency in unit.Dependencies do
                       if not (List.contains dependency ids) then yield $"unit %s{unit.Id} names unknown dependency %s{dependency}"
                       if dependency = unit.Id then yield $"unit %s{unit.Id} depends on itself"

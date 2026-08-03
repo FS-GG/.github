@@ -32,8 +32,11 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 6. Discard the worker and critic, refresh default branch, re-read the roadmap, and select again.
    Persist a typed cycle envelope beside the roadmap: fresh-read Markdown into its source revision
    and units, run `fsgg-coord cycle inspect`, then `register` (or exact-id resume) for the milestone.
-   Pass the actual generated SDD verification, validated schema-v3 critique, and validated schema-v2
-   feedback artifacts by `artifactPath` to `advance`; normalized caller-authored envelopes are not
+   Bind each unit's stable roadmap feedback/critique identity as `providerCycleId`. Pass the actual
+   generated SDD verification, validated schema-v3 critique, and validated schema-v2 feedback artifacts
+   to `advance`: each provider input names `rootPath` and `artifactPath`, while feedback also names its
+   `auditPath` and ordered `phases`. The engine reruns `fsgg-sdd verify` and the canonical critique and
+   feedback validators itself; normalized or minimally shaped caller-authored envelopes are not
    provider evidence, and journey applicability comes from the critique artifact. Persist the
    `updateReceipt` emitted and durably journaled by the guarded merged-head/checkpoint `update`;
    `complete` consumes that exact receipt and revalidates its bound

@@ -800,11 +800,11 @@ no_mutation "whoami" run whoami
 # parser refusal, so command-contract coverage proves the command reaches its actual decision
 # path while the fixture's HTTP mutation ledger remains empty.
 printf '%s\n' \
-  '{"sourceRevision":"fixture-source","units":[{"id":"first","dependencies":[],"completed":false,"evidence":[]}]}' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"first","providerCycleId":"roadmap-fixture-m1-first","dependencies":[],"completed":false,"evidence":[]}]}' \
   >"$CYCLE_SNAPSHOT"
 no_mutation "cycle" run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json
 printf '%s\n' \
-  '{"sourceRevision":"fixture-source","units":[{"id":"a","dependencies":["b"],"completed":false,"evidence":[]},{"id":"b","dependencies":["a"],"completed":false,"evidence":[]}]}' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"a","providerCycleId":"roadmap-fixture-m1-a","dependencies":["b"],"completed":false,"evidence":[]},{"id":"b","providerCycleId":"roadmap-fixture-m2-b","dependencies":["a"],"completed":false,"evidence":[]}]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_bad="$(run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_bad_rc=$?
 if [ "$cycle_bad_rc" -ne 0 ] && printf '%s' "$cycle_bad" | grep -q 'dependency cycle'; then
@@ -816,7 +816,7 @@ fi
 # The provider boundary consumes exact artifact bytes, not provenance fields asserted by the cycle
 # caller. Registration supplies the canonical cycle id used by all three provider envelopes.
 printf '%s\n' \
-  '{"sourceRevision":"base","units":[{"id":"work","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
+  '{"sourceRevision":"base","units":[{"id":"2133-resumable-cycle-ledger","providerCycleId":"roadmap-cycle-ledger-m1-production","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_register="$(run cycle register --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_register_rc=$?
 cycle_id="$(printf '%s' "$cycle_register" | jq -r '.cycleId // empty' 2>/dev/null)"
@@ -826,12 +826,20 @@ else
   bad "#2133: cycle production route must register a canonical cycle" "rc=$cycle_register_rc output=$cycle_register"
 fi
 
-printf '%s\n' "{\"schemaVersion\":1,\"workId\":\"work\",\"stage\":\"verify\",\"status\":\"verificationReady\",\"generator\":\"FS.GG.SDD.Artifacts/1.0.0\",\"readiness\":\"verificationReady\",\"diagnostics\":[]}" >"$CYCLE_FIX/sdd.json"
-printf '%s\n' "{\"schema_version\":3,\"cycle_id\":\"$cycle_id\",\"repair_rounds\":0,\"confirmation\":{\"reviewed_commit\":\"head\",\"verdict\":\"pass\"},\"game_functionality\":true,\"player_journeys\":[{\"entry_point\":\"product-boot\",\"input_surface\":\"player-control-messages\",\"reached\":true}],\"uncovered_functionality\":[]}" >"$CYCLE_FIX/critique.json"
-printf '%s\n' '---' 'schemaVersion: 2' "cycleId: $cycle_id" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence, verify-ship-pr' '## §2 Findings' >"$CYCLE_FIX/feedback.md"
+provider_root="$CYCLE_FIX/provider-root"
+provider_cycle="roadmap-cycle-ledger-m1-production"
+candidate_head="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+mkdir -p "$provider_root/reviews/roadmap" "$provider_root/feedback/audits"
+ln -s "$REPO_ROOT/.agents" "$provider_root/.agents"
+jq -n --arg cycle "$provider_cycle" --arg head "$candidate_head" \
+  '{schema_version:3,cycle_id:$cycle,milestone:"M1 — production",critic:"fixture-critic",initial_reviewed_commit:$head,scope:["requirements","diff","tests","architecture","roadmap-evidence"],initial_verdict:"pass",repair_rounds:0,reviewed_commits:[$head],findings:[],confirmation:{reviewed_commit:$head,verdict:"pass","unresolved_blocker_major":[]},human_escalation:null,game_functionality:false,player_journeys:[],uncovered_functionality:[],entry_point_not_test_ownable:false,entry_point_not_test_ownable_reason:null}' \
+  >"$provider_root/reviews/roadmap/$provider_cycle.json"
+printf '%s\n' '---' 'feedbackSchema: 2' "cycle: $provider_cycle" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** implementation-test-evidence, verify-ship-pr' '- **material events:** 0' '- **zero-event reason:** exercised phases produced no actionable findings' '## §2 Findings' >"$provider_root/feedback/$provider_cycle.md"
+report_digest="$(sed 's/\r$//' "$provider_root/feedback/$provider_cycle.md" | sha256sum | cut -d' ' -f1)"
+jq -n --arg report "feedback/$provider_cycle.md" --arg digest "$report_digest" '{auditSchema:1,report:$report,reportSha256:$digest,findings:[]}' >"$provider_root/feedback/audits/$provider_cycle.audit.json"
 
-jq -n --arg cycle "$cycle_id" --arg sdd "$CYCLE_FIX/sdd.json" --arg critique "$CYCLE_FIX/critique.json" --arg feedback "$CYCLE_FIX/feedback.md" \
-  '{sourceRevision:"base",units:[{id:"work",dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"work",executor:"worker",repository:".github",baseCommit:"base"},implementation:{artifactPath:$sdd},review:{artifactPath:$critique},feedback:{artifactPath:$feedback},evidence:{implementationHead:"head",reviewHead:"head",feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:"head",evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
+jq -n --arg cycle "$cycle_id" --arg providerCycle "$provider_cycle" --arg head "$candidate_head" --arg repo "$REPO_ROOT" --arg providerRoot "$provider_root" \
+  '{sourceRevision:"base",units:[{id:"2133-resumable-cycle-ledger",providerCycleId:$providerCycle,dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"2133-resumable-cycle-ledger",executor:"worker",repository:".github",baseCommit:"base"},implementation:{rootPath:$repo,artifactPath:"readiness/2133-resumable-cycle-ledger/verify.json"},review:{rootPath:$providerRoot,artifactPath:("reviews/roadmap/"+$providerCycle+".json")},feedback:{rootPath:$providerRoot,artifactPath:("feedback/"+$providerCycle+".md"),auditPath:("feedback/audits/"+$providerCycle+".audit.json"),phases:["implementation-test-evidence","verify-ship-pr"]},evidence:{implementationHead:$head,reviewHead:$head,feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:$head,evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
 cycle_advance="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_advance_rc=$?
 if [ "$cycle_advance_rc" -eq 0 ] && [ "$(printf '%s' "$cycle_advance" | jq -r .action 2>/dev/null)" = advance ]; then
   ok "#2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes"
@@ -839,10 +847,34 @@ else
   bad "#2133: cycle advance must consume valid provider artifacts" "rc=$cycle_advance_rc output=$cycle_advance"
 fi
 
-printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"work\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
-jq --arg forged "$CYCLE_FIX/forged-sdd.json" '.implementation.artifactPath=$forged' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/forged-advance.json"
+cp "$provider_root/reviews/roadmap/$provider_cycle.json" "$CYCLE_FIX/valid-critique.json"
+printf '%s\n' "{\"schema_version\":3,\"cycle_id\":\"$provider_cycle\",\"repair_rounds\":0,\"confirmation\":{\"reviewed_commit\":\"$candidate_head\",\"verdict\":\"pass\"},\"game_functionality\":false,\"player_journeys\":[],\"uncovered_functionality\":[]}" >"$provider_root/reviews/roadmap/$provider_cycle.json"
+minimal_critique="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; minimal_critique_rc=$?
+mv "$CYCLE_FIX/valid-critique.json" "$provider_root/reviews/roadmap/$provider_cycle.json"
+if [ "$minimal_critique_rc" -ne 0 ] && printf '%s' "$minimal_critique" | grep -q 'provider validator refused'; then
+  ok "#2133: production advance runs the exact schema-v3 critique validator against minimal lookalikes"
+else
+  bad "#2133: production advance must reject critique-shaped files the canonical validator rejects" "rc=$minimal_critique_rc output=$minimal_critique"
+fi
+
+cp "$provider_root/feedback/$provider_cycle.md" "$CYCLE_FIX/valid-feedback.md"
+cp "$provider_root/feedback/audits/$provider_cycle.audit.json" "$CYCLE_FIX/valid-feedback.audit.json"
+printf '%s\n' '---' 'feedbackSchema: 2' "cycle: $provider_cycle" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** implementation-test-evidence, verify-ship-pr' '## §2 Findings' >"$provider_root/feedback/$provider_cycle.md"
+report_digest="$(sed 's/\r$//' "$provider_root/feedback/$provider_cycle.md" | sha256sum | cut -d' ' -f1)"
+jq -n --arg report "feedback/$provider_cycle.md" --arg digest "$report_digest" '{auditSchema:1,report:$report,reportSha256:$digest,findings:[]}' >"$provider_root/feedback/audits/$provider_cycle.audit.json"
+minimal_feedback="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; minimal_feedback_rc=$?
+mv "$CYCLE_FIX/valid-feedback.md" "$provider_root/feedback/$provider_cycle.md"
+mv "$CYCLE_FIX/valid-feedback.audit.json" "$provider_root/feedback/audits/$provider_cycle.audit.json"
+if [ "$minimal_feedback_rc" -ne 0 ] && printf '%s' "$minimal_feedback" | grep -q 'provider validator refused'; then
+  ok "#2133: production advance runs the exact schema-v2 feedback validator against minimal lookalikes"
+else
+  bad "#2133: production advance must reject feedback-shaped files the canonical validator rejects" "rc=$minimal_feedback_rc output=$minimal_feedback"
+fi
+
+printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"2133-resumable-cycle-ledger\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"$candidate_head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
+jq --arg root "$CYCLE_FIX" '.implementation.rootPath=$root | .implementation.artifactPath="forged-sdd.json"' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/forged-advance.json"
 forged_advance="$(run cycle advance --snapshot "$CYCLE_FIX/forged-advance.json" --json 2>&1)"; forged_advance_rc=$?
-if [ "$forged_advance_rc" -ne 0 ] && printf '%s' "$forged_advance" | grep -q 'self-authored'; then
+if [ "$forged_advance_rc" -ne 0 ] && printf '%s' "$forged_advance" | grep -q 'SDD verification artifact must be'; then
   ok "#2133: production advance rejects supported-looking caller-authored provider envelopes"
 else
   bad "#2133: production advance must reject invented provider provenance" "rc=$forged_advance_rc output=$forged_advance"
@@ -873,6 +905,19 @@ if [ "$invented_complete_rc" -ne 0 ] && printf '%s' "$invented_complete" | grep 
 else
   bad "#2133: production complete must reject invented update receipts" "output=$invented_complete"
 fi
+
+configured_journal="$FSGG_CYCLE_JOURNAL"
+unset FSGG_CYCLE_JOURNAL
+default_journal="$(git -C "$REPO_ROOT" rev-parse --git-path fsgg-cycle-journal.json)"
+rm -f "$default_journal"
+default_update="$(run cycle update --snapshot "$CYCLE_FIX/update.json" --json 2>&1)"; default_update_rc=$?
+if [ "$default_update_rc" -eq 0 ] && [ -f "$default_journal" ] && [ "$(printf '%s' "$default_update" | jq -r .action 2>/dev/null)" = update ]; then
+  ok "#2133: production update resolves its default durable journal through a linked worktree gitdir"
+else
+  bad "#2133: default update journal must work when .git is a linked-worktree file" "rc=$default_update_rc journal=$default_journal output=$default_update"
+fi
+rm -f "$default_journal"
+export FSGG_CYCLE_JOURNAL="$configured_journal"
 
 # `followup add` is intentionally a local-file write, not a shared-board write.  It is a valid
 # (and therefore non-vacuous) driver for the command-contract row; `list` then proves the add

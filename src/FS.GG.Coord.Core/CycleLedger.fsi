@@ -2,7 +2,12 @@ namespace FS.GG.Coord
 
 /// Pure, fail-closed cycle state for roadmap and workspace-board drivers.
 module CycleLedger =
-    type Unit = { Id: string; Dependencies: string list; Completed: bool; Evidence: string list }
+    type Unit =
+        { Id: string
+          ProviderCycleId: string
+          Dependencies: string list
+          Completed: bool
+          Evidence: string list }
     type Ledger = { SourceRevision: string; Units: Unit list }
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     /// A provider envelope parsed from the exact artifact bytes. Construction is intentionally opaque:
