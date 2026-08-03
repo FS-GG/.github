@@ -46,19 +46,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV001]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/core-release.bom-free.trx]
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/run.sh
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV002
     kind: verification
@@ -72,19 +65,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-002]
     obligationRefs: [EV002]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/cli-release.bom-free.trx]
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/run.sh
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV003
     kind: verification
@@ -98,19 +84,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV003]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/github-release.bom-free.trx]
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/run.sh
+        path: tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV004
     kind: verification
@@ -124,19 +103,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV004]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/projection-fixture.txt]
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/run.sh
+        path: tests/projection/run.sh
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV005
     kind: verification
@@ -150,19 +122,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/skill-quality-fixture.txt]
     sourceRefs:
       - kind: verification
         path: tests/skill-quality/run.sh
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV006
     kind: verification
@@ -176,19 +141,12 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV006]
-    artifacts: []
+    artifacts: [work/2136-generated-facts/test-results/package-verification.txt]
     sourceRefs:
       - kind: verification
-        path: tests/skill-quality/run.sh
+        path: src/FS.GG.Kit/verify-package.sh
     result: pass
     synthetic: false
-    observedRun:
-      source: work/2136-generated-facts/test-results/cli.trx
-      digest: "sha256:442a08697ac96d09192f80112be920e392cc9d4b8e6cd99c313533fbdf95a4b5"
-      outcome: passed
-      passed: 560
-      failed: 0
-      skipped: 0
     notes: [Evidence required before verify.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
