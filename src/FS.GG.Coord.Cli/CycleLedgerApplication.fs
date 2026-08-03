@@ -27,8 +27,8 @@ module CycleLedgerApplication =
         |> List.ofSeq
     let private bool (name: string) (node: JsonElement) : bool =
         match (property name node).ValueKind with | JsonValueKind.True -> true | JsonValueKind.False -> false | _ -> invalidArg name "must be a boolean"
-    let private optionalText name node = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString()) | true, value when value.ValueKind = JsonValueKind.Null -> None | false, _ -> None | _ -> invalidArg name "must be string or null"
-    let private optionalBool name node = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.True -> true | true, value when value.ValueKind = JsonValueKind.False -> false | false, _ -> false | _ -> invalidArg name "must be boolean"
+    let private optionalText (name: string) (node: JsonElement) = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString()) | true, value when value.ValueKind = JsonValueKind.Null -> None | false, _ -> None | _ -> invalidArg name "must be string or null"
+    let private optionalBool (name: string) (node: JsonElement) = match node.TryGetProperty name with | true, value when value.ValueKind = JsonValueKind.True -> true | true, value when value.ValueKind = JsonValueKind.False -> false | false, _ -> false | _ -> invalidArg name "must be boolean"
     let private ledger root =
         { SourceRevision = text "sourceRevision" root
           Units =
