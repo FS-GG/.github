@@ -15,8 +15,26 @@ import sys
 
 PATCH = re.compile(r"^0\.(\d+)\.(\d+)$")
 REQUIRED_FACTS = (
-    "version", "mergedPrReachable", "prArm", "orgFeed", "nugetFeed", "tagExists",
+    "version", "provenance", "orgFeed", "nugetFeed", "orgLatest", "nugetLatest", "tagExists",
 )
+
+
+def patch_tuple(value):
+    match = PATCH.fullmatch(value or "")
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def escalation(previous, action, reason, version, run):
+    """Typed, deterministic sticky-marker state; malformed history never resets."""
+    if previous is None:
+        streak = 1
+    elif not isinstance(previous, dict) or not isinstance(previous.get("streak"), int) or previous["streak"] < 1:
+        return {"valid": False, "reason": "sticky-marker-malformed"}
+    elif previous.get("action") == action and previous.get("reason") == reason and previous.get("version") == version:
+        streak = previous["streak"] # idempotent retry of the same run
+    else:
+        streak = previous["streak"] + 1
+    return {"valid": True, "streak": streak, "action": action, "reason": reason, "version": version, "lastRun": run}
 
 
 def decide(facts):
@@ -30,9 +48,10 @@ def decide(facts):
     match = PATCH.fullmatch(version)
     if not match:
         return result("refuse", "version-not-stable-0x-patch", version)
-    if not facts.get("mergedPrReachable"):
+    provenance = facts.get("provenance")
+    if not isinstance(provenance, dict) or not provenance.get("mergedReachable") or not provenance.get("introducedVersion") or provenance.get("introducedVersion") != version:
         return result("refuse", "merged-pr-provenance-missing", version)
-    if facts.get("prArm") != "pass":
+    if provenance.get("prArm") != "pass":
         return result("refuse", "pr-arm-not-passed", version)
     org = facts.get("orgFeed")
     nuget = facts.get("nugetFeed")
@@ -46,6 +65,16 @@ def decide(facts):
         if facts["releaseRun"]["nuspecCommit"] != facts.get("sourceSha"):
             return result("stickyEscalate", "published-nuspec-commit-disagrees", version)
         return result("openEvidencePr", "both-feeds-published", version)
+    org_latest, nuget_latest = patch_tuple(facts.get("orgLatest")), patch_tuple(facts.get("nugetLatest"))
+    candidate = patch_tuple(version)
+    if not org_latest or not nuget_latest:
+        return result("refuse", "feed-frontier-unknown", version)
+    if org_latest != nuget_latest:
+        return result("stickyEscalate", "feed-frontier-disagrees", version)
+    if candidate <= org_latest:
+        return result("refuse", "candidate-not-strictly-newer-than-frontier", version)
+    if candidate[0] != org_latest[0] or candidate[1] != org_latest[1] + 1:
+        return result("refuse", "candidate-not-next-patch", version)
     if facts.get("tagExists"):
         return result("stickyEscalate", "tag-exists-without-both-feed-publication", version)
     return result("tag", "eligible-authored-unpublished-patch", version)
@@ -60,10 +89,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--facts", required=True, help="JSON fixture/observed fact file")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--previous-escalation")
+    parser.add_argument("--run", default="")
     args = parser.parse_args()
     try:
         with open(args.facts, encoding="utf-8") as source:
             answer = decide(json.load(source))
+        if answer["action"] in ("refuse", "stickyEscalate"):
+            previous = None
+            if args.previous_escalation:
+                with open(args.previous_escalation, encoding="utf-8") as state:
+                    previous = json.load(state)
+            answer["escalation"] = escalation(previous, answer["action"], answer["reason"], answer["version"], args.run)
     except (OSError, json.JSONDecodeError) as error:
         answer = result("refuse", "facts-unreadable", "")
         answer["diagnostic"] = str(error)
