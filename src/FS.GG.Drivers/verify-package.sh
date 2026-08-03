@@ -39,8 +39,16 @@ for source in sorted(root.rglob("*.md")):
     if not relative_source.parts[0].startswith("work-board"):
         continue
     text = source.read_text(encoding="utf-8-sig")
-    for match in re.finditer(r"!?\[[^\]]*\]\(([^)]+)\)", text):
-        raw = match.group(1).strip()
+    destinations = [match.group(1) for match in re.finditer(r"!?\[[^\]]*\]\(([^)]+)\)", text)]
+    destinations.extend(
+        match.group(1) or match.group(2)
+        for match in re.finditer(
+            r"(?m)^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(?:<([^>\n]+)>|(\S+))",
+            text,
+        )
+    )
+    for destination in destinations:
+        raw = destination.strip()
         if raw.startswith("<") and raw.endswith(">"):
             raw = raw[1:-1]
         raw = raw.split(maxsplit=1)[0]
@@ -182,8 +190,13 @@ printf '%s\n' '[broken](../withheld-operator/SKILL.md)' > "$WORK/consumer/.agent
 if board_link_closure_ok "$WORK/consumer/.agents/skills" >/dev/null 2>&1; then
   fail "consumer closure gate accepted a relative link to withheld bytes"
 fi
+printf '%s\n' '[broken][operator]' '' '[operator]: ../withheld-operator/SKILL.md' \
+  > "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
+if board_link_closure_ok "$WORK/consumer/.agents/skills" >/dev/null 2>&1; then
+  fail "consumer closure gate accepted a reference-style relative link to withheld bytes"
+fi
 rm "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
-echo "   consumer-shaped materialization is closed; a withheld-sibling link is rejected"
+echo "   consumer-shaped materialization is closed; inline and reference-style withheld-sibling links are rejected"
 
 echo "== 5. a tampered driver byte is REJECTED by that same verify (fail-loud) =="
 cp -r "$WORK/unpacked/drivers" "$WORK/tampered"
