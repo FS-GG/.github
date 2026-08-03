@@ -2851,6 +2851,28 @@ BC_COORD_RECEIVERS="$(roster_list "$KIT_CAP")" \
 # give up rule (4) over a capitalisation.
 SPARSE_ROSTER="$(printf '%s\n' "$all_repos" | tr '[:upper:]' '[:lower:]')"
 
+# Repository issue intake is an org-wide ingress boundary, not a per-repository convention.
+# Read the typed GraphQL enum directly: `hasIssuesEnabled` alone would certify a repository that
+# accepts public issue creation, and a failed read is explicitly not treated as compliant.
+issue_policy_findings=0; issue_policy_undetermined=0; issue_policy_graded=0
+while IFS= read -r policy_repo; do
+  [ -n "$policy_repo" ] || continue
+  policy_owner=${policy_repo%%/*}; policy_name=${policy_repo#*/}
+  policy_query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){issueCreationPolicy hasIssuesEnabled}}'
+  policy_json="$(gh api graphql -f "query=$policy_query" -F "owner=$policy_owner" -F "name=$policy_name" 2>"$GH_ERR_FILE")" || {
+    echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: $(gh_last_err)" >&2
+    issue_policy_undetermined=$((issue_policy_undetermined + 1)); continue
+  }
+  policy_value="$(jq -r '.data.repository.issueCreationPolicy // empty' <<<"$policy_json")"
+  if [ "$policy_value" = "COLLABORATORS_ONLY" ]; then
+    issue_policy_graded=$((issue_policy_graded + 1))
+  else
+    echo "::error::repos-audit: $policy_repo — issue creation policy is ${policy_value:-unreadable}; expected COLLABORATORS_ONLY." >&2
+    issue_policy_findings=$((issue_policy_findings + 1))
+  fi
+done <<< "$all_repos"
+echo "repos-audit: collaborator-only issue intake — $issue_policy_graded verified, $issue_policy_findings noncompliant, $issue_policy_undetermined no-verdict."
+
 audited=0; wired=0; gaps=0; drift=0; undetermined=0; build_config_materialized=0; build_config_graded=0
 # The sparse sweep's own denominators (#1529, criterion 5). They are counted HERE, in the parent,
 # because "did this repo's workflow walk complete?" is the parent's answer — repo_calls runs in a
@@ -3598,9 +3620,10 @@ repos_audit_sparse_report "$SPARSE_FILE" "$sparse_repos" "$rostered" "$sparse_un
 # matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ] || [ "$kitpin_undet" -ne 0 ] || [ "$sparse_noverdict" -ne 0 ] \
    || [ "$viewgen_undet" -ne 0 ] || [ "$offer_undet" -ne 0 ] || [ "$engoffer_undet" -ne 0 ] || [ "$engman_undet" -ne 0 ] \
-   || [ "$absentok_undet" -ne 0 ]; then
+   || [ "$absentok_undet" -ne 0 ] || [ "$issue_policy_undetermined" -ne 0 ]; then
   [ "$undetermined"  -eq 0 ] || echo "::error::repos-audit: could not determine wiring for $undetermined repo(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   [ "$kitpin_undet" -eq 0 ] || echo "::error::repos-audit: could not determine the FS.GG.Kit pin freshness of $kitpin_undet repo(s) — either a pin file or nuget.org would not read. Nothing was proven about their kit; this is an API failure, not a stale pin, and not a wiring gap." >&2
+  [ "$issue_policy_undetermined" -eq 0 ] || echo "::error::repos-audit: could not read collaborator-only issue policy for $issue_policy_undetermined rostered repository/repositories. Nothing was proven about public issue intake for those resources." >&2
   # Its own counter and sentence, for the reason every counter in this block has one: an unreadable
   # receiver project is not a wiring question, and folding it into `$undetermined` would print
   # "could not determine WIRING" about a file that answers a different question (#327/#335).
@@ -3743,7 +3766,7 @@ offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 engoffer_actionable=$(( engoffer_none + engoffer_superseded + engoffer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
    || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engoffer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
-   || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ]; then
+   || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ] || [ "$issue_policy_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   [ "$sparse_findings" -eq 0 ] || echo "::error::repos-audit: $sparse_findings cross-repo sparse-checkout pattern(s) enumerate a file, are unanchored, glob, or select nothing. The fetched script loses its siblings and the caller's job dies at load, in THEIR pipeline rather than here (#1510/#1515/#1522)." >&2
@@ -3752,6 +3775,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
+  [ "$issue_policy_findings" -eq 0 ] || echo "::error::repos-audit: $issue_policy_findings rostered repository/repositories allow issue creation beyond collaborators." >&2
   [ "$offer_actionable" -eq 0 ] || echo "::error::repos-audit: $offer_actionable behind receiver(s) need a human to act at the PROPOSAL step, not the merge step — $offer_none have been offered NO kit bump at all, $offer_superseded have only a superseded one, $offer_ratelimited have a branch a rate limit is holding. Each annotation above names the checkbox and the issue. Nothing else in this org reports these states: the freshness sweep says only 'behind', which is equally true when a bump is sitting open and unmerged (#1768/#1533)." >&2
   [ "$engoffer_actionable" -eq 0 ] || echo "::error::repos-audit: $engoffer_actionable coordination-kit receiver(s) are behind fs.gg.coord.cli and need a proposal-step action — $engoffer_none have NO engine bump, $engoffer_superseded only a superseded one, $engoffer_ratelimited a held branch (#1803)." >&2
   exit 1
