@@ -106,7 +106,10 @@ module Board =
     /// instead of once an invocation. A cached document we cannot parse is a miss, never a failure.
     val bootstrapCached: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
-    /// The board item id for an issue.
+    /// The board item id for an issue. Issues owned outside the board owner are resolved from the
+    /// ProjectV2 item connection because GitHub may omit their placement from the issue-side
+    /// `repository.issue.projectItems` connection. The lookup compares canonical owner, repository, and
+    /// number, so an external row cannot be confused with a default-owner twin.
     ///
     /// `Ok None` means **the issue is genuinely not on this board** — a successful read with a definite
     /// answer, and the only thing that licenses an `item-add`. It is UNREACHABLE from a failed read: a

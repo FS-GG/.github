@@ -334,7 +334,7 @@ module Board =
     let private ItemIdDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { id project { number } } } } } rateLimit { cost remaining } }"
 
-    let itemId
+    let private repositoryItemId
         (transport: IGitHubTransport)
         (board: BoardMap)
         (owner: string)
@@ -402,6 +402,120 @@ module Board =
 
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
+
+    [<Literal>]
+    let private ExternalItemIdDoc =
+        "query($projectId: ID!, $cursor: String) { node(id: $projectId) { ... on ProjectV2 { items(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { id content { ... on Issue { number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+
+    /// Resolve an issue owned outside the board owner from the board side of the relationship.
+    ///
+    /// GitHub can expose an external issue as a ProjectV2 item while omitting that placement from the
+    /// issue-side `repository.issue.projectItems` connection.  The issue-side query therefore answers a
+    /// false `None` for exactly the row that a fresh board scan can see (#2166).  Querying the project node
+    /// preserves both identities at the lookup boundary: the item's `id` and its content's canonical
+    /// `owner/repo#number`.  The full tuple is compared, so a default-owner twin cannot be selected merely
+    /// because it has the same repository name and number.
+    let private externalItemId
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string option> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} on board %s{board.Owner}/%s{board.Title}"
+
+        let same (left: string) (right: string) =
+            String.Equals(left, right, StringComparison.OrdinalIgnoreCase)
+
+        let rec page (cursor: string option) (guard: int) : IoResult<string option> =
+            if guard <= 0 then
+                Error(Malformed(subject, "the external-owner board item lookup did not terminate within 100 pages"))
+            else
+                let variables =
+                    [ "projectId", VId board.Id ]
+                    @ (match cursor with
+                       | Some value -> [ "cursor", VString value ]
+                       | None -> [])
+
+                match transport.Send(query ExternalItemIdDoc variables subject) with
+                | Error e -> Error e
+                | Ok response ->
+                    match graphQlData subject response.Body with
+                    | Error e -> Error e
+                    | Ok data ->
+                        try
+                            let project = data.GetProperty "node"
+
+                            if project.ValueKind = JsonValueKind.Null then
+                                Error(NotFound $"board node %s{board.Id}")
+                            else
+                                let items = project.GetProperty "items"
+
+                                let found =
+                                    items.GetProperty("nodes").EnumerateArray()
+                                    |> Seq.tryPick (fun node ->
+                                        match node.TryGetProperty "id", node.TryGetProperty "content" with
+                                        | (true, id), (true, content)
+                                            when id.ValueKind = JsonValueKind.String
+                                                 && content.ValueKind = JsonValueKind.Object ->
+                                            match content.TryGetProperty "number", content.TryGetProperty "repository" with
+                                            | (true, issueNumber), (true, repository)
+                                                when issueNumber.ValueKind = JsonValueKind.Number
+                                                     && repository.ValueKind = JsonValueKind.Object ->
+                                                match repository.TryGetProperty "nameWithOwner" with
+                                                | true, nwo when nwo.ValueKind = JsonValueKind.String ->
+                                                    let parts = nwo.GetString().Split('/', 2)
+
+                                                    if
+                                                        parts.Length = 2
+                                                        && same parts.[0] owner
+                                                        && same parts.[1] repo
+                                                        && issueNumber.GetInt32() = number
+                                                    then
+                                                        Some(id.GetString())
+                                                    else
+                                                        None
+                                                | _ -> None
+                                            | _ -> None
+                                        | _ -> None)
+
+                                match found with
+                                | Some id -> Ok(Some id)
+                                | None ->
+                                    let pageInfo = items.GetProperty "pageInfo"
+                                    let hasNext =
+                                        match pageInfo.TryGetProperty "hasNextPage" with
+                                        | true, value -> value.ValueKind = JsonValueKind.True
+                                        | _ -> false
+
+                                    let next =
+                                        match pageInfo.TryGetProperty "endCursor" with
+                                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                                        | _ -> None
+
+                                    match hasNext, next with
+                                    | true, Some value -> page (Some value) (guard - 1)
+                                    | true, None ->
+                                        Error(Malformed(subject, "the external-owner board item lookup has another page but no cursor"))
+                                    | false, _ -> Ok None
+                        with :? KeyNotFoundException ->
+                            Error(Malformed(subject, "the external-owner board item lookup response is missing `data.node.items`"))
+
+        page None 100
+
+    let itemId
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string option> =
+
+        if String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase) then
+            repositoryItemId transport board owner repo number
+        else
+            externalItemId transport board owner repo number
 
     /// `itemId`, served from the forever-cache when it is warm.
     ///
