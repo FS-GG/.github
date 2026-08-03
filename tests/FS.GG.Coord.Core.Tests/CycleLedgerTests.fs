@@ -28,3 +28,15 @@ module CycleLedgerTests =
         let doneLedger = { ledger with Units = ledger.Units |> List.map (fun item -> { item with Completed = true }) }
         let cycles = [ { Id = "one"; UnitId = "first"; Executor = "w"; Repository = "r"; BaseCommit = "b" }; { Id = "two"; UnitId = "second"; Executor = "w"; Repository = "r"; BaseCommit = "b" } ]
         Assert.True(complete doneLedger cycles [ "one" ] |> Result.isError)
+
+    [<Fact>]
+    let ``parallel ready units require explicit operator scheduling`` () =
+        let twoReady = { ledger with Units = [ unit "one" [] false; unit "two" [] false ] }
+        Assert.True(register twoReady "worker" ".github" "base" [] |> Result.isError)
+
+    [<Fact>]
+    let ``advancement requires a matching merged head and rejects an eleventh round`` () =
+        let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
+        let receipt = { Schema = "provider/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true }
+        let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None }
+        Assert.True(advance cycle receipt receipt receipt incomplete |> Result.isError)

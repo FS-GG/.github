@@ -65,6 +65,7 @@ module CycleLedger =
               yield! required "provider" receipt.Provider |> Option.toList
               if receipt.WorkId <> expectedWorkId then yield "provider receipt work id does not match"
               if receipt.CycleId <> expectedCycle.Id then yield "provider receipt cycle id does not match"
+              if not (receipt.Schema.EndsWith("/1", StringComparison.Ordinal)) then yield "provider receipt schema version is unsupported"
               if receipt.SourceRevision <> expectedSourceRevision then yield "provider receipt source revision is stale"
               if receipt.CandidateHead <> expectedHead then yield "provider receipt candidate head does not match"
               if receipt.Verdict <> "pass" then yield "provider receipt verdict is not pass"
@@ -84,6 +85,7 @@ module CycleLedger =
               if evidence.ReviewHead <> expected then yield "review evidence head does not match implementation head"
               if evidence.FeedbackCycle <> cycle.Id then yield "feedback evidence cycle does not match"
               if not evidence.FeedbackActive then yield "feedback activation is missing"
+              if evidence.MergedPr.IsNone || evidence.MergeHead <> Some expected then yield "merged evidence does not bind the implementation head"
               if review.Round = 10 && review.Verdict <> "pass" then yield "tenth review round requires escalation rather than advancement" ]
         if List.isEmpty errors then Ok(Advance cycle) else Error errors
 
