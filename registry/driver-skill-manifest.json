@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "f1b4971096854edd4579f99a5b02aaefba75a52583a4a52f2517921d96d4fedf",
-      "tree-sha256": "dbe6b93bd8b199baa8d0118aa01253b0a4da3b6043abd62f6c4badb5f3b2d5d4",
+      "sha256": "101594d061decd318ed2bd676559ff31b182f4140665cc08b58435fdc640f8ea",
+      "tree-sha256": "adadf311f63f800fff7fd57e33448850f55ed1987865cc48be75a2d537798e63",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "f1b4971096854edd4579f99a5b02aaefba75a52583a4a52f2517921d96d4fedf",
+          "sha256": "101594d061decd318ed2bd676559ff31b182f4140665cc08b58435fdc640f8ea",
           "executable": false
         },
         {
@@ -59,12 +59,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "9b2011d6f6ac87029d42828135706b5ab431601fdc3405b661bf854bc938f990",
-      "tree-sha256": "088bbb3b2d56fbdfdae2326a0c059a33e9744be02d42c9c4c31455f4a75597a7",
+      "sha256": "1b96f035121bf1e25d604e0c74b5fb846ad695eaa6f09ab7f5e799b52c4423a3",
+      "tree-sha256": "ca8a829c7e9a85bd033cfd237d5fe6f2024be61186f05e3db5001d0903734477",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "9b2011d6f6ac87029d42828135706b5ab431601fdc3405b661bf854bc938f990",
+          "sha256": "1b96f035121bf1e25d604e0c74b5fb846ad695eaa6f09ab7f5e799b52c4423a3",
           "executable": false
         },
         {

@@ -18,8 +18,13 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    green merge, obligations, verified feedback, and done—or human escalation after an exhausted third
    round. During worker setup, interactive/game work must explicitly invoke the `pnext-item`
    performance-first planning gate before implementation begins.
-   Before choosing another unit, consume a fresh typed `fsgg-coord cycle inspect` receipt; only its
-   ready units and matching cycle/provider-head receipts may resume, advance, or complete a cycle.
+   Persist a typed cycle envelope beside the board before scheduling: fresh-read the board into its
+   source revision and units, run `fsgg-coord cycle inspect`, then `register` (or resume its exact
+   stable id) for the selected unit. After implementation, persist versioned `fsgg-sdd`, critique,
+   and feedback receipts and run `advance`; persist the guarded merged-head/checkpoint update before
+   `complete`, then fresh-read and inspect again. Multiple ready units require an explicit operator
+   parallel authorization and recorded disjoint touch-sets; otherwise schedule one. Missing receipts,
+   evidence paths, or a stale source/head fail closed.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

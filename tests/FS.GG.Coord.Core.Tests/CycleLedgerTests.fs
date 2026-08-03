@@ -17,15 +17,19 @@ module CycleLedgerTests =
     [<Fact>]
     let ``provider receipts fail closed on stale source wrong cycle and missing player journey`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "provider/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None }
-        Assert.True(validateProvider "work" cycle "current" "head" receipt |> Result.isError)
+        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None }
+        Assert.True(validateProvider "work" cycle "current" "head" "critique" "fsgg.critique.report/1" receipt |> Result.isError)
         let good = { receipt with SourceRevision = "base"; PlayerJourney = Some true }
         let evidence = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = Some 7; MergeHead = Some "head" }
-        Assert.Equal(Advance cycle, advance cycle good good good evidence |> unwrap)
+        let implementation = { good with Provider = "fsgg-sdd"; Schema = "fsgg.sdd.report/1"; PlayerJourney = Some true }
+        let feedback = { good with Provider = "feedback"; Schema = "fsgg.feedback.report/2"; PlayerJourney = Some true }
+        Assert.Equal(Advance cycle, advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle implementation good feedback evidence |> unwrap)
+        Assert.True(advance { SourceRevision = "fresh"; Units = [ unit "work" [] false ] } cycle implementation good feedback evidence |> Result.isError)
+        Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle { implementation with Provider = "invented" } good feedback evidence |> Result.isError)
 
     [<Fact>]
     let ``completion rejects a missing roll-up cycle`` () =
-        let doneLedger = { ledger with Units = ledger.Units |> List.map (fun item -> { item with Completed = true }) }
+        let doneLedger = { ledger with Units = ledger.Units |> List.map (fun item -> { item with Completed = true; Evidence = [ "evidence" ] }) }
         let cycles = [ { Id = "one"; UnitId = "first"; Executor = "w"; Repository = "r"; BaseCommit = "b" }; { Id = "two"; UnitId = "second"; Executor = "w"; Repository = "r"; BaseCommit = "b" } ]
         Assert.True(complete doneLedger cycles [ "one" ] |> Result.isError)
 
@@ -37,6 +41,13 @@ module CycleLedgerTests =
     [<Fact>]
     let ``advancement requires a matching merged head and rejects an eleventh round`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "provider/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true }
+        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true }
         let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None }
-        Assert.True(advance cycle receipt receipt receipt incomplete |> Result.isError)
+        Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle receipt receipt receipt incomplete |> Result.isError)
+
+    [<Fact>]
+    let ``inspect rejects a dependency cycle and completion rejects unchecked units`` () =
+        let cyclic = { SourceRevision = "source"; Units = [ unit "a" [ "b" ] false; unit "b" [ "a" ] false ] }
+        Assert.True(inspect cyclic |> Result.isError)
+        let accepted = [ { Id = "a"; UnitId = "a"; Executor = "w"; Repository = "r"; BaseCommit = "source" } ]
+        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted [ "a" ] |> Result.isError)
