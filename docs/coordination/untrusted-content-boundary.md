@@ -41,7 +41,10 @@ trusted-change and independent-review controls to every proposed action.
 When GitHub's supported API cannot read or mutate a Project access fact, the
 scaffolder records a human obligation rather than claiming the board is secured.
 The operator verifies **Project → Settings → Manage access**, confirms base
-permission is `Read` and the explicit writer allowlist. Repository policy can be
-re-checked with the recorded `new-sdd-workspace secure --repo owner/repository`
-command; the Project access obligation remains visible until a supported typed
-API can verify that separate fact.
+permission is `Read` and the explicit writer allowlist, then runs the exact
+`new-sdd-workspace secure <workspace> --project owner/title --trusted-writers …
+--verified-base-permission READ` command recorded in scaffold provenance. That
+command rechecks the supported Project visibility and collaborator mutation
+receipt before it clears only the matching human obligation. Repository policy
+is similarly re-checked with the recorded `new-sdd-workspace secure <workspace>
+--repo owner/repository` command.

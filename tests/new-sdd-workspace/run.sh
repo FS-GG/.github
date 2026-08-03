@@ -143,29 +143,117 @@ for template in rendering console web fable-game; do
   expect_ok "--template $template parses" -- "$TGT" P --template "$template"
 done
 
-# Project production route: a schema-faithful user/team resolver and collaborator mutation must be
-# reached through the built CLI; GitHub's absent effective-writer read remains a fail-closed human
-# verification, never a false secured result.
+# Project production route. The double rejects the exact defects found in ordinary review: it
+# requires a typed collaborator variable, nested gh fields for JSON object serialization, a selected
+# mutation payload, and forbids node ids in GraphQL source. It also returns the same payload shape as
+# GitHub's live ProjectV2 schema so durable state assertions exercise the built CLI, not a substring.
 PROJECT_WORK="$WORK/project-workspace"; mkdir -p "$PROJECT_WORK/.fsgg" "$WORK/project-bin"
-printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$PROJECT_WORK/.fsgg/scaffold-provenance.json"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"},{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$PROJECT_WORK/.fsgg/scaffold-provenance.json"
 cat > "$WORK/project-bin/gh" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
 printf '%s\n' "$*" >> "${PROJECT_LOG:?}"
-case " $* " in
-  *'updateProjectV2Collaborators'* ) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":[]}}}' ;;
-  *'teams(first:100)'* ) printf '%s\n' '{"data":{"organization":{"teams":{"nodes":[{"id":"T_1","slug":"platform"}]}}}}' ;;
-  *'user(login:$login)'* ) printf '%s\n' '{"data":{"user":{"id":"U_1"}}}' ;;
-  * ) printf '%s\n' '{"data":{"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
+all=" $* "
+case "$all" in
+  *'updateProjectV2Collaborators'*)
+    case "$all" in
+      *'$collaborators:[ProjectV2Collaborator!]!'*'collaborators:$collaborators'*'collaborators{totalCount nodes{'*) ;;
+      *) echo 'schema-invalid collaborator mutation' >&2; exit 71 ;;
+    esac
+    case "$all" in *'userId:U_'*|*'teamId:T_'*) echo 'node id interpolated into GraphQL' >&2; exit 72 ;; esac
+    case "$all" in *'collaborators[][userId]=U_1'*'collaborators[][role]=WRITER'*'collaborators[][teamId]=T_1'*) ;;
+      *) echo 'collaborator variables were not structured JSON fields' >&2; exit 73 ;;
+    esac
+    case "${PROJECT_MODE:-success}" in
+      mutation-failure) echo 'TOKEN-SHOULD-NOT-LEAK' >&2; exit 1 ;;
+      unexpected-writer) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"U_bad","login":"mallory"}]}}}}' ;;
+      *) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"T_1","slug":"platform"}]}}}}' ;;
+    esac ;;
+  *'teams(first:100)'*) printf '%s\n' '{"data":{"organization":{"teams":{"nodes":[{"id":"T_1","slug":"platform"}]}}}}' ;;
+  *'user(login:$login)'*) printf '%s\n' '{"data":{"user":{"id":"U_1"}}}' ;;
+  *'projectsV2(first:100)'*)
+    case "${PROJECT_MODE:-success}" in
+      unreadable) exit 1 ;;
+      missing) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[]}}}}' ;;
+      private) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
+      *) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
+    esac ;;
+  *) echo 'unexpected GraphQL route' >&2; exit 74 ;;
 esac
 EOF
 chmod +x "$WORK/project-bin/gh"
-set +e
-project_out="$(PROJECT_LOG="$WORK/project.log" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform 2>&1)"; project_rc=$?
-set -e
-if [ "$project_rc" -eq 1 ] && printf '%s' "$project_out" | grep -q 'partial verified receipt:' && grep -q 'updateProjectV2Collaborators' "$WORK/project.log" && grep -q 'teamId' "$WORK/project.log"; then
-  ok "secure Project route resolves users/teams, mutates, and fails closed on unreadable effective writers"
+
+run_project() {
+  local mode="$1"; shift
+  local rc=0
+  PROJECT_MODE="$mode" PROJECT_LOG="$WORK/project.log" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
+    dotnet "$DLL" "$@" >"$WORK/project.out" 2>&1 || rc=$?
+  return "$rc"
+}
+
+project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
+if [ "$project_rc" -eq 1 ] && grep -q 'partial verified receipt:' "$WORK/project.out" \
+  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification" and .target=="acme/Roadmap")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
+  && [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="partial" and .basePermission=="unverified")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
+  && [ "$(jq '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .trustedWriters | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 2 ] \
+  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  ok "secure Project uses typed variables and persists one partial receipt plus exact human obligation"
 else
-  bad "secure Project production route must reach typed mutation and retain no-verdict" "rc=$project_rc: $project_out"
+  bad "secure Project production route must persist typed partial provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+fi
+
+# A second partial run replaces the receipt/obligation instead of appending. The human completion
+# route then re-executes the observable production mutation and clears only that exact obligation.
+run_project success secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || true
+if [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+  ok "Project partial resume is idempotent and deduplicates its human obligation"
+else
+  bad "Project partial resume must not grow duplicate obligations" "$(cat "$PROJECT_WORK/.fsgg/scaffold-provenance.json")"
+fi
+project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ || project_rc=$?
+if [ "$project_rc" -eq 0 ] \
+  && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 0 ] \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-base-access" and .basePermission=="READ")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+  && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
+  ok "Project human verification resume rechecks supported facts and clears only its base obligation"
+else
+  bad "Project human verification resume must converge exact provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+fi
+
+# Production no-verdict matrix: each route must leave provenance byte-identical and redact tool
+# output. The unexpected-writer leg proves the mutation payload itself is checked, not just reached.
+for project_case in mutation-failure unexpected-writer unreadable missing; do
+  CASE_PROJECT="$WORK/project-$project_case"; mkdir -p "$CASE_PROJECT/.fsgg"
+  printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$CASE_PROJECT/.fsgg/scaffold-provenance.json"
+  cp "$CASE_PROJECT/.fsgg/scaffold-provenance.json" "$CASE_PROJECT/before.json"
+  project_rc=0; run_project "$project_case" secure "$CASE_PROJECT" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
+  if [ "$project_rc" -ne 0 ] && cmp -s "$CASE_PROJECT/before.json" "$CASE_PROJECT/.fsgg/scaffold-provenance.json" && ! grep -q 'TOKEN-SHOULD-NOT-LEAK' "$WORK/project.out"; then
+    ok "Project $project_case is a redacted no-verdict with durable state unchanged"
+  else
+    bad "Project $project_case must fail closed without corrupting provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+  fi
+done
+
+PROJECT_BAD_PROVENANCE="$WORK/project-bad-provenance"; mkdir -p "$PROJECT_BAD_PROVENANCE/.fsgg"
+printf '{broken' > "$PROJECT_BAD_PROVENANCE/.fsgg/scaffold-provenance.json"
+project_rc=0; run_project success secure "$PROJECT_BAD_PROVENANCE" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
+if [ "$project_rc" -ne 0 ] && grep -q 'security provenance persistence failed' "$WORK/project.out" && [ "$(cat "$PROJECT_BAD_PROVENANCE/.fsgg/scaffold-provenance.json")" = '{broken' ]; then
+  ok "Project verified API result fails closed when durable provenance cannot be parsed"
+else
+  bad "Project persistence failure must not become console-only success" "rc=$project_rc: $(cat "$WORK/project.out")"
+fi
+
+# A private board already at the requested visibility is preserved: only the explicit writer route
+# runs, and the partial receipt records `private` without a visibility mutation.
+PRIVATE_WORK="$WORK/project-private"; mkdir -p "$PRIVATE_WORK/.fsgg"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$PRIVATE_WORK/.fsgg/scaffold-provenance.json"
+: > "$WORK/project.log"
+project_rc=0; run_project private secure "$PRIVATE_WORK" --project acme/Roadmap --private-board --trusted-writers alice,team:platform || project_rc=$?
+if [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="private")' "$PRIVATE_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+  && ! grep -q 'updateProjectV2(input' "$WORK/project.log"; then
+  ok "private Project visibility is preserved while explicit writers get a partial receipt"
+else
+  bad "private Project route must preserve visibility" "rc=$project_rc: $(cat "$WORK/project.out")"
 fi
 expect_ok "fable-bindings parses with its exact npm package closure" \
   -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
@@ -205,6 +293,46 @@ if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && 
 else
   bad "secure resume must converge matching provenance" "rc=$secure_rc: $secure_out"
 fi
+
+# Changed-and-verified repository path: the double is stateful so the production route must mutate,
+# re-read, retain prior OPEN in its receipt, and replace that receipt on an idempotent rerun.
+CHANGED="$WORK/changed-workspace"; mkdir -p "$CHANGED/.fsgg" "$WORK/changed-bin"
+printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CHANGED/.fsgg/scaffold-provenance.json"
+cat > "$WORK/changed-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in
+  *'updateRepository'*) : > "${REPO_CHANGED_STATE:?}"; printf '%s\n' '{"data":{"updateRepository":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY"}}}}' ;;
+  *)
+    policy=OPEN; [ -f "${REPO_CHANGED_STATE:?}" ] && policy=COLLABORATORS_ONLY
+    printf '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"%s"}}}\n' "$policy" ;;
+esac
+EOF
+chmod +x "$WORK/changed-bin/gh"
+changed_rc=0; changed_out="$(REPO_CHANGED_STATE="$WORK/repo-changed" PATH="$WORK/changed-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CHANGED" --repo acme/app 2>&1)" || changed_rc=$?
+if [ "$changed_rc" -eq 0 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .priorPolicy=="OPEN" and .finalPolicy=="COLLABORATORS_ONLY")' "$CHANGED/.fsgg/scaffold-provenance.json" >/dev/null; then
+  ok "repository OPEN policy is changed, re-read, and persisted with its prior policy"
+else
+  bad "repository changed-and-verified route must persist the typed receipt" "rc=$changed_rc: $changed_out"
+fi
+REPO_CHANGED_STATE="$WORK/repo-changed" PATH="$WORK/changed-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$CHANGED" --repo acme/app >/dev/null
+if [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="repository-issue-policy" and .repository=="acme/app")] | length' "$CHANGED/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+  ok "repository secure rerun idempotently replaces its durable receipt"
+else
+  bad "repository secure rerun must not duplicate receipts" "$(cat "$CHANGED/.fsgg/scaffold-provenance.json")"
+fi
+
+# A successful remote policy read is not a successful resume when its durable target is missing or
+# malformed. These cases pin F1's fail-closed persistence boundary through the production command.
+for provenance_case in missing malformed; do
+  PROV_WORK="$WORK/provenance-$provenance_case"; mkdir -p "$PROV_WORK"
+  if [ "$provenance_case" = malformed ]; then mkdir -p "$PROV_WORK/.fsgg"; printf '{broken' > "$PROV_WORK/.fsgg/scaffold-provenance.json"; fi
+  prov_rc=0; prov_out="$(PATH="$WORK/secure-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$PROV_WORK" --repo acme/app 2>&1)" || prov_rc=$?
+  if [ "$prov_rc" -ne 0 ] && printf '%s' "$prov_out" | grep -q 'durable receipt failed'; then
+    ok "repository $provenance_case provenance cannot be reported as secured"
+  else
+    bad "repository $provenance_case provenance must fail closed" "rc=$prov_rc: $prov_out"
+  fi
+done
 
 # Production failure matrix: the secure route must fail closed for a mutation failure and for a
 # stale post-write read, leaving the exact durable obligation in place and never echoing a token.

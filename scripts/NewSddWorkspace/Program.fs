@@ -357,8 +357,14 @@ type private RepositoryPolicyReceipt =
     | RepositorySecured of repository: string * prior: string * actor: string
     | RepositoryPending of repository: string * reason: string
 
+type private ResolvedProjectWriter =
+    { Requested: string
+      ActorKind: string
+      ActorId: string }
+
 type private ProjectAccessReceipt =
-    | ProjectObserved of project: string * projectId: string * isPublic: bool
+    | ProjectObserved of project: string * projectId: string * isPublic: bool * actor: string
+    | ProjectPartiallyVerified of project: string * projectId: string * isPublic: bool * actor: string * writers: ResolvedProjectWriter list
     | ProjectPending of project: string * reason: string
 
 type private SecurityReport =
@@ -372,6 +378,25 @@ let private graphql (query: string) (variables: (string * string) list) =
           for name, value in variables do
               yield "-F"
               yield sprintf "%s=%s" name value ]
+    runProcess false "gh" args
+
+/// Send the collaborator list as GraphQL variables. `gh api -F` understands the documented
+/// `array[][field]` spelling and serializes each node id as JSON data; node ids never become query
+/// syntax. Keeping this separate from the scalar helper makes the production request shape visible
+/// to tests and prevents a future fallback to interpolation.
+let private graphqlProjectCollaborators (query: string) (projectId: string) (writers: ResolvedProjectWriter list) =
+    let args =
+        [ yield "api"
+          yield "graphql"
+          yield "-f"
+          yield "query=" + query
+          yield "-F"
+          yield "id=" + projectId
+          for writer in writers do
+              yield "-F"
+              yield sprintf "collaborators[][%s]=%s" (if writer.ActorKind = "team" then "teamId" else "userId") writer.ActorId
+              yield "-F"
+              yield "collaborators[][role]=WRITER" ]
     runProcess false "gh" args
 
 /// Apply the repository's typed `IssueCreationPolicy` only after reading it, then re-read the
@@ -415,15 +440,16 @@ let private secureRepository (repository: string) : RepositoryPolicyReceipt =
 /// the caller, rather than substituted with viewerCanUpdate or a browser scrape.
 let private inspectProject (owner: string) (title: string) : ProjectAccessReceipt =
     let project = sprintf "%s/%s" owner title
-    let query = "query($owner:String!){organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}"
+    let query = "query($owner:String!){viewer{login} organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}"
     let code, output = graphql query [ "owner", owner ]
     if code <> 0 then ProjectPending(project, "ProjectV2 visibility could not be read")
     else
         try
             let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["organization"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
+            let actor = JsonNode.Parse(output).AsObject().["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
             match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
             | None -> ProjectPending(project, "configured Project does not exist yet")
-            | Some node -> ProjectObserved(project, node.AsObject().["id"].GetValue<string>(), node.AsObject().["public"].GetValue<bool>())
+            | Some node -> ProjectObserved(project, node.AsObject().["id"].GetValue<string>(), node.AsObject().["public"].GetValue<bool>(), actor)
         with _ -> ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
 
 /// Update only the visibility fact GitHub exposes and then re-read it. Access base permission and
@@ -433,16 +459,18 @@ let private applyProjectVisibility (owner: string) (title: string) (desired: boo
     match inspectProject owner title, desired with
     | receipt, None -> receipt
     | ProjectPending _ as receipt, _ -> receipt
-    | (ProjectObserved(_, _, current) as receipt), Some wanted when current = wanted -> receipt
-    | ProjectObserved(project, id, _), Some wanted ->
+    | (ProjectObserved(_, _, current, _) as receipt), Some wanted when current = wanted -> receipt
+    | ProjectObserved(project, id, _, _), Some wanted ->
         let mutation = "mutation($id:ID!,$public:Boolean!){updateProjectV2(input:{projectId:$id,public:$public}){projectV2{public}}}"
         let code, _ = graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
         if code <> 0 then ProjectPending(project, "Project visibility mutation failed")
         else
             match inspectProject owner title with
-            | ProjectObserved(_, verifiedId, actual) when actual = wanted -> ProjectObserved(project, verifiedId, actual)
-            | ProjectObserved(_, _, actual) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
+            | ProjectObserved(_, verifiedId, actual, actor) when actual = wanted -> ProjectObserved(project, verifiedId, actual, actor)
+            | ProjectObserved(_, _, actual, _) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
             | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project visibility read failed: " + reason)
+            | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
+    | ProjectPartiallyVerified _ as receipt, _ -> receipt
 
 /// GitHub's supported ProjectV2 collaborator mutation is used for the explicit writer allowlist.
 /// Collaborator ids cannot be safely guessed from display names, so the typed API's own read is
@@ -450,7 +478,7 @@ let private applyProjectVisibility (owner: string) (title: string) (desired: boo
 let private applyProjectWriters (owner: string) (title: string) (desired: string list) : ProjectAccessReceipt =
     match applyProjectVisibility owner title None with
     | ProjectPending _ as receipt -> receipt
-    | ProjectObserved(project, id, _) ->
+    | ProjectObserved(project, id, _, _) ->
         // ProjectV2 accepts actor ids, not names. Resolve explicit users and `team:<slug>`
         // identities through the live typed schema; no UI scrape or guessed id enters a mutation.
         let resolve (writer: string) =
@@ -466,29 +494,45 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
                     if isTeam then
                         data.["organization"].AsObject().["teams"].AsObject().["nodes"].AsArray()
                         |> Seq.tryFind (fun team -> team.AsObject().["slug"].GetValue<string>() = name)
-                        |> Option.map (fun team -> "teamId:" + team.AsObject().["id"].GetValue<string>())
-                    else Some("userId:" + data.["user"].AsObject().["id"].GetValue<string>())
+                        |> Option.map (fun team ->
+                            { Requested = writer
+                              ActorKind = "team"
+                              ActorId = team.AsObject().["id"].GetValue<string>() })
+                    else
+                        Some
+                            { Requested = writer
+                              ActorKind = "user"
+                              ActorId = data.["user"].AsObject().["id"].GetValue<string>() }
                 with _ -> None
-        let collaborators =
-            desired
-            |> List.map (fun writer -> resolve writer |> Option.map (fun id ->
-                if id.StartsWith "teamId:" then sprintf "{teamId:%s,role:WRITER}" (id.Substring "teamId:".Length)
-                else sprintf "{userId:%s,role:WRITER}" (id.Substring "userId:".Length)))
+        let collaborators = desired |> List.map resolve
         if collaborators |> List.exists Option.isNone then
             ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
         else
-            let collaborators = collaborators |> List.choose (fun value -> value) |> String.concat ","
-            // `gh api -F` serializes an array spelling as a string.  The collaborator objects are
-            // built solely from typed GitHub node ids, so place that trusted, schema-shaped list in
-            // the mutation document and keep the Project id as the normal GraphQL variable.
-            let mutation = "mutation($id:ID!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:[" + collaborators + "]}){collaborators{totalCount}}}"
-            let code, _ = graphql mutation [ "id", id ]
+            let resolved = collaborators |> List.choose (fun writer -> writer)
+            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators{totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
+            let code, output = graphqlProjectCollaborators mutation id resolved
             if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
             else
-                match inspectProject owner title with
-                | ProjectObserved(_, verifiedId, verifiedPublic) ->
-                    ProjectObserved(project, verifiedId, verifiedPublic)
-                | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
+                try
+                    let collaborators =
+                        JsonNode.Parse(output).AsObject().["data"].AsObject().["updateProjectV2Collaborators"].AsObject().["collaborators"].AsObject()
+                    let count = collaborators.["totalCount"].GetValue<int>()
+                    let actualIds =
+                        collaborators.["nodes"].AsArray()
+                        |> Seq.map (fun node -> node.AsObject().["id"].GetValue<string>())
+                        |> Set.ofSeq
+                    let expectedIds = resolved |> Seq.map (fun writer -> writer.ActorId) |> Set.ofSeq
+                    if count <> resolved.Length || actualIds <> expectedIds then
+                        ProjectPending(project, "post-write Project collaborators did not match the requested writer allowlist")
+                    else
+                        match inspectProject owner title with
+                        | ProjectObserved(_, verifiedId, verifiedPublic, actor) ->
+                            ProjectPartiallyVerified(project, verifiedId, verifiedPublic, actor, resolved)
+                        | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
+                        | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
+                with _ ->
+                    ProjectPending(project, "Project writer mutation response was not a typed collaborator receipt")
+    | ProjectPartiallyVerified _ as receipt -> receipt
 
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
 /// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
@@ -498,7 +542,8 @@ let private workspaceSecurity (opts: Options) : SecurityReport =
     let project =
         match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
         | ProjectObserved _ as visible when List.isEmpty opts.TrustedWriters -> visible
-        | ProjectObserved(project, _, _) -> applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters
+        | ProjectObserved _ -> applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters
+        | ProjectPartiallyVerified _ as partial -> partial
         | ProjectPending _ as pending -> pending
     let repositoryMessage =
         match repository with
@@ -507,10 +552,66 @@ let private workspaceSecurity (opts: Options) : SecurityReport =
         | Some(RepositoryPending(repo, reason)) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
     let projectMessage =
         match project with
-        | ProjectObserved(project, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
-        | ProjectObserved(project, _, false) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
+        | ProjectObserved(project, _, true, _) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
+        | ProjectObserved(project, _, false, _) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
+        | ProjectPartiallyVerified(project, _, _, _, _) -> sprintf "Project %s visibility and writer allowlist are verified; base Read requires the recorded human verification" project
         | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
     { Repository = repository; Project = project; Outcome = Warned(repositoryMessage + "; " + projectMessage) }
+
+let private upsertSecurityReceipt (root: JsonObject) (kind: string) (targetField: string) (target: string) (receipt: JsonObject) =
+    let receipts = JsonArray()
+    match root.["verifiedSecurityReceipts"] with
+    | :? JsonArray as existing ->
+        existing
+        |> Seq.filter (fun entry ->
+            try
+                let row = entry.AsObject()
+                not (row.["kind"].GetValue<string>() = kind && row.[targetField].GetValue<string>() = target)
+            with _ -> true)
+        |> Seq.iter (fun entry -> receipts.Add(entry.DeepClone()))
+    | _ -> ()
+    receipts.Add receipt
+    root.["verifiedSecurityReceipts"] <- receipts
+
+let private projectReceiptJson (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) =
+    let receipt = JsonObject()
+    receipt.["kind"] <- JsonValue.Create "project-access"
+    receipt.["project"] <- JsonValue.Create project
+    receipt.["projectId"] <- JsonValue.Create projectId
+    receipt.["observedVisibility"] <- JsonValue.Create(if isPublic then "public" else "private")
+    receipt.["actor"] <- JsonValue.Create actor
+    receipt.["source"] <- JsonValue.Create "GitHub GraphQL updateProjectV2Collaborators payload and ProjectV2 visibility re-read"
+    receipt.["verificationState"] <- JsonValue.Create(if basePermission.IsSome then "verified-with-human-base-access" else "partial")
+    receipt.["basePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+    let verifiedFacts = JsonArray(JsonValue.Create "visibility", JsonValue.Create "writer-allowlist")
+    receipt.["verifiedFacts"] <- verifiedFacts
+    let unverifiedFacts = JsonArray()
+    if basePermission.IsNone then unverifiedFacts.Add(JsonValue.Create "organization-base-permission")
+    receipt.["unverifiedFacts"] <- unverifiedFacts
+    let writerRows = JsonArray()
+    writers
+    |> List.iter (fun writer ->
+        let row = JsonObject()
+        row.["requested"] <- JsonValue.Create writer.Requested
+        row.["actorKind"] <- JsonValue.Create writer.ActorKind
+        row.["actorId"] <- JsonValue.Create writer.ActorId
+        writerRows.Add row)
+    receipt.["trustedWriters"] <- writerRows
+    receipt
+
+let private projectBaseAccessObligation (project: string) (writers: ResolvedProjectWriter list) =
+    let obligation = JsonObject()
+    obligation.["kind"] <- JsonValue.Create "project-base-access-human-verification"
+    obligation.["target"] <- JsonValue.Create project
+    obligation.["expectedBasePermission"] <- JsonValue.Create "READ"
+    let requested = writers |> List.map (fun writer -> writer.Requested) |> String.concat ","
+    let trustedWriters = JsonArray()
+    writers |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
+    obligation.["trustedWriters"] <- trustedWriters
+    obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read and the explicit trusted writer allowlist."
+    obligation.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure <workspace> --project %s --trusted-writers %s --verified-base-permission READ" project requested)
+    obligation.["state"] <- JsonValue.Create "pending-human-verification"
+    obligation
 
 /// Persist the security facts that could not be established. This lives beside the scaffold's
 /// provenance rather than in console prose so a later operator has one exact recovery target.
@@ -542,21 +643,27 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
             receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
             receipt.["actor"] <- JsonValue.Create actor
             receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
-            root.["verifiedSecurityReceipts"] <- JsonArray(receipt)
+            upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
         | _ ->
             repo.["state"] <- JsonValue.Create "pending"
             obligations.Add repo
-        let project = JsonObject()
-        project.["kind"] <- JsonValue.Create "project-access"
-        project.["target"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
-        project.["requestedVisibility"] <- JsonValue.Create(match opts.PublicBoard with Some true -> "public" | Some false -> "private" | None -> "preserve")
-        project.["expectedBasePermission"] <- JsonValue.Create "READ"
-        let writers = JsonArray()
-        opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
-        project.["trustedWriters"] <- writers
-        project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist. Re-run new-sdd-workspace secure <workspace> --project owner/title --public-board|--private-board --trusted-writers ids after verification."
-        project.["state"] <- JsonValue.Create "pending-human-verification"
-        obligations.Add project
+        let projectTarget = sprintf "%s/%s" opts.BoardOwner opts.BoardTitle
+        match report.Project with
+        | ProjectPartiallyVerified(project, id, isPublic, actor, writers) ->
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None)
+            obligations.Add(projectBaseAccessObligation project writers)
+        | _ ->
+            let project = JsonObject()
+            project.["kind"] <- JsonValue.Create "project-access"
+            project.["target"] <- JsonValue.Create projectTarget
+            project.["requestedVisibility"] <- JsonValue.Create(match opts.PublicBoard with Some true -> "public" | Some false -> "private" | None -> "preserve")
+            project.["expectedBasePermission"] <- JsonValue.Create "READ"
+            let writers = JsonArray()
+            opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
+            project.["trustedWriters"] <- writers
+            project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/writer verification, then its exact --verified-base-permission READ resume command."
+            project.["state"] <- JsonValue.Create "pending-human-verification"
+            obligations.Add project
         root.["securityObligations"] <- obligations
         File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
     with ex ->
@@ -1077,6 +1184,7 @@ let private usage () =
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ[/]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
@@ -1085,6 +1193,7 @@ let private usage () =
     AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
     AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
     AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ"
     AnsiConsole.MarkupLine "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
@@ -1101,6 +1210,7 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
     AnsiConsole.MarkupLine "  [green]--private-board[/]       request a private product Project"
     AnsiConsole.MarkupLine "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
+    AnsiConsole.MarkupLine "  [green]--verified-base-permission[/] READ records the operator's Manage access verification after re-validating observable Project facts"
     AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
     AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
@@ -1962,18 +2072,23 @@ let private runRetrofit (opts: RetrofitOptions) : int =
 /// Re-run just the repository policy after a freshly scaffolded repository has been created or
 /// an operator has received the required administration grant. This is the resumable half of the
 /// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
-let private clearRepositorySecurityObligation (target: string) (repository: string) (prior: string) (actor: string) =
+let private clearRepositorySecurityObligation (target: string) (repository: string) (prior: string) (actor: string) : Result<unit, string> =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
-    if File.Exists path then
-        let root = JsonNode.Parse(File.ReadAllText path).AsObject()
-        match root.["securityObligations"] with
-        | :? JsonArray as obligations ->
+    try
+        if not (File.Exists path) then Error(sprintf "security provenance is missing at %s" path)
+        else
+            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
             let kept = JsonArray()
-            obligations
-            |> Seq.filter (fun entry ->
-                let row = entry.AsObject()
-                not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository))
-            |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            match root.["securityObligations"] with
+            | :? JsonArray as obligations ->
+                obligations
+                |> Seq.filter (fun entry ->
+                    try
+                        let row = entry.AsObject()
+                        not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository)
+                    with _ -> true)
+                |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            | _ -> ()
             root.["securityObligations"] <- kept
             let receipt = JsonObject()
             receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
@@ -1982,61 +2097,90 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
             receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
             receipt.["actor"] <- JsonValue.Create actor
             receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
-            root.["verifiedSecurityReceipts"] <- JsonArray(receipt)
+            upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
-        | _ -> ()
+            Ok()
+    with ex -> Error("security provenance persistence failed: " + ex.Message)
 
-let private clearProjectSecurityObligation (target: string) (project: string) =
+let private persistProjectSecurityReceipt (target: string) (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) : Result<unit, string> =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
-    if File.Exists path then
-        let root = JsonNode.Parse(File.ReadAllText path).AsObject()
-        match root.["securityObligations"] with
-        | :? JsonArray as obligations ->
+    try
+        if not (File.Exists path) then
+            Error(sprintf "security provenance is missing at %s" path)
+        else
+            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
             let kept = JsonArray()
-            obligations
-            |> Seq.filter (fun entry ->
-                let row = entry.AsObject()
-                not (row.["kind"].GetValue<string>() = "project-access" && row.["target"].GetValue<string>() = project))
-            |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
-            let baseAccess = JsonObject()
-            baseAccess.["kind"] <- JsonValue.Create "project-base-access-human-verification"
-            baseAccess.["target"] <- JsonValue.Create project
-            baseAccess.["expectedBasePermission"] <- JsonValue.Create "READ"
-            baseAccess.["resume"] <- JsonValue.Create "new-sdd-workspace secure <workspace> --project <owner/title> --public-board|--private-board --trusted-writers <ids>"
-            baseAccess.["state"] <- JsonValue.Create "pending-human-verification"
-            kept.Add(baseAccess)
+            match root.["securityObligations"] with
+            | :? JsonArray as obligations ->
+                obligations
+                |> Seq.filter (fun entry ->
+                    try
+                        let row = entry.AsObject()
+                        let kind = row.["kind"].GetValue<string>()
+                        let sameTarget = row.["target"].GetValue<string>() = project
+                        not (sameTarget && (kind = "project-access" || kind = "project-base-access-human-verification"))
+                    with _ -> true)
+                |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            | _ -> ()
+            if basePermission.IsNone then kept.Add(projectBaseAccessObligation project writers)
             root.["securityObligations"] <- kept
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission)
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
-        | _ -> ()
+            Ok()
+    with ex -> Error("security provenance persistence failed: " + ex.Message)
 
 let private runSecure (target: string option) (repository: string) : int =
     match secureRepository repository with
     | RepositorySecured(repo, prior, actor) ->
-        target |> Option.iter (fun workspace -> clearRepositorySecurityObligation workspace repo prior actor)
-        AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
-        0
+        match target with
+        | Some workspace ->
+            match clearRepositorySecurityObligation workspace repo prior actor with
+            | Error reason ->
+                AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s policy verified but durable receipt failed — %s" (Markup.Escape repo) (Markup.Escape reason))
+                1
+            | Ok() ->
+                AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+                0
+        | None ->
+            AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+            0
     | RepositoryPending(repo, reason) ->
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
         1
 
-let private runSecureProject (target: string) (board: string) (isPublic: bool) (writers: string list) : int =
+let private runSecureProject (target: string) (board: string) (visibility: bool option) (writers: string list) (verifiedBasePermission: string option) : int =
     let owner, title = parseBoard board
-    match applyProjectVisibility owner title (Some isPublic) with
+    match applyProjectVisibility owner title visibility with
     | ProjectPending(project, reason) ->
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
         1
-    | ProjectObserved(project, _, _) ->
+    | ProjectObserved(project, _, _, _) ->
         match applyProjectWriters owner title writers with
-        | ProjectObserved(_, _, _) ->
-            // The supported API cannot prove the organization base permission.  Keep the durable
-            // human obligation rather than falsely clearing it; the observable visibility/writers
-            // receipt is nevertheless emitted for the operator's Manage access verification.
-            clearProjectSecurityObligation target project
-            AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+        | ProjectPartiallyVerified(_, id, isPublic, actor, resolved) ->
+            match verifiedBasePermission with
+            | Some permission when permission <> "READ" ->
+                AnsiConsole.MarkupLine "[red]invalid human verification:[/] --verified-base-permission must be READ"
+                2
+            | permission ->
+                match persistProjectSecurityReceipt target project id isPublic actor resolved permission with
+                | Error reason ->
+                    AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+                    1
+                | Ok() when permission.IsSome ->
+                    AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s visibility, writer allowlist, and human-verified base READ receipt converged" (Markup.Escape project))
+                    0
+                | Ok() ->
+                    AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access, then run the receipt's resume command" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+                    1
+        | ProjectObserved _ ->
+            AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — writer allowlist was not verified" (Markup.Escape project))
             1
         | ProjectPending(_, reason) ->
             AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
             1
+    | ProjectPartiallyVerified _ ->
+        AnsiConsole.MarkupLine "[yellow]pending:[/] unexpected pre-verified Project state"
+        1
 
 [<EntryPoint>]
 let main argv =
@@ -2067,9 +2211,11 @@ let main argv =
     | [ "secure"; "--repo"; repository ] -> runSecure None repository
     | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
     | [ "secure"; target; "--project"; board; "--public-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board true (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray)
+        runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None
     | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board false (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray)
+        runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None
+    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission ] ->
+        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission)
     | "secure" :: _ ->
         AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
         2
