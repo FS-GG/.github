@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2133-resumable-cycle-ledger/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "9953778e003dfc0e5ac9c8b1728c99c9c4fd38df2530eb348664c3255a349a2d"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2133-resumable-cycle-ledger/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "c3f1cd7a315feb22a4e58b159a8c9f6bda27b86c54fe83dc5dcf86b1e17ca71b"
+        "value": "702bfcaf2799113bb73d89813800e359d8219484f6072b8226031f7b57dd4e93"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -416,7 +426,7 @@
     {
       "path": "readiness/2133-resumable-cycle-ledger/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
