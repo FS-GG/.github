@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
   "contractVersion": "2.0.0",
-  "generatorVersion": "FS.GG.SDD.Artifacts/0.32.0",
+  "generatorVersion": "FS.GG.SDD.Artifacts/1.0.0",
   "workId": "2102",
   "sources": [
     {
       "path": "readiness/2102/ship.json",
-      "digest": "sha256:39bf1789e2b18576c4f27e729264c73f070d6d211b2b4646f2b5bdedfa0c783e",
+      "digest": "sha256:10c5e95105322e1d79cf78c8a14f226e86663cb7c52a317f756efe8ff98067e1",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2102/verify.json",
-      "digest": "sha256:4a7d123c9c730af4eadc52e14d3a09a37f5bb860f8ba28287eef4b4d163b8b2b",
+      "digest": "sha256:19590626aeab914bd23d4c0c10affdfd084571d7a55e41c001160df8b0a34033",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2102/work-model.json",
-      "digest": "sha256:8b825a39a9d0f44f4d10ffdab23ceb0d856b2e51fc62af62131abc1dea84babb",
+      "digest": "sha256:77ab78d639cb9d83eebf3df1c8bbe0bae185adb6a69bf599c478706195998e04",
       "schemaVersion": 1
     }
   ],
