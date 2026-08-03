@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2102
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2102/spec.md
 sourceClarifications: work/2102/clarifications.md
 sourceChecklist: work/2102/checklist.md
@@ -31,11 +31,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2102/tasks.yml
-    digest: d461131444563613899ebe16ff57509e90c6eef371f50c6c4eceb4e04aa0c0ab
+    digest: b5f433a7589b43f43413ef1e7c1a95b537c35d7f9710594e7becd354d386e687
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -50,11 +50,11 @@ evidence:
     sourceRefs:
       - kind: verification
         path: docs/coordination/receiver-proj-migration-shape.md
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -69,11 +69,11 @@ evidence:
     sourceRefs:
       - kind: verification
         path: docs/coordination/receiver-proj-migration-shape.md
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -88,11 +88,11 @@ evidence:
     sourceRefs:
       - kind: verification
         path: docs/coordination/receiver-proj-migration-shape.md
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -107,11 +107,11 @@ evidence:
     sourceRefs:
       - kind: verification
         path: docs/coordination/receiver-proj-migration-shape.md
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -126,8 +126,8 @@ evidence:
     sourceRefs:
       - kind: verification
         path: docs/coordination/receiver-proj-migration-shape.md
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    notes: ["Verified by focused local skill-root, registry, and receiver-shape reads; see PR #2161."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
