@@ -24,7 +24,7 @@ module BlockerLintTests =
         let restores, impossible =
             other
             |> List.partition (function
-                | Client.RecordedRestore _ -> true
+                | Client.GuardedRestore _ -> true
                 | _ -> false)
 
         Assert.Equal<string list>(
@@ -38,7 +38,7 @@ module BlockerLintTests =
         Assert.Equal<string list>(
             [ "reap (recorded previous Status=Blocked)"
               "release (recorded previous Status=Blocked)" ],
-            restores |> List.map (function Client.RecordedRestore name -> name | _ -> failwith "unreachable") |> List.sort
+            restores |> List.map (function Client.GuardedRestore name -> name | _ -> failwith "unreachable") |> List.sort
         )
         Assert.Equal<string list>(
             [ "claim (Status=In progress)"; "done (Status=Done)" ],

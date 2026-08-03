@@ -2653,6 +2653,35 @@ module Client =
         // ANY other column — including NO column at all, which has no footprint to reset either.
         | other -> Preserve other
 
+    /// The one resolved-Status boundary for a `Blocked` write.  Callers may arrive through an
+    /// explicit park, a recorded claim restore, or reconciliation; none may write the column until
+    /// this verifies that the resulting row carries either a machine edge or a human sentinel.
+    let requireCoherentParkIfBlocked (ctx: Context) (ref: Ref) (requested: BoardStatus option) : Result<unit, int> =
+        if requested <> Some BoardStatus.Blocked then
+            Ok()
+        else
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e ->
+                eprint $"fsgg-coord-engine: Status=Blocked: the board could not be resolved (%s{Errors.explain e}) — nothing written."
+                Error ExitError
+            | Ok board ->
+                match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
+                | Error e ->
+                    eprint $"fsgg-coord-engine: Status=Blocked: the live 'Blocked by' field could not be read (%s{Errors.explain e}) — nothing written."
+                    Error ExitError
+                | Ok(Some fieldValue) when not (String.IsNullOrWhiteSpace fieldValue) -> Ok()
+                | Ok _ ->
+                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                    | Error e ->
+                        eprint $"fsgg-coord-engine: Status=Blocked: the body could not be read to check for a 'Blocked on:' sentinel (%s{Errors.explain e}) — nothing written."
+                        Error ExitError
+                    | Ok body ->
+                        match HumanBlock.parse body with
+                        | Some _ -> Ok()
+                        | None ->
+                            eprint $"fsgg-coord-engine: Status=Blocked refuses: the row would land with an EMPTY 'Blocked by' field and no 'Blocked on: human/...' sentinel (.github#2079). Nothing written."
+                            Error ExitError
+
     /// #581 — collect expired claims whose WORK is dead, and REFUSE any whose work is alive.
     ///
     /// A lease is EVIDENCE of abandonment, never PROOF. Its false positive is SYSTEMATIC — work that simply
@@ -2875,31 +2904,35 @@ module Client =
                                                             // a silent `Deferred` or failure claims exactly
                                                             // that, by saying nothing. Still never fatal: the
                                                             // lock is already gone.
-                                                            match
-                                                                Board.boardWrite
-                                                                    ctx.Transport
-                                                                    bm
-                                                                    ref.Owner
-                                                                    ref.Repo
-                                                                    ref.Number
-                                                                    "Status"
-                                                                    (Board.Set name)
-                                                                    marker.Worker.Value
-                                                            with
-                                                            | Ok Board.Written -> printfn "  reset to %s" name
-                                                            | Ok Board.Deferred ->
-                                                                printfn
-                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
-                                                                    name
-                                                            | Ok Board.NotOnBoard ->
-                                                                printfn "  not on board (marker cleared; nothing to reset)"
-                                                            | Error e ->
-                                                                printfn
-                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
-                                                                    name
-                                                                    (Errors.explain e)
-                                                                    ref.Short
-                                                                    name
+                                                            match requireCoherentParkIfBlocked ctx ref (Some restoreTo) with
+                                                            | Error _ ->
+                                                                printfn "  reset to %s REFUSED — the restored Blocked column has no coherent reason" name
+                                                            | Ok() ->
+                                                                match
+                                                                    Board.boardWrite
+                                                                        ctx.Transport
+                                                                        bm
+                                                                        ref.Owner
+                                                                        ref.Repo
+                                                                        ref.Number
+                                                                        "Status"
+                                                                        (Board.Set name)
+                                                                        marker.Worker.Value
+                                                                with
+                                                                | Ok Board.Written -> printfn "  reset to %s" name
+                                                                | Ok Board.Deferred ->
+                                                                    printfn
+                                                                        "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
+                                                                        name
+                                                                | Ok Board.NotOnBoard ->
+                                                                    printfn "  not on board (marker cleared; nothing to reset)"
+                                                                | Error e ->
+                                                                    printfn
+                                                                        "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
+                                                                        name
+                                                                        (Errors.explain e)
+                                                                        ref.Short
+                                                                        name
                                                     | Ok None ->
                                                         printfn "  not on board (marker cleared; nothing to reset)"
                                                     | Error _ -> ()
@@ -3825,50 +3858,12 @@ module Client =
     ///
     /// Called AFTER `writeBlockedByIfRequested`, so `--blocked-by` on this same call already landed and
     /// the live read below sees it.
-    let requireCoherentParkIfBlocked (ctx: Context) (ref: Ref) (requested: BoardStatus option) : Result<unit, int> =
-        if requested <> Some BoardStatus.Blocked then
-            Ok()
-        else
-            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-            | Error e ->
-                eprint
-                    $"fsgg-coord-engine: release --status Blocked: the board could not be resolved (%s{Errors.explain e}) — nothing released."
-
-                Error ExitError
-            | Ok board ->
-                match Board.itemBlockedBy ctx.Transport board ref.Owner ref.Repo ref.Number with
-                | Error e ->
-                    eprint
-                        $"fsgg-coord-engine: release --status Blocked: the live 'Blocked by' field could not be read (%s{Errors.explain e}) — a field this call could not read is not one it may assume is set (#266). Nothing released."
-
-                    Error ExitError
-                | Ok(Some fieldValue) when not (String.IsNullOrWhiteSpace fieldValue) -> Ok()
-                | Ok _ ->
-                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
-                    | Error e ->
-                        eprint
-                            $"fsgg-coord-engine: release --status Blocked: the body could not be read to check for a 'Blocked on:' sentinel (%s{Errors.explain e}) — nothing released."
-
-                        Error ExitError
-                    | Ok body ->
-                        match HumanBlock.parse body with
-                        | Some _ -> Ok()
-                        | None ->
-                            eprint
-                                $"fsgg-coord-engine: release --status Blocked refuses: the row would land with an EMPTY 'Blocked by' field and no 'Blocked on: human/...' sentinel — a park is two writes and nothing else binds them (.github#2079). Write the edge:  scripts/fsgg-coord set-field %s{ref.Short} 'Blocked by' '<refs>'  (or pass --blocked-by on this call), or record a human park: add a body line 'Blocked on: human/decision' or 'Blocked on: human/action'. Nothing released."
-
-                            Error ExitError
-
-    /// The authoritative inventory of every `Status=Blocked` writer (#2109).  A writer is either a
-    /// deliberate park and MUST pass `requireCoherentParkIfBlocked`, or a restore of a marker's
-    /// recorded previous column. Restores never choose `Blocked`: `unclaimColumn` copies only the
-    /// value captured by `claim`, and their safety boundary is the claim record rather than a new
-    /// park decision. Keep this executable list beside the gate and pin it in BlockerLintTests; adding
-    /// a writer without classifying it is a test failure, not a prose omission.
+    /// The authoritative inventory of every `Status=Blocked` writer (#2109).  Every writer, including
+    /// a recorded restore, passes the same resolved-Status gate before emitting its mutation.
     type BlockedStatusWriter =
         | CannotWriteBlocked of string
         | DeliberatePark of string
-        | RecordedRestore of string
+        | GuardedRestore of string
 
     let blockedStatusWriterCoverage : BlockedStatusWriter list =
         [ CannotWriteBlocked "claim (Status=In progress)"
@@ -3878,8 +3873,8 @@ module Client =
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
           DeliberatePark "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
-          RecordedRestore "release (recorded previous Status=Blocked)"
-          RecordedRestore "reap (recorded previous Status=Blocked)" ]
+          GuardedRestore "release (recorded previous Status=Blocked)"
+          GuardedRestore "reap (recorded previous Status=Blocked)" ]
 
     /// #2098 round 1 (independent review): a pending `Blocked by` CLEAR in the SAME batch is
     /// AUTHORITATIVE, not a cue to fall back on the live field. The live value is about to be overwritten
@@ -4073,25 +4068,28 @@ module Client =
                         let landed =
                             match board with
                             | Ok board when name <> "" ->
-                                match
-                                    Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
-                                with
-                                | Ok Board.Written -> true
-                                | Ok Board.Deferred ->
-                                    eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
+                                match requireCoherentParkIfBlocked ctx ref (Some restoreTo) with
+                                | Error _ -> false
+                                | Ok() ->
+                                    match
+                                        Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
+                                    with
+                                    | Ok Board.Written -> true
+                                    | Ok Board.Deferred ->
+                                        eprint
+                                            $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
 
-                                    false
-                                | Ok Board.NotOnBoard ->
-                                    eprint
-                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+                                        false
+                                    | Ok Board.NotOnBoard ->
+                                        eprint
+                                            $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
 
-                                    false
-                                | Error e ->
-                                    eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+                                        false
+                                    | Error e ->
+                                        eprint
+                                            $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
 
-                                    false
+                                        false
                             | Error e ->
                                 eprint
                                     $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
