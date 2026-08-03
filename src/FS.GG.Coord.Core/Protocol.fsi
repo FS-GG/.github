@@ -208,12 +208,14 @@ module Protocol =
 
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list
-          TerminalActions: string list }
+          TerminalActions: string list
+          HostAcceptanceFields: string list }
 
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
-          ReceiptFields: string list }
+          ReceiptFields: string list
+          RequiredObservations: (string * string) list }
 
     /// `take`'s exit contract (#585) — the one command in the worker loop, so the code that tells "you
     /// hold it" from the ways it can hand you nothing is the difference between a fan-out and a

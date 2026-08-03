@@ -927,6 +927,9 @@ module Snapshot =
             w.WriteStartArray("terminalActions")
             policy.TerminalActions |> List.iter w.WriteStringValue
             w.WriteEndArray()
+            w.WriteStartArray("hostAcceptanceFields")
+            policy.HostAcceptanceFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
             w.WriteEndObject()
 
         let writeLedgerPolicy (key: string) (policy: Protocol.LedgerPolicyDoc) =
@@ -937,6 +940,10 @@ module Snapshot =
             w.WriteEndArray()
             w.WriteStartArray("receiptFields")
             policy.ReceiptFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteStartArray("requiredObservations")
+            policy.RequiredObservations |> List.iter (fun (kind, outcome) ->
+                w.WriteStartObject(); w.WriteString("kind", kind); w.WriteString("outcome", outcome); w.WriteEndObject())
             w.WriteEndArray()
             w.WriteEndObject()
 

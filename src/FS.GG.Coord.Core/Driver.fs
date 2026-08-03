@@ -161,12 +161,7 @@ module Driver =
         |> fun value -> value.ToLowerInvariant()
 
     let planningReceiptFresh now maxAgeSeconds sourceSha receipt =
-        let expected =
-            [ "reconcile-dry-run", "clean"
-              "reconcile-apply", "applied-or-not-needed"
-              "reconcile-fresh", "clean"
-              "triage", "fresh"
-              "engine-currency", "current-scoped" ]
+        let expected = Protocol.ledgerPolicy.RequiredObservations
         let observationValid (kind, outcome) =
             receipt.Observations
             |> List.filter (fun observation -> observation.Kind = kind)

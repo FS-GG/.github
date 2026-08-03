@@ -85,13 +85,15 @@ module Protocol =
     /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list
-          TerminalActions: string list }
+          TerminalActions: string list
+          HostAcceptanceFields: string list }
 
     /// The stable shape of the content-addressed planning ledger.
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
-          ReceiptFields: string list }
+          ReceiptFields: string list
+          RequiredObservations: (string * string) list }
 
     /// One `BlockerState`, as a reader of the scan's JSON meets it.
     type BlockerStateDoc =
@@ -673,12 +675,16 @@ module Protocol =
         { RequiredHousekeeping =
             [ "host-identity"; "stale-claim"; "engine-currency"; "pending-writes"
               "reconcile"; "triage" ]
-          TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ] }
+          TerminalActions = [ "merge"; "post-merge-obligations"; "done-stamp" ]
+          HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ] }
 
     let ledgerPolicy =
         { Schema = "fsgg.coord.planning-receipt/1"
           ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
-          ReceiptFields = [ "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ] }
+          ReceiptFields = [ "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ]
+          RequiredObservations =
+            [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
+              "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ] }
 
     // ================================================================================================
     // THE INVENTORY (#1027) — which facts the document states, and in what order.
