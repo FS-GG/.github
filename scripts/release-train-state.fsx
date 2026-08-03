@@ -9,12 +9,13 @@ open System.IO
 open System.Security.Cryptography
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Text.RegularExpressions
 open ReleaseTrain
 
 let usage () =
     eprintfn "Usage: dotnet fsi scripts/release-train-state.fsx -- inspect --run FILE --audit FILE --workflows FILE [--registry FILE]"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- plan --run FILE"
-    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- advance --run FILE --release-id ID --decision KIND --subject-commit SHA --evidence URL"
+    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- advance --run FILE --release-id ID --decision KIND --subject-commit SHA --evidence URL [--workflow-receipt FILE]"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- verify --run FILE --verification FILE [--verification FILE ...]"
 
 let args = normalizedArgs ()
@@ -83,6 +84,105 @@ let evidence (path: string) =
     JsonObject(
         [ KeyValuePair("path", JsonValue.Create(path) :> JsonNode)
           KeyValuePair("sha256", JsonValue.Create(sha256 path) :> JsonNode) ])
+
+let receiptCurrent (receipt: JsonObject) =
+    let path = stringProperty "path" receipt
+    File.Exists path && String.Equals(sha256 path, stringProperty "sha256" receipt, StringComparison.Ordinal)
+
+let tryElement (name: string) (root: JsonElement) =
+    let mutable value = Unchecked.defaultof<JsonElement>
+    if root.TryGetProperty(name, &value) then Some value else None
+
+let validateReport path requiredArray errorArray =
+    use document = JsonDocument.Parse(File.ReadAllText path)
+    let root = document.RootElement
+    let required = tryElement requiredArray root |> Option.defaultWith (fun () -> failwith $"evidence receipt {path} is missing `{requiredArray}`")
+    let hasErrors =
+        required.EnumerateArray()
+        |> Seq.exists (fun item ->
+            match tryElement errorArray item with
+            | Some errors -> errors.GetArrayLength() > 0
+            | None -> failwith $"evidence receipt {path} is missing `{errorArray}`")
+    if hasErrors then failwith $"evidence receipt {path} reports {errorArray}"
+
+let requireStringElement path name (root: JsonElement) =
+    match tryElement name root with
+    | Some value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> value.GetString()
+    | _ -> failwith $"evidence receipt {path} is missing non-empty `{name}`"
+
+let validateWorkflowReceipt path =
+    use document = JsonDocument.Parse(File.ReadAllText path)
+    let root = document.RootElement
+    let releaseId = requireStringElement path "releaseId" root
+    let subjectCommit = requireStringElement path "subjectCommit" root
+    let workflowRun = requireStringElement path "workflowRun" root
+    if requireStringElement path "conclusion" root <> "success" then
+        failwith $"workflow receipt {path} is not successful"
+    releaseId, subjectCommit, workflowRun
+
+let validateVerificationReceipt path =
+    use document = JsonDocument.Parse(File.ReadAllText path)
+    let root = document.RootElement
+    let name = requireStringElement path "name" root
+    let subjectCommit = requireStringElement path "subjectCommit" root
+    if requireStringElement path "conclusion" root <> "success" then
+        failwith $"verification receipt {path} is not successful"
+    [ "expectedPackages"; "observedPackages"; "tagCommit"; "tagMatchesExpectedCommit"; "packages" ]
+    |> List.iter (fun name -> if tryElement name root |> Option.isNone then failwith $"evidence receipt {path} is missing `{name}`")
+    let packages = tryElement "packages" root |> Option.get
+    if packages.ValueKind <> JsonValueKind.Array then failwith $"evidence receipt {path} has non-array `packages`"
+    name, subjectCommit
+
+let validateEvidence (state: JsonObject) =
+    let evidenceRoot = obj (property "evidence" state)
+    let registry = obj (property "registry" state)
+    let audit = obj (property "audit" evidenceRoot)
+    let workflows = obj (property "workflows" evidenceRoot)
+    if not (receiptCurrent audit) then failwith "audit evidence is stale or unavailable"
+    if not (receiptCurrent workflows) then failwith "workflow evidence is stale or unavailable"
+    validateReport (stringProperty "path" audit) "repositories" "findings"
+    validateReport (stringProperty "path" workflows) "results" "errors"
+    if not (receiptCurrent registry) then failwith "registry topology evidence is stale or unavailable"
+    let workflowReceipts =
+        array (property "workflowReceipts" evidenceRoot)
+        |> Seq.map (fun item ->
+        let receipt = obj item
+        if not (receiptCurrent receipt) then failwith "workflow receipt is stale or unavailable"
+        validateWorkflowReceipt (stringProperty "path" receipt))
+        |> Seq.toList
+    array (property "releases" state)
+    |> Seq.map obj
+    |> Seq.iter (fun release ->
+        let workflowRun = stringOr "" "workflowRun" release
+        if not (String.IsNullOrWhiteSpace workflowRun) then
+            let releaseId = stringProperty "id" release
+            let mainCommit = stringProperty "mainCommit" release
+            if not (workflowReceipts |> List.exists (fun (id, commit, run) -> id = releaseId && commit = mainCommit && run = workflowRun)) then
+                failwith $"release `{releaseId}` has no current successful workflow receipt bound to its merged-main commit")
+    array (property "verifications" evidenceRoot)
+    |> Seq.iter (fun item ->
+        let receipt = obj item
+        if not (receiptCurrent receipt) then failwith "verification evidence is stale or unavailable"
+        validateVerificationReceipt (stringProperty "path" receipt) |> ignore)
+
+let registryEdges path =
+    let mutable currentId = ""
+    let mutable owner = ""
+    let rows = ResizeArray<string * string * string list>()
+    let mutable consumers = []
+    let emitCurrent () =
+        if currentId <> "" && owner <> "" then rows.Add(currentId, owner, consumers)
+    for line in File.ReadLines path do
+        let contract = Regex.Match(line, @"^\s*-\s+id:\s*([^\s#]+)")
+        let ownerMatch = Regex.Match(line, @"^\s+owner:\s*([^\s#]+)")
+        let consumersMatch = Regex.Match(line, @"^\s+consumers:\s*\[([^\]]*)\]")
+        if contract.Success then
+            emitCurrent (); currentId <- contract.Groups[1].Value; owner <- ""; consumers <- []
+        elif ownerMatch.Success && currentId <> "" then owner <- ownerMatch.Groups[1].Value
+        elif consumersMatch.Success && currentId <> "" then
+            consumers <- consumersMatch.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun value -> value.Trim()) |> Array.toList
+    emitCurrent ()
+    rows |> Seq.toList
 
 let command = args |> List.tryHead |> Option.defaultWith (fun () -> usage (); failwith "a command is required")
 
@@ -204,6 +304,9 @@ let inspect () =
     let workflowPath = requireFile "--workflows"
     let registryPath = option "--registry" |> Option.defaultValue "registry/dependencies.yml" |> Path.GetFullPath
     if not (File.Exists registryPath) then failwith $"registry does not exist: {registryPath}"
+    validateReport auditPath "repositories" "findings"
+    validateReport workflowPath "results" "errors"
+    let topology = registryEdges registryPath
     use audit = JsonDocument.Parse(File.ReadAllText auditPath)
     let releases = JsonArray()
     for repository in audit.RootElement.GetProperty("repositories").EnumerateArray() do
@@ -212,10 +315,13 @@ let inspect () =
             let id = repository.GetProperty("id").GetString()
             let tag = repository.GetProperty("baselineTag").GetString()
             let commit = repository.GetProperty("originMain").GetString()
+            let dependencies = topology |> List.choose (fun (_, owner, consumers) -> if List.contains id consumers then Some owner else None) |> List.distinct
+            let coherentSets = topology |> List.choose (fun (contract, owner, _) -> if owner = id then Some contract else None)
             releases.Add(JsonObject(
                 [ KeyValuePair("id", JsonValue.Create(id) :> JsonNode)
-                  KeyValuePair("kind", JsonValue.Create("producer") :> JsonNode)
-                  KeyValuePair("dependsOn", JsonArray() :> JsonNode)
+                  KeyValuePair("kind", JsonValue.Create(if List.isEmpty dependencies then "producer" else "consumer") :> JsonNode)
+                  KeyValuePair("dependsOn", JsonArray(dependencies |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+                  KeyValuePair("coherentSets", JsonArray(coherentSets |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
                   KeyValuePair("expectedPackages", JsonValue.Create(packages.GetArrayLength()) :> JsonNode)
                   KeyValuePair("observedPackages", JsonValue.Create(0) :> JsonNode)
                   KeyValuePair("mainCommit", JsonValue.Create(commit) :> JsonNode)
@@ -224,14 +330,14 @@ let inspect () =
                   KeyValuePair("workflowRun", JsonValue.Create("") :> JsonNode)
                   KeyValuePair("feedState", JsonValue.Create("none") :> JsonNode)
                   KeyValuePair("artifactVerified", JsonValue.Create(false) :> JsonNode)
-                  KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(true) :> JsonNode)
+                  KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(List.isEmpty dependencies) :> JsonNode)
                   KeyValuePair("downstreamVerified", JsonValue.Create(false) :> JsonNode) ]))
     let runId = option "--id" |> Option.defaultValue (Path.GetFileNameWithoutExtension run)
     let state = JsonObject(
         [ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode)
           KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
           KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
-          KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode) ]) :> JsonNode)
           KeyValuePair("decisions", JsonArray() :> JsonNode)
           KeyValuePair("requiresClassification", JsonValue.Create(true) :> JsonNode)
           KeyValuePair("releases", releases :> JsonNode) ])
@@ -243,6 +349,7 @@ let plan () =
     let path = requireFile "--run"
     let state = obj (read path)
     if intProperty "schemaVersion" state <> 1 then failwith "unsupported release-run schemaVersion"
+    validateEvidence state
     state["nextAction"] <- nextAction state
     write path state
     printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
@@ -250,6 +357,7 @@ let plan () =
 let advance () =
     let path = requireFile "--run"
     let state = obj (read path)
+    validateEvidence state
     let decision = require "--decision"
     if not ([ "release-owed"; "no-release"; "semver-effect"; "human-blocker" ] |> List.contains decision) then
         failwith "--decision must be release-owed, no-release, semver-effect, or human-blocker"
@@ -257,6 +365,29 @@ let advance () =
     let subjectCommit = require "--subject-commit"
     let proof = require "--evidence"
     let releaseId = require "--release-id"
+    if String.IsNullOrWhiteSpace proof then failwith "--evidence must not be empty"
+    let release =
+        array (property "releases" state)
+        |> Seq.map obj
+        |> Seq.tryFind (fun item -> stringProperty "id" item = releaseId)
+        |> Option.defaultWith (fun () -> failwith $"unknown release `{releaseId}`")
+    if subjectCommit <> stringProperty "mainCommit" release then
+        failwith "decision subject commit must equal the release's merged-main commit"
+    match option "--workflow-receipt" with
+    | Some receiptPath when decision = "release-owed" || decision = "semver-effect" ->
+        let full = Path.GetFullPath receiptPath
+        if not (File.Exists full) then failwith $"--workflow-receipt does not exist: {full}"
+        let receiptRelease, receiptCommit, workflowRun = validateWorkflowReceipt full
+        if receiptRelease <> releaseId || receiptCommit <> subjectCommit then
+            failwith "workflow receipt must name this release and its merged-main commit"
+        release["workflowRun"] <- JsonValue.Create(workflowRun)
+        let receipts = array (property "workflowReceipts" (obj (property "evidence" state)))
+        let snapshot = evidence full
+        if not (receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)) then receipts.Add(snapshot)
+    | Some _ -> failwith "--workflow-receipt is only valid with release-owed or semver-effect"
+    | None when decision = "release-owed" || decision = "semver-effect" ->
+        failwith "release-owed and semver-effect decisions require a successful --workflow-receipt"
+    | None -> ()
     let duplicate =
         decisions |> Seq.exists (fun item -> let existing = obj item in stringProperty "kind" existing = decision && stringProperty "subjectCommit" existing = subjectCommit && stringOr "" "releaseId" existing = releaseId)
     if not duplicate then
@@ -268,23 +399,37 @@ let advance () =
 let verify () =
     let path = requireFile "--run"
     let state = obj (read path)
+    validateEvidence state
     let releases = array (property "releases" state)
     let evidenceRoot = obj (property "evidence" state)
     let reports = array (property "verifications" evidenceRoot)
     for reportPath in options "--verification" do
         let full = Path.GetFullPath reportPath
         if not (File.Exists full) then failwith $"--verification does not exist: {full}"
+        let receiptName, receiptCommit = validateVerificationReceipt full
         use report = JsonDocument.Parse(File.ReadAllText full)
         let root = report.RootElement
         let name = root.GetProperty("name").GetString()
+        if name <> receiptName then failwith $"verification receipt {full} is inconsistent"
         let release = releases |> Seq.map obj |> Seq.tryFind (fun candidate -> stringProperty "id" candidate = name) |> Option.defaultWith (fun () -> failwith $"verification names unknown release `{name}`")
+        if receiptCommit <> stringProperty "mainCommit" release then failwith "verification receipt subject commit must equal the release's merged-main commit"
         release["expectedPackages"] <- JsonValue.Create(root.GetProperty("expectedPackages").GetInt32())
         release["observedPackages"] <- JsonValue.Create(root.GetProperty("observedPackages").GetInt32())
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
         let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
         let equivalent = root.GetProperty("packages").EnumerateArray() |> Seq.forall (fun package -> package.GetProperty("payloadIdentical").GetBoolean())
-        release["feedState"] <- JsonValue.Create(if matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release then "both-equivalent" else "disagree")
-        release["artifactVerified"] <- JsonValue.Create(matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release)
+        let githubAvailable = tryElement "githubAvailable" root |> Option.map (fun value -> value.GetBoolean()) |> Option.defaultValue true
+        let nugetAvailable = tryElement "nugetAvailable" root |> Option.map (fun value -> value.GetBoolean()) |> Option.defaultValue true
+        let complete = matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release
+        let feed =
+            match githubAvailable, nugetAvailable with
+            | true, true when complete -> "both-equivalent"
+            | true, true -> "disagree"
+            | true, false -> "org-only"
+            | false, true -> "public-only"
+            | false, false -> "none"
+        release["feedState"] <- JsonValue.Create(feed)
+        release["artifactVerified"] <- JsonValue.Create((feed = "both-equivalent"))
         reports.Add(evidence full)
     state["nextAction"] <- nextAction state
     write path state

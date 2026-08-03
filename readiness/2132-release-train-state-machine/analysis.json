@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2132-release-train-state-machine/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "056f48d1bf032f3473940f0202886c2310ccbf5d42ce720ea4297aa072ba4abb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2132-release-train-state-machine/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -356,7 +366,7 @@
     {
       "path": "readiness/2132-release-train-state-machine/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],
