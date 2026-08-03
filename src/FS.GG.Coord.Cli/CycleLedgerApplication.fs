@@ -87,6 +87,19 @@ module CycleLedgerApplication =
             invalidArg "artifactPath" "must resolve beneath rootPath"
         relative.Replace(Path.DirectorySeparatorChar, '/')
 
+    let private trustedValidator fileName expectedDigest =
+        let path = Path.Combine(AppContext.BaseDirectory, "provider-validators", fileName)
+        if not (File.Exists path) then
+            invalidOp $"trusted provider validator is missing beside the engine: %s{fileName}"
+        let digest =
+            File.ReadAllBytes path
+            |> Security.Cryptography.SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+        if digest <> expectedDigest then
+            invalidOp $"trusted provider validator identity is unsupported: %s{fileName} sha256:%s{digest}"
+        path
+
     let private validateProviderArtifact expectedIdentity provider node =
         let root = providerRoot node
         let path = text "artifactPath" node
@@ -98,15 +111,17 @@ module CycleLedgerApplication =
             let output = runValidator root "fsgg-sdd" [ "verify"; "--root"; root; "--work"; expectedIdentity; "--require-observed"; "--dry-run" ]
             use report = JsonDocument.Parse output
             let result = report.RootElement
+            let command = property "command" result
+            let context = property "context" result
+            if text "toolVersion" result <> "1.0.0" || text "name" command <> "verify" || text "workId" context <> expectedIdentity then
+                invalidArg "artifactPath" "fsgg-sdd validator identity, version, command, or work binding is unsupported"
             if not (bool "coherent" result) || text "outcome" result <> "noChange" then
                 invalidArg "artifactPath" "fsgg-sdd verify did not confirm a coherent, byte-current provider view"
         | "critique" ->
-            let script = Path.Combine(root, ".agents", "skills", "work-roadmap", "scripts", "validate-critique-state.py")
-            if not (File.Exists script) then invalidArg "rootPath" "does not contain the canonical schema-v3 critique validator"
+            let script = trustedValidator "validate-critique-state.py" "90b8be5782e5d314c8c7f7ab8556b4859a714c9882ede2be81c75ce408dba9c9"
             runValidator root "python3" [ script; "--root"; root; "--cycle"; expectedIdentity; "--artifact"; relative ] |> ignore
         | "feedback" ->
-            let script = Path.Combine(root, ".agents", "skills", "work-roadmap", "scripts", "validate-feedback-state.py")
-            if not (File.Exists script) then invalidArg "rootPath" "does not contain the canonical schema-v2 feedback validator"
+            let script = trustedValidator "validate-feedback-state.py" "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07"
             let audit = text "auditPath" node |> relativeArtifact root
             let phases = strings "phases" node
             if List.isEmpty phases || phases |> List.exists String.IsNullOrWhiteSpace then invalidArg "phases" "must contain the exercised feedback phases"

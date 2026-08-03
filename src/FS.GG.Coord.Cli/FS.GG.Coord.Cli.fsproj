@@ -222,6 +222,15 @@ the worker's own heartbeat/release/done operations. Neither behavior is claimed 
     <Compile Include="Client.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Provider validator authority travels with the engine binary. Artifact roots are caller data;
+         they must never select executable code (#2133 repair-phase round 1). The pinned byte digests
+         in CycleLedgerApplication make an unreviewed validator replacement fail closed. -->
+    <None Include="../../.agents/skills/work-roadmap/scripts/validate-critique-state.py"
+          Link="provider-validators/validate-critique-state.py"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
+          Link="provider-validators/validate-feedback-state.py"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

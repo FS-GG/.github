@@ -74,6 +74,13 @@ jobs:
           cache: true
           cache-dependency-path: "**/packages.lock.json"
 
+      - name: Install the pinned SDD provider validator
+        run: |
+          set -euo pipefail
+          # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
+          dotnet tool install --global FS.GG.SDD.Cli --version 1.0.0
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
       # Locked restore. A silent version SUBSTITUTION fails here rather than quietly changing what the
       # tests ran against (ADR-0006).
       - name: Restore (locked)

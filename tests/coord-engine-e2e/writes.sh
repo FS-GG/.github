@@ -871,6 +871,43 @@ else
   bad "#2133: production advance must reject feedback-shaped files the canonical validator rejects" "rc=$minimal_feedback_rc output=$minimal_feedback"
 fi
 
+# The artifact root is data, never validator authority. A caller used to place no-op scripts under
+# this alternate root and thereby turn the two canonical validator checks into unconditional passes.
+malicious_root="$CYCLE_FIX/caller-validator-root"
+mkdir -p "$malicious_root/.agents/skills/work-roadmap/scripts" "$malicious_root/reviews/roadmap" "$malicious_root/feedback/audits"
+printf '%s\n' '#!/usr/bin/env python3' 'raise SystemExit(0)' >"$malicious_root/.agents/skills/work-roadmap/scripts/validate-critique-state.py"
+printf '%s\n' '#!/usr/bin/env python3' 'raise SystemExit(0)' >"$malicious_root/.agents/skills/work-roadmap/scripts/validate-feedback-state.py"
+printf '%s\n' "{\"schema_version\":3,\"cycle_id\":\"$provider_cycle\",\"repair_rounds\":0,\"confirmation\":{\"reviewed_commit\":\"$candidate_head\",\"verdict\":\"pass\"},\"game_functionality\":false,\"player_journeys\":[],\"uncovered_functionality\":[]}" >"$malicious_root/reviews/roadmap/$provider_cycle.json"
+printf '%s\n' '---' 'feedbackSchema: 2' "cycle: $provider_cycle" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** implementation-test-evidence, verify-ship-pr' '## §2 Findings' >"$malicious_root/feedback/$provider_cycle.md"
+printf '%s\n' '{}' >"$malicious_root/feedback/audits/$provider_cycle.audit.json"
+
+jq --arg root "$malicious_root" --arg cycle "$provider_cycle" '.review.rootPath=$root | .review.artifactPath=("reviews/roadmap/"+$cycle+".json")' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/substituted-critique-validator.json"
+substituted_critique="$(run cycle advance --snapshot "$CYCLE_FIX/substituted-critique-validator.json" --json 2>&1)"; substituted_critique_rc=$?
+if [ "$substituted_critique_rc" -ne 0 ] && printf '%s' "$substituted_critique" | grep -q 'provider validator refused'; then
+  ok "#2133: caller-controlled artifact roots cannot substitute a no-op critique validator"
+else
+  bad "#2133: critique validator authority must come from the engine, not artifact rootPath" "rc=$substituted_critique_rc output=$substituted_critique"
+fi
+
+jq --arg root "$malicious_root" --arg cycle "$provider_cycle" '.feedback.rootPath=$root | .feedback.artifactPath=("feedback/"+$cycle+".md") | .feedback.auditPath=("feedback/audits/"+$cycle+".audit.json")' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/substituted-feedback-validator.json"
+substituted_feedback="$(run cycle advance --snapshot "$CYCLE_FIX/substituted-feedback-validator.json" --json 2>&1)"; substituted_feedback_rc=$?
+if [ "$substituted_feedback_rc" -ne 0 ] && printf '%s' "$substituted_feedback" | grep -q 'provider validator refused'; then
+  ok "#2133: caller-controlled artifact roots cannot substitute a no-op feedback validator"
+else
+  bad "#2133: feedback validator authority must come from the engine, not artifact rootPath" "rc=$substituted_feedback_rc output=$substituted_feedback"
+fi
+
+trusted_critique_validator="$(dirname "$ENGINE")/provider-validators/validate-critique-state.py"
+cp "$trusted_critique_validator" "$CYCLE_FIX/trusted-critique-validator.py"
+printf '%s\n' '# unsupported validator mutation' >>"$trusted_critique_validator"
+tampered_validator="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; tampered_validator_rc=$?
+mv "$CYCLE_FIX/trusted-critique-validator.py" "$trusted_critique_validator"
+if [ "$tampered_validator_rc" -ne 0 ] && printf '%s' "$tampered_validator" | grep -q 'validator identity is unsupported'; then
+  ok "#2133: engine-shipped provider validator bytes are bound to a supported identity digest"
+else
+  bad "#2133: an unpinned engine-side validator replacement must fail closed" "rc=$tampered_validator_rc output=$tampered_validator"
+fi
+
 printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"2133-resumable-cycle-ledger\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"$candidate_head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
 jq --arg root "$CYCLE_FIX" '.implementation.rootPath=$root | .implementation.artifactPath="forged-sdd.json"' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/forged-advance.json"
 forged_advance="$(run cycle advance --snapshot "$CYCLE_FIX/forged-advance.json" --json 2>&1)"; forged_advance_rc=$?
