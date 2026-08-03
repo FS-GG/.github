@@ -47,6 +47,11 @@ ISSUES = {
     # the row that proves the rollout — a receiver conscripts a caller, which .github used to do alone.
     45: {"body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
          "state": "CLOSED", "status": "Ready"},
+    # .github#2157 — the closed #45 dependency has cleared, but this row is still projected as
+    # Blocked.  Reconcile must make the coupled Status=Ready / Blocked by='' repair as one batch,
+    # then prove BOTH values on a fresh scan.
+    47: {"body": "A formerly blocked SDD item.\n\nPaths: src/Blocked/**",
+         "state": "OPEN", "status": "Blocked", "blocked_by": "FS-GG/FS.GG.SDD#45"},
     # #1087 — the free-refusal control: an UNROSTERED repo (no chore lock at all). All seven FS-GG repos now
     # have one, so the honest "no lock" case is a repo `choreLockRef` does not know. `done` here stamps and
     # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
@@ -103,6 +108,10 @@ DEFER_FIELD_WRITES = [0]
 # be re-testing the deferral queue while claiming to test the case the queue cannot reach.
 FAIL_FIELD_WRITES = [0]
 RECONCILE_45_PROJECTION = [0]
+# .github#2157's negative controls.  A mutation acknowledgement is deliberately not convergence:
+# the next scan either sees only the Status half or no row at all.
+RECONCILE_47_PARTIAL = [0]
+RECONCILE_47_MISSING = [0]
 
 # .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
 # per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
@@ -165,7 +174,7 @@ def board_items():
         nodes.append(
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
-                "blockedBy": None,
+                "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
                     "number": n,
@@ -234,7 +243,7 @@ def graphql(query: str, variables: dict):
         # int(): the wire carries the number as a JSON number, so Python hands us 46.0, and 46.0 misses an
         # int-keyed lookup without erroring — which would silently put the off-board issue back on it.
         n = int(variables.get("number", 0))
-        nodes = [] if off_board(n) else [{"id": "PVTI_item", "project": {"number": 12}}]
+        nodes = [] if off_board(n) else [{"id": f"PVTI_{n}", "project": {"number": 12}}]
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": nodes}}},
@@ -268,13 +277,26 @@ def graphql(query: str, variables: dict):
                 FAIL_FIELD_WRITES[0] -= 1
                 return {"errors": [{"message": "fixture: the field write failed permanently"}]}
             # Model the projection separately from the acknowledgement: a successful mutation becomes
-            # visible on the next board scan for its specific item.
+            # visible on the next board scan for its specific item.  Batch mutations inline their ids,
+            # while the single-field form uses variables, so recognize both wire shapes.
             item_id = str(variables.get("itemId", ""))
+            if not item_id:
+                match = re.search(r'itemId:\s*"(PVTI_\d+)"', query)
+                item_id = match.group(1) if match else ""
             if item_id.startswith("PVTI_"):
                 try:
                     n = int(item_id.removeprefix("PVTI_"))
                     value = json.dumps(variables)
-                    if "opt_done" in value:
+                    if n == 47 and RECONCILE_47_MISSING[0] > 0:
+                        RECONCILE_47_MISSING[0] -= 1
+                        ISSUES[n]["off_board"] = True
+                    elif n == 47 and RECONCILE_47_PARTIAL[0] > 0:
+                        RECONCILE_47_PARTIAL[0] -= 1
+                        ISSUES[n]["status"] = "Ready"
+                    elif n == 47 and "f0:" in query and "f1:" in query:
+                        ISSUES[n]["status"] = "Ready"
+                        ISSUES[n]["blocked_by"] = ""
+                    elif "opt_done" in value:
                         ISSUES[n]["status"] = "Done"
                     elif "opt_ready" in value:
                         ISSUES[n]["status"] = "Ready"
@@ -486,6 +508,25 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 RECONCILE_45_PROJECTION[0] += 1
             return self._send(200, {"armed": RECONCILE_45_PROJECTION[0]})
+
+        if path.rstrip("/") == "/_fixture/reset-reconcile-47":
+            with LOCK:
+                ISSUES[47]["off_board"] = False
+                ISSUES[47]["status"] = "Blocked"
+                ISSUES[47]["blocked_by"] = "FS-GG/FS.GG.SDD#45"
+                RECONCILE_47_PARTIAL[0] = 0
+                RECONCILE_47_MISSING[0] = 0
+            return self._send(200, {"number": 47, "status": "Blocked", "blockedBy": ISSUES[47]["blocked_by"]})
+
+        if path.rstrip("/") == "/_fixture/arm-reconcile-47-partial":
+            with LOCK:
+                RECONCILE_47_PARTIAL[0] += 1
+            return self._send(200, {"armed": RECONCILE_47_PARTIAL[0]})
+
+        if path.rstrip("/") == "/_fixture/arm-reconcile-47-missing":
+            with LOCK:
+                RECONCILE_47_MISSING[0] += 1
+            return self._send(200, {"armed": RECONCILE_47_MISSING[0]})
 
         # #1569: `reap --apply` must see a genuinely expired marker.  Claims use the real wall
         # clock so all normal CAS legs remain live; this narrow test-only route ages the existing

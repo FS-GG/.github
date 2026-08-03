@@ -2152,6 +2152,13 @@ module ApplicationServiceTests =
         Assert.Equal("Status", str "field" landed)
         Assert.Equal("Done", str "value" landed)
         Assert.Equal(JsonValueKind.Null, landed.GetProperty("error").ValueKind)
+        let intended = landed.GetProperty("writes").EnumerateArray() |> List.ofSeq
+        let observed = landed.GetProperty("observed").EnumerateArray() |> List.ofSeq
+        Assert.Single intended |> ignore
+        Assert.Single observed |> ignore
+        Assert.Equal("Status", str "field" intended.[0])
+        Assert.Equal("Done", str "value" intended.[0])
+        Assert.Equal("Done", str "value" observed.[0])
 
         // THE QUEUED WRITE — the leg whose loss is unrecoverable, and the reason this issue was filed. It
         // is a DISTINCT VALUE of a closed set, not a sentence a consumer greps for the word "queued" in.

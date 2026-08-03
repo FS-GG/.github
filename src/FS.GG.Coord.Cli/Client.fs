@@ -1612,6 +1612,8 @@ module Client =
                       Remedy = target chore
                       Statement = chore.Statement
                       Write = write chore
+                      Writes = writesFor chore |> List.map (fun (field, write) -> field, match write with | Board.Set value -> value | Board.Clear -> "")
+                      Observed = None
                       Outcome = outcome }
 
                 /// Emit the machine document, ONCE, and only under `--json`.
@@ -1694,7 +1696,10 @@ module Client =
                                             let actual = observed field
                                             if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
 
-                                    if List.isEmpty mismatches then Ok() else Error(String.concat "; " mismatches)
+                                    if List.isEmpty mismatches then
+                                        Ok(writes |> List.map (fun (field, _) -> field, observed field))
+                                    else
+                                        Error(String.concat "; " mismatches)
 
                         // `BoardClass = None` has two different meanings at two different boundaries:
                         // this scan's row may have an UNSET `Class` value, while this map can prove that
@@ -1862,12 +1867,12 @@ module Client =
                                       // time, so the two projections of one fact disagreed.
                                       | Ok Board.Written ->
                                           match verifyWrites chore writes with
-                                          | Ok() ->
+                                          | Ok observed ->
                                               match opts.Render with
                                               | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
                                               | Json -> ()
 
-                                              reconcileRow chore (Some Written)
+                                              { reconcileRow chore (Some Written) with Observed = Some observed }
                                           | Error reason ->
                                               eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
                                               failed <- true
