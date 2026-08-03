@@ -12,7 +12,9 @@
 #      consumer handle (build/FS.GG.Drivers.props) + README.
 #   3. CONTENT-ADDRESSED — every packed SKILL.md's canonical digest matches its manifest sha256
 #      (the ADR-0014 record the SDD CLI verifies against at scaffold time).
-#   4. FAILS LOUD — a tampered driver byte is DETECTED by that digest check, never silently delivered.
+#   4. PACKAGE-CLOSED — every relative board-driver link resolves after staged and consumer-shaped
+#      materialization, and a link into withheld operator bytes fails loud.
+#   5. FAILS LOUD — a tampered driver byte is DETECTED by that digest check, never silently delivered.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,6 +23,51 @@ MANIFEST="$SRC_ROOT/registry/driver-skill-manifest.json"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 fail() { echo "verify-package: FAIL — $*" >&2; exit 1; }
+
+# A scaffold consumes board drivers offline. Every relative Markdown target from a delivered
+# `work-board*` skill must therefore resolve inside the delivered skills tree, not merely inside
+# this producer checkout. Other driver families may intentionally target separately materialized
+# process skills; this gate owns the board-family closure exposed by #2180.
+board_link_closure_ok() {
+  python3 - "$1" <<'PY'
+import pathlib, re, sys, urllib.parse
+
+root = pathlib.Path(sys.argv[1]).resolve()
+failed = False
+for source in sorted(root.rglob("*.md")):
+    relative_source = source.relative_to(root)
+    if not relative_source.parts[0].startswith("work-board"):
+        continue
+    text = source.read_text(encoding="utf-8-sig")
+    destinations = [match.group(1) for match in re.finditer(r"!?\[[^\]]*\]\(([^)]+)\)", text)]
+    destinations.extend(
+        match.group(1) or match.group(2)
+        for match in re.finditer(
+            r"(?m)^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(?:<([^>\n]+)>|(\S+))",
+            text,
+        )
+    )
+    for destination in destinations:
+        raw = destination.strip()
+        if raw.startswith("<") and raw.endswith(">"):
+            raw = raw[1:-1]
+        raw = raw.split(maxsplit=1)[0]
+        if not raw or raw.startswith(("#", "/", "//")) or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw):
+            continue
+        relative = urllib.parse.unquote(raw.split("#", 1)[0].split("?", 1)[0])
+        target = (source.parent / relative).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            print(f"relative link escapes delivered skills: {source.relative_to(root)} -> {raw}", file=sys.stderr)
+            failed = True
+            continue
+        if not target.exists():
+            print(f"relative link target is not delivered: {source.relative_to(root)} -> {raw}", file=sys.stderr)
+            failed = True
+raise SystemExit(1 if failed else 0)
+PY
+}
 
 [ -f "$MANIFEST" ] || fail "registry/driver-skill-manifest.json not found (is this a .github checkout?)"
 
@@ -83,6 +130,9 @@ for id in "${OPERATOR_IDS[@]}"; do
   [ ! -e "$WORK/stage/skills/$id" ] || fail "operator skill '$id' was staged — it must be delivered nowhere"
 done
 echo "   ${#DRIVER_ROWS[@]} driver skill(s) staged & content-addressed; ${#OPERATOR_IDS[@]} operator row(s) correctly withheld"
+board_link_closure_ok "$WORK/stage/skills" \
+  || fail "staged board-driver skills contain a relative link outside the delivered package closure"
+echo "   staged board-driver links resolve using delivered bytes only"
 
 echo "== 2. pack + content assert =="
 dotnet pack "$HERE/FS.GG.Drivers.csproj" -c Release -o "$WORK/out" >/dev/null
@@ -106,7 +156,7 @@ echo "   nupkg carries the manifest + every driver SKILL.md + the consumer handl
 # <drivers-dir>/skills/ digests to its manifest sha256; non-zero (naming the first mismatch) otherwise.
 # This IS the check the SDD CLI performs at scaffold time — the load-bearing content-addressed verify —
 # so the gate both asserts it PASSES on the real package (step 3) and asserts it FIRES on a tampered byte
-# (step 4). Asserting the digest merely "changed" would be tautological (any appended byte changes a
+# (step 5). Asserting the digest merely "changed" would be tautological (any appended byte changes a
 # sha256); asserting this function's VERDICT flips is what proves the verify.
 content_addressed_ok() {
   local dir="$1" id rel want executable got got_exec
@@ -131,7 +181,24 @@ content_addressed_ok "$WORK/unpacked/drivers" \
   || fail "a packed driver SKILL.md does not match its manifest sha256 (the ADR-0014 record)"
 echo "   every packed driver SKILL.md verifies against the manifest — the ADR-0014 record the CLI uses"
 
-echo "== 4. a tampered driver byte is REJECTED by that same verify (fail-loud) =="
+echo "== 4. consumer materialization is link-closed, and the closure gate fails loud =="
+mkdir -p "$WORK/consumer/.agents"
+cp -r "$WORK/unpacked/drivers/skills" "$WORK/consumer/.agents/skills"
+board_link_closure_ok "$WORK/consumer/.agents/skills" \
+  || fail "consumer-materialized board-driver skills contain a dead relative link"
+printf '%s\n' '[broken](../withheld-operator/SKILL.md)' > "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
+if board_link_closure_ok "$WORK/consumer/.agents/skills" >/dev/null 2>&1; then
+  fail "consumer closure gate accepted a relative link to withheld bytes"
+fi
+printf '%s\n' '[broken][operator]' '' '[operator]: ../withheld-operator/SKILL.md' \
+  > "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
+if board_link_closure_ok "$WORK/consumer/.agents/skills" >/dev/null 2>&1; then
+  fail "consumer closure gate accepted a reference-style relative link to withheld bytes"
+fi
+rm "$WORK/consumer/.agents/skills/work-board-normal/broken-link.md"
+echo "   consumer-shaped materialization is closed; inline and reference-style withheld-sibling links are rejected"
+
+echo "== 5. a tampered driver byte is REJECTED by that same verify (fail-loud) =="
 cp -r "$WORK/unpacked/drivers" "$WORK/tampered"
 first_id="${DRIVER_ROWS[0]%%$'\t'*}"
 echo "CORRUPT" >> "$WORK/tampered/skills/$first_id/SKILL.md"     # bytes drift from the recorded sha256
