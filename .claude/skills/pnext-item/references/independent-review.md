@@ -276,9 +276,9 @@ If a filed material issue blocks the current item, the critic reports it to the 
 the real `Blocked by` edge, parks the item `Blocked`, releases the claim, and stops. Otherwise the
 critic returns `pass` only after every material finding is repaired, deduplicated, or filed. The host
 verifies the marker, ordered round/URL/SHA chain, critic independence, dispositions, and every filed
-issue against GitHub before merge or terminal acceptance. An exhausted three-round chain is a human
-escalation — via the repair phase above when authorized, otherwise straight to the park — never a
-passing terminal acceptance either way. After verification of a passing chain (ordinary or
+issue against GitHub before merge or terminal acceptance. An exhausted three-round chain automatically
+enters the repair phase above; only unavailable routing or repair-phase exhaustion reaches the human
+park, and neither exhaustion is a passing terminal acceptance. After verification of a passing chain (ordinary or
 repair-phase), the host posts `<!-- fsgg:review-accepted:v1 -->` with the accepted head SHA, initial
 review URL, and confirmation URL when a repair occurred, and — for a repair-phase landing — the
 `fsgg:independent-review-repair-phase:v1` marker URL so acceptance evidence itself shows which path

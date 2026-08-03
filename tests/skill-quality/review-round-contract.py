@@ -27,6 +27,8 @@ def main() -> None:
     require(texts[0] == texts[1], "independent-review contract differs between authored roots")
 
     contract = texts[0]
+    require("operator authoriz" not in contract.lower(), "review contract retains an operator-authorization gate")
+    require("when authorized" not in contract.lower(), "review contract retains a conditional authorization branch")
     match = re.search(r"`max-automated-repair-rounds: (\d+)`", contract)
     require(match is not None, "review contract has no machine-readable repair-round limit")
     require(int(match.group(1)) == MAX_ROUNDS, f"repair-round limit is not {MAX_ROUNDS}")
