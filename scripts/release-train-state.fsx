@@ -191,6 +191,8 @@ let topologySha256 path =
     |> Convert.ToHexString
     |> fun value -> value.ToLowerInvariant()
 
+let normalizeRepoId id = if id = ".github" then "github" else id
+
 let validateEvidence requireRegistry (state: JsonObject) =
     let evidenceRoot = obj (property "evidence" state)
     let registry = obj (property "registry" state)
@@ -373,33 +375,104 @@ let inspect () =
     validateReport workflowPath "results" "errors"
     let topology = registryEdges registryPath
     use audit = JsonDocument.Parse(File.ReadAllText auditPath)
-    let releases = JsonArray()
-    for repository in audit.RootElement.GetProperty("repositories").EnumerateArray() do
-        let packages = repository.GetProperty("packages")
-        if packages.GetArrayLength() > 0 then
-            let id = repository.GetProperty("id").GetString()
-            let tag = repository.GetProperty("baselineTag").GetString()
+    let auditSets =
+        audit.RootElement.GetProperty("repositories").EnumerateArray()
+        |> Seq.collect (fun repository ->
+            let repoId = repository.GetProperty("id").GetString()
             let commit = repository.GetProperty("originMain").GetString()
-            let dependencies = topology |> List.choose (fun (_, owner, consumers) -> if List.contains id consumers then Some owner else None) |> List.distinct
-            let coherentSets = topology |> List.choose (fun (contract, owner, _) -> if owner = id then Some contract else None)
-            releases.Add(JsonObject(
-                [ KeyValuePair("id", JsonValue.Create(id) :> JsonNode)
-                  KeyValuePair("kind", JsonValue.Create(if List.isEmpty dependencies then "producer" else "consumer") :> JsonNode)
-                  KeyValuePair("dependsOn", JsonArray(dependencies |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
-                  KeyValuePair("coherentSets", JsonArray(coherentSets |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
-                  KeyValuePair("expectedPackages", JsonValue.Create(packages.GetArrayLength()) :> JsonNode)
-                  KeyValuePair("observedPackages", JsonValue.Create(0) :> JsonNode)
-                  KeyValuePair("mainCommit", JsonValue.Create(commit) :> JsonNode)
-                  KeyValuePair("tag", JsonValue.Create(tag) :> JsonNode)
-                  KeyValuePair("tagCommit", JsonValue.Create("") :> JsonNode)
-                  KeyValuePair("workflowRun", JsonValue.Create("") :> JsonNode)
-                  KeyValuePair("feedState", JsonValue.Create("none") :> JsonNode)
-                  KeyValuePair("artifactVerified", JsonValue.Create(false) :> JsonNode)
-                  KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(List.isEmpty dependencies) :> JsonNode)
-                  KeyValuePair("downstreamVerified", JsonValue.Create(false) :> JsonNode) ]))
+            match tryElement "releaseSets" repository with
+            | Some sets when sets.ValueKind = JsonValueKind.Array && sets.GetArrayLength() > 0 ->
+                sets.EnumerateArray()
+                |> Seq.map (fun releaseSet ->
+                    let releaseSetId = releaseSet.GetProperty("id").GetString()
+                    let expectedTags = releaseSet.GetProperty("expectedTags").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                    if expectedTags.IsEmpty then failwith $"release set `{releaseSetId}` has no expected tag"
+                    let patterns = releaseSet.GetProperty("tagPatterns").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                    let packages = releaseSet.GetProperty("packages").EnumerateArray() |> Seq.toList
+                    releaseSetId, repoId, commit,
+                    releaseSet.GetProperty("baselineTag").GetString(), releaseSet.GetProperty("workflow").GetString(),
+                    expectedTags, patterns, packages)
+            | _ ->
+                let packages = repository.GetProperty("packages").EnumerateArray() |> Seq.toList
+                if packages.IsEmpty then Seq.empty
+                else
+                    let tag = repository.GetProperty("baselineTag").GetString()
+                    Seq.singleton(repoId, repoId, commit, tag, "", [ tag ], [], packages))
+        |> Seq.toList
+    let contractRelease =
+        topology
+        |> List.choose (fun (contract, owner, consumers) ->
+            let ownerId = normalizeRepoId owner
+            let candidates = auditSets |> List.filter (fun (_, repoId, _, _, _, _, _, _) -> normalizeRepoId repoId = ownerId)
+            match candidates with
+            | [ (releaseId, _, _, _, _, _, _, _) ] -> Some(contract, releaseId, consumers)
+            | _ ->
+                candidates
+                |> List.tryFind (fun (releaseId, _, _, _, _, expectedTags, _, _) ->
+                    releaseId.EndsWith($":{contract}", StringComparison.Ordinal)
+                    || expectedTags |> List.exists (fun tag -> tag.StartsWith($"{contract}/", StringComparison.Ordinal)))
+                |> Option.map (fun (releaseId, _, _, _, _, _, _, _) -> contract, releaseId, consumers))
+    let packageRelease =
+        auditSets
+        |> List.collect (fun (releaseId, _, _, _, _, _, _, packages) ->
+            packages
+            |> List.choose (fun package ->
+                match tryElement "packageId" package with
+                | Some value when value.ValueKind = JsonValueKind.String -> Some(value.GetString(), releaseId)
+                | _ -> None))
+        |> Map.ofList
+    let releases = JsonArray()
+    for releaseId, repoId, commit, baselineTag, workflow, expectedTags, tagPatterns, packages in auditSets do
+        let normalizedRepo = normalizeRepoId repoId
+        let packageDependencies =
+            packages
+            |> List.collect (fun package ->
+                match tryElement "packageReferences" package with
+                | Some refs when refs.ValueKind = JsonValueKind.Array -> refs.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                | _ -> [])
+            |> List.choose (fun packageId -> Map.tryFind packageId packageRelease)
+        let registryDependencies =
+            contractRelease
+            |> List.choose (fun (_, producerRelease, consumers) ->
+                if consumers |> List.map normalizeRepoId |> List.contains normalizedRepo then Some producerRelease else None)
+        let dependencies =
+            packageDependencies @ registryDependencies
+            |> List.filter ((<>) releaseId)
+            |> List.distinct
+            |> List.sort
+        let coherentSets =
+            contractRelease
+            |> List.choose (fun (contract, ownerRelease, _) -> if ownerRelease = releaseId then Some contract else None)
+        let packageIds =
+            packages
+            |> List.choose (fun package ->
+                match tryElement "packageId" package with
+                | Some value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+                | _ -> None)
+        releases.Add(JsonObject(
+            [ KeyValuePair("id", JsonValue.Create(releaseId) :> JsonNode)
+              KeyValuePair("repository", JsonValue.Create(repoId) :> JsonNode)
+              KeyValuePair("kind", JsonValue.Create(if List.isEmpty dependencies then "producer" else "consumer") :> JsonNode)
+              KeyValuePair("dependsOn", JsonArray(dependencies |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("coherentSets", JsonArray(coherentSets |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("packages", JsonArray(packageIds |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("expectedPackages", JsonValue.Create(packages.Length) :> JsonNode)
+              KeyValuePair("observedPackages", JsonValue.Create(0) :> JsonNode)
+              KeyValuePair("mainCommit", JsonValue.Create(commit) :> JsonNode)
+              KeyValuePair("baselineTag", JsonValue.Create(baselineTag) :> JsonNode)
+              KeyValuePair("tag", JsonValue.Create(expectedTags.Head) :> JsonNode)
+              KeyValuePair("expectedTags", JsonArray(expectedTags |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("tagPatterns", JsonArray(tagPatterns |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("releaseWorkflow", JsonValue.Create(workflow) :> JsonNode)
+              KeyValuePair("tagCommit", JsonValue.Create("") :> JsonNode)
+              KeyValuePair("workflowRun", JsonValue.Create("") :> JsonNode)
+              KeyValuePair("feedState", JsonValue.Create("none") :> JsonNode)
+              KeyValuePair("artifactVerified", JsonValue.Create(false) :> JsonNode)
+              KeyValuePair("consumerEmbeddingVerified", JsonValue.Create(List.isEmpty dependencies) :> JsonNode)
+              KeyValuePair("downstreamVerified", JsonValue.Create(false) :> JsonNode) ]))
     let runId = option "--id" |> Option.defaultValue (Path.GetFileNameWithoutExtension run)
     let state = JsonObject(
-        [ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode)
+        [ KeyValuePair("schemaVersion", JsonValue.Create(2) :> JsonNode)
           KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
           KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalPath", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("canonicalTopologySha256", JsonValue.Create(topologySha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
           KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode); KeyValuePair("completionReceipts", JsonArray() :> JsonNode) ]) :> JsonNode)
@@ -413,7 +486,7 @@ let inspect () =
 let plan () =
     let path = requireFile "--run"
     let state = obj (read path)
-    if intProperty "schemaVersion" state <> 1 then failwith "unsupported release-run schemaVersion"
+    if not (List.contains (intProperty "schemaVersion" state) [ 1; 2 ]) then failwith "unsupported release-run schemaVersion"
     validateEvidence true state
     state["nextAction"] <- nextAction state
     write path state
@@ -478,6 +551,13 @@ let verify () =
         if name <> receiptName then failwith $"verification receipt {full} is inconsistent"
         let release = releases |> Seq.map obj |> Seq.tryFind (fun candidate -> stringProperty "id" candidate = name) |> Option.defaultWith (fun () -> failwith $"verification names unknown release `{name}`")
         if receiptCommit <> stringProperty "mainCommit" release then failwith "verification receipt subject commit must equal the release's merged-main commit"
+        let receiptTag = root.GetProperty("tag").GetString()
+        let expectedTags =
+            match tryProperty "expectedTags" release with
+            | Some tags -> array tags |> Seq.map (fun tag -> tag.GetValue<string>()) |> Seq.toList
+            | None -> [ stringProperty "tag" release ]
+        if not (List.contains receiptTag expectedTags) then
+            failwith $"verification receipt tag `{receiptTag}` does not match release `{name}` expected tags"
         release["expectedPackages"] <- JsonValue.Create(root.GetProperty("expectedPackages").GetInt32())
         release["observedPackages"] <- JsonValue.Create(root.GetProperty("observedPackages").GetInt32())
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
