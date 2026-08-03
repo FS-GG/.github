@@ -80,7 +80,13 @@ jobs:
           while IFS=$'\t' read -r number merge head; do
             [ -n "$number" ] || continue
             [ "$(git show "$merge:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)" = "$version" ] || continue
-            gh api "repos/${GITHUB_REPOSITORY}/commits/$head/check-runs" --paginate --jq '.check_runs[] | select(.name == "pr-arm" and .conclusion == "success") | .id' | grep -q . || continue
+            # This is provenance for the already-merged authoring PR, not a
+            # replacement merge gate.  Read the named workflow run and its
+            # `pr-arm` job rather than re-implementing the check-run rollup;
+            # PR merging itself remains exclusively `fsgg-coord landable`.
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')"
+            [ -n "$run_id" ] || continue
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || continue
             provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" '{number:($n|tonumber),mergeCommit:$merge,head:$head}')"; break
           done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
           merged=false; pr_arm=unknown; source_sha="$GITHUB_SHA"
