@@ -3000,6 +3000,8 @@ module ApplicationServiceTests =
           "`Program.fs` `decide` is private to the entry point; audited by reading — under `Json` the SAME `printfn (Snapshot.render …)` runs for all three verdicts and Red/NoVerdict only pick the exit code, so there is no verdict that swaps the document for prose (the eprint-per-verdict projection is `renderText`, which is the Text arm). Its two refusal arms, empty stdin and an unparseable snapshot, are `eprint` at a non-zero code"
           Options.DeliveryCmd,
           "`Program.fs` dispatches the private `DeliveryApplication.run`; audited by reading and the delivery command tests. Its JSON arm serializes exactly one next/no-verdict document, and empty or malformed snapshots are stderr failures at a non-zero code. The command is pure snapshot interpretation; live GitHub acquisition remains an application-boundary follow-on."
+          Options.CycleCmd,
+          "`Program.fs` dispatches `CycleLedgerApplication.run`; audited by cycle-ledger command smoke coverage. Its Json projection serializes exactly one ready/next document, while malformed documents and every fail-closed provider or ledger mismatch use `fail` on stderr at a non-zero code."
           Options.LanesView,
           "`Program.fs` `lanes` is private to the entry point; audited by reading — `| Json -> printfn` emits one `Snapshot.renderLanes` document, and the empty partition renders as that document, not prose"
           Options.Facts,
