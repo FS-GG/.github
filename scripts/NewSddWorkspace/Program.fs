@@ -361,6 +361,11 @@ type private ProjectAccessReceipt =
     | ProjectObserved of project: string * projectId: string * isPublic: bool
     | ProjectPending of project: string * reason: string
 
+type private SecurityReport =
+    { Repository: RepositoryPolicyReceipt option
+      Project: ProjectAccessReceipt
+      Outcome: Outcome }
+
 let private graphql (query: string) (variables: (string * string) list) =
     let args =
         [ yield "api"; yield "graphql"; yield "-f"; yield "query=" + query
@@ -446,23 +451,34 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
     match applyProjectVisibility owner title None with
     | ProjectPending _ as receipt -> receipt
     | ProjectObserved(project, id, _) ->
-        // ProjectV2 accepts actor ids, not names. Resolve each supplied user identity through the
-        // typed API; teams use the same explicit `team:` spelling as the command contract.
-        let resolve writer =
-            let query = "query($login:String!){user(login:$login){id}}"
-            let code, output = graphql query [ "login", writer ]
+        // ProjectV2 accepts actor ids, not names. Resolve explicit users and `team:<slug>`
+        // identities through the live typed schema; no UI scrape or guessed id enters a mutation.
+        let resolve (writer: string) =
+            let isTeam = writer.StartsWith("team:", StringComparison.OrdinalIgnoreCase)
+            let name = if isTeam then writer.Substring("team:".Length) else writer
+            let query = if isTeam then "query($owner:String!){organization(login:$owner){teams(first:100){nodes{id slug}}}}" else "query($login:String!){user(login:$login){id}}"
+            let variables = if isTeam then [ "owner", owner ] else [ "login", name ]
+            let code, output = graphql query variables
             if code <> 0 then None
             else
-                try Some(JsonNode.Parse(output).AsObject().["data"].AsObject().["user"].AsObject().["id"].GetValue<string>())
+                try
+                    let data = JsonNode.Parse(output).AsObject().["data"].AsObject()
+                    if isTeam then
+                        data.["organization"].AsObject().["teams"].AsObject().["nodes"].AsArray()
+                        |> Seq.tryFind (fun team -> team.AsObject().["slug"].GetValue<string>() = name)
+                        |> Option.map (fun team -> "teamId:" + team.AsObject().["id"].GetValue<string>())
+                    else Some("userId:" + data.["user"].AsObject().["id"].GetValue<string>())
                 with _ -> None
         let collaborators =
             desired
-            |> List.map (fun writer -> resolve writer |> Option.map (fun id -> sprintf "{userId:%s,role:WRITE}" id))
+            |> List.map (fun writer -> resolve writer |> Option.map (fun id ->
+                if id.StartsWith "teamId:" then sprintf "{teamId:%s,role:WRITE}" (id.Substring "teamId:".Length)
+                else sprintf "{userId:%s,role:WRITE}" (id.Substring "userId:".Length)))
         if collaborators |> List.exists Option.isNone then
             ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
         else
             let collaborators = collaborators |> List.choose (fun value -> value) |> String.concat ","
-            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2CollaboratorInput!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){projectV2{id}}}"
+            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators}}"
             let code, _ = graphql mutation [ "id", id; "collaborators", "[" + collaborators + "]" ]
             if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
             else
@@ -474,30 +490,31 @@ let private applyProjectWriters (owner: string) (title: string) (desired: string
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
 /// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
 /// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
-let private workspaceSecurity (opts: Options) : Outcome =
-    let repositoryMessage =
-        match opts.WorkspaceRepo with
-        | None -> "repository security pending — pass --repo owner/repository after the repository exists"
-        | Some repository ->
-            match secureRepository repository with
-            | RepositorySecured(repo, prior, actor) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
-            | RepositoryPending(repo, reason) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
-    let projectMessage =
+let private workspaceSecurity (opts: Options) : SecurityReport =
+    let repository = opts.WorkspaceRepo |> Option.map secureRepository
+    let project =
         match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
-        | ProjectObserved(project, _, _) ->
-            match applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters with
-            | ProjectObserved(_, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
-            | ProjectObserved(_, _, false) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
-            | ProjectPending(_, reason) -> sprintf "Project access pending for %s — %s" project reason
+        | ProjectObserved _ as visible when List.isEmpty opts.TrustedWriters -> visible
+        | ProjectObserved(project, _, _) -> applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters
+        | ProjectPending _ as pending -> pending
+    let repositoryMessage =
+        match repository with
+        | None -> "repository security pending — pass --repo owner/repository after the repository exists"
+        | Some(RepositorySecured(repo, prior, actor)) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
+        | Some(RepositoryPending(repo, reason)) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
+    let projectMessage =
+        match project with
+        | ProjectObserved(project, _, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
+        | ProjectObserved(project, _, false) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
         | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
-    Warned(repositoryMessage + "; " + projectMessage)
+    { Repository = repository; Project = project; Outcome = Warned(repositoryMessage + "; " + projectMessage) }
 
 /// Persist the security facts that could not be established. This lives beside the scaffold's
 /// provenance rather than in console prose so a later operator has one exact recovery target.
 /// The Project obligation is retained even after repository policy succeeds: GitHub's ordinary
 /// ProjectV2 read does not expose an effective/base access verdict, so visibility or
 /// `viewerCanUpdate` cannot safely clear it.
-let private recordSecurityObligations (opts: Options) (_outcome: Outcome) =
+let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
     let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
     try
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
@@ -513,15 +530,19 @@ let private recordSecurityObligations (opts: Options) (_outcome: Outcome) =
         repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
         repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
         repo.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure --repo %s" (opts.WorkspaceRepo |> Option.defaultValue "owner/repository"))
-        let repositoryVerified =
-            match opts.WorkspaceRepo with
-            | Some repository ->
-                match secureRepository repository with
-                | RepositorySecured _ -> true
-                | RepositoryPending _ -> false
-            | None -> false
-        repo.["state"] <- JsonValue.Create(if repositoryVerified then "verified" else "pending")
-        if not repositoryVerified then obligations.Add repo
+        match report.Repository with
+        | Some(RepositorySecured(repository, prior, actor)) ->
+            let receipt = JsonObject()
+            receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
+            receipt.["repository"] <- JsonValue.Create repository
+            receipt.["priorPolicy"] <- JsonValue.Create prior
+            receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+            receipt.["actor"] <- JsonValue.Create actor
+            receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
+            root.["verifiedSecurityReceipts"] <- JsonArray(receipt)
+        | _ ->
+            repo.["state"] <- JsonValue.Create "pending"
+            obligations.Add repo
         let project = JsonObject()
         project.["kind"] <- JsonValue.Create "project-access"
         project.["target"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
@@ -1774,8 +1795,9 @@ let private run (opts: Options) : int =
         // that must produce a durable pending security result rather than a false secured summary.
         if opts.Coordinate && not fatal then
             step 5 "repository security"
-            let outcome = workspaceSecurity opts
-            recordSecurityObligations opts outcome
+            let report = workspaceSecurity opts
+            let outcome = report.Outcome
+            recordSecurityObligations opts report
             match outcome with
             | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] repository issue policy verified"
             | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
@@ -1936,7 +1958,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
 /// Re-run just the repository policy after a freshly scaffolded repository has been created or
 /// an operator has received the required administration grant. This is the resumable half of the
 /// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
-let private clearRepositorySecurityObligation (target: string) (repository: string) =
+let private clearRepositorySecurityObligation (target: string) (repository: string) (prior: string) (actor: string) =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
     if File.Exists path then
         let root = JsonNode.Parse(File.ReadAllText path).AsObject()
@@ -1949,6 +1971,14 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
                 not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository))
             |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             root.["securityObligations"] <- kept
+            let receipt = JsonObject()
+            receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
+            receipt.["repository"] <- JsonValue.Create repository
+            receipt.["priorPolicy"] <- JsonValue.Create prior
+            receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+            receipt.["actor"] <- JsonValue.Create actor
+            receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
+            root.["verifiedSecurityReceipts"] <- JsonArray(receipt)
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
         | _ -> ()
 
@@ -1971,7 +2001,7 @@ let private clearProjectSecurityObligation (target: string) (project: string) =
 let private runSecure (target: string option) (repository: string) : int =
     match secureRepository repository with
     | RepositorySecured(repo, prior, actor) ->
-        target |> Option.iter (fun workspace -> clearRepositorySecurityObligation workspace repo)
+        target |> Option.iter (fun workspace -> clearRepositorySecurityObligation workspace repo prior actor)
         AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
         0
     | RepositoryPending(repo, reason) ->
