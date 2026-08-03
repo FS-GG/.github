@@ -140,7 +140,31 @@ printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > "$WORK/propagation-action.json"
 jq -e '.kind == "flip-registry"' "$WORK/propagation-action.json" >/dev/null
 registry_sha="$(sha256sum "$ROOT/registry/dependencies.yml" | awk '{print $1}')"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" > "$WORK/registry-receipt.json"
+registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/release-run.json")"
+printf '%s\n' 'not the canonical registry' > "$WORK/not-canonical.yml"
+not_canonical_sha="$(sha256sum "$WORK/not-canonical.yml" | awk '{print $1}')"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/not-canonical.yml" "$not_canonical_sha" "$registry_topology" > "$WORK/arbitrary-registry-receipt.json"
+cp "$WORK/release-run.json" "$WORK/before-arbitrary-registry.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/arbitrary-registry-receipt.json" > /dev/null
+arbitrary_registry_rc=$?
+set -e
+if [ "$arbitrary_registry_rc" -ne 1 ]; then
+  echo "expected arbitrary /tmp registry receipt to fail closed, got $arbitrary_registry_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-arbitrary-registry.json" "$WORK/release-run.json"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"stale","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_topology" > "$WORK/stale-registry-receipt.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/stale-registry-receipt.json" > /dev/null
+stale_registry_rc=$?
+set -e
+if [ "$stale_registry_rc" -ne 1 ]; then
+  echo "expected stale canonical digest to fail closed, got $stale_registry_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-arbitrary-registry.json" "$WORK/release-run.json"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" "$registry_topology" > "$WORK/registry-receipt.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > "$WORK/complete.json"
 jq -e '.kind == "complete"' "$WORK/complete.json" >/dev/null
 cp "$WORK/release-run.json" "$WORK/complete-before-restart.json"
@@ -243,7 +267,8 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topolo
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/downstream-propagation.json" > "$WORK/topology-registry-action.json"
 jq -e '.kind == "flip-registry"' "$WORK/topology-registry-action.json" >/dev/null
 topology_sha="$(sha256sum "$WORK/topology.yml" | awk '{print $1}')"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/topology.yml" "$topology_sha" > "$WORK/topology-registry.json"
+topology_fingerprint="$(jq -r '.registry.canonicalTopologySha256' "$WORK/topology-run.json")"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/topology.yml" "$topology_sha" "$topology_fingerprint" > "$WORK/topology-registry.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/topology-registry.json" > "$WORK/topology-complete.json"
 jq -e '.kind == "complete"' "$WORK/topology-complete.json" >/dev/null
 printf '%s\n' ' ' >> "$WORK/downstream-propagation.json"

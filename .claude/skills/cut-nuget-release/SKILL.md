@@ -44,7 +44,9 @@ Use the repository-owned F# scripts for repeatable evidence:
   `verify --run <run.json> --verification <verify.json>` to import package evidence. Use
   `import --run <run.json> --receipt <json>` for a successful, SHA-bound `consumer-embedding`,
   `propagation`, or `canonical-registry` receipt; these are the only transitions that can satisfy the
-  consumer pin, downstream propagation, and merged-registry predicates.
+  consumer pin, downstream propagation, and merged-registry predicates. A canonical-registry receipt
+  must preserve the path and dependency-topology fingerprint captured by `inspect`; it cannot redirect
+  a run to another local registry file.
   A `human-escalation` action for `org-only`, `public-only`, or `disagree` is terminal: inspect the
   immutable artifacts and record the human decision; do not retry publication from the coordinator.
 
