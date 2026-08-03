@@ -1,0 +1,200 @@
+schemaVersion: 1
+workId: 2136-generated-facts
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2136-generated-facts/spec.md
+sourceClarifications: work/2136-generated-facts/clarifications.md
+sourceChecklist: work/2136-generated-facts/checklist.md
+sourcePlan: work/2136-generated-facts/plan.md
+sourceTasks: work/2136-generated-facts/tasks.yml
+sourceAnalysis: readiness/2136-generated-facts/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2136-generated-facts/analysis.json
+    digest: 5586b3ce6e2694fe705fec1541c5ee202b170f5adb47db310c9d6af6b12339d7
+    schemaVersion: 1
+  - label: checklist
+    path: work/2136-generated-facts/checklist.md
+    digest: fdafd3e35fb40852767ecc8212f9705649645c32b98524951d1f6af1def10448
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2136-generated-facts/clarifications.md
+    digest: fc624056f528c53fa8c0c78970f6402a3b5b87ea72b2aa5fb4938b0a764e7f70
+    schemaVersion: 1
+  - label: plan
+    path: work/2136-generated-facts/plan.md
+    digest: 901a6956199c99e5002ed3b6d43fec2df3ac0b346d6c38cb97610897af904344
+    schemaVersion: 1
+  - label: spec
+    path: work/2136-generated-facts/spec.md
+    digest: 0cca3f4208d06f74133f96a1479e527839962d334882ca4ac24b5977fbdc4130
+    schemaVersion: 1
+  - label: tasks
+    path: work/2136-generated-facts/tasks.yml
+    digest: efcba0bf03272b3825d4af9e9f48628da92e01ca1010e724600ee1fc9cb72c15
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [work/2136-generated-facts/test-results/core-release.bom-free.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/core-release.bom-free.trx
+      digest: "sha256:2ec7b993f30498757a54318ba3da78162824cf357a69853c52232e49272375ae"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 575
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [work/2136-generated-facts/test-results/cli-release.bom-free.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/cli-release.bom-free.trx
+      digest: "sha256:1ce02d091ad5d9cd2c714fc6995e58f696ccd0ae8aab39f14051bc6728b81115"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 564
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [work/2136-generated-facts/test-results/github-release.bom-free.trx]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/github-release.bom-free.trx
+      digest: "sha256:58240bc9740e910d213a6a9d23f76aa3959b33540211f43c7e75ac41096dfda8"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 442
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV004]
+    artifacts: [work/2136-generated-facts/test-results/projection-junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/projection/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/projection-junit.xml
+      digest: "sha256:8edce26e802947791baa13ede1eb3093a51a8e85700768e97b8d1f1d4d79f263"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [work/2136-generated-facts/test-results/skill-quality-junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: tests/skill-quality/run.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/skill-quality-junit.xml
+      digest: "sha256:25784c48bd974e7dc11232e88561ef4c432788bd8a13149b8cca2554bccc79e5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV006]
+    artifacts: [work/2136-generated-facts/test-results/package-junit.xml]
+    sourceRefs:
+      - kind: verification
+        path: src/FS.GG.Kit/verify-package.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2136-generated-facts/test-results/package-junit.xml
+      digest: "sha256:96a811222153347d0cbfd2d607dbbe89f11b13865c11052bbb7b6b9d59858f55"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 2
+      failed: 0
+      skipped: 0
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

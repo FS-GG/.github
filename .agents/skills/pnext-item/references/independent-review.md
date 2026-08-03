@@ -1,5 +1,42 @@
 # Independent review and material filing
 
+<!-- BEGIN GENERATED: fsgg-protocol:review-policy -->
+*Generated review contract. The marker parser and receipt validator consume these exact values.*
+
+| fact | value |
+|---|---|
+| initial marker | `fsgg:independent-review:v1` |
+| confirmation marker | `fsgg:independent-review-confirmation:v1` |
+| host acceptance marker | `fsgg:review-accepted:v1` |
+| escalation marker | `fsgg:independent-review-escalation:v1` |
+| repair-phase marker | `fsgg:independent-review-repair-phase:v1` |
+| ordinary repair ceiling | 3 |
+| repair-phase ceiling | 10 |
+
+<!-- END GENERATED: fsgg-protocol:review-policy -->
+
+<!-- BEGIN GENERATED: fsgg-protocol:lifecycle-policy -->
+*Generated lifecycle boundary. These are machine-owned prerequisites; judgement about the work remains authored.*
+
+Required housekeeping: `host-identity`, `stale-claim`, `engine-currency`, `pending-writes`, `reconcile`, `triage`.
+
+Host acceptance fields: `accepted-head`, `initial-review`, `latest-confirmation`.
+
+Terminal transition evidence: `merge` → `post-merge-obligations` → `done-stamp`.
+
+<!-- END GENERATED: fsgg-protocol:lifecycle-policy -->
+
+<!-- BEGIN GENERATED: fsgg-protocol:ledger-policy -->
+*Generated ledger schema. The receipt id binds these fields; prose does not substitute for the ledger.*
+
+Schema: `fsgg.coord.planning-receipt/1`.
+
+Observation fields: `kind`, `observedAt`, `sourceSha`, `outcome`, `receiptId`.
+
+Receipt fields: `schema`, `observedAt`, `sourceSha`, `complete`, `consolidationApproved`, `observations`.
+
+<!-- END GENERATED: fsgg-protocol:ledger-policy -->
+
 Every item gets one independent critique cycle before merge. The implementer and critic are different
 agents. The critic receives the issue, acceptance criteria, declared `Paths:`, exact PR head SHA,
 complete diff, and test evidence; it does not receive the implementer's conclusions. The critic may

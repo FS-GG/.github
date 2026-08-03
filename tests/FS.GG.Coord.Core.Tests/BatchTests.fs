@@ -1048,21 +1048,22 @@ module BatchTests =
     let ``#2096 wave capacity is derived from the host-loop declaration`` () =
         let document =
             """# host loop
-<!-- fsgg:wave-model:v1 waves=3 implementer-slots-per-wave=4 review-slots=2 consolidation-threshold=3 -->
+<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->
 """
 
         let model = parseWaveModel document |> Result.defaultWith failwith
         let occupancy = waveOccupancy model [ ref 1; ref 2; ref 2 ]
 
-        Assert.Equal(3, model.Waves)
-        Assert.Equal(4, model.ImplementerSlotsPerWave)
+        Assert.Equal(Protocol.wavePolicy.Waves, model.Waves)
+        Assert.Equal(Protocol.wavePolicy.ImplementerSlotsPerWave, model.ImplementerSlotsPerWave)
         Assert.Equal(2, occupancy.ActiveItems)
-        Assert.Equal(12, occupancy.WaveCapacity)
-        Assert.Equal(10, occupancy.OpenSlots)
+        Assert.Equal(6, occupancy.WaveCapacity)
+        Assert.Equal(4, occupancy.OpenSlots)
 
     [<Theory>]
     [<InlineData("no declaration")>]
     [<InlineData("<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=0 review-slots=2 consolidation-threshold=3 -->")>]
+    [<InlineData("<!-- fsgg:wave-model:v1 waves=3 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->")>]
     [<InlineData("<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 --><!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->")>]
     let ``#2096 an absent malformed or duplicate wave model fails closed`` (document: string) =
         Assert.True(Result.isError (parseWaveModel document))

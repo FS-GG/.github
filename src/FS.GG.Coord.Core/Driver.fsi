@@ -16,7 +16,7 @@ module Driver =
 
     type ReviewChain =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
-          Rounds: int list; ChecksGreen: bool; HostAccepted: bool
+          Rounds: int list; RepairPhase: bool; ChecksGreen: bool; HostAccepted: bool
           RuntimeRouteEvidence: RuntimeRouteEvidence option }
 
     type ReviewComment = { Id: int64; Url: string; Body: string }

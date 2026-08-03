@@ -1,0 +1,96 @@
+schemaVersion: 1
+work:
+  id: 2136-generated-facts
+  title: "Generated Operational Process Facts"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2136-generated-facts/spec.md
+  sourceClarifications: work/2136-generated-facts/clarifications.md
+  sourceChecklist: work/2136-generated-facts/checklist.md
+  sourcePlan: work/2136-generated-facts/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2136-generated-facts/spec.md
+    digest: 0cca3f4208d06f74133f96a1479e527839962d334882ca4ac24b5977fbdc4130
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2136-generated-facts/clarifications.md
+    digest: fc624056f528c53fa8c0c78970f6402a3b5b87ea72b2aa5fb4938b0a764e7f70
+    schemaVersion: 1
+  - label: checklist
+    path: work/2136-generated-facts/checklist.md
+    digest: fdafd3e35fb40852767ecc8212f9705649645c32b98524951d1f6af1def10448
+    schemaVersion: 1
+  - label: plan
+    path: work/2136-generated-facts/plan.md
+    digest: 901a6956199c99e5002ed3b6d43fec2df3ac0b346d6c38cb97610897af904344
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV006]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2136-generated-facts."

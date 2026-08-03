@@ -16,15 +16,17 @@ feedback envelope, plus the shared
 control-plane provenance guidance in the `pnext-item` contract. Do not hand it a second item. It MAY, after its done stamp, drain its OWN follow-up
 queue sequentially — one claim at a time, never interleaved.
 
+<!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->
+*Generated operational fact: the parser and driver consume this policy; do not restate its numbers.*
+
 <!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->
 
-**Two concurrent waves, a fixed eight-slot cap.** Run two waves in parallel, not sequentially: each
-wave holds three implementer slots, six implementer slots total across both waves. Two additional
-subagent slots are reserved fleet-wide for independent critics at each wave's review boundary —
-RESERVED, not advisory. An implementer may never occupy a review slot, and filling all eight slots with
-implementers is a contract violation, not an efficiency gain. Dispatch does not wait on one wave's
-verification boundary before the other wave's implementers start; that overlap is the whole point of
-running two waves instead of one.
+**Two concurrent waves, a fixed 8-slot cap.** Each wave holds 3 implementer slots; 2 slots are reserved fleet-wide for independent critics. **Consolidation:** 3 or fewer active items consolidates before a fresh wave is started.
+
+<!-- END GENERATED: fsgg-protocol:wave-policy -->
+
+Critic reservation is **RESERVED, not advisory**; assigning it to an implementer is a contract
+violation, not an efficiency gain.
 
 `batch` reads the machine declaration above and emits `activeItems`, `waveCapacity`, and `openSlots`
 beside its scheduling answer. When schedulable work and open slots coexist it also emits `WAVE
@@ -37,10 +39,9 @@ For deterministic rollover and housekeeping ordering, consume the coordination d
 action/receipt validation when available; consolidation itself remains an explicit host judgement.
 
 **Consolidation.** Count the items being worked across both waves combined — claimed, in review, or
-newly dispatched; not yet-verified follow-ups. Three or fewer consolidates: fold every active item into
-one wave and immediately start a second wave from a fresh reconcile/triage, not a re-slice of the
-current plan. Four or more runs two full waves as designed. Re-check this count at every re-plan, not
-once at loop start.
+newly dispatched; not yet-verified follow-ups. Follow the generated threshold above: fold every active
+item into one wave and immediately start a second wave from a fresh reconcile/triage, not a re-slice of
+the current plan. Re-check this count at every re-plan, not once at loop start.
 
 **Rate limit under two waves.** Every worker still authenticates as the one account whose REST budget
 holds the claim lock — unbatchable, and its remaining budget is not queryable. Six implementers plus two

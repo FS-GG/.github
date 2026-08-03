@@ -1,0 +1,30 @@
+projection fixture
+PASS  well-formed projection passes
+PASS  prose Version cell may drift — it is no longer gated
+PASS  stale prerelease literal (0.4.0 vs 0.4.0-preview.1)
+PASS  stale prerelease literal (0.4.0 vs 0.4.0-preview.1) — and the old substring test was green here (non-vacuous)
+PASS  version literal in the wrong column does not count (9.9.9 in version, 0.4.0 in package-version)
+PASS  version literal in the wrong column does not count (9.9.9 in version, 0.4.0 in package-version) — and the old substring test was green here (non-vacuous)
+PASS  bare version 1 vs cell 1.2.0
+PASS  bare version 1 vs cell 1.2.0 — and the old substring test was green here (non-vacuous)
+PASS  quad registry 1.2.1 vs cell 1.2.1.1
+PASS  quad registry 1.2.1 vs cell 1.2.1.1 — and the old substring test was green here (non-vacuous)
+PASS  outright wrong version
+PASS  quad 1.2.1.1 vs truncated cell 1.2.1
+PASS  missing contract row
+PASS  missing coherence row
+PASS  coherent flag contradicts
+PASS  version column absent
+PASS  package-version column absent
+PASS  Coherent? column absent
+PASS  empty version cell reds
+PASS  unquoted version 1.10 (YAML-coerced to float 1.1) reds as not-a-string
+PASS  unquoted version 1.10 (YAML-coerced to float 1.1) reds as not-a-string — and the old substring test was green here (non-vacuous)
+PASS  contract missing a version literal reds
+PASS  contract missing a version literal reds — and the old substring test was green here (non-vacuous)
+PASS  version with a trailing period still matches
+PASS  version is not matched inside a longer 4-segment version
+PASS  escaped pipe in a cell does not shift columns
+PASS  checked-in registry projects cleanly
+projection fixture — 27 assertion(s): 27 passed, 0 failed
+projection fixture — OK

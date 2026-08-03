@@ -817,20 +817,39 @@ module Client =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement
+            let receiptFields = Protocol.ledgerPolicy.ReceiptFields
+            let observationFields = Protocol.ledgerPolicy.ObservationFields
+            let schemaField, observedAtField, sourceShaField, completeField, consolidationApprovedField, observationsField =
+                match receiptFields with
+                | [ schema; observedAt; sourceSha; complete; consolidationApproved; observations ] ->
+                    schema, observedAt, sourceSha, complete, consolidationApproved, observations
+                | _ -> failwith "the ledger receipt field policy is malformed"
+            let kindField, observationObservedAtField, observationSourceShaField, outcomeField, receiptIdField =
+                match observationFields with
+                | [ kind; observedAt; sourceSha; outcome; receiptId ] -> kind, observedAt, sourceSha, outcome, receiptId
+                | _ -> failwith "the ledger observation field policy is malformed"
+            let requireFields (fields: string list) (node: JsonElement) =
+                fields |> List.iter (fun name ->
+                    let mutable value = Unchecked.defaultof<JsonElement>
+                    if not (node.TryGetProperty(name, &value)) then failwith $"missing ledger field {name}")
+            requireFields receiptFields root
+            if root.GetProperty(schemaField).GetString() <> Protocol.ledgerPolicy.Schema then
+                failwith "the ledger receipt schema is unsupported"
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
             let receipt: Driver.PlanningReceipt =
-                { ObservedAt = root.GetProperty("observedAt").GetInt64()
-                  SourceSha = root.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
-                  Complete = bool "complete" root
-                  ConsolidationApproved = bool "consolidationApproved" root
+                { ObservedAt = root.GetProperty(observedAtField).GetInt64()
+                  SourceSha = root.GetProperty(sourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Complete = bool completeField root
+                  ConsolidationApproved = bool consolidationApprovedField root
                   Observations =
-                    root.GetProperty("observations").EnumerateArray()
+                    root.GetProperty(observationsField).EnumerateArray()
                     |> Seq.map (fun item ->
-                        ({ Kind = item.GetProperty("kind").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ObservedAt = item.GetProperty("observedAt").GetInt64()
-                           SourceSha = item.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           Outcome = item.GetProperty("outcome").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ReceiptId = item.GetProperty("receiptId").GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
+                        requireFields observationFields item
+                        ({ Kind = item.GetProperty(kindField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ObservedAt = item.GetProperty(observationObservedAtField).GetInt64()
+                           SourceSha = item.GetProperty(observationSourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           Outcome = item.GetProperty(outcomeField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ReceiptId = item.GetProperty(receiptIdField).GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
                     |> Seq.toList }
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"

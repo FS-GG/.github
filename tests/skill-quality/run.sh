@@ -172,14 +172,14 @@ PY
 }
 
 seed
-mutate_hostloop_phrase drive-board "Three or fewer consolidates" "Two or fewer consolidates"
-expect_rejection "drive-board cannot vary the two-wave consolidation threshold" \
-  "drive-board: host-loop lost two-wave contract statement 'Three or fewer consolidates'"
+mutate_hostloop_phrase drive-board "consolidation-threshold=3" "consolidation-threshold=2"
+expect_rejection "drive-board cannot vary the generated consolidation threshold" \
+  "generated process contract is stale"
 
 seed
-mutate_hostloop_phrase work-board "filling all eight slots with" "filling every implementer slot with"
+mutate_hostloop_phrase work-board "RESERVED, not advisory" "reserved when convenient"
 expect_rejection "work-board's review slots stay reserved rather than fillable by implementers" \
-  "work-board: host-loop lost two-wave contract statement 'filling all eight slots with'"
+  "work-board: host-loop lost two-wave contract statement 'RESERVED, not advisory'"
 
 seed
 mutate_hostloop_phrase work-board "fleet-wide stop for BOTH waves" "a stop for the reporting wave only"
@@ -187,7 +187,7 @@ expect_rejection "work-board cannot scope an EX_RATE stop to a single wave" \
   "work-board: host-loop lost two-wave contract statement 'fleet-wide stop for BOTH waves'"
 
 seed
-mutate_hostloop_phrase work-board "Three or fewer consolidates" "Two or fewer consolidates"
+mutate_hostloop_phrase work-board "consolidation-threshold=3" "consolidation-threshold=2"
 expect_rejection "the two host-loop copies cannot state the wave model differently" \
   "two-wave contract: drive-board and work-board host-loop copies state the wave model differently"
 
@@ -239,6 +239,122 @@ else
   sed 's/^/    | /' "$WORK/out" >&2
   fail=$((fail+1))
 fi
+
+# `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
+# today. Each registry mutation below must make that generated region stale without touching the skill.
+expect_projection_stale() {
+  local label="$1" evidence="$2"
+  local rc=0
+  bash "$WORK/tree/scripts/generate-projections" --check >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted generated diff containing: $evidence; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+repo_anchor = '  net:        { name: FS.GG.Net,'
+repo_start = text.find(repo_anchor)
+if repo_start < 0:
+    raise SystemExit("fixture producer roster anchor missing")
+repo_end = text.find("\n", repo_start)
+text = text[:repo_end + 1] + '  fixture-producer: { name: FS.GG.Fixture, role: "fixture release producer" }\n' + text[repo_end + 1:]
+addition = '''  - id: fixture-release-tool
+    version: "1.0.0"
+    package-version: "1.0.0"
+    owner: fixture-producer
+    surface: "fixture package-bearing producer"
+    consumers: []
+'''
+needle = "  - id: new-sdd-workspace\n"
+if needle not in text:
+    raise SystemExit("fixture insertion anchor missing")
+path.write_text(text.replace(needle, addition + needle, 1))
+PY
+expect_projection_stale "adding a package producer changes inventory membership and producer count" \
+  "fixture-producer:1.0.0"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: fs-gg-net\n")
+if start < 0:
+    raise SystemExit("fixture package producer missing")
+end = text.find("\n  - id:", start + 1)
+if end < 0:
+    raise SystemExit("fixture package producer has no bounded successor")
+path.write_text(text[:start] + text[end + 1:])
+PY
+expect_projection_stale "removing a package producer changes inventory membership" "fs-gg-net"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: game-scene-adapter\n")
+if start < 0:
+    raise SystemExit("fixture coherent-set producer missing")
+package = text.find('    package-version: "0.13.0"', start)
+if package < 0:
+    raise SystemExit("fixture coherent-set package version missing")
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.13.0"', '    package-version: "0.13.1"', 1))
+PY
+expect_projection_stale "splitting one producer's package versions splits its coherent set" "game:0.13.1"
+
+seed
+python3 - "$WORK/tree/registry/dependencies.yml" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("  - id: fs-gg-audio\n")
+if start < 0:
+    raise SystemExit("fixture audio producer missing")
+package = text.find('    package-version: "0.5.0"', start)
+if package < 0:
+    raise SystemExit("fixture audio package version missing")
+path.write_text(text[:package] + text[package:].replace('    package-version: "0.5.0"', '    package-version: "0.5.1"', 1))
+PY
+expect_projection_stale "changing a published package version changes its real release grouping" "audio:0.5.1"
+
+seed
+bash "$WORK/tree/scripts/generate-projections"
+if grep -Fq -- 'audio:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md" \
+  && grep -Fq -- 'net:0.5.0' "$WORK/tree/.claude/skills/publishing-and-deployment/SKILL.md"; then
+  echo "PASS  same-version Audio and Net remain independent coherent sets"
+  pass=$((pass+1))
+else
+  echo "FAIL  same-version Audio and Net collapsed into one coherent set" >&2
+  fail=$((fail+1))
+fi
+
+# A machine declaration outside its managed region is a second source even when its value happens to
+# agree. The semantic gate must reject that duplicate before a later value change splits the skills.
+seed
+for runtime in .claude .agents; do
+  printf '\n<!-- fsgg:wave-model:v1 waves=2 implementer-slots-per-wave=3 review-slots=2 consolidation-threshold=3 -->\n' \
+    >>"$WORK/tree/$runtime/skills/drive-board/references/host-loop.md"
+done
+expect_rejection "hand-authored duplicate wave literals are rejected" \
+  "drive-board: hand-authored duplicate of generated wave policy"
 
 if [ "$fail" -ne 0 ]; then
   echo "skill-quality fixture: $fail failure(s), $pass pass(es)" >&2

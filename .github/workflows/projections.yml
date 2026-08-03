@@ -117,7 +117,10 @@ jobs:
           # 37 → 27: ADR-0067 §5 (#1636) retires `.codex/skills` — it is Codex's OTHER native root, so
           #          those ten emissions were a second copy nothing read. The ten projections remain;
           #          only the duplicate destination goes.
-          expected=27
+          # 27 → 39: #2136 adds wave, review, lifecycle, ledger, and registry-derived release facts to
+          #          the two live skill roots (six new facts × two roots). The hard count keeps that
+          #          declared projection expansion non-vacuous.
+          expected=39
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

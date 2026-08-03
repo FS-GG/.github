@@ -16,20 +16,24 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 
 ## What ships, and where from
 
-| Component | Artifact(s) | Kind |
-|---|---|---|
-| **SDD** | `FS.GG.SDD.Cli` (`fsgg-sdd` global tool), `FS.GG.Contracts` | tool + contract package |
-| **Rendering** | 17 `FS.GG.UI.*` packages + `FS.GG.UI.Template` (`fs-gg-ui` template) | package coherent set + template |
-| **Governance** | `FS.GG.Governance.Cli` (`fsgg-governance` global tool), `FS.GG.Governance.ReferenceGateSet` | tool + content-only package |
-| **Templates** | `FS.GG.Templates` (`dotnet new` template package) | template |
-| **Game** | `FS.GG.Game.Core`, `FS.GG.Game.Render` | package coherent set |
-| **Audio** | `FS.GG.Audio.{Core,Host,Engine,Elmish}` | package coherent set |
-| **`.github`** | `FS.GG.Coord.Cli` (the ADR-0034 engine), `FS.GG.NewSddWorkspace` (the ADR-0016 scaffolder) | org-level tools |
+<!-- BEGIN GENERATED: fsgg-release-inventory -->
+*Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*
 
-> **`.github` IS a producer** (ADR-0039 §5), and both of its packages are absent from
-> `registry/dependencies.yml` — the org's package inventory is off by two. It owns
-> `release-coord-engine.yml` and `release-new-sdd-workspace.yml`. Do not read the sentence
-> below as excluding it.
+Registry release inventory: 9 package-bearing contracts across 7 producers; 8 coherent release sets.
+
+| owner | contract | source version | published version | coherent set | surface |
+|---|---|---|---|---|---|
+| `sdd` | `fsgg-contracts` | `7.5.2` | `7.5.2` | `sdd:7.5.2` | FS.GG.Contracts package — Fsgg.Schemas (typed .fsgg schema records + version constants for providers/project/sdd/agents/governance/policy/capabilities/tooling/scaffold-provenance/ governance-handoff) / Fsgg.Provider (extended ProviderDescriptor + optional Build/Test/Run/Verify commands + canonical NameParameter default "name") / Fsgg.Registry (dependencies.yml types + validator; 1.1.0 adds the typed registry validator over the real dependencies.yml, SDD#26 / feature 042 — additive; 2.1.0 adds the SKILL-REGISTRY surface — `SkillRegistryEntry`, `SkillRegistryDocument`, `MirrorDeclaration`, `validateSkillRegistry`, and the `MalformedField` case on the public DU `RegistryRule` — +78 lines of Registry.fsi, additive, FS.GG.SDD#426. That surface SHIPPED IN THE 2.0.1 PATCH and 2.1.0 is the corrective relabel; see the `version` comment above) / Fsgg.SkillMirror (1.4.0, ADR-0014 P1 / SDD#61: the pure BCL-only materialize-and-verify library — `mirror`/`verify` over the single `agentSkillRoots` constant, the one skill-fan-out code path for scaffold/refresh/doctor/upgrade) / Fsgg.ContractVersion (= 7.4.0). As of 7.4.0 the `.nupkg` also packs `api-surface/*.fsi` — six files, one per public module — so the signature surface described here is readable from the PACKAGE and not only from SDD's source tree (FS.GG.Rendering#782's producer half; FS.GG.Rendering#1101 pins that capability as a floor).  |
+| `governance` | `governance-reference-gate-set` | `1.5.0` | `1.5.0` | `governance:1.5.0` | FS.GG.Governance.ReferenceGateSet content package — contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to samples/sdd-reference-gate-set/.fsgg/; version-derivation rule per ADR-0055.  |
+| `rendering` | `fs-gg-ui-template` | `0.21.1` | `0.25.1` | `rendering:0.25.1` | dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages |
+| `game` | `game-sim-core` | `0.13.0` | `0.13.0` | `game:0.13.0` | FS.GG.Game.Core package — BCL-only deterministic simulation primitives plus the packaged fs-gg-game-core-fable-lockstep-v1 bounded Fable source/profile and canonical oracle |
+| `game` | `game-scene-adapter` | `0.13.0` | `0.13.0` | `game:0.13.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
+| `audio` | `fs-gg-audio` | `0.5.0` | `0.5.0` | `audio:0.5.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge |
+| `net` | `fs-gg-net` | `0.5.0` | `0.5.0` | `net:0.5.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
+| `github` | `coord-engine` | `0.18.0` | `0.18.0` | `github:0.18.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `new-sdd-workspace` | `0.8.0` | `0.8.0` | `github:0.8.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
+
+<!-- END GENERATED: fsgg-release-inventory -->
 
 - **Feeds — there are two, and they have different jobs (ADR-0012, ADR-0039).**
   - **Publish path:** the org **GitHub Packages** feed, `https://nuget.pkg.github.com/FS-GG/index.json`.

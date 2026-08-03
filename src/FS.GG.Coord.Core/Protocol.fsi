@@ -191,6 +191,32 @@ module Protocol =
           /// to tell a preserve from a set from a bare "no column was set" without re-reading the board.
           Stdout: string }
 
+    type WavePolicyDoc =
+        { Waves: int
+          ImplementerSlotsPerWave: int
+          ReviewSlots: int
+          ConsolidationThreshold: int }
+
+    type ReviewPolicyDoc =
+        { InitialMarker: string
+          ConfirmationMarker: string
+          AcceptanceMarker: string
+          EscalationMarker: string
+          RepairPhaseMarker: string
+          MaxAutomatedRepairRounds: int
+          RepairPhaseMaxRounds: int }
+
+    type LifecyclePolicyDoc =
+        { RequiredHousekeeping: string list
+          TerminalActions: string list
+          HostAcceptanceFields: string list }
+
+    type LedgerPolicyDoc =
+        { Schema: string
+          ObservationFields: string list
+          ReceiptFields: string list
+          RequiredObservations: (string * string) list }
+
     /// `take`'s exit contract (#585) — the one command in the worker loop, so the code that tells "you
     /// hold it" from the ways it can hand you nothing is the difference between a fan-out and a
     /// double-claim.
@@ -233,6 +259,10 @@ module Protocol =
     /// then the `unclaimColumn` arms. `ProtocolTests` pins what the rows SAY — that the `--status` row
     /// leads, and that a preserve writes nothing.
     val releaseColumns: ReleaseColumnDoc list
+    val wavePolicy: WavePolicyDoc
+    val reviewPolicy: ReviewPolicyDoc
+    val lifecyclePolicy: LifecyclePolicyDoc
+    val ledgerPolicy: LedgerPolicyDoc
 
     val touchSetGrammar: Rule
     val touchSetDeclaration: Rule
@@ -289,6 +319,10 @@ module Protocol =
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
         | ReleaseColumns of key: string * ReleaseColumnDoc list
+        | WavePolicy of key: string * WavePolicyDoc
+        | ReviewPolicy of key: string * ReviewPolicyDoc
+        | LifecyclePolicy of key: string * LifecyclePolicyDoc
+        | LedgerPolicy of key: string * LedgerPolicyDoc
         /// The snapshot document's SHAPE — a schema string and its top-level keys. The one case carrying
         /// a scalar beside its list: the shape IS schema-plus-keys, and folding the schema in as a
         /// one-member `keys` entry would misdescribe it to every reader of the emitted JSON.

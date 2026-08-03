@@ -66,6 +66,18 @@ TARGETS=(
   "reconcile-rules:.agents/skills/check-board/references/mechanical-reconciliation.md"
   "driver-rules:.claude/skills/pnext-item/references/command-contracts.md"
   "driver-rules:.agents/skills/pnext-item/references/command-contracts.md"
+  "wave-policy:.claude/skills/drive-board/references/host-loop.md"
+  "wave-policy:.agents/skills/drive-board/references/host-loop.md"
+  "wave-policy:.claude/skills/work-board/references/host-loop.md"
+  "wave-policy:.agents/skills/work-board/references/host-loop.md"
+  "review-policy:.claude/skills/pnext-item/references/independent-review.md"
+  "review-policy:.agents/skills/pnext-item/references/independent-review.md"
+  "lifecycle-policy:.claude/skills/pnext-item/references/independent-review.md"
+  "lifecycle-policy:.agents/skills/pnext-item/references/independent-review.md"
+  "ledger-policy:.claude/skills/pnext-item/references/independent-review.md"
+  "ledger-policy:.agents/skills/pnext-item/references/independent-review.md"
+  "release-inventory:.claude/skills/publishing-and-deployment/SKILL.md"
+  "release-inventory:.agents/skills/publishing-and-deployment/SKILL.md"
   "blocker-states:.claude/skills/check-board/references/mechanical-reconciliation.md"
   "blocker-states:.agents/skills/check-board/references/mechanical-reconciliation.md"
   "board-statuses:.claude/skills/cross-repo-coordination/references/mailbox-and-board.md"
@@ -97,6 +109,7 @@ marker() { # kind, BEGIN|END
     skill-registry-counts) echo "<!-- $2 GENERATED: fsgg-skill-registry-counts -->" ;;
     component-count)       echo "<!-- $2 GENERATED: fsgg-component-count -->" ;;
     component-inventory)   echo "<!-- $2 GENERATED: fsgg-component-inventory -->" ;;
+    release-inventory)     echo "<!-- $2 GENERATED: fsgg-release-inventory -->" ;;
     *)                     echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
   esac
 }
@@ -112,6 +125,7 @@ source_of() { # kind
     skill-registry-counts) echo "registry/skills.yml" ;;
     component-count)       echo "registry/repos.yml" ;;
     component-inventory)   echo "registry/repos.yml + registry/dependencies.yml" ;;
+    release-inventory)     echo "registry/dependencies.yml" ;;
     *)                     echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
   esac
 }
@@ -403,6 +417,48 @@ render_driver_rules() {
   echo "each one, is in [intra-repo-parallel-work](../../intra-repo-parallel-work/SKILL.md).*"
   echo ""
   jq -r '.driverRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
+}
+
+render_wave_policy() {
+  echo "*Generated operational fact: the parser and driver consume this policy; do not restate its numbers.*"
+  echo ""
+  jq -r '"<!-- fsgg:wave-model:v1 waves=\(.wavePolicy.waves) implementer-slots-per-wave=\(.wavePolicy.implementerSlotsPerWave) review-slots=\(.wavePolicy.reviewSlots) consolidation-threshold=\(.wavePolicy.consolidationThreshold) -->\n\n**Two concurrent waves, a fixed \((.wavePolicy.waves * .wavePolicy.implementerSlotsPerWave) + .wavePolicy.reviewSlots)-slot cap.** Each wave holds \(.wavePolicy.implementerSlotsPerWave) implementer slots; \(.wavePolicy.reviewSlots) slots are reserved fleet-wide for independent critics. **Consolidation:** \(.wavePolicy.consolidationThreshold) or fewer active items consolidates before a fresh wave is started."' "$FACTS"
+  echo ""
+}
+
+render_review_policy() {
+  echo "*Generated review contract. The marker parser and receipt validator consume these exact values.*"
+  echo ""
+  jq -r '"| fact | value |\n|---|---|\n| initial marker | `fsgg:\(.reviewPolicy.initialMarker):v1` |\n| confirmation marker | `fsgg:\(.reviewPolicy.confirmationMarker):v1` |\n| host acceptance marker | `fsgg:\(.reviewPolicy.acceptanceMarker):v1` |\n| escalation marker | `fsgg:\(.reviewPolicy.escalationMarker):v1` |\n| repair-phase marker | `fsgg:\(.reviewPolicy.repairPhaseMarker):v1` |\n| ordinary repair ceiling | \(.reviewPolicy.maxAutomatedRepairRounds) |\n| repair-phase ceiling | \(.reviewPolicy.repairPhaseMaxRounds) |"' "$FACTS"
+  echo ""
+}
+
+render_lifecycle_policy() {
+  echo "*Generated lifecycle boundary. These are machine-owned prerequisites; judgement about the work remains authored.*"
+  echo ""
+  jq -r '"Required housekeeping: " + (.lifecyclePolicy.requiredHousekeeping | map("`" + . + "`") | join(", ")) + ".\n\nHost acceptance fields: " + (.lifecyclePolicy.hostAcceptanceFields | map("`" + . + "`") | join(", ")) + ".\n\nTerminal transition evidence: " + (.lifecyclePolicy.terminalActions | map("`" + . + "`") | join(" → ")) + "."' "$FACTS"
+  echo ""
+}
+
+render_ledger_policy() {
+  echo "*Generated ledger schema. The receipt id binds these fields; prose does not substitute for the ledger.*"
+  echo ""
+  jq -r '"Schema: `\(.ledgerPolicy.schema)`.\n\nObservation fields: " + (.ledgerPolicy.observationFields | map("`" + . + "`") | join(", ")) + ".\n\nReceipt fields: " + (.ledgerPolicy.receiptFields | map("`" + . + "`") | join(", ")) + "."' "$FACTS"
+  echo ""
+}
+
+render_release_inventory() {
+  echo '*Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*'
+  echo ""
+  jq -r '([.contracts[] | select(has("package-version"))] | "Registry release inventory: \(length) package-bearing contracts across \(map(.owner) | unique | length) producers; \(map(.owner + ":" + .["package-version"]) | unique | length) coherent release sets.")' "$REG"
+  echo ""
+  echo "| owner | contract | source version | published version | coherent set | surface |"
+  echo "|---|---|---|---|---|---|"
+  jq -r '
+    .contracts[]
+    | select(has("package-version"))
+    | "| `\(.owner)` | `\(.id)` | `\(.version)` | `\(.["package-version"])` | `\(.owner + ":" + .["package-version"])` | \(.surface | gsub("\\|"; "\\\\|") | gsub("\\n"; " ")) |"' "$REG"
+  echo ""
 }
 
 # `blocker-states` — the blocker WIRE vocabulary (#889), for the skill that reads it with `jq`.

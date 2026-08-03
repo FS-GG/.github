@@ -14,7 +14,7 @@ module Driver =
 
     type ReviewChain =
         { MarkerValid: bool; CriticIdentity: string option; HeadSha: string option
-          Rounds: int list; ChecksGreen: bool; HostAccepted: bool
+          Rounds: int list; RepairPhase: bool; ChecksGreen: bool; HostAccepted: bool
           RuntimeRouteEvidence: RuntimeRouteEvidence option }
 
     type ReviewComment = { Id: int64; Url: string; Body: string }
@@ -71,23 +71,34 @@ module Driver =
             | Ok value -> Error $"unknown route-applicability '%s{value}'"
             | Error _ -> Error "a passing review marker requires one route-applicability field"
         let ordered = comments |> List.sortBy _.Id
-        let initial = ordered |> List.filter (fun c -> marker "independent-review" c.Body)
-        let confirmations = ordered |> List.filter (fun c -> marker "independent-review-confirmation" c.Body)
-        let acceptances = ordered |> List.filter (fun c -> marker "review-accepted" c.Body)
+        let initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
+        let confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
+        let escalations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.EscalationMarker c.Body)
+        let repairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
+        let acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body)
         let errors = ResizeArray<string>()
         for comment in ordered do
-            for name in [ "independent-review"; "independent-review-confirmation"; "review-accepted" ] do
+            for name in [ Protocol.reviewPolicy.InitialMarker; Protocol.reviewPolicy.ConfirmationMarker; Protocol.reviewPolicy.AcceptanceMarker; Protocol.reviewPolicy.EscalationMarker; Protocol.reviewPolicy.RepairPhaseMarker ] do
                 if malformedMarker name comment.Body then
                     errors.Add $"%s{name} marker must be the single canonical leading standalone marker"
-        if List.length confirmations > 3 then errors.Add "review confirmation round ceiling exceeded"
+        // The marker designates the one escalated phase; it is not a confirmation round itself.  A
+        // duplicate durable designation still has one boolean meaning and must not silently spend the
+        // phase's confirmation budget.
+        let repairPhase = not (List.isEmpty repairPhases)
+        let confirmationCeiling =
+            if repairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
+            else Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        if List.length confirmations > confirmationCeiling then errors.Add "review confirmation round ceiling exceeded"
+        if not (List.isEmpty escalations) && List.isEmpty repairPhases then errors.Add "review escalation requires a repair-phase marker"
         let requireOne what values =
             match values with
             | [ value ] -> Some value
             | _ -> errors.Add $"exactly one %s{what} marker is required"; None
-        match requireOne "independent-review" initial, requireOne "review-accepted" acceptances with
+        let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
+        match requireOne Protocol.reviewPolicy.InitialMarker initial, requireOne Protocol.reviewPolicy.AcceptanceMarker acceptances with
         | Some first, Some accepted ->
             match field "critic" first.Body, field "reviewed-head" first.Body, field "verdict" first.Body,
-                  field "accepted-head" accepted.Body, field "initial-review" accepted.Body, field "latest-confirmation" accepted.Body with
+                  field hostFields[0] accepted.Body, field hostFields[1] accepted.Body, field hostFields[2] accepted.Body with
             | Ok critic, Ok initialHead, Ok initialVerdict, Ok acceptedHead, Ok acceptedInitialUrl, Ok acceptedLatestUrl ->
                 if System.String.IsNullOrWhiteSpace first.Url then errors.Add "the initial review comment URL is missing"
                 if initialVerdict <> "pass" && initialVerdict <> "changes-required" then
@@ -134,7 +145,7 @@ module Driver =
                 if valid && errors.Count = 0 then
                     let rounds = if List.isEmpty confirmations then [ 1 ] else [ 1 .. List.length confirmations ]
                     Ok { MarkerValid = true; CriticIdentity = Some critic; HeadSha = Some previousHead
-                         Rounds = rounds; ChecksGreen = false; HostAccepted = true
+                         Rounds = rounds; RepairPhase = repairPhase; ChecksGreen = false; HostAccepted = true
                          RuntimeRouteEvidence = latestRouteEvidence }
                 else Error(List.ofSeq errors)
             | _ -> Error [ "review markers are malformed" ]
@@ -161,12 +172,7 @@ module Driver =
         |> fun value -> value.ToLowerInvariant()
 
     let planningReceiptFresh now maxAgeSeconds sourceSha receipt =
-        let expected =
-            [ "reconcile-dry-run", "clean"
-              "reconcile-apply", "applied-or-not-needed"
-              "reconcile-fresh", "clean"
-              "triage", "fresh"
-              "engine-currency", "current-scoped" ]
+        let expected = Protocol.ledgerPolicy.RequiredObservations
         let observationValid (kind, outcome) =
             receipt.Observations
             |> List.filter (fun observation -> observation.Kind = kind)
@@ -203,7 +209,10 @@ module Driver =
           if not chain.HostAccepted then "host acceptance is missing" ]
 
     let receiptFresh now maxAgeSeconds (receipt: Receipt) =
-        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (validateReviewChain 3 >> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
+        let confirmationCeiling chain =
+            if chain.RepairPhase then Protocol.reviewPolicy.RepairPhaseMaxRounds
+            else Protocol.reviewPolicy.MaxAutomatedRepairRounds
+        receipt.Complete && not (System.String.IsNullOrWhiteSpace receipt.SourceSha) && (receipt.Review |> Option.exists (fun chain -> validateReviewChain (confirmationCeiling chain) chain |> List.isEmpty)) && now >= receipt.ObservedAt && now - receipt.ObservedAt <= maxAgeSeconds
 
     let nextAction model activeItems consolidationApproved housekeeping workerReturns =
         if not housekeeping.HasHostIdentity then RequestHostIdentity
