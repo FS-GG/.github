@@ -36,6 +36,7 @@ module CycleLedgerApplication =
             |> Seq.map (fun unit -> { Id = text "id" unit; Dependencies = strings "dependencies" unit; Completed = bool "completed" unit; Evidence = strings "evidence" unit })
             |> List.ofSeq }
     let private cycle node = { Id = text "id" node; UnitId = text "unitId" node; Executor = text "executor" node; Repository = text "repository" node; BaseCommit = text "baseCommit" node }
+    let private updateReceipt node = { CycleId = text "cycleId" node; EvidenceDigest = text "evidenceDigest" node }
     let private receipt node =
         let journey =
             match (property "playerJourney" node).ValueKind with
@@ -78,7 +79,7 @@ module CycleLedgerApplication =
                 | Error errors -> fail (String.concat "; " errors)
             | "complete" ->
                 let accepted = (property "acceptedCycles" root).EnumerateArray() |> Seq.map cycle |> List.ofSeq
-                let guarded = (property "guardedUpdates" root).EnumerateArray() |> Seq.map cycle |> List.ofSeq
+                let guarded = (property "guardedUpdates" root).EnumerateArray() |> Seq.map updateReceipt |> List.ofSeq
                 match complete model accepted guarded (strings "rollupCycleIds" root) with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)

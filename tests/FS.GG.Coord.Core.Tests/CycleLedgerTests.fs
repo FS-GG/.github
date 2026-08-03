@@ -33,7 +33,7 @@ module CycleLedgerTests =
     let ``completion rejects a missing roll-up cycle`` () =
         let doneLedger = { ledger with Units = ledger.Units |> List.map (fun item -> { item with Completed = true; Evidence = [ "evidence" ] }) }
         let cycles = [ { Id = "one"; UnitId = "first"; Executor = "w"; Repository = "r"; BaseCommit = "b" }; { Id = "two"; UnitId = "second"; Executor = "w"; Repository = "r"; BaseCommit = "b" } ]
-        Assert.True(complete doneLedger cycles cycles [ "one" ] |> Result.isError)
+        Assert.True(complete doneLedger cycles [] [ "one" ] |> Result.isError)
 
     [<Fact>]
     let ``parallel ready units require explicit operator scheduling`` () =
@@ -53,4 +53,4 @@ module CycleLedgerTests =
         let cyclic = { SourceRevision = "source"; Units = [ unit "a" [ "b" ] false; unit "b" [ "a" ] false ] }
         Assert.True(inspect cyclic |> Result.isError)
         let accepted = [ { Id = "a"; UnitId = "a"; Executor = "w"; Repository = "r"; BaseCommit = "source" } ]
-        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted accepted [ "a" ] |> Result.isError)
+        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted [] [ "a" ] |> Result.isError)

@@ -16,6 +16,7 @@ module CycleLedger =
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option; EvidencePaths: string list; Dispositions: string list }
+    type UpdateReceipt = { CycleId: string; EvidenceDigest: string }
     type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Update of Cycle | Escalate of Cycle | Complete
 
     let private required name value =
@@ -68,7 +69,10 @@ module CycleLedger =
                 match selectedUnit |> Option.bind (fun id -> ready |> List.tryFind (fun unit -> unit.Id = id)) with
                 | Some unit when parallelAuthorized && disjointTouchSets ->
                     let id = cycleId unit.Id executor repository baseCommit
-                    Ok(Register { Id = id; UnitId = unit.Id; Executor = executor; Repository = repository; BaseCommit = baseCommit })
+                    match live |> List.filter (fun cycle -> cycle.UnitId = unit.Id) with
+                    | [] -> Ok(Register { Id = id; UnitId = unit.Id; Executor = executor; Repository = repository; BaseCommit = baseCommit })
+                    | [ cycle ] when cycle.Id = id -> Ok(Resume cycle)
+                    | _ -> Error [ $"unit %s{unit.Id} has an incompatible live cycle" ]
                 | _ -> Error [ "multiple dependency-ready units require selected unit, explicit operator authorization, and disjoint touch-sets" ]
 
     let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead expectedProvider expectedSchema expectedGenerator receipt =
@@ -121,7 +125,7 @@ module CycleLedger =
               if List.isEmpty evidence.Dispositions || evidence.Dispositions |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires checkpoint and finding dispositions" ]
         if List.isEmpty errors then Ok(Update cycle) else Error errors
 
-    let complete ledger accepted guardedUpdates rollupCycleIds =
+    let complete ledger accepted (guardedUpdates: UpdateReceipt list) rollupCycleIds =
         match inspect ledger with
         | Error errors -> Error errors
         | Ok _ ->
@@ -136,10 +140,12 @@ module CycleLedger =
                     cycle.BaseCommit <> ledger.SourceRevision
                     || cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit)
             let acceptedIds = accepted |> List.map _.Id |> Set.ofList
-            let guardedIds = guardedUpdates |> List.map _.Id |> Set.ofList
+            let guardedIds = guardedUpdates |> List.map _.CycleId |> Set.ofList
+            let malformedUpdates = guardedUpdates |> List.exists (fun receipt -> not (Regex.IsMatch(receipt.EvidenceDigest, "^sha256:[0-9a-f]{64}$", RegexOptions.CultureInvariant)))
             if not (List.isEmpty unchecked) then Error [ "required units are not checked with evidence: " + String.concat ", " unchecked ]
             elif duplicateAccepted then Error [ "accepted cycles must cover each unit exactly once" ]
             elif not (List.isEmpty invalidCycles) then Error [ "accepted cycles are not source-bound registered cycle identities" ]
+            elif malformedUpdates then Error [ "guarded update receipts require exact evidence digests" ]
             elif acceptedIds <> guardedIds then Error [ "final roll-up requires one guarded update for every accepted cycle" ]
             elif not (List.isEmpty missing) then Error [ "required units are missing accepted cycles: " + String.concat ", " missing ]
             elif not (List.isEmpty missingRollup) then Error [ "accepted cycles are missing from roll-up: " + String.concat ", " missingRollup ]
