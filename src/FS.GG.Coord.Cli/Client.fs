@@ -817,6 +817,13 @@ module Client =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement
+            let receiptFields = Protocol.ledgerPolicy.ReceiptFields
+            let observationFields = Protocol.ledgerPolicy.ObservationFields
+            let requireFields (fields: string list) (node: JsonElement) =
+                fields |> List.iter (fun name ->
+                    let mutable value = Unchecked.defaultof<JsonElement>
+                    if not (node.TryGetProperty(name, &value)) then failwith $"missing ledger field {name}")
+            requireFields receiptFields root
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
             let receipt: Driver.PlanningReceipt =
                 { ObservedAt = root.GetProperty("observedAt").GetInt64()
@@ -824,13 +831,14 @@ module Client =
                   Complete = bool "complete" root
                   ConsolidationApproved = bool "consolidationApproved" root
                   Observations =
-                    root.GetProperty("observations").EnumerateArray()
+                    root.GetProperty(receiptFields |> List.last).EnumerateArray()
                     |> Seq.map (fun item ->
-                        ({ Kind = item.GetProperty("kind").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ObservedAt = item.GetProperty("observedAt").GetInt64()
-                           SourceSha = item.GetProperty("sourceSha").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           Outcome = item.GetProperty("outcome").GetString() |> Option.ofObj |> Option.defaultValue ""
-                           ReceiptId = item.GetProperty("receiptId").GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
+                        requireFields observationFields item
+                        ({ Kind = item.GetProperty(observationFields[0]).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ObservedAt = item.GetProperty(observationFields[1]).GetInt64()
+                           SourceSha = item.GetProperty(observationFields[2]).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           Outcome = item.GetProperty(observationFields[3]).GetString() |> Option.ofObj |> Option.defaultValue ""
+                           ReceiptId = item.GetProperty(observationFields[4]).GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
                     |> Seq.toList }
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"
