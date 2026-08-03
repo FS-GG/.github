@@ -1,0 +1,86 @@
+schemaVersion: 1
+work:
+  id: 2102
+  title: "Converge receiver-proj migration shape across SDD, Audio, and Governance"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2102/spec.md
+  sourceClarifications: work/2102/clarifications.md
+  sourceChecklist: work/2102/checklist.md
+  sourcePlan: work/2102/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2102/spec.md
+    digest: 5cb515c0f484da841a7795235cff7a5ba8f6172eb6c24bcb8db633b4c35a9411
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2102/clarifications.md
+    digest: 192d0e3ea17243269fdad47e890491af72cf62beb2d5f4d394593bf6ca07d5e3
+    schemaVersion: 1
+  - label: checklist
+    path: work/2102/checklist.md
+    digest: c0b337d549efa4d473089edab5c9d9c5ea4cfb6d78160170e5a2a4e46f258f61
+    schemaVersion: 1
+  - label: plan
+    path: work/2102/plan.md
+    digest: 9c293457f61bb751f37f96275bebcf90a191756c521dda3577d7c5a6811540ff
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: done
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Update contract surface PC-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Record verification evidence VO-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: []
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Handle migration posture PM-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: []
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Refresh generated view impact GV-001
+    status: done
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: []
+    requiredEvidence: [EV005]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2102."
