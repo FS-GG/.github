@@ -32,8 +32,11 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 6. Discard the worker and critic, refresh default branch, re-read the roadmap, and select again.
    Persist a typed cycle envelope beside the roadmap: fresh-read Markdown into its source revision
    and units, run `fsgg-coord cycle inspect`, then `register` (or exact-id resume) for the milestone.
-   Persist the versioned SDD, critique, and feedback provider receipts and `advance`; only after the
-   guarded merged-head/checkpoint update may `complete` run, followed by another fresh inspection.
+   Record player-journey applicability on the ledger unit. Persist versioned SDD, critique, and
+   feedback envelope files and pass their `artifactPath`s to `advance`, which reads and hashes the
+   exact bytes under supported provider versions. Persist the `updateReceipt` emitted by the guarded
+   merged-head/checkpoint `update`; `complete` consumes that exact receipt and revalidates its bound
+   evidence, followed by another fresh inspection.
    Parallel milestones additionally require recorded disjoint touch-sets and explicit operator
    authorization. Missing, stale, or wrong-cycle evidence fails closed.
 7. After no unchecked milestone remains, validate every completed cycle and land the final report with

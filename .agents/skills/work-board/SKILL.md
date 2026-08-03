@@ -20,9 +20,12 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    performance-first planning gate before implementation begins.
    Persist a typed cycle envelope beside the board before scheduling: fresh-read the board into its
    source revision and units, run `fsgg-coord cycle inspect`, then `register` (or resume its exact
-   stable id) for the selected unit. After implementation, persist versioned `fsgg-sdd`, critique,
-   and feedback receipts and run `advance`; persist the guarded merged-head/checkpoint update before
-   `complete`, then fresh-read and inspect again. Multiple ready units require an explicit operator
+   stable id) for the selected unit. Record player-journey applicability on that ledger unit rather
+   than accepting it from a provider. After implementation, persist versioned `fsgg-sdd`, critique,
+   and feedback envelope files and pass their `artifactPath`s to `advance`; the engine reads and
+   hashes those exact bytes under its supported provider versions. Persist the `updateReceipt` emitted
+   by the guarded merged-head/checkpoint `update` and pass that exact receipt to `complete`, then
+   fresh-read and inspect again. Multiple ready units require an explicit operator
    parallel authorization and recorded disjoint touch-sets; otherwise schedule one. Missing receipts,
    evidence paths, or a stale source/head fail closed.
 5. Report live item state immediately. Whenever the host changes or observes a material transition

@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "b552bc5d8024d8b24a0f21dac31719f3fd2c94da4ed7f0e51f5da59c4a70faff"
+        "value": "477e75b024dc0608706feca6c373636f61b2a8e6b7969fc3b10892d1d89e23bf"
       }
     },
     {
@@ -818,7 +818,7 @@
           "path": "work/2133-resumable-cycle-ledger/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "b552bc5d8024d8b24a0f21dac31719f3fd2c94da4ed7f0e51f5da59c4a70faff"
+            "value": "477e75b024dc0608706feca6c373636f61b2a8e6b7969fc3b10892d1d89e23bf"
           },
           "schemaVersion": 1
         },
@@ -849,7 +849,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "a8331637f7b1de6d687541a1638488698d6a7b2541e9e04054e06a723d994e74"
+        "value": "6aab55344d44a6e8b89dc93b04a3d750a64569f5630852f0a926bae7545df82f"
       },
       "currency": "current"
     }

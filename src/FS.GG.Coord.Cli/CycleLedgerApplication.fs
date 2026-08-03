@@ -33,31 +33,65 @@ module CycleLedgerApplication =
         { SourceRevision = text "sourceRevision" root
           Units =
             (property "units" root).EnumerateArray()
-            |> Seq.map (fun unit -> { Id = text "id" unit; Dependencies = strings "dependencies" unit; Completed = bool "completed" unit; Evidence = strings "evidence" unit })
+            |> Seq.map (fun unit ->
+                { Id = text "id" unit
+                  Dependencies = strings "dependencies" unit
+                  Completed = bool "completed" unit
+                  Evidence = strings "evidence" unit
+                  PlayerJourneyRequired = bool "playerJourneyRequired" unit })
             |> List.ofSeq }
     let private cycle node = { Id = text "id" node; UnitId = text "unitId" node; Executor = text "executor" node; Repository = text "repository" node; BaseCommit = text "baseCommit" node }
-    let private updateReceipt node = { CycleId = text "cycleId" node; EvidenceDigest = text "evidenceDigest" node }
+    let private updateReceipt node =
+        { Schema = text "schema" node
+          CycleId = text "cycleId" node
+          UnitId = text "unitId" node
+          SourceRevision = text "sourceRevision" node
+          ImplementationHead = text "implementationHead" node
+          ReviewHead = text "reviewHead" node
+          FeedbackCycle = text "feedbackCycle" node
+          FeedbackActive = bool "feedbackActive" node
+          MergedPr =
+            match (property "mergedPr" node).TryGetInt32() with
+            | true, value -> value
+            | _ -> invalidArg "mergedPr" "must be an integer"
+          MergeHead = text "mergeHead" node
+          EvidencePaths = strings "evidencePaths" node
+          Dispositions = strings "dispositions" node
+          EvidenceDigest = text "evidenceDigest" node }
     let private receipt node =
-        let journey =
-            match (property "playerJourney" node).ValueKind with
-            | JsonValueKind.True -> Some true
-            | JsonValueKind.False -> Some false
-            | JsonValueKind.Null -> None
-            | _ -> invalidArg "playerJourney" "must be boolean or null"
-        let round = property "round" node
-        match round.TryGetInt32() with
-        | false, _ -> invalidArg "round" "must be an integer"
-        | true, value ->
-            let generator = property "generator" node
-            { Schema = text "schema" node; Provider = text "provider" node; WorkId = text "workId" node; CycleId = text "cycleId" node; SourceRevision = text "sourceRevision" node; CandidateHead = text "candidateHead" node; Verdict = text "verdict" node; Round = value; PlayerJourney = journey; JourneyRequired = optionalBool "journeyRequired" node; GeneratorId = text "id" generator; GeneratorVersion = text "version" generator; ArtifactDigest = text "artifactDigest" node }
+        let path = text "artifactPath" node
+        if not (File.Exists path) then invalidArg "artifactPath" $"does not exist: %s{path}"
+        match parseProviderReceipt (File.ReadAllBytes path) with
+        | Ok parsed -> parsed
+        | Error errors -> invalidArg "artifactPath" (String.concat "; " errors)
     let private evidence node =
         let merged = property "mergedPr" node
         let mergedPr = match merged.ValueKind with | JsonValueKind.Null -> None | _ -> match merged.TryGetInt32() with | true, value -> Some value | _ -> invalidArg "mergedPr" "must be integer or null"
         let mergeHead = match (property "mergeHead" node).ValueKind with | JsonValueKind.Null -> None | JsonValueKind.String -> Some(text "mergeHead" node) | _ -> invalidArg "mergeHead" "must be string or null"
         { ImplementationHead = text "implementationHead" node; ReviewHead = text "reviewHead" node; FeedbackCycle = text "feedbackCycle" node; FeedbackActive = bool "feedbackActive" node; MergedPr = mergedPr; MergeHead = mergeHead; EvidencePaths = strings "evidencePaths" node; Dispositions = strings "dispositions" node }
     let private render options action =
-        let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Update cycle -> {| action = "update"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
-        match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
+        match action with
+        | Update(cycle, receipt) ->
+            let updateReceipt =
+                {| schema = receipt.Schema
+                   cycleId = receipt.CycleId
+                   unitId = receipt.UnitId
+                   sourceRevision = receipt.SourceRevision
+                   implementationHead = receipt.ImplementationHead
+                   reviewHead = receipt.ReviewHead
+                   feedbackCycle = receipt.FeedbackCycle
+                   feedbackActive = receipt.FeedbackActive
+                   mergedPr = receipt.MergedPr
+                   mergeHead = receipt.MergeHead
+                   evidencePaths = receipt.EvidencePaths
+                   dispositions = receipt.Dispositions
+                   evidenceDigest = receipt.EvidenceDigest |}
+            match options.Render with
+            | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = "update"; cycleId = cycle.Id; unitId = cycle.UnitId; updateReceipt = updateReceipt |})
+            | Text -> printfn "update %s %s" cycle.Id receipt.EvidenceDigest
+        | _ ->
+            let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |} | Update _ -> failwith "unreachable"
+            match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
         ExitCode.toInt ExitCode.Green
     let run options =
         try
