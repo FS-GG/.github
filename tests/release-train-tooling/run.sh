@@ -21,6 +21,11 @@ fi
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/release-train-tooling.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
+verification_report() {
+  local target="$1" name="$2" commit="$3" github="$4" nuget="$5" identical="$6"
+  printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"%s","expectedPackages":1,"observedPackages":1,"tag":"v1","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":%s,"nuGetAvailable":%s,"packages":[{"packageId":"Example","version":"1.0.0","gitHubUrl":"https://github.test/example","nuGetUrl":"https://nuget.test/example","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":%s,"differences":[],"gitHubAvailable":%s,"nuGetAvailable":%s}]}' "$name" "$commit" "$commit" "$commit" "$github" "$nuget" "$identical" "$github" "$nuget" > "$target"
+}
+
 if [ "$MODE" = all ] || [ "$MODE" = workflow ]; then
 mkdir -p "$WORK/repo/.github/workflows"
 printf '%s\n' \
@@ -115,24 +120,37 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
   > "$WORK/advance.json"
 jq -e '[.kind, .missingReceipt] | length == 2' "$WORK/advance.json" >/dev/null
 
-printf '%s\n' \
-  '{"name":"producer","subjectCommit":"abc","conclusion":"success","expectedPackages":1,"observedPackages":1,"tagCommit":"abc","tagMatchesExpectedCommit":true,"githubAvailable":true,"nugetAvailable":true,"packages":[{"payloadIdentical":true}]}' \
-  > "$WORK/verification.json"
+verification_report "$WORK/verification.json" producer abc true true true
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify \
   --run "$WORK/release-run.json" \
   --verification "$WORK/verification.json" \
   > "$WORK/verify.json"
 jq -e '.kind == "verify-propagation"' "$WORK/verify.json" >/dev/null
 
-jq '.registry.canonicalMerged = true | .releases[0].downstreamVerified = true' \
-  "$WORK/release-run.json" > "$WORK/restart.json"
-mv "$WORK/restart.json" "$WORK/release-run.json"
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/release-run.json" > "$WORK/complete.json"
+printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"failure"}' > "$WORK/failed-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/failed-propagation.json" > /dev/null
+failed_completion_rc=$?
+set -e
+if [ "$failed_completion_rc" -ne 1 ]; then
+  echo "expected failed completion receipt to fail closed, got $failed_completion_rc" >&2
+  exit 1
+fi
+printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"success"}' > "$WORK/propagation.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > "$WORK/propagation-action.json"
+jq -e '.kind == "flip-registry"' "$WORK/propagation-action.json" >/dev/null
+registry_sha="$(sha256sum "$ROOT/registry/dependencies.yml" | awk '{print $1}')"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" > "$WORK/registry-receipt.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > "$WORK/complete.json"
 jq -e '.kind == "complete"' "$WORK/complete.json" >/dev/null
-cp "$WORK/release-run.json" "$WORK/complete-before-replan.json"
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/release-run.json" > "$WORK/complete-replan.json"
-jq -e '.kind == "complete"' "$WORK/complete-replan.json" >/dev/null
-cmp "$WORK/complete-before-replan.json" "$WORK/release-run.json"
+cp "$WORK/release-run.json" "$WORK/complete-before-restart.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/release-run.json" > "$WORK/complete-restart.json"
+jq -e '.kind == "complete"' "$WORK/complete-restart.json" >/dev/null
+cmp "$WORK/complete-before-restart.json" "$WORK/release-run.json"
+cp "$WORK/release-run.json" "$WORK/complete-before-reimport.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > "$WORK/complete-reimport.json"
+jq -e '.kind == "complete"' "$WORK/complete-reimport.json" >/dev/null
+cmp "$WORK/complete-before-reimport.json" "$WORK/release-run.json"
 
 printf '%s\n' ' ' >> "$WORK/audit.json"
 set +e
@@ -170,8 +188,8 @@ for feed in org public; do
     --run "$WORK/$feed-run.json" --release-id producer --decision release-owed \
     --subject-commit abc --evidence https://example.test/decision --workflow-receipt "$WORK/partial-workflow-receipt.json" \
     > /dev/null
-  if [ "$feed" = org ]; then github=true; nuget=false; expected=0; else github=false; nuget=true; expected=0; fi
-  printf '{"name":"producer","subjectCommit":"abc","conclusion":"success","expectedPackages":1,"observedPackages":%s,"tagCommit":"abc","tagMatchesExpectedCommit":true,"githubAvailable":%s,"nugetAvailable":%s,"packages":[]}' "$expected" "$github" "$nuget" > "$WORK/$feed.json"
+  if [ "$feed" = org ]; then github=true; nuget=false; else github=false; nuget=true; fi
+  verification_report "$WORK/$feed.json" producer abc "$github" "$nuget" false
   dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/$feed-run.json" --verification "$WORK/$feed.json" > "$WORK/$feed-action.json"
   jq -e --arg state "$feed-only" '.kind == "human-escalation"' "$WORK/$feed-action.json" >/dev/null
   jq -e --arg state "$feed-only" '.releases[0].feedState == $state' "$WORK/$feed-run.json" >/dev/null
@@ -197,13 +215,46 @@ printf '%s\n' '{"releaseId":"upstream","subjectCommit":"up","workflowRun":"https
 printf '%s\n' '{"releaseId":"downstream","subjectCommit":"down","workflowRun":"https://example.test/runs/down","conclusion":"success"}' > "$WORK/downstream-receipt.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down --workflow-receipt "$WORK/downstream-receipt.json" > /dev/null
-jq '.releases |= map(.expectedPackages = 1 | .observedPackages = 1 | .tagCommit = .mainCommit | .downstreamVerified = true | .consumerEmbeddingVerified = true | if .id == "upstream" then .feedState = "none" | .artifactVerified = false else .feedState = "both-equivalent" | .artifactVerified = true end)' "$WORK/topology-run.json" > "$WORK/topology-ready.json"
-mv "$WORK/topology-ready.json" "$WORK/topology-run.json"
+verification_report "$WORK/upstream-none.json" upstream up false false false
+verification_report "$WORK/downstream-both.json" downstream down true true true
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-none.json" --verification "$WORK/downstream-both.json" > "$WORK/topology-observed.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/topology-run.json" > "$WORK/topology-action.json"
 jq -e '.kind == "await-producer" and .releaseId == "downstream"' "$WORK/topology-action.json" >/dev/null || {
   jq . "$WORK/topology-action.json" >&2
   exit 1
 }
+printf '%s\n' '{"kind":"consumer-embedding","releaseId":"downstream","subjectCommit":"down","producerId":"upstream","conclusion":"success"}' > "$WORK/consumer-embedding.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > /dev/null
+blocked_embedding_rc=$?
+set -e
+if [ "$blocked_embedding_rc" -ne 1 ]; then
+  echo "expected consumer embedding before verified producer to fail closed, got $blocked_embedding_rc" >&2
+  exit 1
+fi
+verification_report "$WORK/upstream-both.json" upstream up true true true
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-both.json" > "$WORK/producer-live.json"
+jq -e '.kind == "verify-consumer" and .releaseId == "downstream"' "$WORK/producer-live.json" >/dev/null
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > "$WORK/consumer-import.json"
+jq -e '.kind == "verify-propagation"' "$WORK/consumer-import.json" >/dev/null
+printf '%s\n' '{"kind":"propagation","releaseId":"upstream","subjectCommit":"up","conclusion":"success"}' > "$WORK/upstream-propagation.json"
+printf '%s\n' '{"kind":"propagation","releaseId":"downstream","subjectCommit":"down","conclusion":"success"}' > "$WORK/downstream-propagation.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/upstream-propagation.json" > /dev/null
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/downstream-propagation.json" > "$WORK/topology-registry-action.json"
+jq -e '.kind == "flip-registry"' "$WORK/topology-registry-action.json" >/dev/null
+topology_sha="$(sha256sum "$WORK/topology.yml" | awk '{print $1}')"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/topology.yml" "$topology_sha" > "$WORK/topology-registry.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/topology-registry.json" > "$WORK/topology-complete.json"
+jq -e '.kind == "complete"' "$WORK/topology-complete.json" >/dev/null
+printf '%s\n' ' ' >> "$WORK/downstream-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/topology-run.json" > /dev/null
+stale_completion_rc=$?
+set -e
+if [ "$stale_completion_rc" -ne 1 ]; then
+  echo "expected stale completion receipt to fail closed, got $stale_completion_rc" >&2
+  exit 1
+fi
 fi
 
 echo "release-train-tooling fixture: passed"
