@@ -1,0 +1,27 @@
+skill-quality: OK — 17 skills; metadata, mirrors, links, modes, budgets, commands, semantics, and triggers verified
+{"authoredChars": 4000, "ceiling": 4100, "headroom": 100, "roots": [".agents/skills"]}
+projections: current — the protocol is stated once, and every projection agrees with it.
+driver feedback delivery fixture: all cases passed
+review-round-contract: three rounds, ordered evidence, and human escalation hold
+roadmap-critique-contract: ten rounds, ordered SHAs, terminal human escalation, and the bot-driven player journey gate all hold
+PASS  documented option must belong to its verb
+PASS  broken relative links fail before distribution
+PASS  a missing forward trigger class is rejected
+PASS  drive-board cannot terminate over actionable backlog
+PASS  p-add cannot duplicate an existing matching issue
+PASS  padd-item cannot fall back from the workspace's configured board
+PASS  work-board missing wiring fails without mutation
+PASS  work-board promotion remains scheduler-selected and collision-safe
+PASS  work-board sees worker-filed backlog on the next wave
+PASS  work-board cannot terminate over actionable backlog
+PASS  work-board reports parked and human backlog without spinning
+PASS  drive-board cannot vary the generated consolidation threshold
+PASS  work-board's review slots stay reserved rather than fillable by implementers
+PASS  work-board cannot scope an EX_RATE stop to a single wave
+PASS  the two host-loop copies cannot state the wave model differently
+PASS  a routed variant cannot restate the two-wave contract instead of inheriting it
+PASS  an unsupported contract schema cannot silently disarm the polarity gate
+PASS  stale generated board/version truth is rejected
+PASS  registry producer mutation makes release inventory stale without prose edits
+PASS  hand-authored duplicate wave literals are rejected
+skill-quality fixture: all 20 rejection cases passed
