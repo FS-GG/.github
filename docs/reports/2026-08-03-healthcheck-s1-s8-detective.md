@@ -30,9 +30,14 @@ fields. An unreadable, malformed, or incomplete corpus is a permanent
 `GateError`, and `run` from `scripts/lib/gate.py`; it does not duplicate their
 contract. Transport failures retain the shared retryable no-verdict path.
 
-`scripts/healthcheck-suspects.fsx` is the eventual mechanical owner: it reads
-the corpus, emits ranked suspects as JSON, and never turns a heuristic into a
-finding. The detective is the separate causal/adjudication owner.
+`scripts/healthcheck-suspects.py` is the eventual command-edge owner. It
+imports `ExitCode`, `GateError`, and `run` from `scripts/lib/gate.py`, invokes
+the shared wrapper, and owns the final clean/finding/no-verdict process exits.
+It may delegate pure corpus evaluation to `scripts/healthcheck-suspects.fsx`,
+but that F# layer emits only a typed JSON result and owns no process-exit or
+gate-error contract. The Python edge reads the corpus, emits ranked suspects
+as JSON, and never turns a heuristic into a finding. The detective is the
+separate causal/adjudication owner.
 
 ## S1–S8 rules and executable fixture contract
 
@@ -40,7 +45,7 @@ finding. The detective is the separate causal/adjudication owner.
 | --- | --- | --- | --- |
 | S1 — provenance older than subject | `derivedFrom`, verification time, or digest precedes the latest subject change | A changed input after its recorded digest emits S1; the same timestamps in order emit none | `.github#1576`, `.github#1546`, `.github#1577` |
 | S2 — green with no work | green is recorded while the subject changed in the window and the gate ran zero times, or it compared zero subjects | A changed subject plus zero runs/comparisons emits S2; an unchanged subject or a non-zero completed comparison does not | `.github#1510`, `.github#1512`, `.github#1515`, `.github#1506` |
-| S3 — motionless in a moving system | a pin, roster entry, version, or inventory did not move while each tracked upstream fact advanced | A fixed pin with an advanced feed emits S3; an intentionally pinned row carrying its explicit pin reason is not silently exonerated and requires detective evidence | `.github#1560`, `.github#1561`, `.github#1531` |
+| S3 — motionless in a moving system | a pin, roster entry, version, or inventory did not move while each tracked upstream fact advanced | A fixed pin with an advanced feed emits S3; a fixed pin whose tracked feed and comparison window are also unchanged emits no S3. An intentionally pinned-but-advanced row remains a suspect for detective exoneration, not the clean control | `.github#1560`, `.github#1561`, `.github#1531` |
 | S4 — proposals without landings | a configured window has an anomalous opened-to-merged rate, rather than merely an open PR at one instant | A corpus with many opened and few merged proposals emits S4; a comparable healthy rate emits none | `.github#1533`; `.github#1565` measured **16 opened / 4 merged** |
 | S5 — asymmetric duplicates | two spellings mapped to one fact disagree in last-change/provenance state | One updated copy beside one stale copy emits S5; co-updated copies emit none | `.github#1573`, `.github#1547`, `.github#1530` |
 | S6 — a count that never varies | a reported count remains constant while its measured population grows | A constant comparison count over growing populations emits S6; matching growth emits none | `.github#1506` |
