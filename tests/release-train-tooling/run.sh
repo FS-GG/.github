@@ -276,7 +276,6 @@ fi
 cmp "$WORK/after-propagation.json" "$WORK/release-run.json"
 mv "$WORK/propagation.backup.json" "$WORK/propagation.json"
 printf '%s\n' 'not the canonical registry' > "$WORK/not-canonical.yml"
-not_canonical_sha="$(sha256sum "$WORK/not-canonical.yml" | awk '{print $1}')"
 canonical_receipt "$WORK/arbitrary-registry-receipt.json" "$WORK" abc "$WORK/not-canonical.yml" "$registry_topology" "$WORK/not-canonical.yml"
 cp "$WORK/release-run.json" "$WORK/before-arbitrary-registry.json"
 set +e
@@ -529,7 +528,6 @@ printf '%s\n' '{"kind":"propagation","releaseId":"downstream","subjectCommit":"d
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/upstream-propagation.json" > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/downstream-propagation.json" > "$WORK/topology-registry-action.json"
 jq -e '.kind == "flip-registry"' "$WORK/topology-registry-action.json" >/dev/null
-topology_sha="$(sha256sum "$WORK/topology.yml" | awk '{print $1}')"
 topology_fingerprint="$(jq -r '.registry.canonicalTopologySha256' "$WORK/topology-run.json")"
 canonical_receipt "$WORK/topology-registry.json" "$WORK" up "$WORK/topology.yml" "$topology_fingerprint" "$WORK/topology.yml"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/topology-registry.json" > "$WORK/topology-complete.json"
@@ -619,7 +617,6 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --registry "$MULTI/registry/dependencies.yml" \
   --fixture-registry \
   > /dev/null
-multi_registry_sha="$(sha256sum "$MULTI/registry/dependencies.yml" | awk '{print $1}')"
 multi_registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/multiset-run.json")"
 canonical_receipt "$WORK/multiset-early-registry.json" "$MULTI/registry" "$multi_commit" "$MULTI/registry/dependencies.yml" "$multi_registry_topology" "$MULTI/registry/dependencies.yml"
 cp "$WORK/multiset-run.json" "$WORK/multiset-before-early-registry.json"
@@ -786,7 +783,7 @@ expect_canonical_failure "$WORK/canonical-missing-projection.json" "missing proj
 printf '%s\n' '# divergent projection' > "$CANON/docs/registry/compatibility.md"
 expect_canonical_failure "$WORK/canonical-receipt.json" "divergent projection"
 git -C "$CANON" checkout -q -- docs/registry/compatibility.md
-git -C "$CANON" update-ref refs/remotes/origin/main "$(git -C "$CANON" commit-tree "$(git -C "$CANON" rev-parse HEAD^{tree})" -p "$canonical_commit" -m drift)"
+git -C "$CANON" update-ref refs/remotes/origin/main "$(git -C "$CANON" commit-tree "$(git -C "$CANON" rev-parse 'HEAD^{tree}')" -p "$canonical_commit" -m drift)"
 expect_canonical_failure "$WORK/canonical-receipt.json" "origin/main drift"
 git -C "$CANON" update-ref refs/remotes/origin/main "$canonical_commit"
 
