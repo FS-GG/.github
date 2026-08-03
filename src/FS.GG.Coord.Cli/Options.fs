@@ -274,7 +274,7 @@ DECISION (pure — no board, no network):
                                              freshness-bound action; --apply performs only guarded landing
   delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
-  cycle <inspect|register|complete> [--snapshot FILE] [--json|--text]
+  cycle <inspect|register|advance|complete> [--snapshot FILE] [--json|--text]
                                              inspect or advance one source-bound roadmap/workspace cycle ledger
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
