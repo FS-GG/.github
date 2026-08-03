@@ -18,6 +18,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    green merge, obligations, verified feedback, and done—or human escalation after an exhausted third
    round. During worker setup, interactive/game work must explicitly invoke the `pnext-item`
    performance-first planning gate before implementation begins.
+   Before choosing another unit, consume a fresh typed `fsgg-coord cycle inspect` receipt; only its
+   ready units and matching cycle/provider-head receipts may resume, advance, or complete a cycle.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:
