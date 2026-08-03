@@ -351,6 +351,10 @@ type private RepositoryPolicyReceipt =
     | RepositorySecured of repository: string * prior: string * actor: string
     | RepositoryPending of repository: string * reason: string
 
+type private ProjectAccessReceipt =
+    | ProjectObserved of project: string * isPublic: bool
+    | ProjectPending of project: string * reason: string
+
 let private graphql (query: string) (variables: (string * string) list) =
     let args =
         [ yield "api"; yield "graphql"; yield "-f"; yield "query=" + query
@@ -395,18 +399,39 @@ let private secureRepository (repository: string) : RepositoryPolicyReceipt =
             with _ ->
                 RepositoryPending(repository, "repository policy response was not a typed GitHub result")
 
+/// Read Project visibility through the supported ProjectV2 surface. The schema deliberately does
+/// not expose the base/effective access permission; that absence is retained as a no-verdict by
+/// the caller, rather than substituted with viewerCanUpdate or a browser scrape.
+let private inspectProject (owner: string) (title: string) : ProjectAccessReceipt =
+    let project = sprintf "%s/%s" owner title
+    let query = "query($owner:String!){organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}"
+    let code, output = graphql query [ "owner", owner ]
+    if code <> 0 then ProjectPending(project, "ProjectV2 visibility could not be read")
+    else
+        try
+            let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["organization"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
+            match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
+            | None -> ProjectPending(project, "configured Project does not exist yet")
+            | Some node -> ProjectObserved(project, node.AsObject().["public"].GetValue<bool>())
+        with _ -> ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
+
 /// Secure repository issue intake where the resource exists. Project access remains an explicit
 /// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
 /// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
 let private workspaceSecurity (opts: Options) : Outcome =
-    match opts.WorkspaceRepo with
-    | None -> Warned "repository security pending — pass --repo owner/repository after the repository exists"
-    | Some repository ->
-        match secureRepository repository with
-        | RepositorySecured(repo, prior, actor) ->
-            Warned(sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s); Project access still requires its explicit typed allowlist verification" repo prior actor)
-        | RepositoryPending(repo, reason) ->
-            Warned(sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason)
+    let repositoryMessage =
+        match opts.WorkspaceRepo with
+        | None -> "repository security pending — pass --repo owner/repository after the repository exists"
+        | Some repository ->
+            match secureRepository repository with
+            | RepositorySecured(repo, prior, actor) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
+            | RepositoryPending(repo, reason) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
+    let projectMessage =
+        match inspectProject opts.BoardOwner opts.BoardTitle with
+        | ProjectObserved(project, true) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist still require the recorded human verification" project
+        | ProjectObserved(project, false) -> sprintf "Project %s is private (preserved); base access still requires the recorded human verification" project
+        | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
+    Warned(repositoryMessage + "; " + projectMessage)
 
 /// Persist the security facts that could not be established. This lives beside the scaffold's
 /// provenance rather than in console prose so a later operator has one exact recovery target.
