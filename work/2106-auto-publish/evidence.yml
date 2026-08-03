@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2106-auto-publish/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2106-auto-publish/analysis.json
-    digest: 91012e549f7a731c16411727de4325868f696108d16ae6afe8adf2a2af95c226
+    digest: 30d4531e35819ce90afe3a888224636aa6cff50647e301210bce805209b6d885
     schemaVersion: 1
   - label: checklist
     path: work/2106-auto-publish/checklist.md

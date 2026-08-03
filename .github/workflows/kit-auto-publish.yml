@@ -45,6 +45,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
+          permission-organization-packages: read
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -98,7 +99,9 @@ jobs:
             provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$introduced" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}')"; break
           done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
           source_sha="$GITHUB_SHA"
-          if [ "$provenance" != '{}' ]; then source_sha="$(jq -r .mergeCommit <<<"$provenance")"; fi
+          # Artifact identity is the commit the tag will point at; authoring
+          # provenance remains separately bound in `.provenance.mergeCommit`.
+          source_sha="$GITHUB_SHA"
           release='null'
           if [ "$org" = present ] && [ "$nuget" = present ]; then
             org_commit="$(unzip -p org.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
@@ -135,7 +138,11 @@ jobs:
           existing="$(jq -r '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id' <<<"$comments" | head -1)"
           previous=/tmp/previous-escalation.json
           if [ -n "$existing" ]; then jq -r '.[] | select(.id == '"$existing"') | .body' <<<"$comments" | sed -n '/^```json$/,/^```$/p' | sed '1d;$d' > "$previous"; fi
-          args=(); [ -s "$previous" ] && args+=(--previous-escalation "$previous")
+          args=()
+          if [ -n "$existing" ]; then
+            [ -s "$previous" ] || { echo '::error::existing sticky marker has no typed JSON state'; exit 1; }
+            args+=(--previous-escalation "$previous")
+          fi
           python3 scripts/kit-auto-publish.py --facts facts.json --json --run "$GITHUB_RUN_ID" "${args[@]}" > escalation-decision.json
           state="$(jq -c .escalation escalation-decision.json)"
           jq -e '.valid == true' <<<"$state" >/dev/null || { echo '::error::sticky marker state malformed; refusing to overwrite'; exit 1; }

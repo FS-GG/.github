@@ -28,10 +28,14 @@ def escalation(previous, action, reason, version, run):
     """Typed, deterministic sticky-marker state; malformed history never resets."""
     if previous is None:
         streak = 1
-    elif not isinstance(previous, dict) or not isinstance(previous.get("streak"), int) or previous["streak"] < 1:
+    elif (not isinstance(previous, dict) or set(previous) != {"valid", "streak", "action", "reason", "version", "lastRun"}
+          or previous.get("valid") is not True or not isinstance(previous.get("streak"), int) or previous["streak"] < 1
+          or not all(isinstance(previous.get(key), str) and previous[key] for key in ("action", "reason", "version", "lastRun"))):
         return {"valid": False, "reason": "sticky-marker-malformed"}
-    elif previous.get("action") == action and previous.get("reason") == reason and previous.get("version") == version:
-        streak = previous["streak"] # idempotent retry of the same run
+    elif previous["lastRun"] == run:
+        if previous["action"] != action or previous["reason"] != reason or previous["version"] != version:
+            return {"valid": False, "reason": "sticky-marker-run-conflict"}
+        streak = previous["streak"]
     else:
         streak = previous["streak"] + 1
     return {"valid": True, "streak": streak, "action": action, "reason": reason, "version": version, "lastRun": run}
