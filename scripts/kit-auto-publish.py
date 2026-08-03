@@ -98,8 +98,13 @@ def main():
         if answer["action"] in ("refuse", "stickyEscalate"):
             previous = None
             if args.previous_escalation:
-                with open(args.previous_escalation, encoding="utf-8") as state:
-                    previous = json.load(state)
+                try:
+                    with open(args.previous_escalation, encoding="utf-8") as state:
+                        previous = json.load(state)
+                except (OSError, json.JSONDecodeError):
+                    answer["escalation"] = {"valid": False, "reason": "sticky-marker-malformed"}
+                    print(json.dumps(answer, sort_keys=True))
+                    return
             answer["escalation"] = escalation(previous, answer["action"], answer["reason"], answer["version"], args.run)
     except (OSError, json.JSONDecodeError) as error:
         answer = result("refuse", "facts-unreadable", "")
