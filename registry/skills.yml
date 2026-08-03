@@ -170,7 +170,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 18 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 14232035446a667f20db9c966762677cafd9aeddd631739d758f25be58cfe5f8, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 712f21c2ce2fa7866e7696463ae8ebb8b3a4afd2ddc73624c73514e3bd5d8e77, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
@@ -289,7 +289,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: c1eea2ab014e97a99d4b52bba279a70b3f3c30fa0267bae3131d36b9b23c984f, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 3508c5abf89fec6a8ddb41f2b900f786af7e33fc558dc90c51584a991d7e1797, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
