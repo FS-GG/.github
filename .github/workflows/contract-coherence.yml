@@ -183,7 +183,7 @@ jobs:
           # in that gap shadows the pin with a version-shaped literal from the prose — the `0.14.0` above
           # was captured in place of the real pin until this block was moved above the annotation (#1236).
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.31.1
+          dotnet tool install --global FS.GG.SDD.Cli --version 1.0.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Assert build-config source .props are well-formed XML
