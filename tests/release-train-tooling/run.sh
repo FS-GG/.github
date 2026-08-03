@@ -372,7 +372,9 @@ jq '.packages[0].version = "0.15.0"' "$WORK/correct-drivers.json" > "$WORK/wrong
 jq '.packages = [] | .expectedPackages = 0 | .observedPackages = 0' "$WORK/correct-drivers.json" > "$WORK/missing-package.json"
 jq '.packages += [.packages[0]] | .expectedPackages = 2 | .observedPackages = 2' "$WORK/correct-drivers.json" > "$WORK/duplicate-package.json"
 jq '.packages += [(.packages[0] | .packageId = "FS.GG.Kit" | .version = "0.35.0")] | .expectedPackages = 2 | .observedPackages = 2' "$WORK/correct-drivers.json" > "$WORK/extra-package.json"
-for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package; do
+jq '.expectedPackages = 99' "$WORK/correct-drivers.json" > "$WORK/forged-expected-count.json"
+jq '.observedPackages = 99' "$WORK/correct-drivers.json" > "$WORK/forged-observed-count.json"
+for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count; do
   cp "$WORK/multiset-run.json" "$WORK/multiset-before-invalid.json"
   set +e
   dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/$invalid.json" > /dev/null
@@ -385,7 +387,7 @@ for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-pack
   cmp "$WORK/multiset-before-invalid.json" "$WORK/multiset-run.json"
 done
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
-jq -e '.releases[] | select(.id == ".github:drivers" and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
+jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
 fi
 
 echo "release-train-tooling fixture: passed"

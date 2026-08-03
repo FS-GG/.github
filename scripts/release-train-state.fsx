@@ -583,10 +583,18 @@ let verify () =
             |> Seq.map (fun package -> package.GetProperty("packageId").GetString(), package.GetProperty("version").GetString())
             |> Seq.sort
             |> Seq.toList
+        let auditedExpectedCount = intProperty "expectedPackages" release
+        if not expectedArtifacts.IsEmpty && expectedArtifacts.Length <> auditedExpectedCount then
+            failwith $"release `{name}` expected package count does not match its audited artifact set"
         if not expectedArtifacts.IsEmpty && observedArtifacts <> expectedArtifacts then
             failwith $"verification receipt package ID/version multiset does not match release `{name}` expected artifacts"
-        release["expectedPackages"] <- JsonValue.Create(root.GetProperty("expectedPackages").GetInt32())
-        release["observedPackages"] <- JsonValue.Create(root.GetProperty("observedPackages").GetInt32())
+        let receiptExpectedCount = root.GetProperty("expectedPackages").GetInt32()
+        if receiptExpectedCount <> auditedExpectedCount then
+            failwith $"verification receipt expected package count does not match release `{name}` audited package count"
+        let receiptObservedCount = root.GetProperty("observedPackages").GetInt32()
+        if receiptObservedCount <> observedArtifacts.Length then
+            failwith $"verification receipt observed package count does not match release `{name}` package rows"
+        release["observedPackages"] <- JsonValue.Create(observedArtifacts.Length)
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
         let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
         let equivalent = root.GetProperty("packages").EnumerateArray() |> Seq.forall (fun package -> package.GetProperty("payloadIdentical").GetBoolean())
