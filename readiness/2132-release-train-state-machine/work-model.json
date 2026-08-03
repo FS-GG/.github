@@ -1,0 +1,686 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2132-release-train-state-machine",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "00ea14313d92c377238ecc4e78a24938f0872837d46525b2eb84d740c957d08d"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "902a323b81e275b4ec6e831ed471888de4b02e775fd4ea45e15f5ce22b050c83"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "b8f829e99c6f55b3f3422c0ecec8c01bb90403d8c698a549719b1a39a3a82196"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "46f0061e23a65333746e1775ea0f98b4965617929e9718b7e56895aa3fdc5cb8"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "b537a321256588d30114108a907c1cc65aef6f0e572945519ebc1f8831073f2c"
+      }
+    },
+    {
+      "path": "work/2132-release-train-state-machine/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c436f095b50656b78fd5a464a294d112395e63dfb38a42586a7ace85f9553e95"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2132-release-train-state-machine",
+    "title": "Coord release: resumable cross-repo NuGet train state machine",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The coordinator must emit exactly one typed next action and exact missing receipt for every non-terminal run state. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The coordinator must emit exactly one typed next action and exact missing receipt for every non-terminal run state. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2132-release-train-state-machine/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "The coordinator must derive ordered producers and refuse consumers whose required producer artifact or pin is unverified. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The coordinator must derive ordered producers and refuse consumers whose required producer artifact or pin is unverified. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2132-release-train-state-machine/spec.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "The coordinator must classify dual-feed state as none, org-only, public-only, both-equivalent, or disagree and terminally escalate partial or disagree states. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The coordinator must classify dual-feed state as none, org-only, public-only, both-equivalent, or disagree and terminally escalate partial or disagree states. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2132-release-train-state-machine/spec.md",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Automated fixtures must cover no-release, ordered multi-producer, missing package, partial publication, tag/commit mismatch, stale registry, missing consumer embedding, and complete train. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Automated fixtures must cover no-release, ordered multi-producer, missing package, partial publication, tag/commit mismatch, stale registry, missing consumer embedding, and complete train. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2132-release-train-state-machine/spec.md",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-004",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2132-release-train-state-machine/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/release-train-state.fsx",
+        "tests/release-train-tooling/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2132-release-train-state-machine/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2132-release-train-state-machine/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "00ea14313d92c377238ecc4e78a24938f0872837d46525b2eb84d740c957d08d"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "902a323b81e275b4ec6e831ed471888de4b02e775fd4ea45e15f5ce22b050c83"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b8f829e99c6f55b3f3422c0ecec8c01bb90403d8c698a549719b1a39a3a82196"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "46f0061e23a65333746e1775ea0f98b4965617929e9718b7e56895aa3fdc5cb8"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "b537a321256588d30114108a907c1cc65aef6f0e572945519ebc1f8831073f2c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2132-release-train-state-machine/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c436f095b50656b78fd5a464a294d112395e63dfb38a42586a7ace85f9553e95"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "d9cd06afd345bed515b003e2959a1b2b22109703a1fdadd279a962d295bdc54b"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

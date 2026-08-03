@@ -1,0 +1,106 @@
+schemaVersion: 1
+work:
+  id: 2132-release-train-state-machine
+  title: "Coord release: resumable cross-repo NuGet train state machine"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2132-release-train-state-machine/spec.md
+  sourceClarifications: work/2132-release-train-state-machine/clarifications.md
+  sourceChecklist: work/2132-release-train-state-machine/checklist.md
+  sourcePlan: work/2132-release-train-state-machine/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2132-release-train-state-machine/spec.md
+    digest: b537a321256588d30114108a907c1cc65aef6f0e572945519ebc1f8831073f2c
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2132-release-train-state-machine/clarifications.md
+    digest: 902a323b81e275b4ec6e831ed471888de4b02e775fd4ea45e15f5ce22b050c83
+    schemaVersion: 1
+  - label: checklist
+    path: work/2132-release-train-state-machine/checklist.md
+    digest: 00ea14313d92c377238ecc4e78a24938f0872837d46525b2eb84d740c957d08d
+    schemaVersion: 1
+  - label: plan
+    path: work/2132-release-train-state-machine/plan.md
+    digest: 46f0061e23a65333746e1775ea0f98b4965617929e9718b7e56895aa3fdc5cb8
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-001, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-001, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-001, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV007]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2132-release-train-state-machine."

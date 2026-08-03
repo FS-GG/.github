@@ -27,12 +27,30 @@ Use the repository-owned F# scripts for repeatable evidence:
 - `dotnet fsi scripts/release-train-verify.fsx -- --manifest <plan.json> --output <verify.json>`
   polls both feeds, downloads each expected package, compares payload entries while excluding
   nuget.org's `.signature.p7s`, and verifies the tag commit. Its manifest requires `name`,
-  `repositoryPath`, `tag`, `commit`, and `packages: [{ "id": ..., "version": ... }]`.
+  `repositoryPath`, `tag`, `commit`, and `packages: [{ "id": ..., "version": ... }]`. Its v2
+  report carries the commit-bound `subjectCommit`, successful observation conclusion, and separate
+  `gitHubAvailable` / `nuGetAvailable` facts; pass `--allow-partial` to record a one-feed observation
+  as a finding instead of waiting for both feeds.
 - `release-train-status.fsx` summarizes `--audit`, `--workflows`, and repeated `--verification`
   evidence files. Repeat `--verification` for each coherent set; pass `--registry complete` only
   after merged canonical truth is verified.
+- `release-train-state.fsx` is the durable coordinator over those reports. Start it with
+  `inspect --run <run.json> --audit <audit.json> --workflows <workflows.json> --registry registry/dependencies.yml`.
+  Use `plan --run <run.json>` to receive its one typed next action, `advance --release-id <id>` only to record an
+  explicit `release-owed`, `semver-effect`, or `human-blocker` decision with its subject commit and
+  evidence plus `--workflow-receipt <json>` for a successful producer run. The receipt must contain
+  `releaseId`, `subjectCommit`, `workflowRun`, and `conclusion: "success"`; the coordinator stores its
+  digest and refuses a stale or mismatched receipt on every resumed command, and
+  `verify --run <run.json> --verification <verify.json>` to import package evidence. Use
+  `import --run <run.json> --receipt <json>` for a successful, SHA-bound `consumer-embedding`,
+  `propagation`, or `canonical-registry` receipt; these are the only transitions that can satisfy the
+  consumer pin, downstream propagation, and merged-registry predicates. A canonical-registry receipt
+  must preserve the path and dependency-topology fingerprint captured by `inspect`; it cannot redirect
+  a run to another local registry file.
+  A `human-escalation` action for `org-only`, `public-only`, or `disagree` is terminal: inspect the
+  immutable artifacts and record the human decision; do not retry publication from the coordinator.
 
-Keep the JSON files as the resumable run ledger. Rerun commands to refresh live evidence. These scripts
+Keep the release-run JSON file and its evidence as the resumable run ledger. Rerun commands to refresh live evidence. These scripts
 are accelerators, not policy authorities: inspect and improve them when repository-specific behavior
 warrants it. In particular, the audit's newest reachable tag is only a baseline candidate; select the
 latest successful tag separately for every coherent set and override the candidate in the human audit.

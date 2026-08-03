@@ -1,0 +1,171 @@
+schemaVersion: 1
+workId: 2132-release-train-state-machine
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/2132-release-train-state-machine/spec.md
+sourceClarifications: work/2132-release-train-state-machine/clarifications.md
+sourceChecklist: work/2132-release-train-state-machine/checklist.md
+sourcePlan: work/2132-release-train-state-machine/plan.md
+sourceTasks: work/2132-release-train-state-machine/tasks.yml
+sourceAnalysis: readiness/2132-release-train-state-machine/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2132-release-train-state-machine/analysis.json
+    digest: 7fe28c092f090db1f3f4a25abea5d9e31ec1b65f128f7f48f54ff373957de018
+    schemaVersion: 1
+  - label: checklist
+    path: work/2132-release-train-state-machine/checklist.md
+    digest: 00ea14313d92c377238ecc4e78a24938f0872837d46525b2eb84d740c957d08d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2132-release-train-state-machine/clarifications.md
+    digest: 902a323b81e275b4ec6e831ed471888de4b02e775fd4ea45e15f5ce22b050c83
+    schemaVersion: 1
+  - label: plan
+    path: work/2132-release-train-state-machine/plan.md
+    digest: 46f0061e23a65333746e1775ea0f98b4965617929e9718b7e56895aa3fdc5cb8
+    schemaVersion: 1
+  - label: spec
+    path: work/2132-release-train-state-machine/spec.md
+    digest: b537a321256588d30114108a907c1cc65aef6f0e572945519ebc1f8831073f2c
+    schemaVersion: 1
+  - label: tasks
+    path: work/2132-release-train-state-machine/tasks.yml
+    digest: c436f095b50656b78fd5a464a294d112395e63dfb38a42586a7ace85f9553e95
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV006]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [scripts/release-train-state.fsx, tests/release-train-tooling/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/release-train-tooling/run.sh
+    result: pass
+    synthetic: false
+    notes: [Observed by the focused release-train-tooling gate; this durable source declaration does not carry a JUnit or TRX receipt.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

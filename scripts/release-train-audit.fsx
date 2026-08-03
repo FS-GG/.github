@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Text.Json
+open System.Text.RegularExpressions
 open ReleaseTrain
 
 type Package = {
@@ -10,6 +11,17 @@ type Package = {
     PackageId: string
     Version: string
     PackageReferences: string list
+}
+
+type ReleaseSet = {
+    Id: string
+    Workflow: string
+    TagPatterns: string list
+    ExpectedTags: string list
+    BaselineTag: string
+    BaselineCommit: string
+    ChangedFiles: string list
+    Packages: Package list
 }
 
 type RepositoryAudit = {
@@ -26,6 +38,7 @@ type RepositoryAudit = {
     ChangedFiles: string list
     ReleaseWorkflows: string list
     Packages: Package list
+    ReleaseSets: ReleaseSet list
     Findings: string list
 }
 
@@ -94,6 +107,86 @@ let discoverPackages repo =
 
 let git repo args = tryRun repo "git" args |> Option.defaultValue ""
 
+let tagPatterns (workflowText: string) =
+    Regex.Matches(workflowText, @"(?m)^\s*tags:\s*\[(?<items>[^\]]+)\]")
+    |> Seq.cast<Match>
+    |> Seq.collect (fun row ->
+        Regex.Matches(row.Groups["items"].Value, """['"](?<tag>[^'"]+\*)['"]""")
+        |> Seq.cast<Match>
+        |> Seq.map (fun item -> item.Groups["tag"].Value))
+    |> Seq.distinct
+    |> Seq.toList
+
+let releaseSetName (workflow: string) (patterns: string list) =
+    let fromWorkflow =
+        Path.GetFileNameWithoutExtension(workflow)
+            .Replace("release-", "", StringComparison.OrdinalIgnoreCase)
+    match patterns with
+    | first :: _ when first <> "v*" -> first.Split('/')[0]
+    | _ -> fromWorkflow
+
+let discoverReleaseSets (repoId: string) (repo: string) (originMain: string) (packages: Package list) (workflows: string list) =
+    let directlyMapped =
+        workflows
+        |> List.choose (fun workflow ->
+            let full = Path.Combine(repo, workflow.Replace('/', Path.DirectorySeparatorChar))
+            let text = File.ReadAllText full
+            let patterns = tagPatterns text
+            let members =
+                packages
+                |> List.filter (fun package -> text.Contains(package.Project, StringComparison.Ordinal))
+            if patterns.IsEmpty || members.IsEmpty then None
+            else Some(workflow, patterns, members))
+    let candidates =
+        match directlyMapped with
+        | [ (workflow, patterns, _) ] when (packages |> List.map _.Version |> List.distinct |> List.length) = 1 ->
+            [ (workflow, patterns, packages) ]
+        | [ _ ] -> [] // Preserve the repository-level fallback when one workflow indirectly assembles mixed-version projects.
+        | many -> many
+    let membershipFindings =
+        if candidates.Length <= 1 then []
+        else
+            packages
+            |> List.choose (fun package ->
+                let matches = candidates |> List.filter (fun (_, _, members) -> members |> List.exists (fun packageMember -> packageMember.Project = package.Project))
+                match matches.Length with
+                | 1 -> None
+                | 0 -> Some $"packable project {package.Project} is not mapped to a tagged release workflow"
+                | count -> Some $"packable project {package.Project} is mapped to {count} tagged release workflows")
+    let sets, setFindings =
+        candidates
+        |> List.map (fun (workflow, patterns, members) ->
+            let versions = members |> List.map _.Version |> List.distinct
+            let versionFinding =
+                if versions.Length = 1 then []
+                else [ $"release workflow {workflow} groups packages with different evaluated versions" ]
+            let expectedTags =
+                match versions with
+                | [ version ] -> patterns |> List.map (fun pattern -> pattern.Replace("*", version))
+                | _ -> []
+            let baselineTag =
+                patterns
+                |> List.tryPick (fun pattern ->
+                    git repo [ "tag"; "--merged"; "origin/main"; "--sort=-creatordate"; "--list"; pattern ]
+                    |> fun output -> output.Split('\n', StringSplitOptions.RemoveEmptyEntries) |> Array.tryHead)
+                |> Option.defaultValue ""
+            let baselineCommit = if baselineTag = "" then "" else git repo [ "rev-list"; "-n"; "1"; baselineTag ]
+            let changedFiles =
+                if baselineTag = "" then []
+                else
+                    git repo [ "diff"; "--name-only"; $"{baselineTag}..{originMain}" ]
+                    |> fun output -> output.Split('\n', StringSplitOptions.RemoveEmptyEntries) |> Array.toList
+            let id = $"{repoId}:{releaseSetName workflow patterns}"
+            let renderedPatterns = String.concat ", " patterns
+            let baselineFinding = if baselineTag = "" then [ $"release set {id} has no reachable tag matching {renderedPatterns}" ] else []
+            {
+                Id = id; Workflow = workflow; TagPatterns = patterns; ExpectedTags = expectedTags
+                BaselineTag = baselineTag; BaselineCommit = baselineCommit; ChangedFiles = changedFiles
+                Packages = members
+            }, versionFinding @ baselineFinding)
+        |> List.unzip
+    sets, membershipFindings @ (setFindings |> List.collect id)
+
 let auditRepo (fetch: bool) (authorityRoot: string) (parent: string) ((id, fullName): string * string) =
     let repoName = fullName.Split('/') |> Array.last
     let path = if id = ".github" then authorityRoot else Path.Combine(parent, repoName)
@@ -102,6 +195,7 @@ let auditRepo (fetch: bool) (authorityRoot: string) (parent: string) ((id, fullN
             Id = id; FullName = fullName; Path = path; Exists = false; Dirty = false
             Head = ""; OriginMain = ""; HeadEqualsOriginMain = false; BaselineTag = ""
             BaselineCommit = ""; ChangedFiles = []; ReleaseWorkflows = []; Packages = []
+            ReleaseSets = []
             Findings = [ $"missing rostered sibling checkout: {path}" ]
         }
     else
@@ -135,6 +229,7 @@ let auditRepo (fetch: bool) (authorityRoot: string) (parent: string) ((id, fullN
                 |> Seq.toList
             else []
         let packages, packageFindings = discoverPackages path
+        let releaseSets, releaseSetFindings = discoverReleaseSets id path originMain packages workflows
         let findings =
             [
                 if dirty then $"working tree is dirty: {path}"
@@ -142,12 +237,12 @@ let auditRepo (fetch: bool) (authorityRoot: string) (parent: string) ((id, fullN
                 if head <> originMain then $"HEAD {head} does not equal origin/main {originMain}"
                 if packages.IsEmpty then $"no evaluated packable projects discovered in {path}"
                 if baselineTag = "" then $"no reachable tag found for baseline inspection in {path}"
-            ] @ packageFindings
+            ] @ packageFindings @ releaseSetFindings
         {
             Id = id; FullName = fullName; Path = path; Exists = true; Dirty = dirty
             Head = head; OriginMain = originMain; HeadEqualsOriginMain = head = originMain
             BaselineTag = baselineTag; BaselineCommit = baselineCommit; ChangedFiles = changedFiles
-            ReleaseWorkflows = workflows; Packages = packages; Findings = findings
+            ReleaseWorkflows = workflows; Packages = packages; ReleaseSets = releaseSets; Findings = findings
         }
 
 let markdown (audit: Audit) =
@@ -172,6 +267,8 @@ let markdown (audit: Audit) =
         printfn ""
         for package in repo.Packages do
             printfn "- `%s` `%s` from `%s`" package.PackageId package.Version package.Project
+        for releaseSet in repo.ReleaseSets do
+            printfn "- release set `%s`: `%s` -> `%s` (%d package(s))" releaseSet.Id releaseSet.BaselineTag (String.concat ", " releaseSet.ExpectedTags) releaseSet.Packages.Length
         for finding in repo.Findings do
             printfn "- FINDING: %s" finding
         printfn ""
@@ -218,7 +315,7 @@ let main () =
                     let repositories =
                         rows |> List.map (auditRepo (hasFlag "--fetch" args) root parent)
                     let audit = {
-                        SchemaVersion = 1
+                        SchemaVersion = 2
                         GeneratedAt = DateTimeOffset.UtcNow
                         Root = root
                         Repositories = repositories
