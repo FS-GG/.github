@@ -441,6 +441,9 @@ module ApplicationServiceTests =
                             ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         | Query(document, _) when document.Contains "fields(first" ->
                             ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        | Query(document, _) when document.Contains "node(id: $projectId)" ->
+                            ok
+                                """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
                         | Query(document, _) when document.Contains "items(first" -> ok (boardItems ())
                         | Query(document, variables) when document.Contains "projectItems" ->
                             let owner = variable "owner" variables |> Option.map asString |> Option.defaultValue ""
@@ -2123,7 +2126,9 @@ module ApplicationServiceTests =
             let code =
                 match opts.Command with
                 | Options.Reconcile -> Client.reconcile (context transport) opts
-                | other -> failwithf "this fixture drives reconcile only, got %A" other
+                | Options.Ready -> Client.ready (context transport) opts
+                | Options.SetField -> Client.setField (context transport) opts
+                | other -> failwithf "this fixture drives reconciliation board surfaces only, got %A" other
 
             Console.Out.Flush()
             Console.Error.Flush()
@@ -2176,6 +2181,122 @@ module ApplicationServiceTests =
     /// comes back, so the tripwire survives the pin it replaced.
     let private runApplyJson (transport: Fake.Recorder) =
         runReconcile transport (reconcileArgs [ "--apply"; "--json" ])
+
+    /// The live #2166 topology: the Coordination board is owned by FS-GG, while the blocked item is an
+    /// issue in EHotwagner/rogue3.  The default-owner twin is present in the project lookup response too;
+    /// every mutation must select only `PVTI_external96`.
+    let private validExternalOwnerItemLookup =
+        """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+
+    let private externalOwnerWriteWorldWithLookup (lookupResponse: string) =
+        let mutable status = "Blocked"
+        let mutable blockedBy = "FS-GG/.github#2155"
+
+        let items () =
+            let blocker =
+                """{"status":{"name":"Done"},"blockedBy":null,"content":{"__typename":"Issue","number":2155,"title":"resolved blocker","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+
+            let external =
+                $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{if blockedBy = "" then "null" else $"{{\"text\":\"%s{blockedBy}\"}}"},"content":{{"__typename":"Issue","number":96,"title":"external target","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}"""
+
+            String.concat "," [ external; blocker ]
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) when document.Contains "node(id: $projectId)" ->
+                    ok lookupResponse
+                | Query(document, _) when document.Contains "f0:" ->
+                    status <- "Ready"
+                    blockedBy <- ""
+                    ok """{"data":{"f0":{"projectV2Item":{"id":"PVTI_external96"}},"f1":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                | Query(document, _) when document.Contains "updateProjectV2ItemFieldValue" ->
+                    status <- "Ready"
+                    ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                | Query(document, _) when document.Contains "projectsV2" ->
+                    ok
+                        """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                | Query(document, _) when document.Contains "fields(first" ->
+                    ok
+                        """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                | Query(document, _) when document.Contains "items(first" ->
+                    ok
+                        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                | Query(document, _) -> Error(Errors.NotFound $"the external-owner fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
+            | "GET", "repos/EHotwagner/rogue3/issues" ->
+                ok """[{"number":96,"state":"open","body":"Paths: none"}]"""
+            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+            | "GET", "repos/EHotwagner/rogue3/issues/96" ->
+                ok """{"number":96,"state":"open","body":"Paths: none"}"""
+            | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok "[]"
+            | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
+            | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
+            | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the external-owner fixture serves no %s{m} %s{p}"))
+
+    let private externalOwnerWriteWorld () =
+        externalOwnerWriteWorldWithLookup validExternalOwnerItemLookup
+
+    [<Fact>]
+    let ``#2166 ready and set-field preserve one external canonical row through fresh readback`` () =
+        let world = externalOwnerWriteWorld ()
+        let readyCode, readyOut, _ = runReconcile world [ "ready"; "--all"; "--json" ]
+        let setCode, _, setErr =
+            runReconcile world [ "set-field"; "EHotwagner/rogue3#96"; "Status"; "Ready"; "--worker"; "heron-2166" ]
+        let verifyCode, verifyOut, _ = runReconcile world [ "ready"; "--all"; "--json" ]
+
+        Assert.Equal(0, readyCode)
+        Assert.Contains("\"repo\":\"EHotwagner/rogue3\"", readyOut)
+        Assert.Contains("\"status\":\"Blocked\"", readyOut)
+        if setCode <> 0 then failwithf "external set-field failed: %s" setErr
+        Assert.Equal(0, verifyCode)
+        Assert.Contains("\"repo\":\"EHotwagner/rogue3\"", verifyOut)
+        Assert.Contains("\"status\":\"Ready\"", verifyOut)
+        Assert.True(world.Logged "--id PVTI_external96")
+        Assert.False(world.Logged "--id PVTI_default96")
+
+    [<Fact>]
+    let ``#2166 reconcile apply carries the external owner into lookup and verifies both repaired fields`` () =
+        let world = externalOwnerWriteWorld ()
+        let code, out, err =
+            runReconcile world [ "reconcile"; "--worker"; "heron-2166"; "--apply"; "--json" ]
+
+        if String.IsNullOrWhiteSpace out then
+            failwithf "#2166 external reconcile emitted no receipt (exit %d): %s" code err
+
+        let row = parsedArray out |> List.find (fun item -> str "subject" item = "rogue3#96")
+        let observed = row.GetProperty("observed").EnumerateArray() |> List.ofSeq
+
+        if code <> 0 then failwithf "external reconcile failed: %s" err
+        Assert.Equal("written", str "outcome" row)
+        Assert.Equal(2, List.length observed)
+        Assert.Equal("Status", str "field" observed.[0])
+        Assert.Equal("Ready", str "value" observed.[0])
+        Assert.Equal("Blocked by", str "field" observed.[1])
+        Assert.Equal("", str "value" observed.[1])
+        Assert.True(world.Logged "itemId: \"PVTI_external96\"")
+        Assert.False(world.Logged "itemId: \"PVTI_default96\"")
+
+    [<Fact>]
+    let ``#2166 set-field fails closed on malformed external-owner pagination completeness`` () =
+        let malformedLookups =
+            [ "pageInfo absent", """{"data":{"node":{"items":{"nodes":[]}}}}"""
+              "pageInfo null", """{"data":{"node":{"items":{"pageInfo":null,"nodes":[]}}}}"""
+              "hasNextPage absent", """{"data":{"node":{"items":{"pageInfo":{"endCursor":null},"nodes":[]}}}}"""
+              "hasNextPage null", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}}}}"""
+              "hasNextPage wrong type", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}}}}""" ]
+
+        for label, lookup in malformedLookups do
+            let world = externalOwnerWriteWorldWithLookup lookup
+            let code, _, err =
+                runReconcile world [ "set-field"; "EHotwagner/rogue3#96"; "Status"; "Ready"; "--worker"; "heron-2166" ]
+
+            Assert.NotEqual(0, code)
+            Assert.Contains("pageInfo", err)
+            Assert.False(world.Logged "--id PVTI_external96", $"%s{label} reached the mutation")
 
     [<Fact>]
     let ``#2157 partial BLOCKER-CLEARED receipt retains both freshly observed values`` () =

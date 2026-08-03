@@ -539,6 +539,89 @@ let ``#2143 an external-owner batch uses the same canonical cached item as a sin
     | other -> failwith $"the external-owner batch must use the canonical cached item — got %A{other}"
 
 [<Fact>]
+let ``#2166 a cold external-owner write resolves the exact ProjectV2 row across pages`` () =
+    use _sandbox = new Sandbox()
+
+    // The first page contains the same repository name and issue number under the board's default owner.
+    // Matching only repo/number would silently mutate that twin; the external canonical owner appears on
+    // page two and is the only legal mutation target.
+    let firstPage =
+        ok
+            """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":"page-2"},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}}]}}}}"""
+
+    let secondPage =
+        ok
+            """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+
+    let mutation =
+        ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+
+    let transport = scripted [ firstPage; secondPage; mutation ]
+
+    match boardWrite transport board "EHotwagner" "rogue3" 96 "Status" (Set "Ready") "vole-418" with
+    | Ok Written ->
+        Assert.Equal(3, transport.GraphQlCalls)
+        Assert.True(transport.Logged "--id PVTI_external96")
+        Assert.False(transport.Logged "--id PVTI_default96")
+        Assert.Equal(Some "PVTI_external96", Cache.getItemId "EHotwagner" "rogue3" 96 board.Number)
+        Assert.Equal(None, Cache.getItemId "FS-GG" "rogue3" 96 board.Number)
+    | other -> failwith $"the cold external-owner board row must be written — got %A{other}"
+
+[<Fact>]
+let ``#2166 a complete external-owner ProjectV2 lookup may report genuine non-membership`` () =
+    use _sandbox = new Sandbox()
+
+    let transport =
+        serving
+            """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}}]}}}}"""
+
+    match itemId transport board "EHotwagner" "rogue3" 96 with
+    | Ok None -> Assert.Equal(1, transport.GraphQlCalls)
+    | other -> failwith $"a successful complete scan without the canonical external row is absence — got %A{other}"
+
+[<Fact>]
+let ``#2166 an incomplete external-owner ProjectV2 page fails closed instead of reporting absence`` () =
+    use _sandbox = new Sandbox()
+
+    let transport =
+        serving
+            """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}"""
+
+    match itemId transport board "EHotwagner" "rogue3" 96 with
+    | Error(Malformed(_, message)) -> Assert.Contains("another page but no usable cursor", message)
+    | Ok None -> failwith "an incomplete paginated lookup was manufactured into external non-membership"
+    | other -> failwith $"the incomplete external-owner lookup must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2166 malformed pagination completeness is never external non-membership`` () =
+    use _sandbox = new Sandbox()
+
+    let malformedItems =
+        [ "pageInfo absent", """{"nodes":[]}"""
+          "pageInfo null", """{"pageInfo":null,"nodes":[]}"""
+          "hasNextPage absent", """{"pageInfo":{"endCursor":null},"nodes":[]}"""
+          "hasNextPage null", """{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}"""
+          "hasNextPage wrong type", """{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}""" ]
+
+    for label, items in malformedItems do
+        let transport = serving $"""{{"data":{{"node":{{"items":%s{items}}}}}}}"""
+
+        match itemId transport board "EHotwagner" "rogue3" 96 with
+        | Error(Malformed(_, message)) -> Assert.Contains("pageInfo", message)
+        | Ok None -> failwith $"%s{label} was manufactured into external non-membership"
+        | other -> failwith $"%s{label} must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2166 an unavailable external-owner ProjectV2 lookup is never non-membership`` () =
+    use _sandbox = new Sandbox()
+    let transport = failing (RateLimited(GraphQlBudget, None))
+
+    match itemId transport board "EHotwagner" "rogue3" 96 with
+    | Error(RateLimited(GraphQlBudget, _)) -> ()
+    | Ok None -> failwith "an unavailable external-owner board lookup was manufactured into non-membership"
+    | other -> failwith $"the unavailable external-owner lookup must fail closed — got %A{other}"
+
+[<Fact>]
 let ``#510 a REFUSED write is NEVER queued - replaying it would loop forever`` () =
     use _sandbox = new Sandbox()
 

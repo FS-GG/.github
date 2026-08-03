@@ -593,6 +593,9 @@ module BlockerLintTests =
                         elif document.Contains "fields(first" then
                             ok
                                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        elif document.Contains "node(id: $projectId)" then
+                            ok
+                                """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
                         elif document.Contains "updateProjectV2ItemFieldValue" || document.Contains "clearProjectV2ItemFieldValue" then
                             if document.Contains "f0:" then
                                 ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
