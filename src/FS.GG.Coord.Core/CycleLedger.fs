@@ -10,7 +10,8 @@ module CycleLedger =
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
         { Schema: string; Provider: string; WorkId: string; CycleId: string; SourceRevision: string
-          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
+          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool
+          GeneratorId: string; GeneratorVersion: string; ArtifactDigest: string }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option; EvidencePaths: string list; Dispositions: string list }
@@ -69,12 +70,17 @@ module CycleLedger =
                     Ok(Register { Id = id; UnitId = unit.Id; Executor = executor; Repository = repository; BaseCommit = baseCommit })
                 | _ -> Error [ "multiple dependency-ready units require selected unit, explicit operator authorization, and disjoint touch-sets" ]
 
-    let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead expectedProvider expectedSchema receipt =
+    let validateProvider expectedWorkId expectedCycle expectedSourceRevision expectedHead expectedProvider expectedSchema expectedGenerator receipt =
         let errors =
             [ yield! required "provider schema" receipt.Schema |> Option.toList
               yield! required "provider" receipt.Provider |> Option.toList
+              yield! required "provider generator id" receipt.GeneratorId |> Option.toList
+              yield! required "provider generator version" receipt.GeneratorVersion |> Option.toList
+              yield! required "provider artifact digest" receipt.ArtifactDigest |> Option.toList
               if receipt.Provider <> expectedProvider then yield $"provider receipt must be from %s{expectedProvider}"
               if receipt.Schema <> expectedSchema then yield $"provider receipt schema must be %s{expectedSchema}"
+              if receipt.GeneratorId <> expectedGenerator then yield $"provider generator must be %s{expectedGenerator}"
+              if not (receipt.ArtifactDigest.StartsWith("sha256:", StringComparison.Ordinal)) then yield "provider artifact digest is not sha256 provenance"
               if receipt.WorkId <> expectedWorkId then yield "provider receipt work id does not match"
               if receipt.CycleId <> expectedCycle.Id then yield "provider receipt cycle id does not match"
               if receipt.SourceRevision <> expectedSourceRevision then yield "provider receipt source revision is stale"
@@ -89,11 +95,11 @@ module CycleLedger =
 
     let advance (ledger: Ledger) cycle implementation review feedback evidence =
         let expected = evidence.ImplementationHead
-        let validate provider schema receipt = validateProvider cycle.UnitId cycle ledger.SourceRevision expected provider schema receipt
+        let validate provider schema generator receipt = validateProvider cycle.UnitId cycle ledger.SourceRevision expected provider schema generator receipt
         let errors =
             [ if cycle.BaseCommit <> ledger.SourceRevision then yield "cycle base commit is stale against ledger source revision"
-              for provider, schema, receipt in [ "fsgg-sdd", "fsgg.sdd.report/1", implementation; "critique", "fsgg.critique.report/1", review; "feedback", "fsgg.feedback.report/2", feedback ] do
-                  match validate provider schema receipt with Error reasons -> yield! reasons | Ok () -> ()
+              for provider, schema, generator, receipt in [ "fsgg-sdd", "fsgg.sdd.report/1", "FS.GG.SDD.Artifacts", implementation; "critique", "fsgg.critique.report/3", "FS.GG.Critique", review; "feedback", "fsgg.feedback.report/2", "FS.GG.Feedback", feedback ] do
+                  match validate provider schema generator receipt with Error reasons -> yield! reasons | Ok () -> ()
               if evidence.ReviewHead <> expected then yield "review evidence head does not match implementation head"
               if evidence.FeedbackCycle <> cycle.Id then yield "feedback evidence cycle does not match"
               if not evidence.FeedbackActive then yield "feedback activation is missing"
