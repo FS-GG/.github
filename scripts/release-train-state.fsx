@@ -660,6 +660,17 @@ let importReceipt () =
     | "propagation", Some id, Some commit, _, _, _, _ ->
         let target = release id
         if commit <> stringProperty "mainCommit" target then failwith "propagation receipt must bind the release's merged-main commit"
+        let currentAction = obj (nextAction state)
+        let currentActionKind = stringProperty "kind" currentAction
+        let currentActionRelease = stringOr "" "releaseId" currentAction
+        let alreadyRecorded =
+            receipts
+            |> Seq.map obj
+            |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
+        if boolProperty false "downstreamVerified" target then
+            if not alreadyRecorded then failwith "completed propagation import must exactly match its recorded receipt"
+        elif currentActionKind <> "verify-propagation" || currentActionRelease <> id then
+            failwith $"propagation receipt for `{id}` is only legal for its current verify-propagation action"
         target["downstreamVerified"] <- JsonValue.Create(true)
     | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash, Some receiptTopology ->
         let canonicalPath = stringProperty "canonicalPath" registry

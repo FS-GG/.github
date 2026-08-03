@@ -134,6 +134,17 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
   --workflow-receipt "$WORK/workflow-receipt.json" \
   > "$WORK/advance.json"
 jq -e '[.kind, .missingReceipt] | length == 2' "$WORK/advance.json" >/dev/null
+printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"success"}' > "$WORK/premature-propagation.json"
+cp "$WORK/release-run.json" "$WORK/before-premature-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/premature-propagation.json" > /dev/null
+premature_propagation_rc=$?
+set -e
+if [ "$premature_propagation_rc" -ne 1 ]; then
+  echo "expected propagation before verify-propagation to fail closed, got $premature_propagation_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-premature-propagation.json" "$WORK/release-run.json"
 
 verification_report "$WORK/verification.json" producer abc true true true
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify \
@@ -152,8 +163,45 @@ if [ "$failed_completion_rc" -ne 1 ]; then
   exit 1
 fi
 printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"success"}' > "$WORK/propagation.json"
+printf '%s\n' '{"kind":"propagation","releaseId":"wrong-release","subjectCommit":"abc","conclusion":"success"}' > "$WORK/wrong-release-propagation.json"
+cp "$WORK/release-run.json" "$WORK/before-wrong-release-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/wrong-release-propagation.json" > /dev/null
+wrong_release_propagation_rc=$?
+set -e
+if [ "$wrong_release_propagation_rc" -ne 1 ]; then
+  echo "expected wrong-release propagation to fail closed, got $wrong_release_propagation_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-wrong-release-propagation.json" "$WORK/release-run.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > "$WORK/propagation-action.json"
 jq -e '.kind == "flip-registry"' "$WORK/propagation-action.json" >/dev/null
+cp "$WORK/release-run.json" "$WORK/after-propagation.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > "$WORK/propagation-reimport-action.json"
+jq -e '.kind == "flip-registry"' "$WORK/propagation-reimport-action.json" >/dev/null
+cmp "$WORK/after-propagation.json" "$WORK/release-run.json"
+jq '.note = "changed propagation"' "$WORK/propagation.json" > "$WORK/changed-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/changed-propagation.json" > /dev/null
+changed_propagation_rc=$?
+set -e
+if [ "$changed_propagation_rc" -ne 1 ]; then
+  echo "expected non-identical propagation replay to fail closed, got $changed_propagation_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-propagation.json" "$WORK/release-run.json"
+cp "$WORK/propagation.json" "$WORK/propagation.backup.json"
+printf '%s\n' ' ' >> "$WORK/propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > /dev/null
+stale_propagation_rc=$?
+set -e
+if [ "$stale_propagation_rc" -ne 1 ]; then
+  echo "expected stale recorded propagation replay to fail closed, got $stale_propagation_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-propagation.json" "$WORK/release-run.json"
+mv "$WORK/propagation.backup.json" "$WORK/propagation.json"
 printf '%s\n' 'not the canonical registry' > "$WORK/not-canonical.yml"
 not_canonical_sha="$(sha256sum "$WORK/not-canonical.yml" | awk '{print $1}')"
 printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/not-canonical.yml" "$not_canonical_sha" "$registry_topology" > "$WORK/arbitrary-registry-receipt.json"
@@ -403,6 +451,17 @@ if [ "$multiset_early_registry_rc" -ne 1 ]; then
   exit 1
 fi
 cmp "$WORK/multiset-before-early-registry.json" "$WORK/multiset-run.json"
+printf '{"kind":"propagation","releaseId":".github:drivers","subjectCommit":"%s","conclusion":"success"}' "$multi_commit" > "$WORK/multiset-early-propagation.json"
+cp "$WORK/multiset-run.json" "$WORK/multiset-before-early-propagation.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/multiset-run.json" --receipt "$WORK/multiset-early-propagation.json" > /dev/null
+multiset_early_propagation_rc=$?
+set -e
+if [ "$multiset_early_propagation_rc" -ne 1 ]; then
+  echo "expected four-set propagation before verification to fail closed, got $multiset_early_propagation_rc" >&2
+  exit 1
+fi
+cmp "$WORK/multiset-before-early-propagation.json" "$WORK/multiset-run.json"
 jq -e '
   .schemaVersion == 2
   and (.releases | length) == 4
