@@ -354,6 +354,20 @@ module ApplicationServiceTests =
         | Error e -> failwithf "the fixture's own argv did not parse: %s" e
 
     [<Fact>]
+    let ``#2155 a selected external row enters claim with its canonical owner, never a compact display ref`` () =
+        // `Short` is deliberately ambiguous here: both rows render `rogue3#96`.  The scheduler's selected
+        // `Item.Ref` is not ambiguous, so this is the boundary `take` must preserve into the mutating
+        // command.  Before the repair it passed `[ "rogue3#96" ]`, which `claim` resolved as
+        // `FS-GG/rogue3#96` and never contacted the selected external issue.
+        let item =
+            Snapshot.parse
+                """{"schema":"fsgg.coord.snapshot/1","allowBacklog":false,"items":[{"owner":"EHotwagner","repo":"rogue3","number":96,"status":"Ready","state":"OPEN","body":"Paths: src/FS.GG.Coord.Cli/"}]}"""
+            |> Result.defaultWith (fun errors -> failwithf "external-owner fixture did not parse: %A" errors)
+            |> fun request -> request.Candidates |> List.exactlyOne |> fun candidate -> candidate.Item
+
+        Assert.Equal<string list>([ "EHotwagner/rogue3#96" ], Client.claimArgsForSelected item)
+
+    [<Fact>]
     let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =
         // This drives the real `Client.driver` handler through scan, the PR liveness probe, the green
         // landability read and the PR conversation.  The backing issue deliberately has no review marker:

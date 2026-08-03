@@ -775,8 +775,8 @@ module Client =
                 | Json ->
                     // THE MACHINE CONTRACT — the array of chosen ids `take` consumes, byte-identical to the
                     // bash client's `batch --json`: `["FS.GG.SDD#70","FS.GG.SDD#74"]`, short form, sorted as
-                    // the scheduler chose them. This is the one output where byte-parity is not a nicety: a
-                    // `take` that parses it must read the same array from either engine.
+                    // the scheduler chose them. The typed `Item.Ref` remains the source of truth for the
+                    // in-process `take` transition; this compact array is a display compatibility projection.
                     let ids =
                         result.Chosen
                         |> List.map (fun item -> "\"" + item.Ref.Short + "\"")
@@ -3921,6 +3921,11 @@ module Client =
                         printfn "heartbeat %s by worker %s" ref.Short w.Id
                         ExitGreen
 
+    /// The claim argv derived from a selected scheduler item.  The scheduler has already resolved this
+    /// identity; this boundary must preserve it rather than reinterpret a display ref in the board owner's
+    /// context (#2155).
+    let claimArgsForSelected (item: Item) = [ item.Ref.Canonical ]
+
     let take (ctx: Context) (opts: Options) : int =
         match worker opts with
         | Error c -> c
@@ -3987,7 +3992,10 @@ module Client =
                         // exhausted budget passes through as EX_RATE (back off until reset), and any other
                         // failure is a LOST RACE (EX_CONTENDED): the item was startable when we picked it,
                         // so a failure to take it means someone else got there first.
-                        match claim ctx { opts with Args = [ item.Ref.Short ] } with
+                        // Pass the selected typed identity through the mutating path.  `Short` is a display
+                        // projection and parsing it here used `ctx.Owner` as a new default, turning an
+                        // offered external row into an attempt to claim an unrelated default-owner twin.
+                        match claim ctx { opts with Args = claimArgsForSelected item } with
                         | code when code = ExitGreen -> ExitGreen
                         | code when code = Errors.ExRate -> code
                         | _ -> ExitContended
