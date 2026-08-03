@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "daeb204f97a49b598cd9ceb26e678dc93a25af8f163bbe7d9ef0a84cae392fce"
+        "value": "7bfd2ebd447bbd01cae1134af3bb5c2e2768b27d3926d2b75f6ef634364ac7aa"
       }
     },
     {
@@ -113,7 +113,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "d461131444563613899ebe16ff57509e90c6eef371f50c6c4eceb4e04aa0c0ab"
+        "value": "b5f433a7589b43f43413ef1e7c1a95b537c35d7f9710594e7becd354d386e687"
       }
     }
   ],
@@ -153,7 +153,7 @@
     {
       "id": "T001",
       "title": "Implement requirement FR-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [],
       "requirements": [
@@ -165,10 +165,7 @@
         "FR-001",
         "PD-001"
       ],
-      "requiredSkills": [
-        "fsharp",
-        "implementation"
-      ],
+      "requiredSkills": [],
       "requiredEvidence": [
         "EV001"
       ],
@@ -181,7 +178,7 @@
     {
       "id": "T002",
       "title": "Update contract surface PC-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -192,9 +189,7 @@
         "PC-001",
         "PD-001"
       ],
-      "requiredSkills": [
-        "fsharp"
-      ],
+      "requiredSkills": [],
       "requiredEvidence": [
         "EV002"
       ],
@@ -207,7 +202,7 @@
     {
       "id": "T003",
       "title": "Record verification evidence VO-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -219,10 +214,7 @@
         "PD-001",
         "VO-001"
       ],
-      "requiredSkills": [
-        "automated-tests",
-        "readiness-evidence"
-      ],
+      "requiredSkills": [],
       "requiredEvidence": [
         "EV003"
       ],
@@ -235,7 +227,7 @@
     {
       "id": "T004",
       "title": "Handle migration posture PM-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -246,9 +238,7 @@
         "PC-001",
         "PM-001"
       ],
-      "requiredSkills": [
-        "schema-versioning"
-      ],
+      "requiredSkills": [],
       "requiredEvidence": [
         "EV004"
       ],
@@ -261,7 +251,7 @@
     {
       "id": "T005",
       "title": "Refresh generated view impact GV-001",
-      "status": "pending",
+      "status": "done",
       "owner": "sdd",
       "dependencies": [
         "T001"
@@ -272,9 +262,7 @@
         "GV-001",
         "PD-001"
       ],
-      "requiredSkills": [
-        "deterministic-json"
-      ],
+      "requiredSkills": [],
       "requiredEvidence": [
         "EV005"
       ],
@@ -288,7 +276,7 @@
   "evidence": [
     {
       "id": "EV001",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T001",
       "taskRefs": [
@@ -298,7 +286,7 @@
         "FR-001"
       ],
       "artifactRefs": [],
-      "result": "missing",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -312,7 +300,7 @@
     },
     {
       "id": "EV002",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T002",
       "taskRefs": [
@@ -320,7 +308,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "missing",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -334,7 +322,7 @@
     },
     {
       "id": "EV003",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T003",
       "taskRefs": [
@@ -342,7 +330,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "missing",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -356,7 +344,7 @@
     },
     {
       "id": "EV004",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T004",
       "taskRefs": [
@@ -364,7 +352,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "missing",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -378,7 +366,7 @@
     },
     {
       "id": "EV005",
-      "kind": "missing",
+      "kind": "verification",
       "subjectType": "task",
       "subjectId": "T005",
       "taskRefs": [
@@ -386,7 +374,7 @@
       ],
       "requirementRefs": [],
       "artifactRefs": [],
-      "result": "missing",
+      "result": "pass",
       "synthetic": false,
       "performanceBudget": null,
       "performanceEvidenceArtifact": null,
@@ -453,7 +441,7 @@
           "path": "work/2102/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "daeb204f97a49b598cd9ceb26e678dc93a25af8f163bbe7d9ef0a84cae392fce"
+            "value": "7bfd2ebd447bbd01cae1134af3bb5c2e2768b27d3926d2b75f6ef634364ac7aa"
           },
           "schemaVersion": 1
         },
@@ -477,14 +465,14 @@
           "path": "work/2102/tasks.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "d461131444563613899ebe16ff57509e90c6eef371f50c6c4eceb4e04aa0c0ab"
+            "value": "b5f433a7589b43f43413ef1e7c1a95b537c35d7f9710594e7becd354d386e687"
           },
           "schemaVersion": 1
         }
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "cf9b8ffba785bf0570d0f84393db98f452dab523c083ba0010dad53c5e097cf9"
+        "value": "5fa50cf9b73e5bb042f0084cc842a69ed1adb1ce056b16d29c2c09a1ec091e99"
       },
       "currency": "current"
     }

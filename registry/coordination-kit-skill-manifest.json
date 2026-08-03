@@ -36,11 +36,11 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "5fdafeb231e30454a986837b5a50754ae1f55462b9ab24e13aeafb72c7fb1d03",
+      "tree-sha256": "38cae3929d4755477737d1c07db55c5f0b2f6fe0f9c0d23658678278637eeadd",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c857dab77484ebebdb60d88bd5b7259b5b7f7f489a8e310a66502637359802c0",
+          "sha256": "3879f7391decfbd5ad9e5bfe8cab1d21633732d9b747c2b49eac95602cec527d",
           "executable": false
         },
         {
