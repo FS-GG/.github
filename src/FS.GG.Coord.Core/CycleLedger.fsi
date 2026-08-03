@@ -15,7 +15,7 @@ module CycleLedger =
 
     val cycleId: unitId: string -> executor: string -> repository: string -> baseCommit: string -> string
     val inspect: Ledger -> Result<Unit list, string list>
-    val register: Ledger -> executor: string -> repository: string -> baseCommit: string -> live: Cycle list -> Result<Action, string list>
+    val register: Ledger -> executor: string -> repository: string -> baseCommit: string -> selectedUnit: string option -> parallelAuthorized: bool -> disjointTouchSets: bool -> live: Cycle list -> Result<Action, string list>
     val validateProvider: expectedWorkId: string -> expectedCycle: Cycle -> expectedSourceRevision: string -> expectedHead: string -> expectedProvider: string -> expectedSchema: string -> ProviderReceipt -> Result<unit, string list>
     val advance: Ledger -> Cycle -> ProviderReceipt -> ProviderReceipt -> ProviderReceipt -> Evidence -> Result<Action, string list>
     val complete: Ledger -> accepted: Cycle list -> rollupCycleIds: string list -> Result<Action, string list>

@@ -12,7 +12,7 @@ module CycleLedgerTests =
     let ``cycle ledger exposes only dependency-ready units and resumes a matching cycle`` () =
         Assert.Equal<string list>([ "first" ], inspect ledger |> unwrap |> List.map _.Id)
         let cycle = { Id = cycleId "first" "worker" ".github" "base"; UnitId = "first"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        Assert.Equal(Resume cycle, register ledger "worker" ".github" "base" [ cycle ] |> unwrap)
+        Assert.Equal(Resume cycle, register ledger "worker" ".github" "base" None false false [ cycle ] |> unwrap)
 
     [<Fact>]
     let ``provider receipts fail closed on stale source wrong cycle and missing player journey`` () =
@@ -36,7 +36,8 @@ module CycleLedgerTests =
     [<Fact>]
     let ``parallel ready units require explicit operator scheduling`` () =
         let twoReady = { ledger with Units = [ unit "one" [] false; unit "two" [] false ] }
-        Assert.True(register twoReady "worker" ".github" "base" [] |> Result.isError)
+        Assert.True(register twoReady "worker" ".github" "base" None false false [] |> Result.isError)
+        Assert.True(register twoReady "worker" ".github" "base" (Some "one") true true [] |> Result.isOk)
 
     [<Fact>]
     let ``advancement requires a matching merged head and rejects an eleventh round`` () =
