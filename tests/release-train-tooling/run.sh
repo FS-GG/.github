@@ -320,13 +320,45 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/topol
 jq -e '.releases[] | select(.id == "downstream" and .kind == "consumer" and .dependsOn == ["upstream"] and .coherentSets == [])' "$WORK/topology-run.json" >/dev/null
 printf '%s\n' '{"releaseId":"upstream","subjectCommit":"up","workflowRun":"https://example.test/runs/up","conclusion":"success"}' > "$WORK/upstream-receipt.json"
 printf '%s\n' '{"releaseId":"downstream","subjectCommit":"down","workflowRun":"https://example.test/runs/down","conclusion":"success"}' > "$WORK/downstream-receipt.json"
+cp "$WORK/topology-run.json" "$WORK/before-wrong-order-classification.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down --workflow-receipt "$WORK/downstream-receipt.json" > /dev/null
+wrong_order_classification_rc=$?
+set -e
+if [ "$wrong_order_classification_rc" -ne 1 ]; then
+  echo "expected downstream classification while upstream is current to fail closed, got $wrong_order_classification_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-wrong-order-classification.json" "$WORK/topology-run.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
+cp "$WORK/topology-run.json" "$WORK/after-upstream-classification.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
+cmp "$WORK/after-upstream-classification.json" "$WORK/topology-run.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/changed --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
+changed_classification_rc=$?
+set -e
+if [ "$changed_classification_rc" -ne 1 ]; then
+  echo "expected changed classification replay to fail closed, got $changed_classification_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-upstream-classification.json" "$WORK/topology-run.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down --workflow-receipt "$WORK/downstream-receipt.json" > /dev/null
 verification_report "$WORK/upstream-none.json" upstream up false false false
 verification_report "$WORK/downstream-both.json" downstream down true true true
+cp "$WORK/topology-run.json" "$WORK/before-wrong-release-verification.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/downstream-both.json" > /dev/null
+wrong_release_verification_rc=$?
+set -e
+if [ "$wrong_release_verification_rc" -ne 1 ]; then
+  echo "expected downstream verification while upstream is current to fail closed, got $wrong_release_verification_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-wrong-release-verification.json" "$WORK/topology-run.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-none.json" > "$WORK/topology-observed.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/topology-run.json" > "$WORK/topology-action.json"
-jq -e '.kind == "await-producer" and .releaseId == "downstream"' "$WORK/topology-action.json" >/dev/null || {
+jq -e '.kind == "publish" and .releaseId == "upstream"' "$WORK/topology-action.json" >/dev/null || {
   jq . "$WORK/topology-action.json" >&2
   exit 1
 }
@@ -385,6 +417,32 @@ cmp "$WORK/after-consumer-embedding.json" "$WORK/topology-run.json"
 mv "$WORK/consumer-embedding.backup.json" "$WORK/consumer-embedding.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/downstream-both.json" > "$WORK/downstream-live.json"
 jq -e '.kind == "verify-propagation" and .releaseId == "upstream"' "$WORK/downstream-live.json" >/dev/null
+cp "$WORK/topology-run.json" "$WORK/after-downstream-verification.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/downstream-both.json" > "$WORK/downstream-verification-replay.json"
+jq -e '.kind == "verify-propagation" and .releaseId == "upstream"' "$WORK/downstream-verification-replay.json" >/dev/null
+cmp "$WORK/after-downstream-verification.json" "$WORK/topology-run.json"
+jq '.note = "changed verification"' "$WORK/downstream-both.json" > "$WORK/changed-downstream-verification.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/changed-downstream-verification.json" > /dev/null
+changed_downstream_verification_rc=$?
+set -e
+if [ "$changed_downstream_verification_rc" -ne 1 ]; then
+  echo "expected changed verification replay to fail closed, got $changed_downstream_verification_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-downstream-verification.json" "$WORK/topology-run.json"
+cp "$WORK/downstream-both.json" "$WORK/downstream-both.backup.json"
+printf '%s\n' ' ' >> "$WORK/downstream-both.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/downstream-both.json" > /dev/null
+stale_downstream_verification_rc=$?
+set -e
+if [ "$stale_downstream_verification_rc" -ne 1 ]; then
+  echo "expected stale recorded verification replay to fail closed, got $stale_downstream_verification_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-downstream-verification.json" "$WORK/topology-run.json"
+mv "$WORK/downstream-both.backup.json" "$WORK/downstream-both.json"
 printf '%s\n' '{"kind":"propagation","releaseId":"upstream","subjectCommit":"up","conclusion":"success"}' > "$WORK/upstream-propagation.json"
 printf '%s\n' '{"kind":"propagation","releaseId":"downstream","subjectCommit":"down","conclusion":"success"}' > "$WORK/downstream-propagation.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/upstream-propagation.json" > /dev/null
@@ -512,6 +570,16 @@ jq -e '
   and (.releases[] | select(.id == ".github:coord-engine") | .coherentSets) == ["coord-engine"]
   and (.releases[] | select(.id == ".github:new-sdd-workspace") | .coherentSets) == ["new-sdd-workspace"]
 ' "$WORK/multiset-run.json" >/dev/null
+jq '.repositories[0].releaseSets |= map(select(.id == ".github:drivers"))' "$WORK/multiset-audit.json" > "$WORK/drivers-audit.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
+  --run "$WORK/drivers-run.json" \
+  --audit "$WORK/drivers-audit.json" \
+  --workflows "$WORK/multiset-workflows.json" \
+  --registry "$MULTI/registry/dependencies.yml" \
+  > /dev/null
+jq -e '.releases | length == 1 and .[0].id == ".github:drivers" and .[0].expectedPackages == 1' "$WORK/drivers-run.json" >/dev/null
+printf '{"releaseId":".github:drivers","subjectCommit":"%s","workflowRun":"https://example.test/runs/drivers","conclusion":"success"}' "$multi_commit" > "$WORK/drivers-workflow-receipt.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/drivers-run.json" --release-id .github:drivers --decision release-owed --subject-commit "$multi_commit" --evidence https://example.test/drivers-decision --workflow-receipt "$WORK/drivers-workflow-receipt.json" > /dev/null
 printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":".github:drivers","expectedPackages":1,"observedPackages":1,"tag":"drivers/v0.16.0","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"FS.GG.Drivers","version":"0.16.0","gitHubUrl":"https://github.test/drivers","nuGetUrl":"https://nuget.test/drivers","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
   "$multi_commit" "$multi_commit" "$multi_commit" > "$WORK/correct-drivers.json"
 jq '.tag = "kit/v0.35.0"' "$WORK/correct-drivers.json" > "$WORK/wrong-set-tag.json"
@@ -532,23 +600,23 @@ jq '.packages[0].payloadIdentical = false' "$WORK/correct-drivers.json" > "$WORK
 jq '.packages[0].differences = "not-an-array"' "$WORK/correct-drivers.json" > "$WORK/nonarray-differences.json"
 jq '.packages[0].differences = [""]' "$WORK/correct-drivers.json" > "$WORK/empty-difference.json"
 for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package forged-expected-count forged-observed-count contradictory-org-only contradictory-public-only contradictory-disagree contradictory-unavailable unavailable-equivalent identical-with-differences nonidentical-without-differences nonarray-differences empty-difference; do
-  cp "$WORK/multiset-run.json" "$WORK/multiset-before-invalid.json"
+  cp "$WORK/drivers-run.json" "$WORK/multiset-before-invalid.json"
   set +e
-  dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/$invalid.json" > /dev/null
+  dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/drivers-run.json" --verification "$WORK/$invalid.json" > /dev/null
   invalid_rc=$?
   set -e
   if [ "$invalid_rc" -ne 1 ]; then
     echo "expected $invalid Drivers receipt to fail closed, got $invalid_rc" >&2
     exit 1
   fi
-  cmp "$WORK/multiset-before-invalid.json" "$WORK/multiset-run.json"
+  cmp "$WORK/multiset-before-invalid.json" "$WORK/drivers-run.json"
 done
-cp "$WORK/multiset-run.json" "$WORK/multiset-disagree-run.json"
+cp "$WORK/drivers-run.json" "$WORK/multiset-disagree-run.json"
 jq '.packages[0].payloadIdentical = false | .packages[0].differences = ["drivers/driver-skill-manifest.json differs"]' "$WORK/correct-drivers.json" > "$WORK/disagree-drivers.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-disagree-run.json" --verification "$WORK/disagree-drivers.json" > /dev/null
 jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == false and .feedState == "disagree")' "$WORK/multiset-disagree-run.json" >/dev/null
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
-jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/drivers-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
+jq -e '.releases[] | select(.id == ".github:drivers" and .expectedPackages == 1 and .observedPackages == 1 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/drivers-run.json" >/dev/null
 
 printf '%s\n' \
   '{"repositories":[{"id":"feed-multi","baselineTag":"v1","originMain":"feed-commit","packages":[{"packageId":"Feed.One","version":"1.0.0"},{"packageId":"Feed.Two","version":"2.0.0"}],"findings":[]}]}' \
@@ -559,6 +627,8 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --workflows "$WORK/multiset-workflows.json" \
   --registry "$MULTI/registry/dependencies.yml" \
   > /dev/null
+printf '%s\n' '{"releaseId":"feed-multi","subjectCommit":"feed-commit","workflowRun":"https://example.test/runs/feed-multi","conclusion":"success"}' > "$WORK/feed-multi-workflow-receipt.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/feed-multi-run.json" --release-id feed-multi --decision release-owed --subject-commit feed-commit --evidence https://example.test/feed-multi-decision --workflow-receipt "$WORK/feed-multi-workflow-receipt.json" > /dev/null
 printf '%s\n' \
   '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"feed-multi","expectedPackages":2,"observedPackages":2,"tag":"v1","expectedCommit":"feed-commit","subjectCommit":"feed-commit","tagCommit":"feed-commit","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"Feed.One","version":"1.0.0","gitHubUrl":"https://github.test/one","nuGetUrl":"https://nuget.test/one","gitHubArchiveSha256":"a","nuGetArchiveSha256":"a","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true},{"packageId":"Feed.Two","version":"2.0.0","gitHubUrl":"https://github.test/two","nuGetUrl":"https://nuget.test/two","gitHubArchiveSha256":"b","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
   > "$WORK/feed-multi-correct.json"

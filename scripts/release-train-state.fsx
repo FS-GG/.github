@@ -349,25 +349,25 @@ let rec nextAction (state: JsonObject) =
                     match artifactReleases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
                     | Some release -> action "await-workflow" (Some(stringProperty "id" release)) "successful producer workflow run bound to the release commit" false
                     | None ->
-                        let ready id =
-                            let producer = releases |> List.find (fun release -> stringProperty "id" release = id)
-                            feedState producer = "both-equivalent"
-                            && boolProperty false "artifactVerified" producer
-                        let consumerBlocked =
-                            releases
-                            |> List.tryFind (fun release ->
-                                stringOr "producer" "kind" release = "consumer"
-                                && (match tryProperty "dependsOn" release with
-                                    | Some value -> array value |> Seq.exists (fun dependency -> not (ready (dependency.GetValue<string>())))
-                                    | _ -> false))
-                        match consumerBlocked with
-                        | Some release -> action "await-producer" (Some(stringProperty "id" release)) "verified producer artifact and consumer pin receipt" false
+                        match artifactReleases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
+                        | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
                         | None ->
-                            match releases |> List.tryFind (fun release -> stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release)) with
-                            | Some release -> action "verify-consumer" (Some(stringProperty "id" release)) "fresh consumer or retrofit materialization receipt" false
+                            let ready id =
+                                let producer = releases |> List.find (fun release -> stringProperty "id" release = id)
+                                feedState producer = "both-equivalent"
+                                && boolProperty false "artifactVerified" producer
+                            let consumerBlocked =
+                                releases
+                                |> List.tryFind (fun release ->
+                                    stringOr "producer" "kind" release = "consumer"
+                                    && (match tryProperty "dependsOn" release with
+                                        | Some value -> array value |> Seq.exists (fun dependency -> not (ready (dependency.GetValue<string>())))
+                                        | _ -> false))
+                            match consumerBlocked with
+                            | Some release -> action "await-producer" (Some(stringProperty "id" release)) "verified producer artifact and consumer pin receipt" false
                             | None ->
-                                match releases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
-                                | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
+                                match releases |> List.tryFind (fun release -> stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release)) with
+                                | Some release -> action "verify-consumer" (Some(stringProperty "id" release)) "fresh consumer or retrofit materialization receipt" false
                                 | None ->
                                     match releases |> List.tryFind (fun release -> not (boolProperty false "downstreamVerified" release)) with
                                     | Some release -> action "verify-propagation" (Some(stringProperty "id" release)) "dispatch or Renovate propagation receipt" false
@@ -531,6 +531,19 @@ let advance () =
         |> Option.defaultWith (fun () -> failwith $"unknown release `{releaseId}`")
     if subjectCommit <> stringProperty "mainCommit" release then
         failwith "decision subject commit must equal the release's merged-main commit"
+    let duplicateDecision =
+        decisions
+        |> Seq.map obj
+        |> Seq.tryFind (fun existing -> stringProperty "kind" existing = decision && stringProperty "subjectCommit" existing = subjectCommit && stringOr "" "releaseId" existing = releaseId)
+    if decision = "release-owed" || decision = "no-release" then
+        match duplicateDecision with
+        | Some existing when stringProperty "evidence" existing <> proof ->
+            failwith "classification replay must exactly match its recorded evidence"
+        | Some _ -> ()
+        | None ->
+            let currentAction = obj (nextAction state)
+            if stringProperty "kind" currentAction <> "classify-release" || stringOr "" "releaseId" currentAction <> releaseId then
+                failwith $"classification for `{releaseId}` is only legal for its current classify-release action"
     match option "--workflow-receipt" with
     | Some receiptPath when decision = "release-owed" || decision = "semver-effect" ->
         let full = Path.GetFullPath receiptPath
@@ -541,14 +554,14 @@ let advance () =
         release["workflowRun"] <- JsonValue.Create(workflowRun)
         let receipts = array (property "workflowReceipts" (obj (property "evidence" state)))
         let snapshot = evidence full
-        if not (receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)) then receipts.Add(snapshot)
+        let alreadyRecorded = receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
+        if duplicateDecision.IsSome && not alreadyRecorded then failwith "classification replay must exactly match its recorded workflow receipt"
+        if not alreadyRecorded then receipts.Add(snapshot)
     | Some _ -> failwith "--workflow-receipt is only valid with release-owed or semver-effect"
     | None when decision = "release-owed" || decision = "semver-effect" ->
         failwith "release-owed and semver-effect decisions require a successful --workflow-receipt"
     | None -> ()
-    let duplicate =
-        decisions |> Seq.exists (fun item -> let existing = obj item in stringProperty "kind" existing = decision && stringProperty "subjectCommit" existing = subjectCommit && stringOr "" "releaseId" existing = releaseId)
-    if not duplicate then
+    if duplicateDecision.IsNone then
         decisions.Add(JsonObject([ KeyValuePair("kind", JsonValue.Create(decision) :> JsonNode); KeyValuePair("releaseId", JsonValue.Create(releaseId) :> JsonNode); KeyValuePair("subjectCommit", JsonValue.Create(subjectCommit) :> JsonNode); KeyValuePair("evidence", JsonValue.Create(proof) :> JsonNode) ]))
     state["nextAction"] <- nextAction state
     write path state
@@ -571,6 +584,19 @@ let verify () =
         if name <> receiptName then failwith $"verification receipt {full} is inconsistent"
         let release = releases |> Seq.map obj |> Seq.tryFind (fun candidate -> stringProperty "id" candidate = name) |> Option.defaultWith (fun () -> failwith $"verification names unknown release `{name}`")
         if receiptCommit <> stringProperty "mainCommit" release then failwith "verification receipt subject commit must equal the release's merged-main commit"
+        let snapshot = evidence full
+        let alreadyRecorded =
+            reports
+            |> Seq.map obj
+            |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
+        if not alreadyRecorded then
+            if stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release) then
+                failwith $"verification receipt for consumer `{name}` requires verified producer embedding"
+            let currentAction = obj (nextAction state)
+            let currentActionKind = stringProperty "kind" currentAction
+            let currentActionRelease = stringOr "" "releaseId" currentAction
+            if not ([ "verify-packages"; "verify-tag"; "publish" ] |> List.contains currentActionKind) || currentActionRelease <> name then
+                failwith $"verification receipt for `{name}` is only legal for its current package, tag, or publish action"
         let receiptTag = root.GetProperty("tag").GetString()
         let expectedTags =
             match tryProperty "expectedTags" release with
@@ -632,7 +658,7 @@ let verify () =
             | false, false -> "none"
         release["feedState"] <- JsonValue.Create(feed)
         release["artifactVerified"] <- JsonValue.Create((feed = "both-equivalent"))
-        reports.Add(evidence full)
+        if not alreadyRecorded then reports.Add(snapshot)
     state["nextAction"] <- nextAction state
     write path state
     printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
