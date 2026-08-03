@@ -45,10 +45,10 @@ module BlockerLintTests =
             impossible |> List.map (function Client.CannotWriteBlocked name -> name | _ -> failwith "unreachable") |> List.sort
         )
 
-        // The inventory is not a list tested against itself. Every direct Status mutation in the
-        // production source is counted: a new site changes this number and forces its author to add a
-        // classified inventory entry (or refactor through an existing one). The two generic set-field
-        // doors are separately named above because their field name is argv, not this literal.
+        // The inventory is not a list tested against itself.  Count ALL transport shapes, not merely
+        // the literal Status spellings: a generic `field/value` writer is precisely how reconcile
+        // escaped the first inventory.  A new independent single/batch transport site now fails this
+        // gate; routing through the shared boundary is the only way to avoid a new classification.
         let rec repoRoot dir =
             if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Cli/Client.fs")) then dir
             else repoRoot (Directory.GetParent(dir).FullName)
@@ -57,6 +57,10 @@ module BlockerLintTests =
         let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
+        Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(2, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
+        Assert.Equal(4, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("StatusNotBlocked", chore)
         // `ChoreKind.Write` owns the indirect reconcile write.  It deliberately renders the
         // discriminated union through `statusWireName`, so pin the actual production mapping rather
