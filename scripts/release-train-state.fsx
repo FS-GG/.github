@@ -641,6 +641,8 @@ let importReceipt () =
     if kind = "canonical-registry" then validateEvidence false state else validateEvidence true state
     let registry = obj (property "registry" state)
     let releases = array (property "releases" state) |> Seq.map obj |> Seq.toList
+    let receipts = array (property "completionReceipts" (obj (property "evidence" state)))
+    let snapshot = evidence full
     let release id =
         releases |> List.tryFind (fun item -> stringProperty "id" item = id)
         |> Option.defaultWith (fun () -> failwith $"completion receipt names unknown release `{id}`")
@@ -662,6 +664,16 @@ let importReceipt () =
     | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash, Some receiptTopology ->
         let canonicalPath = stringProperty "canonicalPath" registry
         let expectedTopology = stringProperty "canonicalTopologySha256" registry
+        let currentActionKind = stringProperty "kind" (obj (nextAction state))
+        let alreadyRecorded =
+            receipts
+            |> Seq.map obj
+            |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
+        if boolProperty false "canonicalMerged" registry then
+            if currentActionKind <> "complete" || not alreadyRecorded then
+                failwith "completed canonical registry import must exactly match its recorded receipt"
+        elif currentActionKind <> "flip-registry" then
+            failwith "canonical registry receipt is only legal for the current flip-registry action"
         if receiptPath <> canonicalPath then failwith "canonical registry receipt path must equal the inspected canonical registry target"
         if not (File.Exists canonicalPath) || sha256 canonicalPath <> receiptHash then failwith "canonical registry receipt is stale or does not match the inspected canonical target"
         if receiptTopology <> expectedTopology || topologySha256 canonicalPath <> expectedTopology then
@@ -669,8 +681,6 @@ let importReceipt () =
         registry["sha256"] <- JsonValue.Create(receiptHash)
         registry["canonicalMerged"] <- JsonValue.Create(true)
     | _ -> failwith "completion receipt fields are inconsistent"
-    let receipts = array (property "completionReceipts" (obj (property "evidence" state)))
-    let snapshot = evidence full
     if not (receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)) then receipts.Add(snapshot)
     validateEvidence true state
     state["nextAction"] <- nextAction state

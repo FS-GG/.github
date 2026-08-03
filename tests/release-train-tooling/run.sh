@@ -96,6 +96,19 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   > "$WORK/inspect.json"
 jq -e '.nextAction.kind == "classify-release" or .nextAction.kind == "verify-packages" or .nextAction.kind == "verify-tag" or .nextAction.kind == "await-workflow" or .nextAction.kind == "publish"' \
   "$WORK/inspect.json" >/dev/null
+registry_sha="$(sha256sum "$ROOT/registry/dependencies.yml" | awk '{print $1}')"
+registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/release-run.json")"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" "$registry_topology" > "$WORK/early-registry-receipt.json"
+cp "$WORK/release-run.json" "$WORK/before-early-registry.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/early-registry-receipt.json" > /dev/null
+early_registry_rc=$?
+set -e
+if [ "$early_registry_rc" -ne 1 ]; then
+  echo "expected canonical registry import before flip-registry to fail closed, got $early_registry_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-early-registry.json" "$WORK/release-run.json"
 
 printf '%s\n' \
   '{"releaseId":"producer","subjectCommit":"forged","workflowRun":"https://example.test/runs/forged","conclusion":"failure"}' \
@@ -141,8 +154,6 @@ fi
 printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"success"}' > "$WORK/propagation.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/propagation.json" > "$WORK/propagation-action.json"
 jq -e '.kind == "flip-registry"' "$WORK/propagation-action.json" >/dev/null
-registry_sha="$(sha256sum "$ROOT/registry/dependencies.yml" | awk '{print $1}')"
-registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/release-run.json")"
 printf '%s\n' 'not the canonical registry' > "$WORK/not-canonical.yml"
 not_canonical_sha="$(sha256sum "$WORK/not-canonical.yml" | awk '{print $1}')"
 printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/not-canonical.yml" "$not_canonical_sha" "$registry_topology" > "$WORK/arbitrary-registry-receipt.json"
@@ -177,6 +188,28 @@ cp "$WORK/release-run.json" "$WORK/complete-before-reimport.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > "$WORK/complete-reimport.json"
 jq -e '.kind == "complete"' "$WORK/complete-reimport.json" >/dev/null
 cmp "$WORK/complete-before-reimport.json" "$WORK/release-run.json"
+jq '.note = "semantically changed after completion"' "$WORK/registry-receipt.json" > "$WORK/changed-registry-receipt.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/changed-registry-receipt.json" > /dev/null
+changed_reimport_rc=$?
+set -e
+if [ "$changed_reimport_rc" -ne 1 ]; then
+  echo "expected changed canonical receipt reimport after completion to fail closed, got $changed_reimport_rc" >&2
+  exit 1
+fi
+cmp "$WORK/complete-before-reimport.json" "$WORK/release-run.json"
+cp "$WORK/registry-receipt.json" "$WORK/registry-receipt.backup.json"
+printf '%s\n' ' ' >> "$WORK/registry-receipt.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > /dev/null
+stale_reimport_rc=$?
+set -e
+if [ "$stale_reimport_rc" -ne 1 ]; then
+  echo "expected stale recorded canonical receipt reimport after completion to fail closed, got $stale_reimport_rc" >&2
+  exit 1
+fi
+cmp "$WORK/complete-before-reimport.json" "$WORK/release-run.json"
+mv "$WORK/registry-receipt.backup.json" "$WORK/registry-receipt.json"
 
 printf '%s\n' ' ' >> "$WORK/audit.json"
 set +e
@@ -357,6 +390,19 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --workflows "$WORK/multiset-workflows.json" \
   --registry "$MULTI/registry/dependencies.yml" \
   > /dev/null
+multi_registry_sha="$(sha256sum "$MULTI/registry/dependencies.yml" | awk '{print $1}')"
+multi_registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/multiset-run.json")"
+printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$MULTI/registry/dependencies.yml" "$multi_registry_sha" "$multi_registry_topology" > "$WORK/multiset-early-registry.json"
+cp "$WORK/multiset-run.json" "$WORK/multiset-before-early-registry.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/multiset-run.json" --receipt "$WORK/multiset-early-registry.json" > /dev/null
+multiset_early_registry_rc=$?
+set -e
+if [ "$multiset_early_registry_rc" -ne 1 ]; then
+  echo "expected four-set canonical registry import before classification to fail closed, got $multiset_early_registry_rc" >&2
+  exit 1
+fi
+cmp "$WORK/multiset-before-early-registry.json" "$WORK/multiset-run.json"
 jq -e '
   .schemaVersion == 2
   and (.releases | length) == 4
