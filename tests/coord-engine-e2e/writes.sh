@@ -928,6 +928,42 @@ curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-45-projection" >/dev/nul
 no_mutation "reconcile (bare, actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --worker reconcile-probe
 must_mutate "reconcile --apply (actionable chore)" "$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe
 
+# .github#2157 — BLOCKER-CLEARED is a coupled repair.  The JSON receipt names BOTH intended writes
+# and BOTH fresh observations; the fixture's mutation meter proves they travelled in ONE GraphQL batch.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+blocker_cleared="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json)"; blocker_cleared_rc=$?
+blocker_mutations="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+printf '%s' "$blocker_cleared" | jq -e '
+  map(select(.subject == "FS.GG.SDD#47")) | length == 1 and
+  .[0].outcome == "written" and
+  .[0].writes == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}] and
+  .[0].observed == [{"field":"Status","value":"Ready"},{"field":"Blocked by","value":""}]' >/dev/null 2>&1 \
+  && [ "$blocker_cleared_rc" -eq 0 ] \
+  && printf '%s' "$blocker_mutations" | jq -e '.count == 1 and .requests[0].kind == "graphql-mutation"' >/dev/null 2>&1 \
+  && ok "#2157: BLOCKER-CLEARED atomically writes and freshly observes Status=Ready plus an empty Blocked by" \
+  || bad "#2157: BLOCKER-CLEARED receipt and atomic batch" "rc=$blocker_cleared_rc receipt=$blocker_cleared mutations=$blocker_mutations"
+
+# Negative control 1: an acknowledged batch that only projects Status is a FAILED repair, never a
+# written/converged receipt.  The stale Blocked by edge must remain visible in the verification error.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-47-partial" >/dev/null
+partial="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json 2>/dev/null)"; partial_rc=$?
+printf '%s' "$partial" | jq -e 'map(select(.subject == "FS.GG.SDD#47")) | length == 1 and .[0].outcome == "failed" and (.[0].error | contains("Blocked by")) and .[0].observed == []' >/dev/null 2>&1 \
+  && [ "$partial_rc" -ne 0 ] \
+  && ok "#2157: partial Status-only projection cannot masquerade as BLOCKER-CLEARED convergence" \
+  || bad "#2157: partial BLOCKER-CLEARED must fail closed" "rc=$partial_rc receipt=$partial"
+
+# Negative control 2: if the row disappears between acknowledgement and the fresh scan, there is no
+# observation to bless.  A missing row is therefore a FAILED receipt, never an empty successful one.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/reset-reconcile-47" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/arm-reconcile-47-missing" >/dev/null
+missing="$("$ENGINE" reconcile --repo FS.GG.SDD --apply --worker reconcile-probe --json 2>/dev/null)"; missing_rc=$?
+printf '%s' "$missing" | jq -e 'map(select(.subject == "FS.GG.SDD#47")) | length == 1 and .[0].outcome == "failed" and (.[0].error | contains("left the board")) and .[0].observed == []' >/dev/null 2>&1 \
+  && [ "$missing_rc" -ne 0 ] \
+  && ok "#2157: a missing fresh row cannot masquerade as BLOCKER-CLEARED convergence" \
+  || bad "#2157: missing BLOCKER-CLEARED row must fail closed" "rc=$missing_rc receipt=$missing"
+
 # These ten write rows are driven by their dedicated state-transition assertions above.  Marking
 # them here keeps the ledger at one entry per advertised command while the assertions remain next
 # to the preconditions that make each mutation meaningful.

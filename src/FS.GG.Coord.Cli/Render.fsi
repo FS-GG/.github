@@ -180,6 +180,8 @@ module Render =
           /// The field and value this repair sets; `None` for `STALE-CLAIM`, which writes no field. One
           /// option over the PAIR, so the two cannot be present independently.
           Write: (string * string) option
+          Writes: (string * string) list
+          Observed: (string * string) list option
           /// `None` on a dry run — nothing was attempted, so nothing is known.
           Outcome: ReconcileOutcome option }
 
