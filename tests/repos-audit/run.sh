@@ -328,6 +328,13 @@ REG="$WORK/repos.yml"; mkreg "$REG"
 cat > "$STUB/gh" <<'STUB'
 #!/usr/bin/env bash
 set -uo pipefail
+# The roster-wide issue-intake sweep uses GitHub's typed GraphQL enum. Its normal fixture world is
+# collaborator-only; individual policy failure/no-verdict legs can replace this shim response when
+# they need to exercise those dispositions.
+if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
+  printf '%s\n' '{"data":{"repository":{"issueCreationPolicy":"COLLABORATORS_ONLY","hasIssuesEnabled":true}}}'
+  exit 0
+fi
 # args: api [-H ...] <path> [--jq ...]
 path=""; n=$#; args=("$@")
 for ((i=1;i<n;i++)); do case "${args[i]}" in repos/*) path="${args[i]}";; esac; done
