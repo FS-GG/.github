@@ -37,8 +37,7 @@ module CycleLedgerApplication =
                 { Id = text "id" unit
                   Dependencies = strings "dependencies" unit
                   Completed = bool "completed" unit
-                  Evidence = strings "evidence" unit
-                  PlayerJourneyRequired = bool "playerJourneyRequired" unit })
+                  Evidence = strings "evidence" unit })
             |> List.ofSeq }
     let private cycle node = { Id = text "id" node; UnitId = text "unitId" node; Executor = text "executor" node; Repository = text "repository" node; BaseCommit = text "baseCommit" node }
     let private updateReceipt node =
@@ -57,11 +56,12 @@ module CycleLedgerApplication =
           MergeHead = text "mergeHead" node
           EvidencePaths = strings "evidencePaths" node
           Dispositions = strings "dispositions" node
+          Nonce = text "nonce" node
           EvidenceDigest = text "evidenceDigest" node }
-    let private receipt node =
+    let private receipt expectedWorkId target source head provider node =
         let path = text "artifactPath" node
         if not (File.Exists path) then invalidArg "artifactPath" $"does not exist: %s{path}"
-        match parseProviderReceipt (File.ReadAllBytes path) with
+        match parseProviderReceipt expectedWorkId target source head provider (File.ReadAllBytes path) with
         | Ok parsed -> parsed
         | Error errors -> invalidArg "artifactPath" (String.concat "; " errors)
     let private evidence node =
@@ -85,6 +85,7 @@ module CycleLedgerApplication =
                    mergeHead = receipt.MergeHead
                    evidencePaths = receipt.EvidencePaths
                    dispositions = receipt.Dispositions
+                   nonce = receipt.Nonce
                    evidenceDigest = receipt.EvidenceDigest |}
             match options.Render with
             | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = "update"; cycleId = cycle.Id; unitId = cycle.UnitId; updateReceipt = updateReceipt |})
@@ -93,6 +94,30 @@ module CycleLedgerApplication =
             let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Escalate cycle -> {| action = "escalate"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |} | Update _ -> failwith "unreachable"
             match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
         ExitCode.toInt ExitCode.Green
+
+    let private journalOptions = JsonSerializerOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+
+    let private journalPath () =
+        match Environment.GetEnvironmentVariable "FSGG_CYCLE_JOURNAL" with
+        | value when not (String.IsNullOrWhiteSpace value) -> value
+        | _ -> Path.Combine(".git", "fsgg-cycle-journal.json")
+
+    let private readJournal () =
+        let path = journalPath ()
+        if File.Exists path then
+            JsonSerializer.Deserialize<UpdateReceipt list>(File.ReadAllText path, journalOptions)
+            |> Option.ofObj
+            |> Option.defaultValue []
+        else []
+
+    let private appendJournal receipt =
+        let path = journalPath ()
+        let directory = Path.GetDirectoryName path
+        if not (String.IsNullOrWhiteSpace directory) then Directory.CreateDirectory directory |> ignore
+        let receipts = receipt :: (readJournal () |> List.filter (fun existing -> existing.CycleId <> receipt.CycleId))
+        let temporary = path + ".tmp"
+        File.WriteAllText(temporary, JsonSerializer.Serialize(receipts, journalOptions))
+        File.Move(temporary, path, true)
     let run options =
         try
             let action = match options.Args with | [ value ] -> value | _ -> invalidArg "cycle" "requires exactly one action: inspect, register, advance, update, or complete"
@@ -114,17 +139,25 @@ module CycleLedgerApplication =
             | "complete" ->
                 let accepted = (property "acceptedCycles" root).EnumerateArray() |> Seq.map cycle |> List.ofSeq
                 let guarded = (property "guardedUpdates" root).EnumerateArray() |> Seq.map updateReceipt |> List.ofSeq
-                match complete model accepted guarded (strings "rollupCycleIds" root) with
-                | Ok transition -> render options transition
-                | Error errors -> fail (String.concat "; " errors)
+                let journal = readJournal ()
+                let unissued = guarded |> List.filter (fun receipt -> not (List.contains receipt journal))
+                if not (List.isEmpty unissued) then fail "completion requires an exact update receipt issued by the durable update journal"
+                else
+                    match complete model accepted guarded (strings "rollupCycleIds" root) with
+                    | Ok transition -> render options transition
+                    | Error errors -> fail (String.concat "; " errors)
             | "advance" ->
                 let target = cycle (property "cycle" root)
-                match advance model target (receipt (property "implementation" root)) (receipt (property "review" root)) (receipt (property "feedback" root)) (evidence (property "evidence" root)) with
+                let proof = evidence (property "evidence" root)
+                let expected = proof.ImplementationHead
+                match advance model target (receipt target.UnitId target model.SourceRevision expected "fsgg-sdd" (property "implementation" root)) (receipt target.UnitId target model.SourceRevision expected "critique" (property "review" root)) (receipt target.UnitId target model.SourceRevision expected "feedback" (property "feedback" root)) proof with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
             | "update" ->
                 let target = cycle (property "cycle" root)
-                match update model target (evidence (property "evidence" root)) with
+                let nonce = Guid.NewGuid().ToString("N")
+                match update model target (evidence (property "evidence" root)) nonce with
+                | Ok(Update(_, receipt) as transition) -> appendJournal receipt; render options transition
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
             | _ -> fail "unknown action; expected inspect, register, advance, update, or complete"

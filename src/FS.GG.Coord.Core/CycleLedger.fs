@@ -7,17 +7,12 @@ open System.Text.Json
 open System.Text.RegularExpressions
 
 module CycleLedger =
-    type Unit =
-        { Id: string
-          Dependencies: string list
-          Completed: bool
-          Evidence: string list
-          PlayerJourneyRequired: bool }
+    type Unit = { Id: string; Dependencies: string list; Completed: bool; Evidence: string list }
     type Ledger = { SourceRevision: string; Units: Unit list }
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
         { Schema: string; Provider: string; WorkId: string; CycleId: string; SourceRevision: string
-          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option
+          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool
           GeneratorId: string; GeneratorVersion: string; ArtifactDigest: string }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
@@ -35,6 +30,7 @@ module CycleLedger =
           MergeHead: string
           EvidencePaths: string list
           Dispositions: string list
+          Nonce: string
           EvidenceDigest: string }
     type Action = | Resume of Cycle | Register of Cycle | Advance of Cycle | Update of Cycle * UpdateReceipt | Escalate of Cycle | Complete
 
@@ -52,35 +48,80 @@ module CycleLedger =
             invalidArg name "must be a non-empty string"
         value.GetString()
 
-    let parseProviderReceipt (artifactBytes: byte array) =
+    let private jsonBool name node =
+        match (jsonProperty name node).ValueKind with
+        | JsonValueKind.True -> true
+        | JsonValueKind.False -> false
+        | _ -> invalidArg name "must be a boolean"
+
+    let private jsonStringArray name node =
+        let value = jsonProperty name node
+        if value.ValueKind <> JsonValueKind.Array then invalidArg name "must be an array"
+        value.EnumerateArray()
+        |> Seq.map (fun item ->
+            if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
+                invalidArg name "must contain non-empty strings"
+            item.GetString())
+        |> List.ofSeq
+
+    let parseProviderReceipt expectedWorkId (expectedCycle: Cycle) expectedSourceRevision expectedHead expectedProvider (artifactBytes: byte array) =
         try
-            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(artifactBytes))
-            let root = document.RootElement
-            let generator = jsonProperty "generator" root
-            let roundNode = jsonProperty "round" root
-            let round =
-                match roundNode.TryGetInt32() with
-                | true, value -> value
-                | _ -> invalidArg "round" "must be an integer"
-            let playerJourney =
-                match (jsonProperty "playerJourney" root).ValueKind with
-                | JsonValueKind.True -> Some true
-                | JsonValueKind.False -> Some false
-                | JsonValueKind.Null -> None
-                | _ -> invalidArg "playerJourney" "must be boolean or null"
-            Ok
-                { Schema = jsonText "schema" root
-                  Provider = jsonText "provider" root
-                  WorkId = jsonText "workId" root
-                  CycleId = jsonText "cycleId" root
-                  SourceRevision = jsonText "sourceRevision" root
-                  CandidateHead = jsonText "candidateHead" root
-                  Verdict = jsonText "verdict" root
-                  Round = round
-                  PlayerJourney = playerJourney
-                  GeneratorId = jsonText "id" generator
-                  GeneratorVersion = jsonText "version" generator
-                  ArtifactDigest = "sha256:" + (SHA256.HashData artifactBytes |> Convert.ToHexString).ToLowerInvariant() }
+            let digest = "sha256:" + (SHA256.HashData artifactBytes |> Convert.ToHexString).ToLowerInvariant()
+            match expectedProvider with
+            | "fsgg-sdd" ->
+                use document = JsonDocument.Parse(ReadOnlyMemory<byte>(artifactBytes))
+                let root = document.RootElement
+                if root.TryGetProperty("provider") |> fst then invalidArg "artifact" "self-authored normalized provider envelopes are unsupported"
+                let schemaVersion = jsonProperty "schemaVersion" root
+                if schemaVersion.GetInt32() <> 1 then invalidArg "schemaVersion" "must be 1"
+                if jsonText "workId" root <> expectedWorkId then invalidArg "workId" "does not match"
+                if jsonText "stage" root <> "verify" || jsonText "status" root <> "verificationReady" || jsonText "readiness" root <> "verificationReady" then invalidArg "status" "SDD verification report is not verificationReady"
+                let generator = jsonText "generator" root
+                if generator <> "FS.GG.SDD.Artifacts/1.0.0" then invalidArg "generator" "is unsupported"
+                let diagnostics = jsonProperty "diagnostics" root
+                if diagnostics.ValueKind <> JsonValueKind.Array || diagnostics.GetArrayLength() <> 0 then invalidArg "diagnostics" "SDD verification report has diagnostics"
+                Ok { Schema = "fsgg.sdd.verify/1"; Provider = expectedProvider; WorkId = expectedWorkId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.SDD.Artifacts"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
+            | "critique" ->
+                use document = JsonDocument.Parse(ReadOnlyMemory<byte>(artifactBytes))
+                let root = document.RootElement
+                if root.TryGetProperty("provider") |> fst then invalidArg "artifact" "self-authored normalized provider envelopes are unsupported"
+                if (jsonProperty "schema_version" root).GetInt32() <> 3 then invalidArg "schema_version" "must be 3"
+                if jsonText "cycle_id" root <> expectedCycle.Id then invalidArg "cycle_id" "does not match"
+                let rounds = (jsonProperty "repair_rounds" root).GetInt32()
+                if rounds < 0 || rounds > 10 then invalidArg "repair_rounds" "is outside 0 through 10"
+                let confirmation = jsonProperty "confirmation" root
+                if jsonText "reviewed_commit" confirmation <> expectedHead || jsonText "verdict" confirmation <> "pass" then invalidArg "confirmation" "does not pass the candidate head"
+                let game = jsonBool "game_functionality" root
+                let journeys = jsonProperty "player_journeys" root
+                if journeys.ValueKind <> JsonValueKind.Array then invalidArg "player_journeys" "must be an array"
+                let journeyPass =
+                    journeys.EnumerateArray()
+                    |> Seq.exists (fun journey -> jsonText "entry_point" journey = "product-boot" && jsonText "input_surface" journey = "player-control-messages" && jsonBool "reached" journey)
+                if game && not journeyPass then invalidArg "player_journeys" "has no passing product-entry player journey"
+                if not (List.isEmpty (jsonStringArray "uncovered_functionality" root)) then invalidArg "uncovered_functionality" "must be empty"
+                Ok
+                    { Schema = "fsgg.critique.report/3"
+                      Provider = expectedProvider
+                      WorkId = expectedWorkId
+                      CycleId = expectedCycle.Id
+                      SourceRevision = expectedSourceRevision
+                      CandidateHead = expectedHead
+                      Verdict = "pass"
+                      Round = rounds
+                      PlayerJourney = (if game then Some journeyPass else None)
+                      JourneyRequired = game
+                      GeneratorId = "FS.GG.Critique.Validator"
+                      GeneratorVersion = "1.0.0"
+                      ArtifactDigest = digest }
+            | "feedback" ->
+                let text = Encoding.UTF8.GetString artifactBytes
+                let require pattern message = if not (Regex.IsMatch(text, pattern, RegexOptions.Multiline ||| RegexOptions.CultureInvariant)) then invalidArg "feedback" message
+                require "(?m)^schemaVersion:\\s*2\\s*$" "report must declare schemaVersion: 2"
+                require ("(?m)^cycleId:\\s*" + Regex.Escape(expectedCycle.Id) + "\\s*$") "report cycle does not match"
+                require "(?mi)^-\\s+\\*\\*activation:\\*\\*\\s+active\\s*$" "report activation is not active"
+                require "(?mi)^-\\s+\\*\\*phases:\\*\\*\\s+.+$" "report phases are missing"
+                Ok { Schema = "fsgg.feedback.report/2"; Provider = expectedProvider; WorkId = expectedWorkId; CycleId = expectedCycle.Id; SourceRevision = expectedSourceRevision; CandidateHead = expectedHead; Verdict = "pass"; Round = 0; PlayerJourney = None; JourneyRequired = false; GeneratorId = "FS.GG.Feedback.Validator"; GeneratorVersion = "1.0.0"; ArtifactDigest = digest }
+            | _ -> Error [ "unsupported provider adapter: " + expectedProvider ]
         with error -> Error [ "provider artifact is invalid: " + error.Message ]
 
     let cycleId unitId executor repository baseCommit =
@@ -159,15 +200,11 @@ module CycleLedger =
     let advance (ledger: Ledger) (cycle: Cycle) (implementation: ProviderReceipt) (review: ProviderReceipt) (feedback: ProviderReceipt) (evidence: Evidence) =
         let expected = evidence.ImplementationHead
         let validate provider schema generator receipt = validateProvider cycle.UnitId cycle ledger.SourceRevision expected provider schema generator receipt
-        let journeyRequired =
-            ledger.Units
-            |> List.tryFind (fun unit -> unit.Id = cycle.UnitId)
-            |> Option.map _.PlayerJourneyRequired
-            |> Option.defaultValue false
+        let journeyRequired = review.JourneyRequired
         let errors =
             [ if cycle.BaseCommit <> ledger.SourceRevision then yield "cycle base commit is stale against ledger source revision"
               if cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit then yield "cycle identity is not the stable source-bound identity"
-              for provider, schema, generator, receipt in [ "fsgg-sdd", "fsgg.sdd.report/1", "FS.GG.SDD.Artifacts", implementation; "critique", "fsgg.critique.report/3", "FS.GG.Critique", review; "feedback", "fsgg.feedback.report/2", "FS.GG.Feedback", feedback ] do
+              for provider, schema, generator, receipt in [ "fsgg-sdd", "fsgg.sdd.verify/1", "FS.GG.SDD.Artifacts", implementation; "critique", "fsgg.critique.report/3", "FS.GG.Critique.Validator", review; "feedback", "fsgg.feedback.report/2", "FS.GG.Feedback.Validator", feedback ] do
                   match validate provider schema generator receipt with Error reasons -> yield! reasons | Ok () -> ()
               if evidence.ReviewHead <> expected then yield "review evidence head does not match implementation head"
               if evidence.FeedbackCycle <> cycle.Id then yield "feedback evidence cycle does not match"
@@ -178,7 +215,7 @@ module CycleLedger =
         if review.Round = 10 && review.Verdict <> "pass" && errors |> List.forall (fun error -> error = "provider receipt verdict is not pass" || error = "tenth review round requires escalation rather than advancement") then Ok(Escalate cycle)
         elif List.isEmpty errors then Ok(Advance cycle) else Error errors
 
-    let private updateDigest (cycle: Cycle) sourceRevision (evidence: Evidence) mergedPr mergeHead =
+    let private updateDigest (cycle: Cycle) sourceRevision (evidence: Evidence) mergedPr mergeHead nonce =
         [ "fsgg.coord.cycle-update/1"
           cycle.Id
           cycle.UnitId
@@ -190,21 +227,23 @@ module CycleLedger =
           string mergedPr
           mergeHead
           String.concat "\u001f" evidence.EvidencePaths
-          String.concat "\u001f" evidence.Dispositions ]
+          String.concat "\u001f" evidence.Dispositions
+          nonce ]
         |> String.concat "\n"
         |> Encoding.UTF8.GetBytes
         |> SHA256.HashData
         |> Convert.ToHexString
         |> fun digest -> "sha256:" + digest.ToLowerInvariant()
 
-    let update (ledger: Ledger) (cycle: Cycle) (evidence: Evidence) =
+    let update (ledger: Ledger) (cycle: Cycle) (evidence: Evidence) (nonce: string) =
         let errors =
             [ if cycle.BaseCommit <> ledger.SourceRevision then yield "guarded update cycle is stale against ledger source revision"
               if cycle.Id <> cycleId cycle.UnitId cycle.Executor cycle.Repository cycle.BaseCommit then yield "guarded update cycle identity is invalid"
               if evidence.MergedPr.IsNone || evidence.MergeHead <> Some evidence.ImplementationHead then yield "guarded update requires a merged head-bound pull request"
               if evidence.ReviewHead <> evidence.ImplementationHead || evidence.FeedbackCycle <> cycle.Id || not evidence.FeedbackActive then yield "guarded update evidence chain is incomplete"
               if List.isEmpty evidence.EvidencePaths || evidence.EvidencePaths |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires evidence paths"
-              if List.isEmpty evidence.Dispositions || evidence.Dispositions |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires checkpoint and finding dispositions" ]
+              if List.isEmpty evidence.Dispositions || evidence.Dispositions |> List.exists String.IsNullOrWhiteSpace then yield "guarded update requires checkpoint and finding dispositions"
+              if not (Regex.IsMatch(nonce, "^[0-9a-f]{32}$", RegexOptions.CultureInvariant)) then yield "guarded update nonce must be engine-issued" ]
         if List.isEmpty errors then
             let mergedPr = evidence.MergedPr.Value
             let mergeHead = evidence.MergeHead.Value
@@ -221,7 +260,8 @@ module CycleLedger =
                   MergeHead = mergeHead
                   EvidencePaths = evidence.EvidencePaths
                   Dispositions = evidence.Dispositions
-                  EvidenceDigest = updateDigest cycle ledger.SourceRevision evidence mergedPr mergeHead }
+                  Nonce = nonce
+                  EvidenceDigest = updateDigest cycle ledger.SourceRevision evidence mergedPr mergeHead nonce }
             Ok(Update(cycle, receipt))
         else Error errors
 
@@ -256,7 +296,7 @@ module CycleLedger =
                               MergeHead = Some receipt.MergeHead
                               EvidencePaths = receipt.EvidencePaths
                               Dispositions = receipt.Dispositions }
-                        match update ledger cycle evidence with
+                        match update ledger cycle evidence receipt.Nonce with
                         | Ok(Update(_, expected)) when expected = receipt -> None
                         | _ -> Some receipt.CycleId)
             if not (List.isEmpty unchecked) then Error [ "required units are not checked with evidence: " + String.concat ", " unchecked ]

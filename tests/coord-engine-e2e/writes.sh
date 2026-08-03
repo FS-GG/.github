@@ -56,6 +56,7 @@ export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT"
 export GITHUB_TOKEN="fixture-token"
 export FSGG_COORD_OWNER="FS-GG" FSGG_COORD_PROJECT="Coordination"
 export FSGG_COORD_CACHE="$CACHE_DIR" FSGG_COORD_SCAN_TTL_SEC=0
+export FSGG_CYCLE_JOURNAL="$CYCLE_FIX/journal.json"
 # A clean identity, so the derivation never depends on the CI runner's env.
 #
 # `FSGG_WORKER=""` ALONE WAS NOT THAT, and .github#1646 is what made it visible. `Identity.resolve` reads
@@ -799,11 +800,11 @@ no_mutation "whoami" run whoami
 # parser refusal, so command-contract coverage proves the command reaches its actual decision
 # path while the fixture's HTTP mutation ledger remains empty.
 printf '%s\n' \
-  '{"sourceRevision":"fixture-source","units":[{"id":"first","dependencies":[],"completed":false,"evidence":[],"playerJourneyRequired":false}]}' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"first","dependencies":[],"completed":false,"evidence":[]}]}' \
   >"$CYCLE_SNAPSHOT"
 no_mutation "cycle" run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json
 printf '%s\n' \
-  '{"sourceRevision":"fixture-source","units":[{"id":"a","dependencies":["b"],"completed":false,"evidence":[],"playerJourneyRequired":false},{"id":"b","dependencies":["a"],"completed":false,"evidence":[],"playerJourneyRequired":false}]}' \
+  '{"sourceRevision":"fixture-source","units":[{"id":"a","dependencies":["b"],"completed":false,"evidence":[]},{"id":"b","dependencies":["a"],"completed":false,"evidence":[]}]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_bad="$(run cycle inspect --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_bad_rc=$?
 if [ "$cycle_bad_rc" -ne 0 ] && printf '%s' "$cycle_bad" | grep -q 'dependency cycle'; then
@@ -815,7 +816,7 @@ fi
 # The provider boundary consumes exact artifact bytes, not provenance fields asserted by the cycle
 # caller. Registration supplies the canonical cycle id used by all three provider envelopes.
 printf '%s\n' \
-  '{"sourceRevision":"base","units":[{"id":"work","dependencies":[],"completed":false,"evidence":[],"playerJourneyRequired":true}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
+  '{"sourceRevision":"base","units":[{"id":"work","dependencies":[],"completed":false,"evidence":[]}],"executor":"worker","repository":".github","baseCommit":"base","liveCycles":[]}' \
   >"$CYCLE_SNAPSHOT"
 cycle_register="$(run cycle register --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_register_rc=$?
 cycle_id="$(printf '%s' "$cycle_register" | jq -r '.cycleId // empty' 2>/dev/null)"
@@ -825,24 +826,24 @@ else
   bad "#2133: cycle production route must register a canonical cycle" "rc=$cycle_register_rc output=$cycle_register"
 fi
 
-printf '%s\n' "{\"schema\":\"fsgg.sdd.report/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"work\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/sdd.json"
-printf '%s\n' "{\"schema\":\"fsgg.critique.report/3\",\"provider\":\"critique\",\"workId\":\"work\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"head\",\"verdict\":\"pass\",\"round\":1,\"playerJourney\":true,\"generator\":{\"id\":\"FS.GG.Critique\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/critique.json"
-printf '%s\n' "{\"schema\":\"fsgg.feedback.report/2\",\"provider\":\"feedback\",\"workId\":\"work\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.Feedback\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/feedback.json"
+printf '%s\n' "{\"schemaVersion\":1,\"workId\":\"work\",\"stage\":\"verify\",\"status\":\"verificationReady\",\"generator\":\"FS.GG.SDD.Artifacts/1.0.0\",\"readiness\":\"verificationReady\",\"diagnostics\":[]}" >"$CYCLE_FIX/sdd.json"
+printf '%s\n' "{\"schema_version\":3,\"cycle_id\":\"$cycle_id\",\"repair_rounds\":0,\"confirmation\":{\"reviewed_commit\":\"head\",\"verdict\":\"pass\"},\"game_functionality\":true,\"player_journeys\":[{\"entry_point\":\"product-boot\",\"input_surface\":\"player-control-messages\",\"reached\":true}],\"uncovered_functionality\":[]}" >"$CYCLE_FIX/critique.json"
+printf '%s\n' '---' 'schemaVersion: 2' "cycleId: $cycle_id" '---' '## §1 Provenance and confidence' '- **activation:** active' '- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence, verify-ship-pr' '## §2 Findings' >"$CYCLE_FIX/feedback.md"
 
-jq -n --arg cycle "$cycle_id" --arg sdd "$CYCLE_FIX/sdd.json" --arg critique "$CYCLE_FIX/critique.json" --arg feedback "$CYCLE_FIX/feedback.json" \
-  '{sourceRevision:"base",units:[{id:"work",dependencies:[],completed:false,evidence:[],playerJourneyRequired:true}],cycle:{id:$cycle,unitId:"work",executor:"worker",repository:".github",baseCommit:"base"},implementation:{artifactPath:$sdd},review:{artifactPath:$critique},feedback:{artifactPath:$feedback},evidence:{implementationHead:"head",reviewHead:"head",feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:"head",evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
+jq -n --arg cycle "$cycle_id" --arg sdd "$CYCLE_FIX/sdd.json" --arg critique "$CYCLE_FIX/critique.json" --arg feedback "$CYCLE_FIX/feedback.md" \
+  '{sourceRevision:"base",units:[{id:"work",dependencies:[],completed:false,evidence:[]}],cycle:{id:$cycle,unitId:"work",executor:"worker",repository:".github",baseCommit:"base"},implementation:{artifactPath:$sdd},review:{artifactPath:$critique},feedback:{artifactPath:$feedback},evidence:{implementationHead:"head",reviewHead:"head",feedbackCycle:$cycle,feedbackActive:true,mergedPr:7,mergeHead:"head",evidencePaths:["evidence/report.json"],dispositions:["all-findings-disposed"]}}' >"$CYCLE_SNAPSHOT"
 cycle_advance="$(run cycle advance --snapshot "$CYCLE_SNAPSHOT" --json 2>&1)"; cycle_advance_rc=$?
 if [ "$cycle_advance_rc" -eq 0 ] && [ "$(printf '%s' "$cycle_advance" | jq -r .action 2>/dev/null)" = advance ]; then
-  ok "#2133: cycle advance validates exact provider artifact files and ledger-owned journey applicability"
+  ok "#2133: cycle advance validates real SDD, critique, and feedback provider artifact shapes"
 else
   bad "#2133: cycle advance must consume valid provider artifacts" "rc=$cycle_advance_rc output=$cycle_advance"
 fi
 
-sed 's/\"version\":\"1.0.0\"/\"version\":\"9.9.9\"/' "$CYCLE_FIX/sdd.json" >"$CYCLE_FIX/forged-sdd.json"
+printf '%s\n' "{\"schema\":\"fsgg.sdd.verify/1\",\"provider\":\"fsgg-sdd\",\"workId\":\"work\",\"cycleId\":\"$cycle_id\",\"sourceRevision\":\"base\",\"candidateHead\":\"head\",\"verdict\":\"pass\",\"round\":0,\"playerJourney\":null,\"generator\":{\"id\":\"FS.GG.SDD.Artifacts\",\"version\":\"1.0.0\"}}" >"$CYCLE_FIX/forged-sdd.json"
 jq --arg forged "$CYCLE_FIX/forged-sdd.json" '.implementation.artifactPath=$forged' "$CYCLE_SNAPSHOT" >"$CYCLE_FIX/forged-advance.json"
 forged_advance="$(run cycle advance --snapshot "$CYCLE_FIX/forged-advance.json" --json 2>&1)"; forged_advance_rc=$?
-if [ "$forged_advance_rc" -ne 0 ] && printf '%s' "$forged_advance" | grep -q 'unsupported'; then
-  ok "#2133: production advance rejects a well-shaped but unsupported provider version"
+if [ "$forged_advance_rc" -ne 0 ] && printf '%s' "$forged_advance" | grep -q 'self-authored'; then
+  ok "#2133: production advance rejects supported-looking caller-authored provider envelopes"
 else
   bad "#2133: production advance must reject invented provider provenance" "rc=$forged_advance_rc output=$forged_advance"
 fi
@@ -864,10 +865,11 @@ else
   bad "#2133: production complete must verify the emitted update receipt" "rc=$cycle_complete_rc output=$cycle_complete"
 fi
 
-jq '.guardedUpdates=[{cycleId:.acceptedCycles[0].id,evidenceDigest:("sha256:" + ("a" * 64))}]' "$CYCLE_FIX/complete.json" >"$CYCLE_FIX/invented-complete.json"
+rm -f "$FSGG_CYCLE_JOURNAL"
+cp "$CYCLE_FIX/complete.json" "$CYCLE_FIX/invented-complete.json"
 invented_complete="$(run cycle complete --snapshot "$CYCLE_FIX/invented-complete.json" --json 2>&1)"; invented_complete_rc=$?
-if [ "$invented_complete_rc" -ne 0 ]; then
-  ok "#2133: production complete rejects a caller-invented digest without an emitted update receipt"
+if [ "$invented_complete_rc" -ne 0 ] && printf '%s' "$invented_complete" | grep -q 'durable update journal'; then
+  ok "#2133: production complete rejects a full recomputed receipt without durable update history"
 else
   bad "#2133: production complete must reject invented update receipts" "output=$invented_complete"
 fi

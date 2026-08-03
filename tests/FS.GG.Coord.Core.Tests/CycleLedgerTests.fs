@@ -6,28 +6,41 @@ open Xunit
 open FS.GG.Coord.CycleLedger
 
 module CycleLedgerTests =
-    let unit id dependencies completed journeyRequired =
+    let unit id dependencies completed =
         { Id = id
           Dependencies = dependencies
           Completed = completed
-          Evidence = []
-          PlayerJourneyRequired = journeyRequired }
+          Evidence = [] }
 
     let ledger =
         { SourceRevision = "ledger-sha"
-          Units = [ unit "first" [] false false; unit "second" [ "first" ] false false ] }
+          Units = [ unit "first" [] false; unit "second" [ "first" ] false ] }
 
     let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
 
-    let providerBytes provider schema generator version workId cycleId source head verdict round playerJourney =
-        let journey = playerJourney |> Option.map string |> Option.defaultValue "null" |> _.ToLowerInvariant()
-        $"""{{"schema":"%s{schema}","provider":"%s{provider}","workId":"%s{workId}","cycleId":"%s{cycleId}","sourceRevision":"%s{source}","candidateHead":"%s{head}","verdict":"%s{verdict}","round":%d{round},"playerJourney":%s{journey},"generator":{{"id":"%s{generator}","version":"%s{version}"}}}}"""
+    let sddBytes workId =
+        $"""{{"schemaVersion":1,"workId":"%s{workId}","stage":"verify","status":"verificationReady","generator":"FS.GG.SDD.Artifacts/1.0.0","readiness":"verificationReady","diagnostics":[]}}"""
         |> Encoding.UTF8.GetBytes
 
-    let receipt provider schema generator version workId cycleId source head verdict round playerJourney =
-        providerBytes provider schema generator version workId cycleId source head verdict round playerJourney
-        |> parseProviderReceipt
-        |> unwrap
+    let critiqueBytes cycleId head game journey =
+        let journeys = if journey then "[{\"entry_point\":\"product-boot\",\"input_surface\":\"player-control-messages\",\"reached\":true}]" else "[]"
+        $"""{{"schema_version":3,"cycle_id":"%s{cycleId}","repair_rounds":0,"confirmation":{{"reviewed_commit":"%s{head}","verdict":"pass"}},"game_functionality":%s{(string game).ToLowerInvariant()},"player_journeys":%s{journeys},"uncovered_functionality":[]}}"""
+        |> Encoding.UTF8.GetBytes
+
+    let feedbackBytes cycleId =
+        [ "---"
+          "schemaVersion: 2"
+          $"cycleId: %s{cycleId}"
+          "---"
+          "## §1 Provenance and confidence"
+          "- **activation:** active"
+          "- **phases:** onboarding-first-build, lifecycle-authoring, implementation-test-evidence, verify-ship-pr"
+          "## §2 Findings" ]
+        |> String.concat "\n"
+        |> Encoding.UTF8.GetBytes
+
+    let receipt workId target source head provider bytes =
+        parseProviderReceipt workId target source head provider bytes |> unwrap
 
     let cycle unitId source =
         { Id = cycleId unitId "worker" ".github" source
@@ -55,34 +68,29 @@ module CycleLedgerTests =
     [<Fact>]
     let ``provider artifacts are byte-bound and reject unsupported generator provenance`` () =
         let target = cycle "work" "base"
-        let valid = receipt "critique" "fsgg.critique.report/3" "FS.GG.Critique" "1.0.0" "work" target.Id "base" "head" "pass" 1 (Some true)
-        Assert.True(validateProvider "work" target "base" "head" "critique" "fsgg.critique.report/3" "FS.GG.Critique" valid |> Result.isOk)
+        let valid = receipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" false false)
+        Assert.True(validateProvider "work" target "base" "head" "critique" "fsgg.critique.report/3" "FS.GG.Critique.Validator" valid |> Result.isOk)
 
-        let inventedVersion = receipt "critique" "fsgg.critique.report/3" "FS.GG.Critique" "9.9.9" "work" target.Id "base" "head" "pass" 1 (Some true)
-        let errors = validateProvider "work" target "base" "head" "critique" "fsgg.critique.report/3" "FS.GG.Critique" inventedVersion
-        let message = match errors with Error reasons -> String.concat "; " reasons | Ok () -> ""
-        Assert.Contains("unsupported", message)
-
-        let malformed = Encoding.UTF8.GetBytes "{\"schema\":\"fsgg.critique.report/3\"}"
-        Assert.True(parseProviderReceipt malformed |> Result.isError)
+        let normalizedForgery = Encoding.UTF8.GetBytes $"""{{"schema":"fsgg.critique.report/3","provider":"critique","workId":"work","cycleId":"%s{target.Id}","sourceRevision":"base","candidateHead":"head","verdict":"pass","round":0,"playerJourney":null,"generator":{{"id":"FS.GG.Critique.Validator","version":"1.0.0"}}}}"""
+        let forged = parseProviderReceipt "work" target "base" "head" "critique" normalizedForgery
+        Assert.True(forged |> Result.isError)
 
     [<Fact>]
     let ``player journey applicability is derived from the ledger unit`` () =
         let target = cycle "work" "base"
-        let model = { SourceRevision = "base"; Units = [ unit "work" [] false true ] }
-        let implementation = receipt "fsgg-sdd" "fsgg.sdd.report/1" "FS.GG.SDD.Artifacts" "1.0.0" "work" target.Id "base" "head" "pass" 0 None
-        let review = receipt "critique" "fsgg.critique.report/3" "FS.GG.Critique" "1.0.0" "work" target.Id "base" "head" "pass" 1 None
-        let feedback = receipt "feedback" "fsgg.feedback.report/2" "FS.GG.Feedback" "1.0.0" "work" target.Id "base" "head" "pass" 0 None
-        Assert.True(advance model target implementation review feedback (evidence target "head") |> Result.isError)
-        let passingReview = receipt "critique" "fsgg.critique.report/3" "FS.GG.Critique" "1.0.0" "work" target.Id "base" "head" "pass" 1 (Some true)
+        let model = { SourceRevision = "base"; Units = [ unit "work" [] false ] }
+        let implementation = receipt "work" target "base" "head" "fsgg-sdd" (sddBytes "work")
+        let feedback = receipt "work" target "base" "head" "feedback" (feedbackBytes target.Id)
+        Assert.True(parseProviderReceipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" true false) |> Result.isError)
+        let passingReview = receipt "work" target "base" "head" "critique" (critiqueBytes target.Id "head" true true)
         Assert.Equal(Advance target, advance model target implementation passingReview feedback (evidence target "head") |> unwrap)
 
     [<Fact>]
     let ``guarded update emits the exact receipt completion revalidates`` () =
         let target = cycle "work" "base"
-        let model = { SourceRevision = "base"; Units = [ { unit "work" [] true false with Evidence = [ "evidence/report.json" ] } ] }
+        let model = { SourceRevision = "base"; Units = [ { unit "work" [] true with Evidence = [ "evidence/report.json" ] } ] }
         let guarded =
-            match update model target (evidence target "head") |> unwrap with
+            match update model target (evidence target "head") "0123456789abcdef0123456789abcdef" |> unwrap with
             | Update(actual, receipt) ->
                 Assert.Equal(target, actual)
                 Assert.Equal("fsgg.coord.cycle-update/1", receipt.Schema)
@@ -100,14 +108,14 @@ module CycleLedgerTests =
 
     [<Fact>]
     let ``parallel ready units require explicit operator scheduling and resume the selected live cycle`` () =
-        let twoReady = { ledger with Units = [ unit "one" [] false false; unit "two" [] false false ] }
+        let twoReady = { ledger with Units = [ unit "one" [] false; unit "two" [] false ] }
         Assert.True(register twoReady "worker" ".github" "base" None false false [] |> Result.isError)
         let target = cycle "one" "base"
         Assert.Equal(Resume target, register twoReady "worker" ".github" "base" (Some "one") true true [ target ] |> unwrap)
 
     [<Fact>]
     let ``inspect rejects a dependency cycle and completion rejects unchecked units`` () =
-        let cyclic = { SourceRevision = "source"; Units = [ unit "a" [ "b" ] false false; unit "b" [ "a" ] false false ] }
+        let cyclic = { SourceRevision = "source"; Units = [ unit "a" [ "b" ] false; unit "b" [ "a" ] false ] }
         Assert.True(inspect cyclic |> Result.isError)
         let accepted = [ cycle "a" "source" ]
-        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false false ] } accepted [] [ accepted.Head.Id ] |> Result.isError)
+        Assert.True(complete { SourceRevision = "source"; Units = [ unit "a" [] false ] } accepted [] [ accepted.Head.Id ] |> Result.isError)
