@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2106-auto-publish
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2106-auto-publish/spec.md
 sourceClarifications: work/2106-auto-publish/clarifications.md
 sourceChecklist: work/2106-auto-publish/checklist.md
@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2106-auto-publish/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2106-auto-publish/analysis.json
-    digest: 347ca461998d962a3d34077acba4f4d92d9cf8bc25697e7a68f30300c16242e8
+    digest: fd896992497d413e7215b437bcefa2ef2912df0689c36450d4a6164e74a391f0
     schemaVersion: 1
   - label: checklist
     path: work/2106-auto-publish/checklist.md
@@ -55,7 +55,6 @@ evidence:
     observedRun:
       source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
       digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
-      digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
@@ -82,7 +81,6 @@ evidence:
     observedRun:
       source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
       digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
-      digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
@@ -109,7 +107,6 @@ evidence:
     observedRun:
       source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
       digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
-      digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
@@ -136,7 +133,6 @@ evidence:
     observedRun:
       source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
       digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
-      digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
@@ -163,7 +159,6 @@ evidence:
     observedRun:
       source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
       digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
-      digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
