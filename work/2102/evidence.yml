@@ -1,0 +1,133 @@
+schemaVersion: 1
+workId: 2102
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/2102/spec.md
+sourceClarifications: work/2102/clarifications.md
+sourceChecklist: work/2102/checklist.md
+sourcePlan: work/2102/plan.md
+sourceTasks: work/2102/tasks.yml
+sourceAnalysis: readiness/2102/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2102/analysis.json
+    digest: 45bd8755fc99637b68e64d036df9bdc15c155b106698ad5882da239048bb655c
+    schemaVersion: 1
+  - label: checklist
+    path: work/2102/checklist.md
+    digest: c0b337d549efa4d473089edab5c9d9c5ea4cfb6d78160170e5a2a4e46f258f61
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2102/clarifications.md
+    digest: 192d0e3ea17243269fdad47e890491af72cf62beb2d5f4d394593bf6ca07d5e3
+    schemaVersion: 1
+  - label: plan
+    path: work/2102/plan.md
+    digest: 9d24e29c8de8805941512db40ae03a08a16d7771004bfa868d55e9b3baa514c9
+    schemaVersion: 1
+  - label: spec
+    path: work/2102/spec.md
+    digest: 5cb515c0f484da841a7795235cff7a5ba8f6172eb6c24bcb8db633b4c35a9411
+    schemaVersion: 1
+  - label: tasks
+    path: work/2102/tasks.yml
+    digest: d461131444563613899ebe16ff57509e90c6eef371f50c6c4eceb4e04aa0c0ab
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: missing
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: docs/coordination/receiver-proj-migration-shape.md
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: missing
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: docs/coordination/receiver-proj-migration-shape.md
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: missing
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: docs/coordination/receiver-proj-migration-shape.md
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: missing
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: docs/coordination/receiver-proj-migration-shape.md
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: missing
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: docs/coordination/receiver-proj-migration-shape.md
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
