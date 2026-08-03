@@ -324,13 +324,14 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topol
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down --workflow-receipt "$WORK/downstream-receipt.json" > /dev/null
 verification_report "$WORK/upstream-none.json" upstream up false false false
 verification_report "$WORK/downstream-both.json" downstream down true true true
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-none.json" --verification "$WORK/downstream-both.json" > "$WORK/topology-observed.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-none.json" > "$WORK/topology-observed.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- plan --run "$WORK/topology-run.json" > "$WORK/topology-action.json"
 jq -e '.kind == "await-producer" and .releaseId == "downstream"' "$WORK/topology-action.json" >/dev/null || {
   jq . "$WORK/topology-action.json" >&2
   exit 1
 }
 printf '%s\n' '{"kind":"consumer-embedding","releaseId":"downstream","subjectCommit":"down","producerId":"upstream","conclusion":"success"}' > "$WORK/consumer-embedding.json"
+cp "$WORK/topology-run.json" "$WORK/before-blocked-embedding.json"
 set +e
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > /dev/null
 blocked_embedding_rc=$?
@@ -339,11 +340,51 @@ if [ "$blocked_embedding_rc" -ne 1 ]; then
   echo "expected consumer embedding before verified producer to fail closed, got $blocked_embedding_rc" >&2
   exit 1
 fi
+cmp "$WORK/before-blocked-embedding.json" "$WORK/topology-run.json"
 verification_report "$WORK/upstream-both.json" upstream up true true true
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/upstream-both.json" > "$WORK/producer-live.json"
 jq -e '.kind == "verify-consumer" and .releaseId == "downstream"' "$WORK/producer-live.json" >/dev/null
+printf '%s\n' '{"kind":"consumer-embedding","releaseId":"upstream","subjectCommit":"up","producerId":"downstream","conclusion":"success"}' > "$WORK/wrong-consumer-embedding.json"
+cp "$WORK/topology-run.json" "$WORK/before-wrong-consumer-embedding.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/wrong-consumer-embedding.json" > /dev/null
+wrong_consumer_embedding_rc=$?
+set -e
+if [ "$wrong_consumer_embedding_rc" -ne 1 ]; then
+  echo "expected wrong consumer embedding receipt to fail closed, got $wrong_consumer_embedding_rc" >&2
+  exit 1
+fi
+cmp "$WORK/before-wrong-consumer-embedding.json" "$WORK/topology-run.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > "$WORK/consumer-import.json"
-jq -e '.kind == "verify-propagation"' "$WORK/consumer-import.json" >/dev/null
+jq -e '.kind == "verify-packages" and .releaseId == "downstream"' "$WORK/consumer-import.json" >/dev/null
+cp "$WORK/topology-run.json" "$WORK/after-consumer-embedding.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > "$WORK/consumer-reimport.json"
+jq -e '.kind == "verify-packages" and .releaseId == "downstream"' "$WORK/consumer-reimport.json" >/dev/null
+cmp "$WORK/after-consumer-embedding.json" "$WORK/topology-run.json"
+jq '.note = "changed embedding"' "$WORK/consumer-embedding.json" > "$WORK/changed-consumer-embedding.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/changed-consumer-embedding.json" > /dev/null
+changed_consumer_embedding_rc=$?
+set -e
+if [ "$changed_consumer_embedding_rc" -ne 1 ]; then
+  echo "expected changed consumer embedding replay to fail closed, got $changed_consumer_embedding_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-consumer-embedding.json" "$WORK/topology-run.json"
+cp "$WORK/consumer-embedding.json" "$WORK/consumer-embedding.backup.json"
+printf '%s\n' ' ' >> "$WORK/consumer-embedding.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/consumer-embedding.json" > /dev/null
+stale_consumer_embedding_rc=$?
+set -e
+if [ "$stale_consumer_embedding_rc" -ne 1 ]; then
+  echo "expected stale recorded consumer embedding replay to fail closed, got $stale_consumer_embedding_rc" >&2
+  exit 1
+fi
+cmp "$WORK/after-consumer-embedding.json" "$WORK/topology-run.json"
+mv "$WORK/consumer-embedding.backup.json" "$WORK/consumer-embedding.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/topology-run.json" --verification "$WORK/downstream-both.json" > "$WORK/downstream-live.json"
+jq -e '.kind == "verify-propagation" and .releaseId == "upstream"' "$WORK/downstream-live.json" >/dev/null
 printf '%s\n' '{"kind":"propagation","releaseId":"upstream","subjectCommit":"up","conclusion":"success"}' > "$WORK/upstream-propagation.json"
 printf '%s\n' '{"kind":"propagation","releaseId":"downstream","subjectCommit":"down","conclusion":"success"}' > "$WORK/downstream-propagation.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/upstream-propagation.json" > /dev/null

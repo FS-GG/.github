@@ -328,6 +328,10 @@ let rec nextAction (state: JsonObject) =
             nextAction state
     | None ->
         let releases = allReleases
+        let artifactEligible release =
+            stringOr "producer" "kind" release <> "consumer"
+            || boolProperty false "consumerEmbeddingVerified" release
+        let artifactReleases = releases |> List.filter artifactEligible
         let terminalFeed =
             releases
             |> List.tryFind (fun release -> [ "org-only"; "public-only"; "disagree" ] |> List.contains (feedState release))
@@ -336,13 +340,13 @@ let rec nextAction (state: JsonObject) =
             action "human-escalation" (Some(stringProperty "id" release))
                 $"dual-feed receipt is `{feedState release}`; inspect immutable artifacts and record a human decision" true
         | None ->
-            match releases |> List.tryFind (fun release -> intProperty "expectedPackages" release <> intProperty "observedPackages" release) with
+            match artifactReleases |> List.tryFind (fun release -> intProperty "expectedPackages" release <> intProperty "observedPackages" release) with
             | Some release -> action "verify-packages" (Some(stringProperty "id" release)) "expected-versus-observed package count receipt" false
             | None ->
-                match releases |> List.tryFind (fun release -> stringOr "" "mainCommit" release <> stringOr "" "tagCommit" release) with
+                match artifactReleases |> List.tryFind (fun release -> stringOr "" "mainCommit" release <> stringOr "" "tagCommit" release) with
                 | Some release -> action "verify-tag" (Some(stringProperty "id" release)) "exact tag-to-merged-main commit receipt" false
                 | None ->
-                    match releases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
+                    match artifactReleases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
                     | Some release -> action "await-workflow" (Some(stringProperty "id" release)) "successful producer workflow run bound to the release commit" false
                     | None ->
                         let ready id =
@@ -359,11 +363,11 @@ let rec nextAction (state: JsonObject) =
                         match consumerBlocked with
                         | Some release -> action "await-producer" (Some(stringProperty "id" release)) "verified producer artifact and consumer pin receipt" false
                         | None ->
-                            match releases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
-                            | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
+                            match releases |> List.tryFind (fun release -> stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release)) with
+                            | Some release -> action "verify-consumer" (Some(stringProperty "id" release)) "fresh consumer or retrofit materialization receipt" false
                             | None ->
-                                match releases |> List.tryFind (fun release -> stringOr "producer" "kind" release = "consumer" && not (boolProperty false "consumerEmbeddingVerified" release)) with
-                                | Some release -> action "verify-consumer" (Some(stringProperty "id" release)) "fresh consumer or retrofit materialization receipt" false
+                                match releases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
+                                | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
                                 | None ->
                                     match releases |> List.tryFind (fun release -> not (boolProperty false "downstreamVerified" release)) with
                                     | Some release -> action "verify-propagation" (Some(stringProperty "id" release)) "dispatch or Renovate propagation receipt" false
@@ -656,6 +660,17 @@ let importReceipt () =
         let upstream = release producer
         if feedState upstream <> "both-equivalent" || not (boolProperty false "artifactVerified" upstream) then
             failwith "consumer embedding receipt requires the producer's verified dual-feed artifact"
+        let currentAction = obj (nextAction state)
+        let currentActionKind = stringProperty "kind" currentAction
+        let currentActionRelease = stringOr "" "releaseId" currentAction
+        let alreadyRecorded =
+            receipts
+            |> Seq.map obj
+            |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
+        if boolProperty false "consumerEmbeddingVerified" consumer then
+            if not alreadyRecorded then failwith "completed consumer embedding import must exactly match its recorded receipt"
+        elif currentActionKind <> "verify-consumer" || currentActionRelease <> id then
+            failwith $"consumer embedding receipt for `{id}` is only legal for its current verify-consumer action"
         consumer["consumerEmbeddingVerified"] <- JsonValue.Create(true)
     | "propagation", Some id, Some commit, _, _, _, _ ->
         let target = release id
@@ -706,7 +721,7 @@ let selftest () =
     if kind (state [] true) <> "complete" then failwith "current/no-release fixture failed"
     let producer = release "producer" "producer" [] "both-equivalent" 1 1 "a" "a" "run" true true true
     let consumer = release "consumer" "consumer" [ "producer" ] "none" 1 0 "b" "" "" false false false
-    if kind (state [ consumer; producer ] false) <> "verify-packages" then failwith "ordered multi-producer fixture failed"
+    if kind (state [ consumer; producer ] false) <> "verify-consumer" then failwith "ordered consumer embedding fixture failed"
     if kind (state [ release "missing" "producer" [] "both-equivalent" 2 1 "a" "a" "run" true true true ] false) <> "verify-packages" then failwith "missing package fixture failed"
     if kind (state [ release "partial" "producer" [] "org-only" 1 1 "a" "a" "run" true true true ] false) <> "human-escalation" then failwith "partial publication fixture failed"
     if kind (state [ release "tag" "producer" [] "both-equivalent" 1 1 "a" "b" "run" true true true ] false) <> "verify-tag" then failwith "tag mismatch fixture failed"
