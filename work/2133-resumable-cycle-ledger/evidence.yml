@@ -1,7 +1,7 @@
 schemaVersion: 1
 workId: 2133-resumable-cycle-ledger
 stage: evidence
-status: needsEvidenceCorrection
+status: evidenceReady
 sourceSpec: work/2133-resumable-cycle-ledger/spec.md
 sourceClarifications: work/2133-resumable-cycle-ledger/clarifications.md
 sourceChecklist: work/2133-resumable-cycle-ledger/checklist.md
@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2133-resumable-cycle-ledger/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2133-resumable-cycle-ledger/analysis.json
-    digest: 7790e1dae4c05e75a57de5e945bb7b8c780f4787048686fd336a00ace1921935
+    digest: 13ce9b9ace01f2e556ccfecfcd7bda937df6298fa88d4590f05e5ad8923aa640
     schemaVersion: 1
   - label: checklist
     path: work/2133-resumable-cycle-ledger/checklist.md
@@ -31,11 +31,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2133-resumable-cycle-ledger/tasks.yml
-    digest: c3f1cd7a315feb22a4e58b159a8c9f6bda27b86c54fe83dc5dcf86b1e17ca71b
+    digest: 702bfcaf2799113bb73d89813800e359d8219484f6072b8226031f7b57dd4e93
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -49,12 +49,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -68,12 +76,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -87,12 +103,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -106,12 +130,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -125,12 +157,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV006
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T006
@@ -144,12 +184,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV007
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T007
@@ -163,12 +211,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV008
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T008
@@ -182,12 +238,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV009
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T009
@@ -201,12 +265,20 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
   - id: EV010
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T010
@@ -220,9 +292,17 @@ evidence:
     artifacts: []
     sourceRefs:
       - kind: verification
-        path: tests/FS.GG.Coord.Core.Tests
-    result: missing
+        path: tests/FS.GG.Coord.Core.Tests/CycleLedgerTests.fs
+    result: pass
     synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2133.trx
+      digest: "sha256:268a431e028fb298eb2e9bc490376bc11f65f567b1919935542fa22b6b20e386"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 590
+      failed: 0
+      skipped: 0
     notes: [Evidence required before verify.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
