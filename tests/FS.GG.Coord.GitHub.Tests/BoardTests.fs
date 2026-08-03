@@ -588,9 +588,28 @@ let ``#2166 an incomplete external-owner ProjectV2 page fails closed instead of 
             """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}"""
 
     match itemId transport board "EHotwagner" "rogue3" 96 with
-    | Error(Malformed(_, message)) -> Assert.Contains("another page but no cursor", message)
+    | Error(Malformed(_, message)) -> Assert.Contains("another page but no usable cursor", message)
     | Ok None -> failwith "an incomplete paginated lookup was manufactured into external non-membership"
     | other -> failwith $"the incomplete external-owner lookup must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2166 malformed pagination completeness is never external non-membership`` () =
+    use _sandbox = new Sandbox()
+
+    let malformedItems =
+        [ "pageInfo absent", """{"nodes":[]}"""
+          "pageInfo null", """{"pageInfo":null,"nodes":[]}"""
+          "hasNextPage absent", """{"pageInfo":{"endCursor":null},"nodes":[]}"""
+          "hasNextPage null", """{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}"""
+          "hasNextPage wrong type", """{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}""" ]
+
+    for label, items in malformedItems do
+        let transport = serving $"""{{"data":{{"node":{{"items":%s{items}}}}}}}"""
+
+        match itemId transport board "EHotwagner" "rogue3" 96 with
+        | Error(Malformed(_, message)) -> Assert.Contains("pageInfo", message)
+        | Ok None -> failwith $"%s{label} was manufactured into external non-membership"
+        | other -> failwith $"%s{label} must fail closed — got %A{other}"
 
 [<Fact>]
 let ``#2166 an unavailable external-owner ProjectV2 lookup is never non-membership`` () =

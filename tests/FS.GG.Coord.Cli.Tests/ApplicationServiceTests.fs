@@ -2185,7 +2185,10 @@ module ApplicationServiceTests =
     /// The live #2166 topology: the Coordination board is owned by FS-GG, while the blocked item is an
     /// issue in EHotwagner/rogue3.  The default-owner twin is present in the project lookup response too;
     /// every mutation must select only `PVTI_external96`.
-    let private externalOwnerWriteWorld () =
+    let private validExternalOwnerItemLookup =
+        """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+
+    let private externalOwnerWriteWorldWithLookup (lookupResponse: string) =
         let mutable status = "Blocked"
         let mutable blockedBy = "FS-GG/.github#2155"
 
@@ -2204,8 +2207,7 @@ module ApplicationServiceTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) when document.Contains "node(id: $projectId)" ->
-                    ok
-                        """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+                    ok lookupResponse
                 | Query(document, _) when document.Contains "f0:" ->
                     status <- "Ready"
                     blockedBy <- ""
@@ -2234,6 +2236,9 @@ module ApplicationServiceTests =
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the external-owner fixture serves no %s{m} %s{p}"))
+
+    let private externalOwnerWriteWorld () =
+        externalOwnerWriteWorldWithLookup validExternalOwnerItemLookup
 
     [<Fact>]
     let ``#2166 ready and set-field preserve one external canonical row through fresh readback`` () =
@@ -2274,6 +2279,24 @@ module ApplicationServiceTests =
         Assert.Equal("", str "value" observed.[1])
         Assert.True(world.Logged "itemId: \"PVTI_external96\"")
         Assert.False(world.Logged "itemId: \"PVTI_default96\"")
+
+    [<Fact>]
+    let ``#2166 set-field fails closed on malformed external-owner pagination completeness`` () =
+        let malformedLookups =
+            [ "pageInfo absent", """{"data":{"node":{"items":{"nodes":[]}}}}"""
+              "pageInfo null", """{"data":{"node":{"items":{"pageInfo":null,"nodes":[]}}}}"""
+              "hasNextPage absent", """{"data":{"node":{"items":{"pageInfo":{"endCursor":null},"nodes":[]}}}}"""
+              "hasNextPage null", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":null,"endCursor":null},"nodes":[]}}}}"""
+              "hasNextPage wrong type", """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":"false","endCursor":null},"nodes":[]}}}}""" ]
+
+        for label, lookup in malformedLookups do
+            let world = externalOwnerWriteWorldWithLookup lookup
+            let code, _, err =
+                runReconcile world [ "set-field"; "EHotwagner/rogue3#96"; "Status"; "Ready"; "--worker"; "heron-2166" ]
+
+            Assert.NotEqual(0, code)
+            Assert.Contains("pageInfo", err)
+            Assert.False(world.Logged "--id PVTI_external96", $"%s{label} reached the mutation")
 
     [<Fact>]
     let ``#2157 partial BLOCKER-CLEARED receipt retains both freshly observed values`` () =

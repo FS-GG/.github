@@ -483,22 +483,25 @@ module Board =
                                 match found with
                                 | Some id -> Ok(Some id)
                                 | None ->
-                                    let pageInfo = items.GetProperty "pageInfo"
-                                    let hasNext =
+                                    match items.TryGetProperty "pageInfo" with
+                                    | true, pageInfo when pageInfo.ValueKind = JsonValueKind.Object ->
                                         match pageInfo.TryGetProperty "hasNextPage" with
-                                        | true, value -> value.ValueKind = JsonValueKind.True
-                                        | _ -> false
-
-                                    let next =
-                                        match pageInfo.TryGetProperty "endCursor" with
-                                        | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
-                                        | _ -> None
-
-                                    match hasNext, next with
-                                    | true, Some value -> page (Some value) (guard - 1)
-                                    | true, None ->
-                                        Error(Malformed(subject, "the external-owner board item lookup has another page but no cursor"))
-                                    | false, _ -> Ok None
+                                        | true, hasNext when hasNext.ValueKind = JsonValueKind.False -> Ok None
+                                        | true, hasNext when hasNext.ValueKind = JsonValueKind.True ->
+                                            match pageInfo.TryGetProperty "endCursor" with
+                                            | true, value
+                                                when value.ValueKind = JsonValueKind.String
+                                                     && not (String.IsNullOrWhiteSpace(value.GetString())) ->
+                                                page (Some(value.GetString())) (guard - 1)
+                                            | _ ->
+                                                Error(Malformed(subject, "the external-owner board item lookup has another page but no usable cursor"))
+                                        | _ ->
+                                            // COMPLETENESS IS A REQUIRED BOOLEAN, not an optional hint.
+                                            // Missing/null/string used to fall through as `false` and turn
+                                            // an incomplete read into the definite absence `Ok None`.
+                                            Error(Malformed(subject, "the external-owner board item lookup's `pageInfo.hasNextPage` is missing or is not a Boolean"))
+                                    | _ ->
+                                        Error(Malformed(subject, "the external-owner board item lookup's `pageInfo` is missing or is not an object"))
                         with :? KeyNotFoundException ->
                             Error(Malformed(subject, "the external-owner board item lookup response is missing `data.node.items`"))
 
