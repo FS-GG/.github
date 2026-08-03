@@ -188,6 +188,8 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 #
 #   reap        — writes only under `--apply`; the bare form is a DRY RUN (`Client.fs`, `if not opts.Apply`).
 #   reconcile   — the same shape: `--apply` writes board columns via `Board.boardWrite`, bare is a dry run.
+#   delivery    — the bare lifecycle inspection is read-only; `--apply` may issue its guarded merge
+#                 (`Client.delivery` → `Writes.mergeAtHead`) after consuming a fresh receipt.
 #   next        — writes under no flag at all. AFTER printing its answer it makes the #733 chore OFFER
 #                 (`offerChoreAtNext` → `Chores.offer` → `Writes.claim`), which POSTs a claim marker to take
 #                 the repo's chore lock. `.github`'s lock is #1033, so this fires in the repo that owns this
@@ -224,7 +226,7 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 # that reasoning, and `next` cannot be argument-aware at all — its write is gated on board state, not on a
 # flag. Take the refusal. If a permitted stale dry run is ever wanted, the honest way is for the engine to
 # declare per-invocation write-ness, not for this shim to re-implement the parser.
-BOARD_WRITES_CONDITIONAL="next reap reconcile"
+BOARD_WRITES_CONDITIONAL="delivery next reap reconcile"
 
 # READS — permitted (with a warning) on a stale engine, because a stale read misinforms ONE worker where a
 # stale write corrupts what the fleet shares. This set exists so the partition is total: it is the half that
