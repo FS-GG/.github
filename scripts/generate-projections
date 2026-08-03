@@ -448,14 +448,16 @@ render_ledger_policy() {
 }
 
 render_release_inventory() {
-  echo '*Generated from the registry package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*'
+  echo '*Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*'
   echo ""
-  echo "| producer contract | source version | published version | surface |"
-  echo "|---|---|---|---|"
+  jq -r '([.contracts[] | select(has("package-version"))] | "Registry release inventory: \(length) package-bearing contracts across \(map(.owner) | unique | length) producers; \(map(.packageTag // .["package-version"]) | unique | length) coherent release sets.")' "$REG"
+  echo ""
+  echo "| owner | contract | source version | published version | coherent set | surface |"
+  echo "|---|---|---|---|---|---|"
   jq -r '
     .contracts[]
-    | select(.owner == "github" and has("package-version"))
-    | "| `\(.id)` | `\(.version)` | `\(.["package-version"])` | \(.surface | gsub("\\|"; "\\\\|") | gsub("\\n"; " ")) |"' "$REG"
+    | select(has("package-version"))
+    | "| `\(.owner)` | `\(.id)` | `\(.version)` | `\(.["package-version"])` | `\(.packageTag // .["package-version"])` | \(.surface | gsub("\\|"; "\\\\|") | gsub("\\n"; " ")) |"' "$REG"
   echo ""
 }
 
