@@ -3,13 +3,13 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-08-02"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-08-03"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
   rendering:  { name: FS.GG.Rendering,  role: "The UI framework — MVU over SkiaSharp/OpenGL with layout, input, controls and themes, plus the fs-gg-ui template" }
   governance: { name: FS.GG.Governance, role: "Optional tooling that checks your artifacts against rules you control — advisory by default" }
-  templates:  { name: FS.GG.Templates,  role: "Wires SDD, Rendering and Governance into one ready-to-run workspace at scaffold time" }
+  templates:  { name: FS.GG.Templates,  role: "Owns workspace providers and templates — rendering composition plus console, web, Fable-game and Fable-bindings shapes" }
   github:     { name: FS-GG/.github,    role: "cross-repo contract registry, org-shared build config, coordination + decision docs" }   # .github#135: now a first-class consumer/edge node (registry-schema) — not just a contract owner (shared-build-config).
   game:       { name: FS.GG.Game,       role: "Game-simulation libraries — a render-independent simulation core with a companion renderer, usable as plain F# libraries" }   # the platform's sixth repo (P2 stand-up, .github#216); registered here at P5 as a contract owner + edge node.
   audio:      { name: FS.GG.Audio,      role: "Audio-engine libraries — synthesis, playback and mixing (buses, fades, ducking, 3D), with an optional Elmish adapter" }   # the platform's seventh repo; standalone SDD-driven component, transferred into the org + first release 0.1.0-preview.1.

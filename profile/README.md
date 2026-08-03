@@ -1,14 +1,16 @@
 # FS-GG
 
-**F# tooling for building desktop UI apps** — a SkiaSharp/OpenGL UI
-framework, a spec-driven development lifecycle CLI, optional governance, and
-libraries for game-simulation, audio, and networking, composed into one runnable
-workspace on `net10.0`.
+**F# tooling for building applications and libraries** — production-shaped
+workspace templates, a spec-driven development lifecycle CLI, optional
+governance, a SkiaSharp/OpenGL UI framework, and libraries for game simulation,
+audio, and networking on `net10.0`.
 
-You describe a Model-View-Update (MVU) app; FS-GG renders it, scaffolds it,
-drives it through a structured lifecycle from charter to ship, and — only if you
-opt in — checks it against rules you control. Each piece ships on its own and is
-usable on its own; you adopt only what you need.
+Choose a workspace shape, scaffold it, and drive it through a structured
+lifecycle from charter to ship. The Skia/Elmish desktop path remains the current
+published default; FS-GG.Templates also carries independent console, web,
+Fable-game, and Fable-bindings shapes as they move through coherent release and
+activation. Each component ships on its own and is usable on its own; you adopt
+only what you need.
 
 > **📖 Two things, named precisely.** FS-GG is the **platform** — the framework
 > components we build and publish, each in its own repository alongside this
@@ -47,10 +49,11 @@ do.**
 Two things make that bias pay off, and FS-GG is the machinery for both:
 
 1. **Stop reinventing solved work.** A large share of agent effort is re-deriving
-   standard workflows and re-making known mistakes — input routing, the MVU loop,
-   layout, theming, terminal output. FS-GG **freezes that into deterministic
-   framework code** (`FS.GG.UI.*`) and delivers it to agents through a scaffold
-   template, curated **skills**, and **examples anchored to deterministic tests**.
+   standard workflows and re-making known mistakes — solution wiring, locked
+   restores, test harnesses, input routing, the MVU loop, layout, theming, and
+   terminal output. FS-GG **freezes that into deterministic framework and template
+   code** and delivers it to agents through scaffold providers, curated **skills**,
+   and **examples anchored to deterministic tests**.
    A's production surface shrinks to the part that is genuinely novel; the rest is
    M it rides for free.
 2. **Make "who decides" an explicit, honest choice.** When work *can't* be reduced
@@ -62,9 +65,11 @@ Two things make that bias pay off, and FS-GG is the machinery for both:
 
 The narrower the option space, the more of a standard workflow can be frozen into
 M and the better examples and skills can cover it. FS-GG chooses strong opinions —
-F#, SkiaSharp, [Spectre.Console](https://spectreconsole.net/), one MVU model, one
-semantic control set with many themes — so that the common path is pre-solved and
-the tooling is deep rather than wide.
+F#, one SDD lifecycle, exact dependency pins, and bounded workspace shapes with
+deliberate stacks. The rendering shape uses SkiaSharp/OpenGL and Elmish/MVU; the
+other shapes do not inherit that dependency merely because they share the same
+scaffolder. The common path is pre-solved and the tooling stays deep rather than
+wide.
 
 ### Why F#
 
@@ -84,9 +89,9 @@ The house style is not incidental — it is what makes work *capturable as M*:
 
 ## The one rule that keeps it honest
 
-> Governance may **inspect** your rendering or lifecycle artifacts; rendering and
-> the lifecycle never **require** governance to build, test, document, package, or
-> release.
+> Governance may **inspect** your workspace or lifecycle artifacts; workspace
+> templates, framework components, and the lifecycle never **require** governance
+> to build, test, document, package, or release.
 
 The dependency direction is one-way and your inner loop is never blocked by
 governance. You can clone a component repo, read its [Spec Kit](https://github.com/github/spec-kit)
@@ -95,7 +100,30 @@ operating model. If governance ever feels heavy, you drop it and keep building.
 
 ---
 
-## Get started
+## Workspace shapes
+
+`FS.GG.Templates` now owns several independent workspace shapes. A template is
+the product architecture you scaffold; a rendering `--profile` is only a variant
+inside the Skia/Elmish template.
+
+| Shape | Generated workspace | Availability |
+|---|---|---|
+| [`rendering`](https://github.com/FS-GG/FS.GG.Templates/blob/main/providers/rendering.providers.yml) | SkiaSharp/OpenGL desktop UI with Elmish/MVU | Published; compatibility default |
+| [`console`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-console) | Production-shaped F# executable with no browser or npm lane | Authored on `main`; coherent release pending |
+| [`web`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-web) | F# ASP.NET Core server plus a neutral TypeScript/Vite site | Authored on `main`; coherent release pending |
+| [`fable-game`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-game) | Server-authoritative F# game with a Fable/Elmish browser client | Authored on `main`; coherent release pending |
+| [`fable-bindings`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-bindings) | Package-producing Fable interop library over an exactly pinned JS/TS dependency | Authored on `main`; coherent release pending |
+
+The four non-rendering shapes target the unreleased
+`FS.GG.Workspace.Template` 0.8.0 package. They become consumer-ready only after the
+[coherent publish-and-activation sequence](https://github.com/FS-GG/FS.GG.Templates/issues/349)
+proves the exact package and the released `new-sdd-workspace --template` selector.
+Until then, the public one-command path below remains `rendering`; source presence
+is not being presented as a published release.
+
+---
+
+## Get started with the published rendering path
 
 The fastest path is the one-command workspace scaffolder,
 **[`new-sdd-workspace`](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md)**
@@ -108,7 +136,7 @@ it fetches the provider descriptor, scaffolds a runnable app, and lays down the
 dotnet tool install --global FS.GG.SDD.Cli
 dotnet tool install --global FS.GG.NewSddWorkspace --prerelease
 
-# 2. Scaffold a runnable workspace in ONE command (default profile = a minimal
+# 2. Scaffold a runnable rendering workspace in ONE command (default profile = a minimal
 #    Pong-style game; pass --profile app|headless-scene|governed|sample-pack for another shape).
 new-sdd-workspace ./Pong Pong              # <target-dir> <product-name>
 #    …or run it with NO arguments on a terminal for an interactive wizard
@@ -133,7 +161,7 @@ Or create a ready specced sample game: https://github.com/FS-GG/FS.GG.Game/blob/
 ## The `fsgg-sdd` CLI
 
 `fsgg-sdd` (the `FS.GG.SDD.Cli` global tool) is the **single surface** you drive an
-FS-GG workspace with. It does three jobs: it **scaffolds** a runnable workspace, it
+FS-GG workspace with. It does three jobs: it **scaffolds** a workspace, it
 **drives** the `charter → ship` lifecycle, and it **orchestrates coherence** —
 keeping a workspace aligned with its pinned *coherent set* (the
 [template + framework **+ the CLI itself**](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#5-the-contract-registry--the-single-source-of-truth)).
@@ -150,7 +178,7 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 
 | Group | Command | What it does |
 |---|---|---|
-| **Scaffold** | `fsgg-sdd scaffold` | Materialize a runnable app **and** the `.fsgg/` lifecycle skeleton from a provider. |
+| **Scaffold** | `fsgg-sdd scaffold` | Materialize a workspace payload **and** the `.fsgg/` lifecycle skeleton from a provider. |
 | | `fsgg-sdd init` | Write the `.fsgg/` skeleton **only** — no runtime app, no provider. |
 | **Lifecycle** | `charter` · `specify` · `clarify` · `checklist` · `plan` · `tasks` · `analyze` · `evidence` · `verify` · `ship` | Drive a unit of work through the fixed, ordered lifecycle (each emits a report). |
 | **Orchestrate** | `fsgg-sdd doctor` | **Read-only:** report whether the project (CLI + template pin + seeded artifacts) is coherent with its set. |
@@ -242,7 +270,7 @@ authored beside this table — package IDs are stable identity, versions are not
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts | `7.5.2` |
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — MVU over SkiaSharp/OpenGL with layout, input, controls and themes, plus the fs-gg-ui template | `0.25.1` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional tooling that checks your artifacts against rules you control — advisory by default | `1.5.0` |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Wires SDD, Rendering and Governance into one ready-to-run workspace at scaffold time | — |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Owns workspace providers and templates — rendering composition plus console, web, Fable-game and Fable-bindings shapes | — |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | Game-simulation libraries — a render-independent simulation core with a companion renderer, usable as plain F# libraries | `0.13.0` |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | Audio-engine libraries — synthesis, playback and mixing (buses, fades, ducking, 3D), with an optional Elmish adapter | `0.5.0` |
 | [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries — protobuf messaging over WebSocket or gRPC, render-independent, with an optional Elmish adapter | `0.5.0` |
@@ -258,7 +286,8 @@ org's shared docs, registry, and cross-repo fabric — is not a consumer compone
 |---|---|---|
 | Just render an F# UI | **FS.GG.Rendering** packages / `fs-gg-ui` template | [Rendering usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md) |
 | Run a managed dev lifecycle | **FS.GG.SDD** (`fsgg-sdd`) | [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md) |
-| Scaffold a full-stack workspace (one command) | **`new-sdd-workspace`** (wraps the FS.GG.Templates `rendering` provider) | [Scaffolder README](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md) |
+| Scaffold the published desktop workspace (one command) | **`new-sdd-workspace`** (currently wraps the `rendering` provider) | [Scaffolder README](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md) |
+| Follow the console, web, Fable-game, and bindings rollout | **FS.GG.Templates** workspace set | [Release and activation](https://github.com/FS-GG/FS.GG.Templates/issues/349) |
 | Add rules / gates to a workspace | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
 | Build a game / simulation as a library | **FS.GG.Game** (`dotnet add package FS.GG.Game.Core`) | [FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) |
 | Add audio (synthesis / playback) | **FS.GG.Audio** (`dotnet add package FS.GG.Audio.Core`) | [FS.GG.Audio](https://github.com/FS-GG/FS.GG.Audio) |
@@ -301,16 +330,17 @@ Adopt it when you want gates; ignore it and keep building when you don't. See
 ## How it composes
 
 Composition happens **at scaffold time**, not by vendoring: `fsgg-sdd scaffold`
-installs the live, version-pinned rendering template, and the Governance overlay
-drops a reference gate set into the project. There is no single all-in-one
-template, because that could only exist by bundling a rendering copy that goes
-stale.
+installs the selected, version-pinned provider template, and the Governance
+overlay can drop a reference gate set into the generated workspace. Rendering is
+one provider, not a dependency imposed on console, web, or bindings products.
 
 ```text
-       you ──run──▶ fsgg-sdd scaffold ──installs──▶ FS.GG.Rendering app (live, pinned)
-                          │
-                          ├──skeleton──▶ .fsgg/ lifecycle (charter … ship)
-                          └──overlay (optional)──▶ FS.GG.Governance reference gate set
+       you ──run──▶ fsgg-sdd scaffold ──installs──▶ selected provider template (pinned)
+                          │                              ├─ rendering
+                          ├──skeleton──▶ .fsgg/          ├─ console
+                          │               lifecycle      ├─ web / Fable game
+                          └──overlay────▶ governance      └─ Fable bindings
+                              (optional)
 
 FS.GG.Rendering depends on no other FS-GG component — never on Governance.
 ```
@@ -352,12 +382,15 @@ map and the cross-component processes that connect them.
 
 ## Status
 
-Active preview. Rendering ships `FS.GG.UI.*` preview packages and the `fs-gg-ui`
-template; SDD and Governance are active and installable. APIs and package
-versions may still move before a stable line — pin versions and read each
-component's installation and versioning docs. FS-GG is the split of the archived
-[`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI) monolith into focused,
-independently shippable components.
+Active preview. Rendering ships `FS.GG.UI.*` packages and the `fs-gg-ui`
+template; SDD and Governance are active and installable. Console, neutral web,
+Fable-game, and Fable-bindings workspace templates are implemented on
+FS.GG.Templates `main` and are awaiting their coherent public release and
+activation. APIs and package versions may still move before a stable line — pin
+versions and read each component's installation and versioning docs. FS-GG grew
+from the split of the archived
+[`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI) monolith, but the platform
+and its workspace model are no longer synonymous with that rendering stack.
 
 ## License
 
