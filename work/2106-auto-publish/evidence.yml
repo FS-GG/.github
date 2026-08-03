@@ -31,11 +31,11 @@ sourceSnapshots:
     schemaVersion: 1
   - label: tasks
     path: work/2106-auto-publish/tasks.yml
-    digest: e323b570f150d215cecad7ef92c25258f689a933d64889e04e5512981a8e0dae
+    digest: 430887bb1d68bde1cefb3bba75fe9f400c22fa5a19e8c9e7086e7b46ee66e231
     schemaVersion: 1
 evidence:
   - id: EV001
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T001
@@ -46,15 +46,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
     obligationRefs: [EV001]
-    artifacts: []
+    artifacts: [work/2106-auto-publish/test-results/kit-auto-publish-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/kit-auto-publish/run.sh
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
+      digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Executable fixture covers the guarded decision controls.]
   - id: EV002
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T002
@@ -65,15 +73,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV002]
-    artifacts: []
+    artifacts: [work/2106-auto-publish/test-results/kit-auto-publish-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/kit-auto-publish/run.sh
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
+      digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Executable fixture covers the guarded decision controls.]
   - id: EV003
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T003
@@ -84,15 +100,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
     obligationRefs: [EV003]
-    artifacts: []
+    artifacts: [work/2106-auto-publish/test-results/kit-auto-publish-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/kit-auto-publish/run.sh
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
+      digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Executable fixture covers the guarded decision controls.]
   - id: EV004
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T004
@@ -103,15 +127,23 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: []
     obligationRefs: [EV004]
-    artifacts: []
+    artifacts: [work/2106-auto-publish/test-results/kit-auto-publish-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/kit-auto-publish/run.sh
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
+      digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Executable fixture covers the guarded decision controls.]
   - id: EV005
-    kind: missing
+    kind: verification
     subject:
       type: task
       id: T005
@@ -122,12 +154,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: []
+    artifacts: [work/2106-auto-publish/test-results/kit-auto-publish-junit.xml]
     sourceRefs:
       - kind: verification
         path: tests/kit-auto-publish/run.sh
-    result: missing
+    result: pass
     synthetic: false
-    notes: [Evidence required before verify.]
+    observedRun:
+      source: work/2106-auto-publish/test-results/kit-auto-publish-junit.xml
+      digest: "sha256:af11b7ba88735632e822264c0a1d8a0517afca73f6b7ab2647c8b3592687f2e9"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Executable fixture covers the guarded decision controls.]
 lifecycleNotes:
   - "Next lifecycle action: verify."
