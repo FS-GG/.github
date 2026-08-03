@@ -12,57 +12,133 @@ on:
         type: boolean
         default: true
 
-permissions:
-  contents: write
-  pull-requests: write
-  actions: read
-
+# A single queue is the concurrency contract.  It covers the read, tag and
+# evidence-PR transaction; cancellation would strand a half-observed release.
 concurrency:
   group: kit-auto-publish
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   decide:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      packages: read
+      issues: write
     steps:
+      # The App token is intentional: a GITHUB_TOKEN-created tag cannot start
+      # release-kit.yml.  The same identity authors the evidence PR, so its CI
+      # is not suppressed by Actions' recursion guard either.
+      - name: Mint the release coordinator App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
       - uses: actions/checkout@v7
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
       - name: Test the fail-closed state machine
         run: bash tests/kit-auto-publish/run.sh
-      # The observation adapter is intentionally the only unfinished integration seam in this first
-      # commit: it must obtain both feeds, merged-PR/pr-arm provenance, and release-run facts in one
-      # fail-closed JSON document before the decision engine can expose `tag`.
-      - name: Refuse live mutation until all observed facts are available
+      - name: Authenticated read-only observation
         id: observe
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           version="$(dotnet msbuild src/FS.GG.Kit/FS.GG.Kit.csproj -getProperty:Version | tr -d '[:space:]')"
           [ -n "$version" ] || { echo '::error::version unreadable'; exit 1; }
-          # Deliberately require a checked-in observation document until the authenticated org-feed
-          # reader and public nuget reader are wired as one atomic observation.  Absence is refusal,
-          # never "both absent"; this prevents a transient API outage from minting a tag.
-          facts="${RUNNER_TEMP}/kit-auto-publish-facts.json"
-          printf '{"version":"%s","mergedPrReachable":false,"prArm":"unknown","orgFeed":"unknown","nugetFeed":"unknown"}\n' "$version" > "$facts"
-          python3 scripts/kit-auto-publish.py --facts "$facts" --json | tee decision.json
-          action="$(python3 -c 'import json; print(json.load(open("decision.json"))["action"])')"
-          echo "action=$action" >> "$GITHUB_OUTPUT"
-          [ "$action" = tag ] || exit 1
-      - name: Sticky escalation for a refused observation
-        if: failure() && steps.observe.outcome == 'failure'
-        continue-on-error: true
+          package="fs.gg.kit.${version}.nupkg"
+          org_url="https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/${version}/FS.GG.Kit.${version}.nupkg"
+          nuget_url="https://api.nuget.org/v3-flatcontainer/fs.gg.kit/${version}/${package}"
+          observe_feed() {
+            local name="$1" url="$2" auth="$3" code
+            if [ "$auth" = yes ]; then code="$(curl --retry 2 --connect-timeout 10 -sS -u "x-access-token:${GH_TOKEN}" -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; else code="$(curl --retry 2 --connect-timeout 10 -sS -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; fi
+            case "$code" in 200) printf present;; 404) rm -f "${name}.nupkg"; printf absent;; *) rm -f "${name}.nupkg"; printf unknown;; esac
+          }
+          org="$(observe_feed org "$org_url" yes)"; nuget="$(observe_feed nuget "$nuget_url" no)"
+          tag="kit/v${version}"; tag_exists=false
+          git rev-parse -q --verify "refs/tags/$tag" >/dev/null && tag_exists=true || true
+          # Find the merged PR that introduced the evaluated version, rather
+          # than assuming main's latest commit is that PR.  Every candidate is
+          # checked at its immutable merge commit and PR head.
+          provenance='{}'
+          while IFS=$'\t' read -r number merge head; do
+            [ -n "$number" ] || continue
+            [ "$(git show "$merge:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)" = "$version" ] || continue
+            gh api "repos/${GITHUB_REPOSITORY}/commits/$head/check-runs" --paginate --jq '.check_runs[] | select(.name == "pr-arm" and .conclusion == "success") | .id' | grep -q . || continue
+            provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" '{number:($n|tonumber),mergeCommit:$merge,head:$head}')"; break
+          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
+          merged=false; pr_arm=unknown; source_sha="$GITHUB_SHA"
+          if [ "$provenance" != '{}' ]; then merged=true; pr_arm=pass; source_sha="$(jq -r .mergeCommit <<<"$provenance")"; fi
+          release='null'
+          if [ "$org" = present ] && [ "$nuget" = present ]; then
+            org_commit="$(unzip -p org.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
+            nuget_commit="$(unzip -p nuget.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
+            if [ -n "$org_commit" ] && [ "$org_commit" = "$nuget_commit" ]; then
+              run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release-kit.yml --status success --limit 100 --json databaseId,url,headSha | jq -c --arg sha "$org_commit" '.[] | select(.headSha == $sha) | {id:(.databaseId|tostring),url:.url}' | head -1 || true)"
+              [ -n "$run" ] && release="$(jq -c --arg commit "$org_commit" '. + {nuspecCommit:$commit}' <<<"$run")"
+            fi
+          fi
+          jq -n --arg version "$version" --arg sha "$source_sha" --argjson merged "$merged" --arg arm "$pr_arm" --arg org "$org" --arg nuget "$nuget" --argjson tag "$tag_exists" --argjson release "$release" '{version:$version,sourceSha:$sha,mergedPrReachable:$merged,prArm:$arm,orgFeed:$org,nugetFeed:$nuget,tagExists:$tag,releaseRun:$release}' > facts.json
+          python3 scripts/kit-auto-publish.py --facts facts.json --json | tee decision.json
+          echo "action=$(jq -r .action decision.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "source-sha=$source_sha" >> "$GITHUB_OUTPUT"
+      - name: Tag the sole eligible state
+        if: steps.observe.outputs.action == 'tag' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VERSION: ${{ steps.observe.outputs.version }}
         run: |
           set -euo pipefail
-          marker='<!-- fsgg:kit-auto-publish-escalation -->'
-          issue=2106
-          gh issue edit "$issue" --repo "$REPO" --add-label blocked || true
-          printf '%s\n\nAuto-publish refused a live observation and performed **no tag, feed, or PR write**. See [run](%s). This marker comment is patched in place, not repeated.\n' "$marker" "$RUN_URL" > comment.md
-          matches="$(gh api "repos/$REPO/issues/$issue/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id')"
-          existing="${matches%%$'\n'*}"
-          if [ -n "$existing" ]; then gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null; else gh api "repos/$REPO/issues/$issue/comments" -F body=@comment.md >/dev/null; fi
+          tag="kit/v${VERSION}"
+          git rev-parse -q --verify "refs/tags/$tag" >/dev/null && { echo '::error::tag appeared after observation; refusing'; exit 1; }
+          git tag -a "$tag" -m "Auto-publish FS.GG.Kit ${VERSION} after merged pr-arm evidence"
+          git push origin "refs/tags/$tag"
+      - name: Escalate a non-eligible or partial state once
+        if: steps.observe.outputs.action == 'refuse' || steps.observe.outputs.action == 'stickyEscalate'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ACTION: ${{ steps.observe.outputs.action }}
+        run: |
+          set -euo pipefail
+          marker='<!-- fsgg:kit-auto-publish-escalation -->'; issue=2106
+          body="$marker\n\nAuto-publish observed **$ACTION** and performed no tag, feed, or evidence-PR write. [Run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). The marker is updated in place; its repeat count is the comment revision history."
+          existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id' | head -1 || true)"
+          gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --add-label blocked
+          if [ -n "$existing" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null; else gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null; fi
+      - name: Open or update the publish evidence PR
+        if: steps.observe.outputs.action == 'openEvidencePr' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.observe.outputs.version }}
+          SOURCE_SHA: ${{ steps.observe.outputs.source-sha }}
+          BRANCH: bot/kit-auto-publish-evidence
+        run: |
+          set -euo pipefail
+          run="$(jq -r '.releaseRun.url' facts.json)"; org="https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/${VERSION}/FS.GG.Kit.${VERSION}.nupkg"; nuget="https://api.nuget.org/v3-flatcontainer/fs.gg.kit/${VERSION}/fs.gg.kit.${VERSION}.nupkg"
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          entry="$(printf '%s' "- **$(date -u +%F)** — **auto-publish evidence: FS.GG.Kit ${VERSION}** (owner github; refs [.github#2106](https://github.com/FS-GG/.github/issues/2106)): [release run](${run}) published the structurally single-packed artifact to [GitHub Packages](${org}) and [nuget.org](${nuget}). Both served nuspecs record repository commit ${SOURCE_SHA}.")"
+          grep -Fq "auto-publish evidence: FS.GG.Kit ${VERSION}" registry/CHANGELOG.md || sed -i "2i\\${entry}" registry/CHANGELOG.md
+          git add registry/CHANGELOG.md
+          git diff --cached --quiet || git commit -m "docs: record FS.GG.Kit ${VERSION} auto-publish evidence"
+          git push --force-with-lease origin "$BRANCH"
+          body="Automated evidence for FS.GG.Kit ${VERSION}.\n\n- release run: ${run}\n- GitHub Packages: ${org}\n- nuget.org: ${nuget}\n- both served nuspecs: ${SOURCE_SHA}\n\nHuman/critic review is required before merge.\n\nCloses #2106"
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"; else gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "docs: record FS.GG.Kit ${VERSION} publish evidence" --body "$body"; fi

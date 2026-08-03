@@ -14,9 +14,18 @@ import sys
 
 
 PATCH = re.compile(r"^0\.(\d+)\.(\d+)$")
+REQUIRED_FACTS = (
+    "version", "mergedPrReachable", "prArm", "orgFeed", "nugetFeed", "tagExists",
+)
 
 
 def decide(facts):
+    # A missing key is not the same as a negative observation.  Keeping that
+    # distinction typed here prevents a workflow adapter outage from becoming
+    # an accidental permission to tag.
+    missing = [key for key in REQUIRED_FACTS if key not in facts]
+    if missing:
+        return result("refuse", "observation-incomplete", facts.get("version", ""))
     version = facts.get("version", "")
     match = PATCH.fullmatch(version)
     if not match:
@@ -32,8 +41,10 @@ def decide(facts):
     if org != nuget:
         return result("stickyEscalate", "partial-publish-stop-no-retry", version)
     if org == "present":
-        if not facts.get("releaseRun"):
+        if not isinstance(facts.get("releaseRun"), dict) or not facts["releaseRun"].get("id") or not facts["releaseRun"].get("url") or not facts["releaseRun"].get("nuspecCommit"):
             return result("stickyEscalate", "published-without-observed-release-run", version)
+        if facts["releaseRun"]["nuspecCommit"] != facts.get("sourceSha"):
+            return result("stickyEscalate", "published-nuspec-commit-disagrees", version)
         return result("openEvidencePr", "both-feeds-published", version)
     if facts.get("tagExists"):
         return result("stickyEscalate", "tag-exists-without-both-feed-publication", version)
