@@ -9,7 +9,9 @@ usage() {
   exit 2
 }
 
-project= visibility= writers=
+project=''
+visibility=''
+writers=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --project) project=${2:-}; shift 2 ;;
