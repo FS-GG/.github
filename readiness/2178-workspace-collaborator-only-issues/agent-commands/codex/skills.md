@@ -26,4 +26,3 @@ normalized work model, not an authored source of truth. See `guidance.json`.
 ## schema-versioning — schema-versioning
 - Capability: Required by tasks: T009.
 - Related: T009
-
