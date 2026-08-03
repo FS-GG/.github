@@ -29,8 +29,8 @@ module BlockerLintTests =
 
         Assert.Equal<string list>(
             [ "add --status Blocked"
-              "release --status Blocked"
               "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
+              "release --status Blocked"
               "set-field --batch Status=Blocked"
               "set-field Status Blocked" ],
             deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
@@ -56,9 +56,12 @@ module BlockerLintTests =
         let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
         let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
-        Assert.Equal(5, directStatusWrites)
+        Assert.Equal(4, directStatusWrites)
         Assert.Contains("StatusNotBlocked", chore)
-        Assert.Contains("(\"Status\", Blocked)", chore)
+        // `ChoreKind.Write` owns the indirect reconcile write.  It deliberately renders the
+        // discriminated union through `statusWireName`, so pin the actual production mapping rather
+        // than a source spelling that only existed in an earlier draft of this test.
+        Assert.Contains("StatusNotBlocked _ -> Some(\"Status\", statusWireName Blocked)", chore)
 
     [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
