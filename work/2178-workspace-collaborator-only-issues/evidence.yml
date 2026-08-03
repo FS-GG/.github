@@ -1,0 +1,228 @@
+schemaVersion: 1
+workId: 2178-workspace-collaborator-only-issues
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2178-workspace-collaborator-only-issues/spec.md
+sourceClarifications: work/2178-workspace-collaborator-only-issues/clarifications.md
+sourceChecklist: work/2178-workspace-collaborator-only-issues/checklist.md
+sourcePlan: work/2178-workspace-collaborator-only-issues/plan.md
+sourceTasks: work/2178-workspace-collaborator-only-issues/tasks.yml
+sourceAnalysis: readiness/2178-workspace-collaborator-only-issues/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2178-workspace-collaborator-only-issues/analysis.json
+    digest: 3d7ddca91e8e9d26be0960af639bec8a63fe0512442574d9cb570221adbb7e3c
+    schemaVersion: 1
+  - label: checklist
+    path: work/2178-workspace-collaborator-only-issues/checklist.md
+    digest: bd858d20c2f0f85a55ef673f9df5781692ae4b94ac694a46b7be7395ab137f1f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2178-workspace-collaborator-only-issues/clarifications.md
+    digest: 741cf0b83c566e68e3b714094fc480dc467e9b640bd97a2db4fe2bbf7320376d
+    schemaVersion: 1
+  - label: plan
+    path: work/2178-workspace-collaborator-only-issues/plan.md
+    digest: 40cf2bfe6333aae7e1d034a594016124c174b42fc502ce0ad8cae8de4fceccbc
+    schemaVersion: 1
+  - label: spec
+    path: work/2178-workspace-collaborator-only-issues/spec.md
+    digest: 95e7fa69f196e983af4c353c8b48b17a3baf06d16340fd3ae1d5502e3f45d0e6
+    schemaVersion: 1
+  - label: tasks
+    path: work/2178-workspace-collaborator-only-issues/tasks.yml
+    digest: e3a92b312433e20264decf4fc1412d4c6e2e68d280e9a3e5aae6116dc0f3d4f6
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/NewSddWorkspace/Program.fs, scripts/repos-audit.sh, tests/new-sdd-workspace/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Observed by the focused built-CLI and fleet-audit gates; no synthetic evidence is used."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/NewSddWorkspace/Program.fs, tests/new-sdd-workspace/run.sh, tests/new-sdd-workspace/validate_project_graphql.py]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Structured GraphQL variables and payload identity checks passed through the built CLI.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/NewSddWorkspace/Program.fs, tests/new-sdd-workspace/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Partial receipt, and two-fact completion transitions passed., mismatch refusal, obligation dedupe]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/NewSddWorkspace/Program.fs, tests/new-sdd-workspace/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Missing, "and persistence-failure routes passed. The built fixture executes the exact recorded Project command from a workspace path containing whitespace and an apostrophe; the command clears only its matching obligation. The public command-rendering seam also pins the repository route's absolute workspace identity and quoting.", mutation-failure, stale-reread, unreadable]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [tests/new-sdd-workspace/run.sh, tests/new-sdd-workspace/validate_project_graphql.py, tests/repos-audit/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Focused built-CLI suite passed 82 assertions and the fleet-audit fixtures passed.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [registry/dependencies.yml, scripts/NewSddWorkspace/NewSddWorkspace.fsproj]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: ["Version and ordered publication/adoption obligations are declared; post-merge receipts remain delivery obligations."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV007]
+    artifacts: [scripts/NewSddWorkspace/Program.fs, tests/new-sdd-workspace/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Project, Repository, and provenance boundaries are implemented and exercised together.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV008]
+    artifacts: [scripts/repos-audit.sh, tests/repos-audit/run.sh]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Fleet audit distinguishes disabled Issues, and unreadable no-verdict., noncompliance]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [docs/coordination/untrusted-content-boundary.md, profile/README.md, scripts/NewSddWorkspace/README.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [Durable trust-boundary and operator recovery documentation is present.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003, PD-005]
+    obligationRefs: [EV010]
+    artifacts: [tests/new-sdd-workspace/run.sh, work/2178-workspace-collaborator-only-issues/plan.md]
+    sourceRefs:
+      - kind: verification
+        path: tests/new-sdd-workspace/run.sh
+    result: pass
+    synthetic: false
+    notes: [The SDD plan traces the partial-receipt and human-completion state machine to executable evidence.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

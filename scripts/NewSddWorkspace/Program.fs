@@ -81,6 +81,10 @@ type Options =
       /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
       BoardOwner: string
       BoardTitle: string
+      /// Explicit public/private intent for a product Project. None preserves an existing board.
+      PublicBoard: bool option
+      /// Named team/user writer identities. Required whenever `--public-board` is requested.
+      TrustedWriters: string list
       /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
       /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
       ChoreLocks: string option }
@@ -120,6 +124,8 @@ let assembleWizardOptions
       WorkspaceRepo = Some workspaceRepo
       BoardOwner = boardOwner
       BoardTitle = boardTitle
+      PublicBoard = None
+      TrustedWriters = []
       ChoreLocks = choreLocks }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
@@ -336,6 +342,368 @@ let private parseBoard (value: string) : string * string =
     match value.IndexOf '/' with
     | -1 -> value, "Coordination"
     | i -> value.Substring(0, i), value.Substring(i + 1)
+
+/// Parse the only repository identity accepted by the policy client. Keeping this typed at the
+/// boundary prevents a shell fragment or a prose URL from reaching `gh` as an authority.
+let private parseRepository (value: string) : Result<string * string, string> =
+    match value.Split('/', StringSplitOptions.RemoveEmptyEntries) with
+    | [| owner; name |] when not (String.IsNullOrWhiteSpace owner) && not (String.IsNullOrWhiteSpace name) ->
+        Ok(owner, name)
+    | _ -> Error "--repo must be an owner/repository identity"
+
+/// A repository-policy result is deliberately separate from the orchestration outcome: a failed
+/// read is a no-verdict, never evidence that issue intake is restricted.
+type private RepositoryPolicyReceipt =
+    | RepositorySecured of repository: string * prior: string * actor: string
+    | RepositoryPending of repository: string * reason: string
+
+type private ResolvedProjectWriter =
+    { Requested: string
+      ActorKind: string
+      ActorId: string }
+
+type private ProjectAccessReceipt =
+    | ProjectObserved of project: string * projectId: string * isPublic: bool * actor: string
+    | ProjectPartiallyVerified of project: string * projectId: string * isPublic: bool * actor: string * writers: ResolvedProjectWriter list
+    | ProjectPending of project: string * reason: string
+
+type private SecurityReport =
+    { Repository: RepositoryPolicyReceipt option
+      Project: ProjectAccessReceipt
+      Outcome: Outcome }
+
+let private graphql (query: string) (variables: (string * string) list) =
+    let args =
+        [ yield "api"; yield "graphql"; yield "-f"; yield "query=" + query
+          for name, value in variables do
+              yield "-F"
+              yield sprintf "%s=%s" name value ]
+    runProcess false "gh" args
+
+/// Send the collaborator list as GraphQL variables. `gh api -F` understands the documented
+/// `array[][field]` spelling and serializes each node id as JSON data; node ids never become query
+/// syntax. Keeping this separate from the scalar helper makes the production request shape visible
+/// to tests and prevents a future fallback to interpolation.
+let private graphqlProjectCollaborators (query: string) (projectId: string) (writers: ResolvedProjectWriter list) =
+    let args =
+        [ yield "api"
+          yield "graphql"
+          yield "-f"
+          yield "query=" + query
+          yield "-F"
+          yield "id=" + projectId
+          for writer in writers do
+              yield "-F"
+              yield sprintf "collaborators[][%s]=%s" (if writer.ActorKind = "team" then "teamId" else "userId") writer.ActorId
+              yield "-F"
+              yield "collaborators[][role]=WRITER" ]
+    runProcess false "gh" args
+
+/// Apply the repository's typed `IssueCreationPolicy` only after reading it, then re-read the
+/// exact field. This is intentionally not a best-effort security claim: unavailable `gh`, a 404,
+/// permission failure, mutation failure, or stale post-write read becomes `RepositoryPending`.
+let private secureRepository (repository: string) : RepositoryPolicyReceipt =
+    match parseRepository repository with
+    | Error reason -> RepositoryPending(repository, reason)
+    | Ok(owner, name) ->
+        let read = "query($owner:String!,$name:String!){viewer{login} repository(owner:$owner,name:$name){id issueCreationPolicy}}"
+        let code, output = graphql read [ "owner", owner; "name", name ]
+        if code <> 0 then
+            RepositoryPending(repository, "repository policy could not be read (missing repository or administration permission)")
+        else
+            try
+                let root = JsonNode.Parse(output).AsObject()
+                let repo = root.["data"].AsObject().["repository"].AsObject()
+                let id = repo.["id"].GetValue<string>()
+                let prior = repo.["issueCreationPolicy"].GetValue<string>()
+                let actor = root.["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+                if prior = "COLLABORATORS_ONLY" then
+                    RepositorySecured(repository, prior, actor)
+                else
+                    let mutation = "mutation($id:ID!){updateRepository(input:{repositoryId:$id,issueCreationPolicy:COLLABORATORS_ONLY}){repository{issueCreationPolicy}}}"
+                    let changed, _ = graphql mutation [ "id", id ]
+                    if changed <> 0 then
+                        RepositoryPending(repository, "IssueCreationPolicy mutation failed")
+                    else
+                        let reread, verified = graphql read [ "owner", owner; "name", name ]
+                        if reread <> 0 then
+                            RepositoryPending(repository, "post-write repository policy read failed")
+                        else
+                            let finalPolicy = JsonNode.Parse(verified).AsObject().["data"].AsObject().["repository"].AsObject().["issueCreationPolicy"].GetValue<string>()
+                            if finalPolicy = "COLLABORATORS_ONLY" then RepositorySecured(repository, prior, actor)
+                            else RepositoryPending(repository, sprintf "post-write policy was %s, not COLLABORATORS_ONLY" finalPolicy)
+            with _ ->
+                RepositoryPending(repository, "repository policy response was not a typed GitHub result")
+
+/// Read Project visibility through the supported ProjectV2 surface. The schema deliberately does
+/// not expose the base/effective access permission; that absence is retained as a no-verdict by
+/// the caller, rather than substituted with viewerCanUpdate or a browser scrape.
+let private inspectProject (owner: string) (title: string) : ProjectAccessReceipt =
+    let project = sprintf "%s/%s" owner title
+    let query = "query($owner:String!){viewer{login} organization(login:$owner){projectsV2(first:100){nodes{id title public}}}}"
+    let code, output = graphql query [ "owner", owner ]
+    if code <> 0 then ProjectPending(project, "ProjectV2 visibility could not be read")
+    else
+        try
+            let nodes = JsonNode.Parse(output).AsObject().["data"].AsObject().["organization"].AsObject().["projectsV2"].AsObject().["nodes"].AsArray()
+            let actor = JsonNode.Parse(output).AsObject().["data"].AsObject().["viewer"].AsObject().["login"].GetValue<string>()
+            match nodes |> Seq.tryFind (fun n -> n.AsObject().["title"].GetValue<string>() = title) with
+            | None -> ProjectPending(project, "configured Project does not exist yet")
+            | Some node -> ProjectObserved(project, node.AsObject().["id"].GetValue<string>(), node.AsObject().["public"].GetValue<bool>(), actor)
+        with _ -> ProjectPending(project, "ProjectV2 response was not a typed GitHub result")
+
+/// Update only the visibility fact GitHub exposes and then re-read it. Access base permission and
+/// collaborators are intentionally outside this success result: their absence from the read model
+/// means a visibility green cannot certify Project write access.
+let private applyProjectVisibility (owner: string) (title: string) (desired: bool option) : ProjectAccessReceipt =
+    match inspectProject owner title, desired with
+    | receipt, None -> receipt
+    | ProjectPending _ as receipt, _ -> receipt
+    | (ProjectObserved(_, _, current, _) as receipt), Some wanted when current = wanted -> receipt
+    | ProjectObserved(project, id, _, _), Some wanted ->
+        let mutation = "mutation($id:ID!,$public:Boolean!){updateProjectV2(input:{projectId:$id,public:$public}){projectV2{public}}}"
+        let code, _ = graphql mutation [ "id", id; "public", if wanted then "true" else "false" ]
+        if code <> 0 then ProjectPending(project, "Project visibility mutation failed")
+        else
+            match inspectProject owner title with
+            | ProjectObserved(_, verifiedId, actual, actor) when actual = wanted -> ProjectObserved(project, verifiedId, actual, actor)
+            | ProjectObserved(_, _, actual, _) -> ProjectPending(project, sprintf "post-write visibility was %b" actual)
+            | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project visibility read failed: " + reason)
+            | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
+    | ProjectPartiallyVerified _ as receipt, _ -> receipt
+
+/// GitHub's supported ProjectV2 collaborator mutation is used for the explicit writer allowlist.
+/// Collaborator ids cannot be safely guessed from display names, so the typed API's own read is
+/// the authority: when it cannot expose the collaborators we retain a pending human obligation.
+let private applyProjectWriters (owner: string) (title: string) (desired: string list) : ProjectAccessReceipt =
+    match applyProjectVisibility owner title None with
+    | ProjectPending _ as receipt -> receipt
+    | ProjectObserved(project, id, _, _) ->
+        // ProjectV2 accepts actor ids, not names. Resolve explicit users and `team:<slug>`
+        // identities through the live typed schema; no UI scrape or guessed id enters a mutation.
+        let resolve (writer: string) =
+            let isTeam = writer.StartsWith("team:", StringComparison.OrdinalIgnoreCase)
+            let name = if isTeam then writer.Substring("team:".Length) else writer
+            let query = if isTeam then "query($owner:String!){organization(login:$owner){teams(first:100){nodes{id slug}}}}" else "query($login:String!){user(login:$login){id}}"
+            let variables = if isTeam then [ "owner", owner ] else [ "login", name ]
+            let code, output = graphql query variables
+            if code <> 0 then None
+            else
+                try
+                    let data = JsonNode.Parse(output).AsObject().["data"].AsObject()
+                    if isTeam then
+                        data.["organization"].AsObject().["teams"].AsObject().["nodes"].AsArray()
+                        |> Seq.tryFind (fun team -> team.AsObject().["slug"].GetValue<string>() = name)
+                        |> Option.map (fun team ->
+                            { Requested = writer
+                              ActorKind = "team"
+                              ActorId = team.AsObject().["id"].GetValue<string>() })
+                    else
+                        Some
+                            { Requested = writer
+                              ActorKind = "user"
+                              ActorId = data.["user"].AsObject().["id"].GetValue<string>() }
+                with _ -> None
+        let collaborators = desired |> List.map resolve
+        if collaborators |> List.exists Option.isNone then
+            ProjectPending(project, "one or more trusted writers could not be resolved through the typed GitHub API")
+        else
+            let resolved = collaborators |> List.choose (fun writer -> writer)
+            let mutation = "mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators{totalCount nodes{... on User{id login} ... on Team{id slug}}}}}"
+            let code, output = graphqlProjectCollaborators mutation id resolved
+            if code <> 0 then ProjectPending(project, "Project writer allowlist mutation failed")
+            else
+                try
+                    let collaborators =
+                        JsonNode.Parse(output).AsObject().["data"].AsObject().["updateProjectV2Collaborators"].AsObject().["collaborators"].AsObject()
+                    let count = collaborators.["totalCount"].GetValue<int>()
+                    let actualIds =
+                        collaborators.["nodes"].AsArray()
+                        |> Seq.map (fun node -> node.AsObject().["id"].GetValue<string>())
+                        |> Set.ofSeq
+                    let expectedIds = resolved |> Seq.map (fun writer -> writer.ActorId) |> Set.ofSeq
+                    if count <> resolved.Length || actualIds <> expectedIds then
+                        ProjectPending(project, "post-write Project collaborators did not match the requested writer allowlist")
+                    else
+                        match inspectProject owner title with
+                        | ProjectObserved(_, verifiedId, verifiedPublic, actor) ->
+                            ProjectPartiallyVerified(project, verifiedId, verifiedPublic, actor, resolved)
+                        | ProjectPending(_, reason) -> ProjectPending(project, "post-write Project access read failed: " + reason)
+                        | ProjectPartiallyVerified _ -> ProjectPending(project, "unexpected nested Project receipt")
+                with _ ->
+                    ProjectPending(project, "Project writer mutation response was not a typed collaborator receipt")
+    | ProjectPartiallyVerified _ as receipt -> receipt
+
+/// Secure repository issue intake where the resource exists. Project access remains an explicit
+/// no-verdict until its typed access surface can be both read and re-read; that boundary is surfaced
+/// in the run summary instead of inferring safety from `viewerCanUpdate` or scraping GitHub's UI.
+let private workspaceSecurity (opts: Options) : SecurityReport =
+    let repository = opts.WorkspaceRepo |> Option.map secureRepository
+    let project =
+        match applyProjectVisibility opts.BoardOwner opts.BoardTitle opts.PublicBoard with
+        | ProjectObserved _ as visible when List.isEmpty opts.TrustedWriters -> visible
+        | ProjectObserved _ -> applyProjectWriters opts.BoardOwner opts.BoardTitle opts.TrustedWriters
+        | ProjectPartiallyVerified _ as partial -> partial
+        | ProjectPending _ as pending -> pending
+    let repositoryMessage =
+        match repository with
+        | None -> "repository security pending — pass --repo owner/repository after the repository exists"
+        | Some(RepositorySecured(repo, prior, actor)) -> sprintf "repository %s issue policy verified as COLLABORATORS_ONLY (prior %s; actor %s)" repo prior actor
+        | Some(RepositoryPending(repo, reason)) -> sprintf "repository security pending for %s — %s; re-run new-sdd-workspace secure after creation/permission is available" repo reason
+    let projectMessage =
+        match project with
+        | ProjectObserved(project, _, true, _) -> sprintf "Project %s is public-readable; base Read and explicit writer allowlist require the recorded human verification" project
+        | ProjectObserved(project, _, false, _) -> sprintf "Project %s is private; base access and explicit writer allowlist require the recorded human verification" project
+        | ProjectPartiallyVerified(project, _, _, _, _) -> sprintf "Project %s visibility and writer allowlist are verified; base Read requires the recorded human verification" project
+        | ProjectPending(project, reason) -> sprintf "Project access pending for %s — %s" project reason
+    { Repository = repository; Project = project; Outcome = Warned(repositoryMessage + "; " + projectMessage) }
+
+let private upsertSecurityReceipt (root: JsonObject) (kind: string) (targetField: string) (target: string) (receipt: JsonObject) =
+    let receipts = JsonArray()
+    match root.["verifiedSecurityReceipts"] with
+    | :? JsonArray as existing ->
+        existing
+        |> Seq.filter (fun entry ->
+            try
+                let row = entry.AsObject()
+                not (row.["kind"].GetValue<string>() = kind && row.[targetField].GetValue<string>() = target)
+            with _ -> true)
+        |> Seq.iter (fun entry -> receipts.Add(entry.DeepClone()))
+    | _ -> ()
+    receipts.Add receipt
+    root.["verifiedSecurityReceipts"] <- receipts
+
+let private projectReceiptJson (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) =
+    let receipt = JsonObject()
+    receipt.["kind"] <- JsonValue.Create "project-access"
+    receipt.["project"] <- JsonValue.Create project
+    receipt.["projectId"] <- JsonValue.Create projectId
+    receipt.["observedVisibility"] <- JsonValue.Create(if isPublic then "public" else "private")
+    receipt.["actor"] <- JsonValue.Create actor
+    receipt.["source"] <- JsonValue.Create "GitHub GraphQL requested-grant payload and ProjectV2 visibility re-read"
+    receipt.["verificationState"] <- JsonValue.Create(if basePermission.IsSome && effectiveWriters.IsSome then "verified-with-human-access-review" else "partial")
+    receipt.["basePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+    let verifiedFacts = JsonArray(JsonValue.Create "visibility", JsonValue.Create "requested-writer-grant-payload")
+    receipt.["verifiedFacts"] <- verifiedFacts
+    let unverifiedFacts = JsonArray()
+    if basePermission.IsNone then unverifiedFacts.Add(JsonValue.Create "organization-base-permission")
+    if effectiveWriters.IsNone then unverifiedFacts.Add(JsonValue.Create "effective-exclusive-writer-set")
+    receipt.["unverifiedFacts"] <- unverifiedFacts
+    match effectiveWriters with
+    | Some values ->
+        let humanFacts = JsonObject()
+        humanFacts.["source"] <- JsonValue.Create "human verification at Project → Settings → Manage access"
+        humanFacts.["organizationBasePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+        let observed = JsonArray()
+        values |> List.iter (fun writer -> observed.Add(JsonValue.Create writer))
+        humanFacts.["effectiveExclusiveWriters"] <- observed
+        receipt.["humanVerifiedFacts"] <- humanFacts
+    | None -> ()
+    let writerRows = JsonArray()
+    writers
+    |> List.iter (fun writer ->
+        let row = JsonObject()
+        row.["requested"] <- JsonValue.Create writer.Requested
+        row.["actorKind"] <- JsonValue.Create writer.ActorKind
+        row.["actorId"] <- JsonValue.Create writer.ActorId
+        writerRows.Add row)
+    receipt.["trustedWriters"] <- writerRows
+    receipt
+
+let private shellQuote (value: string) =
+    "'" + value.Replace("'", "'\"'\"'") + "'"
+
+/// Render a durable recovery command whose workspace identity survives a change of cwd.
+/// Every dynamic argument is POSIX-shell quoted because the receipt is intended to be copied and
+/// executed, not interpreted as placeholder prose.
+let securityResumeCommand (workspace: string) (args: string list) =
+    let target = workspace |> Path.GetFullPath |> shellQuote
+    let suffix = args |> List.map shellQuote |> String.concat " "
+    sprintf "new-sdd-workspace secure %s %s" target suffix
+
+let private projectBaseAccessObligation (workspace: string) (project: string) (writers: ResolvedProjectWriter list) =
+    let obligation = JsonObject()
+    obligation.["kind"] <- JsonValue.Create "project-base-access-human-verification"
+    obligation.["target"] <- JsonValue.Create project
+    obligation.["expectedBasePermission"] <- JsonValue.Create "READ"
+    let requested = writers |> List.map (fun writer -> writer.Requested) |> String.concat ","
+    let trustedWriters = JsonArray()
+    writers |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
+    obligation.["trustedWriters"] <- trustedWriters
+    obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read AND that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist."
+    obligation.["resume"] <-
+        JsonValue.Create(
+            securityResumeCommand workspace
+                [ "--project"; project
+                  "--trusted-writers"; requested
+                  "--verified-base-permission"; "READ"
+                  "--verified-exclusive-writers"; requested ])
+    obligation.["state"] <- JsonValue.Create "pending-human-verification"
+    obligation
+
+/// Persist the security facts that could not be established. This lives beside the scaffold's
+/// provenance rather than in console prose so a later operator has one exact recovery target.
+/// The Project obligation is retained even after repository policy succeeds: GitHub's ordinary
+/// ProjectV2 read does not expose an effective/base access verdict, so visibility or
+/// `viewerCanUpdate` cannot safely clear it.
+let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
+    let dest = Path.Combine(opts.Target, ".fsgg", "scaffold-provenance.json")
+    try
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+        let root =
+            if File.Exists dest then
+                match JsonNode.Parse(File.ReadAllText dest) with
+                | :? JsonObject as o -> o
+                | _ -> JsonObject()
+            else JsonObject()
+        let obligations = JsonArray()
+        let repo = JsonObject()
+        repo.["kind"] <- JsonValue.Create "repository-issue-policy"
+        repo.["target"] <- JsonValue.Create(opts.WorkspaceRepo |> Option.defaultValue "repository-not-yet-created")
+        repo.["targetPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+        repo.["resume"] <-
+            JsonValue.Create(
+                securityResumeCommand opts.Target
+                    [ "--repo"; opts.WorkspaceRepo |> Option.defaultValue "owner/repository" ])
+        match report.Repository with
+        | Some(RepositorySecured(repository, prior, actor)) ->
+            let receipt = JsonObject()
+            receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
+            receipt.["repository"] <- JsonValue.Create repository
+            receipt.["priorPolicy"] <- JsonValue.Create prior
+            receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+            receipt.["actor"] <- JsonValue.Create actor
+            receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
+            upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
+        | _ ->
+            repo.["state"] <- JsonValue.Create "pending"
+            obligations.Add repo
+        let projectTarget = sprintf "%s/%s" opts.BoardOwner opts.BoardTitle
+        match report.Project with
+        | ProjectPartiallyVerified(project, id, isPublic, actor, writers) ->
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None None)
+            obligations.Add(projectBaseAccessObligation opts.Target project writers)
+        | _ ->
+            let project = JsonObject()
+            project.["kind"] <- JsonValue.Create "project-access"
+            project.["target"] <- JsonValue.Create projectTarget
+            project.["requestedVisibility"] <- JsonValue.Create(match opts.PublicBoard with Some true -> "public" | Some false -> "private" | None -> "preserve")
+            project.["expectedBasePermission"] <- JsonValue.Create "READ"
+            let writers = JsonArray()
+            opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
+            project.["trustedWriters"] <- writers
+            project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/requested-grant verification, then its exact two-fact resume command."
+            let retryArgs =
+                [ "--project"; projectTarget ]
+                @ (match opts.PublicBoard with Some true -> [ "--public-board" ] | Some false -> [ "--private-board" ] | None -> [])
+                @ [ "--trusted-writers"; String.concat "," opts.TrustedWriters ]
+            project.["resume"] <- JsonValue.Create(securityResumeCommand opts.Target retryArgs)
+            project.["state"] <- JsonValue.Create "pending-human-verification"
+            obligations.Add project
+        root.["securityObligations"] <- obligations
+        File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+    with ex ->
+        raise (InvalidOperationException("security provenance persistence failed; no verified or pending security state was recorded", ex))
 
 /// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
 /// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
@@ -851,12 +1219,18 @@ let private usage () =
     AnsiConsole.MarkupLine "[bold]Usage[/]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ --verified-exclusive-writers ids[/]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
     AnsiConsole.MarkupLine "  [aqua]retrofit[/] <target-dir>   idempotently wire coordination ONTO an existing workspace (the"
     AnsiConsole.MarkupLine "                        inverse of the scaffold-time step): vendor the kit + write the board"
     AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ --verified-exclusive-writers <ids>"
+    AnsiConsole.MarkupLine "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
@@ -869,6 +1243,10 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
     AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
     AnsiConsole.MarkupLine "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
+    AnsiConsole.MarkupLine "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
+    AnsiConsole.MarkupLine "  [green]--private-board[/]       request a private product Project"
+    AnsiConsole.MarkupLine "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
+    AnsiConsole.MarkupLine "  [green]--verified-base-permission[/] READ and [green]--verified-exclusive-writers[/] <ids> record both Manage access facts after re-validating observable Project facts"
     AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
     AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
@@ -896,6 +1274,8 @@ type private Draft =
       WorkspaceRepo: string option
       BoardOwner: string option
       BoardTitle: string option
+      PublicBoard: bool option
+      TrustedWriters: string list option
       ChoreLocks: string option }
 
 let private emptyDraft =
@@ -912,6 +1292,8 @@ let private emptyDraft =
       WorkspaceRepo = None
       BoardOwner = None
       BoardTitle = None
+      PublicBoard = None
+      TrustedWriters = None
       ChoreLocks = None }
 
 /// Require a non-blank answer — the shared validator for the text prompts.
@@ -964,6 +1346,11 @@ let private paramsPanel (d: Draft) =
          match d.WorkspaceRepo with
          | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
          | None -> sprintf "%s [grey](default on)[/]" board)
+    row "Project visibility"
+        (match d.PublicBoard with Some true -> "[green]public-readable[/]" | Some false -> "[aqua]private[/]" | None -> pendingCell)
+    row "Project base permission" "[yellow]Read (human verification required)[/]"
+    row "Project writers"
+        (d.TrustedWriters |> Option.map (fun writers -> sprintf "[green]%s[/]" (Markup.Escape(String.Join(", ", writers)))) |> Option.defaultValue pendingCell)
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
     panel.Border <- BoxBorder.Rounded
@@ -1028,6 +1415,13 @@ let private previewPanel (d: Draft) =
     let coordination =
         tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
     coordination.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
+    let access = tree.AddNode "[yellow]Project access boundary[/]  [grey](base Read requires operator verification)[/]"
+    access.AddNode(
+        match d.PublicBoard with
+        | Some true -> "[green]public-readable[/]"
+        | Some false -> "[aqua]private[/]"
+        | None -> pendingCell) |> ignore
+    access.AddNode(sprintf "writers: %s" (d.TrustedWriters |> Option.map (String.concat ", " >> Markup.Escape) |> Option.defaultValue pendingCell)) |> ignore
 
     let panel = Panel(tree)
     panel.Header <- PanelHeader "[bold]scaffold preview[/]"
@@ -1053,6 +1447,8 @@ let private equivalentCommand (d: Draft) =
     (match d.WorkspaceRepo with
      | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
      | _ -> ())
+    (match d.PublicBoard with Some true -> parts.Add "--public-board" | Some false -> parts.Add "--private-board" | None -> ())
+    (match d.TrustedWriters with Some writers -> parts.Add(sprintf "--trusted-writers %s" (String.Join(",", writers))) | None -> ())
     (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
     (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
     (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
@@ -1199,17 +1595,38 @@ let private interactive () : Options option =
                         .AllowEmpty())
                 .Trim()
         if String.IsNullOrWhiteSpace raw then None else Some raw
+    draftView draft
+    let publicBoard =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Product Project [green]visibility[/]?")
+                .AddChoices([| "private — preserve private access"; "public — public-readable, never public-writable" |]))
+            .StartsWith "public"
+    draft <- { draft with PublicBoard = Some publicBoard }
+    draftView draft
+    let trustedWriters =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("  Explicit Project [green]writers[/] [grey](team/user ids, comma-separated)[/]?")
+                .Validate(fun (s: string) -> required "trusted writer allowlist" s))
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        |> Array.map (fun s -> s.Trim())
+        |> Array.filter (String.IsNullOrWhiteSpace >> not)
+        |> List.ofArray
     draft <-
         { draft with
             WorkspaceRepo = Some workspaceRepo
             BoardOwner = Some boardOwner
             BoardTitle = Some boardTitle
+            PublicBoard = Some publicBoard
+            TrustedWriters = Some trustedWriters
             ChoreLocks = choreLocks }
 
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some(assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks)
+        Some({ assembleWizardOptions target product template gitRef governance pinned (if supportsProfile template then Some profile else None) npmPackage npmVersion bindingTarget workspaceRepo boardOwner boardTitle choreLocks with
+                 PublicBoard = Some publicBoard
+                 TrustedWriters = trustedWriters })
     else
         None
 
@@ -1284,6 +1701,15 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--repo needs a value (got flag '%s')" value)
         | "--repo" :: value :: t -> flags { acc with WorkspaceRepo = Some value } t
         | [ "--repo" ] -> Error "--repo needs a value"
+        | "--public-board" :: t -> flags { acc with PublicBoard = Some true } t
+        | "--private-board" :: t -> flags { acc with PublicBoard = Some false } t
+        | "--trusted-writers" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--trusted-writers needs a value (got flag '%s')" value)
+        | "--trusted-writers" :: value :: t ->
+            let writers = value.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun v -> v.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray
+            if List.isEmpty writers then Error "--trusted-writers needs at least one team or user"
+            else flags { acc with TrustedWriters = writers } t
+        | [ "--trusted-writers" ] -> Error "--trusted-writers needs a value"
         | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
         | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
@@ -1311,8 +1737,14 @@ let private parse (argv: string list) : Result<Options, string> =
               WorkspaceRepo = None
               BoardOwner = "FS-GG"
               BoardTitle = "Coordination"
+              PublicBoard = None
+              TrustedWriters = []
               ChoreLocks = None }
             rest
+        |> Result.bind (fun opts ->
+            match opts.PublicBoard with
+            | Some true when List.isEmpty opts.TrustedWriters -> Error "--public-board requires an explicit --trusted-writers allowlist"
+            | _ -> Ok opts)
     | _ -> Error "target dir and product name are required"
 
 /// Parse `retrofit <target> [options]` — the coordination-retrofit subcommand. Only the coordination
@@ -1508,6 +1940,21 @@ let private run (opts: Options) : int =
              | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
             results.Add { Title = "coordination"; Outcome = outcome }
 
+        // 5b · repository issue-intake policy. This is intentionally a distinct, typed step from
+        // board wiring: a board can be readable while its repository has not been created yet, and
+        // that must produce a durable pending security result rather than a false secured summary.
+        if opts.Coordinate && not fatal then
+            step 5 "repository security"
+            let report = workspaceSecurity opts
+            let outcome = report.Outcome
+            recordSecurityObligations opts report
+            match outcome with
+            | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] repository issue policy verified"
+            | Warned note -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape note))
+            | Skipped reason -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape reason))
+            | Failed note -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
+            results.Add { Title = "repository security"; Outcome = outcome }
+
         // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
             step 6 "fsgg-sdd doctor"
@@ -1658,6 +2105,130 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.Write panel
             1
 
+/// Re-run just the repository policy after a freshly scaffolded repository has been created or
+/// an operator has received the required administration grant. This is the resumable half of the
+/// scaffold-time pending receipt; it has no filesystem side effects and never prints credentials.
+let private clearRepositorySecurityObligation (target: string) (repository: string) (prior: string) (actor: string) : Result<unit, string> =
+    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+    try
+        if not (File.Exists path) then Error(sprintf "security provenance is missing at %s" path)
+        else
+            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+            let kept = JsonArray()
+            match root.["securityObligations"] with
+            | :? JsonArray as obligations ->
+                obligations
+                |> Seq.filter (fun entry ->
+                    try
+                        let row = entry.AsObject()
+                        not (row.["kind"].GetValue<string>() = "repository-issue-policy" && row.["target"].GetValue<string>() = repository)
+                    with _ -> true)
+                |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            | _ -> ()
+            root.["securityObligations"] <- kept
+            let receipt = JsonObject()
+            receipt.["kind"] <- JsonValue.Create "repository-issue-policy"
+            receipt.["repository"] <- JsonValue.Create repository
+            receipt.["priorPolicy"] <- JsonValue.Create prior
+            receipt.["finalPolicy"] <- JsonValue.Create "COLLABORATORS_ONLY"
+            receipt.["actor"] <- JsonValue.Create actor
+            receipt.["source"] <- JsonValue.Create "GitHub GraphQL repository.issueCreationPolicy re-read"
+            upsertSecurityReceipt root "repository-issue-policy" "repository" repository receipt
+            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+            Ok()
+    with ex -> Error("security provenance persistence failed: " + ex.Message)
+
+let private persistProjectSecurityReceipt (target: string) (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) : Result<unit, string> =
+    let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+    try
+        if not (File.Exists path) then
+            Error(sprintf "security provenance is missing at %s" path)
+        else
+            let root = JsonNode.Parse(File.ReadAllText path).AsObject()
+            let kept = JsonArray()
+            match root.["securityObligations"] with
+            | :? JsonArray as obligations ->
+                obligations
+                |> Seq.filter (fun entry ->
+                    try
+                        let row = entry.AsObject()
+                        let kind = row.["kind"].GetValue<string>()
+                        let sameTarget = row.["target"].GetValue<string>() = project
+                        not (sameTarget && (kind = "project-access" || kind = "project-base-access-human-verification"))
+                    with _ -> true)
+                |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
+            | _ -> ()
+            if basePermission.IsNone || effectiveWriters.IsNone then kept.Add(projectBaseAccessObligation target project writers)
+            root.["securityObligations"] <- kept
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
+            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+            Ok()
+    with ex -> Error("security provenance persistence failed: " + ex.Message)
+
+let private runSecure (target: string option) (repository: string) : int =
+    match secureRepository repository with
+    | RepositorySecured(repo, prior, actor) ->
+        match target with
+        | Some workspace ->
+            match clearRepositorySecurityObligation workspace repo prior actor with
+            | Error reason ->
+                AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s policy verified but durable receipt failed — %s" (Markup.Escape repo) (Markup.Escape reason))
+                1
+            | Ok() ->
+                AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+                0
+        | None ->
+            AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s IssueCreationPolicy is COLLABORATORS_ONLY (prior %s; actor %s)" (Markup.Escape repo) (Markup.Escape prior) (Markup.Escape actor))
+            0
+    | RepositoryPending(repo, reason) ->
+        AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
+        1
+
+let private runSecureProject (target: string) (board: string) (visibility: bool option) (writers: string list) (verifiedBasePermission: string option) (verifiedExclusiveWriters: string list option) : int =
+    let owner, title = parseBoard board
+    match applyProjectVisibility owner title visibility with
+    | ProjectPending(project, reason) ->
+        AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+        1
+    | ProjectObserved(project, _, _, _) ->
+        match applyProjectWriters owner title writers with
+        | ProjectPartiallyVerified(_, id, isPublic, actor, resolved) ->
+            let requestedSet = writers |> Set.ofList
+            let verifiedSet = verifiedExclusiveWriters |> Option.map Set.ofList
+            let humanVerification =
+                match verifiedBasePermission, verifiedExclusiveWriters with
+                | None, None -> Ok(None, None)
+                | Some "READ", Some values when verifiedSet = Some requestedSet -> Ok(Some "READ", Some values)
+                | Some permission, _ when permission <> "READ" -> Error "--verified-base-permission must be READ"
+                | Some _, None -> Error "--verified-base-permission requires --verified-exclusive-writers"
+                | None, Some _ -> Error "--verified-exclusive-writers requires --verified-base-permission READ"
+                | Some _, Some _ -> Error "the human-verified effective/exclusive writer set must exactly match --trusted-writers"
+            match humanVerification with
+            | Error reason ->
+                persistProjectSecurityReceipt target project id isPublic actor resolved None None |> ignore
+                AnsiConsole.MarkupLine(sprintf "[yellow]pending human verification:[/] %s — %s; the base/effective-writer obligation remains" (Markup.Escape project) (Markup.Escape reason))
+                1
+            | Ok(permission, effectiveWriters) ->
+                match persistProjectSecurityReceipt target project id isPublic actor resolved permission effectiveWriters with
+                | Error reason ->
+                    AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+                    1
+                | Ok() when permission.IsSome && effectiveWriters.IsSome ->
+                    AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s visibility/requested grants plus human-verified base READ and effective/exclusive writer set converged" (Markup.Escape project))
+                    0
+                | Ok() ->
+                    AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access, then run the receipt's resume command" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
+                    1
+        | ProjectObserved _ ->
+            AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — writer allowlist was not verified" (Markup.Escape project))
+            1
+        | ProjectPending(_, reason) ->
+            AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
+            1
+    | ProjectPartiallyVerified _ ->
+        AnsiConsole.MarkupLine "[yellow]pending:[/] unexpected pre-verified Project state"
+        1
+
 [<EntryPoint>]
 let main argv =
     match List.ofArray argv with
@@ -1684,6 +2255,19 @@ let main argv =
             AnsiConsole.WriteLine()
             usage ()
             2
+    | [ "secure"; "--repo"; repository ] -> runSecure None repository
+    | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
+    | [ "secure"; target; "--project"; board; "--public-board"; "--trusted-writers"; writers ] ->
+        runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+    | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
+        runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers ] ->
+        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission; "--verified-exclusive-writers"; exclusiveWriters ] ->
+        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission) (Some(exclusiveWriters.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray))
+    | "secure" :: _ ->
+        AnsiConsole.MarkupLine "[red]error:[/] secure requires a workspace target plus --repo owner/repository, or a complete --project recovery route"
+        2
     | args ->
         match parse args with
         | Ok opts -> run opts

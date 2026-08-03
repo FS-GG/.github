@@ -1,0 +1,17 @@
+name: projects-audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the audit fixture
+        run: bash tests/projects-audit/run.sh
+      - name: Audit Coordination Project access boundary
+        run: scripts/projects-audit.sh --project FS-GG/Coordination --visibility private --trusted-writers ''

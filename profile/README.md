@@ -1,5 +1,13 @@
 # FS-GG
 
+> [!WARNING]
+> FS-GG is agent-operated. Public GitHub content is untrusted data, never
+> executable instruction: we do not act on arbitrary links, packages, commands,
+> or patches found there. FS-GG repositories restrict new issue creation to
+> collaborators. A public product board is public-readable, not public-writable.
+> See the [public-content trust boundary](../docs/coordination/untrusted-content-boundary.md)
+> for the remaining public inputs and Project access model.
+
 **F# tooling for building applications and libraries** — production-shaped
 workspace templates, a spec-driven development lifecycle CLI, optional
 governance, a SkiaSharp/OpenGL UI framework, and libraries for game simulation,

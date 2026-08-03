@@ -54,4 +54,10 @@ if not nonDefaultWiring.Coordinate
    || nonDefaultWiring.ChoreLocks <> Some "acme/Product.X#5" then
     failwith "the wizard did not preserve explicit non-default coordination values"
 
+let recoveryTarget = System.IO.Path.GetFullPath("./workspace with 'quote")
+let recovery = securityResumeCommand "./workspace with 'quote" [ "--repo"; "acme/app" ]
+let expectedTarget = "'" + recoveryTarget.Replace("'", "'\"'\"'") + "'"
+if recovery <> sprintf "new-sdd-workspace secure %s '--repo' 'acme/app'" expectedTarget then
+    failwithf "durable security recovery command lost or misquoted its workspace identity: %s" recovery
+
 printfn "wizard decision/default assembly: ok"
