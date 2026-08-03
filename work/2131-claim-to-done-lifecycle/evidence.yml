@@ -11,7 +11,7 @@ sourceAnalysis: readiness/2131-claim-to-done-lifecycle/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2131-claim-to-done-lifecycle/analysis.json
-    digest: 18981664f1a0a26c6132c7b100562ec4fd6a4d2731ffdc325e5dc86a365dfb6b
+    digest: 82bebb33d12c0873de4430e1135e4e58a64314fa127547886db883604730b8ea
     schemaVersion: 1
   - label: checklist
     path: work/2131-claim-to-done-lifecycle/checklist.md

@@ -37,6 +37,16 @@
       "schemaStatus": "current"
     },
     {
+      "path": "readiness/2131-claim-to-done-lifecycle/work-model.json",
+      "kind": "workModel",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "41c7c248a2c80bbe31649d7b0e86190bb61c9d6aafa6e537c30022e275232305"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
       "path": "work/2131-claim-to-done-lifecycle/checklist.md",
       "kind": "checklist",
       "digest": {
@@ -81,7 +91,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "a83383fd51ab68fa5de76c49f148d312b7cd8bdfaa25b758272b100633ed902a"
+        "value": "c718fd87f9ad09238080edec25673af31704362c2d68fd80ba081982a78f1ab6"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -476,7 +486,7 @@
     {
       "path": "readiness/2131-claim-to-done-lifecycle/work-model.json",
       "kind": "workModel",
-      "currency": "missing",
+      "currency": "current",
       "diagnosticIds": []
     }
   ],

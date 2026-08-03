@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2131-claim-to-done-lifecycle/ship.json",
-      "digest": "sha256:37f601b28cbd7cfd03bce8b49ccdb9e2189305d32fc5ee037d0c4be8082a9e52",
+      "digest": "sha256:ae4a4da0b0e82f8054804605396a23b84c22dd324398ea5ab86b3dec1d254579",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2131-claim-to-done-lifecycle/verify.json",
-      "digest": "sha256:ebb17bc4b3f05ef8fe246004fab4226cee5032ad5f51c1fa0049ba4d1bc4545f",
+      "digest": "sha256:8e8246d5e9dcd63389c93c83a9dd1aab9839a7474555d3add097619285a4a40b",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2131-claim-to-done-lifecycle/work-model.json",
-      "digest": "sha256:41c7c248a2c80bbe31649d7b0e86190bb61c9d6aafa6e537c30022e275232305",
+      "digest": "sha256:2dbfd777f820801a12be34e9c321ed1f312c9913d6b3ee0c3c395fe3a8486a8f",
       "schemaVersion": 1
     }
   ],

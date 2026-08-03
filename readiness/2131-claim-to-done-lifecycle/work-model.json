@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "632445e778d56afee77fb5c229be285cbce0da1557963419041b1eab03b047eb"
+        "value": "fc9105d2df10d63296b9721c87c2712d75f7af0ab317655a4dfc940a90a56f3e"
       }
     },
     {
@@ -1063,7 +1063,7 @@
           "path": "work/2131-claim-to-done-lifecycle/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "632445e778d56afee77fb5c229be285cbce0da1557963419041b1eab03b047eb"
+            "value": "fc9105d2df10d63296b9721c87c2712d75f7af0ab317655a4dfc940a90a56f3e"
           },
           "schemaVersion": 1
         },
@@ -1094,7 +1094,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "3403e442510a4143542f0a0040c81a1d55066252909fddf8f012b8741c3f571c"
+        "value": "a894a781f9c9fbb25a129aabc3bb5a7802773c933344acf7483510a92ed6febd"
       },
       "currency": "current"
     }

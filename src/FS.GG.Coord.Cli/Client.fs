@@ -1071,17 +1071,36 @@ module Client =
                                   ParkedReason = None }
                             match Delivery.inspect facts, opts.Apply with
                             | Delivery.Next transition, true when transition.Action = Delivery.GuardedLand ->
-                                match Writes.mergeAtHead ctx.Transport target pr.Value head with
+                                // A delivery receipt authorizes only the exact claim generation that was
+                                // inspected.  Re-read the winning marker immediately before the REST
+                                // write so a released, replaced, or stolen claim cannot merge on stale
+                                // authority.
+                                let currentClaimGeneration =
+                                    Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
+                                    |> Result.map (fun markers ->
+                                        match Reads.winner opts.LeaseMinutes markers with
+                                        | Some held when held.Worker.Value = w.Id -> Some(string held.Id)
+                                        | _ -> None)
+                                match currentClaimGeneration with
                                 | Error error -> fail error
-                                | Ok false ->
-                                    eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
-                                    ExitNoVerdict
-                                | Ok true ->
-                                    match opts.Render with
-                                    | Json ->
-                                        printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
-                                    | Text -> printfn "merged %s at the inspected head" target.Short
-                                    ExitGreen
+                                | Ok generation ->
+                                    match DeliveryApplication.guardedLanding transition.FreshnessToken transition.ActionKey facts generation (fun () -> Writes.mergeAtHead ctx.Transport target pr.Value head) with
+                                    | Error reason ->
+                                        eprint $"fsgg-coord-engine: delivery --apply is refused: %s{reason}"
+                                        ExitNoVerdict
+                                    | Ok merge ->
+                                        match merge with
+                                        | Error error -> fail error
+                                        | Ok false ->
+                                            eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+                                            ExitNoVerdict
+                                        | Ok true ->
+                                            match opts.Render with
+                                            | Json ->
+                                                printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
+                                            | Text -> printfn "merged %s at the inspected head" target.Short
+                                            ExitGreen
                             | Delivery.Next transition, true when transition.Action = Delivery.Complete ->
                                 // Delegate the coupled close / board-Done / own-claim-release sequence to
                                 // the existing `done` transaction.  Its `Done.verify` re-reads the merged

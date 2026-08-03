@@ -159,6 +159,28 @@ module DeliveryApplication =
                                 ({ Id = id; Kind = kind; Evidence = evidence; HeadSha = headSha; Verified = evidence.IsSome }: Delivery.Obligation))
                             |> Ok
 
+    /// The live adapter must consume its delivery receipt and prove that the same claim generation
+    /// still wins immediately before it asks GitHub to merge.  Keeping this boundary pure makes the
+    /// no-write branch explicit and independently testable.
+    type LandingAuthorization =
+        | MergeAuthorized
+        | MergeRefused of reason: string
+
+    let authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration =
+        match Delivery.advance freshnessToken actionKey facts with
+        | Delivery.NoVerdict reason -> MergeRefused reason
+        | Delivery.Next transition when transition.Action <> Delivery.GuardedLand ->
+            MergeRefused "delivery receipt does not authorize guarded landing"
+        | Delivery.Next _ when Some facts.Freshness.ClaimGeneration <> currentClaimGeneration ->
+            MergeRefused "delivery claim generation changed after inspection; GitHub merge was not attempted"
+        | Delivery.Next _ -> MergeAuthorized
+
+    /// Invoke the merge adapter only after the receipt and re-read claim generation both authorize it.
+    let guardedLanding freshnessToken actionKey facts currentClaimGeneration merge =
+        match authorizeGuardedLanding freshnessToken actionKey facts currentClaimGeneration with
+        | MergeRefused reason -> Error reason
+        | MergeAuthorized -> Ok(merge ())
+
     let private snapshot (raw: string) : Result<Delivery.Snapshot, string> =
         try
             use document = JsonDocument.Parse raw
