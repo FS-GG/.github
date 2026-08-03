@@ -7,7 +7,8 @@ module CycleLedger =
     type Cycle = { Id: string; UnitId: string; Executor: string; Repository: string; BaseCommit: string }
     type ProviderReceipt =
         { Schema: string; Provider: string; WorkId: string; CycleId: string; SourceRevision: string
-          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool }
+          CandidateHead: string; Verdict: string; Round: int; PlayerJourney: bool option; JourneyRequired: bool
+          GeneratorId: string; GeneratorVersion: string; ArtifactDigest: string }
     type Evidence =
         { ImplementationHead: string; ReviewHead: string; FeedbackCycle: string; FeedbackActive: bool
           MergedPr: int option; MergeHead: string option; EvidencePaths: string list; Dispositions: string list }
@@ -16,7 +17,7 @@ module CycleLedger =
     val cycleId: unitId: string -> executor: string -> repository: string -> baseCommit: string -> string
     val inspect: Ledger -> Result<Unit list, string list>
     val register: Ledger -> executor: string -> repository: string -> baseCommit: string -> selectedUnit: string option -> parallelAuthorized: bool -> disjointTouchSets: bool -> live: Cycle list -> Result<Action, string list>
-    val validateProvider: expectedWorkId: string -> expectedCycle: Cycle -> expectedSourceRevision: string -> expectedHead: string -> expectedProvider: string -> expectedSchema: string -> ProviderReceipt -> Result<unit, string list>
+    val validateProvider: expectedWorkId: string -> expectedCycle: Cycle -> expectedSourceRevision: string -> expectedHead: string -> expectedProvider: string -> expectedSchema: string -> expectedGenerator: string -> ProviderReceipt -> Result<unit, string list>
     val advance: Ledger -> Cycle -> ProviderReceipt -> ProviderReceipt -> ProviderReceipt -> Evidence -> Result<Action, string list>
     val update: Ledger -> Cycle -> Evidence -> Result<Action, string list>
     val complete: Ledger -> accepted: Cycle list -> guardedUpdates: Cycle list -> rollupCycleIds: string list -> Result<Action, string list>

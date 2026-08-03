@@ -17,12 +17,12 @@ module CycleLedgerTests =
     [<Fact>]
     let ``provider receipts fail closed on stale source wrong cycle and missing player journey`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None; JourneyRequired = true }
-        Assert.True(validateProvider "work" cycle "current" "head" "critique" "fsgg.critique.report/1" receipt |> Result.isError)
+        let receipt = { Schema = "fsgg.critique.report/3"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "old"; CandidateHead = "head"; Verdict = "pass"; Round = 1; PlayerJourney = None; JourneyRequired = true; GeneratorId = "FS.GG.Critique"; GeneratorVersion = "1"; ArtifactDigest = "sha256:artifact" }
+        Assert.True(validateProvider "work" cycle "current" "head" "critique" "fsgg.critique.report/3" "FS.GG.Critique" receipt |> Result.isError)
         let good = { receipt with SourceRevision = "base"; PlayerJourney = Some true }
         let evidence = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = Some 7; MergeHead = Some "head"; EvidencePaths = [ "evidence" ]; Dispositions = [ "accepted" ] }
-        let implementation = { good with Provider = "fsgg-sdd"; Schema = "fsgg.sdd.report/1"; PlayerJourney = Some true }
-        let feedback = { good with Provider = "feedback"; Schema = "fsgg.feedback.report/2"; PlayerJourney = Some true }
+        let implementation = { good with Provider = "fsgg-sdd"; Schema = "fsgg.sdd.report/1"; PlayerJourney = Some true; GeneratorId = "FS.GG.SDD.Artifacts" }
+        let feedback = { good with Provider = "feedback"; Schema = "fsgg.feedback.report/2"; PlayerJourney = Some true; GeneratorId = "FS.GG.Feedback" }
         Assert.Equal(Advance cycle, advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle implementation good feedback evidence |> unwrap)
         Assert.True(advance { SourceRevision = "fresh"; Units = [ unit "work" [] false ] } cycle implementation good feedback evidence |> Result.isError)
         Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle { implementation with Provider = "invented" } good feedback evidence |> Result.isError)
@@ -42,7 +42,7 @@ module CycleLedgerTests =
     [<Fact>]
     let ``advancement requires a matching merged head and rejects an eleventh round`` () =
         let cycle = { Id = "cycle-1"; UnitId = "work"; Executor = "worker"; Repository = ".github"; BaseCommit = "base" }
-        let receipt = { Schema = "fsgg.critique.report/1"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true; JourneyRequired = true }
+        let receipt = { Schema = "fsgg.critique.report/3"; Provider = "critique"; WorkId = "work"; CycleId = "cycle-1"; SourceRevision = "base"; CandidateHead = "head"; Verdict = "pass"; Round = 11; PlayerJourney = Some true; JourneyRequired = true; GeneratorId = "FS.GG.Critique"; GeneratorVersion = "1"; ArtifactDigest = "sha256:artifact" }
         let incomplete = { ImplementationHead = "head"; ReviewHead = "head"; FeedbackCycle = "cycle-1"; FeedbackActive = true; MergedPr = None; MergeHead = None; EvidencePaths = []; Dispositions = [] }
         Assert.True(advance { SourceRevision = "base"; Units = [ unit "work" [] false ] } cycle receipt receipt receipt incomplete |> Result.isError)
 
