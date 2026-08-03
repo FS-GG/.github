@@ -64,6 +64,28 @@ let private ok (body: string) =
           ETag = None
           NextLink = None }
 
+[<Fact>]
+let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
+    let recorder = Fake.Recorder(fun request ->
+        Assert.Equal("PUT", request.Method)
+        Assert.Equal("repos/FS-GG/FS.GG.SDD/pulls/99/merge", request.Path)
+        match request.Body with
+        | Json body -> Assert.Contains("head-a", body)
+        | _ -> failwith "a guarded merge must carry the inspected head SHA"
+        ok """{"merged":true}""")
+
+    match Writes.mergeAtHead recorder aRef 99 "head-a" with
+    | Ok true -> Assert.Equal(1, recorder.RestCalls)
+    | outcome -> failwithf "expected a guarded merge, got %A" outcome
+
+[<Fact>]
+let ``#2131 a GitHub head mismatch is a refused guarded merge, not a green write`` () =
+    let recorder = Fake.Recorder(fun _ -> ok """{"merged":false,"message":"Head branch was modified"}""")
+
+    match Writes.mergeAtHead recorder aRef 99 "head-a" with
+    | Ok false -> ()
+    | outcome -> failwithf "expected a refused guarded merge, got %A" outcome
+
 // ---- the CHORE LOCK: the same CAS, on a different SUBJECT (ADR-0041, #873) --------------------------
 //
 // #873 asked which substrate a chore lock takes, and framed `Writes.claim` as "145 lines of claim-specific

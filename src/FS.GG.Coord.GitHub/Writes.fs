@@ -566,6 +566,31 @@ module Writes =
         : IoResult<ClaimOutcome> =
         claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None)
 
+    let mergeAtHead (transport: IGitHubTransport) (ref: Ref) (pr: int) (headSha: string) : IoResult<bool> =
+        let payload =
+            let body = Nodes.JsonObject()
+            body["sha"] <- Nodes.JsonValue.Create headSha
+            body.ToJsonString()
+        let request =
+            { Method = "PUT"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pr}/merge"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+        match transport.Send request with
+        | Error error -> Error error
+        | Ok response ->
+            try
+                use document = JsonDocument.Parse response.Body
+                match document.RootElement.TryGetProperty "merged" with
+                | true, value when value.ValueKind = JsonValueKind.True -> Ok true
+                | true, value when value.ValueKind = JsonValueKind.False -> Ok false
+                | _ -> Error(Malformed(ref.Short, "merge response has no boolean merged field"))
+            with :? JsonException as error ->
+                Error(Malformed(ref.Short, $"merge response is not JSON: %s{error.Message}"))
+
     let verifyHeld
         (transport: IGitHubTransport)
         (leaseMinutes: int)

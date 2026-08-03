@@ -939,6 +939,167 @@ module Client =
                     | Text -> printfn "%A" action
                     ExitGreen
 
+    // Bound after `doneCmd` is defined. The delivery adapter precedes the established completion
+    // transaction in this file, while F# binds values top-to-bottom.
+    let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
+
+    /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
+    /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
+    /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
+    let private delivery (ctx: Context) (opts: Options) : int =
+        match oneArg opts "delivery: an item ref", worker opts with
+        | Error code, _ -> code
+        | _, Error code -> code
+        | Ok raw, Ok w ->
+            match parseRef ctx raw with
+            | Error message ->
+                eprint $"fsgg-coord-engine: delivery: %s{message}"
+                ExitError
+            | Ok target ->
+                let candidate =
+                    scanAndDecide ctx { opts with Repo = Some target.Repo; Limit = None } Cache.Scheduling
+                    |> Result.mapError Errors.explain
+                    |> Result.bind (fun (_, doc, _) ->
+                        Snapshot.parse doc
+                        |> Result.mapError (fun errors ->
+                            errors
+                            |> List.map (fun error -> $"%s{error.Path}: %s{error.Message}")
+                            |> String.concat "; ")
+                        |> Result.bind (fun snapshot ->
+                            match snapshot.Candidates |> List.tryFind (fun item -> item.Item.Ref = target) with
+                            | Some item -> Ok item
+                            | None -> Error $"%s{target.Short} is not present in the fresh board scan"))
+
+                match candidate with
+                | Error message ->
+                    eprint $"fsgg-coord-engine: delivery cannot establish board facts: %s{message}"
+                    ExitError
+                | Ok candidate ->
+                    let terminalBoardState = candidate.Item.Status = Done && candidate.Item.State = Closed
+                    let liveClaim =
+                        Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
+                        |> Result.bind (fun markers ->
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | Some marker when marker.Worker.Value = w.Id -> Ok(Some marker)
+                            | Some marker -> Error(Errors.Malformed(target.Short, $"live claim belongs to worker '%s{marker.Worker.Value}', not '%s{w.Id}'"))
+                            | None when terminalBoardState -> Ok None
+                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize delivery")))
+
+                    match liveClaim, Cache.pending () with
+                    | Error error, _ -> fail error
+                    | _, Error error -> fail error
+                    | Ok marker, Ok pending ->
+                        let declaredPaths =
+                            match candidate.Item.TouchSet with
+                            | Declared tokens ->
+                                tokens
+                                |> List.map (function | Matchable value | Unmatchable value -> value)
+                            | DeclaredChore -> [ "any" ]
+                            | DeclaredNone
+                            | Undeclared
+                            | Unreadable _ -> []
+
+                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
+                            match opts.Pr with
+                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, false, false, false, [])
+                            | Some pr ->
+                                match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
+                                      Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                                      Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                                      Reads.prClosingRef ctx.Transport target.Owner target.Repo pr,
+                                      Reads.prFiles ctx.Transport target.Owner target.Repo pr,
+                                      Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                                | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments ->
+                                    let review =
+                                        comments
+                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                        |> Driver.parseReviewComments
+                                        |> Result.map (fun parsed -> { parsed with ChecksGreen = landable = PrGreen })
+                                        |> Result.toOption
+                                    let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
+                                    let linkageCanonical = closing |> Option.exists ((=) target)
+                                    let pathsVerified =
+                                        match candidate.Item.TouchSet with
+                                        | Declared tokens -> files |> List.forall (fun file -> tokens |> List.exists (fun token -> TouchSet.covers token file))
+                                        | _ -> false
+                                    let reviewComments =
+                                        comments
+                                        |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+                                    let obligations = DeliveryApplication.obligationsFromComments head reviewComments
+                                    let obligationsDeclared = Result.isOk obligations
+                                    let obligations = obligations |> Result.defaultValue []
+                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
+                                | Error error, _, _, _, _, _
+                                | _, Error error, _, _, _, _
+                                | _, _, _, Error error, _, _
+                                | _, _, _, _, Error error, _
+                                | _, _, _, _, _, Error error -> Error error
+
+                        match branchAndPr with
+                        | Error error -> fail error
+                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, landable, merged, obligationsDeclared, obligations) ->
+                            let facts: Delivery.Snapshot =
+                                { Freshness =
+                                    { ItemRef = target.Short
+                                      ClaimGeneration = marker |> Option.map (fun held -> string held.Id) |> Option.defaultValue "released"
+                                      Executor = marker |> Option.map (fun held -> held.Worker.Value) |> Option.defaultValue w.Id
+                                      Branch = branch
+                                      Worktree = Directory.GetCurrentDirectory()
+                                      PullRequest = pr
+                                      HeadSha = if pr.IsSome then head else "unpublished"
+                                      DeclaredPaths = declaredPaths
+                                      BoardState = statusWireName candidate.Item.Status }
+                                  ItemBranchCanonical = if pr.IsSome then itemBranchCanonical else true
+                                  ClosingLinkageCanonical = if pr.IsSome then closingLinkageCanonical else false
+                                  PathsVerified = if pr.IsSome then pathsVerified else false
+                                  InReview = pr.IsSome
+                                  Review = review
+                                  Landable = landable
+                                  Merged = merged
+                                  // `done` independently verifies GitHub's merged closing record before it
+                                  // closes or stamps anything.  This only permits routing to that transaction;
+                                  // it never authorizes a write by itself.
+                                  MergeReachable = merged
+                                  IssueClosed = candidate.Item.State = Closed
+                                  BoardDone = candidate.Item.Status = Done
+                                  ClaimReleased = marker.IsNone
+                                  PendingWrites = List.length pending
+                                  CleanupEligible = terminalBoardState && marker.IsNone && List.isEmpty pending
+                                  ObligationsDeclared = obligationsDeclared
+                                  Obligations = obligations
+                                  ParkedReason = None }
+                            match Delivery.inspect facts, opts.Apply with
+                            | Delivery.Next transition, true when transition.Action = Delivery.GuardedLand ->
+                                match Writes.mergeAtHead ctx.Transport target pr.Value head with
+                                | Error error -> fail error
+                                | Ok false ->
+                                    eprint "fsgg-coord-engine: delivery merge was refused because the PR is no longer at the inspected head. Re-inspect before attempting another action."
+                                    ExitNoVerdict
+                                | Ok true ->
+                                    match opts.Render with
+                                    | Json ->
+                                        printfn "{\"schema\":\"fsgg.coord.delivery/1\",\"verdict\":\"applied\",\"action\":\"guardedLand\",\"freshnessToken\":\"%s\",\"actionKey\":\"%s\"}" transition.FreshnessToken transition.ActionKey
+                                    | Text -> printfn "merged %s at the inspected head" target.Short
+                                    ExitGreen
+                            | Delivery.Next transition, true when transition.Action = Delivery.Complete ->
+                                // Delegate the coupled close / board-Done / own-claim-release sequence to
+                                // the existing `done` transaction.  Its `Done.verify` re-reads the merged
+                                // closer and refuses a stale or unrelated PR before any write.
+                                let code = completeDelivery ctx { opts with Args = [ target.Canonical ]; Pr = pr; Apply = false }
+                                if code <> ExitGreen then code
+                                else
+                                    match Cache.pending () with
+                                    | Ok [] -> ExitGreen
+                                    | Ok pending ->
+                                        eprint $"fsgg-coord-engine: delivery completion left %d{List.length pending} queued board write(s); run `flush` and re-inspect before cleanup."
+                                        ExitNoVerdict
+                                    | Error error -> fail error
+                            | Delivery.Next transition, true ->
+                                eprint $"fsgg-coord-engine: delivery --apply is refused: the sole fresh action is %A{transition.Action}, not guarded landing."
+                                ExitNoVerdict
+                            | _ -> DeliveryApplication.render opts facts
+
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
     /// already dropped, #533).
@@ -5553,6 +5714,8 @@ module Client =
                                 // has no readable/durable disposition.
                                 ExitRed
 
+    do completeDelivery <- doneCmd
+
     /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
     /// A repo token → the repo NAME board rows carry. THE MAP NOW LIVES IN THE PARSER (`Options.resolveRepo`,
     /// #962), because that is the one funnel every verb reaches; this alias keeps the call sites that resolve
@@ -7476,6 +7639,7 @@ module Client =
             | Next -> next ctx opts
             | BatchCmd -> batch ctx opts
             | DriverCmd -> driver ctx opts
+            | DeliveryCmd -> delivery ctx opts
             | Ready -> ready ctx opts
             | Reconcile -> reconcile ctx opts
             | Who -> who ctx opts

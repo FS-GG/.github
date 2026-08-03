@@ -1,0 +1,1104 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2131-claim-to-done-lifecycle",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "d22a5d0152651f1c9700024fb61c29afffd5c5298c4f4f463159ad72129f13ab"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "9bf7b026c7dc9de94b47bdac273f6cfed5f44d76e520c75df3e5c30394085df9"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "632445e778d56afee77fb5c229be285cbce0da1557963419041b1eab03b047eb"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "12093e8ef39ff17aa814868029cb2edfc703874ce4b156c6465f134dc925bc94"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "dd2fb4245cab5403d75057d4ab89f623b5b1a2c9c119596700c51fac726adba1"
+      }
+    },
+    {
+      "path": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c718fd87f9ad09238080edec25673af31704362c2d68fd80ba081982a78f1ab6"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2131-claim-to-done-lifecycle",
+    "title": "Claim-to-Done Lifecycle and Guarded Landing",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "The lifecycle represents Claimed, Implementation, ReviewReady, ReviewActive, Accepted, Landable, MergedAwaitingObligations, Done, and terminal park states. (Stories: US-001; Acceptance: AC-001)",
+      "text": "The lifecycle represents Claimed, Implementation, ReviewReady, ReviewActive, Accepted, Landable, MergedAwaitingObligations, Done, and terminal park states. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Each inspect or advance result binds item ref, live claim generation, executor identity, branch or worktree, PR, head SHA, declared paths, and board state, returning exactly one next action or a fail-closed no-verdict. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Each inspect or advance result binds item ref, live claim generation, executor identity, branch or worktree, PR, head SHA, declared paths, and board state, returning exactly one next action or a fail-closed no-verdict. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 32,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Review handoff verifies the canonical item branch, closing reference, declared paths, and current head before moving the board to In review. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Review handoff verifies the canonical item branch, closing reference, declared paths, and current head before moving the board to In review. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 33,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Review acceptance accepts only a valid typed review chain for the current head SHA and rejects prose or stale evidence. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Review acceptance accepts only a valid typed review chain for the current head SHA and rejects prose or stale evidence. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 34,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Guarded landing rechecks claim generation, head SHA, accepted review, checks, mergeability, and closing linkage before one idempotent REST merge. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Guarded landing rechecks claim generation, head SHA, accepted review, checks, mergeability, and closing linkage before one idempotent REST merge. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 35,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Completion remains nonterminal until every declared release, publication, registry, dispatch, or deployment obligation has a verified receipt. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Completion remains nonterminal until every declared release, publication, registry, dispatch, or deployment obligation has a verified receipt. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 36,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    },
+    {
+      "id": "FR-007",
+      "title": "Completion verifies merge reachability, closed issue, Done projection, released claim, zero pending writes, and cleanup eligibility before emitting FSGG-DONE. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Completion verifies merge reachability, closed issue, Done projection, released claim, zero pending writes, and cleanup eligibility before emitting FSGG-DONE. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 37,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T007"
+      ],
+      "linkedEvidenceIds": [
+        "EV007"
+      ]
+    },
+    {
+      "id": "FR-008",
+      "title": "Mutating actions are idempotent and carry a freshness token so stale replay cannot merge twice or stamp the wrong lifecycle state. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Mutating actions are idempotent and carry a freshness token so stale replay cannot merge twice or stamp the wrong lifecycle state. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 38,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T008"
+      ],
+      "linkedEvidenceIds": [
+        "EV008"
+      ]
+    },
+    {
+      "id": "FR-009",
+      "title": "Cleanup and follow-up routing are explicit terminal actions. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Cleanup and follow-up routing are explicit terminal actions. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2131-claim-to-done-lifecycle/spec.md",
+      "sourceLocation": {
+        "line": 39,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T009"
+      ],
+      "linkedEvidenceIds": [
+        "EV009"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Implement requirement FR-007",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-007"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-007",
+        "PD-007"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Implement requirement FR-008",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-008"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-008",
+        "PD-008"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Implement requirement FR-009",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-009"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-009",
+        "PD-009"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2131-claim-to-done-lifecycle/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [
+        "FR-007"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [
+        "FR-008"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [
+        "FR-009"
+      ],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Cli.Tests/DeliveryApplicationTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/TestResults/coord-core-2131.trx"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.lock"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".agents/skills/pnext-item/SKILL.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2131-claim-to-done-lifecycle/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2131-claim-to-done-lifecycle/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "d22a5d0152651f1c9700024fb61c29afffd5c5298c4f4f463159ad72129f13ab"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "9bf7b026c7dc9de94b47bdac273f6cfed5f44d76e520c75df3e5c30394085df9"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "632445e778d56afee77fb5c229be285cbce0da1557963419041b1eab03b047eb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "12093e8ef39ff17aa814868029cb2edfc703874ce4b156c6465f134dc925bc94"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "dd2fb4245cab5403d75057d4ab89f623b5b1a2c9c119596700c51fac726adba1"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2131-claim-to-done-lifecycle/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c718fd87f9ad09238080edec25673af31704362c2d68fd80ba081982a78f1ab6"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "3403e442510a4143542f0a0040c81a1d55066252909fddf8f012b8741c3f571c"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
