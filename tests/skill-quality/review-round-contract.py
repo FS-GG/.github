@@ -34,13 +34,16 @@ def main() -> None:
     normalized = " ".join(contract.split())
     for literal in (
         "`round-numbering: 1-based`",
-        "`round-four-action: human-escalation`",
+        "`round-four-action: automatic-repair-phase`",
+        "`repair-phase-entry: automatic-after-ordinary-exhaustion`",
         "`human-escalation-sentinel: Blocked on: human/action`",
         "<!-- fsgg:independent-review-escalation:v1 -->",
         "all three ordered confirmation URLs",
         "count-before-routing gate",
         "stops without merging",
-        "Only a human may retire that sentinel",
+        "Only a human or the automatic repair-phase transition may retire that sentinel",
+        "sets `Status: Ready`",
+        "without human interaction",
         "exhausted PR cannot reset its counter",
     ):
         require(literal in normalized, f"review contract is missing escalation invariant: {literal}")
@@ -92,7 +95,21 @@ def main() -> None:
             require("round three" in text or "third round" in text, f"{runtime}/{relative} omits round three")
             require("round four" in text or "fourth round" in text, f"{runtime}/{relative} omits round-four refusal")
 
-    print("review-round-contract: three rounds, ordered evidence, and human escalation hold")
+        for relative in (
+            "work-board/SKILL.md",
+            "work-board/references/host-loop.md",
+            "drive-board/SKILL.md",
+            "drive-board/references/host-loop.md",
+            "work-board-best/SKILL.md",
+            "work-board-normal/SKILL.md",
+            "drive-board-best/SKILL.md",
+            "drive-board-normal/SKILL.md",
+        ):
+            text = read(runtime, relative)
+            require("automatically" in text, f"{runtime}/{relative} does not automatically enter repair phase")
+            require("operator authoriz" not in text.lower(), f"{runtime}/{relative} retains an operator-authorization gate")
+
+    print("review-round-contract: three rounds, automatic repair phase, ordered evidence, and terminal human escalation hold")
 
 
 if __name__ == "__main__":

@@ -46,7 +46,9 @@
     <PackageId>FS.GG.Drivers</PackageId>
     <!-- 0.13.0 -> 0.14.0, a MINOR (.github#2136): drive/work-board host loops now consume a generated
          wave contract, so their machine literals cannot drift while qualitative judgement remains local. -->
-    <Version>0.14.0</Version>
+    <!-- 0.14.0 -> 0.15.0, a MINOR (.github#2167): every drive/work board variant now automatically
+         dispatches one fresh repair phase after validated ordinary review exhaustion. -->
+    <Version>0.15.0</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>

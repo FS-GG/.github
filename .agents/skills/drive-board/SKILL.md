@@ -45,11 +45,11 @@ cross-repo allocation, not item implementation.
    independence, material finding dispositions, merge, publication/registry obligations, exact done
    stamp, released claim, and newly filed items against GitHub—not its narrative. Reject any new item
    whose review evidence does not establish materiality. After an exhausted third round, refuse a
-   fourth round of that same chain; dispatch the repair phase instead only under
-   [host-loop](references/host-loop.md)'s operator-authorization and escalated-route rules — never
-   infer entry — and verify its own chain, fresh critic, and repair-phase marker exactly as host-loop
-   describes. Absent authorization, or once the repair phase itself exhausts, refuse further rounds
-   or merge and verify the human-action park, released claim, and escalation marker instead.
+   fourth round of that same chain and automatically dispatch the repair phase under
+   [host-loop](references/host-loop.md)'s validated-exhaustion and escalated-route rules. Verify its own
+   chain, fresh critic, and repair-phase marker exactly as host-loop describes. If the required route is
+   unavailable, or once the repair phase itself exhausts, refuse further rounds or merge and verify the
+   human-action park, released claim, and escalation marker instead.
 7. **Once this wave's merges into `.github` are verified, and before the next wave is dispatched, bring
    the shared checkout's engine current.** In `.github` the engine is a *source build* under the **shared**
    checkout, so merging a worker's PR can leave the binary the whole fleet execs behind `origin/main` —

@@ -79,24 +79,25 @@ materiality, distinct root cause, dedupe, and actionability are evidenced; nonma
 must not create issues, board rows, blocker edges, or follow-up entries. Post the exact-SHA
 `fsgg:review-accepted:v1` marker only after these pre-merge checks pass; the worker may not merge
 before it observes that marker. If material findings remain after round three, verify the escalation
-marker, `Blocked on: human/action` sentinel, `Blocked` status, and released claim; do not post
-acceptance, merge, or permit round four.
+marker, close the ordinary PR without merging, and automatically enter the repair phase; do not post
+acceptance, merge, or permit round four on the exhausted chain.
 
-**Repair phase.** An exhausted three-round chain is not automatically a human park: when the operator
-has explicitly authorized repair-phase entry for that item — a declared parameter of the invocation,
-never inferred from a passing check, a new commit, or this host's own judgement — dispatch it exactly
-like a fresh item: a new worktree, a fresh implementing worker and a fresh critic, both at the escalated
-route the active variant's own routing table names (`drive-board-best`/`-normal`,
-`work-board-best`/`-normal`); a bare canonical invocation with no routing table of its own has no
-escalated route to supply and cannot authorize entry. Reserve the same two review slots for its critic
+**Repair phase.** A validated exhausted three-round chain automatically enters one fresh repair phase.
+Dispatch it exactly like a fresh item: a new worktree, a fresh implementing worker and a fresh critic,
+both at the escalated route the active variant's own routing table names (`drive-board-best`/`-normal`,
+`work-board-best`/`-normal`); a bare canonical invocation uses its corresponding `-best` repair route.
+A passing check, new commit, or host judgement is not an entry trigger: verify the complete ordinary
+chain and escalation marker first. On the next board-driver pass, an already parked item with that
+evidence has its human-action sentinel removed and `Status` returned to `Ready`, then enters
+automatically. Reserve the same two review slots for its critic
 that every wave already reserves; an implementer may never fill one, in the repair phase either. Verify
 the repair-phase chain under the identical rules — durable markers, ordered round/URL/SHA chain, critic
 independence — but against `repair-phase-max-rounds: 10`, not `max-automated-repair-rounds: 3`, and
 require the `fsgg:independent-review-repair-phase:v1` marker naming the exhausted PR and its escalation
-marker before treating any repair-phase pass as landable. Absent explicit authorization, or once the
-repair phase itself exhausts its own round ceiling, verify the escalation marker, `Blocked on:
-human/action` sentinel, `Blocked` status, and released claim exactly as an unauthorized exhaustion; do
-not post acceptance, merge, start a second repair phase, or permit a round beyond either ceiling. A
+marker before treating any repair-phase pass as landable. If the required route is unavailable, or once
+the repair phase itself exhausts its own round ceiling, verify the escalation marker, `Blocked on:
+human/action` sentinel, `Blocked` status, and released claim; do not post acceptance, merge, start a
+second repair phase, or permit a round beyond either ceiling. A
 `Done` transition that landed via the repair phase names it explicitly — `<item> — Done (repair phase):
 <PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one. See
 `pnext-item`'s independent-review contract (its "Repair phase" section) for the full contract this

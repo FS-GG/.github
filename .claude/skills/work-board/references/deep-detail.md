@@ -221,8 +221,9 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    a shared tree, a path you did not declare is one another worker may be editing). Pause before
 >    opening the PR for steps 3–4, then resume pnext-item: push and open the candidate, pause for the host's
 >    independent critic, implement up to three numbered repairs, merge only after the same critic
->    confirms the current head, and `done --flip` to earn the stamp. If round three still fails, park
->    for human action and release the claim; never start round four.
+>    confirms the current head, and `done --flip` to earn the stamp. If round three still fails, never
+>    start round four: close that PR without merging and automatically enter one fresh repair phase.
+>    Park for human action and release the claim only if the repair phase exhausts or its route is unavailable.
 > 3. **Scale the implementation to the item.** A simple item (Effort `S`/`M`) you implement directly. A
 >    **complex** one (Effort `L`/`XL`, or a `needs-sdd` signal) you take through the full `fs-gg-sdd-*`
 >    lifecycle — still inside this one claim → PR → merge → done-stamp envelope. Both skill sets are here.
