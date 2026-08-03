@@ -142,6 +142,31 @@ expect_ok "the bare two-positional form parses (Profile defaults to the provider
 for template in rendering console web fable-game; do
   expect_ok "--template $template parses" -- "$TGT" P --template "$template"
 done
+
+# Project production route: a schema-faithful user/team resolver and collaborator mutation must be
+# reached through the built CLI; GitHub's absent effective-writer read remains a fail-closed human
+# verification, never a false secured result.
+PROJECT_WORK="$WORK/project-workspace"; mkdir -p "$PROJECT_WORK/.fsgg" "$WORK/project-bin"
+printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$PROJECT_WORK/.fsgg/scaffold-provenance.json"
+cat > "$WORK/project-bin/gh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${PROJECT_LOG:?}"
+case " $* " in
+  *'updateProjectV2Collaborators'* ) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":[]}}}' ;;
+  *'teams(first:100)'* ) printf '%s\n' '{"data":{"organization":{"teams":{"nodes":[{"id":"T_1","slug":"platform"}]}}}}' ;;
+  *'user(login:$login)'* ) printf '%s\n' '{"data":{"user":{"id":"U_1"}}}' ;;
+  * ) printf '%s\n' '{"data":{"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
+esac
+EOF
+chmod +x "$WORK/project-bin/gh"
+set +e
+project_out="$(PROJECT_LOG="$WORK/project.log" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$PROJECT_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform 2>&1)"; project_rc=$?
+set -e
+if [ "$project_rc" -eq 1 ] && printf '%s' "$project_out" | grep -q 'pending:' && grep -q 'updateProjectV2Collaborators' "$WORK/project.log" && grep -q 'teamId' "$WORK/project.log"; then
+  ok "secure Project route resolves users/teams, mutates, and fails closed on unreadable effective writers"
+else
+  bad "secure Project production route must reach typed mutation and retain no-verdict" "rc=$project_rc: $project_out"
+fi
 expect_ok "fable-bindings parses with its exact npm package closure" \
   -- "$TGT" P --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target browser
 # Each id in `profiles` (Program.fs) must parse. Kept in lockstep with that list by hand; a removed
@@ -175,8 +200,8 @@ chmod +x "$WORK/secure-bin/gh"
 set +e
 secure_out="$(PATH="$WORK/secure-bin:$DOTNET_DIR:/usr/bin:/bin" dotnet "$DLL" secure "$SECURE" --repo acme/app 2>&1)"; secure_rc=$?
 set -e
-if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && ! grep -q 'repository-issue-policy' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q 'project-access' "$SECURE/.fsgg/scaffold-provenance.json"; then
-  ok "secure resume clears only its verified repository obligation"
+if [ "$secure_rc" -eq 0 ] && printf '%s' "$secure_out" | grep -q 'verified:' && grep -q 'project-access' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q 'verifiedSecurityReceipts' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q '"priorPolicy": "COLLABORATORS_ONLY"' "$SECURE/.fsgg/scaffold-provenance.json" && grep -q '"actor": "fixture"' "$SECURE/.fsgg/scaffold-provenance.json"; then
+  ok "secure resume clears only its verified repository obligation and persists its receipt"
 else
   bad "secure resume must converge matching provenance" "rc=$secure_rc: $secure_out"
 fi
@@ -188,7 +213,7 @@ for secure_case in mutation-failure stale-reread; do
   printf '%s\n' '{"securityObligations":[{"kind":"repository-issue-policy","target":"acme/app"}]}' > "$CASE_WORK/.fsgg/scaffold-provenance.json"
   cat > "$WORK/$secure_case-bin/gh" <<'EOF'
 #!/usr/bin/env bash
-case " \$* " in
+case " $* " in
   *'mutation('* ) printf '%s\n' '{"errors":[{"message":"TOKEN-SHOULD-NOT-LEAK"}]}' ; exit 1 ;;
   * ) printf '%s\\n' '{"data":{"viewer":{"login":"fixture"},"repository":{"id":"R_1","issueCreationPolicy":"OPEN"}}}' ;;
 esac
