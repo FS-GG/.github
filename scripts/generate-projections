@@ -448,7 +448,7 @@ render_ledger_policy() {
 }
 
 render_release_inventory() {
-  echo '*Generated from the registry’s package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*'
+  echo '*Generated from the registry package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*'
   echo ""
   echo "| producer contract | source version | published version | surface |"
   echo "|---|---|---|---|"

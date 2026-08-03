@@ -27,7 +27,7 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 | **`.github`** | `FS.GG.Coord.Cli` (the ADR-0034 engine), `FS.GG.NewSddWorkspace` (the ADR-0016 scaffolder) | org-level tools |
 
 <!-- BEGIN GENERATED: fsgg-release-inventory -->
-*Generated from the registry’s package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*
+*Generated from the registry package-bearing `.github` producer rows. The inventory changes with the registry; release judgement remains below.*
 
 | producer contract | source version | published version | surface |
 |---|---|---|---|
