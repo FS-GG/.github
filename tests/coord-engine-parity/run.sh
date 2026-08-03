@@ -2,7 +2,7 @@
 # PARITY: does the compiled engine, over HTTP, return the SAME answer the shell corpus certifies for bash?
 #
 # The corpus (case 22) certifies, on the parallel-work board:
-#   bash scripts/fsgg-coord batch --repo sdd --json   →   ["FS.GG.SDD#70","FS.GG.SDD#74"]
+#   bash scripts/fsgg-coord batch --repo sdd --json   →   ["FS-GG/FS.GG.SDD#70","FS-GG/FS.GG.SDD#74"]
 # and the skip reasons for #71 (in-flight overlap), #72 (no touch-set), #73 (batch-member overlap).
 # #1887 adds #75 as a decision-class negative control: it must stay absent from that same answer.
 #
@@ -123,7 +123,7 @@ idself="$("$ENGINE" whoami 2>&1)"; idself_rc=$?
 
 # ---- batch --json: the machine contract `take` consumes -------------------------------------------
 out="$("$ENGINE" batch --repo FS.GG.SDD --json 2>/dev/null)"; rc=$?
-golden='["FS.GG.SDD#70","FS.GG.SDD#74"]'
+golden='["FS-GG/FS.GG.SDD#70","FS-GG/FS.GG.SDD#74"]'
 if [ "$rc" -eq 0 ] && [ "$out" = "$golden" ]; then
   ok "batch --json equals the corpus's certified answer (byte for byte)"
 else
@@ -132,9 +132,9 @@ fi
 
 # ---- batch -n 1: the width is honoured, and it is the first chosen --------------------------------
 out1="$("$ENGINE" batch --repo FS.GG.SDD -n 1 --json 2>/dev/null)"
-[ "$out1" = '["FS.GG.SDD#70"]' ] \
+[ "$out1" = '["FS-GG/FS.GG.SDD#70"]' ] \
   && ok "batch -n 1 --json honours the requested width" \
-  || bad "batch -n 1 --json" "expected [\"FS.GG.SDD#70\"], got: $out1"
+  || bad "batch -n 1 --json" "expected [\"FS-GG/FS.GG.SDD#70\"], got: $out1"
 
 # ---- the skip reasons name the right items AND the right CAUSE KIND (case 22 certifies these exact
 #      substrings). It is not enough to name #71 — the reason must say WHY, and the WHY is the #428
@@ -404,9 +404,9 @@ if [ -n "$XBPORT" ]; then
   xbenv() { ( cd "$XB_NOGIT" && FSGG_GITHUB_API_BASE="http://127.0.0.1:$XBPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" ); }
   # The machine contract: both cross-repo namesakes ride together, byte for byte (the corpus's answer).
   xbj="$(xbenv batch -n 9 --json 2>/dev/null)"
-  [ "$xbj" = '["FS.GG.Templates#420","FS.GG.Governance#421"]' ] \
+  [ "$xbj" = '["FS-GG/FS.GG.Templates#420","FS-GG/FS.GG.Governance#421"]' ] \
     && ok "#312: two cross-repo candidates sharing only a repo-relative token BOTH schedule (byte-exact)" \
-    || bad "#312: cross-repo batch parity" "expected [\"FS.GG.Templates#420\",\"FS.GG.Governance#421\"], got: $xbj"
+    || bad "#312: cross-repo batch parity" "expected [\"FS-GG/FS.GG.Templates#420\",\"FS-GG/FS.GG.Governance#421\"], got: $xbj"
   # Neither cross-repo candidate is ever dropped FOR the phantom (#423 Game / #424 Audio hold the same
   # bare token in OTHER repos). This is the exact defect #312 was filed on.
   xberr="$(xbenv batch -n 9 2>&1 >/dev/null)"
@@ -443,9 +443,9 @@ if [ -n "$PW4PORT" ]; then
   pw4env() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PW4PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
   pw4j="$(pw4env batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"
   # The machine contract: only the honest item. A fail-open would clear #300 and offer BOTH.
-  [ "$pw4j" = '["FS.GG.SDD#301"]' ] \
+  [ "$pw4j" = '["FS-GG/FS.GG.SDD#301"]' ] \
     && ok "#273: only the honestly-declared item schedules — the unmatchable one is not cleared into a double-book" \
-    || bad "#273: unmatchable-token batch parity" "expected [\"FS.GG.SDD#301\"], got: $pw4j"
+    || bad "#273: unmatchable-token batch parity" "expected [\"FS-GG/FS.GG.SDD#301\"], got: $pw4j"
   printf '%s' "$pw4j" | grep -q 'FS.GG.SDD#300' \
     && bad "#273: an item whose only token matches NOTHING must never be offered" "$pw4j" \
     || ok "#273: the unmatchable item is never offered"
@@ -476,9 +476,9 @@ PW5PORT=""; for _ in $(seq 1 50); do PW5PORT="$(head -n1 "$PW5_OUT" 2>/dev/null)
 if [ -n "$PW5PORT" ]; then
   pw5env() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PW5PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
   pw5j="$(pw5env batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"
-  [ "$pw5j" = '["FS.GG.SDD#311"]' ] \
+  [ "$pw5j" = '["FS-GG/FS.GG.SDD#311"]' ] \
     && ok "#277: only the honestly-declared item schedules — a fenced quote is not a declaration" \
-    || bad "#277: fenced-declaration batch parity" "expected [\"FS.GG.SDD#311\"], got: $pw5j"
+    || bad "#277: fenced-declaration batch parity" "expected [\"FS-GG/FS.GG.SDD#311\"], got: $pw5j"
   printf '%s' "$pw5j" | grep -q 'FS.GG.SDD#317' \
     && bad "#277: an item whose only 'Paths:' is fenced must never be scheduled on a fabricated touch-set" "$pw5j" \
     || ok "#277: the fenced-only item is never offered"
@@ -1861,9 +1861,9 @@ else
 
   # (4) `batch` — the engine `take` schedules from — scopes the same way, so the two cannot disagree.
   b_sdd="$(scoped "$CO/sdd" batch --json 2>/dev/null)"
-  [ "$b_sdd" = '["FS.GG.SDD#127"]' ] \
+  [ "$b_sdd" = '["FS-GG/FS.GG.SDD#127"]' ] \
     && ok "#480: a bare 'batch --json' from the SDD checkout schedules only SDD's item" \
-    || bad "#480: bare batch scopes to the checkout" "expected [\"FS.GG.SDD#127\"], got: $b_sdd"
+    || bad "#480: bare batch scopes to the checkout" "expected [\"FS-GG/FS.GG.SDD#127\"], got: $b_sdd"
 
   # (5) `take` ACTS, so an UNDETECTABLE scope is a hard error — never a quiet widen to the whole org,
   #     which is the failure that handed a `.github` worker another repo's item. The refusal precedes
@@ -3588,7 +3588,7 @@ if [ -z "$IP_PORT" ]; then bad "item-pr fixture bound a port"; else
                 "$ENGINE" "$@"; }
 
   ipjson="$(ipenv batch --repo FS.GG.SDD --json 2>/dev/null)"
-  [ "$ipjson" = '["FS.GG.SDD#701"]' ] \
+  [ "$ipjson" = '["FS-GG/FS.GG.SDD#701"]' ] \
     && ok "#651: batch offers the markerless-no-PR item (#701) and SKIPS the markerless-open-PR item (#700)" \
     || bad "#651: batch must skip a markerless item with an open item/<n> PR" "got: $ipjson"
 
@@ -3853,10 +3853,10 @@ if [ -z "$OBB_PORT" ]; then bad "off-board batch fixture bound a port"; else
   # THE MACHINE CONTRACT: only the item no live marker touches. #211 is held (the board says Ready, the lock
   # disagrees), #213 overlaps the OFF-BOARD #215's `src/Off`, and #210 is In progress — so #212 alone is free.
   obbj="$(obbenv batch --repo FS.GG.Rendering --json 2>/dev/null)"; rc=$?
-  if [ "$rc" -eq 0 ] && [ "$obbj" = '["FS.GG.Rendering#212"]' ]; then
+  if [ "$rc" -eq 0 ] && [ "$obbj" = '["FS-GG/FS.GG.Rendering#212"]' ]; then
     ok "batch: schedules only the item no live marker touches — reserves the off-board claim (case 25)"
   else
-    bad "batch off-board --json" "expected [\"FS.GG.Rendering#212\"], got (rc=$rc): $obbj"
+    bad "batch off-board --json" "expected [\"FS-GG/FS.GG.Rendering#212\"], got (rc=$rc): $obbj"
   fi
 
   obberr="$(obbenv batch --repo FS.GG.Rendering 2>&1 >/dev/null)"

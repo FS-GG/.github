@@ -650,7 +650,7 @@ module Client =
 
     /// `batch --explain` (.github#1598 AC5) — STDERR, on `sayWhyNothing`'s terms and for its reason.
     ///
-    /// `batch`'s stdout is a machine contract (`["FS.GG.SDD#70",…]`) that `take` parses, so an explanation
+    /// `batch`'s stdout is a machine contract (`["FS-GG/FS.GG.SDD#70",…]`) that `take` parses, so an explanation
     /// printed there would corrupt the answer it explains. It rides beside the per-item refusal prose and
     /// #428's banner, which is where every other "why" this verb produces already goes — and it means
     /// `batch --json --explain` is a legitimate spelling rather than a contradiction.
@@ -773,13 +773,13 @@ module Client =
             | Ok result ->
                 match opts.Render with
                 | Json ->
-                    // THE MACHINE CONTRACT — the array of chosen ids `take` consumes, byte-identical to the
-                    // bash client's `batch --json`: `["FS.GG.SDD#70","FS.GG.SDD#74"]`, short form, sorted as
-                    // the scheduler chose them. The typed `Item.Ref` remains the source of truth for the
-                    // in-process `take` transition; this compact array is a display compatibility projection.
+                    // THE MACHINE CONTRACT — canonical owner/repo/number refs, sorted as the scheduler
+                    // chose them. The array-of-strings shape stays compatible with ref consumers, while the
+                    // strings no longer collapse same-repo/number rows owned by different accounts (#2155).
+                    // Human text continues to use `Short`; machine decisions must be unambiguous.
                     let ids =
                         result.Chosen
-                        |> List.map (fun item -> "\"" + item.Ref.Short + "\"")
+                        |> List.map (fun item -> "\"" + item.Ref.Canonical + "\"")
                         |> String.concat ","
 
                     printfn "[%s]" ids

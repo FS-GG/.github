@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2155-external-owner-identity/ship.json",
-      "digest": "sha256:6c0a4e23e454b8e0ae0250464609487594415b1f41e60dc256ea1c4b30debc62",
+      "digest": "sha256:a702d3f122b39afb1538c03f2b234bf63ef54696359d7eae9a7e51f80bba8f62",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2155-external-owner-identity/verify.json",
-      "digest": "sha256:d694f0ca46a76bc3433d8873b61a4a70bc493912a4e29ce74ac3723318932d7c",
+      "digest": "sha256:f1dd680cadf26a5f3d40f1520e983d27c00e63b232975e8f0031570e8dea3ecf",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2155-external-owner-identity/work-model.json",
-      "digest": "sha256:9f24bab836176ef53d0d11e8ab8a49d2c985a852fe4fc2b9d1b30c29c54a6f15",
+      "digest": "sha256:68e1201b8a5766ad974579343e348f0c57cfbf07520b8823eb879d76445166ce",
       "schemaVersion": 1
     }
   ],

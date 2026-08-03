@@ -367,6 +367,210 @@ module ApplicationServiceTests =
 
         Assert.Equal<string list>([ "EHotwagner/rogue3#96" ], Client.claimArgsForSelected item)
 
+    // ---- .github#2155: the REAL batch -> take -> claim/CAS route keeps the external owner -----------
+
+    module private ExternalOwnerTakeFixture =
+
+        type Failure =
+            | Healthy
+            | ExternalReadFails
+            | ExternalClaimPostFails
+
+        type World =
+            { Transport: Fake.Recorder
+              DefaultMutated: unit -> bool
+              ExternalMutated: unit -> bool }
+
+        let private variable name variables =
+            variables
+            |> List.tryPick (fun (n, value) -> if n = name then Some value else None)
+
+        let private asString = function
+            | VString value
+            | VId value -> value
+            | value -> failwithf "expected string GraphQL variable, got %A" value
+
+        let create failure =
+            let mutable externalMarker: string option = None
+            let mutable externalStatus = "Ready"
+            let mutable defaultMutated = false
+            let mutable externalMutated = false
+
+            let boardItems () =
+                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[{{"id":"PVTI_default96","status":{{"name":"Blocked"}},"blockedBy":null,"content":{{"__typename":"Issue","number":96,"title":"default twin","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/rogue3"}}}}}},{{"id":"PVTI_external96","status":{{"name":"%s{externalStatus}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":96,"title":"external target","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            let projectItems owner includeStatus =
+                let id, status =
+                    if owner = "EHotwagner" then
+                        "PVTI_external96", externalStatus
+                    else
+                        "PVTI_default96", "Blocked"
+
+                let field =
+                    if includeStatus then
+                        $""","fieldValueByName":{{"name":"%s{status}"}}"""
+                    else
+                        ""
+
+                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{id}","project":{{"number":12}}%s{field}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            let comments owner =
+                if owner <> "EHotwagner" then
+                    "[]"
+                else
+                    match externalMarker with
+                    | None -> "[]"
+                    | Some body ->
+                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+                        JsonSerializer.Serialize
+                            [ {| id = 9196
+                                 body = body
+                                 user = {| login = "EHotwagner" |}
+                                 created_at = timestamp
+                                 updated_at = timestamp |} ]
+
+            let transport =
+                Fake.Recorder(fun (req: Request) ->
+                    let path = req.Path.Trim '/'
+
+                    match req.Method, path with
+                    | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+                    | "POST", "graphql" ->
+                        match req.Body with
+                        | Query(document, variables) when document.Contains "projectsV2" ->
+                            ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        | Query(document, _) when document.Contains "fields(first" ->
+                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                        | Query(document, _) when document.Contains "items(first" -> ok (boardItems ())
+                        | Query(document, variables) when document.Contains "projectItems" ->
+                            let owner = variable "owner" variables |> Option.map asString |> Option.defaultValue ""
+                            ok (projectItems owner (document.Contains "fieldValueByName"))
+                        | Query(document, variables) when document.Contains "updateProjectV2ItemFieldValue" ->
+                            let item = variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
+
+                            if item = "PVTI_external96" then
+                                externalMutated <- true
+                                externalStatus <- "In progress"
+                            elif item = "PVTI_default96" then
+                                defaultMutated <- true
+
+                            ok """{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_external96"}}}}"""
+                        | Query(document, _) -> Error(Errors.NotFound $"unserved GraphQL: %s{document}")
+                        | _ -> Error(Errors.NotFound "graphql call without a query")
+                    | "GET", "repos/FS-GG/rogue3/issues" ->
+                        ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
+                    | "GET", "repos/EHotwagner/rogue3/issues" when failure = ExternalReadFails ->
+                        Error(Errors.Transport "external owner issue list unavailable")
+                    | "GET", "repos/EHotwagner/rogue3/issues" ->
+                        ok """[{"number":96,"state":"open","body":"Paths: src/Rogue3/"}]"""
+                    | "GET", "repos/FS-GG/rogue3/issues/96" ->
+                        ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
+                    | "GET", "repos/EHotwagner/rogue3/issues/96" when failure = ExternalReadFails ->
+                        Error(Errors.Transport "external owner issue unavailable")
+                    | "GET", "repos/EHotwagner/rogue3/issues/96" ->
+                        ok """{"number":96,"state":"open","body":"Paths: src/Rogue3/"}"""
+                    | "GET", "repos/FS-GG/rogue3/issues/96/comments" -> ok (comments "FS-GG")
+                    | "GET", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalReadFails ->
+                        Error(Errors.Transport "external owner claim read unavailable")
+                    | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok (comments "EHotwagner")
+                    | "POST", "repos/FS-GG/rogue3/issues/96/comments" ->
+                        defaultMutated <- true
+                        ok """{"id":9195}"""
+                    | "POST", "repos/EHotwagner/rogue3/issues/96/comments" when failure = ExternalClaimPostFails ->
+                        Error(Errors.Http(502, "external owner claim post failed"))
+                    | "POST", "repos/EHotwagner/rogue3/issues/96/comments" ->
+                        externalMutated <- true
+
+                        match req.Body with
+                        | Json payload ->
+                            use document = JsonDocument.Parse payload
+                            externalMarker <- Some(document.RootElement.GetProperty("body").GetString())
+                        | _ -> failwith "claim POST did not carry JSON"
+
+                        ok """{"id":9196}"""
+                    | "GET", p when p.EndsWith "/pulls" -> ok "[]"
+                    | method', target -> Error(Errors.NotFound $"unserved twin-owner request: %s{method'} %s{target}"))
+
+            { Transport = transport
+              DefaultMutated = fun () -> defaultMutated
+              ExternalMutated = fun () -> externalMutated }
+
+        let run (transport: Fake.Recorder) (args: string list) : int * string * string =
+            let cache = Path.Combine(Path.GetTempPath(), "fsgg-2155-twins-" + Guid.NewGuid().ToString "n")
+            let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+            let identityVars =
+                [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+            let previousIdentity =
+                identityVars |> List.map (fun name -> name, Environment.GetEnvironmentVariable name)
+            let stdout, stderr = Console.Out, Console.Error
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+
+            try
+                Directory.CreateDirectory cache |> ignore
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+                previousIdentity |> List.iter (fun (name, _) -> Environment.SetEnvironmentVariable(name, null))
+                Console.SetOut capturedOut
+                Console.SetError capturedErr
+                let opts = options args
+                let code =
+                    match opts.Command with
+                    | Options.BatchCmd -> Client.batch (context transport) opts
+                    | Options.Take -> Client.take (context transport) opts
+                    | command -> failwithf "twin-owner fixture only drives batch/take, got %A" command
+                Console.Out.Flush()
+                Console.Error.Flush()
+                code, capturedOut.ToString(), capturedErr.ToString()
+            finally
+                Console.SetOut stdout
+                Console.SetError stderr
+                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+                previousIdentity |> List.iter (fun (name, value) -> Environment.SetEnvironmentVariable(name, value))
+                try Directory.Delete(cache, true) with _ -> ()
+
+    [<Fact>]
+    let ``#2155 batch then bare take claims only the selected external twin and reports its canonical identity`` () =
+        let world = ExternalOwnerTakeFixture.create ExternalOwnerTakeFixture.Healthy
+        let batchCode, batchOut, _ = ExternalOwnerTakeFixture.run world.Transport [ "batch"; "--json" ]
+        Assert.Equal(0, batchCode)
+        Assert.Equal("[\"EHotwagner/rogue3#96\"]" + Environment.NewLine, batchOut)
+
+        let takeCode, takeOut, takeErr =
+            ExternalOwnerTakeFixture.run world.Transport [ "take"; "--worker"; "otter-2155"; "--json" ]
+
+        Assert.Equal(0, takeCode)
+        use receipt = JsonDocument.Parse takeOut
+        Assert.Equal("claimed", receipt.RootElement.GetProperty("kind").GetString())
+        Assert.Equal("EHotwagner/rogue3", receipt.RootElement.GetProperty("repo").GetString())
+        Assert.Equal(96, receipt.RootElement.GetProperty("number").GetInt32())
+        Assert.True(receipt.RootElement.GetProperty("markerObserved").GetBoolean())
+        Assert.Equal("In progress", receipt.RootElement.GetProperty("status").GetString())
+        Assert.True(receipt.RootElement.GetProperty("converged").GetBoolean())
+        Assert.True(world.ExternalMutated())
+        Assert.False(world.DefaultMutated())
+        Assert.DoesNotContain("FS-GG/rogue3#96", takeErr)
+
+    [<Theory>]
+    [<InlineData(true)>]
+    [<InlineData(false)>]
+    let ``#2155 an unavailable external read or claim mutation fails closed and never reports recovery``
+        (readFails: bool)
+        =
+        let failure =
+            if readFails then ExternalOwnerTakeFixture.ExternalReadFails
+            else ExternalOwnerTakeFixture.ExternalClaimPostFails
+
+        let world = ExternalOwnerTakeFixture.create failure
+        let code, output, _ =
+            ExternalOwnerTakeFixture.run world.Transport [ "take"; "--worker"; "otter-2155"; "--json" ]
+
+        Assert.NotEqual(0, code)
+        Assert.False(world.DefaultMutated())
+
+        if output.Trim() <> "" then
+            use receipt = JsonDocument.Parse output
+            Assert.False(receipt.RootElement.TryGetProperty("converged") |> fst)
+
     [<Fact>]
     let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =
         // This drives the real `Client.driver` handler through scan, the PR liveness probe, the green
@@ -1402,7 +1606,7 @@ module ApplicationServiceTests =
         // the assertion is about #76's admission, not about which of two colliding rows won a lane.
         let world = contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty
 
-        Assert.Contains("FS.GG.SDD#76", scheduled world)
+        Assert.Contains("FS-GG/FS.GG.SDD#76", scheduled world)
         Assert.Equal("disjoint", gateVerdict (contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty))
 
     [<Fact>]
@@ -2442,7 +2646,7 @@ module ApplicationServiceTests =
                 [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
 
         let expectedOut =
-            if hasReady then $"[\"FS.GG.SDD#%d{readyNumber}\"]" else "[]"
+            if hasReady then $"[\"FS-GG/FS.GG.SDD#%d{readyNumber}\"]" else "[]"
 
         Assert.Equal(expectedOut + Environment.NewLine, out)
         Assert.Contains(
@@ -2464,7 +2668,7 @@ module ApplicationServiceTests =
                 transport
                 [ "batch"; "--repo"; "FS.GG.SDD"; "--json" ]
 
-        Assert.Equal("[\"FS.GG.SDD#74\"]" + Environment.NewLine, out)
+        Assert.Equal("[\"FS-GG/FS.GG.SDD#74\"]" + Environment.NewLine, out)
         Assert.Contains("wave occupancy: unavailable", err)
         Assert.Contains("must match the typed Protocol.wavePolicy", err)
         Assert.DoesNotContain("WAVE SHORTFALL", err)

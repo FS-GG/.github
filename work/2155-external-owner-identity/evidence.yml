@@ -53,10 +53,10 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
     notes: ["The selected external Ref enters claim as EHotwagner/rogue3#96", never the ambiguous display ref.]
@@ -79,10 +79,10 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
     notes: [The direct typed scheduler-to-claim handoff preserves the selected owner while default-owner twins remain distinct.]
@@ -98,20 +98,20 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-003]
     obligationRefs: [EV003]
-    artifacts: [src/FS.GG.Coord.Cli/Render.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs, tests/coord-engine-parity/run.sh]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
-    notes: [The typed claim receipt carries owner/repo separately from its compact ref projection.]
+    notes: [The batch JSON contract remains an array of strings but each value is now the unambiguous canonical owner/repo#number; the typed claim receipt also exposes owner and repo.]
   - id: EV004
     kind: verification
     subject:
@@ -131,13 +131,13 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
-    notes: ["No schema or persisted-board migration is needed; only the internal argv handoff changes."]
+    notes: ["No persisted-board migration is needed. The batch JSON container schema remains an array of strings while its identity values become canonical."]
   - id: EV005
     kind: verification
     subject:
@@ -150,17 +150,17 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV005]
-    artifacts: [work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx]
+    artifacts: [work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx]
     sourceRefs:
       - kind: verification
         path: tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
     notes: [0 failed, 0 skipped.]
@@ -183,13 +183,13 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
-    notes: [Compact display compatibility is retained while mutation uses canonical Ref identity.]
+    notes: [Human display compatibility is retained while JSON and mutation paths use canonical Ref identity.]
   - id: EV007
     kind: verification
     subject:
@@ -209,10 +209,10 @@ evidence:
     result: pass
     synthetic: false
     observedRun:
-      source: work/2155-external-owner-identity/test-results/_0bc8bbef51b6_2026-08-03_04_44_13_net10.0.trx
-      digest: "sha256:9d8b48925f2fed9b086c202615ea879a2e7efc8986191ab22e9594523112aa22"
+      source: work/2155-external-owner-identity/test-results/round1/_0bc8bbef51b6_2026-08-03_05_07_51_net10.0.trx
+      digest: "sha256:4b61f032902e94bf4e62843c9a80750472f8a2a2048a1890c6d8948905c284db"
       outcome: passed
-      passed: 565
+      passed: 568
       failed: 0
       skipped: 0
     notes: [Generated readiness views refreshed after authored lifecycle changes.]
