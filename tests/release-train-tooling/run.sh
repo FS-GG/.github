@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:-all}"
 case "$MODE" in
-  all|workflow|state|core|partial|topology|multiset) ;;
-  *) echo "usage: $0 [all|workflow|state|core|partial|topology|multiset]" >&2; exit 2 ;;
+  all|workflow|state|core|partial|topology|multiset|canonical) ;;
+  *) echo "usage: $0 [all|workflow|state|core|partial|topology|multiset|canonical]" >&2; exit 2 ;;
 esac
 
 if [ "$MODE" = all ] || [ "$MODE" = workflow ]; then
@@ -26,6 +26,17 @@ verification_report() {
   local differences='["payloads differ or a feed is unavailable"]'
   if [ "$identical" = true ]; then differences='[]'; fi
   printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"%s","expectedPackages":1,"observedPackages":1,"tag":"v1","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":%s,"nuGetAvailable":%s,"packages":[{"packageId":"Example","version":"1.0.0","gitHubUrl":"https://github.test/example","nuGetUrl":"https://nuget.test/example","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":%s,"differences":%s,"gitHubAvailable":%s,"nuGetAvailable":%s}]}' "$name" "$commit" "$commit" "$commit" "$github" "$nuget" "$identical" "$differences" "$github" "$nuget" > "$target"
+}
+
+canonical_receipt() {
+  local target="$1" repository="$2" source_commit="$3" registry="$4" topology="$5" projection="$6"
+  local registry_hash projection_hash
+  registry_hash="$(sha256sum "$registry" | awk '{print $1}')"
+  projection_hash="$(sha256sum "$projection" | awk '{print $1}')"
+  jq -n --arg repositoryRoot "$repository" --arg source "$source_commit" \
+    --arg registryPath "$registry" --arg registrySha256 "$registry_hash" --arg topology "$topology" \
+    --arg projectionPath "$projection" --arg projectionSha256 "$projection_hash" \
+    '{kind:"canonical-registry",repositoryRoot:$repositoryRoot,registrySourceCommit:$source,registryPath:$registryPath,registrySha256:$registrySha256,registryTopologySha256:$topology,projectionPath:$projectionPath,projectionSha256:$projectionSha256,projectionSourceCommit:$source,canonicalMerged:true,projectionCurrent:true,conclusion:"success"}' > "$target"
 }
 
 if [ "$MODE" = all ] || [ "$MODE" = workflow ]; then
@@ -93,12 +104,12 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --audit "$WORK/audit.json" \
   --workflows "$WORK/workflows.json" \
   --registry "$ROOT/registry/dependencies.yml" \
+  --fixture-registry \
   > "$WORK/inspect.json"
 jq -e '.nextAction.kind == "classify-release" or .nextAction.kind == "verify-packages" or .nextAction.kind == "verify-tag" or .nextAction.kind == "await-workflow" or .nextAction.kind == "publish"' \
   "$WORK/inspect.json" >/dev/null
-registry_sha="$(sha256sum "$ROOT/registry/dependencies.yml" | awk '{print $1}')"
 registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/release-run.json")"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" "$registry_topology" > "$WORK/early-registry-receipt.json"
+canonical_receipt "$WORK/early-registry-receipt.json" "$ROOT/registry" abc "$ROOT/registry/dependencies.yml" "$registry_topology" "$ROOT/registry/dependencies.yml"
 cp "$WORK/release-run.json" "$WORK/before-early-registry.json"
 set +e
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/early-registry-receipt.json" > /dev/null
@@ -126,14 +137,76 @@ if [ "$failed_receipt_rc" -ne 1 ]; then
 fi
 
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision semver-effect \
+  --subject-commit abc --evidence https://example.test/semver > "$WORK/semver.json"
+jq -e '.kind == "classify-release" and .releaseId == "producer"' "$WORK/semver.json" >/dev/null
+cp "$WORK/release-run.json" "$WORK/after-semver.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision semver-effect \
+  --subject-commit abc --evidence https://example.test/semver > /dev/null
+cmp "$WORK/after-semver.json" "$WORK/release-run.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision semver-effect \
+  --subject-commit abc --evidence https://example.test/changed-semver > /dev/null
+changed_semver_rc=$?
+set -e
+if [ "$changed_semver_rc" -ne 1 ]; then echo "expected changed SemVer replay to fail closed, got $changed_semver_rc" >&2; exit 1; fi
+cmp "$WORK/after-semver.json" "$WORK/release-run.json"
+
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
   --run "$WORK/release-run.json" \
   --release-id producer \
   --decision release-owed \
   --subject-commit abc \
   --evidence https://example.test/decision \
+  > "$WORK/classify.json"
+jq -e '.kind == "await-workflow" and .releaseId == "producer"' "$WORK/classify.json" >/dev/null
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision release-owed \
+  --subject-commit abc --evidence https://example.test/decision \
+  --workflow-receipt "$WORK/failed-workflow-receipt.json" > /dev/null
+failed_after_classification_rc=$?
+set -e
+if [ "$failed_after_classification_rc" -ne 1 ]; then
+  echo "expected failed workflow at await-workflow to fail closed, got $failed_after_classification_rc" >&2
+  exit 1
+fi
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision release-owed \
+  --subject-commit abc --evidence https://example.test/decision \
   --workflow-receipt "$WORK/workflow-receipt.json" \
   > "$WORK/advance.json"
 jq -e '[.kind, .missingReceipt] | length == 2' "$WORK/advance.json" >/dev/null
+cp "$WORK/release-run.json" "$WORK/after-workflow.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision release-owed \
+  --subject-commit abc --evidence https://example.test/decision \
+  --workflow-receipt "$WORK/workflow-receipt.json" > /dev/null
+cmp "$WORK/after-workflow.json" "$WORK/release-run.json"
+printf '%s\n' '{"releaseId":"producer","subjectCommit":"abc","workflowRun":"https://example.test/runs/changed","conclusion":"success"}' > "$WORK/changed-workflow-receipt.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision release-owed \
+  --subject-commit abc --evidence https://example.test/decision \
+  --workflow-receipt "$WORK/changed-workflow-receipt.json" > /dev/null
+changed_workflow_rc=$?
+set -e
+if [ "$changed_workflow_rc" -ne 1 ]; then echo "expected changed workflow replay to fail closed, got $changed_workflow_rc" >&2; exit 1; fi
+cmp "$WORK/after-workflow.json" "$WORK/release-run.json"
+cp "$WORK/workflow-receipt.json" "$WORK/workflow-receipt.backup.json"
+printf '%s\n' ' ' >> "$WORK/workflow-receipt.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+  --run "$WORK/release-run.json" --release-id producer --decision release-owed \
+  --subject-commit abc --evidence https://example.test/decision \
+  --workflow-receipt "$WORK/workflow-receipt.json" > /dev/null
+stale_workflow_rc=$?
+set -e
+if [ "$stale_workflow_rc" -ne 1 ]; then echo "expected stale recorded workflow replay to fail closed, got $stale_workflow_rc" >&2; exit 1; fi
+cmp "$WORK/after-workflow.json" "$WORK/release-run.json"
+mv "$WORK/workflow-receipt.backup.json" "$WORK/workflow-receipt.json"
 printf '%s\n' '{"kind":"propagation","releaseId":"producer","subjectCommit":"abc","conclusion":"success"}' > "$WORK/premature-propagation.json"
 cp "$WORK/release-run.json" "$WORK/before-premature-propagation.json"
 set +e
@@ -204,7 +277,7 @@ cmp "$WORK/after-propagation.json" "$WORK/release-run.json"
 mv "$WORK/propagation.backup.json" "$WORK/propagation.json"
 printf '%s\n' 'not the canonical registry' > "$WORK/not-canonical.yml"
 not_canonical_sha="$(sha256sum "$WORK/not-canonical.yml" | awk '{print $1}')"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/not-canonical.yml" "$not_canonical_sha" "$registry_topology" > "$WORK/arbitrary-registry-receipt.json"
+canonical_receipt "$WORK/arbitrary-registry-receipt.json" "$WORK" abc "$WORK/not-canonical.yml" "$registry_topology" "$WORK/not-canonical.yml"
 cp "$WORK/release-run.json" "$WORK/before-arbitrary-registry.json"
 set +e
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/arbitrary-registry-receipt.json" > /dev/null
@@ -215,7 +288,8 @@ if [ "$arbitrary_registry_rc" -ne 1 ]; then
   exit 1
 fi
 cmp "$WORK/before-arbitrary-registry.json" "$WORK/release-run.json"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"stale","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_topology" > "$WORK/stale-registry-receipt.json"
+canonical_receipt "$WORK/stale-registry-receipt.json" "$ROOT/registry" abc "$ROOT/registry/dependencies.yml" "$registry_topology" "$ROOT/registry/dependencies.yml"
+jq '.registrySha256 = "stale"' "$WORK/stale-registry-receipt.json" > "$WORK/stale-registry-receipt.tmp" && mv "$WORK/stale-registry-receipt.tmp" "$WORK/stale-registry-receipt.json"
 set +e
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/stale-registry-receipt.json" > /dev/null
 stale_registry_rc=$?
@@ -225,7 +299,7 @@ if [ "$stale_registry_rc" -ne 1 ]; then
   exit 1
 fi
 cmp "$WORK/before-arbitrary-registry.json" "$WORK/release-run.json"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$ROOT/registry/dependencies.yml" "$registry_sha" "$registry_topology" > "$WORK/registry-receipt.json"
+canonical_receipt "$WORK/registry-receipt.json" "$ROOT/registry" abc "$ROOT/registry/dependencies.yml" "$registry_topology" "$ROOT/registry/dependencies.yml"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/release-run.json" --receipt "$WORK/registry-receipt.json" > "$WORK/complete.json"
 jq -e '.kind == "complete"' "$WORK/complete.json" >/dev/null
 cp "$WORK/release-run.json" "$WORK/complete-before-restart.json"
@@ -290,7 +364,12 @@ for feed in org public; do
     --audit "$WORK/audit.json" \
     --workflows "$WORK/workflows.json" \
     --registry "$ROOT/registry/dependencies.yml" \
+    --fixture-registry \
     > "$WORK/$feed-inspect.json"
+  dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
+    --run "$WORK/$feed-run.json" --release-id producer --decision release-owed \
+    --subject-commit abc --evidence https://example.test/decision \
+    > /dev/null
   dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance \
     --run "$WORK/$feed-run.json" --release-id producer --decision release-owed \
     --subject-commit abc --evidence https://example.test/decision --workflow-receipt "$WORK/partial-workflow-receipt.json" \
@@ -316,7 +395,7 @@ printf '%s\n' \
 printf '%s\n' \
   '{"repositories":[{"id":"upstream","baselineTag":"v1","originMain":"up","packages":[{}],"findings":[]},{"id":"downstream","baselineTag":"v1","originMain":"down","packages":[{}],"findings":[]}]}' \
   > "$WORK/topology-audit.json"
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/topology-run.json" --audit "$WORK/topology-audit.json" --workflows "$WORK/workflows.json" --registry "$WORK/topology.yml" > /dev/null
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/topology-run.json" --audit "$WORK/topology-audit.json" --workflows "$WORK/workflows.json" --registry "$WORK/topology.yml" --fixture-registry > /dev/null
 jq -e '.releases[] | select(.id == "downstream" and .kind == "consumer" and .dependsOn == ["upstream"] and .coherentSets == [])' "$WORK/topology-run.json" >/dev/null
 printf '%s\n' '{"releaseId":"upstream","subjectCommit":"up","workflowRun":"https://example.test/runs/up","conclusion":"success"}' > "$WORK/upstream-receipt.json"
 printf '%s\n' '{"releaseId":"downstream","subjectCommit":"down","workflowRun":"https://example.test/runs/down","conclusion":"success"}' > "$WORK/downstream-receipt.json"
@@ -330,6 +409,7 @@ if [ "$wrong_order_classification_rc" -ne 1 ]; then
   exit 1
 fi
 cmp "$WORK/before-wrong-order-classification.json" "$WORK/topology-run.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
 cp "$WORK/topology-run.json" "$WORK/after-upstream-classification.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id upstream --decision release-owed --subject-commit up --evidence https://example.test/up --workflow-receipt "$WORK/upstream-receipt.json" > /dev/null
@@ -343,6 +423,7 @@ if [ "$changed_classification_rc" -ne 1 ]; then
   exit 1
 fi
 cmp "$WORK/after-upstream-classification.json" "$WORK/topology-run.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/topology-run.json" --release-id downstream --decision release-owed --subject-commit down --evidence https://example.test/down --workflow-receipt "$WORK/downstream-receipt.json" > /dev/null
 verification_report "$WORK/upstream-none.json" upstream up false false false
 verification_report "$WORK/downstream-both.json" downstream down true true true
@@ -450,7 +531,7 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topolo
 jq -e '.kind == "flip-registry"' "$WORK/topology-registry-action.json" >/dev/null
 topology_sha="$(sha256sum "$WORK/topology.yml" | awk '{print $1}')"
 topology_fingerprint="$(jq -r '.registry.canonicalTopologySha256' "$WORK/topology-run.json")"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$WORK/topology.yml" "$topology_sha" "$topology_fingerprint" > "$WORK/topology-registry.json"
+canonical_receipt "$WORK/topology-registry.json" "$WORK" up "$WORK/topology.yml" "$topology_fingerprint" "$WORK/topology.yml"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/topology-run.json" --receipt "$WORK/topology-registry.json" > "$WORK/topology-complete.json"
 jq -e '.kind == "complete"' "$WORK/topology-complete.json" >/dev/null
 printf '%s\n' ' ' >> "$WORK/downstream-propagation.json"
@@ -536,10 +617,11 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --audit "$WORK/multiset-audit.json" \
   --workflows "$WORK/multiset-workflows.json" \
   --registry "$MULTI/registry/dependencies.yml" \
+  --fixture-registry \
   > /dev/null
 multi_registry_sha="$(sha256sum "$MULTI/registry/dependencies.yml" | awk '{print $1}')"
 multi_registry_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/multiset-run.json")"
-printf '{"kind":"canonical-registry","registryPath":"%s","registrySha256":"%s","registryTopologySha256":"%s","canonicalMerged":true,"projectionCurrent":true,"conclusion":"success"}' "$MULTI/registry/dependencies.yml" "$multi_registry_sha" "$multi_registry_topology" > "$WORK/multiset-early-registry.json"
+canonical_receipt "$WORK/multiset-early-registry.json" "$MULTI/registry" "$multi_commit" "$MULTI/registry/dependencies.yml" "$multi_registry_topology" "$MULTI/registry/dependencies.yml"
 cp "$WORK/multiset-run.json" "$WORK/multiset-before-early-registry.json"
 set +e
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/multiset-run.json" --receipt "$WORK/multiset-early-registry.json" > /dev/null
@@ -576,9 +658,11 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --audit "$WORK/drivers-audit.json" \
   --workflows "$WORK/multiset-workflows.json" \
   --registry "$MULTI/registry/dependencies.yml" \
+  --fixture-registry \
   > /dev/null
 jq -e '.releases | length == 1 and .[0].id == ".github:drivers" and .[0].expectedPackages == 1' "$WORK/drivers-run.json" >/dev/null
 printf '{"releaseId":".github:drivers","subjectCommit":"%s","workflowRun":"https://example.test/runs/drivers","conclusion":"success"}' "$multi_commit" > "$WORK/drivers-workflow-receipt.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/drivers-run.json" --release-id .github:drivers --decision release-owed --subject-commit "$multi_commit" --evidence https://example.test/drivers-decision > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/drivers-run.json" --release-id .github:drivers --decision release-owed --subject-commit "$multi_commit" --evidence https://example.test/drivers-decision --workflow-receipt "$WORK/drivers-workflow-receipt.json" > /dev/null
 printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":".github:drivers","expectedPackages":1,"observedPackages":1,"tag":"drivers/v0.16.0","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"FS.GG.Drivers","version":"0.16.0","gitHubUrl":"https://github.test/drivers","nuGetUrl":"https://nuget.test/drivers","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
   "$multi_commit" "$multi_commit" "$multi_commit" > "$WORK/correct-drivers.json"
@@ -626,14 +710,92 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
   --audit "$WORK/feed-multi-audit.json" \
   --workflows "$WORK/multiset-workflows.json" \
   --registry "$MULTI/registry/dependencies.yml" \
+  --fixture-registry \
   > /dev/null
 printf '%s\n' '{"releaseId":"feed-multi","subjectCommit":"feed-commit","workflowRun":"https://example.test/runs/feed-multi","conclusion":"success"}' > "$WORK/feed-multi-workflow-receipt.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/feed-multi-run.json" --release-id feed-multi --decision release-owed --subject-commit feed-commit --evidence https://example.test/feed-multi-decision > /dev/null
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/feed-multi-run.json" --release-id feed-multi --decision release-owed --subject-commit feed-commit --evidence https://example.test/feed-multi-decision --workflow-receipt "$WORK/feed-multi-workflow-receipt.json" > /dev/null
 printf '%s\n' \
   '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":"feed-multi","expectedPackages":2,"observedPackages":2,"tag":"v1","expectedCommit":"feed-commit","subjectCommit":"feed-commit","tagCommit":"feed-commit","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"Feed.One","version":"1.0.0","gitHubUrl":"https://github.test/one","nuGetUrl":"https://nuget.test/one","gitHubArchiveSha256":"a","nuGetArchiveSha256":"a","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true},{"packageId":"Feed.Two","version":"2.0.0","gitHubUrl":"https://github.test/two","nuGetUrl":"https://nuget.test/two","gitHubArchiveSha256":"b","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
   > "$WORK/feed-multi-correct.json"
 dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/feed-multi-run.json" --verification "$WORK/feed-multi-correct.json" > /dev/null
 jq -e '.releases[] | select(.id == "feed-multi" and .expectedPackages == 2 and .observedPackages == 2 and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/feed-multi-run.json" >/dev/null
+fi
+
+if [ "$MODE" = all ] || [ "$MODE" = state ] || [ "$MODE" = canonical ]; then
+CANON="$WORK/canonical-repo"
+mkdir -p "$CANON/registry" "$CANON/docs/registry"
+printf '%s\n' 'contracts:' '  - id: example' '    owner: canonical' '    consumers: []' > "$CANON/registry/dependencies.yml"
+printf '%s\n' '# Canonical registry projection' > "$CANON/docs/registry/compatibility.md"
+git -C "$CANON" init -q -b main
+git -C "$CANON" config user.name fixture
+git -C "$CANON" config user.email fixture@example.test
+git -C "$CANON" add .
+git -C "$CANON" commit -q -m canonical
+canonical_commit="$(git -C "$CANON" rev-parse HEAD)"
+git -C "$CANON" update-ref refs/remotes/origin/main "$canonical_commit"
+printf '{"repositories":[{"id":"canonical","path":"%s","baselineTag":"v1","originMain":"%s","packages":[{"packageId":"Example","version":"1.0.0"}],"findings":[]}]}' "$CANON" "$canonical_commit" > "$WORK/canonical-audit.json"
+printf '%s\n' '{"results":[{"errors":[],"warnings":[]}]}' > "$WORK/canonical-workflows.json"
+
+mkdir -p "$WORK/not-git/registry" "$WORK/not-git/docs/registry"
+cp "$CANON/registry/dependencies.yml" "$WORK/not-git/registry/dependencies.yml"
+cp "$CANON/docs/registry/compatibility.md" "$WORK/not-git/docs/registry/compatibility.md"
+jq --arg path "$WORK/not-git" '.repositories[0].path = $path' "$WORK/canonical-audit.json" > "$WORK/not-git-audit.json"
+set +e
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/not-git-run.json" --audit "$WORK/not-git-audit.json" --workflows "$WORK/canonical-workflows.json" --registry "$WORK/not-git/registry/dependencies.yml" > /dev/null
+not_git_rc=$?
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/wrong-path-run.json" --audit "$WORK/canonical-audit.json" --workflows "$WORK/canonical-workflows.json" --registry "$CANON/docs/registry/compatibility.md" > /dev/null
+wrong_path_rc=$?
+set -e
+if [ "$not_git_rc" -ne 1 ] || [ "$wrong_path_rc" -ne 1 ] || [ -e "$WORK/not-git-run.json" ] || [ -e "$WORK/wrong-path-run.json" ]; then
+  echo "expected non-Git and non-canonical registry inspection to fail without state mutation" >&2
+  exit 1
+fi
+
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect --run "$WORK/canonical-run.json" --audit "$WORK/canonical-audit.json" --workflows "$WORK/canonical-workflows.json" --registry "$CANON/registry/dependencies.yml" > /dev/null
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- advance --run "$WORK/canonical-run.json" --release-id canonical --decision no-release --subject-commit "$canonical_commit" --evidence https://example.test/no-release > "$WORK/no-release-action.json"
+jq -e '.kind == "flip-registry"' "$WORK/no-release-action.json" >/dev/null
+canonical_topology="$(jq -r '.registry.canonicalTopologySha256' "$WORK/canonical-run.json")"
+canonical_receipt "$WORK/canonical-receipt.json" "$CANON" "$canonical_commit" "$CANON/registry/dependencies.yml" "$canonical_topology" "$CANON/docs/registry/compatibility.md"
+cp "$WORK/canonical-run.json" "$WORK/canonical-before-import.json"
+
+expect_canonical_failure() {
+  local receipt="$1" label="$2" rc
+  cp "$WORK/canonical-before-import.json" "$WORK/canonical-run.json"
+  set +e
+  dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/canonical-run.json" --receipt "$receipt" > /dev/null
+  rc=$?
+  set -e
+  if [ "$rc" -ne 1 ]; then echo "expected $label canonical receipt to fail closed, got $rc" >&2; exit 1; fi
+  cmp "$WORK/canonical-before-import.json" "$WORK/canonical-run.json"
+}
+
+jq '.registrySourceCommit = "stale"' "$WORK/canonical-receipt.json" > "$WORK/canonical-stale-source.json"
+jq --arg path "$WORK/not-git/registry/dependencies.yml" '.registryPath = $path' "$WORK/canonical-receipt.json" > "$WORK/canonical-wrong-registry.json"
+jq '.registrySha256 = "stale"' "$WORK/canonical-receipt.json" > "$WORK/canonical-stale-registry.json"
+jq --arg path "$CANON/registry/dependencies.yml" '.projectionPath = $path' "$WORK/canonical-receipt.json" > "$WORK/canonical-wrong-projection.json"
+jq '.projectionSha256 = "stale"' "$WORK/canonical-receipt.json" > "$WORK/canonical-stale-projection.json"
+jq --arg path "$CANON/MISSING.md" '.projectionPath = $path' "$WORK/canonical-receipt.json" > "$WORK/canonical-missing-projection.json"
+expect_canonical_failure "$WORK/canonical-stale-source.json" "stale source"
+expect_canonical_failure "$WORK/canonical-wrong-registry.json" "wrong registry path"
+expect_canonical_failure "$WORK/canonical-stale-registry.json" "stale registry digest"
+expect_canonical_failure "$WORK/canonical-wrong-projection.json" "wrong projection path"
+expect_canonical_failure "$WORK/canonical-stale-projection.json" "stale projection digest"
+expect_canonical_failure "$WORK/canonical-missing-projection.json" "missing projection"
+
+printf '%s\n' '# divergent projection' > "$CANON/docs/registry/compatibility.md"
+expect_canonical_failure "$WORK/canonical-receipt.json" "divergent projection"
+git -C "$CANON" checkout -q -- docs/registry/compatibility.md
+git -C "$CANON" update-ref refs/remotes/origin/main "$(git -C "$CANON" commit-tree "$(git -C "$CANON" rev-parse HEAD^{tree})" -p "$canonical_commit" -m drift)"
+expect_canonical_failure "$WORK/canonical-receipt.json" "origin/main drift"
+git -C "$CANON" update-ref refs/remotes/origin/main "$canonical_commit"
+
+cp "$WORK/canonical-before-import.json" "$WORK/canonical-run.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/canonical-run.json" --receipt "$WORK/canonical-receipt.json" > "$WORK/canonical-complete.json"
+jq -e '.kind == "complete"' "$WORK/canonical-complete.json" >/dev/null
+cp "$WORK/canonical-run.json" "$WORK/canonical-complete-before-replay.json"
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- import --run "$WORK/canonical-run.json" --receipt "$WORK/canonical-receipt.json" > /dev/null
+cmp "$WORK/canonical-complete-before-replay.json" "$WORK/canonical-run.json"
 fi
 
 echo "release-train-tooling fixture: passed"

@@ -13,7 +13,7 @@ open System.Text.RegularExpressions
 open ReleaseTrain
 
 let usage () =
-    eprintfn "Usage: dotnet fsi scripts/release-train-state.fsx -- inspect --run FILE --audit FILE --workflows FILE [--registry FILE]"
+    eprintfn "Usage: dotnet fsi scripts/release-train-state.fsx -- inspect --run FILE --audit FILE --workflows FILE [--registry FILE] [--fixture-registry]"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- plan --run FILE"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- advance --run FILE --release-id ID --decision KIND --subject-commit SHA --evidence URL [--workflow-receipt FILE]"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- verify --run FILE --verification FILE [--verification FILE ...]"
@@ -80,6 +80,18 @@ let stringOr fallback (name: string) (source: JsonObject) =
 
 let sha256 (path: string) =
     File.ReadAllBytes path |> SHA256.HashData |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+
+let git (repository: string) arguments =
+    let result = runProcess repository "git" arguments
+    if result.ExitCode <> 0 then
+        let commandLine = String.concat " " arguments
+        failwith $"git {commandLine} failed in {repository}: {result.StdErr}"
+    result.StdOut.Trim()
+
+let requireGitFileAtCommit repository sourceCommit relativePath =
+    let result = runProcess repository "git" [ "diff"; "--quiet"; sourceCommit; "--"; relativePath ]
+    if result.ExitCode <> 0 then
+        failwith $"{relativePath} is missing or differs from audited source commit {sourceCommit}"
 
 let evidence (path: string) =
     JsonObject(
@@ -163,6 +175,8 @@ let validateCompletionReceipt path =
     | "canonical-registry" ->
         if not (requireBooleanElement path "canonicalMerged" root) || not (requireBooleanElement path "projectionCurrent" root) then
             failwith $"canonical registry receipt {path} does not attest merged canonical registry and current projection"
+        [ "repositoryRoot"; "registrySourceCommit"; "projectionPath"; "projectionSha256"; "projectionSourceCommit" ]
+        |> List.iter (fun name -> requireStringElement path name root |> ignore)
         kind, None, None, None, Some(requireStringElement path "registryPath" root |> Path.GetFullPath), Some(requireStringElement path "registrySha256" root), Some(requireStringElement path "registryTopologySha256" root)
     | _ -> failwith $"completion receipt {path} has unsupported kind `{kind}`"
 
@@ -253,7 +267,19 @@ let validateEvidence requireRegistry (state: JsonObject) =
         let hash = stringProperty "sha256" registry
         let canonicalPath = stringProperty "canonicalPath" registry
         let topology = stringProperty "canonicalTopologySha256" registry
-        if path <> canonicalPath || topologySha256 path <> topology then failwith "canonical registry no longer matches the run's inspected identity and topology"
+        let projectionPath = stringProperty "projectionPath" registry
+        if path <> canonicalPath || not (File.Exists path) || sha256 path <> hash || topologySha256 path <> topology then failwith "canonical registry no longer matches the run's inspected identity, bytes, and topology"
+        if not (File.Exists projectionPath) || sha256 projectionPath <> stringProperty "projectionSha256" registry then
+            failwith "canonical registry projection is stale or unavailable"
+        if not (boolProperty false "fixtureMode" registry) then
+            let repositoryRoot = stringProperty "repositoryRoot" registry
+            let sourceCommit = stringProperty "sourceCommit" registry
+            if (git repositoryRoot [ "rev-parse"; "--show-toplevel" ] |> Path.GetFullPath) <> Path.GetFullPath(repositoryRoot) then
+                failwith "canonical registry is no longer rooted in its audited Git repository"
+            if git repositoryRoot [ "rev-parse"; "refs/remotes/origin/main" ] <> sourceCommit then
+                failwith "canonical registry audited origin/main commit is stale"
+            requireGitFileAtCommit repositoryRoot sourceCommit "registry/dependencies.yml"
+            requireGitFileAtCommit repositoryRoot sourceCommit "docs/registry/compatibility.md"
         if not (completions |> List.exists (fun (kind, _, _, _, receiptPath, receiptHash, receiptTopology) -> kind = "canonical-registry" && receiptPath = Some path && receiptHash = Some hash && receiptTopology = Some topology)) then
             failwith "registry is marked canonical without a current canonical-registry receipt"
 
@@ -316,16 +342,23 @@ let rec nextAction (state: JsonObject) =
             "explicit human-blocker decision and its evidence must be resolved" true
     | None when boolProperty false "requiresClassification" state ->
         match allReleases |> List.tryFind (fun release ->
-            let id = stringProperty "id" release
-            not (decision "release-owed" id) && not (decision "no-release" id)) with
+            decision "release-owed" (stringProperty "id" release)
+            && String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
         | Some release ->
-            action "classify-release" (Some(stringProperty "id" release))
-                "explicit release-owed or no-release classification bound to the current merged-main commit" false
+            action "await-workflow" (Some(stringProperty "id" release))
+                "successful producer workflow run bound to the release commit" false
         | None ->
-            let releases = allReleases |> List.filter (fun release -> decision "release-owed" (stringProperty "id" release))
-            let scoped = JsonArray(releases |> List.map (fun release -> release.DeepClone()) |> List.toArray)
-            let state = JsonObject([ KeyValuePair("registry", registry.DeepClone()); KeyValuePair("releases", scoped :> JsonNode) ])
-            nextAction state
+            match allReleases |> List.tryFind (fun release ->
+                let id = stringProperty "id" release
+                not (decision "release-owed" id) && not (decision "no-release" id)) with
+            | Some release ->
+                action "classify-release" (Some(stringProperty "id" release))
+                    "explicit release-owed or no-release classification bound to the current merged-main commit" false
+            | None ->
+                let releases = allReleases |> List.filter (fun release -> decision "release-owed" (stringProperty "id" release))
+                let scoped = JsonArray(releases |> List.map (fun release -> release.DeepClone()) |> List.toArray)
+                let state = JsonObject([ KeyValuePair("registry", registry.DeepClone()); KeyValuePair("releases", scoped :> JsonNode) ])
+                nextAction state
     | None ->
         let releases = allReleases
         let artifactEligible release =
@@ -340,14 +373,14 @@ let rec nextAction (state: JsonObject) =
             action "human-escalation" (Some(stringProperty "id" release))
                 $"dual-feed receipt is `{feedState release}`; inspect immutable artifacts and record a human decision" true
         | None ->
-            match artifactReleases |> List.tryFind (fun release -> intProperty "expectedPackages" release <> intProperty "observedPackages" release) with
-            | Some release -> action "verify-packages" (Some(stringProperty "id" release)) "expected-versus-observed package count receipt" false
+            match artifactReleases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
+            | Some release -> action "await-workflow" (Some(stringProperty "id" release)) "successful producer workflow run bound to the release commit" false
             | None ->
-                match artifactReleases |> List.tryFind (fun release -> stringOr "" "mainCommit" release <> stringOr "" "tagCommit" release) with
-                | Some release -> action "verify-tag" (Some(stringProperty "id" release)) "exact tag-to-merged-main commit receipt" false
+                match artifactReleases |> List.tryFind (fun release -> intProperty "expectedPackages" release <> intProperty "observedPackages" release) with
+                | Some release -> action "verify-packages" (Some(stringProperty "id" release)) "expected-versus-observed package count receipt" false
                 | None ->
-                    match artifactReleases |> List.tryFind (fun release -> String.IsNullOrWhiteSpace(stringOr "" "workflowRun" release)) with
-                    | Some release -> action "await-workflow" (Some(stringProperty "id" release)) "successful producer workflow run bound to the release commit" false
+                    match artifactReleases |> List.tryFind (fun release -> stringOr "" "mainCommit" release <> stringOr "" "tagCommit" release) with
+                    | Some release -> action "verify-tag" (Some(stringProperty "id" release)) "exact tag-to-merged-main commit receipt" false
                     | None ->
                         match artifactReleases |> List.tryFind (fun release -> feedState release = "none" || not (boolProperty false "artifactVerified" release)) with
                         | Some release -> action "publish" (Some(stringProperty "id" release)) "dual-feed, payload-equivalence, tag, workflow, and expected-package receipt" false
@@ -380,13 +413,40 @@ let inspect () =
     let auditPath = requireFile "--audit"
     let workflowPath = requireFile "--workflows"
     let registryPath = option "--registry" |> Option.defaultValue "registry/dependencies.yml" |> Path.GetFullPath
+    let fixtureRegistry = List.contains "--fixture-registry" args
     if not (File.Exists registryPath) then failwith $"registry does not exist: {registryPath}"
     validateReport auditPath "repositories" "findings"
     validateReport workflowPath "results" "errors"
     let topology = registryEdges registryPath
     use audit = JsonDocument.Parse(File.ReadAllText auditPath)
+    let auditRepositories = audit.RootElement.GetProperty("repositories").EnumerateArray() |> Seq.toList
+    let repositoryRoot, registrySourceCommit, projectionPath =
+        if fixtureRegistry then
+            Path.GetDirectoryName(registryPath), auditRepositories.Head.GetProperty("originMain").GetString(), registryPath
+        else
+            let registryDirectory = Directory.GetParent(registryPath) |> Option.ofObj |> Option.defaultWith (fun () -> failwith "registry path has no parent")
+            let root = registryDirectory.Parent |> Option.ofObj |> Option.defaultWith (fun () -> failwith "registry path has no repository parent") |> fun value -> value.FullName
+            let canonical = Path.Combine(root, "registry", "dependencies.yml") |> Path.GetFullPath
+            if registryPath <> canonical then failwith $"production registry must be the audited repository canonical path: {canonical}"
+            let repository =
+                auditRepositories
+                |> List.tryFind (fun item ->
+                    match tryElement "path" item with
+                    | Some value when value.ValueKind = JsonValueKind.String -> Path.GetFullPath(value.GetString()) = root
+                    | _ -> false)
+                |> Option.defaultWith (fun () -> failwith "canonical registry repository path is absent from the audit report")
+            let sourceCommit = repository.GetProperty("originMain").GetString()
+            let gitRoot = git root [ "rev-parse"; "--show-toplevel" ] |> Path.GetFullPath
+            if gitRoot <> root then failwith "canonical registry path is not rooted in the audited Git repository"
+            if git root [ "rev-parse"; "refs/remotes/origin/main" ] <> sourceCommit then
+                failwith "audited origin/main commit no longer matches the canonical registry repository"
+            let projection = Path.Combine(root, "docs", "registry", "compatibility.md") |> Path.GetFullPath
+            if not (File.Exists projection) then failwith $"required projection does not exist: {projection}"
+            requireGitFileAtCommit root sourceCommit "registry/dependencies.yml"
+            requireGitFileAtCommit root sourceCommit "docs/registry/compatibility.md"
+            root, sourceCommit, projection
     let auditSets =
-        audit.RootElement.GetProperty("repositories").EnumerateArray()
+        auditRepositories
         |> Seq.collect (fun repository ->
             let repoId = repository.GetProperty("id").GetString()
             let commit = repository.GetProperty("originMain").GetString()
@@ -494,7 +554,7 @@ let inspect () =
     let state = JsonObject(
         [ KeyValuePair("schemaVersion", JsonValue.Create(2) :> JsonNode)
           KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
-          KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalPath", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("canonicalTopologySha256", JsonValue.Create(topologySha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalPath", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("canonicalTopologySha256", JsonValue.Create(topologySha256 registryPath) :> JsonNode); KeyValuePair("repositoryRoot", JsonValue.Create(repositoryRoot) :> JsonNode); KeyValuePair("sourceCommit", JsonValue.Create(registrySourceCommit) :> JsonNode); KeyValuePair("projectionPath", JsonValue.Create(projectionPath) :> JsonNode); KeyValuePair("projectionSha256", JsonValue.Create(sha256 projectionPath) :> JsonNode); KeyValuePair("fixtureMode", JsonValue.Create(fixtureRegistry) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
           KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode); KeyValuePair("completionReceipts", JsonArray() :> JsonNode) ]) :> JsonNode)
           KeyValuePair("decisions", JsonArray() :> JsonNode)
           KeyValuePair("requiresClassification", JsonValue.Create(true) :> JsonNode)
@@ -535,7 +595,7 @@ let advance () =
         decisions
         |> Seq.map obj
         |> Seq.tryFind (fun existing -> stringProperty "kind" existing = decision && stringProperty "subjectCommit" existing = subjectCommit && stringOr "" "releaseId" existing = releaseId)
-    if decision = "release-owed" || decision = "no-release" then
+    if [ "release-owed"; "no-release"; "semver-effect" ] |> List.contains decision then
         match duplicateDecision with
         | Some existing when stringProperty "evidence" existing <> proof ->
             failwith "classification replay must exactly match its recorded evidence"
@@ -543,23 +603,27 @@ let advance () =
         | None ->
             let currentAction = obj (nextAction state)
             if stringProperty "kind" currentAction <> "classify-release" || stringOr "" "releaseId" currentAction <> releaseId then
-                failwith $"classification for `{releaseId}` is only legal for its current classify-release action"
+                failwith $"classification or SemVer judgment for `{releaseId}` is only legal for its current classify-release action"
     match option "--workflow-receipt" with
-    | Some receiptPath when decision = "release-owed" || decision = "semver-effect" ->
+    | Some receiptPath when decision = "release-owed" ->
+        if duplicateDecision.IsNone then failwith "workflow receipt is premature until release-owed classification is recorded"
         let full = Path.GetFullPath receiptPath
         if not (File.Exists full) then failwith $"--workflow-receipt does not exist: {full}"
         let receiptRelease, receiptCommit, workflowRun = validateWorkflowReceipt full
         if receiptRelease <> releaseId || receiptCommit <> subjectCommit then
             failwith "workflow receipt must name this release and its merged-main commit"
-        release["workflowRun"] <- JsonValue.Create(workflowRun)
         let receipts = array (property "workflowReceipts" (obj (property "evidence" state)))
         let snapshot = evidence full
         let alreadyRecorded = receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)
-        if duplicateDecision.IsSome && not alreadyRecorded then failwith "classification replay must exactly match its recorded workflow receipt"
-        if not alreadyRecorded then receipts.Add(snapshot)
-    | Some _ -> failwith "--workflow-receipt is only valid with release-owed or semver-effect"
-    | None when decision = "release-owed" || decision = "semver-effect" ->
-        failwith "release-owed and semver-effect decisions require a successful --workflow-receipt"
+        if alreadyRecorded then
+            if stringOr "" "workflowRun" release <> workflowRun then failwith "recorded workflow receipt contradicts release state"
+        else
+            let currentAction = obj (nextAction state)
+            if stringProperty "kind" currentAction <> "await-workflow" || stringOr "" "releaseId" currentAction <> releaseId then
+                failwith $"workflow receipt for `{releaseId}` is only legal for its current await-workflow action"
+            release["workflowRun"] <- JsonValue.Create(workflowRun)
+            receipts.Add(snapshot)
+    | Some _ -> failwith "--workflow-receipt is only valid with an already-recorded release-owed decision"
     | None -> ()
     if duplicateDecision.IsNone then
         decisions.Add(JsonObject([ KeyValuePair("kind", JsonValue.Create(decision) :> JsonNode); KeyValuePair("releaseId", JsonValue.Create(releaseId) :> JsonNode); KeyValuePair("subjectCommit", JsonValue.Create(subjectCommit) :> JsonNode); KeyValuePair("evidence", JsonValue.Create(proof) :> JsonNode) ]))
@@ -716,6 +780,16 @@ let importReceipt () =
     | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash, Some receiptTopology ->
         let canonicalPath = stringProperty "canonicalPath" registry
         let expectedTopology = stringProperty "canonicalTopologySha256" registry
+        use receiptDocument = JsonDocument.Parse(File.ReadAllText full)
+        let receiptRoot = receiptDocument.RootElement
+        let receiptRepository = requireStringElement full "repositoryRoot" receiptRoot |> Path.GetFullPath
+        let receiptSourceCommit = requireStringElement full "registrySourceCommit" receiptRoot
+        let receiptProjectionPath = requireStringElement full "projectionPath" receiptRoot |> Path.GetFullPath
+        let receiptProjectionHash = requireStringElement full "projectionSha256" receiptRoot
+        let receiptProjectionCommit = requireStringElement full "projectionSourceCommit" receiptRoot
+        let repositoryRoot = stringProperty "repositoryRoot" registry |> Path.GetFullPath
+        let sourceCommit = stringProperty "sourceCommit" registry
+        let projectionPath = stringProperty "projectionPath" registry |> Path.GetFullPath
         let currentActionKind = stringProperty "kind" (obj (nextAction state))
         let alreadyRecorded =
             receipts
@@ -727,10 +801,22 @@ let importReceipt () =
         elif currentActionKind <> "flip-registry" then
             failwith "canonical registry receipt is only legal for the current flip-registry action"
         if receiptPath <> canonicalPath then failwith "canonical registry receipt path must equal the inspected canonical registry target"
+        if receiptRepository <> repositoryRoot then failwith "canonical registry receipt repository must equal the audited repository root"
+        if receiptSourceCommit <> sourceCommit || receiptProjectionCommit <> sourceCommit then failwith "canonical registry receipt must bind registry and projection to the audited source commit"
+        if receiptProjectionPath <> projectionPath then failwith "canonical registry receipt projection path must equal the required audited projection"
         if not (File.Exists canonicalPath) || sha256 canonicalPath <> receiptHash then failwith "canonical registry receipt is stale or does not match the inspected canonical target"
+        if not (File.Exists projectionPath) || sha256 projectionPath <> receiptProjectionHash then failwith "canonical registry projection receipt is stale or unavailable"
         if receiptTopology <> expectedTopology || topologySha256 canonicalPath <> expectedTopology then
             failwith "canonical registry receipt does not preserve the inspected registry topology"
+        if not (boolProperty false "fixtureMode" registry) then
+            if (git repositoryRoot [ "rev-parse"; "--show-toplevel" ] |> Path.GetFullPath) <> repositoryRoot then
+                failwith "canonical registry receipt is not rooted in the audited Git repository"
+            if git repositoryRoot [ "rev-parse"; "refs/remotes/origin/main" ] <> sourceCommit then
+                failwith "canonical registry receipt does not match current origin/main"
+            requireGitFileAtCommit repositoryRoot sourceCommit "registry/dependencies.yml"
+            requireGitFileAtCommit repositoryRoot sourceCommit "docs/registry/compatibility.md"
         registry["sha256"] <- JsonValue.Create(receiptHash)
+        registry["projectionSha256"] <- JsonValue.Create(receiptProjectionHash)
         registry["canonicalMerged"] <- JsonValue.Create(true)
     | _ -> failwith "completion receipt fields are inconsistent"
     if not (receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)) then receipts.Add(snapshot)
