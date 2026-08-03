@@ -132,6 +132,8 @@ expect_err "--repo swallowing the next flag as its value is caught" \
   "--repo needs a value (got flag '--board')" -- "$TGT" P --repo --board acme/R
 expect_err "--repo with no following token needs a value" \
   "--repo needs a value" -- "$TGT" P --repo
+expect_err "a public Project cannot omit its explicit writer allowlist" \
+  "--public-board requires an explicit --trusted-writers allowlist" -- "$TGT" P --public-board
 
 # ── Ok leg: the parse grammar accepts, reaching the fsgg-sdd preflight (exit 127, no scaffold) ─────
 
@@ -153,6 +155,7 @@ expect_ok "--no-coordination toggles" -- "$TGT" P --no-coordination
 expect_ok "--board takes an owner/title value" -- "$TGT" P --board acme/Roadmap
 expect_ok "--board accepts an owner-only value (defaults the title)" -- "$TGT" P --board acme
 expect_ok "--repo takes an owner/repo value" -- "$TGT" P --repo acme/Product.X
+expect_ok "a public board carries an explicit writer allowlist" -- "$TGT" P --public-board --trusted-writers acme/platform,alice
 expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
 
