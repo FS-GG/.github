@@ -449,6 +449,15 @@ let inspect () =
                 match tryElement "packageId" package with
                 | Some value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
                 | _ -> None)
+        let expectedArtifacts =
+            packages
+            |> List.choose (fun package ->
+                match tryElement "packageId" package, tryElement "version" package with
+                | Some packageId, Some version when packageId.ValueKind = JsonValueKind.String && version.ValueKind = JsonValueKind.String ->
+                    Some(JsonObject(
+                        [ KeyValuePair("packageId", JsonValue.Create(packageId.GetString()) :> JsonNode)
+                          KeyValuePair("version", JsonValue.Create(version.GetString()) :> JsonNode) ]) :> JsonNode)
+                | _ -> None)
         releases.Add(JsonObject(
             [ KeyValuePair("id", JsonValue.Create(releaseId) :> JsonNode)
               KeyValuePair("repository", JsonValue.Create(repoId) :> JsonNode)
@@ -456,6 +465,7 @@ let inspect () =
               KeyValuePair("dependsOn", JsonArray(dependencies |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
               KeyValuePair("coherentSets", JsonArray(coherentSets |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
               KeyValuePair("packages", JsonArray(packageIds |> List.map (fun value -> JsonValue.Create(value) :> JsonNode) |> List.toArray) :> JsonNode)
+              KeyValuePair("expectedArtifacts", JsonArray(expectedArtifacts |> List.toArray) :> JsonNode)
               KeyValuePair("expectedPackages", JsonValue.Create(packages.Length) :> JsonNode)
               KeyValuePair("observedPackages", JsonValue.Create(0) :> JsonNode)
               KeyValuePair("mainCommit", JsonValue.Create(commit) :> JsonNode)
@@ -558,6 +568,23 @@ let verify () =
             | None -> [ stringProperty "tag" release ]
         if not (List.contains receiptTag expectedTags) then
             failwith $"verification receipt tag `{receiptTag}` does not match release `{name}` expected tags"
+        let expectedArtifacts =
+            match tryProperty "expectedArtifacts" release with
+            | Some artifacts ->
+                array artifacts
+                |> Seq.map (fun artifact ->
+                    let item = obj artifact
+                    stringProperty "packageId" item, stringProperty "version" item)
+                |> Seq.sort
+                |> Seq.toList
+            | None -> []
+        let observedArtifacts =
+            root.GetProperty("packages").EnumerateArray()
+            |> Seq.map (fun package -> package.GetProperty("packageId").GetString(), package.GetProperty("version").GetString())
+            |> Seq.sort
+            |> Seq.toList
+        if not expectedArtifacts.IsEmpty && observedArtifacts <> expectedArtifacts then
+            failwith $"verification receipt package ID/version multiset does not match release `{name}` expected artifacts"
         release["expectedPackages"] <- JsonValue.Create(root.GetProperty("expectedPackages").GetInt32())
         release["observedPackages"] <- JsonValue.Create(root.GetProperty("observedPackages").GetInt32())
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())

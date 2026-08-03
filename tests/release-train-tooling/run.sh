@@ -358,24 +358,34 @@ dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- inspect \
 jq -e '
   .schemaVersion == 2
   and (.releases | length) == 4
-  and (.releases[] | select(.id == ".github:drivers") | {tag,baselineTag,expectedPackages,packages})
-      == {tag:"drivers/v0.16.0",baselineTag:"drivers/v0.15.0",expectedPackages:1,packages:["FS.GG.Drivers"]}
+  and (.releases[] | select(.id == ".github:drivers") | {tag,baselineTag,expectedPackages,packages,expectedArtifacts})
+      == {tag:"drivers/v0.16.0",baselineTag:"drivers/v0.15.0",expectedPackages:1,packages:["FS.GG.Drivers"],expectedArtifacts:[{packageId:"FS.GG.Drivers",version:"0.16.0"}]}
   and (.releases[] | select(.id == ".github:kit") | .tag) == "kit/v0.35.0"
   and (.releases[] | select(.id == ".github:coord-engine") | .coherentSets) == ["coord-engine"]
   and (.releases[] | select(.id == ".github:new-sdd-workspace") | .coherentSets) == ["new-sdd-workspace"]
 ' "$WORK/multiset-run.json" >/dev/null
-printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":".github:drivers","expectedPackages":1,"observedPackages":1,"tag":"kit/v0.35.0","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"FS.GG.Drivers","version":"0.16.0","gitHubUrl":"https://github.test/drivers","nuGetUrl":"https://nuget.test/drivers","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
-  "$multi_commit" "$multi_commit" "$multi_commit" > "$WORK/wrong-set-tag.json"
-cp "$WORK/multiset-run.json" "$WORK/multiset-before-wrong-tag.json"
-set +e
-dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/wrong-set-tag.json" > /dev/null
-wrong_set_tag_rc=$?
-set -e
-if [ "$wrong_set_tag_rc" -ne 1 ]; then
-  echo "expected a Kit tag receipt to be refused for the Drivers release set, got $wrong_set_tag_rc" >&2
-  exit 1
-fi
-cmp "$WORK/multiset-before-wrong-tag.json" "$WORK/multiset-run.json"
+printf '{"schemaVersion":2,"generatedAt":"2026-08-03T00:00:00Z","name":".github:drivers","expectedPackages":1,"observedPackages":1,"tag":"drivers/v0.16.0","expectedCommit":"%s","subjectCommit":"%s","tagCommit":"%s","tagMatchesExpectedCommit":true,"conclusion":"success","gitHubAvailable":true,"nuGetAvailable":true,"packages":[{"packageId":"FS.GG.Drivers","version":"0.16.0","gitHubUrl":"https://github.test/drivers","nuGetUrl":"https://nuget.test/drivers","gitHubArchiveSha256":"a","nuGetArchiveSha256":"b","payloadFiles":1,"payloadIdentical":true,"differences":[],"gitHubAvailable":true,"nuGetAvailable":true}]}' \
+  "$multi_commit" "$multi_commit" "$multi_commit" > "$WORK/correct-drivers.json"
+jq '.tag = "kit/v0.35.0"' "$WORK/correct-drivers.json" > "$WORK/wrong-set-tag.json"
+jq '.packages[0].packageId = "FS.GG.Kit" | .packages[0].version = "0.35.0"' "$WORK/correct-drivers.json" > "$WORK/wrong-package-id.json"
+jq '.packages[0].version = "0.15.0"' "$WORK/correct-drivers.json" > "$WORK/wrong-package-version.json"
+jq '.packages = [] | .expectedPackages = 0 | .observedPackages = 0' "$WORK/correct-drivers.json" > "$WORK/missing-package.json"
+jq '.packages += [.packages[0]] | .expectedPackages = 2 | .observedPackages = 2' "$WORK/correct-drivers.json" > "$WORK/duplicate-package.json"
+jq '.packages += [(.packages[0] | .packageId = "FS.GG.Kit" | .version = "0.35.0")] | .expectedPackages = 2 | .observedPackages = 2' "$WORK/correct-drivers.json" > "$WORK/extra-package.json"
+for invalid in wrong-set-tag wrong-package-id wrong-package-version missing-package duplicate-package extra-package; do
+  cp "$WORK/multiset-run.json" "$WORK/multiset-before-invalid.json"
+  set +e
+  dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/$invalid.json" > /dev/null
+  invalid_rc=$?
+  set -e
+  if [ "$invalid_rc" -ne 1 ]; then
+    echo "expected $invalid Drivers receipt to fail closed, got $invalid_rc" >&2
+    exit 1
+  fi
+  cmp "$WORK/multiset-before-invalid.json" "$WORK/multiset-run.json"
+done
+dotnet fsi "$ROOT/scripts/release-train-state.fsx" -- verify --run "$WORK/multiset-run.json" --verification "$WORK/correct-drivers.json" > /dev/null
+jq -e '.releases[] | select(.id == ".github:drivers" and .artifactVerified == true and .feedState == "both-equivalent")' "$WORK/multiset-run.json" >/dev/null
 fi
 
 echo "release-train-tooling fixture: passed"
