@@ -71,6 +71,11 @@ jobs:
             case "$code" in 200) printf present;; 404) rm -f "${name}.nupkg"; printf absent;; *) rm -f "${name}.nupkg"; printf unknown;; esac
           }
           org="$(observe_feed org "$org_url" yes)"; nuget="$(observe_feed nuget "$nuget_url" no)"
+          # Frontiers are independently observed, not inferred from candidate
+          # absence.  A listing/read failure remains `unknown` and refuses.
+          org_latest="$(gh api 'orgs/FS-GG/packages/nuget/FS.GG.Kit/versions?per_page=100' --paginate --jq '[.[].name | select(test("^0\\.[0-9]+\\.[0-9]+$"))] | sort_by(split(".") | map(tonumber)) | last // empty' 2>/dev/null || true)"
+          nuget_latest="$(curl --retry 2 --connect-timeout 10 -fsS 'https://api.nuget.org/v3-flatcontainer/fs.gg.kit/index.json' 2>/dev/null | jq -r '[.versions[] | select(test("^0\\.[0-9]+\\.[0-9]+$"))] | sort_by(split(".") | map(tonumber)) | last // empty' || true)"
+          [ -n "$org_latest" ] || org_latest=unknown; [ -n "$nuget_latest" ] || nuget_latest=unknown
           tag="kit/v${version}"; tag_exists=false
           git rev-parse -q --verify "refs/tags/$tag" >/dev/null && tag_exists=true || true
           # Find the merged PR that introduced the evaluated version, rather
@@ -79,7 +84,9 @@ jobs:
           provenance='{}'
           while IFS=$'\t' read -r number merge head; do
             [ -n "$number" ] || continue
-            [ "$(git show "$merge:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)" = "$version" ] || continue
+            introduced="$(git show "$merge:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)"
+            base="$(git show "$merge^:src/FS.GG.Kit/FS.GG.Kit.csproj" 2>/dev/null | sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' | tail -1)"
+            [ "$introduced" = "$version" ] && [ "$base" != "$version" ] || continue
             # This is provenance for the already-merged authoring PR, not a
             # replacement merge gate.  Read the named workflow run and its
             # `pr-arm` job rather than re-implementing the check-run rollup;
@@ -87,10 +94,11 @@ jobs:
             run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow kit-published-coherence.yml --commit "$head" --event pull_request --status success --limit 20 --json databaseId --jq '.[0].databaseId // empty')"
             [ -n "$run_id" ] || continue
             gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "pr-arm" and .conclusion == "success") | .databaseId' | grep -q . || continue
-            provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" '{number:($n|tonumber),mergeCommit:$merge,head:$head}')"; break
+            git merge-base --is-ancestor "$merge" origin/main || continue
+            provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$introduced" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}')"; break
           done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
-          merged=false; pr_arm=unknown; source_sha="$GITHUB_SHA"
-          if [ "$provenance" != '{}' ]; then merged=true; pr_arm=pass; source_sha="$(jq -r .mergeCommit <<<"$provenance")"; fi
+          source_sha="$GITHUB_SHA"
+          if [ "$provenance" != '{}' ]; then source_sha="$(jq -r .mergeCommit <<<"$provenance")"; fi
           release='null'
           if [ "$org" = present ] && [ "$nuget" = present ]; then
             org_commit="$(unzip -p org.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
@@ -100,7 +108,7 @@ jobs:
               [ -n "$run" ] && release="$(jq -c --arg commit "$org_commit" '. + {nuspecCommit:$commit}' <<<"$run")"
             fi
           fi
-          jq -n --arg version "$version" --arg sha "$source_sha" --argjson merged "$merged" --arg arm "$pr_arm" --arg org "$org" --arg nuget "$nuget" --argjson tag "$tag_exists" --argjson release "$release" '{version:$version,sourceSha:$sha,mergedPrReachable:$merged,prArm:$arm,orgFeed:$org,nugetFeed:$nuget,tagExists:$tag,releaseRun:$release}' > facts.json
+          jq -n --arg version "$version" --arg sha "$source_sha" --argjson provenance "$provenance" --arg org "$org" --arg nuget "$nuget" --arg orgLatest "$org_latest" --arg nugetLatest "$nuget_latest" --argjson tag "$tag_exists" --argjson release "$release" '{version:$version,sourceSha:$sha,provenance:$provenance,orgFeed:$org,nugetFeed:$nuget,orgLatest:$orgLatest,nugetLatest:$nugetLatest,tagExists:$tag,releaseRun:$release}' > facts.json
           python3 scripts/kit-auto-publish.py --facts facts.json --json | tee decision.json
           echo "action=$(jq -r .action decision.json)" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -123,8 +131,15 @@ jobs:
         run: |
           set -euo pipefail
           marker='<!-- fsgg:kit-auto-publish-escalation -->'; issue=2106
-          body="$marker\n\nAuto-publish observed **$ACTION** and performed no tag, feed, or evidence-PR write. [Run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). The marker is updated in place; its repeat count is the comment revision history."
-          existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue/comments" --paginate --jq '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id' | head -1 || true)"
+          comments="$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue/comments" --paginate)"
+          existing="$(jq -r '.[] | select(.body | startswith("<!-- fsgg:kit-auto-publish-escalation -->")) | .id' <<<"$comments" | head -1)"
+          previous=/tmp/previous-escalation.json
+          if [ -n "$existing" ]; then jq -r '.[] | select(.id == '"$existing"') | .body' <<<"$comments" | sed -n '/^```json$/,/^```$/p' | sed '1d;$d' > "$previous"; fi
+          args=(); [ -s "$previous" ] && args+=(--previous-escalation "$previous")
+          python3 scripts/kit-auto-publish.py --facts facts.json --json --run "$GITHUB_RUN_ID" "${args[@]}" > escalation-decision.json
+          state="$(jq -c .escalation escalation-decision.json)"
+          jq -e '.valid == true' <<<"$state" >/dev/null || { echo '::error::sticky marker state malformed; refusing to overwrite'; exit 1; }
+          body="$marker\n\n```json\n$state\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
           gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --add-label blocked
           if [ -n "$existing" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null; else gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null; fi
       - name: Open or update the publish evidence PR
