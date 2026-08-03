@@ -17,6 +17,7 @@ let usage () =
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- plan --run FILE"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- advance --run FILE --release-id ID --decision KIND --subject-commit SHA --evidence URL [--workflow-receipt FILE]"
     eprintfn "       dotnet fsi scripts/release-train-state.fsx -- verify --run FILE --verification FILE [--verification FILE ...]"
+    eprintfn "       dotnet fsi scripts/release-train-state.fsx -- import --run FILE --receipt FILE"
 
 let args = normalizedArgs ()
 
@@ -120,20 +121,46 @@ let validateWorkflowReceipt path =
         failwith $"workflow receipt {path} is not successful"
     releaseId, subjectCommit, workflowRun
 
+let requireBooleanElement path name (root: JsonElement) =
+    match tryElement name root with
+    | Some value when value.ValueKind = JsonValueKind.True -> true
+    | Some value when value.ValueKind = JsonValueKind.False -> false
+    | _ -> failwith $"evidence receipt {path} is missing boolean `{name}`"
+
 let validateVerificationReceipt path =
     use document = JsonDocument.Parse(File.ReadAllText path)
     let root = document.RootElement
     let name = requireStringElement path "name" root
     let subjectCommit = requireStringElement path "subjectCommit" root
+    if root.GetProperty("schemaVersion").GetInt32() < 2 then failwith $"verification receipt {path} has unsupported schemaVersion"
+    if requireStringElement path "expectedCommit" root <> subjectCommit then failwith $"verification receipt {path} binds different expected and subject commits"
     if requireStringElement path "conclusion" root <> "success" then
         failwith $"verification receipt {path} is not successful"
-    [ "expectedPackages"; "observedPackages"; "tagCommit"; "tagMatchesExpectedCommit"; "packages" ]
+    [ "generatedAt"; "tag"; "expectedPackages"; "observedPackages"; "tagCommit"; "tagMatchesExpectedCommit"; "packages" ]
     |> List.iter (fun name -> if tryElement name root |> Option.isNone then failwith $"evidence receipt {path} is missing `{name}`")
     let packages = tryElement "packages" root |> Option.get
     if packages.ValueKind <> JsonValueKind.Array then failwith $"evidence receipt {path} has non-array `packages`"
-    name, subjectCommit
+    packages.EnumerateArray()
+    |> Seq.iter (fun package ->
+        [ "packageId"; "version"; "gitHubUrl"; "nuGetUrl"; "gitHubArchiveSha256"; "nuGetArchiveSha256"; "payloadFiles"; "payloadIdentical"; "differences"; "gitHubAvailable"; "nuGetAvailable" ]
+        |> List.iter (fun field -> if tryElement field package |> Option.isNone then failwith $"verification receipt {path} package is missing `{field}`"))
+    name, subjectCommit, requireBooleanElement path "gitHubAvailable" root, requireBooleanElement path "nuGetAvailable" root
 
-let validateEvidence (state: JsonObject) =
+let validateCompletionReceipt path =
+    use document = JsonDocument.Parse(File.ReadAllText path)
+    let root = document.RootElement
+    let kind = requireStringElement path "kind" root
+    if requireStringElement path "conclusion" root <> "success" then failwith $"completion receipt {path} is not successful"
+    match kind with
+    | "consumer-embedding" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), Some(requireStringElement path "producerId" root), None, None
+    | "propagation" -> kind, Some(requireStringElement path "releaseId" root), Some(requireStringElement path "subjectCommit" root), None, None, None
+    | "canonical-registry" ->
+        if not (requireBooleanElement path "canonicalMerged" root) || not (requireBooleanElement path "projectionCurrent" root) then
+            failwith $"canonical registry receipt {path} does not attest merged canonical registry and current projection"
+        kind, None, None, None, Some(requireStringElement path "registryPath" root |> Path.GetFullPath), Some(requireStringElement path "registrySha256" root)
+    | _ -> failwith $"completion receipt {path} has unsupported kind `{kind}`"
+
+let validateEvidence requireRegistry (state: JsonObject) =
     let evidenceRoot = obj (property "evidence" state)
     let registry = obj (property "registry" state)
     let audit = obj (property "audit" evidenceRoot)
@@ -142,7 +169,7 @@ let validateEvidence (state: JsonObject) =
     if not (receiptCurrent workflows) then failwith "workflow evidence is stale or unavailable"
     validateReport (stringProperty "path" audit) "repositories" "findings"
     validateReport (stringProperty "path" workflows) "results" "errors"
-    if not (receiptCurrent registry) then failwith "registry topology evidence is stale or unavailable"
+    if requireRegistry && not (receiptCurrent registry) then failwith "registry topology evidence is stale or unavailable"
     let workflowReceipts =
         array (property "workflowReceipts" evidenceRoot)
         |> Seq.map (fun item ->
@@ -164,6 +191,29 @@ let validateEvidence (state: JsonObject) =
         let receipt = obj item
         if not (receiptCurrent receipt) then failwith "verification evidence is stale or unavailable"
         validateVerificationReceipt (stringProperty "path" receipt) |> ignore)
+    let completions =
+        array (property "completionReceipts" evidenceRoot)
+        |> Seq.map (fun item ->
+            let receipt = obj item
+            if not (receiptCurrent receipt) then failwith "completion receipt is stale or unavailable"
+            validateCompletionReceipt (stringProperty "path" receipt))
+        |> Seq.toList
+    let hasCompletion kind releaseId subjectCommit =
+        completions |> List.exists (fun (receiptKind, receiptRelease, receiptCommit, _, _, _) -> receiptKind = kind && receiptRelease = Some releaseId && receiptCommit = Some subjectCommit)
+    array (property "releases" state)
+    |> Seq.map obj
+    |> Seq.iter (fun release ->
+        let id = stringProperty "id" release
+        let commit = stringProperty "mainCommit" release
+        if stringOr "producer" "kind" release = "consumer" && boolProperty false "consumerEmbeddingVerified" release && not (hasCompletion "consumer-embedding" id commit) then
+            failwith $"consumer `{id}` has no current embedding receipt"
+        if boolProperty false "downstreamVerified" release && not (hasCompletion "propagation" id commit) then
+            failwith $"release `{id}` has no current propagation receipt")
+    if boolProperty false "canonicalMerged" registry then
+        let path = stringProperty "path" registry
+        let hash = stringProperty "sha256" registry
+        if not (completions |> List.exists (fun (kind, _, _, _, receiptPath, receiptHash) -> kind = "canonical-registry" && receiptPath = Some path && receiptHash = Some hash)) then
+            failwith "registry is marked canonical without a current canonical-registry receipt"
 
 let registryEdges path =
     let mutable currentId = ""
@@ -337,7 +387,7 @@ let inspect () =
         [ KeyValuePair("schemaVersion", JsonValue.Create(1) :> JsonNode)
           KeyValuePair("runId", JsonValue.Create(runId) :> JsonNode)
           KeyValuePair("registry", JsonObject([ KeyValuePair("path", JsonValue.Create(registryPath) :> JsonNode); KeyValuePair("sha256", JsonValue.Create(sha256 registryPath) :> JsonNode); KeyValuePair("canonicalMerged", JsonValue.Create(false) :> JsonNode) ]) :> JsonNode)
-          KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode) ]) :> JsonNode)
+          KeyValuePair("evidence", JsonObject([ KeyValuePair("audit", evidence auditPath :> JsonNode); KeyValuePair("workflows", evidence workflowPath :> JsonNode); KeyValuePair("workflowReceipts", JsonArray() :> JsonNode); KeyValuePair("verifications", JsonArray() :> JsonNode); KeyValuePair("completionReceipts", JsonArray() :> JsonNode) ]) :> JsonNode)
           KeyValuePair("decisions", JsonArray() :> JsonNode)
           KeyValuePair("requiresClassification", JsonValue.Create(true) :> JsonNode)
           KeyValuePair("releases", releases :> JsonNode) ])
@@ -349,7 +399,7 @@ let plan () =
     let path = requireFile "--run"
     let state = obj (read path)
     if intProperty "schemaVersion" state <> 1 then failwith "unsupported release-run schemaVersion"
-    validateEvidence state
+    validateEvidence true state
     state["nextAction"] <- nextAction state
     write path state
     printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
@@ -357,7 +407,7 @@ let plan () =
 let advance () =
     let path = requireFile "--run"
     let state = obj (read path)
-    validateEvidence state
+    validateEvidence true state
     let decision = require "--decision"
     if not ([ "release-owed"; "no-release"; "semver-effect"; "human-blocker" ] |> List.contains decision) then
         failwith "--decision must be release-owed, no-release, semver-effect, or human-blocker"
@@ -399,14 +449,14 @@ let advance () =
 let verify () =
     let path = requireFile "--run"
     let state = obj (read path)
-    validateEvidence state
+    validateEvidence true state
     let releases = array (property "releases" state)
     let evidenceRoot = obj (property "evidence" state)
     let reports = array (property "verifications" evidenceRoot)
     for reportPath in options "--verification" do
         let full = Path.GetFullPath reportPath
         if not (File.Exists full) then failwith $"--verification does not exist: {full}"
-        let receiptName, receiptCommit = validateVerificationReceipt full
+        let receiptName, receiptCommit, githubAvailable, nugetAvailable = validateVerificationReceipt full
         use report = JsonDocument.Parse(File.ReadAllText full)
         let root = report.RootElement
         let name = root.GetProperty("name").GetString()
@@ -418,8 +468,6 @@ let verify () =
         release["tagCommit"] <- JsonValue.Create(root.GetProperty("tagCommit").GetString())
         let matchingTag = root.GetProperty("tagMatchesExpectedCommit").GetBoolean()
         let equivalent = root.GetProperty("packages").EnumerateArray() |> Seq.forall (fun package -> package.GetProperty("payloadIdentical").GetBoolean())
-        let githubAvailable = tryElement "githubAvailable" root |> Option.map (fun value -> value.GetBoolean()) |> Option.defaultValue true
-        let nugetAvailable = tryElement "nugetAvailable" root |> Option.map (fun value -> value.GetBoolean()) |> Option.defaultValue true
         let complete = matchingTag && equivalent && intProperty "expectedPackages" release = intProperty "observedPackages" release
         let feed =
             match githubAvailable, nugetAvailable with
@@ -431,6 +479,46 @@ let verify () =
         release["feedState"] <- JsonValue.Create(feed)
         release["artifactVerified"] <- JsonValue.Create((feed = "both-equivalent"))
         reports.Add(evidence full)
+    state["nextAction"] <- nextAction state
+    write path state
+    printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+let importReceipt () =
+    let path = requireFile "--run"
+    let state = obj (read path)
+    let full = requireFile "--receipt"
+    let kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash = validateCompletionReceipt full
+    if kind = "canonical-registry" then validateEvidence false state else validateEvidence true state
+    let registry = obj (property "registry" state)
+    let releases = array (property "releases" state) |> Seq.map obj |> Seq.toList
+    let release id =
+        releases |> List.tryFind (fun item -> stringProperty "id" item = id)
+        |> Option.defaultWith (fun () -> failwith $"completion receipt names unknown release `{id}`")
+    match kind, receiptRelease, receiptCommit, producerId, registryPath, registryHash with
+    | "consumer-embedding", Some id, Some commit, Some producer, _, _ ->
+        let consumer = release id
+        if stringOr "producer" "kind" consumer <> "consumer" || commit <> stringProperty "mainCommit" consumer then
+            failwith "consumer embedding receipt must bind the consumer's merged-main commit"
+        let dependencies = array (property "dependsOn" consumer) |> Seq.map (fun item -> item.GetValue<string>()) |> Set.ofSeq
+        if not (Set.contains producer dependencies) then failwith "consumer embedding receipt names a non-dependency producer"
+        let upstream = release producer
+        if feedState upstream <> "both-equivalent" || not (boolProperty false "artifactVerified" upstream) then
+            failwith "consumer embedding receipt requires the producer's verified dual-feed artifact"
+        consumer["consumerEmbeddingVerified"] <- JsonValue.Create(true)
+    | "propagation", Some id, Some commit, _, _, _ ->
+        let target = release id
+        if commit <> stringProperty "mainCommit" target then failwith "propagation receipt must bind the release's merged-main commit"
+        target["downstreamVerified"] <- JsonValue.Create(true)
+    | "canonical-registry", None, None, _, Some receiptPath, Some receiptHash ->
+        if not (File.Exists receiptPath) || sha256 receiptPath <> receiptHash then failwith "canonical registry receipt is stale or does not match its registry snapshot"
+        registry["path"] <- JsonValue.Create(receiptPath)
+        registry["sha256"] <- JsonValue.Create(receiptHash)
+        registry["canonicalMerged"] <- JsonValue.Create(true)
+    | _ -> failwith "completion receipt fields are inconsistent"
+    let receipts = array (property "completionReceipts" (obj (property "evidence" state)))
+    let snapshot = evidence full
+    if not (receipts |> Seq.map obj |> Seq.exists (fun current -> stringProperty "sha256" current = stringProperty "sha256" snapshot)) then receipts.Add(snapshot)
+    validateEvidence true state
     state["nextAction"] <- nextAction state
     write path state
     printfn "%s" (state["nextAction"].ToJsonString(JsonSerializerOptions(WriteIndented = true)))
@@ -458,6 +546,7 @@ try
     | "plan" -> plan ()
     | "advance" -> advance ()
     | "verify" -> verify ()
+    | "import" -> importReceipt ()
     | "selftest" -> selftest ()
     | "--help" | "-h" -> usage ()
     | _ -> usage (); failwith $"unknown command: {command}"
