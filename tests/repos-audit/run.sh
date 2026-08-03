@@ -334,7 +334,7 @@ set -uo pipefail
 if [ "${1:-}" = api ] && [ "${2:-}" = graphql ]; then
   [ "${FSGG_FIX_ISSUE_POLICY:-}" != unreadable ] || { echo 'gh: API rate limit exceeded (HTTP 403)' >&2; exit 1; }
   policy="${FSGG_FIX_ISSUE_POLICY:-COLLABORATORS_ONLY}"
-  printf '{"data":{"repository":{"issueCreationPolicy":"%s","hasIssuesEnabled":true}}}\n' "$policy"
+  printf '{"data":{"repository":{"issueCreationPolicy":"%s","hasIssuesEnabled":%s}}}\n' "$policy" "${FSGG_FIX_ISSUES_ENABLED:-true}"
   exit 0
 fi
 # args: api [-H ...] <path> [--jq ...]
@@ -3859,6 +3859,11 @@ out="$(FSGG_FIX_ISSUE_POLICY=EVERYONE run_reg "$REG" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'issue creation policy is EVERYONE' && printf '%s' "$out" | grep -q 'allow issue creation beyond collaborators'; } \
   && ok "issue intake: non-collaborator policy is a finding" \
   || bad "open issue creation must fail the roster audit" "rc=$rc: $out"
+
+out="$(FSGG_FIX_ISSUE_POLICY=EVERYONE FSGG_FIX_ISSUES_ENABLED=false run_reg "$REG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'issue creation policy is EVERYONE'; } \
+  && ok "issue intake: disabled Issues does not falsely require an intake policy" \
+  || bad "disabled Issues must be compliant regardless of dormant policy" "rc=$rc: $out"
 
 out="$(FSGG_FIX_ISSUE_POLICY=unreadable run_reg "$REG" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'issue-creation policy no-verdict' && printf '%s' "$out" | grep -q 'Nothing was proven about public issue intake'; } \

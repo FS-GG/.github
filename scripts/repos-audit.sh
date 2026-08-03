@@ -2863,8 +2863,16 @@ while IFS= read -r policy_repo; do
     echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: $(gh_last_err)" >&2
     issue_policy_undetermined=$((issue_policy_undetermined + 1)); continue
   }
+  issues_enabled="$(jq -r '.data.repository.hasIssuesEnabled | if type == "boolean" then tostring else empty end' <<<"$policy_json")"
   policy_value="$(jq -r '.data.repository.issueCreationPolicy // empty' <<<"$policy_json")"
-  if [ "$policy_value" = "COLLABORATORS_ONLY" ]; then
+  if [ -z "$issues_enabled" ]; then
+    echo "::error::repos-audit: $policy_repo — issue-creation policy no-verdict: hasIssuesEnabled was unreadable." >&2
+    issue_policy_undetermined=$((issue_policy_undetermined + 1))
+  elif [ "$issues_enabled" = "false" ]; then
+    # No issue intake surface exists. Acceptance grades the collaborator-only policy only when
+    # Issues are enabled; retaining the typed flag avoids falsely failing a disabled repository.
+    issue_policy_graded=$((issue_policy_graded + 1))
+  elif [ "$policy_value" = "COLLABORATORS_ONLY" ]; then
     issue_policy_graded=$((issue_policy_graded + 1))
   else
     echo "::error::repos-audit: $policy_repo — issue creation policy is ${policy_value:-unreadable}; expected COLLABORATORS_ONLY." >&2

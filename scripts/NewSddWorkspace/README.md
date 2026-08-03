@@ -53,7 +53,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--repo <owner>/<repo>` | this workspace's own repo — its identity on the board and the basis for its chore-lock ref. In the wizard its owner defaults the board org; on the CLI it drives the non-FS-GG chore-lock next-step hint. Not consumed as env (the engine resolves the repo from the git remote). |
 | `--public-board` / `--private-board` | Explicit desired visibility for a product Project; omitted preserves an existing Project. Public requires `--trusted-writers`. |
 | `--trusted-writers <team-or-user,…>` | Explicit Project writer allowlist. Required with `--public-board`; it is recorded in security provenance, never inferred from viewer permissions. |
-| `secure <workspace> --project … --verified-base-permission READ` | After checking **Project → Settings → Manage access**, re-validates the supported visibility/writer facts and clears only the matching base-access obligation. The exact command is recorded in scaffold provenance. |
+| `secure <workspace> --project … --verified-base-permission READ --verified-exclusive-writers <ids>` | After checking **Project → Settings → Manage access**, re-validates the supported visibility/requested-grant facts and records both human facts: base `Read` and the exact effective/exclusive writer set. It clears only the matching obligation when both assertions equal the requested allowlist. |
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
 
@@ -75,9 +75,11 @@ remains narrower. Project `Write` authorizes project-only draft issues—GitHub 
 not offer a draft-item `COLLABORATORS_ONLY` switch. See the durable
 [public-content trust boundary](../../docs/coordination/untrusted-content-boundary.md)
 for the remaining untrusted inputs and operator verification path. The first
-Project secure run records the observable visibility/writer receipt and one
-deduplicated base-access obligation; its recorded `--verified-base-permission
-READ` resume command rechecks the observable facts and converges that obligation.
+Project secure run records observable visibility and requested-grant payload facts
+and one deduplicated access obligation. The mutation payload is not claimed as an
+effective-writer read. Its recorded `--verified-base-permission READ
+--verified-exclusive-writers …` resume command rechecks the observable facts and
+converges only when the human-observed exclusive writer set matches the allowlist.
 
 ### Coordination by default (ADR-0019)
 

@@ -155,18 +155,18 @@ set -euo pipefail
 printf '%s\n' "$*" >> "${PROJECT_LOG:?}"
 all=" $* "
 case "$all" in
+  *'updateProjectV2(input'*)
+    case "${PROJECT_MODE:-success}" in
+      visibility-change) : > "${PROJECT_STATE:?}" ;;
+      visibility-stale) : ;;
+      *) echo 'unexpected visibility mutation' >&2; exit 75 ;;
+    esac
+    printf '%s\n' '{"data":{"updateProjectV2":{"projectV2":{"public":true}}}}' ;;
   *'updateProjectV2Collaborators'*)
-    case "$all" in
-      *'$collaborators:[ProjectV2Collaborator!]!'*'collaborators:$collaborators'*'collaborators{totalCount nodes{'*) ;;
-      *) echo 'schema-invalid collaborator mutation' >&2; exit 71 ;;
-    esac
-    case "$all" in *'userId:U_'*|*'teamId:T_'*) echo 'node id interpolated into GraphQL' >&2; exit 72 ;; esac
-    case "$all" in *'collaborators[][userId]=U_1'*'collaborators[][role]=WRITER'*'collaborators[][teamId]=T_1'*) ;;
-      *) echo 'collaborator variables were not structured JSON fields' >&2; exit 73 ;;
-    esac
+    python3 "${PROJECT_GRAPHQL_VALIDATOR:?}" "$@"
     case "${PROJECT_MODE:-success}" in
       mutation-failure) echo 'TOKEN-SHOULD-NOT-LEAK' >&2; exit 1 ;;
-      unexpected-writer) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"U_bad","login":"mallory"}]}}}}' ;;
+      grant-payload-mismatch) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"U_bad","login":"mallory"}]}}}}' ;;
       *) printf '%s\n' '{"data":{"updateProjectV2Collaborators":{"collaborators":{"totalCount":2,"nodes":[{"id":"U_1","login":"alice"},{"id":"T_1","slug":"platform"}]}}}}' ;;
     esac ;;
   *'teams(first:100)'*) printf '%s\n' '{"data":{"organization":{"teams":{"nodes":[{"id":"T_1","slug":"platform"}]}}}}' ;;
@@ -176,6 +176,8 @@ case "$all" in
       unreadable) exit 1 ;;
       missing) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[]}}}}' ;;
       private) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
+      visibility-change) [ -f "${PROJECT_STATE:?}" ] && public=true || public=false; printf '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":%s}]}}}}\n' "$public" ;;
+      visibility-stale) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":false}]}}}}' ;;
       *) printf '%s\n' '{"data":{"viewer":{"login":"fixture"},"organization":{"projectsV2":{"nodes":[{"id":"P_1","title":"Roadmap","public":true}]}}}}' ;;
     esac ;;
   *) echo 'unexpected GraphQL route' >&2; exit 74 ;;
@@ -183,10 +185,18 @@ esac
 EOF
 chmod +x "$WORK/project-bin/gh"
 
+if python3 "$HERE/validate_project_graphql.py" \
+  'query=mutation($id:ID!,$collaborators:[ProjectV2Collaborator!]!){updateProjectV2Collaborators(input:{projectId:$id,collaborators:$collaborators}){collaborators{totalCount}}' \
+  id=P_1 'collaborators[][userId]=U_1' 'collaborators[][role]=WRITER' >/dev/null 2>&1; then
+  bad "Project GraphQL contract parser rejects syntax-invalid documents" "invalid GraphQL unexpectedly parsed"
+else
+  ok "Project GraphQL contract parser rejects syntax-invalid documents"
+fi
+
 run_project() {
   local mode="$1"; shift
   local rc=0
-  PROJECT_MODE="$mode" PROJECT_LOG="$WORK/project.log" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
+  PROJECT_MODE="$mode" PROJECT_STATE="$WORK/project-state-$mode" PROJECT_LOG="$WORK/project.log" PROJECT_GRAPHQL_VALIDATOR="$HERE/validate_project_graphql.py" PATH="$WORK/project-bin:$DOTNET_DIR:/usr/bin:/bin" \
     dotnet "$DLL" "$@" >"$WORK/project.out" 2>&1 || rc=$?
   return "$rc"
 }
@@ -195,6 +205,7 @@ project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap 
 if [ "$project_rc" -eq 1 ] && grep -q 'partial verified receipt:' "$WORK/project.out" \
   && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification" and .target=="acme/Roadmap")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
   && [ "$(jq '[.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="partial" and .basePermission=="unverified")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ] \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .unverifiedFacts | index("effective-exclusive-writer-set")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
   && [ "$(jq '.verifiedSecurityReceipts[] | select(.kind=="project-access") | .trustedWriters | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 2 ] \
   && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
   ok "secure Project uses typed variables and persists one partial receipt plus exact human obligation"
@@ -210,10 +221,17 @@ if [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-v
 else
   bad "Project partial resume must not grow duplicate obligations" "$(cat "$PROJECT_WORK/.fsgg/scaffold-provenance.json")"
 fi
-project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ || project_rc=$?
+# A human observation that includes an unexpected effective writer cannot discharge the obligation.
+project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ --verified-exclusive-writers alice,team:platform,mallory || project_rc=$?
+if [ "$project_rc" -ne 0 ] && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 1 ]; then
+  ok "unexpected effective writer keeps the exact human obligation pending"
+else
+  bad "human completion must reject an effective writer outside the allowlist" "rc=$project_rc: $(cat "$WORK/project.out")"
+fi
+project_rc=0; run_project success secure "$PROJECT_WORK" --project acme/Roadmap --trusted-writers alice,team:platform --verified-base-permission READ --verified-exclusive-writers alice,team:platform || project_rc=$?
 if [ "$project_rc" -eq 0 ] \
   && [ "$(jq '[.securityObligations[] | select(.kind=="project-base-access-human-verification")] | length' "$PROJECT_WORK/.fsgg/scaffold-provenance.json")" -eq 0 ] \
-  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-base-access" and .basePermission=="READ")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+  && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .verificationState=="verified-with-human-access-review" and .basePermission=="READ" and (.humanVerifiedFacts.effectiveExclusiveWriters | length)==2)' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
   && jq -e '.securityObligations[] | select(.kind=="repository-issue-policy")' "$PROJECT_WORK/.fsgg/scaffold-provenance.json" >/dev/null; then
   ok "Project human verification resume rechecks supported facts and clears only its base obligation"
 else
@@ -222,7 +240,7 @@ fi
 
 # Production no-verdict matrix: each route must leave provenance byte-identical and redact tool
 # output. The unexpected-writer leg proves the mutation payload itself is checked, not just reached.
-for project_case in mutation-failure unexpected-writer unreadable missing; do
+for project_case in mutation-failure grant-payload-mismatch unreadable missing; do
   CASE_PROJECT="$WORK/project-$project_case"; mkdir -p "$CASE_PROJECT/.fsgg"
   printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$CASE_PROJECT/.fsgg/scaffold-provenance.json"
   cp "$CASE_PROJECT/.fsgg/scaffold-provenance.json" "$CASE_PROJECT/before.json"
@@ -231,6 +249,25 @@ for project_case in mutation-failure unexpected-writer unreadable missing; do
     ok "Project $project_case is a redacted no-verdict with durable state unchanged"
   else
     bad "Project $project_case must fail closed without corrupting provenance" "rc=$project_rc: $(cat "$WORK/project.out")"
+  fi
+done
+
+# Visibility is a separate typed state transition: the successful leg must mutate then re-read the
+# requested value; the stale leg must fail and preserve provenance byte-for-byte.
+for visibility_case in visibility-change visibility-stale; do
+  VIS_WORK="$WORK/project-$visibility_case"; mkdir -p "$VIS_WORK/.fsgg"
+  printf '%s\n' '{"securityObligations":[{"kind":"project-access","target":"acme/Roadmap"}]}' > "$VIS_WORK/.fsgg/scaffold-provenance.json"
+  cp "$VIS_WORK/.fsgg/scaffold-provenance.json" "$VIS_WORK/before.json"
+  rm -f "$WORK/project-state-$visibility_case"
+  project_rc=0; run_project "$visibility_case" secure "$VIS_WORK" --project acme/Roadmap --public-board --trusted-writers alice,team:platform || project_rc=$?
+  if [ "$visibility_case" = visibility-change ]; then
+    [ "$project_rc" -eq 1 ] && jq -e '.verifiedSecurityReceipts[] | select(.kind=="project-access" and .observedVisibility=="public")' "$VIS_WORK/.fsgg/scaffold-provenance.json" >/dev/null \
+      && ok "Project visibility mutation is re-read before partial receipt" \
+      || bad "changed Project visibility must be re-read and persisted" "rc=$project_rc: $(cat "$WORK/project.out")"
+  else
+    [ "$project_rc" -ne 0 ] && cmp -s "$VIS_WORK/before.json" "$VIS_WORK/.fsgg/scaffold-provenance.json" \
+      && ok "stale Project visibility reread fails closed with provenance unchanged" \
+      || bad "stale Project visibility must not produce a receipt" "rc=$project_rc: $(cat "$WORK/project.out")"
   fi
 done
 

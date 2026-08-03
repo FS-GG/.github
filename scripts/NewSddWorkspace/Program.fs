@@ -573,21 +573,32 @@ let private upsertSecurityReceipt (root: JsonObject) (kind: string) (targetField
     receipts.Add receipt
     root.["verifiedSecurityReceipts"] <- receipts
 
-let private projectReceiptJson (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) =
+let private projectReceiptJson (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) =
     let receipt = JsonObject()
     receipt.["kind"] <- JsonValue.Create "project-access"
     receipt.["project"] <- JsonValue.Create project
     receipt.["projectId"] <- JsonValue.Create projectId
     receipt.["observedVisibility"] <- JsonValue.Create(if isPublic then "public" else "private")
     receipt.["actor"] <- JsonValue.Create actor
-    receipt.["source"] <- JsonValue.Create "GitHub GraphQL updateProjectV2Collaborators payload and ProjectV2 visibility re-read"
-    receipt.["verificationState"] <- JsonValue.Create(if basePermission.IsSome then "verified-with-human-base-access" else "partial")
+    receipt.["source"] <- JsonValue.Create "GitHub GraphQL requested-grant payload and ProjectV2 visibility re-read"
+    receipt.["verificationState"] <- JsonValue.Create(if basePermission.IsSome && effectiveWriters.IsSome then "verified-with-human-access-review" else "partial")
     receipt.["basePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
-    let verifiedFacts = JsonArray(JsonValue.Create "visibility", JsonValue.Create "writer-allowlist")
+    let verifiedFacts = JsonArray(JsonValue.Create "visibility", JsonValue.Create "requested-writer-grant-payload")
     receipt.["verifiedFacts"] <- verifiedFacts
     let unverifiedFacts = JsonArray()
     if basePermission.IsNone then unverifiedFacts.Add(JsonValue.Create "organization-base-permission")
+    if effectiveWriters.IsNone then unverifiedFacts.Add(JsonValue.Create "effective-exclusive-writer-set")
     receipt.["unverifiedFacts"] <- unverifiedFacts
+    match effectiveWriters with
+    | Some values ->
+        let humanFacts = JsonObject()
+        humanFacts.["source"] <- JsonValue.Create "human verification at Project → Settings → Manage access"
+        humanFacts.["organizationBasePermission"] <- JsonValue.Create(basePermission |> Option.defaultValue "unverified")
+        let observed = JsonArray()
+        values |> List.iter (fun writer -> observed.Add(JsonValue.Create writer))
+        humanFacts.["effectiveExclusiveWriters"] <- observed
+        receipt.["humanVerifiedFacts"] <- humanFacts
+    | None -> ()
     let writerRows = JsonArray()
     writers
     |> List.iter (fun writer ->
@@ -608,8 +619,8 @@ let private projectBaseAccessObligation (project: string) (writers: ResolvedProj
     let trustedWriters = JsonArray()
     writers |> List.iter (fun writer -> trustedWriters.Add(JsonValue.Create writer.Requested))
     obligation.["trustedWriters"] <- trustedWriters
-    obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read and the explicit trusted writer allowlist."
-    obligation.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure <workspace> --project %s --trusted-writers %s --verified-base-permission READ" project requested)
+    obligation.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify organization base permission Read AND that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist."
+    obligation.["resume"] <- JsonValue.Create(sprintf "new-sdd-workspace secure <workspace> --project %s --trusted-writers %s --verified-base-permission READ --verified-exclusive-writers %s" project requested requested)
     obligation.["state"] <- JsonValue.Create "pending-human-verification"
     obligation
 
@@ -650,7 +661,7 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
         let projectTarget = sprintf "%s/%s" opts.BoardOwner opts.BoardTitle
         match report.Project with
         | ProjectPartiallyVerified(project, id, isPublic, actor, writers) ->
-            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None)
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project id isPublic actor writers None None)
             obligations.Add(projectBaseAccessObligation project writers)
         | _ ->
             let project = JsonObject()
@@ -661,7 +672,7 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
             let writers = JsonArray()
             opts.TrustedWriters |> List.iter (fun writer -> writers.Add(JsonValue.Create writer))
             project.["trustedWriters"] <- writers
-            project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/writer verification, then its exact --verified-base-permission READ resume command."
+            project.["humanVerification"] <- JsonValue.Create "Project → Settings → Manage access; verify base permission Read and that the effective/exclusive Write actor set exactly equals the explicit trusted writer allowlist. Run the recorded secure command after supported visibility/requested-grant verification, then its exact two-fact resume command."
             project.["state"] <- JsonValue.Create "pending-human-verification"
             obligations.Add project
         root.["securityObligations"] <- obligations
@@ -1184,7 +1195,7 @@ let private usage () =
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey][[workspace]] --repo owner/repository | --project owner/title (--public-board|--private-board) --trusted-writers ids[/]"
-    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ[/]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]secure[/] [grey]<workspace> --project owner/title --trusted-writers ids --verified-base-permission READ --verified-exclusive-writers ids[/]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Subcommands[/]"
@@ -1193,7 +1204,7 @@ let private usage () =
     AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
     AnsiConsole.MarkupLine "  [aqua]secure[/] --repo <owner/repo>  apply and verify collaborator-only repository issue intake"
     AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> (--public-board|--private-board) --trusted-writers <ids>"
-    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ"
+    AnsiConsole.MarkupLine "  [aqua]secure[/] <workspace> --project <owner/title> --trusted-writers <ids> --verified-base-permission READ --verified-exclusive-writers <ids>"
     AnsiConsole.MarkupLine "                        apply/re-read observable Project visibility and writers; retain base-Read human verification"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
@@ -1210,7 +1221,7 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--public-board[/]        request a public-readable product Project (requires --trusted-writers)"
     AnsiConsole.MarkupLine "  [green]--private-board[/]       request a private product Project"
     AnsiConsole.MarkupLine "  [green]--trusted-writers[/] <ids> comma-separated explicit Project team/user writer allowlist"
-    AnsiConsole.MarkupLine "  [green]--verified-base-permission[/] READ records the operator's Manage access verification after re-validating observable Project facts"
+    AnsiConsole.MarkupLine "  [green]--verified-base-permission[/] READ and [green]--verified-exclusive-writers[/] <ids> record both Manage access facts after re-validating observable Project facts"
     AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
     AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
@@ -2102,7 +2113,7 @@ let private clearRepositorySecurityObligation (target: string) (repository: stri
             Ok()
     with ex -> Error("security provenance persistence failed: " + ex.Message)
 
-let private persistProjectSecurityReceipt (target: string) (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) : Result<unit, string> =
+let private persistProjectSecurityReceipt (target: string) (project: string) (projectId: string) (isPublic: bool) (actor: string) (writers: ResolvedProjectWriter list) (basePermission: string option) (effectiveWriters: string list option) : Result<unit, string> =
     let path = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
     try
         if not (File.Exists path) then
@@ -2122,9 +2133,9 @@ let private persistProjectSecurityReceipt (target: string) (project: string) (pr
                     with _ -> true)
                 |> Seq.iter (fun entry -> kept.Add(entry.DeepClone()))
             | _ -> ()
-            if basePermission.IsNone then kept.Add(projectBaseAccessObligation project writers)
+            if basePermission.IsNone || effectiveWriters.IsNone then kept.Add(projectBaseAccessObligation project writers)
             root.["securityObligations"] <- kept
-            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission)
+            upsertSecurityReceipt root "project-access" "project" project (projectReceiptJson project projectId isPublic actor writers basePermission effectiveWriters)
             File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
             Ok()
     with ex -> Error("security provenance persistence failed: " + ex.Message)
@@ -2148,7 +2159,7 @@ let private runSecure (target: string option) (repository: string) : int =
         AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape repo) (Markup.Escape reason))
         1
 
-let private runSecureProject (target: string) (board: string) (visibility: bool option) (writers: string list) (verifiedBasePermission: string option) : int =
+let private runSecureProject (target: string) (board: string) (visibility: bool option) (writers: string list) (verifiedBasePermission: string option) (verifiedExclusiveWriters: string list option) : int =
     let owner, title = parseBoard board
     match applyProjectVisibility owner title visibility with
     | ProjectPending(project, reason) ->
@@ -2157,17 +2168,28 @@ let private runSecureProject (target: string) (board: string) (visibility: bool 
     | ProjectObserved(project, _, _, _) ->
         match applyProjectWriters owner title writers with
         | ProjectPartiallyVerified(_, id, isPublic, actor, resolved) ->
-            match verifiedBasePermission with
-            | Some permission when permission <> "READ" ->
-                AnsiConsole.MarkupLine "[red]invalid human verification:[/] --verified-base-permission must be READ"
-                2
-            | permission ->
-                match persistProjectSecurityReceipt target project id isPublic actor resolved permission with
+            let requestedSet = writers |> Set.ofList
+            let verifiedSet = verifiedExclusiveWriters |> Option.map Set.ofList
+            let humanVerification =
+                match verifiedBasePermission, verifiedExclusiveWriters with
+                | None, None -> Ok(None, None)
+                | Some "READ", Some values when verifiedSet = Some requestedSet -> Ok(Some "READ", Some values)
+                | Some permission, _ when permission <> "READ" -> Error "--verified-base-permission must be READ"
+                | Some _, None -> Error "--verified-base-permission requires --verified-exclusive-writers"
+                | None, Some _ -> Error "--verified-exclusive-writers requires --verified-base-permission READ"
+                | Some _, Some _ -> Error "the human-verified effective/exclusive writer set must exactly match --trusted-writers"
+            match humanVerification with
+            | Error reason ->
+                persistProjectSecurityReceipt target project id isPublic actor resolved None None |> ignore
+                AnsiConsole.MarkupLine(sprintf "[yellow]pending human verification:[/] %s — %s; the base/effective-writer obligation remains" (Markup.Escape project) (Markup.Escape reason))
+                1
+            | Ok(permission, effectiveWriters) ->
+                match persistProjectSecurityReceipt target project id isPublic actor resolved permission effectiveWriters with
                 | Error reason ->
                     AnsiConsole.MarkupLine(sprintf "[yellow]pending:[/] %s — %s" (Markup.Escape project) (Markup.Escape reason))
                     1
-                | Ok() when permission.IsSome ->
-                    AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s visibility, writer allowlist, and human-verified base READ receipt converged" (Markup.Escape project))
+                | Ok() when permission.IsSome && effectiveWriters.IsSome ->
+                    AnsiConsole.MarkupLine(sprintf "[green]verified:[/] %s visibility/requested grants plus human-verified base READ and effective/exclusive writer set converged" (Markup.Escape project))
                     0
                 | Ok() ->
                     AnsiConsole.MarkupLine(sprintf "[yellow]partial verified receipt:[/] %s; requested writers [[%s]]; verify base Read at Project → Settings → Manage access, then run the receipt's resume command" (Markup.Escape project) (Markup.Escape(String.Join(",", writers))))
@@ -2211,11 +2233,11 @@ let main argv =
     | [ "secure"; "--repo"; repository ] -> runSecure None repository
     | [ "secure"; target; "--repo"; repository ] -> runSecure (Some target) repository
     | [ "secure"; target; "--project"; board; "--public-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None
+        runSecureProject target board (Some true) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
     | [ "secure"; target; "--project"; board; "--private-board"; "--trusted-writers"; writers ] ->
-        runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None
-    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission ] ->
-        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission)
+        runSecureProject target board (Some false) (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) None None
+    | [ "secure"; target; "--project"; board; "--trusted-writers"; writers; "--verified-base-permission"; permission; "--verified-exclusive-writers"; exclusiveWriters ] ->
+        runSecureProject target board None (writers.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray) (Some permission) (Some(exclusiveWriters.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map (fun writer -> writer.Trim()) |> Array.filter (String.IsNullOrWhiteSpace >> not) |> List.ofArray))
     | "secure" :: _ ->
         AnsiConsole.MarkupLine "[red]error:[/] secure requires exactly --repo owner/repository"
         2

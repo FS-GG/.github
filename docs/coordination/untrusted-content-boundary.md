@@ -43,8 +43,9 @@ scaffolder records a human obligation rather than claiming the board is secured.
 The operator verifies **Project → Settings → Manage access**, confirms base
 permission is `Read` and the explicit writer allowlist, then runs the exact
 `new-sdd-workspace secure <workspace> --project owner/title --trusted-writers …
---verified-base-permission READ` command recorded in scaffold provenance. That
-command rechecks the supported Project visibility and collaborator mutation
-receipt before it clears only the matching human obligation. Repository policy
+--verified-base-permission READ --verified-exclusive-writers …` command recorded
+in scaffold provenance. That command rechecks Project visibility and the
+requested-grant mutation payload, then binds the human-observed effective/exclusive
+writer set before it clears only the matching human obligation. Repository policy
 is similarly re-checked with the recorded `new-sdd-workspace secure <workspace>
 --repo owner/repository` command.
