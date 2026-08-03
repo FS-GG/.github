@@ -173,15 +173,15 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-001]
     obligationRefs: [EV006]
-    artifacts: [work/2136-generated-facts/test-results/package-verification.txt]
+    artifacts: [work/2136-generated-facts/test-results/package-junit.xml]
     sourceRefs:
       - kind: verification
         path: src/FS.GG.Kit/verify-package.sh
     result: pass
     synthetic: false
     observedRun:
-      source: work/2136-generated-facts/test-results/package-verification.txt
-      digest: "sha256:5d040273ce63e9d5dd37e747c38b482f539b6318a759f709115c40b4f80115bd"
+      source: work/2136-generated-facts/test-results/package-junit.xml
+      digest: "sha256:96a811222153347d0cbfd2d607dbbe89f11b13865c11052bbb7b6b9d59858f55"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 2
