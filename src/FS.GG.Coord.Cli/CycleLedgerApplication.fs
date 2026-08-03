@@ -34,13 +34,29 @@ module CycleLedgerApplication =
             |> Seq.map (fun unit -> { Id = text "id" unit; Dependencies = strings "dependencies" unit; Completed = bool "completed" unit; Evidence = strings "evidence" unit })
             |> List.ofSeq }
     let private cycle node = { Id = text "id" node; UnitId = text "unitId" node; Executor = text "executor" node; Repository = text "repository" node; BaseCommit = text "baseCommit" node }
+    let private receipt node =
+        let journey =
+            match (property "playerJourney" node).ValueKind with
+            | JsonValueKind.True -> Some true
+            | JsonValueKind.False -> Some false
+            | JsonValueKind.Null -> None
+            | _ -> invalidArg "playerJourney" "must be boolean or null"
+        let round = property "round" node
+        match round.TryGetInt32() with
+        | false, _ -> invalidArg "round" "must be an integer"
+        | true, value -> { Schema = text "schema" node; Provider = text "provider" node; WorkId = text "workId" node; CycleId = text "cycleId" node; SourceRevision = text "sourceRevision" node; CandidateHead = text "candidateHead" node; Verdict = text "verdict" node; Round = value; PlayerJourney = journey }
+    let private evidence node =
+        let merged = property "mergedPr" node
+        let mergedPr = match merged.ValueKind with | JsonValueKind.Null -> None | _ -> match merged.TryGetInt32() with | true, value -> Some value | _ -> invalidArg "mergedPr" "must be integer or null"
+        let mergeHead = match (property "mergeHead" node).ValueKind with | JsonValueKind.Null -> None | JsonValueKind.String -> Some(text "mergeHead" node) | _ -> invalidArg "mergeHead" "must be string or null"
+        { ImplementationHead = text "implementationHead" node; ReviewHead = text "reviewHead" node; FeedbackCycle = text "feedbackCycle" node; FeedbackActive = bool "feedbackActive" node; MergedPr = mergedPr; MergeHead = mergeHead }
     let private render options action =
         let value = match action with | Resume cycle -> {| action = "resume"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Register cycle -> {| action = "register"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Advance cycle -> {| action = "advance"; cycleId = cycle.Id; unitId = cycle.UnitId |} | Complete -> {| action = "complete"; cycleId = ""; unitId = "" |}
         match options.Render with | Json -> printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.cycle-ledger/1"; verdict = "next"; action = value.action; cycleId = value.cycleId; unitId = value.unitId |}) | Text -> printfn "%s %s" value.action value.cycleId
         ExitCode.toInt ExitCode.Green
     let run options =
         try
-            let action = match options.Args with | [ value ] -> value | _ -> invalidArg "cycle" "requires exactly one action: inspect, register, or complete"
+            let action = match options.Args with | [ value ] -> value | _ -> invalidArg "cycle" "requires exactly one action: inspect, register, advance, or complete"
             use document = JsonDocument.Parse(input options)
             let root = document.RootElement
             let model = ledger root
@@ -61,5 +77,10 @@ module CycleLedgerApplication =
                 match complete model accepted (strings "rollupCycleIds" root) with
                 | Ok transition -> render options transition
                 | Error errors -> fail (String.concat "; " errors)
-            | _ -> fail "unknown action; expected inspect, register, or complete"
+            | "advance" ->
+                let target = cycle (property "cycle" root)
+                match advance target (receipt (property "implementation" root)) (receipt (property "review" root)) (receipt (property "feedback" root)) (evidence (property "evidence" root)) with
+                | Ok transition -> render options transition
+                | Error errors -> fail (String.concat "; " errors)
+            | _ -> fail "unknown action; expected inspect, register, advance, or complete"
         with error -> fail error.Message
