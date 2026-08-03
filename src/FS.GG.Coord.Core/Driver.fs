@@ -84,10 +84,11 @@ module Driver =
             match values with
             | [ value ] -> Some value
             | _ -> errors.Add $"exactly one %s{what} marker is required"; None
-        match requireOne "independent-review" initial, requireOne "review-accepted" acceptances with
+        let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
+        match requireOne Protocol.reviewPolicy.InitialMarker initial, requireOne Protocol.reviewPolicy.AcceptanceMarker acceptances with
         | Some first, Some accepted ->
             match field "critic" first.Body, field "reviewed-head" first.Body, field "verdict" first.Body,
-                  field "accepted-head" accepted.Body, field "initial-review" accepted.Body, field "latest-confirmation" accepted.Body with
+                  field hostFields[0] accepted.Body, field hostFields[1] accepted.Body, field hostFields[2] accepted.Body with
             | Ok critic, Ok initialHead, Ok initialVerdict, Ok acceptedHead, Ok acceptedInitialUrl, Ok acceptedLatestUrl ->
                 if System.String.IsNullOrWhiteSpace first.Url then errors.Add "the initial review comment URL is missing"
                 if initialVerdict <> "pass" && initialVerdict <> "changes-required" then
