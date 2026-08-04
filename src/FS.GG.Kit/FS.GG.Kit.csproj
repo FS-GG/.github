@@ -401,7 +401,15 @@
          §3 worker guidance gains the matching implementer-side obligation. This changes
          receiver-visible required review and authoring behavior while preserving the packed member set
          and destinations. -->
-    <Version>0.37.0</Version>
+    <!-- 0.37.0 -> 0.38.0, a MINOR (.github#2220): the packed check-board finding table is
+         OPERATOR-PRESCRIPTIVE — §6 step 3 is a hand-run `set-field` batch write whose Status value is
+         read straight off it — and BLOCKER-CLEARED's row now names two columns instead of one. A
+         receiver reconciling a row that declares `Paths: none`, or declares no touch-set line at all,
+         must write `Backlog` where it previously wrote `Ready`: `Ready` advertises a row no scheduler
+         can ever admit, which is a permanently unfillable lane. That is a change in what a receiver
+         DOES, not merely in what it reads, so it is a minor rather than a patch. The packed member set
+         and destinations are unchanged. -->
+    <Version>0.38.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
