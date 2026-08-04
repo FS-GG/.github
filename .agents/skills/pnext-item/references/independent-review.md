@@ -101,10 +101,20 @@ it. So this is a numbered step, not a virtue some critics happen to have.
 1. **Inventory the gates the change touches.** A gate is anything whose purpose is to refuse: a test,
    an assertion, a fixture case, a checker script, a workflow step, a schema or parser rule. The
    inventory is bounded to gates the diff **adds or modifies** — never the whole suite.
-2. **Invert each one exactly once.** Break the subject the gate claims to protect, or the gate's own
-   decisive predicate, and run the suite. Record the exact mutation and the exact observed result
-   under `Verification:`. One mutation per touched gate is the bound; this step is cheap by design and
-   must not grow into a suite-wide sweep.
+2. **Invert each one exactly once, by breaking its SUBJECT.** Break the thing the gate claims to
+   protect — not the gate's own predicate — and run the suite. Record the exact mutation and the exact
+   observed result under `Verification:`. One mutation per touched gate is the bound; this step is
+   cheap by design and must not grow into a suite-wide sweep.
+
+   **Predicate inversion is not an equal alternative, and on its own it proves nothing.** Negating a
+   gate's own comparison reds necessarily, whatever the gate is pointed at. It demonstrates that the
+   assertion is reachable and executed — never that it is connected to its subject, which is the only
+   thing in question. `C4` in step 4 is the proof: it stayed 30/30 green under a subject mutation, so
+   predicate inversion would have certified as `JUSTIFIED` the exact decorative gate this section
+   exists to catch. `scripts/gate-mutate.py` breaks subjects for precisely this reason — it does not
+   read gates. Where a subject mutation genuinely cannot be constructed, say so, record predicate
+   inversion as the strictly weaker evidence it is, and grade the gate `NOT_MEASURED` — never
+   `JUSTIFIED`.
 3. **A surviving inversion is material by definition.** A gate that stays green on a mutant that broke
    its subject is a material finding — not a judgement call, not a style note, and not something a
    later round may absorb silently.
@@ -128,6 +138,17 @@ it. So this is a numbered step, not a virtue some critics happen to have.
    repaired demonstration must red on *that* mutation — not merely pass, and not merely red on some
    newly added one. A repair that adds cases without re-running the original escape has not been shown
    to close it.
+8. **When a repair strengthens what a gate ASSERTS, re-check the evidence for the strengthened
+   assertion.** Making a gate's claim broader, more specific, or more confident changes what must be
+   proved, and the evidence that supported the weaker claim does not carry forward to the stronger one.
+   On `FS.GG.Templates#349` a round-1 repair strengthened a failure message to say the complete
+   published set had been compared — *"so this is not a search-depth artifact"* — while the predicate
+   still asked only whether a ceiling had been hit. A skipped download then produced a confident
+   upstream accusation in better prose than before the repair. **A gate that gains eloquence faster
+   than correctness is worse than one that stayed vague**, because the vague one did not invite
+   reliance on a claim nothing checked. So the reviewer re-derives the evidence for what the gate now
+   says, not for what it said when the evidence was gathered — and a strengthened assertion with
+   unchanged evidence is a material finding, exactly like a surviving inversion.
 
 ### The sub-shape a happy-path mutation does not catch
 

@@ -93,8 +93,15 @@ def main() -> None:
     for literal in (
         # AC1 — a numbered step, applied to every gate the change adds or modifies.
         "**Inventory the gates the change touches.**",
-        "**Invert each one exactly once.**",
-        "Break the subject the gate claims to protect",
+        # Subject-breaking is the PRIMARY form. Predicate inversion reds necessarily, so it proves
+        # reachability and never connection-to-subject: offered as an equal it would certify the very
+        # decorative gate step 4's own `C4` instance measured at 30/30 green under a subject mutation.
+        # It is a strictly weaker fallback that grades NOT_MEASURED, never JUSTIFIED.
+        "**Invert each one exactly once, by breaking its SUBJECT.**",
+        "not the gate's own predicate",
+        "**Predicate inversion is not an equal alternative, and on its own it proves nothing.**",
+        "never that it is connected to its subject",
+        "grade the gate `NOT_MEASURED` — never `JUSTIFIED`",
         # AC1 — a surviving inversion is material BY DEFINITION, never a judgement call.
         "**A surviving inversion is material by definition.**",
         "a gate the change adds or modifies stays green when inverted",
@@ -119,6 +126,14 @@ def main() -> None:
         # Repair criterion: the demonstration must catch the escape that was actually found.
         "**A repair must catch the escape that was actually found.**",
         "without re-running the original escape has not been shown to close it",
+        # Strengthened-assertion sub-shape (issue comment, FS.GG.Templates#349): a repair may broaden
+        # what a gate CLAIMS without broadening what it checks, and the evidence for the weaker claim
+        # does not carry forward. Distinct from the three world-mismatch shapes: nothing about the test
+        # world changed, only the confidence of the sentence the gate emits.
+        "**When a repair strengthens what a gate ASSERTS, re-check the evidence for the strengthened assertion.**",
+        "the evidence that supported the weaker claim does not carry forward",
+        "**A gate that gains eloquence faster than correctness is worse than one that stayed vague**",
+        "a strengthened assertion with unchanged evidence is a material finding",
         # AC6 — a worked example drawn from one of the measured instances.
         "### Worked example",
         'so that deleting the step reds too"',
