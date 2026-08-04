@@ -44,7 +44,7 @@ report that does not say what would make the route supported costs a whole run t
 is cheap: no claim is held, no lease is spent, and every item stays schedulable.
 
 **Repair-phase route.** When an ordinary three-round chain exhausts, automatically enter the
-[repair phase](../pnext-item/references/independent-review.md#repair-phase) and dispatch its fresh
+repair phase and dispatch its fresh
 implementer and fresh critic at `work-board-best`'s route instead
 of the table above:
 
