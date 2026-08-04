@@ -42,7 +42,7 @@ module Driver =
 
     val parseReviewCommentsWithFacts:
         mechanicallyRequired: bool ->
-        trustedAudit: SemanticDiff.Receipt option ->
+        trustedAudit: SemanticDiff.TrustedAudit option ->
         comments: ReviewComment list ->
             Result<ReviewChain, string list>
 

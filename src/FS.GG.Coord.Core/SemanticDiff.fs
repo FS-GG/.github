@@ -45,6 +45,23 @@ module SemanticDiff =
           Required: bool
           Occurrences: Occurrence list }
 
+    /// What the ENGINE independently established about the diff, for a chain that submits receipts.
+    ///
+    /// A receipt carries ONE rename pair, so a diff containing two distinct renames cannot be covered by
+    /// one receipt.  Checking a submitted receipt only against a recomputation of its own pair therefore
+    /// proved it honest about itself and nothing more: a receipt for 6 of 12 discovered occurrences,
+    /// over 1 of 2 changed paths, validated (.github#2144 repair-phase round 2). The author still chose
+    /// how much of the diff the gate applied to — the same class as the escalated finding.
+    ///
+    /// So both halves are carried. `Expected` proves each submitted receipt HONEST about the pair it
+    /// names; `Discovered` proves the submitted receipts COMPLETE against the population the engine
+    /// found for itself. Neither alone is sufficient and they fail with different messages.
+    type TrustedAudit =
+        { /// One engine recomputation per submitted receipt, matched by rename pair and declared paths.
+          Expected: Receipt list
+          /// Every occurrence the engine discovered across the whole diff, receipts notwithstanding.
+          Discovered: Occurrence list }
+
     let classificationName =
         function
         | StringLiteral -> "string-literal"

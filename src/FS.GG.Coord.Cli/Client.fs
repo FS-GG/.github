@@ -856,21 +856,23 @@ module Client =
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
-        let auditReceipt (comments: Driver.ReviewComment list) =
+        /// EVERY receipt the chain carries, not the one it is allowed to carry.
+        ///
+        /// A receipt names ONE rename pair, so a diff with two distinct renames cannot be covered by a
+        /// single one — and this used to return `Some` only for exactly one receipt in exactly one
+        /// comment, which made a covering submission impossible to author (.github#2144 repair-phase
+        /// round 2). Malformed encodings are dropped HERE and re-read by `Driver`, which is the layer
+        /// that reports them; this function's job is to supply the recomputations, not to grade.
+        let auditReceipts (comments: Driver.ReviewComment list) =
             comments
-            |> List.choose (fun comment ->
+            |> List.collect (fun comment ->
                 comment.Body.Split '\n'
                 |> Array.choose (fun line ->
                     let prefix = "diff-audit-receipt-v1:"
                     let line = line.Trim()
                     if line.StartsWith(prefix, StringComparison.Ordinal) then Some(line.Substring(prefix.Length).Trim()) else None)
-                |> Array.toList
-                |> function
-                    | [ encoded ] -> SemanticDiff.ofBase64 encoded |> Result.toOption
-                    | _ -> None)
-            |> function
-                | [ receipt ] -> Some receipt
-                | _ -> None
+                |> Array.toList)
+            |> List.choose (SemanticDiff.ofBase64 >> Result.toOption)
 
         let collect rows =
             rows
@@ -975,38 +977,54 @@ module Client =
                                         // manufactured from a missing one.
                                         let declared = SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
 
-                                        /// The occurrence count the threshold is measured against, read from the live
-                                        /// base/head blobs of every changed path. `None` means the reads failed, which
-                                        /// is not a zero.
-                                        let liveOccurrenceCount baseSha =
-                                            changedPaths
-                                            |> List.map (fun path -> blobPair owner repo path baseSha head)
-                                            |> collect
-                                            |> Result.map (fun files -> (SemanticDiff.discoveredOccurrences files).Length)
+                                        /// Every occurrence the engine can discover over the whole diff, read from the
+                                        /// live base/head blobs of every changed path. An `Error` means the reads
+                                        /// failed, which is emphatically not an empty inventory.
+                                        let liveOccurrences baseSha =
+                                            if List.isEmpty changedPaths then
+                                                Ok []
+                                            else
+                                                changedPaths
+                                                |> List.map (fun path -> blobPair owner repo path baseSha head)
+                                                |> collect
+                                                |> Result.map SemanticDiff.discoveredOccurrences
 
                                         let requiredFrom baseSha =
-                                            match liveOccurrenceCount baseSha with
+                                            match liveOccurrences baseSha with
                                             // Threshold satisfaction could not be DISPROVED. Fail closed.
                                             | Error _ -> true
                                             | Ok occurrences ->
-                                                SemanticDiff.activationRequired threshold occurrences commitMessage (Some itemBody)
+                                                SemanticDiff.activationRequired threshold occurrences.Length commitMessage (Some itemBody)
 
-                                        match auditReceipt comments with
-                                        | Some submitted ->
+                                        match auditReceipts comments with
+                                        | _ :: _ as submitted ->
                                             match Reads.prBaseSha ctx.Transport owner repo pr with
                                             | Error _ -> None
                                             | Ok baseSha ->
-                                                match recomputeAudit owner repo baseSha head submitted with
-                                                | Error _ -> None
-                                                | Ok trusted ->
-                                                    // `declared` and an empty changed set short-circuit for the same
-                                                    // reasons as the no-receipt arm below.
+                                                // One recomputation per submitted receipt proves each HONEST about the
+                                                // pair it names; the whole-diff discovery proves them COMPLETE. A
+                                                // receipt arm that carried only the first accepted a receipt for 6 of
+                                                // 12 discovered occurrences (round 2 of this repair phase).
+                                                let expected =
+                                                    submitted
+                                                    |> List.map (recomputeAudit owner repo baseSha head)
+                                                    |> collect
+
+                                                match expected, liveOccurrences baseSha with
+                                                | Ok expected, Ok discovered ->
                                                     let required =
-                                                        if declared then true
-                                                        elif List.isEmpty changedPaths then false
-                                                        else requiredFrom baseSha
-                                                    finish required (Some trusted)
-                                        | None ->
+                                                        declared
+                                                        || SemanticDiff.activationRequired threshold discovered.Length commitMessage (Some itemBody)
+
+                                                    finish required (Some({ Expected = expected; Discovered = discovered }: SemanticDiff.TrustedAudit))
+                                                | _ ->
+                                                    // The live facts could not be established, so the receipts cannot be
+                                                    // checked against anything. Requiring the audit while supplying NO
+                                                    // trusted facts makes the gate refuse — an unreadable diff must not
+                                                    // let unverified receipts through, which is the same fail-closed
+                                                    // rule the no-receipt arm applies to the threshold itself.
+                                                    finish true None
+                                        | [] ->
                                             if declared then
                                                 // An item/commit declaration already decides it; the blob reads
                                                 // cannot change the answer and are not worth the REST budget.

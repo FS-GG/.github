@@ -41,6 +41,15 @@ module SemanticDiff =
           Required: bool
           Occurrences: Occurrence list }
 
+    /// What the ENGINE independently established about the diff, for a chain that submits receipts.
+    /// `Expected` proves each submitted receipt honest about the pair it names; `Discovered` proves the
+    /// submitted receipts complete against the population the engine found for itself. A receipt carries
+    /// one rename pair, so honesty alone let a receipt for 6 of 12 discovered occurrences validate
+    /// (.github#2144 repair-phase round 2).
+    type TrustedAudit =
+        { Expected: Receipt list
+          Discovered: Occurrence list }
+
     val inventory:
         path: string -> before: string -> after: string -> oldToken: string -> newToken: string -> Occurrence list
 

@@ -412,6 +412,105 @@ module DriverTests =
         let errors = validateReviewChain 3 { MarkerValid = false; CriticIdentity = None; HeadSha = None; Rounds = [ 1; 3 ]; RepairPhase = false; ChecksGreen = false; HostAccepted = false; RuntimeRouteEvidence = None; DiffAuditRequired = false; DiffAuditHead = None }
         Assert.Equal(7, List.length errors)
 
+    /// .github#2144 repair-phase round 2 — honest receipts must also be COMPLETE.
+    ///
+    /// A receipt carries one rename pair, so a diff with two distinct renames cannot be covered by one.
+    /// Checking a receipt only against a recomputation of its own pair therefore proved it honest about
+    /// itself and nothing more: a receipt for 6 of 12 discovered occurrences, over 1 of 2 changed paths,
+    /// validated. The author still chose how much of the diff the gate applied to.
+    ///
+    /// The four failure causes below are asserted to be DISTINGUISHABLE, not merely all-errors. .github
+    /// #2207 is what collapsing causes into one sentence costs, and this parser is the one that bit.
+    [<Fact>]
+    let ``#2144 submitted diff audit receipts must cover every discovered occurrence`` () =
+        let review =
+            comment
+                1L
+                "https://reviews/1"
+                ("<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: head\nverdict: pass\ndiff-audit-required: true"
+                 + notMeaningful)
+
+        let acceptance fields =
+            comment
+                2L
+                "https://reviews/2"
+                ("<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1\n"
+                 + fields)
+
+        // Two files, two distinct renames, six quoted occurrences each.
+        let beforeA = [ for i in 1..6 -> $"let a%d{i} = \"oldWide\"" ] |> String.concat "\n"
+        let afterA = beforeA.Replace("oldWide", "newWide")
+        let beforeB = [ for i in 1..6 -> $"let b%d{i} = \"oldOther\"" ] |> String.concat "\n"
+        let afterB = beforeB.Replace("oldOther", "newOther")
+
+        let dispositioned =
+            List.map (fun (row: FS.GG.Coord.SemanticDiff.Occurrence) ->
+                { row with Disposition = FS.GG.Coord.SemanticDiff.IntendedContractChange })
+
+        let occurrencesA = FS.GG.Coord.SemanticDiff.inventory "src/A.fs" beforeA afterA "oldWide" "newWide"
+        let occurrencesB = FS.GG.Coord.SemanticDiff.inventory "src/B.fs" beforeB afterB "oldOther" "newOther"
+        Assert.Equal(6, List.length occurrencesA)
+        Assert.Equal(6, List.length occurrencesB)
+
+        let receiptFor path oldToken newToken occurrences =
+            FS.GG.Coord.SemanticDiff.receipt "repo" "base" "head" oldToken newToken [ path ] true occurrences
+
+        let expectedA = receiptFor "src/A.fs" "oldWide" "newWide" occurrencesA
+        let expectedB = receiptFor "src/B.fs" "oldOther" "newOther" occurrencesB
+        let submittedA = receiptFor "src/A.fs" "oldWide" "newWide" (dispositioned occurrencesA)
+        let submittedB = receiptFor "src/B.fs" "oldOther" "newOther" (dispositioned occurrencesB)
+
+        // What the engine independently established: both recomputations, and all 12 discovered.
+        let trusted: FS.GG.Coord.SemanticDiff.TrustedAudit =
+            { Expected = [ expectedA; expectedB ]
+              Discovered = occurrencesA @ occurrencesB }
+
+        let line (receipt: FS.GG.Coord.SemanticDiff.Receipt) =
+            $"diff-audit-receipt-v1: %s{FS.GG.Coord.SemanticDiff.toBase64 receipt}"
+
+        let errorsFor fields =
+            match parseReviewCommentsWithFacts true (Some trusted) [ review; acceptance fields ] with
+            | Ok _ -> []
+            | Error errors -> errors
+
+        let saysThat fragment errors =
+            errors |> List.exists (fun (error: string) -> error.Contains(fragment: string))
+
+        // 1. NOTHING SUBMITTED — its own cause, not folded into "does not cover".
+        let missing = errorsFor ""
+        Assert.True(saysThat "was not submitted" missing, $"%A{missing}")
+        Assert.False(saysThat "discovered occurrences" missing, $"%A{missing}")
+
+        // 2. MALFORMED — distinct from both absence and incompleteness.
+        let malformed = errorsFor "diff-audit-receipt-v1: not-base64"
+        Assert.True(saysThat "is malformed" malformed, $"%A{malformed}")
+        Assert.False(saysThat "was not submitted" malformed, $"%A{malformed}")
+        Assert.False(saysThat "discovered occurrences" malformed, $"%A{malformed}")
+
+        // 3. HONEST BUT INCOMPLETE — the round-2 finding. One valid receipt, half the diff.
+        let partial' = errorsFor (line submittedA)
+        Assert.True(saysThat "account for 6 of 12 discovered occurrences" partial', $"%A{partial'}")
+        Assert.False(saysThat "was not submitted" partial', $"%A{partial'}")
+        Assert.False(saysThat "is malformed" partial', $"%A{partial'}")
+
+        // 4. THE COVERING UNION — two receipts, one per discovered rename, and the gate opens.
+        match parseReviewCommentsWithFacts true (Some trusted) [ review; acceptance (line submittedA + "\n" + line submittedB) ] with
+        | Ok chain ->
+            Assert.True(chain.DiffAuditRequired)
+            Assert.Equal(Some "head", chain.DiffAuditHead)
+        | Error errors -> failwithf "the covering union must be accepted, got %A" errors
+
+        // 5. A receipt the engine never recomputed is its own cause, and is not "incomplete".
+        let unknownPair =
+            receiptFor "src/A.fs" "oldWide" "somethingElse" (dispositioned occurrencesA) |> line
+
+        let unknown = errorsFor (unknownPair + "\n" + line submittedB)
+        Assert.True(saysThat "did not recompute" unknown, $"%A{unknown}")
+
+        // 6. Honesty still binds: a forged base on one receipt of an otherwise covering union.
+        let forged = { submittedA with BaseSha = "forged" } |> line
+        Assert.True(saysThat "is stale" (errorsFor (forged + "\n" + line submittedB)))
+
     [<Fact>]
     let ``#2144 required diff audit binds the complete receipt to the accepted head`` () =
         let review =
@@ -470,6 +569,9 @@ module DriverTests =
             { review with
                 Body = review.Body.Replace("diff-audit-required: true", "diff-audit-required: false") }
 
-        let callerCanDisable = Result.isOk(parseReviewCommentsWithFacts true (Some trusted) [ optedOut; valid ])
+        let trustedAudit: FS.GG.Coord.SemanticDiff.TrustedAudit =
+            { Expected = [ trusted ]; Discovered = trusted.Occurrences }
+
+        let callerCanDisable = Result.isOk(parseReviewCommentsWithFacts true (Some trustedAudit) [ optedOut; valid ])
         Assert.False(callerCanDisable)
         Assert.True(Result.isError(parseReviewCommentsWithFacts true None [ optedOut; acceptance "" ]))

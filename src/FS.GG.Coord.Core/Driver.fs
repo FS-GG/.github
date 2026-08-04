@@ -32,7 +32,7 @@ module Driver =
         { Id: int64; Url: string; Body: string }
 
     let private parseReviewCommentsCore
-        (trustedFacts: (bool * SemanticDiff.Receipt option) option)
+        (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
         (comments: ReviewComment list)
         =
         let markerText name = $"<!-- fsgg:%s{name}:v1 -->"
@@ -224,30 +224,81 @@ module Driver =
 
                 let effectiveAuditRequired = auditRequired || mechanicallyRequired
 
+                // A receipt names ONE rename pair, so a chain may carry several and the gate is only
+                // satisfied by their UNION.  `fieldValues`, not `field`: `field` fails closed on a
+                // duplicate key, which is right for a single-valued field and is exactly what made a
+                // second receipt unpostable — and therefore what made a covering receipt impossible to
+                // author for a two-rename diff (.github#2144 repair-phase round 2).
+                //
+                // The outcomes below are deliberately DISTINCT rather than collapsed into one sentence.
+                // "no receipt was submitted", "a receipt is malformed", "a receipt is dishonest about its
+                // own pair" and "the receipts are honest but do not account for the whole diff" are four
+                // different repairs, and .github#2207 is what collapsing them costs: an operator told to
+                // wait for a review that had already happened, because one message stood for every cause.
                 let auditHead =
-                    if effectiveAuditRequired then
-                        match field "diff-audit-receipt-v1" accepted.Body with
-                        | Ok encoded ->
-                            match SemanticDiff.ofBase64 encoded with
-                            | Ok receipt when
-                                receipt.Required
-                                && (match trustedFacts |> Option.bind snd with
-                                    | Some expected -> SemanticDiff.validateAgainst expected receipt |> List.isEmpty
-                                    | None -> false)
-                                ->
-                                Some receipt.HeadSha
-                            | _ ->
-                                errors.Add
-                                    "required typed diff-audit receipt is missing, stale, or has unresolved dispositions"
-
-                                None
-                        | Error _ ->
-                            errors.Add
-                                "required typed diff-audit receipt is missing, stale, or has unresolved dispositions"
-
-                            None
-                    else
+                    if not effectiveAuditRequired then
                         None
+                    else
+                        match fieldValues "diff-audit-receipt-v1" accepted.Body with
+                        | [] ->
+                            errors.Add "a required typed diff-audit receipt was not submitted"
+                            None
+                        | encoded ->
+                            let parsed = encoded |> List.map SemanticDiff.ofBase64
+
+                            if parsed |> List.exists Result.isError then
+                                errors.Add "a submitted typed diff-audit receipt is malformed"
+                                None
+                            else
+                                let submitted = parsed |> List.choose Result.toOption
+
+                                match trustedFacts |> Option.bind snd with
+                                | None ->
+                                    errors.Add "the live delivery facts needed to check a diff-audit receipt are absent"
+                                    None
+                                | Some trusted ->
+                                    // 1. HONESTY. Every submitted receipt must match the engine's own
+                                    //    recomputation of the pair and paths it names.
+                                    for receipt in submitted do
+                                        if not receipt.Required then
+                                            errors.Add "a submitted typed diff-audit receipt does not assert the audit was required"
+                                        else
+                                            match
+                                                trusted.Expected
+                                                |> List.tryFind (fun expected ->
+                                                    expected.OldToken = receipt.OldToken
+                                                    && expected.NewToken = receipt.NewToken
+                                                    && expected.DeclaredPaths = receipt.DeclaredPaths)
+                                            with
+                                            | None ->
+                                                errors.Add
+                                                    "a submitted typed diff-audit receipt names a rename the live delivery facts did not recompute"
+                                            | Some expected ->
+                                                if SemanticDiff.validateAgainst expected receipt |> List.isEmpty |> not then
+                                                    errors.Add
+                                                        "a submitted typed diff-audit receipt is stale, or has unresolved dispositions"
+
+                                    // 2. COVERAGE. Honest receipts still have to account for the WHOLE
+                                    //    diff, or the author narrows the gate by choosing what to submit.
+                                    let accounted =
+                                        submitted
+                                        |> List.collect _.Occurrences
+                                        |> List.map _.Id
+                                        |> Set.ofList
+
+                                    let uncovered =
+                                        trusted.Discovered
+                                        |> List.filter (fun occurrence -> not (accounted.Contains occurrence.Id))
+
+                                    if not (List.isEmpty uncovered) then
+                                        errors.Add
+                                            $"the submitted typed diff-audit receipts account for %d{trusted.Discovered.Length - uncovered.Length} of %d{trusted.Discovered.Length} discovered occurrences"
+
+                                    match submitted |> List.map _.HeadSha |> List.distinct with
+                                    | [ single ] -> Some single
+                                    | _ ->
+                                        errors.Add "the submitted typed diff-audit receipts are not all bound to one head"
+                                        None
 
                 if accepted.Id <= previousReviewId then
                     errors.Add "host acceptance must follow the latest review comment"
@@ -273,8 +324,12 @@ module Driver =
 
     let parseReviewComments comments = parseReviewCommentsCore None comments
 
-    let parseReviewCommentsWithAudit trustedAudit comments =
-        parseReviewCommentsCore (Some(true, Some trustedAudit)) comments
+    let parseReviewCommentsWithAudit (trustedAudit: SemanticDiff.Receipt) comments =
+        // The single-receipt spelling stays available: one receipt whose own recomputation IS the whole
+        // discovered population, which is the shape every pre-round-2 caller meant.
+        parseReviewCommentsCore
+            (Some(true, Some { Expected = [ trustedAudit ]; Discovered = trustedAudit.Occurrences }))
+            comments
 
     let parseReviewCommentsWithFacts mechanicallyRequired trustedAudit comments =
         parseReviewCommentsCore (Some(mechanicallyRequired, trustedAudit)) comments

@@ -903,7 +903,7 @@ module ApplicationServiceTests =
     /// The driver read set for a one-file, one-PR board, parameterised by the file's base/head content,
     /// the extra comments on the PR, and what the `contents` reads do.  Shared by the two theories below
     /// so they differ only in the fact under test.
-    let private auditWorld (path: string) (before: string) (after: string) (extraComments: string list) (contentsResult: string -> Errors.IoResult<Response>) =
+    let private auditWorldWith (auditRequired: bool) (path: string) (before: string) (after: string) (extraComments: string list) (contentsResult: string -> Errors.IoResult<Response>) =
         let head = "2144-audit-head"
         let baseSha = "2144-audit-base"
         let encode (text: string) = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes text)
@@ -917,8 +917,9 @@ module ApplicationServiceTests =
                 """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
             else
                 $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+        let requiredField = if auditRequired then "true" else "false"
         let initial =
-            $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: false\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
+            $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: %s{requiredField}\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
         let accepted =
             $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
         let comments =
@@ -955,6 +956,9 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/.github/issues/2149/comments" -> ok (JsonSerializer.Serialize comments)
             | method', p -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{p}")),
         baseSha
+
+    let private auditWorld path before after extraComments contentsResult =
+        auditWorldWith false path before after extraComments contentsResult
 
     /// Runs the real `Client.driver` over one of those worlds and returns its `reviewEvidence`.
     let private driverEvidence (transport: Fake.Recorder) =
@@ -1026,6 +1030,56 @@ module ApplicationServiceTests =
         // without the narrow receipt.
         if evidence <> 0 then
             failwithf "attachReceipt=%b expected evidence=0 got %d; stdout=%s; log=%A" attachReceipt evidence stdout transport.Log
+
+    /// .github#2144 repair-phase round 2 — a receipt covering PART of the diff must not open the gate.
+    ///
+    /// Round 1 stopped the author turning the gate OFF by submitting narrow evidence. This is the other
+    /// half: with the gate ON, a receipt that is entirely honest about the one rename it names still let
+    /// a two-rename diff through, because the engine only ever checked it against a recomputation of its
+    /// own pair. The author chose how much of the diff the audit applied to.
+    ///
+    /// Both rows drive the real `Client.driver` over an IDENTICAL diff carrying two distinct renames,
+    /// six quoted occurrences each. The only difference is whether the submitted receipts cover one of
+    /// them or both. Subset must red; the covering union must go green.
+    [<Theory>]
+    [<InlineData(false, 0)>]
+    [<InlineData(true, 1)>]
+    let ``#2144 receipts covering a strict subset of the discovered set are refused`` (coverBoth: bool) (expectedEvidence: int) =
+        let path = "src/Rogue3/Protocol.fs"
+        let head = "2144-audit-head"
+        let baseSha = "2144-audit-base"
+
+        let before =
+            ([ for i in 1..6 -> $"let a%d{i} = \"oldWide\"" ] @ [ for i in 1..6 -> $"let b%d{i} = \"oldOther\"" ])
+            |> String.concat "\n"
+
+        let after = before.Replace("oldWide", "newWide").Replace("oldOther", "newOther")
+
+        let dispositioned =
+            List.map (fun (row: SemanticDiff.Occurrence) ->
+                { row with Disposition = SemanticDiff.IntendedContractChange })
+
+        let receiptLine oldToken newToken =
+            let occurrences = SemanticDiff.inventory path before after oldToken newToken |> dispositioned
+            Assert.Equal(6, List.length occurrences)
+            let receipt = SemanticDiff.receipt "FS-GG/.github" baseSha head oldToken newToken [ path ] true occurrences
+            $"diff-audit-receipt-v1: %s{SemanticDiff.toBase64 receipt}"
+
+        // The engine discovers both renames, so the audit is mechanically required either way; the chain
+        // says so honestly. What is under test is purely whether the receipts ACCOUNT for the whole diff.
+        Assert.Equal(12, (SemanticDiff.discoveredOccurrences [ path, before, after ]).Length)
+
+        let receipts =
+            if coverBoth then
+                [ receiptLine "oldWide" "newWide"; receiptLine "oldOther" "newOther" ]
+            else
+                [ receiptLine "oldWide" "newWide" ]
+
+        let _, transport, _ = auditWorldWith true path before after receipts ok
+        let evidence, stdout = driverEvidence transport
+
+        if evidence <> expectedEvidence then
+            failwithf "coverBoth=%b expected evidence=%d got %d; stdout=%s; log=%A" coverBoth expectedEvidence evidence stdout transport.Log
 
     /// .github#2144 repair-phase round 1, finding 3 — the fail-closed arm must be executable.
     ///
