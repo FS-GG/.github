@@ -691,6 +691,96 @@ module Board =
     // ---- the pre-claim column (#481) ----------------------------------------------------------------
 
     [<Literal>]
+    let private ExternalItemFieldDoc =
+        "query($itemId: ID!, $field: String!) { node(id: $itemId) { ... on ProjectV2Item { fieldValueByName(name: $field) { ... on ProjectV2ItemFieldSingleSelectValue { name } ... on ProjectV2ItemFieldTextValue { text } } } } rateLimit { cost remaining } }"
+
+    /// Read ONE field of an issue owned OUTSIDE the board owner, from the BOARD side of the relationship.
+    ///
+    /// **THE ISSUE SIDE CANNOT ANSWER THIS QUESTION (#2166, #2204).** `repository.issue.projectItems` omits an
+    /// organization project's placement of an issue whose repository has a different owner — measured on
+    /// `EHotwagner/rogue3#96`, `EHotwagner/rogue3#75` and `EHotwagner/S.I.R.#138`, each of which returns only
+    /// its own user project while the FS-GG Coordination row demonstrably exists. Narrowing that connection to
+    /// `board.Number` therefore found nothing and reported `Ok None` — the DEFINITE "no column" — for a row
+    /// that carries one. `#2172` gave `itemId` the board-side branch; this is the same branch for the two
+    /// readers it did not reach, and both go through this ONE function so a future repair cannot land on
+    /// `itemStatus` and miss `itemBlockedBy`.
+    ///
+    /// **IT IS STILL A RESOLVER READ.** `itemIdCached` resolves the row once and keeps it forever (ids are
+    /// stable), so the field itself is one point on `node(id:)` — the #481/#418 thrift that keeps `take` →
+    /// `claim` off a full-board scan. Only the FIRST external lookup pages the project, and `claim`'s own
+    /// write resolves that id anyway.
+    ///
+    /// `Ok None` is a MEASURED absence with exactly two shapes: `itemId` walked the project to completion and
+    /// this row is not on it, or the row is on it with the field genuinely unset. Every other outcome is
+    /// `Error` — `itemId` already fails closed on an incomplete page (#2166), and a board item id that no
+    /// longer resolves to a node is unresolvable, not empty.
+    let private externalItemField
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        (field: string)
+        (read: JsonElement -> 'a option)
+        : IoResult<'a option> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} %s{field}"
+
+        match itemIdCached transport board owner repo number with
+        | Error e -> Error e
+        // Not on this board at all — `itemId`'s external branch paged the project to completion to say so,
+        // and it is the one absence that may be manufactured into "there is no column here".
+        | Ok None -> Ok None
+        | Ok(Some id) ->
+
+        let request =
+            query ExternalItemFieldDoc [ "itemId", VId id; "field", VString field ] subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let node = data.GetProperty "node"
+
+            if node.ValueKind = JsonValueKind.Null then
+                // A board item id that resolves to nothing is an UNRESOLVABLE read, not an empty field. It
+                // may not wear an absence's clothes (#266): the id came from the board, so a null here means
+                // the row moved or the read failed — either way we did not measure the column.
+                Error(NotFound $"board item %s{id} for %s{subject}")
+            else
+
+            match node.TryGetProperty "fieldValueByName" with
+            // Null when the row is on the board with the field genuinely unset — the same "nothing recorded"
+            // answer the issue-side reader reaches the other way.
+            | true, fv when fv.ValueKind = JsonValueKind.Object -> Ok(read fv)
+            | true, fv when fv.ValueKind = JsonValueKind.Null -> Ok None
+            | _ -> Error(Malformed(subject, "the external-owner field read response has no `node.fieldValueByName`"))
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the external-owner field read response is missing `data.node`"))
+
+    /// The `Status` single-select value, read off a `fieldValueByName` node.
+    let private statusOfFieldValue (fv: JsonElement) : BoardStatus option =
+        match fv.TryGetProperty "name" with
+        | true, nm when nm.ValueKind = JsonValueKind.String -> Reads.statusOfName (nm.GetString())
+        | _ -> None
+
+    /// The `Blocked by` text value, read off a `fieldValueByName` node.
+    let private textOfFieldValue (fv: JsonElement) : string option =
+        match fv.TryGetProperty "text" with
+        | true, tx when tx.ValueKind = JsonValueKind.String -> Some(tx.GetString())
+        | _ -> None
+
+    /// Is this issue's owner the board's own owner? Only then can the issue-side connection see the row.
+    let private ownedByBoardOwner (board: BoardMap) (owner: string) =
+        String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase)
+
+    [<Literal>]
     let private ItemStatusDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
 
@@ -708,7 +798,11 @@ module Board =
     /// — the pre-#481 behaviour, now scoped to the one case where there is genuinely nothing to restore. A
     /// FAILED read is `Error`, never `Ok None`: the caller (`claim`) treats it as "recorded no column" too,
     /// but it may not be manufactured into the definite absence that `None` asserts.
-    let itemStatus
+    ///
+    /// **THIS ARM IS FOR THE BOARD OWNER'S OWN ISSUES ONLY.** For an external owner the connection filters
+    /// the row away and this reader would answer a false `Ok None` (#2204) — `itemStatus` routes those to
+    /// `externalItemField` instead.
+    let private repositoryItemStatus
         (transport: IGitHubTransport)
         (board: BoardMap)
         (owner: string)
@@ -770,12 +864,28 @@ module Board =
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item-status response is missing `repository.issue.projectItems`"))
 
+    let itemStatus
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<BoardStatus option> =
+
+        if ownedByBoardOwner board owner then
+            repositoryItemStatus transport board owner repo number
+        else
+            externalItemField transport board owner repo number "Status" statusOfFieldValue
+
     let private ItemBlockedByDoc =
         "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } } } } } rateLimit { cost remaining } }"
 
     /// Read ONE item's live `Blocked by` column. `itemStatus`'s twin over the TEXT fragment — see the
     /// `.fsi` for why this is a resolver read and what `Ok None` covers.
-    let itemBlockedBy
+    ///
+    /// **BOARD OWNER'S OWN ISSUES ONLY**, for `repositoryItemStatus`'s reason and by the same #2204
+    /// measurement; `itemBlockedBy` routes an external owner to `externalItemField`.
+    let private repositoryItemBlockedBy
         (transport: IGitHubTransport)
         (board: BoardMap)
         (owner: string)
@@ -832,6 +942,19 @@ module Board =
 
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item-blocked-by response is missing `repository.issue.projectItems`"))
+
+    let itemBlockedBy
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string option> =
+
+        if ownedByBoardOwner board owner then
+            repositoryItemBlockedBy transport board owner repo number
+        else
+            externalItemField transport board owner repo number "Blocked by" textOfFieldValue
 
     // ---- one field write ----------------------------------------------------------------------------
 
