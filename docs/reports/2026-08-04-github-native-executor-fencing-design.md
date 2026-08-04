@@ -82,9 +82,11 @@ Everything below follows from one inversion.
 The claim lock separates **markers**, and markers separate **workers** only while worker ids are distinct — the engine says so in its own generated contract: *"That total order is over MARKERS, and it separates WORKERS only while their ids are DISTINCT."*
 *Verification:* `src/FS.GG.Coord.Core/Protocol.fs:545`, projected into `.claude/skills/pnext-item/references/command-contracts.md`.
 
-So the design never compares a worker id, a session id, a process, or a machine. Instead:
+So **none of this design's own fences compares a worker id, a session id, a process, or a machine** — not the broker, not the receiver validation, not any of the merge gate's six checks. (Two things nearby do, and neither is a fence of this design: the pre-existing client-side `delivery --apply` guard tests `held.Worker.Value = w.Id` before its merge request, `src/FS.GG.Coord.Cli/Client.fs:1085-1086`, and this document does not change it; and an earlier draft of §6.3 added a worker test that repair round 2 removed as both redundant and harmful, §4.2.) Instead:
 
-**Authorization is a capability GitHub issues, not a property the executor asserts.** Before a consequential effect, the acting party must obtain a **grant** — a marker comment posted through the existing comment-order CAS. The grant's identity is the **GitHub-assigned comment id**. Nobody can mint one locally, nobody can choose its value, and nobody can forge its ordering.
+**Authorization is a capability GitHub issues, not a property the executor asserts.** Before a consequential effect, the acting party must obtain a **grant** — a marker comment whose identity is the **GitHub-assigned comment id**. Nobody can mint one locally, nobody can choose its value, and nobody can forge its ordering.
+
+There are two grant mechanisms, because there are two kinds of verifier (§4): a **lease-based lock** where the verifier is synchronous (dispatch), and a **lease-free election** where the verifier is an asynchronous CI job (merge). Both are arbitrated by the same rule — lowest comment id wins — and neither compares anything about the executor.
 
 This is what makes §1.2 tractable. Two executors that are indistinguishable by session are still perfectly distinguishable by *which comment id GitHub gave them*, because GitHub issues comment ids from a single server-side sequence:
 
@@ -137,7 +139,7 @@ Three properties follow, all free:
 |---|---|---|---|---|
 | **worker id** | `godwit-fb4a` | minted locally (`whoami --mint`) | human-readable addressing (`say --to`), provenance in `who` | any authorization decision |
 | **claim generation** | winning `fsgg:claim` comment id | **GitHub** | which *tenancy* of the item an effect belongs to | identifying *who* is acting |
-| **executor identity** | the **grant's** comment id (§4) | **GitHub** | the only identity a fence trusts | anything that outlives the grant's lease |
+| **executor identity** | the **grant's** comment id — a dispatch lock marker or a merge election marker (§4) | **GitHub** | the only identity a fence trusts | outliving its own scope: a dispatch grant is meaningless past its lease, a merge election past its generation |
 
 The inversion that matters: **executor identity is not an attribute of the process — it is a capability the process holds.** Two contexts of one session, one worker id, one machine, can each obtain a grant; GitHub gives them two different comment ids; exactly one is the winner. Neither had to know the other existed.
 
@@ -152,18 +154,25 @@ Reuse `Delivery.digest` rather than writing a second one — one rule computed i
 
 ## 4. Question 2 — the durable marker
 
-There are three markers, and **the distinction between them is load-bearing**: exactly one of them flows through the claim CAS, and the other two must never be read by it.
+There are four markers, and **the distinction between them is load-bearing**. Exactly one flows through the claim CAS; the others must never be read by it.
 
-| marker | read by | may it introduce a new prefix? |
-|---|---|---|
-| the **grant** (§4.1) | `Reads.winner`, the CAS's own arbiter | **No.** It must be a `fsgg:claim` marker or the CAS cannot see it. |
-| the **effect receipt** (§4.2) | a purpose-built idempotence reader | Yes — it decides no lock. |
-| the **PR authorization** (§6.3) | the merge gate | Yes — it decides no lock. |
+The split that matters most is not "lock or not" but **who reads it, and when**:
+
+| marker | subject | read by | when | prefix |
+|---|---|---|---|---|
+| the **dispatch grant** (§4.1) | the receiver's operation-lock issue | `Reads.winner` — the CAS's arbiter | **synchronously**, by the broker, inside the window it holds the lock | must be `fsgg:claim`; the CAS cannot see anything else |
+| the **merge election** (§4.2) | the item | the merge gate | **asynchronously**, minutes later, from a CI runner | its own; it decides no lease |
+| the **effect receipt** (§4.3) | the item | an idempotence reader | after the effect | its own |
+| the **PR authorization** (§6.3) | the pull request body | the merge gate | on each evaluation | its own |
+
+**Why the first two cannot be the same mechanism**, which an earlier draft assumed and which repair round 2 found: a lease-based lock can only be verified by a reader that runs *inside the lease*. The broker does. A CI job does not — it is queued, and nothing synchronizes a local client's hold with it. Worse, releasing the lock **deletes the marker** (`deleteComment`, `src/FS.GG.Coord.GitHub/Writes.fs:349` and `:388`), so a correctly-behaving worker that released on schedule leaves *nothing at all* for a later job to verify. A gate built on that reads a correct worker as unauthorized — `#463`'s fail-*always* shape, which §8.2 commits against. §4.2 is the resolution.
 
 Every one of them is an anchored HTML comment, so a marker merely *quoted* in prose is not a marker — the discipline `Reads.fs` already applies, whose comment explains that an un-anchored pattern lets a body that quotes a marker *"forge a lock on the item it is posted"* on.
 *Verification:* `src/FS.GG.Coord.GitHub/Reads.fs:220-226`.
 
-### 4.1 The grant — a `fsgg:claim` marker on the receiver's operation-lock issue
+### 4.1 The dispatch grant — a `fsgg:claim` marker on the receiver's operation-lock issue
+
+**Scope: `op=dispatch:*` only.** This is the mechanism for the contention the 2026-07-28 addendum measured — *"is anyone dispatching against `FS.GG.SDD` right now?"* — which is per receiver, concurrent, and asked and answered inside one synchronous window by the broker. Merge does **not** use it; §4.2 says why.
 
 **The grant is an ordinary `fsgg:claim` marker, posted by `Writes.claim` unchanged, on a dedicated per-receiver operation-lock issue.** It introduces no prefix, no field, and no parameter.
 
@@ -172,7 +181,7 @@ Every one of them is an anchored HTML comment, so a marker merely *quoted* in pr
 The lock issue is closed, *unlocked*, off-board, one per repository. The grant **is** its comment id; the holder is `Reads.winner leaseMinutes` over that issue's markers, unchanged.
 
 **This costs the GitHub layer no code, and that is checkable rather than asserted.** `Writes.claim` is already public, already takes an arbitrary `ref: Ref`, and already takes `readPreviousStatus` and `readPathRepo` as caller-supplied callbacks — so a new caller supplies a lock ref and two stubs and is done.
-*Verification:* `src/FS.GG.Coord.GitHub/Writes.fsi:294-305` (`val claim`, with `ref: Ref` and both callbacks in its signature). Slice 2's `Paths:` in §11.2 is scoped accordingly: `Options.fs` and `Client.fs`, not `Writes.fs`/`Reads.fs`.
+*Verification:* `src/FS.GG.Coord.GitHub/Writes.fsi:280-291` — `val claimScoped`, taking `ref: Ref` plus `readPreviousStatus` and `readPathRepo` as caller callbacks. (The two-callback form is `claimScoped`; `val claim` at `:293-303` is the backward-compatible single-callback overload *"for subjects with no board path-scope projection"*, which is itself the natural fit for an off-board lock issue. An earlier draft cited the line range of the second while describing the first.) Slice 2's `Paths:` in §11.2 is scoped accordingly: `Options.fs` and `Client.fs`, not `Writes.fs`/`Reads.fs`.
 
 This is ADR-0041's decision applied a third time. That ADR's finding was that `Writes.claim` *"is **already a general comment-order CAS over an arbitrary issue ref.** It is not item-specific; it is *item-configured*, by its caller, through a callback"* — and its decision was *"a chore takes `Writes.claim` — unchanged — on a dedicated per-repo chore-lock issue, with a short lease. No new function. No new marker prefix. No new parameter."*
 *Verification:* `docs/adr/0041-the-chore-lock-is-the-item-cas-on-another-subject.md`, "The finding" and "Decision".
@@ -205,7 +214,28 @@ Its operational clauses carry over unchanged and are **requirements**, not comme
 
 The roster is eight, and `FS.GG.Net#58` is one of the two pull requests `#1858` measured as merged by the unlocked executor. A per-receiver table built the same way would inherit the hole in exactly the repository the incident reached. Slice 2's acceptance must include the eighth row.
 
-### 4.2 The effect receipt — on the item
+### 4.2 The merge election — an append-only record on the item, with no lease
+
+**Scope: `op=merge`.** The merge path's verifier is an asynchronous CI job, so its authorization fact must be one that **cannot change between being written and being read**. A lease is exactly the wrong primitive. The election is the right one:
+
+- **Append-only and never deleted.** No lease, no release, no renewal, no stale collection.
+- **Keyed on the operation key**, which already contains `(item, gen, receiver, op)`. The winner for an opkey is the **lowest-id** election marker bearing it.
+- **Permanent for that opkey.** Because `gen` is the winning claim's comment id, a re-claim, steal, or reap mints a strictly higher `gen` (§3.1) and therefore a *different* opkey with a *fresh* election. Recovery from a dead executor is a new generation, which is how the protocol already recovers a stranded claim — not a lease expiring under a CI job.
+
+So check 4 (§6.3) asserts a **historical fact that is stable forever**: "the grant this PR names is the lowest-id election marker for this opkey." Any job, at any time, on any runner, computes the same answer. There is no window to miss and no latency to race.
+
+**Three consequences the earlier draft got wrong, all now fixed:**
+
+1. **No cross-item interference.** The opkey contains the item, so a worker legitimately holding `FS.GG.Net`'s dispatch lock for a *different* item elects nothing here and reds nothing. The critic's case is structurally impossible rather than merely unlikely.
+2. **No fail-always.** A correct worker that finishes and releases leaves its election marker in place, because there is nothing to release.
+3. **No worker comparison.** The binding to the claim is carried by `gen` *inside the opkey*, so the explicit worker test the earlier draft added is redundant — and it was the thing that caused (1). It is removed. §8.3's absolute statement is true again as a result, rather than being weakened to accommodate a check that should not have existed.
+
+**Is this a second CAS?** No, and the distinction is the one §12.5 rests on. A CAS here means *lock* semantics: lease, release, eviction, twin detection, restore-previous-column. The election has none of them; it is `sortBy id |> tryHead` over a filtered list. **That ordering rule must not be written twice** (`#485`), and it does not need to be: the engine already computes exactly it, without the lease filter, in `reserver`'s fallback branch.
+*Verification:* `src/FS.GG.Coord.GitHub/Reads.fs:391-394` — `winner` else `markers |> List.sortBy (fun m -> m.Id) |> List.tryHead`; and `winner` itself at `:375-379`, which is the same expression with the staleness filter applied. Slice 2 must express the election through that one ordering function with the filter as its parameter, not a second copy of "lowest id wins".
+
+**What this achieves, and what it does not.** It guarantees **at most one merge takes effect per `(item, generation, receiver)`** — which is `#1858` AC2's shape and directly prevents the measured harm of two executors both merging against one item. It does **not** establish that the electee is the *rightful* claim holder: two contexts sharing one worker id and one live claim are both, to every GitHub-visible fact, that holder, and whichever wins the election is *an* authorized executor. That is the same concession §8.3 makes for dispatch and §12.2 records as `#1938`'s unroutable boundary. Deduplication under a generation is the property; authentication of the holder is not, and this document does not claim it.
+
+### 4.3 The effect receipt — on the item
 
 ```
 <!-- fsgg:op-effect v=1 opkey=<sha256> grant=<grant comment id>
@@ -216,7 +246,7 @@ Posted on the **item** after the effect lands. A new prefix is safe here precise
 
 **The receipt is audit for the merge path and authority for nothing.** It is written *after* the effect, so its absence understates rather than overstates. Deriving *authorization* from it would turn a failed comment POST into a second dispatch (§8.5). The receiver may consult it for **idempotence** — "has this exact opkey already been applied?" — which is a different question from "is this executor allowed to act", and answering it wrongly costs a duplicate no-op rather than an unauthorized effect.
 
-### 4.3 Local state may cache; it is never required
+### 4.4 Local state may cache; it is never required
 
 Every value above is a GitHub comment or a field of one. The only local inputs a fresh process needs are `owner/repo#N` and the compiled-in lock-ref table. `fsgg-coord` is already effectively stateless between invocations, which the hold decision names as the invariant to preserve: *"Today the durable coordination state and claim CAS live on GitHub, while `fsgg-coord` is effectively stateless between invocations. That location independence is an invariant, not an incidental property to trade away."*
 *Verification:* `docs/reports/2026-07-30-150617-native-collaboration-runtime-supervision-design-and-roadmap.md`, "Hold decision".
@@ -329,13 +359,16 @@ The PR carries one authorization marker in its body, bound to its head:
 2. **`head=` equals the PR's current head SHA.** A force-push after authorization means the authorization is for a different artifact. This is the rule `delivery` already enforces client-side, where a merge is refused because *"the PR is no longer at the inspected head."*
    *Verification:* `src/FS.GG.Coord.Cli/Client.fs:1096`.
 3. **`gen=` equals the live winning `fsgg:claim` comment id on `item`**, re-read at check time. Stale → RED. Released, so there is no live winner → RED.
-4. **`grant=` is the live winner of this receiver's operation-lock issue**, re-read at check time, and the worker recorded in that winning marker equals the worker recorded in the item's winning claim marker. Not the winner → RED. Not live → RED. Nonexistent, or on the wrong issue → RED. Winner held by a different worker than the claim → RED.
-   This is where a second context is refused. Two contexts sharing one live generation compute a byte-identical opkey and pass checks 1–3 and 5 identically — the critic's case, and it is real. They cannot both pass this one, because they contend on **one** lock issue and `Reads.winner` names a single lowest live marker that every reader computes identically. Forging the field does not help: a forger who invents a comment id fails the existence read, and a forger who posts a real grant marker to obtain a real id has thereby entered the CAS and can still only win it once.
-   *Verification:* `src/FS.GG.Coord.GitHub/Reads.fs:375-379` (`winner` sorts before taking the head, so racers cannot disagree); `src/FS.GG.Coord.GitHub/Reads.fs:283` and `:473-486` (an unreadable or unclassifiable marker refuses the whole scan rather than shortening the list).
+4. **`grant=` is the lowest-id merge-election marker on `item` bearing this opkey** (§4.2), and that marker's recorded item, generation, and receiver match the authorization. Not the lowest → RED. Absent → RED. Recorded fields disagreeing with the authorization → RED.
+   This is where a second context is refused. Two contexts sharing one live generation compute a byte-identical opkey and pass checks 1–3 and 5 identically — the round-1 finding, and it is real. They cannot both pass this one: they elect on the **same** opkey, and "lowest id wins" is computed identically by every reader. Forging the field does not help: a forger who invents a comment id fails the existence read, and a forger who posts a real election marker to obtain a real id has thereby entered the election and can still only be lowest once.
+   **This is a historical fact, not a live one**, which is the whole reason the check is satisfiable from CI at all. An election marker is never deleted and never expires (§4.2), so the answer a runner computes minutes after the push is the answer that was true at the push. An earlier draft demanded a *live lease winner* here, which no queued job can observe and which a correctly-behaving worker destroys by releasing — `deleteComment`, `src/FS.GG.Coord.GitHub/Writes.fs:349`.
+   *Verification:* `src/FS.GG.Coord.GitHub/Reads.fs:391-394` (the lease-free "lowest id" ordering the election reuses); `:375-379` (the same expression with the staleness filter, showing they are one rule with one parameter); `:283` and `:473-486` (an unreadable or unclassifiable marker refuses the whole scan rather than shortening the list).
 5. **`opkey` recomputes** from `(item, gen, this repository, merge)`. Mismatch → RED.
 6. **Any read that cannot be completed** → RED via the no-verdict path (§8.2 answers the fail-always tension this creates).
 
-**What check 4 costs, stated plainly.** A merge grant must be live when the gate runs. Holding one from authorization until a human-paced review finishes would either lapse (the lease is minutes, §7) or serialize every merge in the receiver for hours. So the grant is taken around each *head event* and around the merge attempt, not held across the PR's life — which is why `merge_group` (§6.2) matters twice over: it is the trigger that re-runs check 4 at merge time, when the grant that authorizes the merge is actually held.
+**What check 4 costs, stated plainly.** Nothing is held. The election is written once, before the first authorization, and read thereafter; no lock spans the pull request's life, no per-receiver mutex is held across CI latency, and no unrelated pull request is serialized behind it. That is a deliberate reversal of an earlier draft, which asked the merge path to hold a lease across an asynchronous gate and thereby created two defects at once: it would have redded a correct worker that released on time, and it would have redded an unrelated pull request whenever some worker legitimately held the same receiver's lock for a *different* item.
+
+The residual cost is a small one and it is the honest kind: the election is per `(item, generation, receiver)`, so **a generation change invalidates every authorization written under the old one**. That is correct — a re-claimed item is a new tenancy — but it means a `--force` steal or a `reap` mid-review requires the successor to re-authorize. §8.1 already routes that as authoring rather than retry.
 
 ### 6.4 Why a new job and not the existing required `drift` context
 
@@ -380,7 +413,9 @@ The answer is the per-receiver op-lock of §4.1, and it changes the question fro
 
 *Verification for all three:* `docs/adr/0041-the-chore-lock-is-the-item-cas-on-another-subject.md`, "Consequences".
 
-Two mitigations this design must therefore carry explicitly: the grant lease is **minutes**, not the claim's 120-minute default; and the grant is taken **immediately before a consequential effect and released after it**, never held across an item's lifetime. A long-held per-receiver grant would convert a parallel fleet into a serial one.
+Two mitigations this design must therefore carry explicitly: the dispatch grant's lease is **minutes**, not the claim's 120-minute default; and it is taken **immediately before a dispatch and released after it**, never held across an item's lifetime. A long-held per-receiver lock would convert a parallel fleet into a serial one.
+
+**This lock covers dispatch only, and that boundary is what repair round 2 established.** It is safe here precisely because the broker reads it inside the window it holds it. Merge cannot use it: its verifier is a queued CI job, so a lease-based lock would either be gone by the time the job looked (a correct worker read as unauthorized) or held across CI latency on every push — and, because the lock is per *receiver*, a worker legitimately holding `FS.GG.Net`'s lock for one item would red an unrelated pull request for another. Merge therefore uses the lease-free per-`(item, generation, receiver)` election of §4.2, which has neither failure. The per-receiver lock keeps exactly the job the 2026-07-28 addendum asked for and no more.
 
 ---
 
@@ -417,25 +452,30 @@ This is the concrete reason §6.1's App constraint is a feature: **an App outage
 
 ### 8.3 Concurrent receivers — the clause that answers the shared session id
 
-Two executors, indistinguishable by session, reach the fence for the same receiver:
+Two executors, indistinguishable by session, race. The shape is the same on both paths and the arbiter is the same rule — *lowest comment id wins, computed identically by every reader* — but the subject and the lease differ, because the readers differ:
 
-1. Both post claim markers to that receiver's operation-lock issue. GitHub assigns two **distinct** comment ids.
-2. `Reads.winner` is the lowest live id, and every racer computes it identically because the function sorts rather than trusting input order (§3.1).
-3. The loser's grant is not the winner, so it is refused.
+| | **dispatch** | **merge** |
+|---|---|---|
+| subject | the receiver's operation-lock issue | the item, keyed on the opkey |
+| arbiter | `Reads.winner` — lowest **live** id | lowest id, no lease (§4.2) |
+| read by | the broker, synchronously | a CI job, minutes later |
+| loser | not the winner → refused (§5.2 step 2, again at §5.3) | not the lowest → RED at check 4 (§6.3) |
 
-**At no point is a worker id, a session id, a process, or a machine compared.** The design does not repair `twinSession` (§1.2) — it routes around the need for it.
+**No worker id, session id, process, or machine is compared on either path.** The design does not repair `twinSession` (§1.2) — it routes around the need for it. The one place an earlier draft did compare workers was §6.3 check 4, and repair round 2 removed it: the binding to the claim is already carried by `gen` *inside* the opkey, so the test bought nothing and cost cross-item interference (§4.2).
 
-**Both paths reach this, and they reach it at different points.** The dispatch path enforces it in the broker (§5.2 step 2) and again at the receiver (§5.3). The merge path enforces it at **check 4** of §6.3 — which is the check an earlier draft of this document omitted while still claiming here that per-receiver exclusion covered merges. It did not. Merge is where `#1858`'s harm actually landed (`FS.GG.Net#58` and `FS.GG.Audio#220` were *merged* by the unlocked executor), so a design that fenced only dispatch would have missed the measured defect. With check 4 present, `#2210` AC2 is discharged on both paths — subject to §8.1's freshness bound on when the merge-path check is evaluated.
+**Both paths matter, and merge matters most.** Merge is where `#1858`'s harm actually landed — `FS.GG.Net#58` and `FS.GG.Audio#220` were *merged* by the unlocked executor — so a design that fenced only dispatch would have missed the measured defect. That was true of this document's first draft, which is why check 4 exists at all.
+
+**What is discharged, stated exactly.** `#2210` AC2 — detection that works when two executors are indistinguishable by session — is discharged on both paths, because neither path ever needed to tell them apart. The property delivered is *at most one effect per `(item, generation, receiver, operation)`*, subject to §8.1's bound on **when** the merge-path check is evaluated. The property **not** delivered is authentication of the rightful holder; §4.2 and §12.2 say why that is `#1938`'s and why this design does not wait for it.
 
 ### 8.4 The executor that never calls a coordination verb
 
-The actual `#1858` mechanism. It holds no grant, so its PR carries no authorization marker, so the merge gate is RED at check 1 — and would still be RED at check 4 even if it typed one, because it holds no winning grant (§6.3). Its dispatch carries no grant, so the receiver refuses. It can still push branches and open PRs — §6.5, conceded.
+The actual `#1858` mechanism. It holds nothing, so its PR carries no authorization marker and the merge gate is RED at check 1 — and would still be RED at check 4 even if it typed one, because it won no election (§4.2). Its dispatch carries no grant, so the receiver refuses. It can still push branches and open PRs — §6.5, conceded.
 
-**The honest residual.** A resumed context that *does* run `fsgg-coord` and *does* hold the claim — because the claim is still live under a shared id, or because it re-claimed — will be granted. Effect fencing cannot distinguish "the rightful holder resumed" from "a second context of the rightful holder", and it does not try. It does not need to for *correctness*: both then contend for the same receiver's operation lock, and check 4 refuses whichever one is not its winner, so at most one effect lands. What is lost is the **warning**, not the fence. The warning is `#1938`'s harness-owned boundary and is not this design's to build (§12.2).
+**The honest residual.** A resumed context that *does* run `fsgg-coord` and *does* hold the claim — because the claim is still live under a shared id, or because it re-claimed — will be authorized. Effect fencing cannot distinguish "the rightful holder resumed" from "a second context of the rightful holder", and it does not try. It does not need to for *correctness*: both contend on the same subject — the receiver's lock for a dispatch, the `(item, generation, receiver)` election for a merge — and the loser is refused, so at most one effect lands. What is lost is the **warning**, not the fence. The warning is `#1938`'s harness-owned boundary and is not this design's to build (§12.2).
 
 ### 8.5 Partial application
 
-An effect that lands while its `fsgg:op-effect` receipt fails to post. Because the receipt is written *after* the effect and is audit rather than authority (§4.2), its absence understates the record; it never authorizes a second effect. A re-run recomputes the same opkey and the receiver collapses it.
+An effect that lands while its receipt fails to post. Because the receipt is written *after* the effect and is audit rather than authority (§4.3), its absence understates the record; it never authorizes a second effect. A re-run recomputes the same opkey and the receiver collapses it.
 
 The inverse — a receipt that posts while the effect fails — is also safe, for the same reason: nothing reads the receipt to decide anything.
 
@@ -492,7 +532,8 @@ Three levels, cheapest first, and **the order is the design**:
 | element | where its state lives | local state required? | daemon or leader required? |
 |---|---|---|---|
 | claim generation | `fsgg:claim` comment id on the item | no | no |
-| operation grant | a claim-marker comment id on the receiver's op-lock issue | no | no |
+| dispatch grant | a claim-marker comment id on the receiver's op-lock issue | no | no |
+| merge election | an append-only marker comment id on the item | no | no |
 | PR authorization | a marker in the PR body | no | no |
 | merge gate | an Actions job on the PR, reading GitHub | no | no |
 | broker | an Actions workflow in `FS-GG/.github` | no | GitHub Actions' own `concurrency` — GitHub's, not ours |
@@ -525,9 +566,9 @@ Each `Paths:` below is a proposal for the filing worker to declare, chosen to be
 | # | slice | proposed `Paths:` | `Class:` | ordering |
 |---|---|---|---|---|
 | 1 | Operation key and receipt types in the pure core: `OpKey`, the closed operation vocabulary, digest composition | `src/FS.GG.Coord.Core/Operation.fs src/FS.GG.Coord.Core/Operation.fsi tests/FS.GG.Coord.Core.Tests` | hardening | first; pure, no IO |
-| 2 | Per-receiver op-lock **refs and callers** — a new `opLockRef` table beside `choreLockRef` (**including the missing `FS.GG.Net` row**) plus grant acquire/release that calls `Writes.claim` with the lock ref. The CAS itself gains no code: no new prefix, no new field, no new parameter (§4.1) | `src/FS.GG.Coord.Cli/Options.fs src/FS.GG.Coord.Cli/Client.fs tests/FS.GG.Coord.Cli.Tests` | hardening | after 1 |
-| 3 | `delivery` writes the PR authorization marker bound to head, and takes/releases the grant around a guarded landing | `src/FS.GG.Coord.Cli/DeliveryApplication.fs src/FS.GG.Coord.Cli/DeliveryApplication.fsi src/FS.GG.Coord.Core/Delivery.fs src/FS.GG.Coord.Core/Delivery.fsi` | hardening | after 2; **must land before 8** (§9.1) |
-| 4 | The merge-gate producer, observe-only, triggered on `pull_request` **and `merge_group`** (§6.2), with all six checks of §6.3 including the grant read | `.github/workflows/fsgg-claim-fence.yml scripts/check-claim-fence.py tests/claim-fence` | hardening | after 2 — check 4 needs the op-lock refs |
+| 2 | **Two mechanisms, one ordering rule.** (a) the per-receiver dispatch lock: a new `opLockRef` table beside `choreLockRef` (**including the missing `FS.GG.Net` row**) plus acquire/release calling `claimScoped` with that ref — the CAS gains no code, no prefix, no field, no parameter (§4.1); (b) the merge election: append-only marker, no lease, read through the **existing** lease-free ordering expression rather than a second copy of "lowest id wins" (§4.2) | `src/FS.GG.Coord.Cli/Options.fs src/FS.GG.Coord.Cli/Client.fs tests/FS.GG.Coord.Cli.Tests` | hardening | after 1 |
+| 3 | `delivery` posts the merge election, then writes the PR authorization marker naming it and bound to head | `src/FS.GG.Coord.Cli/DeliveryApplication.fs src/FS.GG.Coord.Cli/DeliveryApplication.fsi src/FS.GG.Coord.Core/Delivery.fs src/FS.GG.Coord.Core/Delivery.fsi` | hardening | after 2; **must land before 8** (§9.1) |
+| 4 | The merge-gate producer, observe-only, triggered on `pull_request` **and `merge_group`** (§6.2), with all six checks of §6.3 including the election read | `.github/workflows/fsgg-claim-fence.yml scripts/check-claim-fence.py tests/claim-fence` | hardening | after 2 — check 4 reads the election, and its negative legs need a losing election to exist |
 | 5 | The broker workflow — the only caller of `dispatch-sender.yml`; per-receiver `concurrency`, opkey dedupe | `.github/workflows/fsgg-dispatch-broker.yml tests/dispatch-broker` | hardening | after 2 |
 | 6 | Receiver-side validation as a **job added to `kit-materialize.yml`** (zero receiver edits, §5.3) | `.github/workflows/kit-materialize.yml tests/receiver-validate` | hardening | after 5 |
 | 7 | The reproduction: two concurrently live executors, two PCs, restart, stale generation, App outage, concurrent receivers — `#1858` AC6 | `tests/claim-fence-e2e` | hardening | after 6 |
@@ -559,16 +600,19 @@ These block acceptance but are not authorable as implementation work, so they be
    *Verification:* `src/FS.GG.Coord.GitHub/Writes.fs:1005-1007`.
 
 5. **A second CAS for grant markers, under a prefix of their own.** Rejected on ADR-0041's Option B and `#485`: one rule computed in two places agrees at first and drifts later. `Writes.claim` is already a general comment-order CAS over an arbitrary issue ref, and the tests have driven it that way for its whole life. The **third** option — parameterising the existing CAS's prefix — is rejected on ADR-0041's Option A: it refactors the org's most safety-critical function to obtain a generality it already has, and would parameterise off protections (stale collection, twin detection) that a lock issue positively wants. §4.1 records that an earlier draft of this document reached for a new prefix anyway, and why that was both incoherent with the ADR it cited and unimplementable against the code.
+   **The merge election (§4.2) is not the rejected thing**, and the line between them is the one this rejection rests on: it has no lease, no release, no eviction, no twin detection and no column to restore, so it is not a lock and cannot drift from one. What it *does* share — "lowest comment id wins" — is exactly the rule that must not be duplicated, and §4.2 requires it to be expressed through the ordering function the engine already has rather than a second copy.
 
-6. **GitHub Actions `concurrency` as the deduplicator.** Rejected on a verified semantic: the default `queue: single` cancels the existing *pending* run in favour of the newly queued one, so the policy is last-writer-wins. That is mutual exclusion, not idempotence, and it silently prefers the later duplicate — the opposite of what a fence wants (§5.2).
+6. **Using the per-receiver dispatch lock for merges too**, which is what the first two drafts of this document did implicitly. Rejected on two measured grounds established in repair round 2. A lease-based lock is verifiable only by a reader running inside the lease; the merge verifier is a queued CI job, and releasing the lock **deletes the marker** (`src/FS.GG.Coord.GitHub/Writes.fs:349`), so a correctly-behaving worker would be read as unauthorized — `#463`'s fail-*always* shape. And because the lock's subject is the *receiver*, a worker legitimately holding one receiver's lock for one item would red an unrelated pull request for a different item. Two mechanisms are warranted here not by preference but because the two verifiers have different synchronization properties.
 
-7. **An App-created check run for the merge gate.** Rejected on two verified facts: creating a check run requires a GitHub App, and this org's App installation carries neither `checks: write` nor `statuses: write`; and the App is documented as not installed on `.github` at all. It would additionally put the App on the critical path of every merge, so an App outage would block all merges — a failure mode a fence must not have (§6.1, §8.2).
+7. **GitHub Actions `concurrency` as the deduplicator.** Rejected on a verified semantic: the default `queue: single` cancels the existing *pending* run in favour of the newly queued one, so the policy is last-writer-wins. That is mutual exclusion, not idempotence, and it silently prefers the later duplicate — the opposite of what a fence wants (§5.2).
 
-8. **Extending `touch-set-drift`'s existing required `drift` context.** Rejected because that verdict is deliberately non-blocking; adding a blocking verdict would make one check run answer two questions in one colour and retroactively change what its history of greens meant (§6.4).
+8. **An App-created check run for the merge gate.** Rejected on two verified facts: creating a check run requires a GitHub App, and this org's App installation carries neither `checks: write` nor `statuses: write`; and the App is documented as not installed on `.github` at all. It would additionally put the App on the critical path of every merge, so an App outage would block all merges — a failure mode a fence must not have (§6.1, §8.2).
 
-9. **Trusting `client_payload` for authorization.** Rejected on the sender's own shape — the caller's `payload` merges **last** and can override `source_repo`/`source_sha` — and on the discipline `feed-autofix.yml` already applies. The payload is a pointer; GitHub is the authority (§5.1, §5.3).
+9. **Extending `touch-set-drift`'s existing required `drift` context.** Rejected because that verdict is deliberately non-blocking; adding a blocking verdict would make one check run answer two questions in one colour and retroactively change what its history of greens meant (§6.4).
 
-10. **A machine-local claim cache read at startup**, one of the two shapes the mechanism comment floated. Rejected on AC6: it would make correctness depend on machine-local state, which the hold decision forbids, and it would help only the runtime that wrote it — a second PC, a second runtime, or a fresh container gets nothing. It remains legitimate as an *advisory* cache, which is all §4.3 permits.
+10. **Trusting `client_payload` for authorization.** Rejected on the sender's own shape — the caller's `payload` merges **last** and can override `source_repo`/`source_sha` — and on the discipline `feed-autofix.yml` already applies. The payload is a pointer; GitHub is the authority (§5.1, §5.3).
+
+11. **A machine-local claim cache read at startup**, one of the two shapes the mechanism comment floated. Rejected on AC6: it would make correctness depend on machine-local state, which the hold decision forbids, and it would help only the runtime that wrote it — a second PC, a second runtime, or a fresh container gets nothing. It remains legitimate as an *advisory* cache, which is all §4.4 permits.
     *Verification:* https://github.com/FS-GG/.github/issues/1858#issuecomment-5109701014, "The remedy this points at", candidate shape 1.
 
 ---
