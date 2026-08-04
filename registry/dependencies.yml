@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-08-03"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-08-04"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -853,7 +853,7 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.19.1" # SOURCE SemVer: coherent Blocked-status enforcement patch (#2109/#2184), released from coord-engine/v0.19.1 at 5b21e5a4461166a89c7336e64c48a9d744a70c92.
+    version: "0.20.0" # SOURCE SemVer: additive deterministic cycle-ledger command (#2133/#2197), queued for coord-engine/v0.20.0 after the 0.19.1 cut.
     package-version: "0.19.1" # Run 30853358886 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 31 unsigned payload entries and a public install were verified. PRIOR 0.19.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —

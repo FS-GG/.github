@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.19.1</Version>
+    <Version>0.20.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,8 +96,23 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.19.1 — PATCH: coherent Blocked parking is now enforced consistently across
-every board-writing transport route (#2109/#2184).
+    <PackageReleaseNotes>0.20.0 — MINOR on the 0.x line: deterministic, resumable coordination cycles
+are now a caller-visible engine command (#2133/#2197).
+
+The new `cycle` surface inspects, registers, advances, updates, and completes source-bound roadmap and
+workspace units through one typed ledger. Stable provider-cycle identities bind implementation, critique,
+feedback, candidate head, merge evidence, and durable update history; stale or wrong-cycle artifacts fail
+closed. The default journal resolves through Git's per-worktree path, so restart/resume works in the linked
+worktrees used by normal workers.
+
+Provider validation executes only the canonical validators shipped beside the engine, with pinned byte
+identities. Caller-controlled artifact roots cannot substitute executable validators, tampered bundled
+validators are refused, and the SDD provider is bound to the supported 1.0.0 tool/report/work identity.
+
+PREVIOUS RELEASE NOTES (0.19.1):
+
+0.19.1 — PATCH: coherent Blocked parking is now enforced consistently across every board-writing
+transport route (#2109/#2184).
 
 The packaged coordination engine rejects an incoherent `Status: Blocked` write before it can leave a
 board row parked without a concrete blocker or the explicit human/action sentinel. The centralized
