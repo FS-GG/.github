@@ -149,6 +149,68 @@ module SemanticDiffTests =
         Assert.Equal<(string * string) list>([ "oldName", "newName" ], discoverRenames files)
         Assert.Equal(rows, (discoveredOccurrences files).Length)
 
+    /// .github#2144 repair-phase round 1, finding 1.
+    ///
+    /// Discovery used to take the whole-file multiset difference and let ANY removed line pair with ANY
+    /// added line sharing its skeleton. On this PR's own 50-file diff that reported 29 rename pairs and
+    /// 7 occurrences at confidence 85-90, every one of them a false positive — enough to cross the
+    /// default threshold of 5 and make the item's own gate block the item.
+    ///
+    /// Each block below is one of the three real shapes that produced those 7, reduced to a fixture.
+    /// None of them may yield an occurrence, and the real rename in the last block still must.
+    [<Fact>]
+    let ``discovery rejects generated values re-indented blocks and coincidental pairings`` () =
+        // 1. A regenerated content digest. A perfectly formed single word substitution on an ALIGNED
+        //    line, so alignment alone cannot reject it — the token itself has to be implausible.
+        let manifestBefore =
+            "{\n  \"id\": \"pnext-item\",\n  \"tree-sha256\": \"cc4761b067f2a36a39351b5d260797d2bc364e15afccc24201b6cb1581bb0c7b\",\n  \"path\": \"SKILL.md\",\n  \"sha256\": \"3e73eb76410db4f3900c215cd5f1ecc80beb7ac0329b010f675997be59e0323f\"\n}"
+
+        let manifestAfter =
+            manifestBefore
+                .Replace("cc4761b067f2a36a39351b5d260797d2bc364e15afccc24201b6cb1581bb0c7b", "11476d307256a659e77e7dfa83b906434d3accfa3056728f3cff8c1ca19c6c27")
+                .Replace("3e73eb76410db4f3900c215cd5f1ecc80beb7ac0329b010f675997be59e0323f", "f7e1d7841bb6a0a52e3069631148a7d6d2ddaf7be89c2504641a8f7c168b57fe")
+
+        Assert.Empty(discoveredOccurrences [ "registry/manifest.json", manifestBefore, manifestAfter ])
+
+        // 2. An indentation-only move: the same block wrapped in one more scope. Under exact-equality
+        //    alignment this became one enormous replace region, and `"contexts"` at one indent paired
+        //    with `"checks"` at another as a confidence-90 string-literal rename. Nothing was renamed.
+        let readsBefore =
+            "let read doc =\n    if guard then\n        let entries =\n            match rsc.TryGetProperty \"checks\" with\n            | true, checks -> Some checks\n            | _ ->\n                match rsc.TryGetProperty \"contexts\" with\n                | true, arr -> Some arr\n                | _ -> None\n        entries\n    else None"
+
+        let readsAfter =
+            "let read doc =\n    if guard then\n      if extra then\n        let entries =\n            match rsc.TryGetProperty \"checks\" with\n            | true, checks -> Some checks\n            | _ ->\n                match rsc.TryGetProperty \"contexts\" with\n                | true, arr -> Some arr\n                | _ -> None\n        entries\n      else None\n    else None"
+
+        Assert.Empty(discoverRenames [ "src/Reads.fs", readsBefore, readsAfter ])
+
+        // 3. Two unrelated edits far apart in one file: a bare `else` deleted near the top, a bare
+        //    `Some` added near the bottom. They share a skeleton, so whole-file pairing called them the
+        //    rename `else` -> `Some` at confidence 90, three times over.
+        let spread prefix suffix =
+            [ yield "let head () ="
+              yield "    if ready then"
+              yield "        run ()"
+              yield prefix
+              yield! [ for index in 1..40 -> $"    let filler%d{index} = %d{index}" ]
+              yield "let tail () ="
+              yield "    match probe () with"
+              yield suffix ]
+            |> String.concat "\n"
+
+        Assert.Empty(discoverRenames [ "tests/Suite.fs", spread "        else" "    | _ -> ()", spread "        skip ()" "    | _ -> Some" ])
+
+        // The repair must not have bought this by blinding discovery: a genuine quoted rename in a
+        // re-indented file is still found, and still inventoried.
+        let genuineBefore = "let f () =\n    let a = \"oldName\"\n    let b = \"oldName\"\n    a + b"
+        let genuineAfter = "let f () =\n  if extra then\n    let a = \"newName\"\n    let b = \"newName\"\n    a + b\n  else empty"
+
+        Assert.Equal<(string * string) list>(
+            [ "oldName", "newName" ],
+            discoverRenames [ "src/A.fs", genuineBefore, genuineAfter ]
+        )
+
+        Assert.Equal(2, (discoveredOccurrences [ "src/A.fs", genuineBefore, genuineAfter ]).Length)
+
     [<Fact>]
     let ``bulk rename activation is derived from typed item or commit facts and threshold`` () =
         Assert.True(activationRequired 5 5 "ordinary commit" None)

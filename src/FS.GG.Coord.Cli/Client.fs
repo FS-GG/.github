@@ -947,33 +947,66 @@ module Client =
                                             | Ok review when review.HeadSha = Some head ->
                                                 Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
                                             | _ -> None
+                                        // THE THRESHOLD COUNTS OCCURRENCES, SO IT MUST BE MEASURED IN
+                                        // OCCURRENCES (.github#2144, the finding this repair phase exists for).
+                                        // The no-receipt arm used to pass `changedPaths.Length` — the changed-FILE
+                                        // count — into a parameter documented and named as an occurrence count. They
+                                        // are different quantities and the file count is always the smaller one, so a
+                                        // one-file rename with six quoted occurrences supplied `1`, computed
+                                        // `mechanicallyRequired = false` against the default threshold of 5, and let a
+                                        // `diff-audit-required:false` chain merge with no receipt at all. Omitting the
+                                        // receipt therefore ANSWERED the question the receipt exists to answer, which
+                                        // is the agent-memory failure this item removes.
+                                        //
+                                        // AND REQUIREDNESS IS MEASURED FROM THE SAME POPULATION IN BOTH ARMS
+                                        // (round 1 finding 2). The receipt arm used to count only
+                                        // `trusted.Occurrences.Length` — the recomputation of the ONE token pair the
+                                        // author chose to submit. On an identical diff that made "no receipt" report
+                                        // 7 occurrences and require the audit, while a receipt naming the narrowest
+                                        // rename in the same diff reported 1 and turned the gate OFF. That is the
+                                        // escalated defect wearing different clothes: the author's choice of what
+                                        // evidence to supply must never decide whether the gate applies. So the
+                                        // threshold input below is always what the ENGINE discovers over the whole
+                                        // diff, and the submitted receipt is evidence to be CHECKED, never the
+                                        // population to be checked against.
+                                        //
+                                        // Evidence we could not read stays UNKNOWN throughout: it requires the
+                                        // receipt rather than disproving the threshold. A negative fact is never
+                                        // manufactured from a missing one.
+                                        let declared = SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
+
+                                        /// The occurrence count the threshold is measured against, read from the live
+                                        /// base/head blobs of every changed path. `None` means the reads failed, which
+                                        /// is not a zero.
+                                        let liveOccurrenceCount baseSha =
+                                            changedPaths
+                                            |> List.map (fun path -> blobPair owner repo path baseSha head)
+                                            |> collect
+                                            |> Result.map (fun files -> (SemanticDiff.discoveredOccurrences files).Length)
+
+                                        let requiredFrom baseSha =
+                                            match liveOccurrenceCount baseSha with
+                                            // Threshold satisfaction could not be DISPROVED. Fail closed.
+                                            | Error _ -> true
+                                            | Ok occurrences ->
+                                                SemanticDiff.activationRequired threshold occurrences commitMessage (Some itemBody)
+
                                         match auditReceipt comments with
                                         | Some submitted ->
                                             match Reads.prBaseSha ctx.Transport owner repo pr with
+                                            | Error _ -> None
                                             | Ok baseSha ->
                                                 match recomputeAudit owner repo baseSha head submitted with
-                                                | Ok trusted ->
-                                                    finish (SemanticDiff.activationRequired threshold trusted.Occurrences.Length commitMessage (Some itemBody)) (Some trusted)
                                                 | Error _ -> None
-                                            | Error _ -> None
+                                                | Ok trusted ->
+                                                    // `declared` and an empty changed set short-circuit for the same
+                                                    // reasons as the no-receipt arm below.
+                                                    let required =
+                                                        if declared then true
+                                                        elif List.isEmpty changedPaths then false
+                                                        else requiredFrom baseSha
+                                                    finish required (Some trusted)
                                         | None ->
-                                            // THE THRESHOLD COUNTS OCCURRENCES, SO IT MUST BE MEASURED IN
-                                            // OCCURRENCES (.github#2144, the finding this repair phase exists for).
-                                            // This arm used to pass `changedPaths.Length` — the changed-FILE count —
-                                            // into a parameter documented and named as an occurrence count. They are
-                                            // different quantities and the file count is always the smaller one, so a
-                                            // one-file rename with six quoted occurrences supplied `1`, computed
-                                            // `mechanicallyRequired = false` against the default threshold of 5, and
-                                            // let a `diff-audit-required:false` chain merge with no receipt at all.
-                                            // Omitting the receipt therefore ANSWERED the question the receipt exists
-                                            // to answer, which is the agent-memory failure this item removes.
-                                            //
-                                            // So the tokens are recovered from the live base/head blobs instead of
-                                            // from a receipt the author may simply not have written, and evidence we
-                                            // could not read stays UNKNOWN: it requires the receipt rather than
-                                            // disproving the threshold. A negative fact is never manufactured from a
-                                            // missing one.
-                                            let declared = SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
                                             if declared then
                                                 // An item/commit declaration already decides it; the blob reads
                                                 // cannot change the answer and are not worth the REST budget.
@@ -986,13 +1019,7 @@ module Client =
                                             else
                                                 match Reads.prBaseSha ctx.Transport owner repo pr with
                                                 | Error _ -> None
-                                                | Ok baseSha ->
-                                                    match changedPaths |> List.map (fun path -> blobPair owner repo path baseSha head) |> collect with
-                                                    // Threshold satisfaction could not be DISPROVED. Fail closed.
-                                                    | Error _ -> finish true None
-                                                    | Ok files ->
-                                                        let occurrences = SemanticDiff.discoveredOccurrences files
-                                                        finish (SemanticDiff.activationRequired threshold occurrences.Length commitMessage (Some itemBody)) None
+                                                | Ok baseSha -> finish (requiredFrom baseSha) None
                                     | _ -> None
                                 | _ -> None
                             | None -> None)

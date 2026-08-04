@@ -192,22 +192,159 @@ module SemanticDiff =
                 Some(oldToken, newToken)
             | _ -> None
 
-    /// The lines of `before` that `after` does not also contain, counting duplicates — the deletion side
-    /// of the diff, without needing git to hand us hunks.
-    let private surplus (source: string[]) (other: string[]) =
-        let counts = Collections.Generic.Dictionary<string, int>()
+    /// A token pair is only a rename candidate when both sides could plausibly BE an identifier or a
+    /// piece of authored text.  Two classes of word run are structurally indistinguishable from a rename
+    /// and are never one:
+    ///
+    ///   * a content-addressed digest — every kit change rewrites `sha256`/`tree-sha256` values, and
+    ///     `"3e73eb76…"` -> `"f7e1d784…"` is a perfectly formed single word substitution on an ALIGNED
+    ///     line, so alignment alone cannot reject it (.github#2144 repair-phase round 1, finding 1);
+    ///   * a run with no letter at all — a version bump or a count is a value edit, not a rename.
+    ///
+    /// This is a plausibility filter, not a taste filter: it rejects only what cannot be a renamed name.
+    let private plausibleRenameToken (token: string) =
+        let digestLike = token.Length >= 16 && Regex.IsMatch(token, @"^[0-9a-fA-F]+$")
+        let hasLetter = token |> Seq.exists Char.IsLetter
+        hasLetter && not digestLike
 
-        for line in other do
-            counts[line] <- (match counts.TryGetValue line with
-                             | true, n -> n
-                             | _ -> 0)
-                            + 1
+    /// What alignment treats as "the same line".
+    ///
+    /// Indentation is deliberately not part of it.  Wrapping a block in a new scope re-indents every
+    /// line, which under exact equality makes the whole block one enormous replace region — and then
+    /// `contexts` at one indent pairs with `checks` at another and is reported as a rename at confidence
+    /// 90, which is exactly what happened to `Reads.fs` (.github#2144 repair-phase round 1, finding 1).
+    /// Two lines differing ONLY by indentation cannot be a rename anyway: `singleSubstitution` requires
+    /// every differing run to be a word run, and leading whitespace is not one.  So ignoring indentation
+    /// here removes false regions without hiding a single real rename.
+    let private alignKey (line: string) = line.Trim()
 
-        [ for line in source do
-              match counts.TryGetValue line with
-              | true, n when n > 0 ->
-                  counts[line] <- n - 1
-              | _ -> yield line ]
+    /// The lines occurring exactly once in BOTH slices.  Patience diff's insight: a line that is unique
+    /// on each side is an anchor no plausible alignment moves past, so it can be matched with no search.
+    let private uniqueCommon (oldLines: string[]) (newLines: string[]) oldLo oldHi newLo newHi =
+        let count (lines: string[]) lo hi =
+            let counts = Collections.Generic.Dictionary<string, int>()
+
+            for index in lo .. hi - 1 do
+                let key = alignKey lines[index]
+
+                counts[key] <-
+                    (match counts.TryGetValue key with
+                     | true, n -> n
+                     | _ -> 0)
+                    + 1
+
+            counts
+
+        let oldCounts = count oldLines oldLo oldHi
+        let newCounts = count newLines newLo newHi
+
+        let firstIndex (lines: string[]) lo hi key =
+            let mutable found = -1
+            let mutable index = lo
+
+            while found < 0 && index < hi do
+                if alignKey lines[index] = key then found <- index
+                index <- index + 1
+
+            found
+
+        [| for KeyValue(key, n) in oldCounts do
+               if n = 1 then
+                   match newCounts.TryGetValue key with
+                   | true, 1 ->
+                       yield firstIndex oldLines oldLo oldHi key, firstIndex newLines newLo newHi key
+                   | _ -> () |]
+        |> Array.sortBy fst
+
+    /// The longest strictly increasing subsequence by second coordinate, over anchors already sorted by
+    /// the first.  Anchors that survive are a consistent, non-crossing alignment.
+    let private longestIncreasing (anchors: (int * int)[]) =
+        if anchors.Length = 0 then
+            [||]
+        else
+            let tailIndex = ResizeArray<int>()
+            let previous = Array.create anchors.Length -1
+
+            for index in 0 .. anchors.Length - 1 do
+                let _, value = anchors[index]
+                let mutable lo = 0
+                let mutable hi = tailIndex.Count
+
+                while lo < hi do
+                    let mid = (lo + hi) / 2
+                    if snd anchors[tailIndex[mid]] < value then lo <- mid + 1 else hi <- mid
+
+                if lo > 0 then previous[index] <- tailIndex[lo - 1]
+                if lo = tailIndex.Count then tailIndex.Add index else tailIndex[lo] <- index
+
+            let result = ResizeArray<int * int>()
+            let mutable cursor = tailIndex[tailIndex.Count - 1]
+
+            while cursor >= 0 do
+                result.Add anchors[cursor]
+                cursor <- previous[cursor]
+
+            result.Reverse()
+            result.ToArray()
+
+    /// The diff's REPLACE regions: maximal runs of removed lines paired with the added lines that took
+    /// their place, as `removed, added`.
+    ///
+    /// This is the fact the module was missing.  Discovery used to take the whole-file multiset
+    /// difference and let ANY removed line pair with ANY added line sharing its skeleton, so a bare
+    /// `else` deleted at line 667 paired with a bare `Some` added at line 1057, and a block that merely
+    /// changed indentation re-paired against unrelated neighbours — both reported at confidence 90
+    /// (.github#2144 repair-phase round 1, finding 1).  Restricting pairing to lines the diff actually
+    /// puts opposite each other removes that entire class without weakening real discovery, because a
+    /// rename's two lines are opposite each other by construction.
+    let private replaceRegions (oldLines: string[]) (newLines: string[]) =
+        let regions = ResizeArray<string list * string list>()
+        let work = Collections.Generic.Stack<int * int * int * int>()
+        work.Push(0, oldLines.Length, 0, newLines.Length)
+
+        while work.Count > 0 do
+            let oldLo, oldHi, newLo, newHi = work.Pop()
+
+            // Equal prefix and suffix are alignment nobody has to search for.
+            let mutable a = oldLo
+            let mutable b = newLo
+
+            while a < oldHi && b < newHi && alignKey oldLines[a] = alignKey newLines[b] do
+                a <- a + 1
+                b <- b + 1
+
+            let mutable c = oldHi
+            let mutable d = newHi
+
+            while c > a && d > b && alignKey oldLines[c - 1] = alignKey newLines[d - 1] do
+                c <- c - 1
+                d <- d - 1
+
+            if a < c || b < d then
+                let anchors = uniqueCommon oldLines newLines a c b d |> longestIncreasing
+
+                if anchors.Length = 0 then
+                    // Nothing to align on: this really is one replace region.  Both sides non-empty is
+                    // what makes it a REPLACE rather than a pure insertion or deletion, and only a
+                    // replace can contain a rename.
+                    if a < c && b < d then
+                        regions.Add(
+                            [ for index in a .. c - 1 -> oldLines[index] ],
+                            [ for index in b .. d - 1 -> newLines[index] ]
+                        )
+                else
+                    // Recurse into the gaps between consecutive anchors; the anchors themselves match.
+                    let mutable previousOld = a
+                    let mutable previousNew = b
+
+                    for anchorOld, anchorNew in anchors do
+                        work.Push(previousOld, anchorOld, previousNew, anchorNew)
+                        previousOld <- anchorOld + 1
+                        previousNew <- anchorNew + 1
+
+                    work.Push(previousOld, c, previousNew, d)
+
+        regions
 
     /// Recovers the rename tokens from the live diff itself, for the delivery path where no receipt
     /// supplies them.
@@ -224,45 +361,53 @@ module SemanticDiff =
         [ for _, before, after in files do
               let oldLines = before.Replace("\r\n", "\n").Split '\n'
               let newLines = after.Replace("\r\n", "\n").Split '\n'
-              let removed = surplus oldLines newLines
-              let added = surplus newLines oldLines |> List.toArray
 
-              // Bucket the added lines by skeleton.  A partner can only live in the bucket matching the
-              // removed line's own skeleton, so this scans a handful of candidates instead of the whole
-              // added side — and each bucket keeps ascending index order, so first-match pairing picks
-              // exactly the line the unbucketed scan would have.
-              let buckets = Collections.Generic.Dictionary<string, ResizeArray<int>>()
+              // Pair ONLY inside a replace region the diff actually produced.  Scoping the search this
+              // way is what separates a rename from a coincidence: `else` and `Some` share a skeleton
+              // wherever they appear, so with the whole file in scope they paired across 400 lines.
+              for removed, added in replaceRegions oldLines newLines do
+                  let added = List.toArray added
 
-              added
-              |> Array.iteri (fun index line ->
-                  let key = skeleton (runs line)
+                  // Within the region, pairing is still by skeleton bucket rather than by position.
+                  // That is what keeps discovery robust to a line inserted or deleted INSIDE the region
+                  // (the shifted-rename case round 1 of the #2149 chain was repaired for), and it keeps
+                  // the bulk-rename shape linear rather than quadratic — each bucket holds the handful
+                  // of candidates that could possibly pair, in ascending index order, so first-match
+                  // picks exactly what an unbucketed scan would.
+                  let buckets = Collections.Generic.Dictionary<string, ResizeArray<int>>()
 
-                  match buckets.TryGetValue key with
-                  | true, bucket -> bucket.Add index
-                  | _ ->
-                      let bucket = ResizeArray<int>()
-                      bucket.Add index
-                      buckets[key] <- bucket)
+                  added
+                  |> Array.iteri (fun index line ->
+                      let key = skeleton (runs line)
 
-              let used = Collections.Generic.HashSet<int>()
+                      match buckets.TryGetValue key with
+                      | true, bucket -> bucket.Add index
+                      | _ ->
+                          let bucket = ResizeArray<int>()
+                          bucket.Add index
+                          buckets[key] <- bucket)
 
-              for removedLine in removed do
-                  match buckets.TryGetValue(skeleton (runs removedLine)) with
-                  | true, bucket ->
-                      match
-                          bucket
-                          |> Seq.tryPick (fun index ->
-                              if used.Contains index then
-                                  None
-                              else
-                                  singleSubstitution removedLine added[index]
-                                  |> Option.map (fun pair -> index, pair))
-                      with
-                      | Some(index, pair) ->
-                          used.Add index |> ignore
-                          yield pair
-                      | None -> ()
-                  | _ -> () ]
+                  let used = Collections.Generic.HashSet<int>()
+
+                  for removedLine in removed do
+                      match buckets.TryGetValue(skeleton (runs removedLine)) with
+                      | true, bucket ->
+                          match
+                              bucket
+                              |> Seq.tryPick (fun index ->
+                                  if used.Contains index then
+                                      None
+                                  else
+                                      singleSubstitution removedLine added[index]
+                                      |> Option.map (fun pair -> index, pair))
+                          with
+                          | Some(index, (oldToken, newToken)) ->
+                              used.Add index |> ignore
+
+                              if plausibleRenameToken oldToken && plausibleRenameToken newToken then
+                                  yield oldToken, newToken
+                          | None -> ()
+                      | _ -> () ]
         |> List.distinct
         |> List.sort
 

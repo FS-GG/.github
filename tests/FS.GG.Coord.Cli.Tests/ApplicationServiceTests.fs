@@ -900,6 +900,161 @@ module ApplicationServiceTests =
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
             try Directory.Delete(cache, true) with _ -> ()
 
+    /// The driver read set for a one-file, one-PR board, parameterised by the file's base/head content,
+    /// the extra comments on the PR, and what the `contents` reads do.  Shared by the two theories below
+    /// so they differ only in the fact under test.
+    let private auditWorld (path: string) (before: string) (after: string) (extraComments: string list) (contentsResult: string -> Errors.IoResult<Response>) =
+        let head = "2144-audit-head"
+        let baseSha = "2144-audit-base"
+        let encode (text: string) = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes text)
+        let contents (text: string) = $$"""{"encoding":"base64","content":"{{encode text}}"}"""
+        let boardItem =
+            """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2144,"title":"diff audit","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+        let graph (query: string) =
+            if query.Contains "projectsV2" then
+                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            elif query.Contains "fields(first" then
+                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            else
+                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+        let initial =
+            $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: false\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
+        let accepted =
+            $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
+        let comments =
+            [ {| id = 1; html_url = "https://reviews/1"; body = initial |}
+              {| id = 2; html_url = "https://reviews/2"; body = (accepted :: extraComments) |> String.concat "\n" |} ]
+        head,
+        Fake.Recorder(fun (req: Request) ->
+            let ref' = req.Query |> List.tryFind (fun (k, _) -> k = "ref") |> Option.map snd
+            match req.Method, req.Path.Trim '/' with
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(query, _) -> ok (graph query)
+                | _ -> Error(Errors.NotFound "graphql without a query")
+            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/.github/issues/2144" ->
+                ok $"""{{"number":2144,"state":"open","body":"Paths: %s{path}"}}"""
+            | "GET", "repos/FS-GG/.github/issues/2144/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/.github/pulls" ->
+                ok """[{"number":2149,"head":{"ref":"item/2144-quoted-diff-inventory"}}]"""
+            | "GET", "repos/FS-GG/.github/pulls/2149" ->
+                ok $"""{{"number":2149,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2144-quoted-diff-inventory","sha":"%s{head}"}},"base":{{"ref":"main","sha":"%s{baseSha}"}}}}"""
+            | "GET", "repos/FS-GG/.github/pulls/2149/files" -> ok $"""[{{"filename":"%s{path}"}}]"""
+            | "GET", p when p = $"repos/FS-GG/.github/commits/%s{head}" ->
+                ok """{"commit":{"message":"ordinary rename"}}"""
+            | "GET", p when p.StartsWith "repos/FS-GG/.github/contents/" ->
+                match ref' with
+                | Some r when r = baseSha -> contentsResult (contents before)
+                | Some r when r = head -> contentsResult (contents after)
+                | _ -> Error(Errors.NotFound $"unexpected contents ref: %A{ref'}")
+            | "GET", "repos/FS-GG/.github/actions/runs" ->
+                ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2144-quoted-diff-inventory","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2149}]}]}"""
+            | "GET", p when p.StartsWith "repos/FS-GG/.github/commits/" && p.EndsWith "/check-runs" ->
+                ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+            | "GET", "repos/FS-GG/.github/issues/2149/comments" -> ok (JsonSerializer.Serialize comments)
+            | method', p -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{p}")),
+        baseSha
+
+    /// Runs the real `Client.driver` over one of those worlds and returns its `reviewEvidence`.
+    let private driverEvidence (transport: Fake.Recorder) =
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2144-driver-" + Guid.NewGuid().ToString "n")
+        let previousOut, previousErr = Console.Out, Console.Error
+        try
+            Directory.CreateDirectory cache |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+            let code =
+                Client.driver (context transport) (options [ "driver"; "--repo"; ".github"; "--json"; "--worker"; "host-2144" ])
+            Console.Out.Flush()
+            Console.Error.Flush()
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            let stdout = capturedOut.ToString()
+            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code (capturedErr.ToString()) transport.Log
+            use document = JsonDocument.Parse stdout
+            document.RootElement.GetProperty("reviewEvidence").GetInt32(), stdout
+        finally
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            try Directory.Delete(cache, true) with _ -> ()
+
+    /// .github#2144 repair-phase round 1, finding 2 — a NARROW receipt must not be weaker than none.
+    ///
+    /// The two arms of the receipt branch used to feed different quantities into the same threshold: the
+    /// no-receipt arm counted whole-diff discovery, the receipt arm counted only the recomputation of the
+    /// ONE token pair the author submitted.  On the identical diff that made "no receipt" report 7
+    /// occurrences and require the audit, while a receipt naming the narrowest rename in the same diff
+    /// reported 1, fell under the threshold, and let the same `diff-audit-required: false` chain be
+    /// accepted.  The author therefore chose whether the gate applied — the escalated defect again,
+    /// reached through the one gesture the protocol actively encourages.
+    ///
+    /// Both rows below drive the real `Client.driver` over the IDENTICAL diff. The only difference is
+    /// whether a valid receipt for the narrow pair is attached, and neither may be accepted.
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``#2144 a narrow receipt cannot lower the threshold below whole-diff discovery`` (attachReceipt: bool) =
+        let path = "src/Rogue3/Protocol.fs"
+        // Six occurrences of one rename, plus one occurrence of a second, narrower rename.
+        let before =
+            [ for index in 1..6 -> $"let wide%d{index} = \"oldWide\"" ] @ [ "let narrow = \"oldNarrow\"" ]
+            |> String.concat "\n"
+        let after = before.Replace("oldWide", "newWide").Replace("oldNarrow", "newNarrow")
+
+        let extra =
+            if not attachReceipt then
+                []
+            else
+                // An honest, non-stale receipt — for the narrow pair only.
+                let occurrences = SemanticDiff.inventory path before after "oldNarrow" "newNarrow"
+                let receipt =
+                    SemanticDiff.receipt "FS-GG/.github" "2144-audit-base" "2144-audit-head" "oldNarrow" "newNarrow" [ path ] true occurrences
+                Assert.Equal(1, List.length occurrences)
+                [ $"diff-audit-receipt-v1: %s{SemanticDiff.toBase64 receipt}" ]
+
+        let _, transport, _ = auditWorld path before after extra ok
+        let evidence, stdout = driverEvidence transport
+
+        // Whole-diff discovery is 7, over the default threshold of 5, so the audit is mechanically
+        // required and the chain's `diff-audit-required: false` contradicts the live facts — with or
+        // without the narrow receipt.
+        if evidence <> 0 then
+            failwithf "attachReceipt=%b expected evidence=0 got %d; stdout=%s; log=%A" attachReceipt evidence stdout transport.Log
+
+    /// .github#2144 repair-phase round 1, finding 3 — the fail-closed arm must be executable.
+    ///
+    /// `Client.fs` turns an unreadable blob into "required", because threshold satisfaction could not be
+    /// DISPROVED — half of the objective the escalation set.  Inverting that line used to leave Core 604,
+    /// Cli 585 and GitHub 457 all green: the mutant survived, so a regression reopening the escalated
+    /// bypass through a failed blob read would have been invisible.
+    ///
+    /// A 404 is NOT this case and must stay an honest empty read: the server saying the path is absent at
+    /// that ref is a file this PR added or deleted.
+    [<Theory>]
+    [<InlineData("unreadable", 0)>]
+    [<InlineData("absent", 1)>]
+    let ``#2144 an unreadable blob requires the audit while a 404 stays an honest empty read`` (mode: string) (expectedEvidence: int) =
+        let path = "src/Rogue3/Protocol.fs"
+        let before = "let a = \"oldName\""
+        let after = "let a = \"newName\""
+
+        let contentsResult: string -> Errors.IoResult<Response> =
+            match mode with
+            | "unreadable" -> fun _ -> Error(Errors.Http(500, "upstream failed"))
+            | _ -> fun _ -> Error(Errors.NotFound $"contents/%s{path}")
+
+        let _, transport, _ = auditWorld path before after [] contentsResult
+        let evidence, stdout = driverEvidence transport
+
+        if evidence <> expectedEvidence then
+            failwithf "mode=%s expected evidence=%d got %d; stdout=%s; log=%A" mode expectedEvidence evidence stdout transport.Log
+
     [<Fact>]
     let ``followup audit apply disposes an abandoned queue's ref even when another worker holds the open issue`` () =
         let transport = world (Map.ofList [ 42, "Paths: src/A" ]) (Map.ofList [ 42, "other-123" ]) false
