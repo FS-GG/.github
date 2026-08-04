@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.20.1</Version>
+    <Version>0.21.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +96,53 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.20.1 — PATCH: an organization board's row for an issue owned OUTSIDE the
+    <PackageReleaseNotes>0.21.0 — MINOR on the 0.x line: the typed semantic diff-audit becomes a
+caller-visible engine command, and a mandatory, engine-recomputed gate on the live delivery path
+(.github#2144).
+
+FOURTEEN merged engine commits since 0.20.1. All of them belong to .github#2144 and its repair
+phase; the wire surface `src/FS.GG.Coord.Core/Protocol.fs` is UNTOUCHED by this cut, so no exit
+code and no existing verb's contract changes.
+
+NEW COMMAND VOCABULARY — `diff-audit`. `fsgg-coord-engine diff-audit &lt;base&gt; &lt;head&gt; &lt;old&gt; &lt;new&gt;
+[receipt.json|-] [item-body.md] --paths P... [--repo ROOT] [--json]` inventories the exact
+git-object changes between two immutable commits and classifies every changed occurrence with a
+typed disposition. It is JSON-only, reads no board and opens no network connection, and accepts a
+bare `-` to read a receipt from stdin. `--paths` is now accepted for it as well as for `widen` and
+`set-paths`. THIS IS WHY THE CUT IS A MINOR AND NOT A PATCH: receivers gain a verb, a help entry, a
+flag applicability, a render name and a refusal vocabulary that 0.20.1 did not have. The 0.x line
+has no major available to take, so MINOR is this repository's caller-observable-change signal.
+
+THE GATE. Review-chain parsing now binds a mandatory diff audit to an inventory the engine
+recomputes ITSELF from the live PR base/head blobs, so a submitted receipt is evidence only where
+the engine can reproduce it. Requiredness is derived from the live item body, the immutable head
+declaration and an occurrence threshold — never from a review marker's own claim, and never from
+caller environment variables. A receipt that is stale, incomplete, duplicated, malformed, or
+outside the declared paths is refused, and unreadable live facts supply NO trusted facts and
+require the audit rather than waiving it.
+
+MEASURED IN OCCURRENCES, NOT FILES. Where no receipt supplies the rename tokens, the engine
+recovers them from the live diff and counts OCCURRENCES. The changed-file count is a different and
+always smaller quantity, and substituting it let a one-file/six-occurrence rename pass under the
+default threshold of 5. Both arms — with and without a submitted receipt — now measure the same
+way, from diff-aligned renames rather than from an unaligned whole-file multiset difference.
+
+COVERAGE. A receipt carries one rename pair, and the gate is satisfied by the UNION of every
+receipt the review chain carries: each must be honest about the pair it names, and together they
+must cover every occurrence discovered across the whole diff. Before this, a receipt honestly
+covering 6 of 12 discovered occurrences over 1 of 2 changed paths was accepted, so the author still
+chose how much of the diff the audit applied to.
+
+PERFORMANCE. Rename discovery buckets candidates by line skeleton, so a bulk rename over a large
+diff terminates instead of degenerating into an all-pairs comparison.
+
+Six refusal causes stay distinguishable rather than collapsing into one message: no receipts, a
+malformed receipt, an honest-but-partial receipt, an unrecomputed rename pair, and a stale or
+unresolved-disposition receipt each name themselves; only a covering union is `Ok`.
+
+PREVIOUS RELEASE NOTES (0.20.1):
+
+0.20.1 — PATCH: an organization board's row for an issue owned OUTSIDE the
 board owner is now read from the board side, so cross-owner coordination reports the truth (#2204/#2209).
 
 `Board.itemStatus` and `Board.itemBlockedBy` resolved a row's `Status`/`Blocked by` through the
