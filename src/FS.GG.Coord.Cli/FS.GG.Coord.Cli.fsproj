@@ -100,9 +100,19 @@
 caller-visible engine command, and a mandatory, engine-recomputed gate on the live delivery path
 (.github#2144).
 
-FOURTEEN merged engine commits since 0.20.1. All of them belong to .github#2144 and its repair
-phase; the wire surface `src/FS.GG.Coord.Core/Protocol.fs` is UNTOUCHED by this cut, so no exit
-code and no existing verb's contract changes.
+FIFTEEN merged engine commits since 0.20.1 — fourteen from .github#2144 and its repair phase, plus
+one DEFECT-class fix from .github#2220. The wire surface `src/FS.GG.Coord.Core/Protocol.fs` is
+UNTOUCHED by this cut, so no exit code and no existing verb's contract changes.
+
+BLOCKER-CLEARED NOW CHOOSES ITS REMEDY FROM THE ROW'S TOUCH-SET (.github#2220). The rule emitted
+`Status = Ready` unconditionally, which is a correct answer to "do the recorded blockers still
+hold?" applied to rows for which `Ready` is not a REACHABLE state. A row declaring `Paths: none`
+(unschedulable by design) or declaring no touch-set line at all was advertised to every reader and
+then refused by the scheduler on every pass — a permanently unfillable lane at the head of the
+queue, observed live for six days on the board's only Critical row. Such rows now clear to
+`Backlog`, the file-less chore case still clears to `Ready`, and an unreadable body yields no
+destination rather than a guessed one. Receivers running 0.20.1 still reconcile the old way, which
+is why this cut is owed rather than merely due.
 
 NEW COMMAND VOCABULARY — `diff-audit`. `fsgg-coord-engine diff-audit &lt;base&gt; &lt;head&gt; &lt;old&gt; &lt;new&gt;
 [receipt.json|-] [item-body.md] --paths P... [--repo ROOT] [--json]` inventories the exact
