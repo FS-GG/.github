@@ -111,6 +111,45 @@ module Chore =
 
         member Label: string
 
+    /// WHERE A CLEARED ROW SHOULD LAND — `BLOCKER-CLEARED`'s remedy, chosen from the row's own touch-set
+    /// (.github#2220).
+    ///
+    /// `BLOCKER-CLEARED` used to answer one question — *"do the recorded blockers still hold?"* — and emit
+    /// `Status = Ready` unconditionally. That is a correct answer to the question it asks, applied to rows
+    /// for which `Ready` is not a REACHABLE state. `Ready` is the column `Schedulability.columnStartability`
+    /// calls `AlwaysStartable`, so it asserts a startability the scheduler will then refuse on every pass:
+    /// `batch`/`take` list the row as a candidate and decline it forever. A permanently unfillable lane at
+    /// the head of the queue — MEASURED on `.github#1858`, the board's only `Severity: Critical` row, which
+    /// spent six days simultaneously the most important defect on the board and impossible to schedule.
+    ///
+    /// **THE DISTINCTION IS ALREADY TYPED, AND THE RULE SIMPLY DID NOT READ IT.** `Types.fsi` separates
+    /// `Undeclared` (an OMISSION) from `DeclaredNone` (a DECISION) from `DeclaredChore` (reserves nothing
+    /// but IS schedulable). This type is that partition projected onto the one axis the remedy needs — the
+    /// column to write — while keeping the two unschedulable cases APART in the prose, because collapsing
+    /// them re-introduces exactly the ambiguity `Types.fsi:127-140` exists to remove: one is a bug to
+    /// repair, the other a decision to respect, and a worker reading the offer acts differently on each.
+    ///
+    /// This is a REMEDY, not a second startability opinion. It never promotes a row the old rule held, and
+    /// it never holds a row the old rule promoted — it only redirects the write for the two populations
+    /// whose destination was unreachable.
+    type ClearedDestination =
+        /// A real declaration (`Declared`) or `Paths: any` (`DeclaredChore`). `Ready` is reachable, so the
+        /// remedy is #620's original flip, unchanged. THE COMMON PATH, and the one the fixture pair pins.
+        | ToReady
+
+        /// `Paths: none` — unschedulable BY DESIGN. Clear the stale `Blocked`, which is genuinely wrong
+        /// once the blockers have resolved, WITHOUT asserting a startability the row cannot have.
+        /// `Backlog` says exactly that and nothing more: not blocked, not startable, parked by decision.
+        | ToBacklogDeclaredNone
+
+        /// No `Paths:` line at all — unschedulable by OMISSION. Same column as above, because the board
+        /// facts are the same; a different sentence, because the repair is not. `lint`'s `UNDECLARED-PATHS`
+        /// owns the repair itself, which is an ISSUE edit and never a board write.
+        | ToBacklogUndeclared
+
+        /// The column this destination writes.
+        member Status: BoardStatus
+
     /// WHICH `/check-board` RULE GENERATED THIS CHORE.
     ///
     /// Each case carries the fact that JUSTIFIES it, not merely a code — so the statement a worker reads and
@@ -146,7 +185,8 @@ module Chore =
         | ClosedIssueNotDone of column: BoardStatus
 
         /// `BLOCKER-CLEARED` — every blocker resolved, but the column still says `Blocked`.
-        /// Remedy: `Status = Ready`.
+        /// Remedy: `Status = <the destination's column>` — `Ready` for a row that can hold it, `Backlog`
+        /// for one whose touch-set makes `Ready` unreachable (.github#2220, and `ClearedDestination`).
         ///
         /// Resolved means CLOSED **or MERGED** (#476): a PR's state is OPEN | CLOSED | MERGED, so a rule that
         /// clears only on CLOSED unblocks when the blocking work is ABANDONED and blocks forever once it is
@@ -235,7 +275,18 @@ module Chore =
         ///   the fact it was derived from.
         ///
         /// None of the five can contradict a refusal, in either direction.
-        | BlockerCleared of resolved: string list
+        ///
+        /// ...AND THE REMEDY IS CHOSEN FROM THE ROW'S TOUCH-SET, NOT FIXED AT `Ready` — .github#2220. See
+        /// `ClearedDestination` for the incident. Every gate above HOLDS the row; this one is the first
+        /// that REDIRECTS it, and the difference matters: the populations it redirects (`Paths: none`,
+        /// and a missing `Paths:` line) have a genuinely stale `Blocked` that something must still clear.
+        /// Holding them would leave the lie in place; promoting them to `Ready` advertises a row no
+        /// scheduler can admit. `Backlog` is the only column that is true of both.
+        ///
+        /// The destination is carried, not re-derived, on the same terms every other case carries what it
+        /// saw: `Write` and `Statement` both read THIS value, so the column the receipt names and the
+        /// column the sentence promises cannot come apart.
+        | BlockerCleared of resolved: string list * destination: ClearedDestination
 
         /// `STATUS-NOT-BLOCKED` — an OPEN blocker, but the column is `Ready`/`Backlog`, so the scheduler is
         /// advertising work that is not startable. Remedy: `Status = Blocked`.

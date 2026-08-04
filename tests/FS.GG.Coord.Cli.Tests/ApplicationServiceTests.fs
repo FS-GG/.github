@@ -2412,6 +2412,66 @@ module ApplicationServiceTests =
                     else
                         Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
+            // A REAL touch-set, and .github#2220 is why it is spelled rather than left as filler. This body
+            // was `Paths: none` — chosen as the shortest thing that parses, not as a fact about the row —
+            // and `Paths: none` is `DeclaredNone`, whose remedy is now `Backlog` rather than `Ready`. This
+            // fixture's subject is the two-FIELD receipt on an ORDINARY cleared row, so the ordinary row is
+            // what it must carry; the `DeclaredNone` path has its own fixture below.
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
+                ok """{"number":47,"body":"Paths: src/A.fs"}"""
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/pulls" -> ok "[]"
+            | "GET", "repos/FS-GG/FS.GG.SDD/git/matching-refs/heads/item/47-" -> ok "[]"
+            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    /// `.github#1858`'S EXACT SHAPE: one OPEN `Blocked` row whose only blocker has CLOSED, whose body
+    /// declares `Paths: none`, and which `BLOCKER-CLEARED` used to promote to `Ready` (.github#2220).
+    ///
+    /// THIS EXISTS BECAUSE A CORE TEST CANNOT REACH THE HALF THAT WAS BROKEN. `Chore.fs` decides the
+    /// destination; `Client.fs` decides what actually goes on the wire — and they were two different
+    /// answers, because `writesFor` hardcoded `statusWireName Ready` for the Status half of the
+    /// two-field batch. Every assertion in `ChoreTests` would have stayed green over that: the receipt
+    /// would have said `Backlog` while the mutation sent `Ready`, which is the board and its own audit
+    /// trail disagreeing. So this fixture serves a `Backlog` OPTION and the test below reads the OPTION
+    /// ID off the log — the bytes that reach GitHub, not the value the engine intended.
+    let private declaredNoneReconcileWorld () =
+        let mutable status = "Blocked"
+        let mutable blockedBy = "FS-GG/FS.GG.SDD#45"
+
+        let items () =
+            [ boardItemIn status 47 "a decision item" (if blockedBy = "" then None else Some blockedBy) "OPEN"
+              boardItemIn "Done" 45 "resolved blocker" None "CLOSED" ]
+            |> String.concat ","
+
+        Fake.Recorder(fun (req: Request) ->
+            match req.Method, req.Path.Trim '/' with
+            | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, _) ->
+                    if document.Contains "projectItems" then
+                        ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "updateProjectV2ItemFieldValue" then
+                        // The repair landed: the fresh verification read below now observes both fields.
+                        status <- "Backlog"
+                        blockedBy <- ""
+                        ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
+                    elif document.Contains "projectsV2" then
+                        ok
+                            """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "fields(first" then
+                        // `Backlog` IS an option here, unlike the fixtures above — a board that could not
+                        // represent the destination would fail this test for the wrong reason (HTTP 422),
+                        // which proves nothing about which column the CLI chose.
+                        ok
+                            """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_backlog","name":"Backlog"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "items(first" then
+                        ok
+                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    else
+                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47" ->
                 ok """{"number":47,"body":"Paths: none"}"""
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/47/comments" -> ok "[]"
@@ -2621,11 +2681,15 @@ module ApplicationServiceTests =
                         $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{items ()}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                 | Query(document, _) -> Error(Errors.NotFound $"the external-owner fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
+            // A REAL touch-set — .github#2220, for `partialBlockerReconcileWorld`'s reason exactly. This
+            // fixture is about carrying the EXTERNAL OWNER into the lookup, and it needs an ordinary
+            // cleared row to do it on; `Paths: none` would silently move it onto the `Backlog` path and
+            // test the external owner against the wrong remedy.
             | "GET", "repos/EHotwagner/rogue3/issues" ->
-                ok """[{"number":96,"state":"open","body":"Paths: none"}]"""
+                ok """[{"number":96,"state":"open","body":"Paths: src/A.fs"}]"""
             | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/issues/96" ->
-                ok """{"number":96,"state":"open","body":"Paths: none"}"""
+                ok """{"number":96,"state":"open","body":"Paths: src/A.fs"}"""
             | "GET", "repos/EHotwagner/rogue3/issues/96/comments" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/pulls" -> ok "[]"
             | "GET", "repos/EHotwagner/rogue3/git/matching-refs/heads/item/96-" -> ok "[]"
@@ -2714,6 +2778,42 @@ module ApplicationServiceTests =
         Assert.Equal("Ready", str "value" observed.[0])
         Assert.Equal("Blocked by", str "field" observed.[1])
         Assert.Equal("FS-GG/FS.GG.SDD#45", str "value" observed.[1])
+
+    [<Fact>]
+    let ``.github#2220 reconcile --apply sends BACKLOG on the wire for a `Paths: none` row, never Ready`` () =
+        // THE END-TO-END LEG, on `.github#1858`'s exact shape. The Core chooses the destination and the
+        // CLI puts it on the wire; this asserts the two agree by reading the OPTION ID out of the
+        // transport log — `opt_backlog`, the bytes GitHub would receive — rather than trusting the
+        // receipt, which is the engine describing itself.
+        let world = declaredNoneReconcileWorld ()
+        let code, out, err = runReconcile world (reconcileArgs [ "--apply"; "--json" ])
+
+        if String.IsNullOrWhiteSpace out then
+            failwithf ".github#2220 fixture emitted no receipt (exit %d): %s" code err
+
+        let row = parsedArray out |> List.find (fun r -> str "subject" r = "FS.GG.SDD#47")
+
+        if code <> 0 then failwithf ".github#2220 reconcile failed: %s" err
+
+        Assert.Equal("BLOCKER-CLEARED", str "rule" row)
+        Assert.Equal("written", str "outcome" row)
+
+        // The RECEIPT names Backlog...
+        Assert.Equal("Status", str "field" row)
+        Assert.Equal("Backlog", str "value" row)
+
+        // ...the FRESH VERIFICATION read agrees...
+        let observed = row.GetProperty("observed").EnumerateArray() |> List.ofSeq
+        Assert.Equal(2, List.length observed)
+        Assert.Equal("Status", str "field" observed.[0])
+        Assert.Equal("Backlog", str "value" observed.[0])
+        Assert.Equal("Blocked by", str "field" observed.[1])
+        Assert.Equal("", str "value" observed.[1])
+
+        // ...AND THE WIRE CARRIED IT. This is the assertion the hardcoded `Ready` in `writesFor` would
+        // have failed while every other line above still passed.
+        Assert.True(world.Logged "opt_backlog", $"the mutation did not send the Backlog option: %A{world.Log}")
+        Assert.False(world.Logged "opt_ready", $"the mutation sent Ready for a `Paths: none` row: %A{world.Log}")
 
     [<Fact>]
     let ``reconcile --apply --json puts the whole stream in ONE document`` () =

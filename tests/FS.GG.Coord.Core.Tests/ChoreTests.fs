@@ -487,6 +487,164 @@ module ChoreTests =
 
             Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
 
+    // ---- .github#2220: the REMEDY's column is read off the touch-set, not fixed at `Ready` ------------
+    //
+    // MEASURED live on `.github#1858`, the board's only `Severity: Critical` row. Its one blocker cleared,
+    // the chore offered *"set Status to Ready"*, and the row declares `Paths: none` — `DeclaredNone`, which
+    // `Types.fsi:130-132` documents as "unschedulable BY DESIGN". `Ready` is the one column
+    // `columnStartability` calls `AlwaysStartable`, so applying that remedy would have put a row at the head
+    // of the queue that `batch`/`take` list as a candidate and then decline forever. The worker declined the
+    // chore by hand; nothing in the code would have stopped it.
+    //
+    // THE GATES ABOVE ALL HOLD THE ROW; THIS ONE REDIRECTS IT, and the tests below are shaped by that
+    // difference. `Blocked` really is stale once the blockers resolve, so declining to write anything would
+    // leave the lie in place — the fix has to choose a DIFFERENT column, not refuse. So every leg comes in a
+    // pair: what the redirected populations now get, and the unchanged `Ready` for everything else.
+
+    [<Fact>]
+    let ``.github#2220 a `Paths: none` row is cleared to Backlog, NOT Ready — Ready is a column no scheduler can admit`` () =
+        let i =
+            { item 1858 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                TouchSet = DeclaredNone }
+
+        // The chore still FIRES — the stale `Blocked` is real and something must clear it.
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+        Assert.Equal<(string * string) option>(Some("Status", statusWireName Backlog), (List.head (derive [ i ])).Kind.Write)
+
+    [<Fact>]
+    let ``.github#2220 a row with NO `Paths:` line is cleared to Backlog too — same board facts, different repair`` () =
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                TouchSet = Undeclared }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+        Assert.Equal<(string * string) option>(Some("Status", statusWireName Backlog), (List.head (derive [ i ])).Kind.Write)
+
+    [<Fact>]
+    let ``.github#2220 AC3 the OMISSION and the DECISION are told apart in the statement — collapsing them re-opens #496`` () =
+        // `Types.fsi:127-140` exists to separate "somebody forgot" from "somebody decided". They take the
+        // same column here, so the COLUMN cannot carry the distinction and the sentence must — a worker
+        // reading the offer acts differently on each: one is an issue edit somebody owes, the other is
+        // nothing to repair at all.
+        let statementFor ts =
+            let i =
+                { item 1 with
+                    Status = Blocked
+                    Blockers = [ blocker 2 BlockerClosed ]
+                    TouchSet = ts }
+
+            (List.head (derive [ i ])).Statement
+
+        let omission = statementFor Undeclared
+        let decision = statementFor DeclaredNone
+
+        Assert.NotEqual<string>(omission, decision)
+
+        // Each names the fact that produced it, so the two cannot be told apart only by being different.
+        Assert.Contains("no `Paths:` line", omission)
+        Assert.Contains("UNDECLARED-PATHS", omission)
+        Assert.Contains("`Paths: none`", decision)
+
+        // And NEITHER promises the column it is not writing — the sentence and `Write` are the same value.
+        for s in [ omission; decision ] do
+            Assert.Contains("set Status to Backlog", s)
+            Assert.DoesNotContain("set Status to Ready", s)
+
+    [<Fact>]
+    let ``.github#2220 negative control: an ordinary Declared row still goes to Ready — #620's remedy is intact`` () =
+        // The half that makes the two above a NARROWING rather than a deletion. Identical in every field
+        // but the touch-set.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                TouchSet = Declared [ Matchable "src/" ] }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+        Assert.Equal<(string * string) option>(Some("Status", statusWireName Ready), (List.head (derive [ i ])).Kind.Write)
+        Assert.Contains("set Status to Ready", (List.head (derive [ i ])).Statement)
+
+    [<Fact>]
+    let ``.github#2220 `Paths: any` is DeclaredNone's SCHEDULABLE counterpart and still goes to Ready`` () =
+        // The case a rule keyed on "reserves no files" would get wrong. `DeclaredChore` reserves nothing
+        // EXACTLY as `DeclaredNone` does — and ADR-0045 makes it schedulable anyway, which is why
+        // `Types.fsi` splits them. Keying on emptiness instead of on the case would park every file-less
+        // chore in `Backlog`.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                TouchSet = DeclaredChore }
+
+        Assert.Equal<(string * string) option>(Some("Status", statusWireName Ready), (List.head (derive [ i ])).Kind.Write)
+
+    [<Fact>]
+    let ``.github#2220 an UNREAD body picks no column at all — a destination chosen from a failed read (#266)`` () =
+        // The fail-closed leg. `humanHoldAllowsFlip` already holds every `Unreadable` row, so this is a
+        // second lock on one door — spelled anyway, because a gate that is only correct while some OTHER
+        // gate keeps its subject away breaks the first time the other gate moves.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                TouchSet = Unreadable "rate limited" }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``.github#2220 THE GENERAL RULE: a chore may only write `Ready` onto a row Schedulability actually calls Startable`` () =
+        // THE STATEMENT THE TWO SPECIAL CASES ARE INSTANCES OF, and the reason this is a fix rather than a
+        // pair of patches. The defect is not that `Paths: none` is special — it is that the remedy asserted
+        // a startability WITHOUT ASKING the one module that decides startability. So this asks it: put the
+        // row in the column the chore chose and make `Schedulability.schedulable` agree.
+        //
+        // GATED ON `AlwaysStartable`, which is the precise claim. `Ready` ADVERTISES the row unconditionally,
+        // so writing it is a promise that the scheduler will hand the row out. `Backlog` is
+        // `WithBacklogOptIn` — a parking column that promises nothing — which is exactly why it is the right
+        // destination for a row that is genuinely unblocked and genuinely not startable.
+        //
+        // Swept over every `TouchSet` case, derived from the union, so a SEVENTH case cannot default into
+        // `Ready` and ship as a new unfillable lane. `noFields` throws on a field type it does not know
+        // rather than dropping the case.
+        let touchSets =
+            everyCaseOf<TouchSet> (fun t ->
+                if t = typeof<PathToken list> then box ([ Matchable "src/" ]: PathToken list)
+                elif t = typeof<string> then box "rate limited"
+                else noFields t)
+
+        Assert.NotEmpty(touchSets)
+
+        // NON-VACUITY, the other half. If no touch-set produced a chore that writes `Ready`, the loop below
+        // would report green having asserted nothing at all — the #266 shape, inside the guard for it.
+        let mutable everAdvertised = false
+
+        for ts in touchSets do
+            let i =
+                { item 1 with
+                    Status = Blocked
+                    Blockers = [ blocker 2 BlockerClosed ]
+                    TouchSet = ts }
+
+            for c in derive [ i ] do
+                match c.Kind.Write with
+                | Some("Status", wire) ->
+                    let column = everyStatus |> List.find (fun s -> statusWireName s = wire)
+
+                    if Schedulability.columnStartability column = Schedulability.AlwaysStartable then
+                        everAdvertised <- true
+
+                        Assert.Equal<Schedulability.Schedulability>(
+                            Schedulability.Startable,
+                            Schedulability.schedulable false [] { i with Status = column }
+                        )
+                | _ -> ()
+
+        Assert.True(everAdvertised, "no touch-set produced a chore writing an AlwaysStartable column — this test asserted nothing")
+
     [<Fact>]
     let ``#1644 the park gate does NOT reach an item whose blockers still HOLD — the blocker gate is first`` () =
         // The park NARROWS the flip condition; it is not a second thing that can trigger or suppress one.
@@ -668,15 +826,15 @@ module ChoreTests =
         // `STALE-CLAIM`'s is `reap`, which restores `PreviousStatus`, and that can be `Ready`), and a
         // `Status` string no `BoardStatus` renders (a hand-written literal instead of `statusWireName`).
         // Both would answer "harmless" by DEFAULT, which is the fail-open this whole item is about.
-        let kinds =
-            everyCaseOf<ChoreKind> (fun t ->
-                if t = typeof<WorkerId> then box (WorkerId "wren-0001")
-                elif t = typeof<BoardStatus> then box Ready
-                elif t = typeof<string list> then box ([ ".github#2" ]: string list)
-                elif t = typeof<ItemClass> then box (List.head (everyCaseOf<ItemClass> noFields))
-                else noFields t)
+        //
+        // SWEPT OVER EVERY `ClearedDestination` — .github#2220. `BLOCKER-CLEARED`'s `Write` now varies with
+        // the destination the derivation chose, so filling ONE value would assert this about a third of the
+        // case and go green over the other two. The expected answer is the SAME for all three, and that is
+        // the claim: which KIND can contradict a refusal is a property of the kind, not of the column it
+        // happened to pick on the day the fixture was written.
+        let destinations = everyCaseOf<ClearedDestination> noFields
 
-        Assert.NotEmpty(kinds)
+        Assert.NotEmpty(destinations)
 
         let writesStartableColumn (k: ChoreKind) =
             match k.Write with
@@ -699,9 +857,21 @@ module ChoreTests =
                 Assert.Equal("STALE-CLAIM", k.RuleId)
                 false
 
-        let offenders = kinds |> List.filter writesStartableColumn |> List.map (fun k -> k.RuleId)
+        for destination in destinations do
+            let kinds =
+                everyCaseOf<ChoreKind> (fun t ->
+                    if t = typeof<WorkerId> then box (WorkerId "wren-0001")
+                    elif t = typeof<BoardStatus> then box Ready
+                    elif t = typeof<string list> then box ([ ".github#2" ]: string list)
+                    elif t = typeof<ItemClass> then box (List.head (everyCaseOf<ItemClass> noFields))
+                    elif t = typeof<ClearedDestination> then box destination
+                    else noFields t)
 
-        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], offenders)
+            Assert.NotEmpty(kinds)
+
+            let offenders = kinds |> List.filter writesStartableColumn |> List.map (fun k -> k.RuleId)
+
+            Assert.Equal<string list>([ "BLOCKER-CLEARED" ], offenders)
 
     [<Fact>]
     let ``#1738 BLOCKER-CLEARED fires exactly where Blockers.cleared says — the predicate Scan probes on`` () =

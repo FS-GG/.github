@@ -1940,13 +1940,22 @@ module Client =
                 // A cleared dependency is a two-field projection.  Keeping the old `Blocked by` text
                 // beside a Ready status creates the half-converged shape this reconciler is meant to
                 // remove, so send both values in one aliased mutation.
+                //
+                // THE STATUS HALF IS `write`'S, NOT A LITERAL — .github#2220. This spelled
+                // `statusWireName Ready` directly, which was the SECOND hand-maintained answer to "what
+                // column does BLOCKER-CLEARED write" and is exactly the duplication the note above forbids.
+                // It went unnoticed while the Core's answer was also an unconditional `Ready`; once the
+                // Core began choosing `Backlog` for a row whose touch-set makes `Ready` unreachable, this
+                // literal would have written `Ready` anyway — the receipt saying `Backlog` and the board
+                // getting `Ready`, which is worse than the defect it repairs. Only the `Blocked by` clear
+                // is genuinely local, because it is this kind's second field and no other kind has one.
                 let writesFor (chore: Chore.Chore) =
-                    match chore.Kind with
-                    | Chore.BlockerCleared _ -> [ "Status", Board.Set(statusWireName FS.GG.Coord.Types.Ready); "Blocked by", Board.Clear ]
-                    | _ ->
-                        match write chore with
-                        | Some(field, value) -> [ field, Board.Set value ]
-                        | None -> []
+                    match write chore with
+                    | None -> []
+                    | Some(field, value) ->
+                        match chore.Kind with
+                        | Chore.BlockerCleared _ -> [ field, Board.Set value; "Blocked by", Board.Clear ]
+                        | _ -> [ field, Board.Set value ]
 
                 // DERIVED from `write`, not matched a second time. These are the same fact in two
                 // renderings — the `remedy` key and the `field`/`value` pair of the SAME JSON object, plus

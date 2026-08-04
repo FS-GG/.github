@@ -67,6 +67,21 @@ module BlockerLintTests =
         // than a source spelling that only existed in an earlier draft of this test.
         Assert.Contains("StatusNotBlocked _ -> Some(\"Status\", statusWireName Blocked)", chore)
 
+        // .github#2220: BLOCKER-CLEARED's remedy column is the DESTINATION's, chosen from the row's
+        // touch-set — not a literal `Ready`. `.github#1858` declares `Paths: none`, which `Types.fsi`
+        // documents as unschedulable BY DESIGN, and the old unconditional `Ready` would have advertised it
+        // to every reader while `batch`/`take` declined it forever.
+        Assert.Contains("BlockerCleared(_, destination) -> Some(\"Status\", statusWireName destination.Status)", chore)
+
+        // ...AND THE CLI MAY NOT SPELL THAT COLUMN A SECOND TIME. `writesFor` builds BLOCKER-CLEARED's
+        // two-field batch and used to hardcode `statusWireName FS.GG.Coord.Types.Ready` for the Status
+        // half — a second answer to "what column does this rule write", harmless only while the Core's
+        // answer was also an unconditional `Ready`. Once the Core began choosing `Backlog`, that literal
+        // would have sent `Ready` anyway while the receipt printed `Backlog`: the board and its own
+        // audit trail disagreeing, which is worse than the defect being repaired. The Status half now
+        // comes from `write chore`, and this is the gate that keeps it there.
+        Assert.DoesNotContain("statusWireName FS.GG.Coord.Types.Ready", source)
+
     [<Fact>]
     let ``BLOCKED-NO-REASON fires only for an unreasoned open blocked row`` () =
         let verdict body blockedBy =

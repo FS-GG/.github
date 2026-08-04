@@ -13,11 +13,23 @@ module Chore =
             | Quick -> "quick"
             | Involved -> "involved"
 
+    /// Where a cleared row should land — see Chore.fsi for the incident (.github#2220).
+    type ClearedDestination =
+        | ToReady
+        | ToBacklogDeclaredNone
+        | ToBacklogUndeclared
+
+        member this.Status =
+            match this with
+            | ToReady -> Ready
+            | ToBacklogDeclaredNone
+            | ToBacklogUndeclared -> Backlog
+
     type ChoreKind =
         | StaleClaim of holder: WorkerId
         | ClaimStatusLag of column: BoardStatus
         | ClosedIssueNotDone of column: BoardStatus
-        | BlockerCleared of resolved: string list
+        | BlockerCleared of resolved: string list * destination: ClearedDestination
         | StatusNotBlocked of blockers: string list
         | ClassProjectionLag of declared: ItemClass
 
@@ -39,7 +51,11 @@ module Chore =
             | StaleClaim _ -> None
             | ClaimStatusLag _ -> Some("Status", statusWireName InProgress)
             | ClosedIssueNotDone _ -> Some("Status", statusWireName Done)
-            | BlockerCleared _ -> Some("Status", statusWireName Ready)
+            // .github#2220: the column comes from the DESTINATION the derivation chose off the row's
+            // touch-set, never from a literal `Ready` spelled here. `Ready` for a row that can hold it,
+            // `Backlog` for one that cannot — and because `Statement` reads the same value, the sentence a
+            // worker reads cannot promise a column the receipt does not write.
+            | BlockerCleared(_, destination) -> Some("Status", statusWireName destination.Status)
             | StatusNotBlocked _ -> Some("Status", statusWireName Blocked)
             // The ONLY kind that writes a field other than `Status` (.github#1588), which is exactly why
             // `Write` had to move into this type — see the .fsi.
@@ -176,6 +192,34 @@ module Chore =
     let private itemPrAllowsFlip (item: Item) : bool =
         item.ItemPr.IsNone && not item.ItemPrUnreadable
 
+    /// THE DESTINATION CHOICE — `BLOCKER-CLEARED`'s remedy, read off the row's touch-set (.github#2220).
+    ///
+    /// Every other gate above answers "may this flip happen at all?" and returns a `bool`. This one is the
+    /// only question `BLOCKER-CLEARED` asks about WHERE the row goes, and it is a different question: the
+    /// rows it redirects have a `Blocked` column that is genuinely stale and that something must still
+    /// clear. Answering it with a `bool` would force the choice between leaving the lie in place and
+    /// writing `Ready` onto a row no scheduler can admit — which is the incident (.github#1858).
+    ///
+    /// IT RETURNS AN OPTION, AND THE `None` IS THE FAIL-CLOSED (#266). `Unreadable` is "we did not read the
+    /// body", so we do not know what the row declares and cannot choose a destination for it — that is not
+    /// the same fact as `Undeclared`, and coercing it to one would pick a column from a failed read.
+    /// `humanHoldAllowsFlip` already holds every `Unreadable` row for its own reason, so this is the second
+    /// lock on one door rather than the only one; it is spelled anyway because a gate that is only correct
+    /// while some OTHER gate keeps its subject away is the shape that breaks the first time the other gate
+    /// moves. THE MATCH IS TOTAL for `humanHoldAllowsFlip`'s reason exactly: a seventh `TouchSet` case must
+    /// be classified here rather than defaulting into a column.
+    ///
+    /// `DeclaredChore` (`Paths: any`) goes to `Ready` and that is not an oversight — ADR-0045's file-less
+    /// chore reserves nothing and IS schedulable, so `Ready` is reachable for it. It is `DeclaredNone`'s
+    /// counterpart precisely here, and the two are told apart by `Types.fsi` for this reason.
+    let private clearedDestination (item: Item) : ClearedDestination option =
+        match item.TouchSet with
+        | Unreadable _ -> None
+        | Undeclared -> Some ToBacklogUndeclared
+        | DeclaredNone -> Some ToBacklogDeclaredNone
+        | DeclaredChore
+        | Declared _ -> Some ToReady
+
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
         member _.Subject = subject
@@ -192,8 +236,17 @@ module Chore =
                 $"%s{subject.Short}: a live claim holds it, but the board says %s{columnLabel column} — set Status to In progress."
             | ClosedIssueNotDone column ->
                 $"%s{subject.Short}: the issue is CLOSED but the board says %s{columnLabel column} — set Status to Done."
-            | BlockerCleared resolved ->
+            // .github#2220 — three sentences, because there are three different things to tell a worker.
+            // The first is #620's original promotion. The other two name WHY `Ready` is not on offer, and
+            // they stay apart because the follow-up differs: a `Paths: none` row is a decision to respect
+            // and needs no repair at all, where a row with no `Paths:` line at all is an omission somebody
+            // must fix before it can ever be scheduled.
+            | BlockerCleared(resolved, ToReady) ->
                 $"%s{subject.Short}: every blocker is resolved (%s{nameList resolved}) but the board still says Blocked — set Status to Ready."
+            | BlockerCleared(resolved, ToBacklogDeclaredNone) ->
+                $"%s{subject.Short}: every blocker is resolved (%s{nameList resolved}) but the board still says Blocked — set Status to Backlog. NOT Ready: the item declares `Paths: none`, which is unschedulable by design, so Ready would advertise a row no scheduler can ever admit."
+            | BlockerCleared(resolved, ToBacklogUndeclared) ->
+                $"%s{subject.Short}: every blocker is resolved (%s{nameList resolved}) but the board still says Blocked — set Status to Backlog. NOT Ready: the item declares no `Paths:` line at all, so no scheduler can admit it until somebody adds one (`lint`'s UNDECLARED-PATHS owns that repair)."
             | StatusNotBlocked blockers ->
                 $"%s{subject.Short}: %s{nameList blockers} is still open, but the board advertises it as startable — set Status to Blocked."
             | ClassProjectionLag c ->
@@ -352,18 +405,31 @@ module Chore =
               // The gate order mirrors `Schedulability`'s: concrete blockers (step 3), the human park (3b),
               // the markerless in-flight PR (5b) — then the machine predicate, for which `Schedulability`
               // has no step at all and which is therefore last.
-              if
-                  item.State = Open
-                  && item.Status = Blocked
-                  // `Blockers.cleared`, not a `not IsEmpty && forall` spelled here: `Scan` must probe
-                  // exactly this population for `Item.ItemPr`, so the two projects ask ONE function
-                  // rather than agreeing by inspection (.github#1738, #1012).
-                  && Blockers.cleared item.Blockers
-                  && humanHoldAllowsFlip item
-                  && itemPrAllowsFlip item
-                  && predicateAllowsFlip item
-              then
-                  Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
+              //
+              // ...AND THE REMEDY'S COLUMN COMES FROM THE ROW'S TOUCH-SET — .github#2220. The gates above
+              // decide WHETHER; `clearedDestination` decides WHERE, and its `None` is one more fail-closed
+              // read (an unread body cannot pick a column). Everything the old rule promoted still
+              // promotes, to the same `Ready`; only the two populations for which `Ready` was unreachable
+              // are redirected.
+              match
+                  (if
+                       item.State = Open
+                       && item.Status = Blocked
+                       // `Blockers.cleared`, not a `not IsEmpty && forall` spelled here: `Scan` must probe
+                       // exactly this population for `Item.ItemPr`, so the two projects ask ONE function
+                       // rather than agreeing by inspection (.github#1738, #1012).
+                       && Blockers.cleared item.Blockers
+                       && humanHoldAllowsFlip item
+                       && itemPrAllowsFlip item
+                       && predicateAllowsFlip item
+                   then
+                       clearedDestination item
+                   else
+                       None)
+              with
+              | Some destination ->
+                  Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display), destination), Quick)
+              | None -> ()
 
               // STATUS-NOT-BLOCKED. A blocker observed OPEN while the board advertises the item as
               // startable — the scheduler is handing out work that is not startable. `BlockerUnknown` blocks
