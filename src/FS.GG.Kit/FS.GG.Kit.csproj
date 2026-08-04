@@ -394,7 +394,14 @@
          rather than from changed-file count, so a missing receipt can no longer read as a negative
          fact. This changes receiver-visible required review behavior while preserving the packed
          member set and destinations. -->
-    <Version>0.36.0</Version>
+    <!-- 0.36.0 -> 0.37.0, a MINOR (.github#2223): the packed pnext-item critic contract now requires,
+         as a numbered step, that every gate the change adds or modifies is INVERTED and demonstrated to
+         red — a surviving inversion being material by definition rather than a judgement call — and
+         bounds the fixture and the measurement environment that demonstration is taken in. The packed
+         §3 worker guidance gains the matching implementer-side obligation. This changes
+         receiver-visible required review and authoring behavior while preserving the packed member set
+         and destinations. -->
+    <Version>0.37.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

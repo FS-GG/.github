@@ -80,6 +80,13 @@ Before implementing interactive/game work, run the
 [performance-first planning gate](references/performance-first.md). Then fix causes, add focused
 regression coverage, and run proportionate build/test/format gates. Poll inbox at phase boundaries.
 
+Every gate this change adds or modifies **ships with evidence it can fail**: invert it, run the suite,
+and record the mutation and the observed red. A test that passes both before and after the fix has not
+tested the fix, and a gate whose inversion survives is a material finding at review by definition — see
+Gate-inversion evidence in [independent-review](references/independent-review.md), whose numbered steps
+also bound the fixture and the measurement environment. Doing this at authoring time is cheaper than at
+review time, and it makes the critic's step a confirmation rather than a discovery.
+
 ## 4. Route implementation findings
 
 Fix in-scope causes now. For a distinct cause, **establish the root cause before you file** — a finding

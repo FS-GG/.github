@@ -110,11 +110,11 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "11476d307256a659e77e7dfa83b906434d3accfa3056728f3cff8c1ca19c6c27",
+      "tree-sha256": "680eab978af61d0b23b2a6b07651809b3bca214311c5af9027c23c054f9d837d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "f7e1d7841bb6a0a52e3069631148a7d6d2ddaf7be89c2504641a8f7c168b57fe",
+          "sha256": "7ba09a34f9f659d7e967856bc44979be90625cf40b6b895e563c206cd77c9499",
           "executable": false
         },
         {
@@ -144,7 +144,7 @@
         },
         {
           "path": "references/independent-review.md",
-          "sha256": "fefd978a376df7b90933cb6cb5e93c1f22056dbdebfa5eb60690a2bfe21d0de8",
+          "sha256": "2383cc96ca3d8567fd62b24c1a0ecc66ae3c733f5b16d16aa870aba6ceae6da1",
           "executable": false
         },
         {
