@@ -621,6 +621,170 @@ let ``#2166 an unavailable external-owner ProjectV2 lookup is never non-membersh
     | Ok None -> failwith "an unavailable external-owner board lookup was manufactured into non-membership"
     | other -> failwith $"the unavailable external-owner lookup must fail closed — got %A{other}"
 
+// ---- #2204: the two readers #2172 did not reach --------------------------------------------------
+
+/// The MEASURED #2204 topology, in one transport.
+///
+/// The issue-side `repository.issue.projectItems` connection returns ONLY the external repository's own
+/// user project — it omits the FS-GG organization board's row entirely, which is exactly what
+/// `EHotwagner/rogue3#96`, `EHotwagner/rogue3#75` and `EHotwagner/S.I.R.#138` return against the live API.
+/// The board node carries that row and its column all along. A reader that narrows the issue-side answer
+/// to `board.Number` therefore reports the DEFINITE "no column" for a row that has one.
+let private externalOwnerFieldWorld (projectLookup: string) (fieldNode: string) =
+    Fake.Recorder(fun (req: Request) ->
+        match req.Body with
+        | Query(document, _) when document.Contains "node(id: $projectId)" -> ok projectLookup
+        | Query(document, _) when document.Contains "node(id: $itemId)" -> ok fieldNode
+        | Query(document, _) when document.Contains "repository(owner: $owner" ->
+            ok
+                """{"data":{"repository":{"issue":{"projectItems":{"nodes":[
+                     {"id":"PVTI_user7","project":{"number":7},"fieldValueByName":{"name":"Backlog"}}]}}}}}"""
+        | Query(document, _) -> Error(NotFound $"the #2204 fixture serves no answer for: %s{document}")
+        | _ -> Error(NotFound "the #2204 fixture serves no answer for a non-GraphQL request"))
+
+/// The board node carries the external row; the twin under the default owner is present so a match on
+/// repo/number alone would pick the wrong one.
+let private externalRowOnBoard =
+    """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+         {"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},
+         {"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+
+[<Fact>]
+let ``#2204 itemStatus reads an external-owner column the issue-side connection omits`` () =
+    use _sandbox = new Sandbox()
+
+    // THE DEFECT, IN ONE ASSERTION. `claim`'s convergence gate is `status = Some "In progress"`, and the
+    // issue-side reader made that permanently unreachable for every cross-owner row on the board.
+    let transport =
+        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":{"fieldValueByName":{"name":"In progress"}}}}"""
+
+    match itemStatus transport board "EHotwagner" "rogue3" 96 with
+    | Ok(Some InProgress) ->
+        // Two points: the project walk that resolves the row, then the one-point field read on its node.
+        // The issue-side arm of this fixture is live and would have answered `Ok None` — the pre-repair
+        // result — so reaching `In progress` at all is the assertion.
+        Assert.Equal(2, transport.GraphQlCalls)
+    | Ok None ->
+        failwith "the external-owner column was manufactured into 'no column' — this is #2204: a filtered row became a definite absence"
+    | other -> failwith $"the external-owner Status must be read from the board — got %A{other}"
+
+[<Fact>]
+let ``#2204 itemBlockedBy reads an external-owner edge from the board side too`` () =
+    use _sandbox = new Sandbox()
+
+    // The twin reader. #2172 repaired `itemId` alone and left BOTH of these carrying the defect verbatim;
+    // they now share one mechanism so a future repair cannot land on one and miss the other.
+    let transport =
+        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":{"fieldValueByName":{"text":"FS-GG/.github#2155"}}}}"""
+
+    match itemBlockedBy transport board "EHotwagner" "rogue3" 96 with
+    | Ok(Some edge) -> Assert.Equal("FS-GG/.github#2155", edge)
+    | Ok None -> failwith "a live external-owner `Blocked by` edge was reported as absent"
+    | other -> failwith $"the external-owner Blocked by must be read from the board — got %A{other}"
+
+[<Fact>]
+let ``#2204 an external-owner row on the board with the field unset is a measured Ok None`` () =
+    use _sandbox = new Sandbox()
+
+    // The legitimate absence, and the one this repair must NOT lose: on the board, no column. `null`
+    // `fieldValueByName` is GitHub's own answer for an unset field.
+    let statusWorld =
+        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":{"fieldValueByName":null}}}"""
+
+    match itemStatus statusWorld board "EHotwagner" "rogue3" 96 with
+    | Ok None -> ()
+    | other -> failwith $"an unset external Status is Ok None — got %A{other}"
+
+    let blockedWorld =
+        externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":{"fieldValueByName":null}}}"""
+
+    match itemBlockedBy blockedWorld board "EHotwagner" "rogue3" 96 with
+    | Ok None -> ()
+    | other -> failwith $"an unset external Blocked by is Ok None — got %A{other}"
+
+[<Fact>]
+let ``#2204 an external issue genuinely not on this board is still Ok None`` () =
+    use _sandbox = new Sandbox()
+
+    // A COMPLETE walk of the project that did not find the canonical row. This is the one absence that may
+    // be manufactured into "there is no column", because it was measured rather than filtered.
+    let notOnBoard =
+        """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+             {"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}}]}}}}"""
+
+    let transport = externalOwnerFieldWorld notOnBoard """{"data":{"node":null}}"""
+
+    match itemStatus transport board "EHotwagner" "rogue3" 96 with
+    | Ok None -> ()
+    | other -> failwith $"a complete project walk without the external row is Ok None — got %A{other}"
+
+[<Fact>]
+let ``#2204 an incomplete external-owner lookup is Error, never 'no column'`` () =
+    use _sandbox = new Sandbox()
+
+    // #2166's fail-closed discipline reaches these readers through the same `itemId`. An incomplete page is
+    // a read that did not finish, and #266's class is precisely turning that into a definite answer.
+    let incomplete =
+        """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}"""
+
+    match itemStatus (externalOwnerFieldWorld incomplete "{}") board "EHotwagner" "rogue3" 96 with
+    | Error(Malformed(_, message)) -> Assert.Contains("another page but no usable cursor", message)
+    | Ok None -> failwith "an incomplete external lookup was manufactured into 'no column'"
+    | other -> failwith $"the incomplete external Status lookup must fail closed — got %A{other}"
+
+    match itemBlockedBy (externalOwnerFieldWorld incomplete "{}") board "EHotwagner" "rogue3" 96 with
+    | Error(Malformed(_, message)) -> Assert.Contains("another page but no usable cursor", message)
+    | Ok None -> failwith "an incomplete external lookup was manufactured into 'no edge'"
+    | other -> failwith $"the incomplete external Blocked by lookup must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2204 a resolved external row whose board node does not resolve is Error, never an empty column`` () =
+    use _sandbox = new Sandbox()
+
+    // The id came FROM the board, so a null node is an unresolvable read — the row moved, or the read did
+    // not happen. Either way the column was not measured, and absence may not be manufactured from it.
+    let transport = externalOwnerFieldWorld externalRowOnBoard """{"data":{"node":null}}"""
+
+    match itemStatus transport board "EHotwagner" "rogue3" 96 with
+    | Error(NotFound message) -> Assert.Contains("PVTI_external96", message)
+    | Ok None -> failwith "an unresolvable external field read was manufactured into 'no column'"
+    | other -> failwith $"the unresolvable external field read must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2204 an unavailable external field read is never a manufactured absence`` () =
+    use _sandbox = new Sandbox()
+    let transport = failing (RateLimited(GraphQlBudget, None))
+
+    match itemStatus transport board "EHotwagner" "rogue3" 96 with
+    | Error(RateLimited(GraphQlBudget, _)) -> ()
+    | Ok None -> failwith "a rate-limited external Status read reported the column ABSENT"
+    | other -> failwith $"expected RateLimited — got %A{other}"
+
+    match itemBlockedBy transport board "EHotwagner" "rogue3" 96 with
+    | Error(RateLimited(GraphQlBudget, _)) -> ()
+    | Ok None -> failwith "a rate-limited external Blocked by read reported the edge ABSENT"
+    | other -> failwith $"expected RateLimited — got %A{other}"
+
+[<Fact>]
+let ``#2204 the board owner's own issues keep the ONE-POINT issue-side resolver read`` () =
+    use _sandbox = new Sandbox()
+
+    // THE THRIFT #481/#418 BOUGHT, AND THE REASON THIS BRANCHES ON OWNER AT ALL. `take` → `claim` runs this
+    // for every worker on every round, against the budget that dies first. The board-side route costs a
+    // project walk on its first lookup; routing the board owner's own issues through it would put that walk
+    // on the hottest path in the org for no gain, because the issue-side connection answers them correctly.
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"projectItems":{"nodes":[
+                 {"project":{"number":12},"fieldValueByName":{"name":"In progress"}}]}}}}}"""
+
+    // ONE call, and it parsed an issue-side body. The board-side route would have paged the project first
+    // and then failed to find `data.node.items` in this response, so `Ok(Some InProgress)` at one GraphQL
+    // call is the whole assertion.
+    match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(Some InProgress) -> Assert.Equal(1, transport.GraphQlCalls)
+    | other -> failwith $"the board owner's own Status is the resolver read — got %A{other}"
+
 [<Fact>]
 let ``#510 a REFUSED write is NEVER queued - replaying it would loop forever`` () =
     use _sandbox = new Sandbox()

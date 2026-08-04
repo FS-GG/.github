@@ -399,12 +399,20 @@ module ApplicationServiceTests =
             let boardItems () =
                 $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[{{"id":"PVTI_default96","status":{{"name":"Blocked"}},"blockedBy":null,"content":{{"__typename":"Issue","number":96,"title":"default twin","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/rogue3"}}}}}},{{"id":"PVTI_external96","status":{{"name":"%s{externalStatus}"}},"blockedBy":null,"content":{{"__typename":"Issue","number":96,"title":"external target","state":"OPEN","repository":{{"nameWithOwner":"EHotwagner/rogue3"}}}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
 
+            // The issue-side connection, AS THE LIVE API ANSWERS IT (.github#2204).
+            //
+            // For the board owner's own issue it carries the Coordination row. For `EHotwagner/rogue3#96` it
+            // carries ONLY that repository's own user project (7) and OMITS the organization board's row
+            // entirely — measured against the fleet token on #96, #75 and `EHotwagner/S.I.R.#138`. This
+            // fixture used to answer project 12 for both owners, which quietly made the cross-owner arm
+            // untestable: it modelled an API that does not filter. Every external read must now reach the
+            // board side, and this arm is the tripwire that says so.
             let projectItems owner includeStatus =
-                let id, status =
+                let id, project, status =
                     if owner = "EHotwagner" then
-                        "PVTI_external96", externalStatus
+                        "PVTI_user7", 7, "Backlog"
                     else
-                        "PVTI_default96", "Blocked"
+                        "PVTI_default96", 12, "Blocked"
 
                 let field =
                     if includeStatus then
@@ -412,7 +420,17 @@ module ApplicationServiceTests =
                     else
                         ""
 
-                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{id}","project":{{"number":12}}%s{field}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"%s{id}","project":{{"number":%d{project}}}%s{field}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+
+            /// The board-side field read: one point on the resolved row's own node.
+            let externalField (field: string) =
+                let value =
+                    if field = "Status" then
+                        $"""{{"name":"%s{externalStatus}"}}"""
+                    else
+                        "null"
+
+                $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
 
             let comments owner =
                 if owner <> "EHotwagner" then
@@ -440,10 +458,21 @@ module ApplicationServiceTests =
                         | Query(document, variables) when document.Contains "projectsV2" ->
                             ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         | Query(document, _) when document.Contains "fields(first" ->
-                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                            // `Backlog` is a REAL option here on purpose: it is the #1823 default `add`
+                            // applies over a column it believes is unset, and an assertion that it was NOT
+                            // written is worthless if the write could not have resolved an option id anyway.
+                            ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"}]},{"id":"PVTF_blocked","name":"Blocked by","dataType":"TEXT"}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         | Query(document, _) when document.Contains "node(id: $projectId)" ->
                             ok
                                 """{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_default96","content":{"number":96,"repository":{"nameWithOwner":"FS-GG/rogue3"}}},{"id":"PVTI_external96","content":{"number":96,"repository":{"nameWithOwner":"EHotwagner/rogue3"}}}]}}}}"""
+                        | Query(document, variables) when document.Contains "node(id: $itemId)" ->
+                            let item = variable "itemId" variables |> Option.map asString |> Option.defaultValue ""
+                            let field = variable "field" variables |> Option.map asString |> Option.defaultValue ""
+
+                            if item <> "PVTI_external96" then
+                                Error(Errors.NotFound $"the board-side field read addressed the wrong row: %s{item}")
+                            else
+                                ok (externalField field)
                         | Query(document, _) when document.Contains "items(first" -> ok (boardItems ())
                         | Query(document, variables) when document.Contains "projectItems" ->
                             let owner = variable "owner" variables |> Option.map asString |> Option.defaultValue ""
@@ -520,7 +549,10 @@ module ApplicationServiceTests =
                     match opts.Command with
                     | Options.BatchCmd -> Client.batch (context transport) opts
                     | Options.Take -> Client.take (context transport) opts
-                    | command -> failwithf "twin-owner fixture only drives batch/take, got %A" command
+                    | Options.Claim -> Client.claim (context transport) opts
+                    | Options.Release -> Client.release (context transport) opts
+                    | Options.Add -> Client.addCmd (context transport) opts
+                    | command -> failwithf "twin-owner fixture drives batch/take/claim/release/add, got %A" command
                 Console.Out.Flush()
                 Console.Error.Flush()
                 code, capturedOut.ToString(), capturedErr.ToString()
@@ -573,6 +605,50 @@ module ApplicationServiceTests =
         if output.Trim() <> "" then
             use receipt = JsonDocument.Parse output
             Assert.False(receipt.RootElement.TryGetProperty("converged") |> fst)
+
+    [<Fact>]
+    let ``#2204 a bare release RESTORES a cross-owner item's pre-claim column`` () =
+        // CONSEQUENCE 1 OF THE FALSE `Ok None`. `release` without `--status` derives its decision from the
+        // live column: `Ok None` becomes `Preserve None`, printed as "no column to reset", and the row is
+        // LEFT at the `In progress` the claim wrote — unschedulable, and looking held by nobody.
+        let world = ExternalOwnerTakeFixture.create ExternalOwnerTakeFixture.Healthy
+
+        let claimCode, _, claimErr =
+            ExternalOwnerTakeFixture.run world.Transport [ "claim"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
+
+        if claimCode <> 0 then failwithf "the external claim failed: %s" claimErr
+
+        let releaseCode, releaseOut, releaseErr =
+            ExternalOwnerTakeFixture.run world.Transport [ "release"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
+
+        if releaseCode <> 0 then failwithf "the external release failed: %s" releaseErr
+
+        // The pre-claim column was `Ready`, so the restore names it. The pre-repair output was the bare
+        // "(no column to reset — not on this board, or no Status set)" for a row that is on the board.
+        Assert.Contains("released rogue3#96 → Ready", releaseOut)
+        Assert.DoesNotContain("no column to reset", releaseOut)
+
+    [<Fact>]
+    let ``#2204 add does not lay the Backlog default over a live cross-owner column`` () =
+        // CONSEQUENCE 2. `add` reads the column and, on `Ok None`, writes the #1823 `Backlog` default. The
+        // comment above that call names this as "the ONE direction this change destroys information,
+        // asserted to be impossible rather than made so" — and for a cross-owner row it was certain.
+        let world = ExternalOwnerTakeFixture.create ExternalOwnerTakeFixture.Healthy
+
+        let addCode, addOut, addErr =
+            ExternalOwnerTakeFixture.run world.Transport [ "add"; "EHotwagner/rogue3#96"; "--worker"; "otter-2204" ]
+
+        if addCode <> 0 then failwithf "the external add failed: %s" addErr
+
+        // The row's live column is `Ready`. `add` is idempotent over it: no Status write at all, and in
+        // particular never the default.
+        Assert.False(
+            world.Transport.Logged "--single-select-option-id opt_backlog",
+            $"`add` wrote the Backlog default over a live external column — stdout: %s{addOut}")
+
+        Assert.False(
+            world.Transport.Logged "--id PVTI_default96",
+            "`add` addressed the default-owner twin")
 
     [<Fact>]
     let ``#2127 driver review evidence is bound to the PR comment endpoint`` () =

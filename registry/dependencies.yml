@@ -437,8 +437,8 @@ contracts:
     surface: ".fsgg/governance.yml"
     consumers: [governance]
   - id: governance-reference-gate-set
-    version: "1.5.0"
-    package-version: "1.5.0"
+    version: "1.6.0"
+    package-version: "1.6.0"
     owner: governance
     # .github#15 (H3, epic #16 Pillar 3): the validated reference .fsgg gate set published as a
     # content-only NuGet package FS.GG.Governance.ReferenceGateSet — ONE versioned source of truth
@@ -464,6 +464,25 @@ contracts:
     # Feed: PUBLISHED — live at 1.5.0 on GitHub Packages (record 1068393740) and nuget.org;
     # all 13 non-signature payload paths and bytes match across feeds. Templates#305 owns the
     # downstream overlay adoption, so the historical Templates edge below remains at its real pin.
+    # 1.6.0 (Governance#386/PR#387, merge 6bbd8ff90efc93bd5479739dd57414b8a96c1c2d): MINOR — the
+    # package gains its FIRST consumer resolution contract. Until now the payload shipped only under
+    # contentFiles/any/any/, which a modern SDK-style PackageReference does not materialize, and the
+    # package carried no build/buildTransitive assets — so an ordinary repository had NO verb by which
+    # to obtain the profile, only a hand copy out of a clone. 1.6.0 adds
+    # buildTransitive/FS.GG.Governance.ReferenceGateSet.targets defining `FsggResolveReferenceGateSet`
+    # (`dotnet restore` then `dotnet msbuild -t:FsggResolveReferenceGateSet`). MINOR, not PATCH: the
+    # package SHAPE grows by a first-class MSBuild asset and exact-pin consumers re-pin deliberately.
+    # Also in 1.6.0: the `game` gameplay-floor entries in the packed capabilities.yml are now a
+    # GENERATED region derived from the authoritative embedded F# profile
+    # (ReferenceProfile.checksFor), per Governance docs/decisions/0011, which amends ADR-0009 §1
+    # WITHOUT overturning it — enforcement still reads no file, so this resolution route is
+    # DISTRIBUTION only and a product cannot escape the floor by deleting its resolved copy.
+    # NO CONSUMER'S GATE SET MOVES: the floor's check VALUES are byte-identical to 1.5.0's; only
+    # comment lines changed. Governance release run 30902595815 published the package.
+    # Feed: PUBLISHED — live at 1.6.0 on GitHub Packages (record 1097229941) and nuget.org; both
+    # archives downloaded and compared entry-wise — 13 non-signature payload entries, identical
+    # names, ZERO content differences (nuget.org adds only .signature.p7s). Templates#305 still owns
+    # the downstream overlay adoption, so the Templates edge below remains at its real pin.
     surface: >
       FS.GG.Governance.ReferenceGateSet content package —
       contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to
@@ -853,8 +872,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.20.0" # SOURCE SemVer: additive deterministic cycle-ledger command (#2133/#2197), released from coord-engine/v0.20.0.
-    package-version: "0.20.0" # Run 30866791028 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 33 unsigned payload entries and a public install were verified. PRIOR 0.19.1.
+    version: "0.20.1" # SOURCE SemVer: cross-owner board-side Status/Blocked by read (#2204/#2209) — a compatibility-preserving correctness patch, no wire-surface change; released from coord-engine/v0.20.1 at acdc68267020efcb9d064aef1e7173d8e4983a7b.
+    package-version: "0.20.1" # Run 30902727534 packed ONCE and pushed that one archive to GitHub Packages then nuget.org. Independent post-publish downloads from both feeds share all 33 payload entries byte-for-byte (org SHA-256 dc3f9a2fe526845b8b4b5d3452d086f35d8f35fd82ef9049955fe2430506c914; public signed SHA-256 d3eed4d171cde1f84093f08a8c0a13d25a3f51c935c0f38bef0b1fed266b3a61 — the sole extra entry is nuget.org's own .signature.p7s). A nuget.org-only install self-reports 0.20.1.0, carries the #2204 externalItemField fix (2 occurrences vs 0 in published 0.20.0), and emits byte-identical command-contract/facts JSON — so the caller-observable surface is unchanged and PATCH is measured, not asserted. PRIOR 0.20.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
