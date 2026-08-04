@@ -12,7 +12,9 @@ module DeliveryTests =
           RepairPhase = false
           ChecksGreen = true
           HostAccepted = true
-          RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure lifecycle test") }
+          RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure lifecycle test")
+          DiffAuditRequired = false
+          DiffAuditHead = None }
 
     let freshness head : Delivery.Freshness =
         { ItemRef = "FS-GG/.github#2131"

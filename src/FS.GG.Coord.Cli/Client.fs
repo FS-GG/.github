@@ -856,6 +856,57 @@ module Client =
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
+        /// EVERY receipt the chain carries, not the one it is allowed to carry.
+        ///
+        /// A receipt names ONE rename pair, so a diff with two distinct renames cannot be covered by a
+        /// single one — and this used to return `Some` only for exactly one receipt in exactly one
+        /// comment, which made a covering submission impossible to author (.github#2144 repair-phase
+        /// round 2). Malformed encodings are dropped HERE and re-read by `Driver`, which is the layer
+        /// that reports them; this function's job is to supply the recomputations, not to grade.
+        let auditReceipts (comments: Driver.ReviewComment list) =
+            comments
+            |> List.collect (fun comment ->
+                comment.Body.Split '\n'
+                |> Array.choose (fun line ->
+                    let prefix = "diff-audit-receipt-v1:"
+                    let line = line.Trim()
+                    if line.StartsWith(prefix, StringComparison.Ordinal) then Some(line.Substring(prefix.Length).Trim()) else None)
+                |> Array.toList)
+            |> List.choose (SemanticDiff.ofBase64 >> Result.toOption)
+
+        let collect rows =
+            rows
+            |> List.fold (fun state next -> Result.bind (fun all -> Result.map (fun row -> all @ [ row ]) next) state) (Ok [])
+
+        /// The blob pair a rename is visible in.  A 404 is the SERVER saying the path is absent at that
+        /// ref — a file this PR added or deleted — which is empty content and a readable fact. Every
+        /// other failure stays an error, because "I could not read it" and "there is nothing there" are
+        /// opposite answers and #421 is what merging them costs.
+        let blobPair owner repo path baseSha headSha =
+            let at gitRef =
+                match Reads.fileAtRef ctx.Transport owner repo path gitRef with
+                | Ok content -> Ok content
+                | Error(Errors.NotFound _) -> Ok ""
+                | Error e -> Error e
+            match at baseSha, at headSha with
+            | Ok before, Ok after -> Ok(path, before, after)
+            | Error e, _
+            | _, Error e -> Error e
+
+        // Recomputation reads blobs through the SAME `blobPair` rule as discovery.  When it used a bare
+        // `fileAtRef`, a declared path this PR ADDED 404'd at the base and the whole candidate was
+        // dropped — so a correct receipt over a new file was discarded rather than validated, and the two
+        // arms disagreed about what "absent at that ref" means.
+        let recomputeAudit owner repo baseSha headSha (submitted: SemanticDiff.Receipt) =
+            submitted.DeclaredPaths
+            |> List.map (fun path ->
+                blobPair owner repo path baseSha headSha
+                |> Result.map (fun (path, before, after) ->
+                    SemanticDiff.inventory path before after submitted.OldToken submitted.NewToken))
+            |> List.fold (fun state next -> Result.bind (fun all -> Result.map (fun rows -> all @ rows) next) state) (Ok [])
+            |> Result.map (fun rows ->
+                SemanticDiff.receipt submitted.Repository baseSha headSha submitted.OldToken submitted.NewToken submitted.DeclaredPaths true rows)
+
         match scanAndDecide ctx opts Cache.Scheduling, readWaveModel () with
         | Error e, _ -> eprint (Errors.explain e); ExitError
         | _, Error e -> eprint e; ExitError
@@ -878,10 +929,115 @@ module Client =
                                       Reads.prHeadSha ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr,
                                       Reads.commentsWithIdentity ctx.Transport candidate.Item.Ref.Owner candidate.Item.Ref.Repo pr with
                                 | Ok scan, PrGreen, Ok head, Ok comments when List.isEmpty scan.Unreadable ->
+                                    let owner = candidate.Item.Ref.Owner
+                                    let repo = candidate.Item.Ref.Repo
                                     let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
-                                    match Driver.parseReviewComments comments with
-                                    | Ok review when review.HeadSha = Some head ->
-                                        Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
+                                    let threshold =
+                                        match Environment.GetEnvironmentVariable "FSGG_DIFF_AUDIT_THRESHOLD" with
+                                        | null | "" -> Some 5
+                                        | value ->
+                                            match Int32.TryParse value with
+                                            | true, number when number >= 0 -> Some number
+                                            | _ -> None
+                                    match threshold,
+                                          Reads.issueBody ctx.Transport owner repo candidate.Item.Ref.Number,
+                                          Reads.commitMessage ctx.Transport owner repo head,
+                                          Reads.prFiles ctx.Transport owner repo pr with
+                                    | Some threshold, Ok itemBody, Ok commitMessage, Ok changedPaths ->
+                                        let finish required trusted =
+                                            match Driver.parseReviewCommentsWithFacts required trusted comments with
+                                            | Ok review when review.HeadSha = Some head ->
+                                                Some(pr, head, { review with ChecksGreen = true }, scan.Markers.Length)
+                                            | _ -> None
+                                        // THE THRESHOLD COUNTS OCCURRENCES, SO IT MUST BE MEASURED IN
+                                        // OCCURRENCES (.github#2144, the finding this repair phase exists for).
+                                        // The no-receipt arm used to pass `changedPaths.Length` — the changed-FILE
+                                        // count — into a parameter documented and named as an occurrence count. They
+                                        // are different quantities and the file count is always the smaller one, so a
+                                        // one-file rename with six quoted occurrences supplied `1`, computed
+                                        // `mechanicallyRequired = false` against the default threshold of 5, and let a
+                                        // `diff-audit-required:false` chain merge with no receipt at all. Omitting the
+                                        // receipt therefore ANSWERED the question the receipt exists to answer, which
+                                        // is the agent-memory failure this item removes.
+                                        //
+                                        // AND REQUIREDNESS IS MEASURED FROM THE SAME POPULATION IN BOTH ARMS
+                                        // (round 1 finding 2). The receipt arm used to count only
+                                        // `trusted.Occurrences.Length` — the recomputation of the ONE token pair the
+                                        // author chose to submit. On an identical diff that made "no receipt" report
+                                        // 7 occurrences and require the audit, while a receipt naming the narrowest
+                                        // rename in the same diff reported 1 and turned the gate OFF. That is the
+                                        // escalated defect wearing different clothes: the author's choice of what
+                                        // evidence to supply must never decide whether the gate applies. So the
+                                        // threshold input below is always what the ENGINE discovers over the whole
+                                        // diff, and the submitted receipt is evidence to be CHECKED, never the
+                                        // population to be checked against.
+                                        //
+                                        // Evidence we could not read stays UNKNOWN throughout: it requires the
+                                        // receipt rather than disproving the threshold. A negative fact is never
+                                        // manufactured from a missing one.
+                                        let declared = SemanticDiff.activationRequired threshold 0 commitMessage (Some itemBody)
+
+                                        /// Every occurrence the engine can discover over the whole diff, read from the
+                                        /// live base/head blobs of every changed path. An `Error` means the reads
+                                        /// failed, which is emphatically not an empty inventory.
+                                        let liveOccurrences baseSha =
+                                            if List.isEmpty changedPaths then
+                                                Ok []
+                                            else
+                                                changedPaths
+                                                |> List.map (fun path -> blobPair owner repo path baseSha head)
+                                                |> collect
+                                                |> Result.map SemanticDiff.discoveredOccurrences
+
+                                        let requiredFrom baseSha =
+                                            match liveOccurrences baseSha with
+                                            // Threshold satisfaction could not be DISPROVED. Fail closed.
+                                            | Error _ -> true
+                                            | Ok occurrences ->
+                                                SemanticDiff.activationRequired threshold occurrences.Length commitMessage (Some itemBody)
+
+                                        match auditReceipts comments with
+                                        | _ :: _ as submitted ->
+                                            match Reads.prBaseSha ctx.Transport owner repo pr with
+                                            | Error _ -> None
+                                            | Ok baseSha ->
+                                                // One recomputation per submitted receipt proves each HONEST about the
+                                                // pair it names; the whole-diff discovery proves them COMPLETE. A
+                                                // receipt arm that carried only the first accepted a receipt for 6 of
+                                                // 12 discovered occurrences (round 2 of this repair phase).
+                                                let expected =
+                                                    submitted
+                                                    |> List.map (recomputeAudit owner repo baseSha head)
+                                                    |> collect
+
+                                                match expected, liveOccurrences baseSha with
+                                                | Ok expected, Ok discovered ->
+                                                    let required =
+                                                        declared
+                                                        || SemanticDiff.activationRequired threshold discovered.Length commitMessage (Some itemBody)
+
+                                                    finish required (Some({ Expected = expected; Discovered = discovered }: SemanticDiff.TrustedAudit))
+                                                | _ ->
+                                                    // The live facts could not be established, so the receipts cannot be
+                                                    // checked against anything. Requiring the audit while supplying NO
+                                                    // trusted facts makes the gate refuse — an unreadable diff must not
+                                                    // let unverified receipts through, which is the same fail-closed
+                                                    // rule the no-receipt arm applies to the threshold itself.
+                                                    finish true None
+                                        | [] ->
+                                            if declared then
+                                                // An item/commit declaration already decides it; the blob reads
+                                                // cannot change the answer and are not worth the REST budget.
+                                                finish true None
+                                            elif List.isEmpty changedPaths then
+                                                // `prFiles` SUCCEEDED and returned nothing, so "no occurrences" is
+                                                // a read fact here rather than an unread one — there is no diff for
+                                                // a rename to hide in. This is the one shape where zero is honest.
+                                                finish false None
+                                            else
+                                                match Reads.prBaseSha ctx.Transport owner repo pr with
+                                                | Error _ -> None
+                                                | Ok baseSha -> finish (requiredFrom baseSha) None
                                     | _ -> None
                                 | _ -> None
                             | None -> None)

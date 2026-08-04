@@ -96,6 +96,23 @@ not elaboration** — load it for the dedupe reads and the judgement boundaries.
 findings discovered before independent review begins. Once review starts, do not file the critic's
 findings or add them to a private follow-up queue; the critic owns their disposition.
 
+For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
+exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
+or documentation occurrence with an accountable disposition; compilation is not evidence that quoted
+protocol/example text was intended. Capture the live item body and pass it to `diff-audit`; a standalone
+`Bulk rename: true` line there, the immutable head commit declaration, or the occurrence threshold makes
+the audit mandatory. Caller environment variables are not declarations. An unresolved, stale, empty,
+or live-inventory-mismatched receipt blocks host acceptance. For the initial item-declared inventory,
+use the receipt placeholder form `diff-audit BASE HEAD OLD NEW - item-body.md --paths ...`.
+The host re-derives requiredness from live item, immutable commit, and threshold facts; a review marker
+cannot opt out by writing `diff-audit-required: false`.
+
+**Not writing the receipt does not make the audit unnecessary.** The threshold counts occurrences, and
+when no receipt supplies the rename tokens the host recovers them from the live PR diff and counts the
+occurrences itself — it never substitutes the changed-file count, which is a different and always
+smaller quantity that let a one-file/six-occurrence rename slip under the default threshold of 5
+(.github#2144). Evidence the host cannot read requires the receipt rather than clearing it.
+
 ## 5. Independent critique
 
 ### Typed delivery receipt
