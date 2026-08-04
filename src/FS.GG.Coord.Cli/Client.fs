@@ -891,13 +891,16 @@ module Client =
             | Error e, _
             | _, Error e -> Error e
 
+        // Recomputation reads blobs through the SAME `blobPair` rule as discovery.  When it used a bare
+        // `fileAtRef`, a declared path this PR ADDED 404'd at the base and the whole candidate was
+        // dropped — so a correct receipt over a new file was discarded rather than validated, and the two
+        // arms disagreed about what "absent at that ref" means.
         let recomputeAudit owner repo baseSha headSha (submitted: SemanticDiff.Receipt) =
             submitted.DeclaredPaths
             |> List.map (fun path ->
-                match Reads.fileAtRef ctx.Transport owner repo path baseSha, Reads.fileAtRef ctx.Transport owner repo path headSha with
-                | Ok before, Ok after -> Ok(SemanticDiff.inventory path before after submitted.OldToken submitted.NewToken)
-                | Error error, _
-                | _, Error error -> Error error)
+                blobPair owner repo path baseSha headSha
+                |> Result.map (fun (path, before, after) ->
+                    SemanticDiff.inventory path before after submitted.OldToken submitted.NewToken))
             |> List.fold (fun state next -> Result.bind (fun all -> Result.map (fun rows -> all @ rows) next) state) (Ok [])
             |> Result.map (fun rows ->
                 SemanticDiff.receipt submitted.Repository baseSha headSha submitted.OldToken submitted.NewToken submitted.DeclaredPaths true rows)
