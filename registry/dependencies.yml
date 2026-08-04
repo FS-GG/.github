@@ -437,8 +437,8 @@ contracts:
     surface: ".fsgg/governance.yml"
     consumers: [governance]
   - id: governance-reference-gate-set
-    version: "1.6.0"
-    package-version: "1.6.0"
+    version: "1.7.0"
+    package-version: "1.7.0"
     owner: governance
     # .github#15 (H3, epic #16 Pillar 3): the validated reference .fsgg gate set published as a
     # content-only NuGet package FS.GG.Governance.ReferenceGateSet — ONE versioned source of truth
@@ -483,6 +483,29 @@ contracts:
     # archives downloaded and compared entry-wise — 13 non-signature payload entries, identical
     # names, ZERO content differences (nuget.org adds only .signature.p7s). Templates#305 still owns
     # the downstream overlay adoption, so the Templates edge below remains at its real pin.
+    # 1.7.0 (Governance#385/PR#389, merge c034971ebacb2bf6f671a9ea753670c8f2b3da86): MINOR — the
+    # published set gains the COMPOSED F# CONSTITUTION PROFILE. Epic Governance#367 shipped the F#
+    # constitution as FOUR separate rule packs (#366 curated .fsi surfaces, #368 idiomatic
+    # simplicity, #369 functional core / effect edge, #370 behavior evidence and safe failure) and
+    # named one acceptance line no child owned — that they be integrated into ONE reusable profile
+    # consumed by generated products and ordinary repositories. Nothing composed them: all four
+    # children declared reference-gates/ in their touch-sets and the directory did not exist.
+    # 1.7.0 adds a `fsharp` capability domain (governance.yml + capabilities.yml), two pathMap globs
+    # binding it, and a SECOND generated region carrying four command-free checks —
+    # fsharp:public-surface, fsharp:idiomatic-simplicity, fsharp:effect-boundary,
+    # fsharp:evidence-boundary — derived from SurfaceChecks.Profile.checks through the same
+    # ReferenceProfile.capabilitiesRegion projection the `game` floor uses (Governance
+    # docs/decisions/0012, building on 0011; no ADR is amended).
+    # MINOR, not PATCH: the set grows by a domain and four checks that exact-pin consumers re-pin
+    # deliberately to adopt. NO CONSUMER THAT WAS GREEN CAN GO RED: no existing check changed (the
+    # `game` floor's values are untouched), three of the four new gates bind at `warn`, and the
+    # fourth (fsharp:effect-boundary, block-on-pr) is applicable only to a transition an author
+    # opted in with an in-source marker. Governance release run 30915354917 published the package
+    # from the merge commit.
+    # Feed: PUBLISHED — live at 1.7.0 on GitHub Packages and nuget.org; both archives downloaded
+    # and compared entry-wise — 14 non-signature payload entries, identical names, ZERO content
+    # differences (nuget.org adds only .signature.p7s). Templates#305 still owns the downstream
+    # overlay adoption, so the Templates edge below remains at its real pin.
     surface: >
       FS.GG.Governance.ReferenceGateSet content package —
       contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to
