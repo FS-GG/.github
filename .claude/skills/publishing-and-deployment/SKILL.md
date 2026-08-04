@@ -30,7 +30,7 @@ Registry release inventory: 9 package-bearing contracts across 7 producers; 8 co
 | `game` | `game-scene-adapter` | `0.13.0` | `0.13.0` | `game:0.13.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
 | `audio` | `fs-gg-audio` | `0.5.0` | `0.5.0` | `audio:0.5.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge |
 | `net` | `fs-gg-net` | `0.5.0` | `0.5.0` | `net:0.5.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
-| `github` | `coord-engine` | `0.20.1` | `0.20.0` | `github:0.20.0` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `coord-engine` | `0.20.1` | `0.20.1` | `github:0.20.1` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
 | `github` | `new-sdd-workspace` | `0.9.0` | `0.9.0` | `github:0.9.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 
 <!-- END GENERATED: fsgg-release-inventory -->

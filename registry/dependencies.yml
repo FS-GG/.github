@@ -853,8 +853,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.20.1" # SOURCE SemVer: cross-owner board-side Status/Blocked by read (#2204/#2209) — a compatibility-preserving correctness patch, no wire-surface change; queued for coord-engine/v0.20.1 after the 0.20.0 cut.
-    package-version: "0.20.0" # Run 30866791028 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 33 unsigned payload entries and a public install were verified. PRIOR 0.19.1.
+    version: "0.20.1" # SOURCE SemVer: cross-owner board-side Status/Blocked by read (#2204/#2209) — a compatibility-preserving correctness patch, no wire-surface change; released from coord-engine/v0.20.1 at acdc68267020efcb9d064aef1e7173d8e4983a7b.
+    package-version: "0.20.1" # Run 30902727534 packed ONCE and pushed that one archive to GitHub Packages then nuget.org. Independent post-publish downloads from both feeds share all 33 payload entries byte-for-byte (org SHA-256 dc3f9a2fe526845b8b4b5d3452d086f35d8f35fd82ef9049955fe2430506c914; public signed SHA-256 d3eed4d171cde1f84093f08a8c0a13d25a3f51c935c0f38bef0b1fed266b3a61 — the sole extra entry is nuget.org's own .signature.p7s). A nuget.org-only install self-reports 0.20.1.0, carries the #2204 externalItemField fix (2 occurrences vs 0 in published 0.20.0), and emits byte-identical command-contract/facts JSON — so the caller-observable surface is unchanged and PATCH is measured, not asserted. PRIOR 0.20.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
