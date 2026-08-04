@@ -117,7 +117,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-capabilities` | FS.GG.Governance | `2` | — |
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
-| `governance-reference-gate-set` | FS.GG.Governance | `1.5.0` | `1.5.0` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.6.0` | `1.6.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.26.0` | `0.26.0` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
@@ -127,7 +127,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
-| `coord-engine` | FS-GG/.github | `0.20.1` | `0.20.0` |
+| `coord-engine` | FS-GG/.github | `0.20.1` | `0.20.1` |
 | `new-sdd-workspace` | FS-GG/.github | `0.9.0` | `0.9.0` |
 
 <!-- END GENERATED: fsgg-contract-versions -->
