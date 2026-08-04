@@ -54,9 +54,15 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    owner until validation passes, then discard the worker and critic.
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
    plan while the simple-versus-complex SDD lifecycle branch remains inside each item worker.
-8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and
-   every completed cycle is covered by a validated workspace feedback roll-up. Surface deliberately
-   parked and human-blocked backlog without spinning; then update/land the workspace report.
+8. Stop only when fresh reconciliation and triage leave **no startable `Class: defect`**, no actionable
+   or untriaged work, and every completed cycle is covered by a validated workspace feedback roll-up.
+   `hardening` accumulates as ordinary backlog and is drained deliberately — it is not a reason to keep
+   running; `decision` is surfaced to a human and never dispatched. **An unclassed row counts as a
+   possible defect**, not a minor one: you may stop with some outstanding, but report them by number and
+   say the run ended without establishing the board is defect-free. Read classes from `ready --json`'s
+   `class` field *after* a `reconcile --apply`, and `lint`'s `CLASS-UNSET` for the rows that column
+   cannot speak for. Surface deliberately parked and human-blocked backlog without spinning; then
+   update/land the workspace report.
 
 Load [host-loop](references/host-loop.md) for the shared worker/verification/termination contract and
 [workspace-scope](references/workspace-scope.md) for the single-repository ledger rules.
