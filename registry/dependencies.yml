@@ -853,8 +853,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.20.0" # SOURCE SemVer: additive deterministic cycle-ledger command (#2133/#2197), queued for coord-engine/v0.20.0 after the 0.19.1 cut.
-    package-version: "0.19.1" # Run 30853358886 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 31 unsigned payload entries and a public install were verified. PRIOR 0.19.0.
+    version: "0.20.0" # SOURCE SemVer: additive deterministic cycle-ledger command (#2133/#2197), released from coord-engine/v0.20.0.
+    package-version: "0.20.0" # Run 30866791028 packed once, installed the produced tool, then pushed those bytes to GitHub Packages and nuget.org; 33 unsigned payload entries and a public install were verified. PRIOR 0.19.1.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
