@@ -50,6 +50,12 @@
       "workflow": ".github/workflows/ignored-author-coherence.yml"
     },
     {
+      "source": "scripts/check-engine-freshness.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/engine-freshness/run.sh",
+      "workflow": ".github/workflows/engine-freshness.yml"
+    },
+    {
       "source": "scripts/check-kit-published-coherence.py",
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/kit-published-coherence/run.sh",

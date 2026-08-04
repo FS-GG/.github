@@ -99,6 +99,33 @@ must_fail() { # $1 = label, $2 = required reason pattern
   ok "$1"
 }
 
+# --- the machine report (.github#2231). These live up here with the other helpers rather than beside
+# the section that introduced them, because the DEFECT-class red in section 4 needs them 120 lines
+# earlier than section 12 — and that distance is exactly how the defect leg came to be the one report
+# arm nobody asserted.
+run_report() { # $1 = repo, $2 = feed json, $3 = report path  -> stdout+stderr in $out, exit in $rc
+  set +e
+  out="$(python3 "$GATE" --repo "$1" --fixture "$2" --report "$3" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# Reads one top-level scalar out of the report, or prints nothing if it cannot. python3 rather than
+# jq: the workflow provisions python and nothing else, so a jq assertion would pass here and be
+# unrunnable in CI.
+field() { # $1 = report path, $2 = key
+  python3 -c 'import json,sys
+try:
+    print(json.dumps(json.load(open(sys.argv[1]))[sys.argv[2]]))
+except Exception:
+    pass' "$1" "$2" 2>/dev/null
+}
+
+expect_field() { # $1 = label, $2 = report, $3 = key, $4 = expected JSON scalar
+  local got; got="$(field "$2" "$3")"
+  if [ "$got" = "$4" ]; then ok "$1"; else bad "$1 (expected $3=$4, got '${got:-<absent>}')" "$out"; fi
+}
+
 echo "== check-engine-freshness fixture =="
 
 # ---------------------------------------------------------------------------------------------
@@ -163,13 +190,23 @@ sha="$(git_ -C "$R" rev-parse HEAD)"
 F="$WORK/feed-defect.json"
 printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":{"%s":[{"number":88,"body":"Class: hardening\\n\\nClass: defect"}]}}' \
   "$sha" > "$F"
-run "$R" "$F"
+REP="$WORK/report-defect.json"
+run_report "$R" "$F" "$REP"
 must_fail "an unreleased DEFECT-class engine commit is RED" "unreleased engine commit(s) close an issue declaring"
 if grep -q 'DEFECT .*closes #88' <<<"$out"; then
   ok "the defect RED names the commit and structurally closing issue"
 else
   bad "the defect RED names the commit and structurally closing issue" "$out"
 fi
+
+# THE REPORT MUST NOT CONTRADICT THE VERDICT IT CARRIES, and this is the only arm where it could:
+# the defect red is the one red with an EMPTY wire_drift, so a `red` derived from the wire leg alone
+# emits `red: false` on a run the gate exits 1 for, and every other leg in this file stays green
+# while it does. Section 12's four terminal states did not include this one.
+expect_field "the DEFECT red is reported as red=true, not just exited 1" "$REP" red true
+expect_field "...with the defect counted" "$REP" defectCount 1
+expect_field "...and NO wire drift, which is what makes this arm the uncovered one" "$REP" wireCount 0
+expect_field "...and a release owed as well" "$REP" releaseOwed true
 
 # A `Class: defect` example inside a fence is documentation, not a declaration — the same grammar
 # the engine's Class.fromBody uses. This keeps the new red bar from classifying prose examples.
@@ -293,29 +330,6 @@ must_fail "a non-repo is an ERROR" "not a git repository"
 #    the field a consumer branches on — `releaseOwed` — is the one that must be TRUE in exactly the
 #    state the gate calls GREEN, which is the least intuitive thing about this whole file.
 # ---------------------------------------------------------------------------------------------
-run_report() { # $1 = repo, $2 = feed json, $3 = report path  -> stdout+stderr in $out, exit in $rc
-  set +e
-  out="$(python3 "$GATE" --repo "$1" --fixture "$2" --report "$3" 2>&1)"
-  rc=$?
-  set -e
-}
-
-# Reads one top-level scalar out of the report, or prints nothing if it cannot. python3 rather than
-# jq: the workflow provisions python and nothing else, so a jq assertion would pass here and be
-# unrunnable in CI.
-field() { # $1 = report path, $2 = key
-  python3 -c 'import json,sys
-try:
-    print(json.dumps(json.load(open(sys.argv[1]))[sys.argv[2]]))
-except Exception:
-    pass' "$1" "$2" 2>/dev/null
-}
-
-expect_field() { # $1 = label, $2 = report, $3 = key, $4 = expected JSON scalar
-  local got; got="$(field "$2" "$3")"
-  if [ "$got" = "$4" ]; then ok "$1"; else bad "$1 (expected $3=$4, got '${got:-<absent>}')" "$out"; fi
-}
-
 # THE RECURRING STATE ITSELF: internal-only drift. Green, correctly — and a release is owed anyway.
 R="$WORK/report-owed"; make_repo "$R"
 touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: an internal refactor"

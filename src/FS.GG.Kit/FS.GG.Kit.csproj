@@ -409,7 +409,25 @@
          can ever admit, which is a permanently unfillable lane. That is a change in what a receiver
          DOES, not merely in what it reads, so it is a minor rather than a patch. The packed member set
          and destinations are unchanged. -->
-    <Version>0.38.0</Version>
+    <!-- 0.38.0 -> 0.39.0, a MINOR (.github#2231): the packed pnext-item merge-and-release guidance now
+         carries a POST-MERGE OBLIGATION — a worker whose merged PR touched the engine source runs the
+         freshness gate and, when a release is owed with no open row carrying it, FILES and BOARDS that
+         row rather than reporting it onward. Receiver-visible required authoring behavior, not a prose
+         correction: the two agents who hit this before reported and stopped because reporting was the
+         whole instruction, and an unboarded row is invisible to `take`. Member set and destinations
+         unchanged.
+
+         WHY THIS TOOK 0.39.0 RATHER THAN 0.38.0, WHICH IS WHAT THE STRICTLY-GREATER RULE ALONE WOULD
+         HAVE ALLOWED WHEN IT WAS WRITTEN. .github#2220 / PR #2228 claimed 0.38.0 for the same reason
+         (it edits `check-board/references/deep-detail.md`) and was a review round ahead. This is a
+         single scalar with no disjoint regions, so the two could not both take it; the host sequenced
+         #2228 first and this to rebase onto it. Choosing 0.39.0 up front held ONE value across that
+         rebase rather than an edit that would have had to be redone at the exact moment attention was
+         on the release — and the rebase has now happened, so the predecessor named above is the real
+         one. Both releases are owed: kit/v0.38.0 belongs to #2220 and kit/v0.39.0 to this item, and
+         publishing them out of order is harmless because 0.38.0 < 0.39.0 leaves the feed's newest
+         correct either way. -->
+    <Version>0.39.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
