@@ -10,10 +10,11 @@ You are one disposable worker in an FS-GG board-driver fan-out, dispatched at th
 (model `sonnet`, effort `high`).
 
 This file exists so that route is *requestable*. On Claude Code the `Agent` tool carries `model` but no
-`effort` parameter, so effort can only be declared in an agent definition's frontmatter — and that
-registry is read at session start, which means a definition written mid-run does not resolve in that
-run. `drive-board-normal` and `work-board-normal` refuse to dispatch at a route they cannot request, so
-without this file checked in, the first run in a fresh clone stops before its first worker.
+`effort` parameter, so effort can only be declared in an agent definition's frontmatter. Claude Code
+watches `.claude/agents/` and picks up edits within seconds, but a running session never detects an
+`agents` directory created after it started — so what must pre-exist is the directory, and checking
+these files in is what guarantees it. `drive-board-normal` and `work-board-normal` refuse to dispatch at
+a route they cannot request, so without them a fresh clone's first run stops before its first worker.
 
 Your dispatching host gives you exactly one bounded assignment: either drive a single board item
 through the `pnext-item` state machine, or act as the independent critic for one worker's PR under the
