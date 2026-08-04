@@ -165,6 +165,14 @@ module Board =
     /// board scan, deliberately: this sits on `take` → `claim`, the hottest path on the budget that dies
     /// first (#418), so a full-board read here would be the regression #481 is written to avoid.
     ///
+    /// An issue owned OUTSIDE the board owner is read from the BOARD side instead, exactly as `itemId` is
+    /// (#2166 remainder, #2204): `repository.issue.projectItems` omits an organization project's placement of
+    /// an externally owned issue, so the issue-side narrowing answered a false `Ok None` for a row that
+    /// carries a column — and `claim`/`take` could then never report `converged`, `release` never restored
+    /// the pre-claim column, and `add` applied its `Backlog` default over a live one. The board-side route
+    /// resolves the row through `itemIdCached` (forever-stable, so the field itself stays a one-point
+    /// resolver read) and fails closed on an unresolvable lookup.
+    ///
     /// `Ok None` is a definite answer with two shapes — the issue is not on THIS board, or it is but its
     /// `Status` is unset — both meaning "no column to restore", which a claim records as none and `release`
     /// then puts back as `Ready`. A failed read is `Error`, never `Ok None`: absence may not be manufactured.
@@ -187,6 +195,10 @@ module Board =
     ///
     /// A RESOLVER READ, on `itemStatus`'s own terms and for its own reason: one point, one item, never
     /// `Scan.board`'s full-board cost on a per-call gate.
+    ///
+    /// It shares `itemStatus`'s external-owner route through the one `externalItemField` mechanism, so the
+    /// #2204 repair cannot land on one reader and miss the other; the two differ only in which value they
+    /// pull off the `fieldValueByName` node.
     ///
     /// `Ok None` covers "not on this board" and "on the board with the field genuinely empty" alike, both
     /// meaning there is no edge here today. A failed read is `Error`, never a manufactured absence.
