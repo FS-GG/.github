@@ -833,7 +833,11 @@ module BlockerLintTests =
 
     [<Fact>]
     let ``reconcile proposes BLOCKER-CLEARED when the body agrees with the field (or says nothing)`` () =
-        let _, out, _ = ReconcileWithholdFixture.run "Paths: none"
+        // A REAL touch-set. This was `Paths: none` as filler — the subject is the #2079 withhold control,
+        // not the touch-set — and since .github#2220 that body puts the row on the `Backlog` path. The
+        // assertion below still held there, so nothing failed; it had simply stopped being the ORDINARY
+        // cleared row this control is the positive half of.
+        let _, out, _ = ReconcileWithholdFixture.run "Paths: src/A.fs"
         Assert.Contains("BLOCKER-CLEARED", out)
 
     [<Fact>]

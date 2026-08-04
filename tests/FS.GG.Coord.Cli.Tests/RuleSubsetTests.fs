@@ -37,27 +37,85 @@ open FS.GG.Coord.Cli
 /// canonical doc states identically.
 module RuleSubsetTests =
 
+    /// Every combination, taking one element from each list (.github#2220).
+    ///
+    /// `[[]]` — ONE empty combination — for no lists at all, never `[]`. A union case carrying no fields
+    /// has exactly one inhabitant, not zero, and answering `[]` there would silently drop every
+    /// field-less case from the sweep. That is the same shape as the `Array.head` blindness this helper
+    /// exists to remove, one level down.
+    let rec private cartesian (xss: 'a list list) : 'a list list =
+        match xss with
+        | [] -> [ [] ]
+        | xs :: rest -> cartesian rest |> List.collect (fun tail -> xs |> List.map (fun x -> x :: tail))
+
     [<Fact>]
     let ``#1623 every writing ChoreKind is named by check-board, with a non-vacuous floor`` () =
         let cases = FSharpType.GetUnionCases typeof<Chore.ChoreKind>
         Assert.NotEmpty cases
         let ruleId = typeof<Chore.ChoreKind>.GetProperty("RuleId")
         let write = typeof<Chore.ChoreKind>.GetProperty("Write")
-        let rec sample (t: System.Type) : obj =
-            if t = typeof<string> then box "sample"
+        // EVERY CASE OF EVERY UNION A KIND CARRIES, NOT THE FIRST ONE — .github#2220.
+        //
+        // This was `FSharpType.GetUnionCases t |> Array.head`: one sample per field, so a kind whose
+        // `Write` DEPENDS on a union it carries was only ever measured at that union's first case. When
+        // `BLOCKER-CLEARED` grew a `ClearedDestination`, `Array.head` pinned it to `ToReady` forever — the
+        // gate asserted the table says `Status=Ready` and could not see `Status=Backlog` existed. Measured
+        // both directions before this repair: the table naming only `Ready` passed 7/0, and the table
+        // corrected to `Backlog` FAILED. The gate whose job is catching drift was pinned to one side of it.
+        //
+        // That is this item's own subject applied to itself: a mechanism that could not see the case it was
+        // deciding. So the sample function returns EVERY value, and the caller takes the cartesian product.
+        let rec samples (t: System.Type) : obj list =
+            if t = typeof<string> then
+                [ box "sample" ]
+            elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> then
+                // An F# list IS a union (`Empty`/`Cons`), and expanding `Cons` recurses forever on its own
+                // tail. One empty sample: no `Write` reads an element, and `RuleId` reads no field at all.
+                let empty = FSharpType.GetUnionCases t |> Array.find (fun c -> c.GetFields().Length = 0)
+                [ FSharpValue.MakeUnion(empty, [||]) ]
             elif FSharpType.IsUnion t then
-                let c = FSharpType.GetUnionCases t |> Array.head
-                FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType))
-            elif t.IsValueType then System.Activator.CreateInstance t
-            else null
+                FSharpType.GetUnionCases t
+                |> Array.toList
+                |> List.collect (fun c ->
+                    c.GetFields()
+                    |> Array.toList
+                    |> List.map (fun f -> samples f.PropertyType)
+                    |> cartesian
+                    |> List.map (fun args -> FSharpValue.MakeUnion(c, List.toArray args)))
+            elif t.IsValueType then
+                [ System.Activator.CreateInstance t ]
+            else
+                [ null ]
+
         let writing =
             cases
-            |> Array.choose (fun c ->
-                let value = FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> sample f.PropertyType)) :?> Chore.ChoreKind
-                match write.GetValue(value) with
-                | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
-                | _ -> None)
+            |> Array.toList
+            |> List.collect (fun c ->
+                c.GetFields()
+                |> Array.toList
+                |> List.map (fun f -> samples f.PropertyType)
+                |> cartesian
+                |> List.choose (fun args ->
+                    let value = FSharpValue.MakeUnion(c, List.toArray args) :?> Chore.ChoreKind
+
+                    match write.GetValue(value) with
+                    | :? Option<string * string> as remedy when remedy.IsSome -> Some(ruleId.GetValue(value) :?> string, remedy.Value)
+                    | _ -> None))
+            |> List.distinct
+            |> List.toArray
+
         Assert.NotEmpty writing
+
+        // NON-VACUITY FOR THE SWEEP ITSELF. Without this, a `samples` that silently collapsed back to one
+        // value per field would be indistinguishable from the `Array.head` version it replaces: green, and
+        // blind again. At least one rule id must contribute MORE THAN ONE distinct write, which is exactly
+        // the property `Array.head` destroyed.
+        let multiValued = writing |> Array.groupBy fst |> Array.filter (fun (_, ws) -> ws.Length > 1)
+
+        Assert.True(
+            multiValued.Length > 0,
+            $"no rule id produced more than one write value — the sweep has collapsed to one sample per field and cannot see a varying remedy: %A{writing}"
+        )
         let rec repoRoot (dir: DirectoryInfo) =
             if File.Exists(Path.Combine(dir.FullName, ".git")) || Directory.Exists(Path.Combine(dir.FullName, ".git")) then dir.FullName
             else repoRoot dir.Parent
