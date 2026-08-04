@@ -117,7 +117,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-capabilities` | FS.GG.Governance | `2` | — |
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
-| `governance-reference-gate-set` | FS.GG.Governance | `1.5.0` | `1.5.0` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.6.0` | `1.6.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.26.0` | `0.26.0` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
