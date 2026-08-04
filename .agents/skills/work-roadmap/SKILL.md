@@ -30,6 +30,19 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
    checkpoint state, and schema-v2 report externally. Missing, invalid, or unreadable critique or
    feedback state fails closed.
 6. Discard the worker and critic, refresh default branch, re-read the roadmap, and select again.
+   Persist a typed cycle envelope beside the roadmap: fresh-read Markdown into its source revision
+   and units, run `fsgg-coord cycle inspect`, then `register` (or exact-id resume) for the milestone.
+   Bind each unit's stable roadmap feedback/critique identity as `providerCycleId`. Pass the actual
+   generated SDD verification, validated schema-v3 critique, and validated schema-v2 feedback artifacts
+   to `advance`: each provider input names `rootPath` and `artifactPath`, while feedback also names its
+   `auditPath` and ordered `phases`. The engine reruns `fsgg-sdd verify` and the canonical critique and
+   feedback validators itself; normalized or minimally shaped caller-authored envelopes are not
+   provider evidence, and journey applicability comes from the critique artifact. Persist the
+   `updateReceipt` emitted and durably journaled by the guarded merged-head/checkpoint `update`;
+   `complete` consumes that exact receipt and revalidates its bound
+   evidence, followed by another fresh inspection.
+   Parallel milestones additionally require recorded disjoint touch-sets and explicit operator
+   authorization. Missing, stale, or wrong-cycle evidence fails closed.
 7. After no unchecked milestone remains, validate every completed cycle and land the final report with
    cross-cycle critique and feedback roll-ups; a report that omits a cycle, critique disposition, or
    checkpoint disposition cannot finish.

@@ -248,7 +248,7 @@ BOARD_WRITES_CONDITIONAL="delivery next reap reconcile"
 # ONE LINE, AND NO SUBSTITUTION IN IT — the parity gate lifts these three assignments straight out of this
 # file and refuses any that is not a plain literal, so a `$…`/`$(…)`/continuation spelling would red §3b
 # rather than be evaluated. Long, therefore, on purpose.
-BOARD_READS="batch board bootstrap budget command-contract decide driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready scan verify-paths who whoami"
+BOARD_READS="batch board bootstrap budget command-contract cycle decide driver facts field-id followup inbox issues item-id landable lanes lint option-id overlap predicate ready scan verify-paths who whoami"
 
 # STAT THE .dll, NOT THE APPHOST. `fsgg-coord-engine` is the .NET apphost — a fixed ~78 KB native stub,
 # BYTE-IDENTICAL across every build of every commit. The IL, which is the thing that goes stale, is in

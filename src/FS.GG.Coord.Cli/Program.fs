@@ -332,6 +332,8 @@ let main argv =
 
             | DriverCmd -> Client.run opts
 
+            | CycleCmd -> CycleLedgerApplication.run opts
+
             // `whoami` reads no board — identity is local, and `--mint` needs no token.
             | WhoAmI -> Client.whoami opts
 
