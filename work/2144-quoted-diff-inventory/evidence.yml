@@ -1,0 +1,209 @@
+schemaVersion: 1
+workId: 2144-quoted-diff-inventory
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2144-quoted-diff-inventory/spec.md
+sourceClarifications: work/2144-quoted-diff-inventory/clarifications.md
+sourceChecklist: work/2144-quoted-diff-inventory/checklist.md
+sourcePlan: work/2144-quoted-diff-inventory/plan.md
+sourceTasks: work/2144-quoted-diff-inventory/tasks.yml
+sourceAnalysis: readiness/2144-quoted-diff-inventory/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2144-quoted-diff-inventory/analysis.json
+    digest: a3fa7f0a6036014a63414f9dcb0433b6ad79e2339cfc7f9609dcbcc5bb9fcb81
+    schemaVersion: 1
+  - label: checklist
+    path: work/2144-quoted-diff-inventory/checklist.md
+    digest: 12fad0ee57036c1120efffb32bd35b206826a70851e1b7b8f8c5a5597c2c5332
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2144-quoted-diff-inventory/clarifications.md
+    digest: 892407dae0ff3c3a8528583e086ce4ffb5fee9468ec39b52a124876db7e580fb
+    schemaVersion: 1
+  - label: plan
+    path: work/2144-quoted-diff-inventory/plan.md
+    digest: a59ded2d34b42f8b25338f2b957c77e3780db6d8aa01980e37cb29849a93bc5d
+    schemaVersion: 1
+  - label: spec
+    path: work/2144-quoted-diff-inventory/spec.md
+    digest: 60d0d40808c48cc896f21ae124a428efa454543ca41045844ab3c07344aed498
+    schemaVersion: 1
+  - label: tasks
+    path: work/2144-quoted-diff-inventory/tasks.yml
+    digest: 738565782ecbbb9c294446e728603bef69aa88cbc5140f4d71891828e96c72c3
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Core/SemanticDiff.fs, tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes: [Semantic inventory tests passed.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Core/Driver.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes: [Acceptance receipt gate tests passed.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes: [Core evidence receipt passed.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Core/SemanticDiff.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes: [Versioned public receipt contract passed.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV005]
+    artifacts: [".agents/skills/pnext-item/SKILL.md", docs/coordination/semantic-diff-audit.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes: [Generated guidance and semantic diff documentation are committed.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV006]
+    artifacts:
+      - src/FS.GG.Coord.Core/SemanticDiff.fs
+      - src/FS.GG.Coord.Core/SemanticDiff.fsi
+      - src/FS.GG.Coord.Cli/Client.fs
+      - tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs
+      - tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs
+    sourceRefs:
+      - kind: verification
+        path: tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs
+    result: pass
+    synthetic: false
+    observedRun:
+      source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
+      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      outcome: passed
+      passed: 603
+      failed: 0
+      skipped: 0
+    notes:
+      - >-
+        Repair phase authorized by
+        https://github.com/FS-GG/.github/issues/2144#issuecomment-5170895957 after the ordinary
+        three-round ceiling on closed PR #2149.
+      - >-
+        The no-receipt live path measured the occurrence threshold with the changed-FILE count.
+        SemanticDiff.discoverRenames/discoveredOccurrences now recover the rename tokens from the
+        live base/head blobs, so the count is occurrences. The production-route theory in
+        ApplicationServiceTests drives Client.driver twice over a ONE-file PR with a
+        `diff-audit-required: false` chain and no receipt; six quoted occurrences yield
+        reviewEvidence 0 (audit mechanically required, opt-out rejected) and one occurrence yields
+        reviewEvidence 1. The changed-file count is 1 in both, so it cannot explain the difference.
+      - >-
+        Unreadable base/head blobs require the receipt rather than disproving the threshold; only a
+        404 is read as absent-at-that-ref, and only a successful empty prFiles read is a zero.
+lifecycleNotes:
+  - "Next lifecycle action: verify."
+  - >-
+    One authorized repair phase (T006/EV006) followed the closed, unmerged PR #2149 and its
+    three-round independent-review chain, which are preserved as provenance.

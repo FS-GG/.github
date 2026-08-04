@@ -1,0 +1,507 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2144-quoted-diff-inventory",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "12fad0ee57036c1120efffb32bd35b206826a70851e1b7b8f8c5a5597c2c5332"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "892407dae0ff3c3a8528583e086ce4ffb5fee9468ec39b52a124876db7e580fb"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "30a0a2546d77bbdd7833f0464f16f9832ed0245a4861318fe5ab6b2de64517a7"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "23f28397094c102c5917614a3c50bda5ef4f9b128dfab55d629e8357684cbb88"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "60d0d40808c48cc896f21ae124a428efa454543ca41045844ab3c07344aed498"
+      }
+    },
+    {
+      "path": "work/2144-quoted-diff-inventory/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2144-quoted-diff-inventory",
+    "title": "Quoted semantic-diff receipt",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Every classified changed literal is dispositioned and stale or unresolved receipts fail closed. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Every classified changed literal is dispositioned and stale or unresolved receipts fail closed. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2144-quoted-diff-inventory/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2144-quoted-diff-inventory/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Update contract surface PC-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2144-quoted-diff-inventory/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Record verification evidence VO-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2144-quoted-diff-inventory/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Handle migration posture PM-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2144-quoted-diff-inventory/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Refresh generated view impact GV-001",
+      "status": "done",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2144-quoted-diff-inventory/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/SemanticDiff.fs",
+        "tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2144-quoted-diff-inventory/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/Driver.fs",
+        "tests/FS.GG.Coord.Core.Tests/DriverTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2144-quoted-diff-inventory/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/FS.GG.Coord.Core.Tests/SemanticDiffTests.fs"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2144-quoted-diff-inventory/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "src/FS.GG.Coord.Core/SemanticDiff.fsi"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2144-quoted-diff-inventory/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".agents/skills/pnext-item/SKILL.md",
+        "docs/coordination/semantic-diff-audit.md"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2144-quoted-diff-inventory/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2144-quoted-diff-inventory/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "0.32.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "12fad0ee57036c1120efffb32bd35b206826a70851e1b7b8f8c5a5597c2c5332"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "892407dae0ff3c3a8528583e086ce4ffb5fee9468ec39b52a124876db7e580fb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "30a0a2546d77bbdd7833f0464f16f9832ed0245a4861318fe5ab6b2de64517a7"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "23f28397094c102c5917614a3c50bda5ef4f9b128dfab55d629e8357684cbb88"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "60d0d40808c48cc896f21ae124a428efa454543ca41045844ab3c07344aed498"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2144-quoted-diff-inventory/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "141ebaf0ae43decab1b40b4f8d2ce2929a049940305ed04a1c5dc6f7a9c93004"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "fdab527dad7fc2668abc10b98befb45747d1434bd8aefa841e753353b0e5d938"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}

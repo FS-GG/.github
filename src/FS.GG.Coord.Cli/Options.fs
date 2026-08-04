@@ -45,6 +45,7 @@ module Options =
         | Issues
         | Followup
         | Predicate
+        | DiffAudit
         | RoomOpen
         | Help
         | Version
@@ -438,6 +439,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              and producer checkouts under $FSGG_REPOS_ROOT (default .repos).
                                              Local: no board, no token. Defaults to text; --json gives the
                                              machine verdict. Only `mirrored` compared today.
+  diff-audit <base> <head> <old> <new> [receipt.json|-] [item-body.md] --paths P... [--repo ROOT] [--json]
+                                             inventory exact git-object changes; unresolved required receipts
+                                             exit red. A supplied receipt is rejected when stale, incomplete,
+                                             duplicated, malformed, or outside the declared paths.
 
   --help    --version
 
@@ -527,6 +532,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | SetPaths -> Both Text
         | Inbox -> Both Text
         | Predicate -> Both Text
+        | DiffAudit -> JsonOnly
         | LintCmd -> Both Text
 
         // ---- JSON ONLY: stdout is a machine document whatever the flag says ----------------------------
@@ -726,7 +732,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FDryRun -> Only [ Flush ]
         | FStrict -> Only [ LintCmd ]
         | FBatch -> Only [ SetField ]
-        | FPaths -> Only [ Widen; SetPaths ]
+        | FPaths -> Only [ Widen; SetPaths; DiffAudit ]
         | FTo -> Only [ Say ]
         | FMessage -> Only [ Say ]
         | FEvidence -> Only [ DoneCmd ]
@@ -967,6 +973,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
         | Followup -> Reads // the #1063 queue is a FILE, which is the whole reason it survives EX_RATE
         | Predicate -> Reads // ADR-0050 oracle: registry + producer manifests off disk
+        | DiffAudit -> Reads // immutable git-object inspection; no board or network write
 
         // ---- READ THE BOARD — GraphQL/REST QUERIES, plus a per-user cache file -------------------------
         | Scan -> Reads // POSTs to `graphql`, which is how a GraphQL READ is spelled
@@ -1131,6 +1138,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Issues -> "issues"
         | Followup -> "followup"
         | Predicate -> "predicate"
+        | DiffAudit -> "diff-audit"
         | RoomOpen -> "room open"
         | Help -> "--help"
         | Version -> "--version"
@@ -1667,6 +1675,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                         RenderGiven = acc.RenderGiven.Add Text }
                     t
 
+            | "-" :: t when acc.Command = DiffAudit -> flags { acc with Args = "-" :: acc.Args } t
             | other :: _ when other.StartsWith "-" -> Error $"unknown argument: %s{other}"
             | other :: t -> flags { acc with Args = other :: acc.Args } t
 
@@ -1828,6 +1837,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "issues" :: rest -> flags (start { defaults with Command = Issues }) rest
         | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
         | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
+        | "diff-audit" :: rest -> flags (start { defaults with Command = DiffAudit }) rest
 
         // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
         // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`

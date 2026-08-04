@@ -22,7 +22,7 @@ module DeliveryApplicationTests =
           ClosingLinkageCanonical = true
           PathsVerified = true
           InReview = true
-          Review = Some { MarkerValid = true; CriticIdentity = Some "critic"; HeadSha = Some "head-a"; Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test") }
+          Review = Some { MarkerValid = true; CriticIdentity = Some "critic"; HeadSha = Some "head-a"; Rounds = [ 1 ]; RepairPhase = false; ChecksGreen = true; HostAccepted = true; RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure adapter test"); DiffAuditRequired = false; DiffAuditHead = None }
           Landable = true
           Merged = false
           MergeReachable = false

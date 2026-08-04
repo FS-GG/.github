@@ -603,6 +603,9 @@ module ApplicationServiceTests =
                     if claimed then ok (commentsFor (Map.ofList [ 2127, "worker-2127" ]) 2127) else ok "[]"
                 | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
                 | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
+                | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
+                | "GET", path when path = $"repos/FS-GG/.github/commits/%s{head}" ->
+                    ok """{"commit":{"message":"ordinary driver change"}}"""
                 | "GET", "repos/FS-GG/.github/actions/runs" -> ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2127-driver-transition-state-machine","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2140}]}]}"""
                 | "GET", path when path.StartsWith "repos/FS-GG/.github/commits/" && path.EndsWith "/check-runs" -> ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                 | "GET", "repos/FS-GG/.github/issues/2140/comments" ->
@@ -708,6 +711,113 @@ module ApplicationServiceTests =
             use malformedDoc = JsonDocument.Parse malformedOutput
             Assert.False(malformedDoc.RootElement.GetProperty("receiptValid").GetBoolean())
             Assert.True(transport.Logged "comment-list FS-GG/.github 2140", $"log: %A{transport.Log}")
+        finally
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            try Directory.Delete(cache, true) with _ -> ()
+
+    /// .github#2144's escalated finding, driven through the real `Client.driver` handler.
+    ///
+    /// Both runs change EXACTLY ONE file and carry a canonical passing chain that opts out with
+    /// `diff-audit-required: false` and submits no receipt.  The only difference between them is how many
+    /// quoted occurrences the single file's diff contains.  The old code passed the changed-FILE count
+    /// (1, in both) to the occurrence threshold, so both were mechanically not-required and both merged
+    /// green.  Measuring occurrences separates them, which is the whole repair.
+    [<Theory>]
+    [<InlineData(6, 0)>]
+    [<InlineData(1, 1)>]
+    let ``#2144 the no-receipt threshold is measured from live diff occurrences not changed-file count``
+        (occurrences: int)
+        (expectedEvidence: int)
+        =
+        let head = "2144-audit-head"
+        let baseSha = "2144-audit-base"
+        let path = "src/Rogue3/Protocol.fs"
+        let before =
+            [ yield "let oldName = 1"
+              for index in 1..occurrences -> $"let field%d{index} = \"oldName\"" ]
+            |> String.concat "\n"
+        let after = before.Replace("oldName", "newName")
+        let encode (text: string) =
+            Convert.ToBase64String(Text.Encoding.UTF8.GetBytes text)
+        let contents (text: string) =
+            $$"""{"encoding":"base64","content":"{{encode text}}"}"""
+        let boardItem =
+            """{"status":{"name":"Ready"},"blockedBy":null,"content":{"__typename":"Issue","number":2144,"title":"diff audit","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}"""
+        let graph (query: string) =
+            if query.Contains "projectsV2" then
+                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            elif query.Contains "fields(first" then
+                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}},"rateLimit":{"cost":1,"remaining":4977}}}"""
+            else
+                $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{boardItem}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+        let transport =
+            Fake.Recorder(fun (req: Request) ->
+                let ref' = req.Query |> List.tryFind (fun (k, _) -> k = "ref") |> Option.map snd
+                match req.Method, req.Path.Trim '/' with
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(query, _) -> ok (graph query)
+                    | _ -> Error(Errors.NotFound "graphql without a query")
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/issues/2144" ->
+                    ok $"""{{"number":2144,"state":"open","body":"Paths: %s{path}"}}"""
+                | "GET", "repos/FS-GG/.github/issues/2144/comments" -> ok "[]"
+                | "GET", "repos/FS-GG/.github/pulls" ->
+                    ok """[{"number":2149,"head":{"ref":"item/2144-quoted-diff-inventory"}}]"""
+                | "GET", "repos/FS-GG/.github/pulls/2149" ->
+                    ok $"""{{"number":2149,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2144-quoted-diff-inventory","sha":"%s{head}"}},"base":{{"ref":"main","sha":"%s{baseSha}"}}}}"""
+                | "GET", "repos/FS-GG/.github/pulls/2149/files" ->
+                    ok $"""[{{"filename":"%s{path}"}}]"""
+                | "GET", p when p = $"repos/FS-GG/.github/commits/%s{head}" ->
+                    ok """{"commit":{"message":"ordinary rename"}}"""
+                | "GET", p when p.StartsWith "repos/FS-GG/.github/contents/" ->
+                    match ref' with
+                    | Some r when r = baseSha -> ok (contents before)
+                    | Some r when r = head -> ok (contents after)
+                    | _ -> Error(Errors.NotFound $"unexpected contents ref: %A{ref'}")
+                | "GET", "repos/FS-GG/.github/actions/runs" ->
+                    ok """{"total_count":1,"workflow_runs":[{"path":".github/workflows/build.yml","event":"pull_request","head_branch":"item/2144-quoted-diff-inventory","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":2149}]}]}"""
+                | "GET", p when p.StartsWith "repos/FS-GG/.github/commits/" && p.EndsWith "/check-runs" ->
+                    ok """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                | "GET", "repos/FS-GG/.github/issues/2149/comments" ->
+                    // A canonical, fully passing chain that opts OUT of the audit and attaches no receipt.
+                    let initial =
+                        $"<!-- fsgg:independent-review:v1 -->\ncritic: shrike-2144\nreviewed-head: %s{head}\nverdict: pass\ndiff-audit-required: false\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: no runtime-route comparison subject"
+                    let accepted =
+                        $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: %s{head}\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
+                    ok (JsonSerializer.Serialize [ {| id = 1; html_url = "https://reviews/1"; body = initial |}; {| id = 2; html_url = "https://reviews/2"; body = accepted |} ])
+                | method', p -> Error(Errors.NotFound $"unexpected driver read: %s{method'} %s{p}"))
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let cache = Path.Combine(Path.GetTempPath(), "fsgg-2144-driver-" + Guid.NewGuid().ToString "n")
+        let previousOut, previousErr = Console.Out, Console.Error
+        try
+            Directory.CreateDirectory cache |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+            use capturedOut = new StringWriter()
+            use capturedErr = new StringWriter()
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+            let code =
+                Client.driver
+                    (context transport)
+                    (options [ "driver"; "--repo"; ".github"; "--json"; "--worker"; "host-2144" ])
+            Console.Out.Flush()
+            Console.Error.Flush()
+            Console.SetOut previousOut
+            Console.SetError previousErr
+            let stdout = capturedOut.ToString()
+            if code <> 0 then failwithf "exit=%d; stderr=%s; log=%A" code (capturedErr.ToString()) transport.Log
+            use document = JsonDocument.Parse stdout
+            let evidence = document.RootElement.GetProperty("reviewEvidence").GetInt32()
+            if evidence <> expectedEvidence then
+                failwithf
+                    "occurrences=%d expected evidence=%d got %d; stdout=%s; log=%A"
+                    occurrences expectedEvidence evidence stdout transport.Log
+            // The engine had to read both blobs to reach an occurrence count at all — the file count
+            // alone can never distinguish these two runs.
+            Assert.True(transport.Logged $"get FS-GG/.github contents/%s{path}", $"log: %A{transport.Log}")
         finally
             Console.SetOut previousOut
             Console.SetError previousErr
@@ -3011,7 +3121,9 @@ module ApplicationServiceTests =
           Options.CommandContractCmd,
           "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
           Options.Issues,
-          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE" ]
+          "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
+          Options.DiffAudit,
+          "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
 
     /// Drive ONE verb's empty or refusing arm under `--json`, capturing stdout and stderr APART.
     ///

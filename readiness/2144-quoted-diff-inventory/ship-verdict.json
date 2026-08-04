@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2144-quoted-diff-inventory",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/0.32.0",
+  "sourcesDigest": {
+    "algorithm": "sha256",
+    "value": "9ea705ee25aaaf223bf05a79969f83efa319b6c1153fb9d1618304a78fd6babc"
+  },
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 5,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 5
+  },
+  "disposition": {
+    "state": "shipReady",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

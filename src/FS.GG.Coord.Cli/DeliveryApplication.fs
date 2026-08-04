@@ -64,6 +64,19 @@ module DeliveryApplication =
         | JsonValueKind.String when not (String.IsNullOrWhiteSpace(value.GetString())) -> Some(value.GetString())
         | _ -> invalidArg name "must be null or a non-empty string"
 
+    /// A field an older snapshot producer may not emit at all.  Absent means "this producer makes no
+    /// diff-audit assertion" — which is exactly the behavior before .github#2144 — and is deliberately
+    /// NOT read as a producer asserting `false` about an audit it measured and cleared.
+    let private readBooleanOrDefault (name: string) (fallback: bool) (element: JsonElement) : bool =
+        match element.TryGetProperty name with
+        | true, _ -> readBoolean name element
+        | _ -> fallback
+
+    let private readOptionalStringOrAbsent (name: string) (element: JsonElement) : string option =
+        match element.TryGetProperty name with
+        | true, _ -> readOptionalString name element
+        | _ -> None
+
     let private review (element: JsonElement) : Driver.ReviewChain option =
         let value = required "review" element
         match value.ValueKind with
@@ -85,6 +98,8 @@ module DeliveryApplication =
             let checksGreen = readBoolean "checksGreen" value
             let hostAccepted = readBoolean "hostAccepted" value
             let runtimeRouteEvidence = readOptionalString "routeNotMeaningfulReason" value |> Option.map Driver.NotMeaningful
+            let diffAuditRequired = readBooleanOrDefault "diffAuditRequired" false value
+            let diffAuditHead = readOptionalStringOrAbsent "diffAuditHead" value
             Some
                 ({ MarkerValid = markerValid;
                   CriticIdentity = criticIdentity;
@@ -93,7 +108,9 @@ module DeliveryApplication =
                   RepairPhase = repairPhase;
                   ChecksGreen = checksGreen;
                   HostAccepted = hostAccepted;
-                  RuntimeRouteEvidence = runtimeRouteEvidence } : Driver.ReviewChain)
+                  RuntimeRouteEvidence = runtimeRouteEvidence;
+                  DiffAuditRequired = diffAuditRequired;
+                  DiffAuditHead = diffAuditHead } : Driver.ReviewChain)
         | _ -> invalidArg "review" "must be an object or null"
 
     let private obligations (element: JsonElement) : Delivery.Obligation list =

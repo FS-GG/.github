@@ -388,7 +388,13 @@
          the winning claim generation immediately before its REST merge call. This is a required
          receiver-visible operational behavior, not a prose-only correction; member set and
          destinations are unchanged. -->
-    <Version>0.35.1</Version>
+    <!-- 0.35.1 -> 0.36.0, a MINOR (.github#2144): the packed pnext-item worker/critic contract now
+         requires a head-bound quoted-string classification receipt for bulk renames, and states that
+         threshold activation is measured from semantic occurrences discovered in the live PR diff
+         rather than from changed-file count, so a missing receipt can no longer read as a negative
+         fact. This changes receiver-visible required review behavior while preserving the packed
+         member set and destinations. -->
+    <Version>0.36.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
