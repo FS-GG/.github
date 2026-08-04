@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes: [Semantic inventory tests passed.]
@@ -78,9 +78,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes: [Acceptance receipt gate tests passed.]
@@ -102,9 +102,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes: [Core evidence receipt passed.]
@@ -126,9 +126,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes: [Versioned public receipt contract passed.]
@@ -150,9 +150,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes: [Generated guidance and semantic diff documentation are committed.]
@@ -181,9 +181,9 @@ evidence:
     synthetic: false
     observedRun:
       source: tests/FS.GG.Coord.Core.Tests/TestResults/2144-core.trx
-      digest: "sha256:6611f2c4feefc064414bbfffdc57e79e36dbb0babc5f4ffe6309ebd88b6ffd66"
+      digest: "sha256:df96de9d06cd03e77bab9cb8b76a41764c439cf3a8ce419f841d78d7402d25cb"
       outcome: passed
-      passed: 603
+      passed: 604
       failed: 0
       skipped: 0
     notes:

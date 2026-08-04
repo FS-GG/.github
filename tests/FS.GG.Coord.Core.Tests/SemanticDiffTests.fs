@@ -133,6 +133,22 @@ module SemanticDiffTests =
         // Each rename is inventoried against every file, and identical rows are never double-counted.
         Assert.Equal(2, (discoveredOccurrences files).Length)
 
+    /// Discovery must stay tractable at the diff shape it exists for. Pairing is bucketed by skeleton;
+    /// without that it is quadratic in the size of the diff, and a real bulk rename — thousands of
+    /// changed lines on both sides — would not finish. This asserts the answer at that scale, so a
+    /// change that drops the bucketing shows up as a suite that stops completing rather than silently.
+    [<Fact>]
+    let ``discovery stays tractable and exact at bulk-rename scale`` () =
+        let rows = 2000
+
+        let before =
+            [ for index in 1..rows -> $"let field%d{index} = \"oldName\" // row %d{index}" ]
+            |> String.concat "\n"
+
+        let files = [ "src/Protocol.fs", before, before.Replace("oldName", "newName") ]
+        Assert.Equal<(string * string) list>([ "oldName", "newName" ], discoverRenames files)
+        Assert.Equal(rows, (discoveredOccurrences files).Length)
+
     [<Fact>]
     let ``bulk rename activation is derived from typed item or commit facts and threshold`` () =
         Assert.True(activationRequired 5 5 "ordinary commit" None)
