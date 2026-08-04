@@ -583,10 +583,41 @@ module ChoreTests =
         Assert.Equal<(string * string) option>(Some("Status", statusWireName Ready), (List.head (derive [ i ])).Kind.Write)
 
     [<Fact>]
-    let ``.github#2220 an UNREAD body picks no column at all — a destination chosen from a failed read (#266)`` () =
-        // The fail-closed leg. `humanHoldAllowsFlip` already holds every `Unreadable` row, so this is a
-        // second lock on one door — spelled anyway, because a gate that is only correct while some OTHER
-        // gate keeps its subject away breaks the first time the other gate moves.
+    let ``.github#2220 an UNREAD body yields NO chore — a DOUBLE-LOCKED door, and neither lock alone is measurable`` () =
+        // RETITLED AND REGRADED — round-2 review of PR #2228, under `#2223` steps 2 and 4.
+        //
+        // This was titled *"an UNREAD body picks no column at all"*, which claimed a property of
+        // `clearedDestination` alone. The critic mutated that arm to `Some ToReady` and this suite stayed
+        // **613/0 GREEN** — a surviving inversion, and material by definition. Reproduced here before
+        // repairing.
+        //
+        // BUT THE CONCLUSION IS NOT `C4`'S. Running the opposite mutation settles it. Three runs:
+        //
+        //   1. `clearedDestination`'s `Unreadable _ -> None`  ->  `Some ToReady`, alone   ...  613/0 GREEN
+        //   2. `humanHoldAllowsFlip`'s  `Unreadable _ -> false` ->  `true`, alone          ...  613/0 GREEN
+        //   3. BOTH together                                                               ...  3 RED
+        //
+        // Two INDEPENDENT locks provide this property, so of course neither survives-alone measurement
+        // reds: that is what defence in depth means. `FS.GG.Governance#385`'s `C4` is a different animal —
+        // there the named test never tested the property at all, so breaking the one real provider removed
+        // the guarantee while the test still reported coverage. Here, breaking either provider leaves the
+        // guarantee STANDING, and breaking both is visible right here. The failure mode `C4` warns about
+        // cannot occur on this door.
+        //
+        //   PROVIDERS (both, and the order is the reason neither is separable):
+        //     - `humanHoldAllowsFlip`'s `Unreadable _ -> false`, EARLIER in `choresFor`'s `&&` chain,
+        //       pinned directly by ``#1644 an UNREAD body HOLDS the flip`` above.
+        //     - `clearedDestination`'s `Unreadable _ -> None`, which is what refuses the row when the
+        //       first lock is removed — run 2 is the proof it is load-bearing rather than decorative.
+        //
+        //   NOT INDEPENDENTLY MEASURABLE, deliberately: while the park gate precedes the destination
+        //   choice, no input reaching the second lock exists through `derive`, so no single subject
+        //   mutation can isolate it. Recorded rather than graded JUSTIFIED — and `Chore.fs` carries the
+        //   same three measurements beside the arm itself.
+        //
+        // What THIS test buys over `#1644`'s leg: that one drives the predicate, this one drives `derive`,
+        // so a future reorder putting the destination choice ahead of the park gate stays green there and
+        // is caught here.
         let i =
             { item 1 with
                 Status = Blocked

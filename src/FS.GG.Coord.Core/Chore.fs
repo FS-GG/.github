@@ -209,6 +209,23 @@ module Chore =
     /// moves. THE MATCH IS TOTAL for `humanHoldAllowsFlip`'s reason exactly: a seventh `TouchSet` case must
     /// be classified here rather than defaulting into a column.
     ///
+    /// **THE `Unreadable` ARM IS NOT INDEPENDENTLY MEASURABLE, AND IT IS NOT DEAD EITHER** — PR #2228
+    /// round 2, graded under `#2223` step 2's "where a subject mutation genuinely cannot be constructed,
+    /// say so". Three mutations, all run against the Core suite:
+    ///
+    /// - this arm to `Some ToReady`, alone: **613/0 GREEN**. `humanHoldAllowsFlip` refuses the row first,
+    ///   so nothing reaches here through `derive`.
+    /// - `humanHoldAllowsFlip`'s `Unreadable _ -> false` to `true`, alone: **613/0 GREEN**. This arm is
+    ///   what refuses the row instead.
+    /// - **both together: 3 RED**, the unread-body legs among them.
+    ///
+    /// So the two locks are genuinely redundant, and no single subject mutation can red either one — which
+    /// is what defence in depth MEANS, and is why the first measurement is not evidence this arm is
+    /// decorative. It is distinct from `FS.GG.Governance#385`'s `C4`: there, breaking the real provider
+    /// silently removed the guarantee while the named test still reported coverage. Here, removing EITHER
+    /// provider leaves the guarantee standing, and removing both is visible. The failure mode `C4` warns
+    /// about cannot occur on this door.
+    ///
     /// `DeclaredChore` (`Paths: any`) goes to `Ready` and that is not an oversight — ADR-0045's file-less
     /// chore reserves nothing and IS schedulable, so `Ready` is reachable for it. It is `DeclaredNone`'s
     /// counterpart precisely here, and the two are told apart by `Types.fsi` for this reason.
