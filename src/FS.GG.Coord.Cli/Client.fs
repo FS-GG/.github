@@ -4814,8 +4814,30 @@ module Client =
     ///
     /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
     ///
-    /// - A claim on a **CLOSED** issue. `openIssues` is open-only — and so is the scheduler: `Scan.snapshot`
-    ///   SWEEPS a closed candidate with no marker read at all (#520). The two agree, deliberately.
+    /// - A claim on a **CLOSED** issue. `openIssues` is open-only, so a closed row is never read here and
+    ///   this gate can find no collision on it. **THE TWO ROUTES NO LONGER AGREE, AND THIS IS A KNOWN
+    ///   DIVERGENCE, NOT A DELIBERATE ONE — `.github#2250`.** Until `.github#2225` this bullet read *"and so
+    ///   is the scheduler: `Scan.snapshot` SWEEPS a closed candidate with no marker read at all (#520). The
+    ///   two agree, deliberately."* That agreement was real, and it was the SAME defect on both sides.
+    ///   `#2225` fixed the scheduler half: `Scan.snapshot` now sweeps only a closed **and STAMPED** row, so a
+    ///   closed-but-unstamped holder — the post-merge window — is read, reserves its touch-set, and is named
+    ///   by `batch`/`take`. This path was not changed with it, so measured over one such holder the two now
+    ///   answer opposite: the scheduler refuses the overlapping candidate and names its holder, while
+    ///   `overlap --active` answers `DISJOINT` with exit 0. `widen` gates its `#523` re-check on this same
+    ///   scan (below), so a worker widening into a held tree lands the declaration and the holder is never
+    ///   told.
+    ///
+    ///   The direction is the safe one — `take` refuses what this gate permits, so the two-workers-in-one-
+    ///   tree failure (#1858's class) stays blocked — which is why `#2225` closed without closing this.
+    ///   Repairing it means giving `activeCollisions` a different candidate universe, and that is a GraphQL
+    ///   cost decision against the budget table above, not a one-line edit. `.github#2250` owns it.
+    ///
+    ///   **The citation of `#520` is deliberately gone.** The old sentence pinned this licence to `#520`'s
+    ///   sweep test — and `#2225` moved that very test's fixture from `Status = Ready` to `Status = Done`,
+    ///   falsifying the licence by editing the test it named, with nothing connecting the two. That is the
+    ///   exact shape `#2225` exists to stop (`Scan.fs`'s own note: a site licensed by a claim about another
+    ///   site, falsified without either able to notice), so it is not repeated here: this bullet now states
+    ///   what these two routes DO, and names the row that owns the gap.
     /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
     ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
     /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
