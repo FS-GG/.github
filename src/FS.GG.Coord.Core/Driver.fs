@@ -36,37 +36,67 @@ module Driver =
         (comments: ReviewComment list)
         =
         let markerText name = $"<!-- fsgg:%s{name}:v1 -->"
-        // A protocol marker is the first complete line of the comment.  `Contains` made quoted examples,
-        // critic prose and a second embedded marker executable evidence.  Preserve the bytes which make
-        // the marker canonical: no quote prefix, leading prose, indentation, or duplicate occurrence.
-        let marker name (text: string) =
+
+        let markerNames =
+            [ Protocol.reviewPolicy.InitialMarker
+              Protocol.reviewPolicy.ConfirmationMarker
+              Protocol.reviewPolicy.AcceptanceMarker
+              Protocol.reviewPolicy.EscalationMarker
+              Protocol.reviewPolicy.RepairPhaseMarker ]
+
+        let knownMarkerTexts = markerNames |> List.map markerText
+
+        // THE PLACEMENT RULE (.github#2221).  A marker is evidence only as a WHOLE LINE inside the
+        // comment's LEADING MARKER BLOCK — the run of lines, from byte 0, each of which is exactly one
+        // known marker's text.  The block ends at the first line that is anything else.
+        //
+        // WHY A BLOCK AND NOT "the first line".  The predecessor recognised exactly one marker at offset
+        // 0, and then — this is the defect — treated ANY other occurrence of those bytes ANYWHERE on the
+        // PR as a hard error over the SHARED error list.  So a handoff comment whose only sin was naming
+        // a marker in prose, in backticks, made every genuine marker on that PR unparseable, and the
+        // message named a marker kind rather than the comment that carried the bytes: the reader was
+        // sent to the critic's correct marker.  Measured live on PR #2205 at head 6ba838ac.
+        //
+        // "This quotation is not evidence" and "this PR can have no review" are different facts, and only
+        // the first was ever intended.  The guard's stated intent is fully served by DECLINING to read a
+        // quotation — `marker` already does that — so the extra step is deleted rather than softened.
+        //
+        // The block also makes `independent-review` §"Repair phase" step 3 reachable: it sanctions a
+        // repair-phase designation riding in "the same comment" as the initial review, which the
+        // offset-0 rule could not represent at all (#2221 comment 5179330334).  Two markers, two whole
+        // lines, one comment, and no prose between them: both canonical.
+        //
+        // What stays refused is a COMPETING marker — the same kind twice in one comment's block, which
+        // has one meaning and cannot be given two.  Everything outside the block is inert: quoted,
+        // fenced, blockquoted, indented, or trailing after prose.  It is never evidence and never an
+        // error.
+        let leadingMarkerBlock (text: string) =
+            let rec collect offset acc =
+                if offset >= text.Length then
+                    List.rev acc
+                else
+                    let lineEnd =
+                        match text.IndexOf('\n', offset) with
+                        | -1 -> text.Length
+                        | index -> index
+
+                    let raw = text.Substring(offset, lineEnd - offset)
+                    let line = if raw.EndsWith '\r' then raw.Substring(0, raw.Length - 1) else raw
+
+                    if List.contains line knownMarkerTexts then
+                        collect (lineEnd + 1) (line :: acc)
+                    else
+                        List.rev acc
+
+            collect 0 []
+
+        let canonicalOccurrences name (text: string) =
             let expected = markerText name
+            leadingMarkerBlock text |> List.filter (fun line -> line = expected) |> List.length
 
-            let occurrences =
-                [ let mutable offset = 0
+        let marker name (text: string) = canonicalOccurrences name text = 1
 
-                  while offset < text.Length do
-                      let found = text.IndexOf(expected, offset, System.StringComparison.Ordinal)
-
-                      if found >= 0 then
-                          yield found
-                          offset <- found + expected.Length
-                      else
-                          offset <- text.Length ]
-
-            match occurrences with
-            | [ 0 ] when
-                text.Length = expected.Length
-                || text[expected.Length] = '\n'
-                || (text[expected.Length] = '\r'
-                    && text.Length > expected.Length + 1
-                    && text[expected.Length + 1] = '\n')
-                ->
-                true
-            | _ -> false
-
-        let malformedMarker name (text: string) =
-            text.Contains(markerText name) && not (marker name text)
+        let competingMarker name (text: string) = canonicalOccurrences name text > 1
 
         let fieldValues key (text: string) =
             text.Split '\n'
@@ -126,10 +156,20 @@ module Driver =
         let acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body)
         let errors = ResizeArray<string>()
 
+        // EVERY marker error names the comment that caused it (#2221 acceptance criterion 3).  The
+        // predecessor named only a marker KIND, so the reader looked at the one correct marker of that
+        // kind and concluded the critic had got it wrong.
+        let locate (comment: ReviewComment) =
+            if System.String.IsNullOrWhiteSpace comment.Url then
+                $"comment %d{comment.Id}"
+            else
+                $"comment %d{comment.Id} (%s{comment.Url})"
+
         for comment in ordered do
-            for name in [ Protocol.reviewPolicy.InitialMarker; Protocol.reviewPolicy.ConfirmationMarker; Protocol.reviewPolicy.AcceptanceMarker; Protocol.reviewPolicy.EscalationMarker; Protocol.reviewPolicy.RepairPhaseMarker ] do
-                if malformedMarker name comment.Body then
-                    errors.Add $"%s{name} marker must be the single canonical leading standalone marker"
+            for name in markerNames do
+                if competingMarker name comment.Body then
+                    errors.Add
+                        $"%s{name} marker is repeated in the leading marker block of %s{locate comment}; one comment may carry a marker kind once"
         // The marker designates the one escalated phase; it is not a confirmation round itself.  A
         // duplicate durable designation still has one boolean meaning and must not silently spend the
         // phase's confirmation budget.
@@ -142,7 +182,13 @@ module Driver =
         let requireOne what values =
             match values with
             | [ value ] -> Some value
-            | _ -> errors.Add $"exactly one %s{what} marker is required"; None
+            | [] ->
+                errors.Add $"exactly one %s{what} marker is required; no comment carries one"
+                None
+            | competing ->
+                let where = competing |> List.map locate |> String.concat ", "
+                errors.Add $"exactly one %s{what} marker is required; it is carried by %s{where}"
+                None
         let hostFields = Protocol.lifecyclePolicy.HostAcceptanceFields
         match requireOne Protocol.reviewPolicy.InitialMarker initial, requireOne Protocol.reviewPolicy.AcceptanceMarker acceptances with
         | Some first, Some accepted ->

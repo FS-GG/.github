@@ -406,6 +406,126 @@ module DriverTests =
         Assert.True(multipleMarkers.RepairPhase)
         Assert.Equal<int list>([ 1 .. 10 ], multipleMarkers.Rounds)
 
+    /// .github#2221 — a comment that merely QUOTES a marker must not invalidate the real chain.
+    ///
+    /// Measured live on PR #2205 at head `6ba838ac`: one ordinary ready-for-review handoff whose only
+    /// sin was naming `<!-- fsgg:independent-review-repair-phase:v1 -->` inside backticks made a
+    /// syntactically perfect chain — posted LATER, by the critic — unparseable. The blast radius was the
+    /// PR, not the comment, and the message named a marker KIND, so the reader was sent to the one
+    /// correct marker of that kind and concluded the critic had got it wrong.
+    ///
+    /// The boundary encoded here: evidence is a marker occupying a WHOLE LINE in the comment's leading
+    /// marker block; every other occurrence is INERT — never evidence, never an error. Only a marker
+    /// REPEATED in that block competes with itself, and that error names the comment that carried it.
+    [<Fact>]
+    let ``#2221 quoted markers are inert, competing markers fail closed, and errors name the comment`` () =
+        let initial =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+                 + notMeaningful)
+
+        let accepted =
+            comment
+                20L
+                "https://reviews/accepted"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial"
+
+        let chainWith extra = [ initial; accepted ] @ extra
+        let bystander id body = comment id $"https://reviews/bystander-%d{id}" body
+
+        // The control: the chain alone parses. Every row below adds ONE bystander to exactly this.
+        match parseReviewComments (chainWith []) with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "the control chain must parse: %A" errors
+
+        let quotedRepairPhase =
+            bystander
+                30L
+                "Ready for review. Per `independent-review` §3 the critic's initial review should additionally carry `<!-- fsgg:independent-review-repair-phase:v1 -->` naming that exhausted PR and escalation URL."
+
+        let quotations =
+            [ quotedRepairPhase
+              // A fenced example, the marker alone on its own line inside the fence.
+              bystander 31L "Post this:\n\n```\n<!-- fsgg:independent-review:v1 -->\ncritic: <you>\n```\n"
+              // A blockquote of a real chain.
+              bystander 32L "> <!-- fsgg:independent-review-confirmation:v1 -->\n> round: 1\n"
+              // Bare bytes after prose, with no quoting of any kind.
+              bystander 33L "The host posts <!-- fsgg:review-accepted:v1 --> once it accepts the head.\n"
+              // Indented, which is how an editor renders a nested list item's code block.
+              bystander 34L "Escalation:\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n"
+              // Marker bytes on their own line, but AFTER prose — still outside the leading block.
+              bystander 35L "the escalation marker is spelled\n<!-- fsgg:independent-review-escalation:v1 -->\n" ]
+
+        for quotation in quotations do
+            match parseReviewComments (chainWith [ quotation ]) with
+            | Ok chain -> Assert.True(chain.HostAccepted)
+            | Error errors -> failwithf "comment %d invalidated the chain: %A" quotation.Id errors
+
+        match parseReviewComments (chainWith quotations) with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "the quotations together invalidated the chain: %A" errors
+
+        // Inert means inert IN BOTH DIRECTIONS: a quoted repair-phase designation is not read as one.
+        match parseReviewComments (chainWith [ quotedRepairPhase ]) with
+        | Ok chain -> Assert.False(chain.RepairPhase)
+        | Error errors -> failwithf "%A" errors
+
+        // GitHub returns comment bodies with CRLF endings; the block is defined over lines, not bytes.
+        let crlf (c: ReviewComment) = { c with Body = c.Body.Replace("\n", "\r\n") }
+
+        match parseReviewComments [ crlf initial; crlf accepted; crlf quotedRepairPhase ] with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "CRLF bodies must parse: %A" errors
+
+        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
+
+        // COMPETING, not quoted: one kind twice in one comment's leading block has one meaning and
+        // cannot be given two. The error names the comment, not just the kind.
+        let repeated =
+            bystander
+                40L
+                "<!-- fsgg:independent-review:v1 -->\n<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+
+        match parseReviewComments (chainWith [ repeated ]) with
+        | Ok _ -> failwith "a repeated canonical leading marker must fail closed"
+        | Error errors ->
+            Assert.True(saysThat "comment 40" errors, $"%A{errors}")
+            Assert.True(saysThat "https://reviews/bystander-40" errors, $"%A{errors}")
+
+        // Two comments each canonically carrying the initial marker: still exactly-one, and the message
+        // names BOTH candidates so the reader can see which pair competes.
+        let second =
+            bystander 41L "<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+
+        match parseReviewComments (chainWith [ second ]) with
+        | Ok _ -> failwith "two competing initial markers must fail closed"
+        | Error errors ->
+            Assert.True(saysThat "comment 10" errors, $"%A{errors}")
+            Assert.True(saysThat "comment 41" errors, $"%A{errors}")
+
+        // A chain with no initial marker at all still says so, and says it is missing rather than naming
+        // a comment that does not exist.
+        match parseReviewComments [ accepted ] with
+        | Ok _ -> failwith "a chain with no initial marker must fail closed"
+        | Error errors -> Assert.True(saysThat "no comment carries one" errors, $"%A{errors}")
+
+        // `independent-review` §"Repair phase" step 3 sanctions the designation riding in "the same
+        // comment" as the initial review (#2221 comment 5179330334). The offset-0 predecessor could not
+        // represent that layout at all, so a critic following the reference literally produced an
+        // unparseable chain. Two markers, two whole lines, one comment: both canonical.
+        let colocated =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\n<!-- fsgg:independent-review-repair-phase:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+                 + notMeaningful)
+
+        match parseReviewComments [ colocated; accepted ] with
+        | Ok chain -> Assert.True(chain.RepairPhase)
+        | Error errors -> failwithf "a co-located repair-phase designation must parse: %A" errors
+
     [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
