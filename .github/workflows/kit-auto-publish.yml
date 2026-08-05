@@ -33,9 +33,32 @@ jobs:
       packages: read
       issues: write
     steps:
-      # The App token is intentional: a GITHUB_TOKEN-created tag cannot start
-      # release-kit.yml.  The same identity authors the evidence PR, so its CI
-      # is not suppressed by Actions' recursion guard either.
+      # The App token is intentional, and it is intentional ONLY FOR THE WRITES:
+      # a GITHUB_TOKEN-created tag cannot start release-kit.yml, and the same
+      # identity authors the evidence PR so its CI is not suppressed by Actions'
+      # recursion guard either.  Every READ below uses the run-scoped
+      # GITHUB_TOKEN instead — see the observation step.
+      #
+      # A mint requests permissions; it does not receive a subset.  GitHub
+      # refuses the WHOLE mint with 422 "The permissions requested are not
+      # granted to this installation" if any ONE requested scope is ungranted,
+      # so the three below must stay a subset of what fs-gg-cross-repo-dispatch
+      # actually grants (`gh api /orgs/FS-GG/installations`):
+      #
+      #   administration:write  contents:write  issues:write  metadata:read
+      #   organization_administration:read  packages:read  pull_requests:write
+      #
+      # This step is UNCONDITIONAL, which is what makes an ungranted scope
+      # unrecoverable here.  Do not read it as the fail-closed
+      # dormant-until-configured pattern of .github#157 / FS.GG.Templates#83:
+      # those steps are variable-gated and skip cleanly when unprovisioned, so
+      # releases keep working.  This one cannot skip.  If it 422s, the workflow
+      # is dead on every push and every hour until a scope is removed here or
+      # granted to the installation by an org owner — as it was for all 56 runs
+      # between 2026-08-03 and .github#2234, none of which ever reached a step
+      # past this one.  `permission-organization-packages: read` was the scope
+      # that did it: the installation carries repository-scoped `packages`, and
+      # the organization-scoped permission was never granted at all.
       - name: Mint the release coordinator App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -45,7 +68,6 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
-          permission-organization-packages: read
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -55,10 +77,29 @@ jobs:
           global-json-file: global.json
       - name: Test the fail-closed state machine
         run: bash tests/kit-auto-publish/run.sh
+      # Read-only, so it uses the LEAST-privileged token that can do the job:
+      # the run-scoped GITHUB_TOKEN carrying this job's own `permissions:` block
+      # (actions: read, packages: read, contents: write, pull-requests: write).
+      # That block existed before this step could use it — `packages: read` had
+      # no consumer at all while the App token held GH_TOKEN.
+      #
+      # The App token is not merely unnecessary here, it is INSUFFICIENT: an
+      # installation token is 403 on the GitHub Packages registry
+      # (nuget.pkg.github.com), where the run-scoped token succeeds.  Measured
+      # side by side on 2026-08-05, actions/runs/30984500498:
+      #
+      #   nuget.pkg.github.com/FS-GG/download/…  App 403   GITHUB_TOKEN 302→200
+      #   orgs/FS-GG/packages/nuget/…/versions   App 200   GITHUB_TOKEN 200
+      #   repos/…/actions/workflows/…/runs       App 200   GITHUB_TOKEN 200
+      #   repos/…/pulls?state=closed             App 200   GITHUB_TOKEN 200
+      #
+      # So no grant of `organization_packages` would have fixed the download
+      # either; swapping the token is the fix, and dropping the scope is safe
+      # because nothing minted here reads packages any more.
       - name: Authenticated read-only observation
         id: observe
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="$(dotnet msbuild src/FS.GG.Kit/FS.GG.Kit.csproj -getProperty:Version | tr -d '[:space:]')"
@@ -66,9 +107,15 @@ jobs:
           package="fs.gg.kit.${version}.nupkg"
           org_url="https://nuget.pkg.github.com/FS-GG/download/FS.GG.Kit/${version}/FS.GG.Kit.${version}.nupkg"
           nuget_url="https://api.nuget.org/v3-flatcontainer/fs.gg.kit/${version}/${package}"
+          # `-L` is load-bearing, not tidying.  Both feeds answer a nupkg
+          # download with a 302 to presigned blob storage, and `%{http_code}`
+          # without `-L` reports that 302 — which is neither 200 nor 404, so a
+          # PUBLISHED package was observed as `unknown` and refused.  curl drops
+          # the credentials on a cross-host redirect, which is correct here: the
+          # storage URL carries its own signature.
           observe_feed() {
             local name="$1" url="$2" auth="$3" code
-            if [ "$auth" = yes ]; then code="$(curl --retry 2 --connect-timeout 10 -sS -u "x-access-token:${GH_TOKEN}" -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; else code="$(curl --retry 2 --connect-timeout 10 -sS -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; fi
+            if [ "$auth" = yes ]; then code="$(curl --retry 2 --connect-timeout 10 -sSL -u "x-access-token:${GH_TOKEN}" -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; else code="$(curl --retry 2 --connect-timeout 10 -sSL -o "${name}.nupkg" -w '%{http_code}' "$url" || true)"; fi
             case "$code" in 200) printf present;; 404) rm -f "${name}.nupkg"; printf absent;; *) rm -f "${name}.nupkg"; printf unknown;; esac
           }
           org="$(observe_feed org "$org_url" yes)"; nuget="$(observe_feed nuget "$nuget_url" no)"
@@ -98,10 +145,17 @@ jobs:
             git merge-base --is-ancestor "$merge" origin/main || continue
             provenance="$(jq -n --arg n "$number" --arg merge "$merge" --arg head "$head" --arg version "$introduced" '{number:($n|tonumber),mergeCommit:$merge,head:$head,mergedReachable:true,introducedVersion:$version,prArm:"pass"}')"; break
           done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 --json number,mergeCommit,headRefOid --jq '.[] | [.number, .mergeCommit.oid, .headRefOid] | @tsv')
-          source_sha="$GITHUB_SHA"
           # Artifact identity is the commit the tag will point at; authoring
           # provenance remains separately bound in `.provenance.mergeCommit`.
-          source_sha="$GITHUB_SHA"
+          # For an ALREADY-tagged version that is what the tag already points
+          # at, which is the commit the served nuspecs record — not $GITHUB_SHA,
+          # which is merely whatever main happens to be when this run fires.
+          # Comparing the nuspec commit against $GITHUB_SHA made every run after
+          # a release report `published-nuspec-commit-disagrees` about two feeds
+          # that agree exactly.  Where the tag does not exist yet the fallback is
+          # $GITHUB_SHA, which is precisely the commit the tag step will create
+          # it at, so the irreversible `tag` edge is unchanged.
+          source_sha="$(git rev-parse -q --verify "refs/tags/${tag}^{commit}" 2>/dev/null || echo "$GITHUB_SHA")"
           release='null'
           if [ "$org" = present ] && [ "$nuget" = present ]; then
             org_commit="$(unzip -p org.nupkg '*.nuspec' 2>/dev/null | sed -n 's/.*repository[^>]*commit="\([^"]*\)".*/\1/p' | head -1)"
