@@ -71,11 +71,44 @@ current" must never share an exit code. Every one of these is an ERROR, not a sk
     hard-coded path that silently checks nothing is the #266 shape this gate exists to refuse);
   * an engine source tree named below does not exist.
 
-Usage:  scripts/check-engine-freshness.py [--repo <dir>] [--ref HEAD]
+Usage:  scripts/check-engine-freshness.py [--repo <dir>] [--ref HEAD] [--report <file.json>]
 
 `--fixture <feed.json>` serves a canned feed instead of the live one. It is NOT a freshness signal,
 and it refuses to run unless FSGG_ENGINE_FIXTURE_OK=1 — which only tests/engine-freshness/ sets. A
 test hook that can silently turn the gate into a no-op is the very defect class above.
+
+REPORTING IS NOT A DESTINATION, AND WHO THE DESTINATION IS WAS DECIDED, NOT LEFT OPEN (.github#2231).
+
+The "reported, not red" arm below is a correct severity judgement with no actor behind it. On
+2026-08-04 an engine release became owed twice in one day and reached the board both times only
+because an agent mentioned the debt in passing. `--report <file>` writes the measurement as JSON so
+that the decision stops depending on someone reading a green check.
+
+THE ACTOR IS A WORKER, NOT THIS WORKFLOW, and the reason is measured. Three candidate automated
+destinations were examined and all three fail:
+
+  * A workflow that FILES the row files it as a bot, and the off-board reconcile net excludes
+    `.user.type == "Bot"` by construction (check-board/references/deep-detail.md). The row would
+    exist, never be boarded, and never be scheduled — this defect reproduced one level down, with a
+    green check over it.
+  * BOARDING it from CI would be the org's first Projects write from a runner. No workflow performs
+    one, and `graphql-monopoly` exists to keep raw board mutations out of exactly those places.
+  * Making THIS GATE red on `drift > 0` is rejected in the threshold discussion below, on a
+    measurement rather than on taste: 33 engine commits landed in the 8 hours after v0.3.0, so that
+    bar is red on the happy path and teaches that red is noise.
+
+So the obligation sits on the worker whose merged PR created the debt — a principal that already
+holds board write, is already standing at a release checkpoint, and is not excluded by the bot rule.
+It is written down in `pnext-item`'s `references/merge-and-release.md` so it is instruction rather
+than luck. Revisit this the day a runner can board an item; the JSON below is the interface that
+makes that actor cheap to add, which is why it ships now rather than with the actor.
+
+The report is written whenever a MEASUREMENT WAS OBTAINED, on the green, reported and red paths
+alike — an owed release is owed whether or not the wire surface also drifted. It is NOT written
+when the gate fails closed, because there is nothing measured to report. A consumer must therefore
+read an absent or unparsable report as "no verdict", never as "nothing is owed" (epic #266): the
+two must not share a silence. `--report` changes no exit code and suppresses no output; it is a
+strictly additional emission.
 
 Exit 0 = the fleet's engine carries every wire-surface and defect-class commit on this ref.
 """
@@ -329,6 +362,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", default=".", help="the git repo to measure (default: cwd)")
     ap.add_argument("--ref", default="HEAD", help="the ref to measure drift up to (default: HEAD)")
     ap.add_argument("--fixture", help="read the feed from a JSON file (tests only, never in CI)")
+    ap.add_argument(
+        "--report",
+        help="write the measurement as JSON here (the response half reads it; see the docstring)",
+    )
     args = ap.parse_args(argv)
     fixture_table = None
     token = ""
@@ -406,6 +443,66 @@ def main(argv: list[str]) -> int:
         print(f"::error::check-engine-freshness: {e}", file=sys.stderr)
         return 1
 
+    # The defect leg is computed here, ABOVE the human report, because the machine report below has
+    # to carry the same three counts the verdict is made from. Computing it twice — once for the
+    # report and once for the verdict — is how the two would eventually disagree.
+    defect_drift = []
+    for sha, display in all_drift:
+        defect_issues = [
+            issue["number"] for issue in issues_by_commit[sha] if declares_defect(issue["body"])
+        ]
+        if defect_issues:
+            defect_drift.append((sha, display, defect_issues))
+
+    wire_shas = {sha for sha, _ in wire_drift}
+
+    if args.report:
+        # THE DESTINATION (.github#2231). Written before any verdict is returned, so the red arms
+        # below emit it too: a release that is owed is owed whether or not the wire surface also
+        # drifted. `releaseOwed` is the field the response half branches on, and it is derived from
+        # the same `all_drift` the "reported, not red" arm reports — one measurement, two consumers.
+        report = {
+            "schema": "fsgg.engine-freshness/1",
+            "package": PACKAGE,
+            "feedVersion": version,
+            "tag": tag,
+            "ref": args.ref,
+            "wireSurface": WIRE_SURFACE,
+            "unreleasedCount": len(all_drift),
+            "wireCount": len(wire_drift),
+            "defectCount": len(defect_drift),
+            # A release is OWED whenever anything the package ships is unreleased. It is deliberately
+            # NOT the red condition: `red` says the fleet is degraded now, `releaseOwed` says a
+            # release transaction is outstanding, and the whole point of #2231 is that the second was
+            # true, correct, green, and unactioned.
+            "releaseOwed": bool(all_drift),
+            "red": bool(wire_drift or defect_drift),
+            "commits": [
+                {
+                    "sha": sha,
+                    "display": display,
+                    "wire": sha in wire_shas,
+                    "closes": [row["number"] for row in issues_by_commit[sha]],
+                }
+                for sha, display in reversed(all_drift)
+            ],
+        }
+        try:
+            with open(args.report, "w", encoding="utf-8") as fh:
+                json.dump(report, fh, indent=2)
+                fh.write("\n")
+        except OSError as e:
+            # A report the consumer will read as "no verdict" must not be produced silently. This is
+            # the one place the flag can change the exit code, and it fails the gate rather than
+            # letting a green run leave the response half with nothing to act on.
+            print(
+                f"::error::check-engine-freshness: could not write --report {args.report}: {e}. "
+                f"The measurement succeeded but its destination did not; refusing to exit green on "
+                f"a report nothing can read.",
+                file=sys.stderr,
+            )
+            return 1
+
     print(
         f"the fleet restores {PACKAGE} {version} (newest on the {ORG} feed), cut at {tag}.\n"
         f"engine commits on {args.ref} since {tag}: {len(all_drift)} "
@@ -417,20 +514,11 @@ def main(argv: list[str]) -> int:
     # below the bar" must be legible as such, not indistinguishable from "there is nothing here".
     if all_drift:
         print("\nunreleased engine commits (oldest first):")
-        wire_shas = {sha for sha, _ in wire_drift}
         for sha, display in reversed(all_drift):
             mark = "  WIRE " if sha in wire_shas else "       "
             issue_refs = ", ".join(f"#{row['number']}" for row in issues_by_commit[sha])
             closes = f" — closes {issue_refs}" if issue_refs else ""
             print(f"{mark}{display}{closes}")
-
-    defect_drift = []
-    for sha, display in all_drift:
-        defect_issues = [
-            issue["number"] for issue in issues_by_commit[sha] if declares_defect(issue["body"])
-        ]
-        if defect_issues:
-            defect_drift.append((sha, display, defect_issues))
 
     if defect_drift:
         print("\nunreleased defect-class engine commits (oldest first):")

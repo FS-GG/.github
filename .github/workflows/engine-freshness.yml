@@ -24,6 +24,19 @@
 # path that has moved is an ERROR, never a skip and never "no drift". So this workflow must never
 # gain a `continue-on-error` or a conditional that lets the live job be skipped into green —
 # "nothing to check" and "checked, and it's fine" must not share an exit code.
+#
+# THIS WORKFLOW IS THE DETECTION HALF AND HAS NO RESPONSE HALF, DELIBERATELY (.github#2231).
+# `feed-coherence`/`feed-autofix` and `skill-registry-coherence`/`skill-registry-autofix` are both
+# detection+response pairs, so the missing twin here looks like an oversight. It is not; it was
+# costed and refused. A response half would file the release row as a BOT, and the off-board
+# reconcile net excludes `.user.type == "Bot"` by construction — the row would be filed, never
+# boarded, and never scheduled, which is this workflow's own defect reproduced one level down
+# underneath a green check. Boarding it from the runner instead would be the org's first Projects
+# write from CI, which `graphql-monopoly` exists to prevent. So the actor is the WORKER whose merged
+# PR created the debt, and the obligation is written into `pnext-item`'s `merge-and-release.md`
+# rather than into a job here. The `--report` JSON below is what that worker (or a future runner that
+# CAN board) reads instead of parsing this job's prose. Do not add an auto-file job without solving
+# the bot-exclusion problem first; filing is the easy half and it is not the half that was missing.
 name: engine-freshness
 
 on:
@@ -98,4 +111,17 @@ jobs:
           # pattern (cf. feed-coherence.yml, architecture-map.yml). The run-scoped token carries
           # `packages: read` for the feed and `issues: read` for the structural defect-class leg.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/check-engine-freshness.py --repo . --ref HEAD
+        run: python scripts/check-engine-freshness.py --repo . --ref HEAD --report freshness.json
+
+      # The measurement, kept as an artifact rather than only as log prose (.github#2231). `always()`
+      # because the RED arms measure too — an owed release is owed whether or not the wire surface
+      # also drifted, and the run that goes red is exactly the one whose numbers someone will want.
+      # A missing artifact means the gate failed closed before measuring, and must be read as "no
+      # verdict", never as "nothing is owed".
+      - name: Keep the measurement
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: engine-freshness-report
+          path: freshness.json
+          if-no-files-found: ignore

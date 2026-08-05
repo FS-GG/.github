@@ -99,6 +99,33 @@ must_fail() { # $1 = label, $2 = required reason pattern
   ok "$1"
 }
 
+# --- the machine report (.github#2231). These live up here with the other helpers rather than beside
+# the section that introduced them, because the DEFECT-class red in section 4 needs them 120 lines
+# earlier than section 12 — and that distance is exactly how the defect leg came to be the one report
+# arm nobody asserted.
+run_report() { # $1 = repo, $2 = feed json, $3 = report path  -> stdout+stderr in $out, exit in $rc
+  set +e
+  out="$(python3 "$GATE" --repo "$1" --fixture "$2" --report "$3" 2>&1)"
+  rc=$?
+  set -e
+}
+
+# Reads one top-level scalar out of the report, or prints nothing if it cannot. python3 rather than
+# jq: the workflow provisions python and nothing else, so a jq assertion would pass here and be
+# unrunnable in CI.
+field() { # $1 = report path, $2 = key
+  python3 -c 'import json,sys
+try:
+    print(json.dumps(json.load(open(sys.argv[1]))[sys.argv[2]]))
+except Exception:
+    pass' "$1" "$2" 2>/dev/null
+}
+
+expect_field() { # $1 = label, $2 = report, $3 = key, $4 = expected JSON scalar
+  local got; got="$(field "$2" "$3")"
+  if [ "$got" = "$4" ]; then ok "$1"; else bad "$1 (expected $3=$4, got '${got:-<absent>}')" "$out"; fi
+}
+
 echo "== check-engine-freshness fixture =="
 
 # ---------------------------------------------------------------------------------------------
@@ -163,13 +190,23 @@ sha="$(git_ -C "$R" rev-parse HEAD)"
 F="$WORK/feed-defect.json"
 printf '{"FS.GG.Coord.Cli":["0.3.0"],"_closingIssues":{"%s":[{"number":88,"body":"Class: hardening\\n\\nClass: defect"}]}}' \
   "$sha" > "$F"
-run "$R" "$F"
+REP="$WORK/report-defect.json"
+run_report "$R" "$F" "$REP"
 must_fail "an unreleased DEFECT-class engine commit is RED" "unreleased engine commit(s) close an issue declaring"
 if grep -q 'DEFECT .*closes #88' <<<"$out"; then
   ok "the defect RED names the commit and structurally closing issue"
 else
   bad "the defect RED names the commit and structurally closing issue" "$out"
 fi
+
+# THE REPORT MUST NOT CONTRADICT THE VERDICT IT CARRIES, and this is the only arm where it could:
+# the defect red is the one red with an EMPTY wire_drift, so a `red` derived from the wire leg alone
+# emits `red: false` on a run the gate exits 1 for, and every other leg in this file stays green
+# while it does. Section 12's four terminal states did not include this one.
+expect_field "the DEFECT red is reported as red=true, not just exited 1" "$REP" red true
+expect_field "...with the defect counted" "$REP" defectCount 1
+expect_field "...and NO wire drift, which is what makes this arm the uncovered one" "$REP" wireCount 0
+expect_field "...and a release owed as well" "$REP" releaseOwed true
 
 # A `Class: defect` example inside a fence is documentation, not a declaration — the same grammar
 # the engine's Class.fromBody uses. This keeps the new red bar from classifying prose examples.
@@ -285,6 +322,79 @@ run "$WORK/notgit" "$F"
 # The REASON, not merely a non-zero exit: "failed" would match a path typo in this harness just as
 # happily as the thing under test, which is the vacuous-failure defect this file's header cites.
 must_fail "a non-repo is an ERROR" "not a git repository"
+
+# ---------------------------------------------------------------------------------------------
+# 12. THE MACHINE REPORT (.github#2231). The "reported, not red" arm is a correct severity call with
+#    no actor behind it, and twice on 2026-08-04 the owed release reached the board only because an
+#    agent happened to mention it. `--report` is the destination interface. These legs exist because
+#    the field a consumer branches on — `releaseOwed` — is the one that must be TRUE in exactly the
+#    state the gate calls GREEN, which is the least intuitive thing about this whole file.
+# ---------------------------------------------------------------------------------------------
+# THE RECURRING STATE ITSELF: internal-only drift. Green, correctly — and a release is owed anyway.
+R="$WORK/report-owed"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: an internal refactor"
+touch_commit "$R" "src/FS.GG.Coord.GitHub/Reads.fs" "github: another internal change"
+F="$WORK/feed-report-owed.json"; feed "$F" 0.3.0
+REP="$WORK/report-owed.json"
+run_report "$R" "$F" "$REP"
+must_pass "the report does not disturb the green verdict" "Reported, not red"
+expect_field "GREEN drift still reports releaseOwed=true" "$REP" releaseOwed true
+expect_field "...and red=false, so the two facts stay separable" "$REP" red false
+expect_field "...and the count matches the human output" "$REP" unreleasedCount 2
+expect_field "...and the schema is declared" "$REP" schema '"fsgg.engine-freshness/1"'
+
+# The commit list is the payload a filer needs; an empty one with a non-zero count would be a report
+# that says a release is owed and cannot say for what.
+if [ "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(len(d["commits"]))' "$REP")" = "2" ]; then
+  ok "the report carries one entry per unreleased commit"
+else
+  bad "the report carries one entry per unreleased commit" "$(cat "$REP")"
+fi
+
+# NOTHING OWED must be distinguishable from OWED. A report whose releaseOwed is true whatever the
+# tree looks like would satisfy every assertion above and be worthless.
+R="$WORK/report-clean"; make_repo "$R"
+F="$WORK/feed-report-clean.json"; feed "$F" 0.3.0
+REP="$WORK/report-clean.json"
+run_report "$R" "$F" "$REP"
+must_pass "a clean tree is still clean with --report" "no engine commits since"
+expect_field "a clean tree reports releaseOwed=false" "$REP" releaseOwed false
+expect_field "...with a zero count" "$REP" unreleasedCount 0
+
+# THE RED PATH MEASURES TOO. An owed release is owed whether or not the wire surface also drifted,
+# and the run that goes red is exactly the one whose numbers someone will want.
+R="$WORK/report-red"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Core/Protocol.fs" "protocol: a new take exit code"
+F="$WORK/feed-report-red.json"; feed "$F" 0.3.0
+REP="$WORK/report-red.json"
+run_report "$R" "$F" "$REP"
+must_fail "wire drift is still RED with --report" "WIRE SURFACE has outrun the feed"
+expect_field "the RED path still writes a report" "$REP" red true
+expect_field "...and it is owed as well as red" "$REP" releaseOwed true
+expect_field "...and the wire commit is counted as such" "$REP" wireCount 1
+
+# FAIL CLOSED — a gate that could not measure writes NO report. "I could not look" must not arrive
+# at a consumer as a document saying nothing is owed (epic #266): absence is the only honest
+# encoding of no-verdict, so the file must not exist at all.
+R="$WORK/report-notag"; make_repo "$R"
+F="$WORK/feed-report-notag.json"; feed "$F" 0.9.9
+REP="$WORK/report-notag.json"
+run_report "$R" "$F" "$REP"
+must_fail "an untagged feed version is still an ERROR with --report" "has no tag"
+if [ -e "$REP" ]; then
+  bad "a gate that could not measure writes NO report" "$(cat "$REP")"
+else
+  ok "a gate that could not measure writes NO report"
+fi
+
+# A DESTINATION THAT CANNOT BE WRITTEN IS NOT A DESTINATION. The measurement succeeded, so the gate
+# would otherwise exit 0 while the thing that acts on it got nothing — the same silence, arrived at
+# from the other side.
+R="$WORK/report-unwritable"; make_repo "$R"
+touch_commit "$R" "src/FS.GG.Coord.Cli/Client.fs" "cli: an internal refactor"
+F="$WORK/feed-report-unwritable.json"; feed "$F" 0.3.0
+run_report "$R" "$F" "$WORK/no-such-dir/report.json"
+must_fail "an unwritable --report fails the gate instead of exiting green" "could not write --report"
 
 echo
 echo "engine-freshness fixture: $pass passed, $failcount failed"
