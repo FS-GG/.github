@@ -24,6 +24,10 @@ module DriverTests =
 
     let comment id url body : ReviewComment = { Id = id; Url = url; Body = body }
 
+    /// Does any error message carry this fragment?  Hoisted (#2221 review round 2) because four tests
+    /// had defined it identically, and one of them needed it before its own definition.
+    let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
+
     let notMeaningful =
         "\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: this review subject has no meaningful runtime-route comparison"
 
@@ -453,10 +457,8 @@ module DriverTests =
               bystander 32L "> <!-- fsgg:independent-review-confirmation:v1 -->\n> round: 1\n"
               // Bare bytes after prose, with no quoting of any kind.
               bystander 33L "The host posts <!-- fsgg:review-accepted:v1 --> once it accepts the head.\n"
-              // Indented, which is how an editor renders a nested list item's code block.
-              bystander 34L "Escalation:\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n"
-              // Marker bytes on their own line, but AFTER prose — still outside the leading block.
-              bystander 35L "the escalation marker is spelled\n<!-- fsgg:independent-review-escalation:v1 -->\n" ]
+              // An indented code block — markdown's other quotation form, alongside the fence.
+              bystander 34L "Escalation:\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n" ]
 
         for quotation in quotations do
             match parseReviewComments (chainWith [ quotation ]) with
@@ -466,6 +468,29 @@ module DriverTests =
         match parseReviewComments (chainWith quotations) with
         | Ok chain -> Assert.True(chain.HostAccepted)
         | Error errors -> failwithf "the quotations together invalidated the chain: %A" errors
+
+        // THE ONE AMBIGUOUS FORM, decided out loud (#2221 review round 2). A bare escalation marker on
+        // its own line at column 0 after prose, in a comment with no fields, is byte-identical to a
+        // MISPLACED field-less escalation marker — escalation has no field grammar, so nothing can
+        // separate them. Silently calling it a quotation is the #266 shape; it is refused by name, and
+        // the message says how to write either one you meant.
+        let ambiguous =
+            bystander 35L "the escalation marker is spelled\n<!-- fsgg:independent-review-escalation:v1 -->\n"
+
+        match parseReviewComments (chainWith [ ambiguous ]) with
+        | Ok _ -> failwith "an unclassifiable field-less marker must not be silently decided"
+        | Error errors ->
+            Assert.True(saysThat "comment 35" errors, $"%A{errors}")
+            Assert.True(saysThat "no fields to tell a real one from a mention" errors, $"%A{errors}")
+            Assert.True(saysThat "fence it, indent it, or write it inline" errors, $"%A{errors}")
+
+        // And both escapes from that refusal work: fencing it or indenting it is fixture 31/34's shape.
+        for escaped in
+            [ bystander 38L "the escalation marker is spelled\n\n```\n<!-- fsgg:independent-review-escalation:v1 -->\n```\n"
+              bystander 39L "the escalation marker is spelled\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n" ] do
+            match parseReviewComments (chainWith [ escaped ]) with
+            | Ok chain -> Assert.True(chain.HostAccepted)
+            | Error errors -> failwithf "comment %d should be inert: %A" escaped.Id errors
 
         // Inert means inert IN BOTH DIRECTIONS: a quoted repair-phase designation is not read as one.
         match parseReviewComments (chainWith [ quotedRepairPhase ]) with
@@ -478,8 +503,6 @@ module DriverTests =
         match parseReviewComments [ crlf initial; crlf accepted; crlf quotedRepairPhase ] with
         | Ok chain -> Assert.True(chain.HostAccepted)
         | Error errors -> failwithf "CRLF bodies must parse: %A" errors
-
-        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
 
         // COMPETING, not quoted: one kind twice in one comment's leading block has one meaning and
         // cannot be given two. The error names the comment, not just the kind.
@@ -554,8 +577,6 @@ module DriverTests =
                 "https://reviews/accepted"
                 "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial"
 
-        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
-
         // The control: this chain is accepted, and stays accepted throughout.
         match parseReviewComments [ initial; accepted ] with
         | Ok chain -> Assert.True(chain.HostAccepted)
@@ -586,17 +607,74 @@ module DriverTests =
 
         // ESCAPE 2 — a prose-first escalation. Dropping it removes `review escalation requires a
         // repair-phase marker`, so the failure mode is an acceptance rather than a refusal.
-        let proseFirstEscalation =
-            comment
-                16L
-                "https://reviews/escalation"
-                "Escalating: the third confirmation still reports unresolved material findings.\n\n<!-- fsgg:independent-review-escalation:v1 -->\ncritic: heron\nreviewed-head: head\n"
+        //
+        // ROUND 2: THIS IS THE ESCAPE VERBATIM, and the round-1 version of this test was not. It wrote
+        // `critic:`/`reviewed-head:` under the marker; the escape the critic measured wrote `head:`. Only
+        // the first satisfies a field-keyed condition, so the repair "closed" a case nobody had found
+        // while seven of the critic's eight real shapes were still dropped. Escalation and repair-phase
+        // have NO field grammar in this parser, so the key under the marker is chosen ad hoc — which is
+        // exactly why the rule may not key on one. Every shape the critic measured is pinned below.
+        let escalationBodies =
+            [ "head", "head: abc123"
+              "current-head", "current-head: abc123"
+              "escalated-head", "escalated-head: abc123"
+              "unresolved", "unresolved: finding 1 remains"
+              "pr", "pr: https://github.com/FS-GG/.github/pull/2205"
+              "confirmations", "confirmations: url1, url2, url3"
+              "no fields at all", ""
+              "reviewed-head", "reviewed-head: abc123" ]
 
-        match parseReviewComments [ initial; proseFirstEscalation; accepted ] with
-        | Ok _ -> failwith "a misplaced escalation was dropped and the chain was accepted"
+        for label, fieldLine in escalationBodies do
+            let proseFirstEscalation =
+                comment
+                    16L
+                    "https://reviews/escalation"
+                    ("Ordinary chain exhausted; three confirmations still report material findings.\n\n<!-- fsgg:independent-review-escalation:v1 -->\n"
+                     + fieldLine)
+
+            match parseReviewComments [ initial; proseFirstEscalation; accepted ] with
+            | Ok chain ->
+                failwithf
+                    "a misplaced escalation with body key '%s' was dropped and the chain was accepted (repairPhase=%b, accepted=%b)"
+                    label
+                    chain.RepairPhase
+                    chain.HostAccepted
+            | Error errors ->
+                Assert.True(saysThat "independent-review-escalation marker" errors, $"%s{label}: %A{errors}")
+                Assert.True(saysThat "comment 16" errors, $"%s{label}: %A{errors}")
+
+        // The canonical form of the same comment is still READ — it must produce the escalation's own
+        // error, not the misplacement one. Without this the test would pass on a parser that refused
+        // every escalation.
+        match
+            parseReviewComments
+                [ initial; comment 16L "https://reviews/escalation" "<!-- fsgg:independent-review-escalation:v1 -->\nhead: abc123"; accepted ]
+        with
+        | Ok _ -> failwith "an escalation with no repair-phase marker must fail closed"
         | Error errors ->
-            Assert.True(saysThat "misplaced marker" errors, $"%A{errors}")
-            Assert.True(saysThat "comment 16" errors, $"%A{errors}")
+            Assert.True(saysThat "review escalation requires a repair-phase marker" errors, $"%A{errors}")
+            Assert.False(saysThat "comment 16" errors, $"%A{errors}")
+
+        // ESCAPE 2b — the repair-phase designation, the ZERO-FIELD shape .github#2136's own fixture uses.
+        // Dropping it reports a repair-phase landing as an ordinary one AND silently lowers the
+        // confirmation ceiling from 10 to 3.
+        let repairPhaseBody prefix =
+            prefix + "<!-- fsgg:independent-review-repair-phase:v1 -->\nexhausted-pr: 2144\nescalation: https://x/y"
+
+        match parseReviewComments [ initial; comment 17L "https://reviews/rp" (repairPhaseBody ""); accepted ] with
+        | Ok chain -> Assert.True(chain.RepairPhase, "the canonical designation must still be read")
+        | Error errors -> failwithf "the canonical repair-phase designation must parse: %A" errors
+
+        for prefix in [ "Entering the repair phase.\n\n"; " " ] do
+            match parseReviewComments [ initial; comment 17L "https://reviews/rp" (repairPhaseBody prefix); accepted ] with
+            | Ok chain ->
+                failwithf
+                    "a misplaced repair-phase designation was dropped: repairPhase=%b, accepted=%b"
+                    chain.RepairPhase
+                    chain.HostAccepted
+            | Error errors ->
+                Assert.True(saysThat "independent-review-repair-phase marker" errors, $"%A{errors}")
+                Assert.True(saysThat "comment 17" errors, $"%A{errors}")
 
         // A CRLF body reaches the same verdict — the rule is over lines, not bytes.
         match parseReviewComments [ initial; { indented with Body = indented.Body.Replace("\n", "\r\n") }; accepted ] with
@@ -615,8 +693,8 @@ module DriverTests =
               // a blockquoted marker and a blockquoted field: `> round: 1` is not a field line
               bystander 32L "> <!-- fsgg:independent-review-confirmation:v1 -->\n> round: 1\n"
               bystander 33L "The host posts <!-- fsgg:review-accepted:v1 --> once it accepts the head.\n"
+              // an indented code block — markdown's other quotation form, alongside the fence
               bystander 34L "Escalation:\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n"
-              bystander 35L "the escalation marker is spelled\n<!-- fsgg:independent-review-escalation:v1 -->\n"
               // a whole-line marker after prose, with the fields quoted in a fence below it
               bystander 36L "the confirmation is spelled\n<!-- fsgg:independent-review-confirmation:v1 -->\n\n```\nround: 1\nverdict: pass\n```\n"
               // protocol fields, but no marker bytes anywhere
@@ -653,8 +731,6 @@ module DriverTests =
                 ("<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
                  + notMeaningful
                  + suffix)
-
-        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
 
         match parseReviewComments [ initialWith ""; accepted ] with
         | Ok chain -> Assert.True(chain.HostAccepted)

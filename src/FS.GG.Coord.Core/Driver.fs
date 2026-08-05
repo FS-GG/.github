@@ -119,36 +119,66 @@ module Driver =
         // comment leaves no residue at all. "I could not read this comment" became "I read every comment
         // and the chain is accepted", which is exactly what .github#266 is about.
         //
-        // THE DISCRIMINATOR IS STRUCTURAL, and it has to be: a prose sentence mentioning a marker and a
-        // marker preceded by a prose sentence can be byte-identical.  What is not identical is what else
-        // the comment does.  A comment DESCRIBING the protocol talks about a marker; a comment
-        // PARTICIPATING in it also writes the protocol's field lines.  So an occurrence is misplaced when
-        // BOTH hold:
+        // THE DISCRIMINATOR IS TYPOGRAPHIC FIRST, AND STRUCTURAL ONLY WHERE STRUCTURE EXISTS.  A prose
+        // sentence mentioning a marker and a marker preceded by a prose sentence can be byte-identical, so
+        // an occurrence is misplaced when:
         //
         //   1. the marker text is the whole of its line modulo surrounding whitespace, outside the leading
-        //      block and outside a markdown fence — an inline mention and a `> ` blockquote are
-        //      typographically incapable of being the marker, and a fence is markdown's own way of saying
-        //      "this is quoted text"; and
-        //   2. the same comment writes at least one review-protocol field as a whole line, outside a fence.
+        //      block and outside a QUOTED REGION — a fence or an indented code block.  An inline mention
+        //      and a `> ` blockquote are typographically incapable of being the marker, and a fence or a
+        //      four-space indent is markdown's own way of saying "this is quoted text"; AND
+        //   2. either the kind has NO field grammar in this parser at all, or the same comment writes at
+        //      least one review-protocol field as a whole line outside a quoted region.
         //
-        // Both halves are needed. (1) alone re-breaks the fenced and after-prose quotations this item was
-        // filed about; (2) alone re-breaks a critic's own comment that quotes an example field list.
-        // Together they leave every quotation fixture inert and catch the escapes.
+        // WHY (2) IS A DISJUNCTION, AND WHY THAT IS THE WHOLE OF ROUND-2 REPAIR 3.  The first spelling of
+        // this rule required a protocol field unconditionally, and that made it VACUOUS for exactly the
+        // two kinds `requireOne` does not guard.  Escalation and repair-phase have no fields read anywhere
+        // in this parser — .github#2136's repair-phase fixture carries zero — and the contract gives the
+        // escalation comment no typed field grammar either, so the key under it is chosen ad hoc by
+        // whoever writes it.  The critic measured eight prose-first escalation bodies differing only in
+        // that key; `head:`, `current-head:`, `escalated-head:`, `unresolved:`, `pr:`, `confirmations:`
+        // and no-fields-at-all were all still silently dropped, and only `reviewed-head:` — which happens
+        // to be a protocol key — was caught.  Seven of eight escapes survived a repair that reported them
+        // closed.
         //
-        // A comment that satisfies both is refused BY NAME rather than dropped, which is the whole
-        // correction: the reader is sent to the comment whose marker did not land, and the chain does not
-        // silently lose a `changes-required` round.
+        // Dropping an escalation removes `review escalation requires a repair-phase marker`; dropping a
+        // repair-phase designation reports a repair-phase landing as an ordinary one AND silently lowers
+        // the confirmation ceiling from 10 to 3.  Both fail OPEN, which is why the waiver goes here rather
+        // than being tuned.
+        //
+        // So the rule reads structure off the parser's own grammar: where a kind HAS one, a comment
+        // genuinely attempting it necessarily exhibits it, and requiring that keeps a critic's quoted
+        // example inert.  Where a kind has NONE, there is no key to look for and the honest answer is to
+        // refuse the ambiguous form by name rather than to guess — .github#266 is answered by a named
+        // refusal, never by a confident silent classification.  If escalation ever acquires a field
+        // grammar, this tightens on its own; nothing here is a second copy of the contract.
+        let markerFieldGrammar name =
+            if name = Protocol.reviewPolicy.InitialMarker then
+                [ "critic"; "reviewed-head"; "verdict" ]
+            elif name = Protocol.reviewPolicy.ConfirmationMarker then
+                [ "initial-review"; "critic"; "round"; "preceding-review"; "reviewed-head"; "verdict" ]
+            elif name = Protocol.reviewPolicy.AcceptanceMarker then
+                Protocol.lifecyclePolicy.HostAcceptanceFields
+            else
+                // Escalation and repair-phase.  Not an omission — this parser reads no field from either.
+                []
+
         let protocolFieldKeys =
-            [ "critic"; "reviewed-head"; "verdict"; "initial-review"; "round"; "preceding-review"
-              "route-applicability"; "route-not-meaningful-reason"; "diff-audit-required"
-              "diff-audit-receipt-v1" ]
+            (markerNames |> List.collect markerFieldGrammar)
+            @ [ "route-applicability"; "route-not-meaningful-reason"; "diff-audit-required"
+                "diff-audit-receipt-v1" ]
             @ meaningfulFields
-            @ Protocol.lifecyclePolicy.HostAcceptanceFields
             |> List.distinct
 
-        /// Each line paired with whether it lies in a fenced code region.  The delimiter lines count as
-        /// fenced themselves, so an opening ``` cannot be read as protocol content either.
-        let annotateFences (text: string) =
+        /// Each line paired with whether markdown itself presents it as quoted text: inside a fence, or
+        /// indented as a code block.  Fence delimiters count as quoted themselves, so an opening ``` is
+        /// never read as protocol content.
+        ///
+        /// The indent test is deliberately the simple one — four spaces or a tab — rather than CommonMark's
+        /// full indented-code-block rule, which also depends on the preceding blank line and on list
+        /// context.  A misplaced marker is indented by one or two spaces, not four; four is somebody
+        /// showing you the marker.  The simplification is stated here because it is a real one.
+        let annotateQuotedRegions (text: string) =
             let mutable inFence = false
 
             commentLines text
@@ -159,31 +189,35 @@ module Driver =
                 if isDelimiter then
                     inFence <- not inFence
 
-                line, (isDelimiter || inFence))
+                let indentedCodeBlock =
+                    trimmed <> "" && (line.StartsWith "    " || line.StartsWith "\t")
+
+                line, (isDelimiter || inFence || indentedCodeBlock))
 
         let misplacedMarkerKinds (text: string) =
-            let annotated = annotateFences text
+            let annotated = annotateQuotedRegions text
 
             let writesProtocolFields =
                 annotated
-                |> List.exists (fun (line, fenced) ->
-                    not fenced
+                |> List.exists (fun (line, quoted) ->
+                    not quoted
                     && protocolFieldKeys |> List.exists (fun key -> line.Trim().StartsWith(key + ":")))
 
-            if not writesProtocolFields then
-                []
-            else
-                let blockLength = leadingMarkerBlock text |> List.length
+            let blockLength = leadingMarkerBlock text |> List.length
 
-                annotated
-                |> List.indexed
-                |> List.collect (fun (index, (line, fenced)) ->
-                    if fenced || index < blockLength then
-                        []
-                    else
-                        let trimmed = line.Trim()
-                        markerNames |> List.filter (fun name -> trimmed = markerText name))
-                |> List.distinct
+            annotated
+            |> List.indexed
+            |> List.collect (fun (index, (line, quoted)) ->
+                if quoted || index < blockLength then
+                    []
+                else
+                    let trimmed = line.Trim()
+
+                    markerNames
+                    |> List.filter (fun name ->
+                        trimmed = markerText name
+                        && (List.isEmpty (markerFieldGrammar name) || writesProtocolFields)))
+            |> List.distinct
 
         let routeEvidence (text: string) =
             match field "route-applicability" text with
@@ -235,8 +269,14 @@ module Driver =
                         $"%s{name} marker is repeated in the leading marker block of %s{locate comment}; one comment may carry a marker kind once"
 
             for name in misplacedMarkerKinds comment.Body do
-                errors.Add
-                    $"%s{name} marker in %s{locate comment} is not a leading standalone marker, and that comment writes review-protocol fields — so it is a misplaced marker, not a quotation. Move the marker to the comment's first line, or drop the field lines if the comment only quotes it."
+                if List.isEmpty (markerFieldGrammar name) then
+                    // No field grammar, so a mention and a misplaced marker are byte-identical and no
+                    // reader can classify this.  Refusing by name is the answer; guessing is not.
+                    errors.Add
+                        $"%s{name} marker in %s{locate comment} stands on its own line but is not the comment's leading marker, and this marker kind has no fields to tell a real one from a mention. Move it to the comment's first line if you meant to post it; fence it, indent it, or write it inline if you meant to quote it."
+                else
+                    errors.Add
+                        $"%s{name} marker in %s{locate comment} is not a leading standalone marker, and that comment writes review-protocol fields — so it is a misplaced marker, not a quotation. Move the marker to the comment's first line, or drop the field lines if the comment only quotes it."
         // The marker designates the one escalated phase; it is not a confirmation round itself.  A
         // duplicate durable designation still has one boolean meaning and must not silently spend the
         // phase's confirmation budget.
