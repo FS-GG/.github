@@ -526,6 +526,189 @@ module DriverTests =
         | Ok chain -> Assert.True(chain.RepairPhase)
         | Error errors -> failwithf "a co-located repair-phase designation must parse: %A" errors
 
+    /// .github#2221 review round 1, finding 1 — MISPLACED IS NOT QUOTED.
+    ///
+    /// Deleting `malformedMarker` outright traded one #266 shape for its mirror image. Only `initial` and
+    /// `acceptances` are `requireOne`-guarded, so a confirmation, escalation or repair-phase comment that
+    /// fails the placement rule ceased to exist: no error, no residue, and the parser then emitted
+    /// `Ok (HostAccepted = true)`. "I could not read this comment" became "I read every comment and the
+    /// chain is accepted".
+    ///
+    /// The escape found by the critic, reproduced here on the fixture route: a LATER confirmation carrying
+    /// `verdict: changes-required` whose marker line has ONE LEADING SPACE. At column 0 it fails closed on
+    /// `the latest review confirmation must have verdict pass`; indented by one space it vanished, and the
+    /// chain came back accepted. The prose-first escalation does the same through
+    /// `review escalation requires a repair-phase marker`.
+    [<Fact>]
+    let ``#2221 a misplaced marker is refused by name, not silently dropped`` () =
+        let initial =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+                 + notMeaningful)
+
+        let accepted =
+            comment
+                20L
+                "https://reviews/accepted"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial"
+
+        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
+
+        // The control: this chain is accepted, and stays accepted throughout.
+        match parseReviewComments [ initial; accepted ] with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "the control chain must parse: %A" errors
+
+        // ESCAPE 1 — a later `changes-required` confirmation, one leading space before its marker.
+        let confirmationBody =
+            "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/initial\ncritic: heron\nround: 1\npreceding-review: https://reviews/initial\nreviewed-head: head\nverdict: changes-required"
+
+        // At column 0 it is a real confirmation and the chain fails closed on its verdict — proof that a
+        // recognised comment of this shape is what makes the difference.
+        match parseReviewComments [ initial; comment 15L "https://reviews/round-1" confirmationBody; accepted ] with
+        | Ok _ -> failwith "a changes-required latest confirmation must fail closed"
+        | Error errors -> Assert.True(saysThat "latest review confirmation must have verdict pass" errors, $"%A{errors}")
+
+        let indented = comment 15L "https://reviews/round-1" (" " + confirmationBody)
+
+        match parseReviewComments [ initial; indented; accepted ] with
+        | Ok chain ->
+            failwithf
+                "a misplaced confirmation was dropped and the chain was accepted (repairPhase=%b, accepted=%b)"
+                chain.RepairPhase
+                chain.HostAccepted
+        | Error errors ->
+            Assert.True(saysThat "misplaced marker" errors, $"%A{errors}")
+            Assert.True(saysThat "comment 15" errors, $"%A{errors}")
+            Assert.True(saysThat "https://reviews/round-1" errors, $"%A{errors}")
+
+        // ESCAPE 2 — a prose-first escalation. Dropping it removes `review escalation requires a
+        // repair-phase marker`, so the failure mode is an acceptance rather than a refusal.
+        let proseFirstEscalation =
+            comment
+                16L
+                "https://reviews/escalation"
+                "Escalating: the third confirmation still reports unresolved material findings.\n\n<!-- fsgg:independent-review-escalation:v1 -->\ncritic: heron\nreviewed-head: head\n"
+
+        match parseReviewComments [ initial; proseFirstEscalation; accepted ] with
+        | Ok _ -> failwith "a misplaced escalation was dropped and the chain was accepted"
+        | Error errors ->
+            Assert.True(saysThat "misplaced marker" errors, $"%A{errors}")
+            Assert.True(saysThat "comment 16" errors, $"%A{errors}")
+
+        // A CRLF body reaches the same verdict — the rule is over lines, not bytes.
+        match parseReviewComments [ initial; { indented with Body = indented.Body.Replace("\n", "\r\n") }; accepted ] with
+        | Ok _ -> failwith "a misplaced confirmation with CRLF endings was dropped"
+        | Error errors -> Assert.True(saysThat "misplaced marker" errors, $"%A{errors}")
+
+        // AND THE QUOTATIONS STAY INERT. Both halves of the discriminator are load-bearing, so each of
+        // these is a comment that satisfies exactly one of them.
+        let bystander id body = comment id $"https://reviews/bystander-%d{id}" body
+
+        let quotations =
+            [ // marker bytes, no protocol fields at all
+              bystander 30L "Ready for review. Per `independent-review` §3 the critic's initial review should additionally carry `<!-- fsgg:independent-review-repair-phase:v1 -->` naming that exhausted PR and escalation URL."
+              // marker AND a field line, both inside a fence
+              bystander 31L "Post this:\n\n```\n<!-- fsgg:independent-review:v1 -->\ncritic: <you>\n```\n"
+              // a blockquoted marker and a blockquoted field: `> round: 1` is not a field line
+              bystander 32L "> <!-- fsgg:independent-review-confirmation:v1 -->\n> round: 1\n"
+              bystander 33L "The host posts <!-- fsgg:review-accepted:v1 --> once it accepts the head.\n"
+              bystander 34L "Escalation:\n\n    <!-- fsgg:independent-review-escalation:v1 -->\n"
+              bystander 35L "the escalation marker is spelled\n<!-- fsgg:independent-review-escalation:v1 -->\n"
+              // a whole-line marker after prose, with the fields quoted in a fence below it
+              bystander 36L "the confirmation is spelled\n<!-- fsgg:independent-review-confirmation:v1 -->\n\n```\nround: 1\nverdict: pass\n```\n"
+              // protocol fields, but no marker bytes anywhere
+              bystander 37L "round: 1\nverdict: pass\ncritic: heron\n" ]
+
+        for quotation in quotations do
+            match parseReviewComments [ initial; quotation; accepted ] with
+            | Ok chain -> Assert.True(chain.HostAccepted)
+            | Error errors -> failwithf "quotation in comment %d invalidated the chain: %A" quotation.Id errors
+
+        match parseReviewComments ([ initial; accepted ] @ quotations) with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "the quotations together invalidated the chain: %A" errors
+
+    /// .github#2221 review round 1, finding 2 — the likeliest marker error named nothing.
+    ///
+    /// `| _ -> Error [ "review markers are malformed" ]` fires whenever any of the six field reads on the
+    /// initial or acceptance comment fails, and it discarded which comment, which field, and whether the
+    /// field was absent or written twice. It is reachable by this item's own condition: a review comment
+    /// that quotes an example `verdict:` line at column 0 inside a fence makes `field "verdict"` see two
+    /// values, because `fieldValues` reads every line.
+    [<Fact>]
+    let ``#2221 a failed field read names the comment, the field, and missing versus duplicated`` () =
+        let accepted =
+            comment
+                20L
+                "https://reviews/accepted"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial"
+
+        let initialWith suffix =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict: pass"
+                 + notMeaningful
+                 + suffix)
+
+        let saysThat fragment (errors: string list) = errors |> List.exists (fun e -> e.Contains(fragment: string))
+
+        match parseReviewComments [ initialWith ""; accepted ] with
+        | Ok chain -> Assert.True(chain.HostAccepted)
+        | Error errors -> failwithf "the control chain must parse: %A" errors
+
+        // DUPLICATED — the escape: an example field list quoted in a fence inside the review comment.
+        match parseReviewComments [ initialWith "\n\nWrite it like this:\n\n```\nverdict: pass\n```\n"; accepted ] with
+        | Ok _ -> failwith "a duplicated field must fail closed"
+        | Error errors ->
+            Assert.True(saysThat "comment 10" errors, $"%A{errors}")
+            Assert.True(saysThat "https://reviews/initial" errors, $"%A{errors}")
+            Assert.True(saysThat "'verdict'" errors, $"%A{errors}")
+            Assert.True(saysThat "2 times" errors, $"%A{errors}")
+            Assert.False(saysThat "review markers are malformed" errors, $"%A{errors}")
+
+        // MISSING — a different repair, and it must read as a different sentence.
+        let withoutCritic =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\nreviewed-head: head\nverdict: pass" + notMeaningful)
+
+        match parseReviewComments [ withoutCritic; accepted ] with
+        | Ok _ -> failwith "a missing field must fail closed"
+        | Error errors ->
+            Assert.True(saysThat "comment 10" errors, $"%A{errors}")
+            Assert.True(saysThat "does not carry the required 'critic' field" errors, $"%A{errors}")
+            Assert.False(saysThat "2 times" errors, $"%A{errors}")
+
+        // The failure is attributed to the right COMMENT: a host-acceptance field names comment 20.
+        let acceptedWithoutHead =
+            comment
+                20L
+                "https://reviews/accepted"
+                "<!-- fsgg:review-accepted:v1 -->\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial"
+
+        match parseReviewComments [ initialWith ""; acceptedWithoutHead ] with
+        | Ok _ -> failwith "a missing acceptance field must fail closed"
+        | Error errors ->
+            Assert.True(saysThat "comment 20" errors, $"%A{errors}")
+            Assert.True(saysThat "'accepted-head'" errors, $"%A{errors}")
+            Assert.False(saysThat "comment 10" errors, $"%A{errors}")
+
+        // EMPTY is neither missing nor duplicated, and says so.
+        let emptyVerdict =
+            comment
+                10L
+                "https://reviews/initial"
+                ("<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: head\nverdict:" + notMeaningful)
+
+        match parseReviewComments [ emptyVerdict; accepted ] with
+        | Ok _ -> failwith "an empty field must fail closed"
+        | Error errors -> Assert.True(saysThat "with an empty value" errors, $"%A{errors}")
+
     [<Fact>]
     let ``#2127 live worker returns are resumed and invalid review chains are typed`` () =
         Assert.Equal(ResumeSameWorker, nextAction model 2 true clean [ { ClaimLive = true; ReviewReady = false; ParkedOrDone = false } ])
