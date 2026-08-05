@@ -233,25 +233,41 @@ module Snapshot =
                 asString $"%s{path}.bodyUnreadable" v
                 |> Result.map (fun reason -> Unreadable reason)
             | None ->
-                match optProp "body" el, state with
-                | None, Ok Closed ->
-                    // A CLOSED item is SWEPT: the client short-circuits it off the board scan and never
-                    // reads its body, exactly as bash's own scheduler does. Its touch-set is never
-                    // consulted — `Schedulability` answers `Closed -> IssueClosed` as its FIRST question,
-                    // before the touch-set — so an absent body here is a fact, not a malformed item. (A
-                    // shadow that pays to read the closed body still sends one; that parses too.)
+                match optProp "body" el, state, status with
+                | None, Ok Closed, Ok Done ->
+                    // A CLOSED AND STAMPED item is SWEPT: the client short-circuits it off the board scan
+                    // and never reads its body. Its touch-set is never consulted — `Schedulability` answers
+                    // `Closed -> IssueClosed` as its FIRST question, before the touch-set — so an absent
+                    // body here is a fact, not a malformed item. (A shadow that pays to read the closed
+                    // body still sends one; that parses too.)
                     Ok(TouchSet.parse "")
-                | _ -> stringField path "body" el |> Result.map TouchSet.parse
+                | _ ->
+                    // EVERY OTHER ROW MUST CARRY ITS BODY, AND A CLOSED-BUT-UNSTAMPED ONE ESPECIALLY
+                    // (.github#2225). This guard read `Ok Closed` alone, which made the writer's sweep and
+                    // the reader's tolerance agree on the WRONG set: the whole post-merge window parsed as
+                    // `TouchSet.parse ""` → `Undeclared`, the "confident OMISSION about an item nobody
+                    // looked at" the comment above forbids in the very next breath — and `delivery` then
+                    // reported that omission as the ITEM's incomplete declaration.
+                    //
+                    // Narrowing it to `Ok Done` makes the absent body ILLEGAL exactly where the writer no
+                    // longer omits it, so the two halves cannot drift apart again in silence: a missing
+                    // `body` on a closed, unstamped row is now `items[i].body: required field is missing`,
+                    // a malformed snapshot the reader REFUSES, rather than a touch-set it invents.
+                    stringField path "body" el |> Result.map TouchSet.parse
 
         // #1103 leg 2 — the `Blocked on: human/...` sentinel, parsed off the same body the touch-set is.
         // Absent when the body was unreadable (we cannot know the sentinel we did not read) or swept off a
-        // closed item (`Schedulability` answers `IssueClosed` first, so it is never consulted).
+        // closed and STAMPED item (`Schedulability` answers `IssueClosed` first, so it is never consulted).
+        // The `Ok Done` half of that guard is .github#2225's, and it is here for the reason the touch-set
+        // above carries in full: these three siblings read the SAME body on the SAME terms, and leaving
+        // three of the four tolerating an absence the writer no longer produces is how the next silent
+        // drift starts. All four now agree on one document rule — only a swept row may omit its body.
         let humanBlock =
             match optProp "bodyUnreadable" el with
             | Some _ -> Ok None
             | None ->
-                match optProp "body" el, state with
-                | None, Ok Closed -> Ok None
+                match optProp "body" el, state, status with
+                | None, Ok Closed, Ok Done -> Ok None
                 | _ -> stringField path "body" el |> Result.map HumanBlock.parse
 
         // The registry-predicate ASSERTION the body declares, if any (ADR-0050 call-site B, .github#1213) —
@@ -259,12 +275,13 @@ module Snapshot =
         // id/field/value triple the form renders, never the owner VERDICT, which needs the owning manifest
         // off disk and is resolved at the offer path's impure edge (`Client.enrichPredicates`). Absent on an
         // unreadable or swept-closed body — a predicate we did not read is one the flip gate holds on anyway.
+        // `Ok Done` per .github#2225, on the same terms as `humanBlock` above.
         let declaredPredicate =
             match optProp "bodyUnreadable" el with
             | Some _ -> Ok None
             | None ->
-                match optProp "body" el, state with
-                | None, Ok Closed -> Ok None
+                match optProp "body" el, state, status with
+                | None, Ok Closed, Ok Done -> Ok None
                 | _ -> stringField path "body" el |> Result.map RegistryPredicate.parseAssertion
 
         // The `Class:` the body declares (.github#1588, ADR-0066) — parsed off the SAME body as the
@@ -272,13 +289,13 @@ module Snapshot =
         // title convention is also evidence (AC3) but the snapshot document carries no `title`, so that
         // half is added at the impure edge by `Client.enrichClasses` — exactly the split `DeclaredPredicate`
         // above already runs. Body-only here is the fail-SAFE half: a missed derivation yields no chore,
-        // never a wrong one.
+        // never a wrong one. `Ok Done` per .github#2225, on the same terms as `humanBlock` above.
         let itemClass =
             match optProp "bodyUnreadable" el with
             | Some _ -> Ok None
             | None ->
-                match optProp "body" el, state with
-                | None, Ok Closed -> Ok None
+                match optProp "body" el, state, status with
+                | None, Ok Closed, Ok Done -> Ok None
                 | _ -> stringField path "body" el |> Result.map Class.fromBody
 
         let blockers =

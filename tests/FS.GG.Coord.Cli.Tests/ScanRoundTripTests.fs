@@ -206,7 +206,7 @@ let ``#641 a PULL REQUEST on the board is not a candidate`` () =
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
-let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
+let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
     // One was handed to a worker two hours after it was closed as completed, because candidate selection
     // read the board COLUMN and nothing else — and then it was PROMOTED back to Ready on release, re-arming
     // it for the next worker. The fix is NOT to drop it from the candidates: that gets the right answer
@@ -214,7 +214,14 @@ let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueC
     // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
     // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
     // needs neither a body read nor a marker read, and the reason survives to `decide`.
-    let closed = { aRow with State = Closed; Status = Ready }
+    //
+    // THE FIXTURE IS `Done`, NOT `Ready`, SINCE .github#2225. This test used to drive `State = Closed;
+    // Status = Ready` — a CLOSED, UNSTAMPED row, which is now precisely the post-merge window that MUST be
+    // read. Pinning the sweep on that fixture is what let the sweep grow over the whole window unnoticed:
+    // the test agreed with the code, and both were describing a rule nobody had checked against `delivery`.
+    // The sweep is real and worth keeping — it is just gated on the STAMP now, which is what `Done` says.
+    // Its unstamped twin is the test immediately below.
+    let closed = { aRow with State = Closed; Status = Done }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
     // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
@@ -245,6 +252,166 @@ let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueC
             match Schedulability.schedulable false [] item with
             | Schedulability.IssueClosed -> ()
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
+
+[<Fact>]
+let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERVES its touch-set`` () =
+    // THE POST-MERGE WINDOW. Closing is the MIDDLE of an item in this protocol, not its end: the merge that
+    // closes the issue is followed by publication, receipts and registry records, and only then a done stamp.
+    // The sweep above used to cover that whole window on `Closed` alone, so the item's body AND its markers
+    // went unread — and one sweep then failed in three registers: `who` answered EMPTY for a live claim,
+    // `batch` reserved NOTHING (a second worker could be handed the holder's tree — #1858's class), and
+    // `delivery` reported the reader's blindness as the ITEM's own incomplete `Paths:` declaration.
+    //
+    // The transport here is the INVERSE of the sweep test's: body and markers MUST be read, and the fixture
+    // supplies both. If the sweep ever widens back over the stamp, the claim below stops reserving and this
+    // test goes red on `InFlight` — the assertion the three registers all reduce to.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    let marker =
+        $"""[{{"id":902,"body":"<!-- fsgg:claim worker=curlew-8afd lease=120 prev=In%%20review -->","updated_at":"%s{now}"}}]"""
+
+    // `In review` + CLOSED: the exact shape of an item whose PR has merged while its worker still owes
+    // obligations. Deliberately NOT `In progress` — that column is the one arm `who` already covered, and a
+    // fixture using it would pass without the fix.
+    let closedUnstamped =
+        { aRow with
+            State = Closed
+            Status = InReview }
+
+    let transport = routed (issueBody "Paths: src/Audio/**") marker
+
+    match Scan.snapshot transport [ closedUnstamped ] None false None 120 with
+    | Error e -> failwith $"a closed, unstamped item must be READ, not swept — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.Candidates)
+        Assert.Equal(0, receipt.BodiesUnreadable)
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"the closed, unstamped row must round-trip: %s{detail}"
+        | Ok request ->
+            let item = request.Candidates.[0].Item
+            Assert.Equal(Closed, item.State)
+
+            // THE TOUCH-SET IS READ, not invented. `Undeclared` here is the #2225 defect exactly: the body
+            // was never fetched and the engine reported a confident omission about an item nobody looked at.
+            match item.TouchSet with
+            | Declared [ Matchable "src/Audio/**" ] -> ()
+            | Undeclared ->
+                failwith "the closed body went unread and became a confident 'no touch-set declared' — that is .github#2225"
+            | other -> failwith $"expected the declared touch-set — got %A{other}"
+
+            // THE CLAIM SURVIVES, so `who` can see it.
+            match item.Claim with
+            | Some(claim, LeaseHeld) -> Assert.Equal(WorkerId "curlew-8afd", claim.Worker)
+            | other -> failwith $"a live claim on a closed item must survive — got %A{other}"
+
+            // AND IT RESERVES, so `batch` cannot hand a second worker the holder's tree.
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(worker, _, _, _) -> Assert.Equal(WorkerId "curlew-8afd", worker)
+                | other -> failwith $"a live claim on a closed item reserves as a LiveClaim — got %A{other}"
+            | other -> failwith $"the post-merge window must reserve exactly one touch-set — got %A{other}"
+
+[<Fact>]
+let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED holder is NAMED, word for word as an open one`` () =
+    // CRITERION 3, WHICH THE RESERVATION TEST ABOVE DOES NOT REACH. That test stops at `request.InFlight`:
+    // it proves the closed holder RESERVES. Criterion 3 asks for something strictly further on — that
+    // `batch`/`take` then REFUSE an overlapping candidate "with the same overlap message they emit for an
+    // open one, naming the holder" — and criterion 5 names that refusal as a third thing the fixture must
+    // assert. Reservation is the INPUT to `Batch.explainDecision`; the sentence a worker actually reads is
+    // the OUTPUT, and nothing between the two was pinned.
+    //
+    // The gap is not academic. `explainDecision` renders a collision from `CollidedWith`, and its
+    // holder-blind leg (`UnknownHolder`) prints "overlaps in-flight work: a ⇄ b" — true, useless, and the
+    // #428 regression by name. A reservation that arrives correctly but renders through that leg satisfies
+    // the test above and still tells the second worker nothing about who to talk to.
+    //
+    // THE ASSERTION IS AN EQUALITY, NOT A SUBSTRING, because criterion 3's word is "the SAME message". Two
+    // scans over the SAME transport differing in exactly one input — the holder's `State` — must produce a
+    // byte-identical sentence. That is deterministic here: `leaseWindow` has minute granularity and both
+    // scans read one `marker` timestamp captured once, microseconds apart, so both compute an age of 0s.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    let marker =
+        $"""[{{"id":903,"body":"<!-- fsgg:claim worker=curlew-8afd lease=120 prev=In%%20review -->","updated_at":"%s{now}"}}]"""
+
+    // #43 — a Ready candidate declaring a SUBTREE of #42's touch-set, so it MUST be refused either way.
+    let candidate43 =
+        { aRow with
+            Ref = { aRow.Ref with Number = 43 }
+            Status = Ready }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]" // no OFF-board claim; the reservation is the board row's own marker
+            elif req.Path.EndsWith "/42/comments" then
+                ok marker // #42 carries the LIVE claim
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // #43 carries none
+            elif req.Path.Contains "/issues/43" then
+                ok """{"number":43,"body":"Paths: src/Audio/Sub"}"""
+            else
+                ok (issueBody "Paths: src/Audio")) // #42's body
+
+    // The holder in the two states criterion 3 says must be treated ALIKE. `In review` both times, so
+    // `State` is the ONLY input that varies — an open row that differed in its column too would leave the
+    // equality below provable by coincidence.
+    let refusalFor (state: IssueState) =
+        let holder = { aRow with State = state; Status = InReview }
+
+        match Scan.snapshot transport [ holder; candidate43 ] None false None 120 with
+        | Error e -> failwith $"the scan must survive a %A{state} holder — got %A{e}"
+        | Ok(document, _) ->
+            match Snapshot.parse document with
+            | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
+            | Ok request ->
+                match
+                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                with
+                | Green result ->
+                    // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
+                    // those files. This is #1858's class, and on a CLOSED holder it is exactly what .github#2225
+                    // let through.
+                    Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
+
+                    let d43 = result.Decisions |> List.find (fun d -> d.Item.Ref.Number = 43)
+                    d43, Batch.explainDecision request.LeaseMinutes d43
+                | other -> failwith $"an overlap with a live %A{state} holder is a refusal, not %A{other}"
+
+    let dClosed, closedText = refusalFor Closed
+    let dOpen, openText = refusalFor Open
+
+    // THE HOLDER IS IDENTIFIED, and as a LIVE CLAIM — not `UnknownHolder`, and not `Unowned`. A closed row
+    // that reserved but collapsed to a holder-blind verdict would pass the reservation test and still send
+    // the second worker away with nobody to talk to.
+    let holderRef =
+        match dClosed.CollidedWith with
+        | Some(Batch.LiveClaim(WorkerId w, ref, _, _)) ->
+            Assert.Equal("curlew-8afd", w)
+            ref
+        | other -> failwith $"a CLOSED, unstamped holder must collide as a named LiveClaim — got %A{other}"
+
+    // AND THE SENTENCE NAMES THEM. `explainDecision`'s whole reason to exist is that "who reserved this
+    // path" is a fact about the batch, so a worker reading the refusal is told where to go (#428).
+    Assert.Contains("curlew-8afd", closedText)
+    Assert.Contains(holderRef.Short, closedText)
+
+    // CRITERION 3'S ACTUAL WORDS: the SAME overlap message an open holder emits. If the closed arm ever
+    // drifts — a different phrasing, a dropped holder, a lease window computed from a different clock —
+    // this is the assertion that catches it, and the diff is printed rather than described.
+    Assert.Equal(openText, closedText)
+
+    // The control that keeps the equality honest: the OPEN arm really did render the holder-naming leg, so
+    // an equality of two identically-degraded sentences cannot pass for agreement.
+    match dOpen.CollidedWith with
+    | Some(Batch.LiveClaim(WorkerId w, _, _, _)) -> Assert.Equal("curlew-8afd", w)
+    | other -> failwith $"the OPEN control must itself collide as a named LiveClaim — got %A{other}"
 
 // ---- blockers ---------------------------------------------------------------------------------------
 
