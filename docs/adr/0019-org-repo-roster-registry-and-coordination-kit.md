@@ -66,6 +66,14 @@ participant-side analog of what `skills.yml` is for skills.
    > cannot grade it is `check-roster-closure.py`'s ORG closure, because `GET /orgs/FS-GG/repos`
    > cannot return somebody else's repository; it compares only the org-owned rows and prints each row
    > it does not grade with that reason, so "not graded" is never reachable by silence.
+   >
+   > **The cost of getting that one wrong is fail-OPEN, and it does not look like it.** An owner-blind
+   > roster leg returns a no-verdict on every run; `main()` then never reaches the findings pass, and
+   > `coherence.yml:96-100` maps exit 3 to `::warning::` + `exit 0`. The result is a permanently
+   > **green** required check with the whole of direction B switched off — the FS.GG.Audio shape, the
+   > one thing no other gate can report, stops being reported and nothing says so. Recorded here
+   > because "permanent no-verdict" reads as a standing red, and a future reader acting on that
+   > reading would rank this consequence far below what it is.
 2. **`.github` is the authority/producer.** It holds the canonical fabrics and the coordination kit
    and mirrors them out — the analog of `fsgg-sdd` for product skills. The authority repo is the
    SOURCE of the coordination kit, never a receiver of it.

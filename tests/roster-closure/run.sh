@@ -289,8 +289,16 @@ expect_noverdict "a mis-shaped org meta (array, not object) is a clean no-verdic
 # `GET /orgs/{org}/repos` enumerates the org's own repositories and nothing else. Before this item the
 # roster could not name anything else, so direction B could treat "rostered" and "org-owned" as one
 # set. `.github#2206`'s maintainer decision rosters `EHotwagner/S.I.R.`, and an owner-blind roster leg
-# turns that decided row into exit 3 FOREVER — a required check red on main that no edit in this repo
-# can clear. These legs pin both halves: it is not graded, and it is not silent.
+# would report it as an unreachable subject on every run, forever.
+#
+# THAT COSTS THE GATE, NOT THE MERGE — and the two are easy to confuse in the wrong direction. A
+# permanent exit 3 here is NOT a standing red: `main()` skips `org_closure_findings` whenever the
+# visibility legs return anything (`if nv: … else:`), and `coherence.yml:96-100` maps exit 3 to
+# `::warning::` + `exit 0`. The observable result is a permanently GREEN required check with the whole
+# of direction B switched off — the FS.GG.Audio shape stops being reported and nothing says so.
+# FAIL-OPEN, which is why the leg below is not decoration: it is the one that catches the silence.
+# These legs pin all three halves: the row is not graded, it is not silent, and excusing it does not
+# switch off the direction that grades everybody else.
 ROSTER_USEROWNED="$WORK/repos-user-owned.yml"
 sed 's|^capabilities:|  - { id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [], reason: "org work on a user-owned repo (.github#2206)" }\ncapabilities:|' \
   "$ROSTER" > "$ROSTER_USEROWNED"
@@ -321,9 +329,13 @@ fi
 expect_noverdict "an ORG-owned rostered repo missing from the listing is still a no-verdict" \
   "did NOT come back from" "$ROSTER_USEROWNED" "$DEPS" "$NARROW"
 
-# ...nor for the reverse direction: an FS-GG repo live in the org and rostered nowhere is still a
-# finding, with a user-owned row present in the same roster.
-expect_finding "an unrostered ORG repo is still a finding alongside a user-owned row" \
+# THE FAIL-OPEN LEG, and the reason it is worded as an exit-1 expectation rather than a green: an
+# FS-GG repo live in the org and rostered nowhere must STILL be a finding while a user-owned row sits
+# in the same roster. Owner-blind, this exact case exits 3 and the finding VANISHES — `main()` never
+# reaches `org_closure_findings` once the visibility legs return anything — and CI would show a
+# warning and a pass. `expect_finding` refuses both halves of that: it fails on exit 3 as loudly as on
+# exit 0, so "the direction quietly stopped looking" cannot be mistaken for "nothing to report".
+expect_finding "an unrostered ORG repo is still a finding alongside a user-owned row (owner-blind, this is where direction B goes SILENT)" \
   "exists in the GitHub org but is in NEITHER" "$ROSTER_USEROWNED" "$DEPS" "$LIVE_AUDIO"
 
 # `outside-fabric:` is the other half of #2245's trap — the escape hatch was closed against exactly

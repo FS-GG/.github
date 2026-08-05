@@ -24,9 +24,22 @@ This script asserts the roster is closed, from two directions:
 
      ITS SUBJECT IS THE ORG'S OWN REPOSITORIES, and since `.github#2245` the roster can name a repo
      the org does NOT own (`.github#2206` rosters `EHotwagner/S.I.R.`). `GET /orgs/{org}/repos`
-     cannot return such a repo, so grading it here would make an ordinary, decided roster row an
-     unfixable exit 3 forever. Direction B therefore compares only the org-owned rows, and every row
-     it does not grade is PRINTED with the reason — never dropped, and never counted as verified.
+     cannot return such a repo, so an owner-blind comparison would report it as an unreachable
+     subject on every run, forever.
+
+     AND THE COST OF THAT IS FAIL-OPEN, NOT A RED CHECK — which is the opposite of what it looks
+     like. `main()` treats ANY no-verdict from the visibility legs as a reason to skip
+     `org_closure_findings` entirely (the `if nv: … else:` below), and `coherence.yml:96-100` maps
+     exit 3 to `::warning::` + `exit 0`. So the permanent no-verdict would be a permanently GREEN
+     required check with the whole of direction B silently switched off: the FS.GG.Audio shape — a
+     repo live in the org and rostered nowhere — would stop being reported and nothing would say so.
+     Measured, not reasoned: owner-blind, with the S.I.R. row and a listing containing an unrostered
+     `FS-GG/FS.GG.Audio`, the script exits 3 and that finding does not appear
+     (`tests/roster-closure/run.sh`, "an unrostered ORG repo is still a finding alongside a
+     user-owned row", which reds under exactly that mutation).
+
+     Direction B therefore compares only the org-owned rows, and every row it does not grade is
+     PRINTED with the reason — never dropped, and never counted as verified.
 
 Neither reports a vacuous green — but "could not look" and "looked, and the world is open" are
 DIFFERENT answers and must not share an exit code (#1154). A human who sees a red treats it as a
@@ -88,7 +101,9 @@ def _owner(full: str) -> str:
     organization does NOT own, because `.github#2206`'s maintainer decision rosters
     `EHotwagner/S.I.R.` A reader that keeps the old assumption does not merely miss it — direction B
     below asks GitHub for the org's repositories, which by construction can never return a repo owned
-    by somebody else, so an owner-blind comparison turns every such row into a permanent no-verdict.
+    by somebody else, so an owner-blind comparison turns every such row into a permanent no-verdict,
+    and a permanent no-verdict here silently disables the whole of direction B (see the module
+    docstring: the caller skips the findings pass, and CI maps exit 3 to a warning). Fail-open.
     """
     return str(full).split("/", 1)[0] if "/" in str(full) else ""
 
@@ -223,11 +238,15 @@ def org_visibility_noverdicts(rostered: set[str], org: str, live_set: set[str],
 
     # ONLY THE REPOS THIS ORG OWNS. `GET /orgs/{org}/repos` enumerates the org's own repositories and
     # nothing else, so a rostered repo owned by a USER is absent from a complete listing exactly as
-    # loudly as it would be from a truncated one — and this leg cannot tell those apart. Grading it
-    # here would therefore convert `.github#2206`'s decided disposition into a permanent exit 3 on
-    # `main`, which is the "knowingly red required check" .github#2245 exists to avoid. Its rows are
-    # named out loud by the caller instead of silently dropped, and they are never counted as
-    # verified by this direction.
+    # loudly as it would be from a truncated one — and this leg cannot tell those apart.
+    #
+    # GRADING IT HERE WOULD FAIL OPEN, WHICH IS NOT WHAT A PERMANENT NO-VERDICT SOUNDS LIKE. It would
+    # return non-empty on every run, the caller's `if nv: … else:` would then never reach
+    # `org_closure_findings`, and `coherence.yml:96-100` turns exit 3 into `::warning::` + `exit 0` —
+    # so `main` would carry a GREEN required check over a direction that had stopped looking. The
+    # repo-live-in-the-org-and-rostered-nowhere finding (the FS.GG.Audio shape, the one thing no
+    # other gate can report) would simply stop appearing. Its rows are named out loud by the caller
+    # instead of silently dropped, and they are never counted as verified by this direction.
     for full in sorted(_org_owned(rostered, org)):
         if full not in live_set:
             nv.append(

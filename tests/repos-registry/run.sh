@@ -535,6 +535,16 @@ expect_fail "a 'reason' on a PARTICIPATING row is REJECTED, not ignored" \
 # named `-`. An ordinary org row reproduced it.
 expect_pass "an ORG-owned row with receives: [] VALIDATES (#2245 acceptance 3)" \
   "$(nonpart emptyrecv 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: []')"
+# ...AND THE LEG ABOVE IS NOT THE ONE THAT HOLDS THE SENTINEL, which is worth its own line because the
+# distinction is invisible and the gap it leaves is real (#2245 review round 1, F4). On that row
+# `receives` is the last field anyone SET, so every column after it is already `-`; bash collapses the
+# empty run and the `-` that lands in `$recv` is mapped back to "" by accident rather than by design.
+# Revert only the jq half of the sentinel and that leg still passes. The property is only observable
+# when a LATER column carries a real value, because then the shift moves that value into the wrong
+# variable: with `reason:` set, an unrepaired reader sees `absence-cover 'user-owned…'`. So the row
+# below — org-owned, so ownership is not what is under test — is what actually pins acceptance 3.
+expect_pass "receives: [] VALIDATES when a LATER column is SET — the sentinel, not the trailing-field accident (#2245 acceptance 3)" \
+  "$(nonpart emptyrecvmid 'id: spike, full: FS-GG/Spike.Repo, role: non-participant, receives: [], reason: an org-owned non-participant, so a real value follows the empty receives')"
 # THE SENTINEL MUST NOT DISABLE THE VOCABULARY CHECK. This is the fail-open direction of the fix: if
 # `-` mapped to "no capabilities" everywhere, an unknown word would still have to red — and a literal
 # `-` under receives must be refused rather than silently read as "receives nothing".
