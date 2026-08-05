@@ -285,6 +285,73 @@ META_BADSHAPE="$WORK/meta-bad-shape.json"; printf '[1, 2, 3]\n' > "$META_BADSHAP
 expect_noverdict "a mis-shaped org meta (array, not object) is a clean no-verdict, not a traceback" \
   "could not read org metadata" "$ROSTER" "$DEPS" "$LIVE" "$META_BADSHAPE"
 
+# --- 9. a rostered repo the ORG DOES NOT OWN (.github#2245) ---------------------------------------
+# `GET /orgs/{org}/repos` enumerates the org's own repositories and nothing else. Before this item the
+# roster could not name anything else, so direction B could treat "rostered" and "org-owned" as one
+# set. `.github#2206`'s maintainer decision rosters `EHotwagner/S.I.R.`, and an owner-blind roster leg
+# turns that decided row into exit 3 FOREVER — a required check red on main that no edit in this repo
+# can clear. These legs pin both halves: it is not graded, and it is not silent.
+ROSTER_USEROWNED="$WORK/repos-user-owned.yml"
+sed 's|^capabilities:|  - { id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [], reason: "org work on a user-owned repo (.github#2206)" }\ncapabilities:|' \
+  "$ROSTER" > "$ROSTER_USEROWNED"
+
+# THE ACCEPTANCE CASE. The listing holds exactly the two FS-GG repos and the org's own total agrees
+# with it, so the world IS closed — the user-owned row is simply not this direction's subject.
+out="$(run "$ROSTER_USEROWNED" "$DEPS" "$LIVE")" \
+  && ok "a rostered repo the org does not own does not make org closure a no-verdict" \
+  || bad "user-owned roster row broke org closure" "$out"
+
+# ...AND IT IS NAMED. "Not graded" must never be reachable by silence: a row nobody mentions is
+# indistinguishable from a row nobody checked, which is the #266 shape this whole registry fights.
+if grep -qF "EHotwagner/S.I.R." <<<"$out" && grep -qF "does not own" <<<"$out"; then
+  ok "the ungraded user-owned row is NAMED with its reason, not silently skipped"
+else
+  bad "the user-owned row was skipped silently" "$out"
+fi
+# It must also not be counted as verified: the green line reports what direction B established, and a
+# row it never looked at cannot be inside that claim.
+if grep -qF "does not grade them and does not count them as verified" <<<"$out"; then
+  ok "the report states the ungraded row is not counted as verified"
+else
+  bad "the report does not say the ungraded row is uncounted" "$out"
+fi
+
+# THE GUARANTEE MUST NOT LEAK. Excusing user-owned rows may not weaken the leg for the org's OWN
+# repos: a listing missing an FS-GG rostered repo is still the unreachable-subject no-verdict.
+expect_noverdict "an ORG-owned rostered repo missing from the listing is still a no-verdict" \
+  "did NOT come back from" "$ROSTER_USEROWNED" "$DEPS" "$NARROW"
+
+# ...nor for the reverse direction: an FS-GG repo live in the org and rostered nowhere is still a
+# finding, with a user-owned row present in the same roster.
+expect_finding "an unrostered ORG repo is still a finding alongside a user-owned row" \
+  "exists in the GitHub org but is in NEITHER" "$ROSTER_USEROWNED" "$DEPS" "$LIVE_AUDIO"
+
+# `outside-fabric:` is the other half of #2245's trap — the escape hatch was closed against exactly
+# the repo that needed it. A user-owned exemption must not be reported as a STALE exemption merely
+# because the org listing cannot contain it.
+ROSTER_USEREXEMPT="$WORK/repos-user-exempt.yml"
+sed 's|outside-fabric: \[\]|outside-fabric:\n  - { full: EHotwagner/rogue3, reason: "an external product this fabric does not track" }|' \
+  "$ROSTER" > "$ROSTER_USEREXEMPT"
+out="$(run "$ROSTER_USEREXEMPT" "$DEPS" "$LIVE")" \
+  && ok "a user-owned outside-fabric row is not reported as a stale exemption" \
+  || bad "user-owned exemption read as stale" "$out"
+# A stale ORG-owned exemption is still a finding — the narrowing is by owner, not a blanket amnesty.
+expect_finding "a stale ORG-owned exemption is still a finding alongside a user-owned one" \
+  "Remove the stale exemption" "$ROSTER_EXEMPT" "$DEPS" "$LIVE"
+
+# Both halves must survive `repos.sh validate`, or the fixture above is asserting over a roster that
+# could never be committed (#2245 acceptance 1).
+if bash "$REPOS_SH" validate --registry "$ROSTER_USEROWNED" >/dev/null 2>&1; then
+  ok "the user-owned non-participant roster validates under repos.sh"
+else
+  bad "user-owned roster does not validate" "$(bash "$REPOS_SH" validate --registry "$ROSTER_USEROWNED" 2>&1)"
+fi
+if bash "$REPOS_SH" validate --registry "$ROSTER_USEREXEMPT" >/dev/null 2>&1; then
+  ok "the user-owned outside-fabric roster validates under repos.sh"
+else
+  bad "user-owned exemption does not validate" "$(bash "$REPOS_SH" validate --registry "$ROSTER_USEREXEMPT" 2>&1)"
+fi
+
 echo "roster-closure fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::roster-closure fixture FAILED"; exit 1; }
 echo "roster-closure fixture — OK"

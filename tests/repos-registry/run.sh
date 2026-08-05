@@ -205,7 +205,12 @@ expect_fail "non-config row carrying a dest"  1 "only 'config'"      "$(variant 
 # worker to "restore" the deleted rule would find every fixture green and no argument against it.
 expect_pass "shim WITHOUT an engine manifest row is a valid roster (#1615/ADR-0068 — the invariant moved to repos-audit's engine-manifest sweep, which reads the receiver's tree)" \
   "$(variant shimnomanifest 's/source: scripts\/democlient/source: scripts\/fsgg-coord/')"
-expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
+# `full:` IS OWNER-QUALIFIED SINCE .github#2245, so `GH/FS.GG.SDD` — the old mutation here — is now a
+# legal roster row and cannot be this leg's subject. What is still refused is a name that is not an
+# `<owner>/<repo>` at all: the shape check is what keeps a typo a violation once the owner stopped
+# being pinned to one literal. Both classes are asserted (no slash, and an owner GitHub cannot issue).
+expect_fail "repo full with no owner at all"  1 "<owner>/<repo>"     "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: FS.GG.SDD/')"
+expect_fail "repo full with an illegal owner" 1 "<owner>/<repo>"     "$(variant badowner    's/full: FS-GG\/FS.GG.SDD/full: has.dots\/FS.GG.SDD/')"
 # --- the kit lock: the digests moved OUT of the roster into a generated artifact (#527) -----------
 # This section replaces the old single "kit digest drift" assertion, and must be at LEAST as strong:
 # the digest guarantee is the whole reason the kit is content-addressed, and it now lives in a file
@@ -474,6 +479,104 @@ caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
 [ -z "$(bash "$REPOS_SH" caps --field materializer --registry "$BASE")" ] \
   && ok "caps --field materializer -> empty for non-materializer rows" \
   || bad "caps --field materializer" "got: $(bash "$REPOS_SH" caps --field materializer --registry "$BASE")"
+
+# === .github#2245: THE ROSTER'S THREE-WAY TRAP ====================================================
+#
+# `registry/repos.yml` encoded EXACTLY ONE shape — an FS-GG-owned repository participating in at least
+# one fabric — and `.github#2206`'s maintainer decision needed a row that is none of those things.
+# Three independent legs refused it at once, and the two about ownership closed `outside-fabric:` for
+# the same repo, so NEITHER registry-side disposition ("rostered" or "excused with a reason") could be
+# written and only "delete it from the board" remained. Each leg gets its own assertion, in both
+# directions: the new shape VALIDATES, and every guarantee the old legs carried still REFUSES.
+
+# `nonpart <name> <row-fields>` — BASE plus one extra repo row, locked. The rows below are the shapes
+# #2245 is about, so they are written out rather than sed-mutated onto an existing row.
+nonpart() {
+  # SEPARATE `local` STATEMENTS, not one: bash expands a `local`'s whole word list before assigning
+  # any of it, so `local n="$1" f="$WORK/$n.yml"` reads an unset `n` — and under `set -u` that aborts
+  # the helper mid-fixture, leaving eight legs failing on "--registry needs a value" instead of on
+  # their own subject.
+  local n="$1" row="$2"
+  local f="$WORK/$n.yml"
+  sed "s|^capabilities:|  - { $row }\ncapabilities:|" "$BASE" > "$f"
+  relock "$f"
+  printf '%s' "$f"
+}
+
+# LEG 1 — a USER-OWNED row. The `^FS-GG/` regex at repos.sh:796 refused this outright.
+expect_pass "a user-owned repos[] row VALIDATES (#2245 acceptance 1)" \
+  "$(nonpart useredrow 'id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [], reason: org work on a user-owned repo (.github#2206)')"
+
+# LEG 1b — the same for the OPT-OUT list, which applied the identical regex at repos.sh:868. With
+# both closed, a user-owned repo could be neither inside the fabric nor outside it.
+OUTSIDE_USER="$WORK/outside-user.yml"
+sed 's|^capabilities:|outside-fabric:\n  - { full: EHotwagner/rogue3, reason: an external product this fabric does not track }\ncapabilities:|' \
+  "$BASE" > "$OUTSIDE_USER"; relock "$OUTSIDE_USER"
+expect_pass "a user-owned outside-fabric row VALIDATES (#2245 acceptance 1)" "$OUTSIDE_USER"
+
+# LEG 2 — the role vocabulary. A non-participant must say WHY it is rostered: it is excused from every
+# capability sweep, which is precisely the standing licence #269 refused to grant without a reason.
+expect_fail "a non-participant row with NO recorded reason is REJECTED (#2245 acceptance 2)" \
+  1 "carries no 'reason'" \
+  "$(nonpart noreason 'id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: []')"
+# ...and the word means what it says: a row that receives something IS a participant.
+expect_fail "a non-participant that RECEIVES a capability is REJECTED" \
+  1 "IS a fabric participant" \
+  "$(nonpart partrecv 'id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [labels], reason: contradiction')"
+# The reason is refused where nothing reads it, rather than silently ignored (the rule this file
+# already applies to kit-delivery and absence-cover set on a non-receiver).
+expect_fail "a 'reason' on a PARTICIPATING row is REJECTED, not ignored" \
+  1 "explains why a NON-PARTICIPANT is rostered" \
+  "$(nonpart reasononfw 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: [labels], reason: nothing reads this')"
+
+# LEG 3 — `receives: []`. A DISTINCT coding defect with the same effect, and independent of ownership:
+# jq emitted the empty string for `[]`, bash collapsed the empty tab-delimited field (tab is IFS
+# WHITESPACE), the NEXT column shifted left into `$recv`, and the validator reported a capability
+# named `-`. An ordinary org row reproduced it.
+expect_pass "an ORG-owned row with receives: [] VALIDATES (#2245 acceptance 3)" \
+  "$(nonpart emptyrecv 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: []')"
+# THE SENTINEL MUST NOT DISABLE THE VOCABULARY CHECK. This is the fail-open direction of the fix: if
+# `-` mapped to "no capabilities" everywhere, an unknown word would still have to red — and a literal
+# `-` under receives must be refused rather than silently read as "receives nothing".
+expect_fail "an unknown capability is STILL rejected after the sentinel fix" \
+  1 "unknown capability 'bogus'" \
+  "$(nonpart unknownstill 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: [bogus]')"
+expect_fail "a literal '-' under receives is REFUSED, never read as the empty-list sentinel" \
+  1 "sentinel for an EMPTY receives list" \
+  "$(nonpart dashcap 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: ["-"]')"
+# ...and the role vocabulary is still closed: growing it by one word is not opening it.
+expect_fail "a role outside the GROWN vocabulary is STILL rejected" \
+  1 "authority|framework|non-participant" \
+  "$(nonpart badrole2 'id: spike, full: FS-GG/Spike.Repo, role: banana, receives: [labels]')"
+
+# THE ROW #2206 DECIDED, VALIDATED AGAINST THE REAL TREE. The roster does not carry it yet — the
+# collaborator-only intake boundary applies to every rostered repository and `EHotwagner/S.I.R.` is
+# still `ALL`, so the row lands with that policy rather than before it (#2245 acceptance 5/6, and the
+# comment beside `id: net` in registry/repos.yml). What this leg holds is the half that IS this item's:
+# the exact row, spelled as #2206 decided it, VALIDATES against the checked-in registry and root — so
+# whoever adds it is adding a line, not reopening this defect.
+REALSIR="$WORK/real-with-sir.yml"
+sed 's|^  - { id: net,|  - { id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [], reason: "user-owned and doing org work (.github#2206); it takes no org fabric" }\n  - { id: net,|' \
+  "$REPO_ROOT/registry/repos.yml" > "$REALSIR"
+cp "$REPO_ROOT/registry/repos.lock" "${REALSIR%.yml}.lock"
+if bash "$REPOS_SH" validate --registry "$REALSIR" --root "$REPO_ROOT" >/dev/null 2>&1; then
+  ok "#2206's decided S.I.R. row validates against the REAL checked-in roster (#2245 acceptance 6 is now one line)"
+else
+  bad "the decided S.I.R. row does not validate against the real roster" \
+    "$(bash "$REPOS_SH" validate --registry "$REALSIR" --root "$REPO_ROOT" 2>&1)"
+fi
+# It must participate in NOTHING: a `receives` word here would be a permanent unfixable gap in
+# whichever sweep owns that capability.
+for realcap in labels coordination-kit build-config lockfile-sync contract-coherence skill-union; do
+  if bash "$REPOS_SH" list --receives "$realcap" --registry "$REALSIR" | grep -qx 'EHotwagner/S.I.R.'; then
+    bad "the S.I.R. row receives '$realcap'" "a non-participant must take no fabric"
+  fi
+done
+ok "the decided S.I.R. row receives no capability at all"
+# ...and `list --all` yields it, so every sweep that starts there sees it the day it lands.
+sir_full="$(bash "$REPOS_SH" list --all --registry "$REALSIR" | grep -c '^EHotwagner/S.I.R.$' || true)"
+[ "$sir_full" = "1" ] && ok "list --all yields the user-owned row, so every sweep starting there sees it" \
+  || bad "list --all does not yield EHotwagner/S.I.R." "got $sir_full match(es)"
 
 # --- list --all (the unrostered-adopter sweep starts from every repo, not from a declaration) ---
 all_repos="$(bash "$REPOS_SH" list --all --field id --registry "$BASE" | tr '\n' ',')"

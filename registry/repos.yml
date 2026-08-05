@@ -14,9 +14,45 @@
 # coordination kit and mirrors them out (it is the analog of `fsgg-sdd` for product skills). The
 # authority repo is therefore the SOURCE of the coordination kit, not a receiver of it.
 #
-# GOVERNANCE. Schema growth (a new field or a new `receives` capability) is a governed change:
-# bump `schemaVersion` when the SHAPE changes, always set `updated:` to match the newest change,
-# and prepend one dated entry to registry/CHANGELOG.md. Validated by scripts/repos.sh.
+# `role` VOCABULARY, AND WHO MAY OWN A ROW (.github#2245).
+#   authority        — exactly one, equal to the top-level `authority:`. The SOURCE of the fabrics.
+#   framework        — a fabric participant: it `receives` at least one capability and every sweep
+#                      grades it for exactly the capabilities it declares.
+#   non-participant  — ROSTERED AND ORG-RELEVANT, PARTICIPATING IN NOTHING. It must carry
+#                      `receives: []` and a `reason:`, and the validator refuses it without either.
+#
+# The third word, and the owner-qualified `full:` beside it, exist because this file could previously
+# express EXACTLY ONE SHAPE — an `FS-GG`-owned repository participating in at least one fabric — and
+# there was no way to say anything else. `.github#2206`'s maintainer decision rosters
+# `EHotwagner/S.I.R.`, a USER-OWNED repo doing org work (its `#138` is a child of epic `.github#2067`
+# M6 and an open blocker on the `.github#2070` release epic). That row was unwritable on three
+# independent grounds at once, and — because `outside-fabric:` applied the same `^FS-GG/` regex — so
+# was the opt-out. NEITHER of the two registry-side dispositions could be expressed for the repo, so
+# the only remaining option was deleting it from the board, which is the one the maintainer declined.
+#
+# A `reason:` IS MANDATORY ON A NON-PARTICIPANT for the same argument `outside-fabric:` has carried
+# since #269: a standing row that excuses a repo from every capability sweep, with nothing recorded
+# about why it is here at all, is a mute button. It is REFUSED on a participating row rather than
+# ignored, because nothing would read it there and an unread field reads as intent.
+#
+# `non-participant` IS NOT AN EXEMPTION FROM THE INGRESS BOUNDARY. It says which FABRICS a repo takes,
+# and nothing else. `.github#2178` acceptance 14 makes "every repository in registry/repos.yml" the
+# subject of the collaborator-only issue-intake audit with no owner qualifier, and #2206's decision
+# comment says rostering S.I.R. "brings it under the fleet IssueCreationPolicy.COLLABORATORS_ONLY
+# audit" — so `repos-audit` grades these rows exactly like any other. What ownership changes is only
+# the REMEDY: a finding against a repo the org does not administer is cleared by its owner, never by
+# an edit here, and the sweep says so in the finding rather than leaving a reader to discover it.
+# Every sweep that starts from `repos.sh list --all` names such a row out loud and never counts it as
+# verified without reading it; `scripts/check-roster-closure.py`'s ORG direction is the one place
+# that genuinely cannot grade it, because `GET /orgs/FS-GG/repos` cannot return somebody else's
+# repository, and it prints each row it does not grade with that reason.
+#
+# GOVERNANCE. Schema growth (a new field, a new `role` word, or a new `receives` capability) is a
+# governed change: bump `schemaVersion` when the SHAPE changes, always set `updated:` to match the
+# newest change, and prepend one dated entry to registry/repos.CHANGELOG.md — THIS file's own log,
+# whose protocol covers "adding or retiring a repo, or changing a repo's `receives`". (This line used
+# to name registry/CHANGELOG.md, which is the `dependencies.yml` log; the sentence below about kit
+# republishes is the one that genuinely belongs there.) Validated by scripts/repos.sh.
 # Kit republishes are fleet events, too: record their release evidence in registry/CHANGELOG.md even
 # when no dependencies.yml row changes; do not reconstruct historical evidence after the fact.
 # (shell + jq; kept self-contained in .github, deliberately not the SDD-owned typed validator).
@@ -152,8 +188,8 @@
 # kit-pin freshness sweep (#1540) grades every receiver's pin against the newest stable FS.GG.Kit on
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
-schemaVersion: 10
-updated: 2026-07-29
+schemaVersion: 11
+updated: 2026-08-05
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -178,6 +214,26 @@ repos:
   - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below.
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
   - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
+  # THE ROW THIS FILE CAN NOW HOLD, AND DELIBERATELY DOES NOT HOLD YET (.github#2245 acceptance 6).
+  # `.github#2206`'s maintainer decision (comment 5178235203, revised 2026-08-04) rosters
+  # `EHotwagner/S.I.R.`, and the schema above can express it exactly:
+  #
+  #   - { id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [],
+  #       reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and
+  #                an open blocker on the .github#2070 release epic; it takes no org fabric" }
+  #
+  # What is still owed is NOT a registry edit. The collaborator-only intake boundary applies to every
+  # rostered repository (.github#2178 acceptance 14; #2206: rostering it "brings it under the fleet
+  # IssueCreationPolicy.COLLABORATORS_ONLY audit"), `EHotwagner/S.I.R.` is measured at `ALL`, and the
+  # remedy is an administrative action by its OWNER — no edit here can perform it. Committing the row
+  # first would leave the daily `repos-audit` standing red on a finding this organization cannot clear,
+  # which is the failure mode #1611/#1582 are about: a gate that is always red is indistinguishable
+  # from a gate that never runs. The row lands with the policy, not before it.
+  #
+  # Do NOT give it a `receives:` word when it lands, to make it look like the rows above: it takes none
+  # of these fabrics, and a false one would be a permanent unfixable gap in whichever sweep owns that
+  # capability. `EHotwagner/rogue3` is deliberately absent from BOTH this block and `outside-fabric:` —
+  # see #2206's decision for why an exemption there would be the wrong shape.
   - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).

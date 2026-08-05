@@ -2851,6 +2851,42 @@ BC_COORD_RECEIVERS="$(roster_list "$KIT_CAP")" \
 # give up rule (4) over a capitalisation.
 SPARSE_ROSTER="$(printf '%s\n' "$all_repos" | tr '[:upper:]' '[:lower:]')"
 
+# --- WHO OWNS THE ROWS THIS RUN IS ABOUT TO SWEEP (.github#2245) ---------------------------------
+#
+# Until #2245 the roster could only name `FS-GG/<repo>` — `repos.sh validate` refused anything else —
+# so every sweep below could assume that a rostered repository is one this organization administers.
+# It now can name one the org does NOT own (`.github#2206`'s maintainer decision rosters
+# `EHotwagner/S.I.R.`), and the assumption stops holding in one specific, asymmetric way: the run can
+# still READ a public repo it does not own, but it cannot ACT on one. A finding against such a row is
+# real and must be reported — and its remedy is an administrative action in somebody else's
+# repository, which no edit in `FS-GG/.github` can perform.
+#
+# THE GRADING IS UNCHANGED BY THIS ITEM — every sweep below already started from `list --all` and
+# always has. What is added here is REPORTING. Recorded so the next reader does not re-derive it: the
+# org's collaborator-only intake boundary APPLIES to a rostered repository the org does not own.
+# `.github#2178` acceptance 14 states the subject as "every repository in registry/repos.yml" with no
+# owner qualifier, and `.github#2206`'s decision comment says rostering S.I.R. "brings it under the
+# fleet IssueCreationPolicy.COLLABORATORS_ONLY audit". So the sweeps below GRADE these rows; they do
+# not skip them. What changes is only that the report says which rows they are, out loud, once —
+# because "graded like everything else" and "quietly dropped" are indistinguishable from a summary
+# that never mentions them, and an unstated exemption is the #266 shape this registry exists to end.
+audit_org="${AUTHORITY%%/*}"
+# Lowercased on both sides, for the reason SPARSE_ROSTER is: GitHub resolves an owner login
+# case-insensitively, so a roster spelling `fs-gg/X` names an org repo and must not read as foreign.
+audit_org_lc="$(printf '%s' "$audit_org" | tr '[:upper:]' '[:lower:]')"
+outside_org_repos=""
+while IFS= read -r own_repo; do
+  [ -n "$own_repo" ] || continue
+  own_lc="$(printf '%s' "${own_repo%%/*}" | tr '[:upper:]' '[:lower:]')"
+  [ "$own_lc" = "$audit_org_lc" ] \
+    || outside_org_repos="${outside_org_repos:+$outside_org_repos, }$own_repo"
+done <<< "$all_repos"
+if [ -n "$outside_org_repos" ]; then
+  echo "repos-audit: roster ownership — every sweep below starts from \`repos.sh list --all\` and grades these rows like any other, with this run's own credentials: $outside_org_repos (owned outside org '$audit_org'). None is skipped and none is counted as verified without being read. A FINDING against one of them is still a finding, and its remedy is an administrative action in a repository '$audit_org' does not administer, so it cannot be cleared by any edit here."
+else
+  echo "repos-audit: roster ownership — all rostered repo(s) are owned by org '$audit_org'."
+fi
+
 # Repository issue intake is an org-wide ingress boundary, not a per-repository convention.
 # Read the typed GraphQL enum directly: `hasIssuesEnabled` alone would certify a repository that
 # accepts public issue creation, and a failed read is explicitly not treated as compliant.
@@ -2875,7 +2911,18 @@ while IFS= read -r policy_repo; do
   elif [ "$policy_value" = "COLLABORATORS_ONLY" ]; then
     issue_policy_graded=$((issue_policy_graded + 1))
   else
-    echo "::error::repos-audit: $policy_repo — issue creation policy is ${policy_value:-unreadable}; expected COLLABORATORS_ONLY." >&2
+    # THE REMEDY ROUTE IS PART OF THE FINDING when the org does not administer the subject
+    # (.github#2245). The default message reads as an org-side task, and for a user-owned rostered
+    # repo that is false: nothing in `FS-GG/.github` can set another account's repository policy, so
+    # a reader who treats it as one spends the sweep looking for the edit that clears it. The finding
+    # is NOT downgraded — the boundary applies to every rostered repo (#2178 acceptance 14) — only
+    # named accurately.
+    policy_owner_lc="$(printf '%s' "$policy_owner" | tr '[:upper:]' '[:lower:]')"
+    if [ "$policy_owner_lc" = "$audit_org_lc" ]; then
+      echo "::error::repos-audit: $policy_repo — issue creation policy is ${policy_value:-unreadable}; expected COLLABORATORS_ONLY." >&2
+    else
+      echo "::error::repos-audit: $policy_repo — issue creation policy is ${policy_value:-unreadable}; expected COLLABORATORS_ONLY. This repository is rostered but owned outside org '$audit_org', so the remedy is an administrative action by its owner (set IssueCreationPolicy to COLLABORATORS_ONLY); no change in $AUTHORITY can clear it." >&2
+    fi
     issue_policy_findings=$((issue_policy_findings + 1))
   fi
 done <<< "$all_repos"

@@ -801,7 +801,15 @@ render_component_count() {
        "9":"nine","10":"ten","11":"eleven","12":"twelve"}[tostring]
       // error("registry/repos.yml states a repo count outside the number-word map (1-12) in render_component_count — extend it");
     def cap: (.[0:1] | ascii_upcase) + .[1:];
-    (.repos | length) as $total
+    # THE SENTENCE IS ARITHMETIC, so its two numbers must come from the same set (.github#2245).
+    # $total was (.repos | length) while the sentence reads "those $fw plus this .github coordination
+    # repo", which held only while EVERY roster row was an FS-GG-owned fabric participant — the one
+    # shape the roster could express. It can now hold a non-participant row (EHotwagner/S.I.R., per
+    # .github#2206), and counting it here would render "seven framework components ... across nine
+    # repositories in the org (those seven plus this .github coordination repo)" — a self-
+    # contradicting count, in the org profile, about a repository the org does not even own. The
+    # subject of this sentence is the org fabric, so the count is the fabric rows.
+    ([.repos[] | select(.role != "non-participant")] | length) as $total
     | ([.repos[] | select(.role == "framework")] | length) as $fw
     | "**\($fw | word | cap) framework components** ship independently — each public on [nuget.org](https://www.nuget.org) and restoring with no credential (ADR-0039) — across **\($total | word)** repositories in the org (those \($fw | word) plus this `.github` coordination repo)."
   ' "$ROSTER"

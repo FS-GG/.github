@@ -3870,6 +3870,77 @@ out="$(FSGG_FIX_ISSUE_POLICY=unreadable run_reg "$REG" 2>&1)" && rc=0 || rc=$?
   && ok "issue intake: unread policy is a retryable no-verdict" \
   || bad "unread issue policy must not render as compliant" "rc=$rc: $out"
 
+# === A ROSTERED REPO THE ORG DOES NOT OWN (.github#2245) =========================================
+#
+# Every sweep here starts from `repos.sh list --all`, and until #2245 that list could only hold
+# `FS-GG/<repo>` — so "rostered" and "this org administers it" were the same claim and nothing had to
+# say which. The roster can now name a user-owned repo (`.github#2206` rosters `EHotwagner/S.I.R.`),
+# and the two ways that can go wrong are opposite: grade it silently, so a reader cannot tell it was
+# examined at all; or excuse it silently, which is the mute button #269 refused. Both halves are
+# pinned below, plus the third: excusing NOTHING — the boundary still applies, so a bad policy on a
+# user-owned row is still a FINDING and still reds the run.
+USEROWNED="$WORK/repos-user-owned.yml"
+cat > "$USEROWNED" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: sir,       full: EHotwagner/S.I.R.,     role: non-participant, receives: [], reason: org work on a user-owned repo (.github#2206) }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+  - { id: skill-union, caller: skill-union, receivers: none, reason: retired shape kept for the reverse sweep (#1806 requires the row at zero receivers) }
+$LABELS_CAP
+YAML
+# The roster this fixture asserts over must be one that could actually be committed, or the legs
+# below prove nothing about the file CI reads.
+bash "$REPOS_SH" validate --registry "$USEROWNED" >/dev/null 2>&1 \
+  && ok "a roster naming a user-owned non-participant validates (#2245 acceptance 1)" \
+  || bad "the fixture roster does not validate" "$(bash "$REPOS_SH" validate --registry "$USEROWNED" 2>&1)"
+
+SDD_COVER=required REN_COVER=required mkreg "$REG"
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering; unwired EHotwagner/S.I.R.
+
+out="$(run_reg "$USEROWNED" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'roster ownership' \
+  && printf '%s' "$out" | grep -q 'EHotwagner/S.I.R.'; } \
+  && ok "roster ownership: a user-owned row is NAMED in the report, not silently swept" \
+  || bad "a user-owned rostered repo was not named by the sweep report" "rc=$rc: $out"
+
+{ printf '%s' "$out" | grep -q 'None is skipped and none is counted as verified'; } \
+  && ok "roster ownership: the report states the row is neither skipped nor assumed verified" \
+  || bad "the ownership line does not state its disposition" "$out"
+
+# THE BOUNDARY STILL APPLIES (#2178 acceptance 14 names "every repository in registry/repos.yml";
+# #2206's decision comment says rostering S.I.R. brings it under that audit). A user-owned row with
+# open issue creation is a finding — the ownership awareness is about NAMING THE REMEDY, never about
+# lowering the bar. If this ever passes, the roster has become a way to opt out of the ingress
+# boundary by changing who owns the repo.
+out="$(FSGG_FIX_ISSUE_POLICY=EVERYONE run_reg "$USEROWNED" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'EHotwagner/S.I.R. — issue creation policy is EVERYONE'; } \
+  && ok "issue intake: a user-owned rostered repo is still graded, and still a finding" \
+  || bad "ownership awareness must not excuse the ingress boundary" "rc=$rc: $out"
+
+{ printf '%s' "$out" | grep -q 'remedy is an administrative action by its owner' \
+  && printf '%s' "$out" | grep -q 'no change in FS-GG/.github can clear it'; } \
+  && ok "issue intake: the finding names the remedy route the org cannot take itself" \
+  || bad "a finding no org edit can clear was reported as an ordinary org-side task" "$out"
+
+# The org-owned rows keep the ORIGINAL message: the owner clause is added where it is true, not
+# pasted onto every finding, or it stops carrying information.
+{ printf '%s' "$out" | grep -q 'FS-GG/FS.GG.SDD — issue creation policy is EVERYONE; expected COLLABORATORS_ONLY.$'; } \
+  && ok "issue intake: an org-owned finding is unchanged (the owner clause is not blanket text)" \
+  || bad "the owner clause leaked onto an org-owned finding" "$out"
+
+# An all-FS-GG roster must say so rather than printing nothing: silence would be indistinguishable
+# from a run where the ownership question was never asked.
+out="$(run_reg "$REG" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q "all rostered repo(s) are owned by org 'FS-GG'"; } \
+  && ok "roster ownership: an all-org roster states that positively, not by omission" \
+  || bad "the ownership line is silent on an all-org roster" "rc=$rc: $out"
+
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
 echo "repos-audit fixture — OK"
