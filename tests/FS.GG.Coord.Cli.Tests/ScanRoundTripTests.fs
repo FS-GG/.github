@@ -206,7 +206,7 @@ let ``#641 a PULL REQUEST on the board is not a candidate`` () =
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
-let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
+let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
     // One was handed to a worker two hours after it was closed as completed, because candidate selection
     // read the board COLUMN and nothing else — and then it was PROMOTED back to Ready on release, re-arming
     // it for the next worker. The fix is NOT to drop it from the candidates: that gets the right answer
@@ -214,7 +214,14 @@ let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueC
     // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
     // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
     // needs neither a body read nor a marker read, and the reason survives to `decide`.
-    let closed = { aRow with State = Closed; Status = Ready }
+    //
+    // THE FIXTURE IS `Done`, NOT `Ready`, SINCE .github#2225. This test used to drive `State = Closed;
+    // Status = Ready` — a CLOSED, UNSTAMPED row, which is now precisely the post-merge window that MUST be
+    // read. Pinning the sweep on that fixture is what let the sweep grow over the whole window unnoticed:
+    // the test agreed with the code, and both were describing a rule nobody had checked against `delivery`.
+    // The sweep is real and worth keeping — it is just gated on the STAMP now, which is what `Done` says.
+    // Its unstamped twin is the test immediately below.
+    let closed = { aRow with State = Closed; Status = Done }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
     // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
@@ -245,6 +252,70 @@ let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueC
             match Schedulability.schedulable false [] item with
             | Schedulability.IssueClosed -> ()
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
+
+[<Fact>]
+let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERVES its touch-set`` () =
+    // THE POST-MERGE WINDOW. Closing is the MIDDLE of an item in this protocol, not its end: the merge that
+    // closes the issue is followed by publication, receipts and registry records, and only then a done stamp.
+    // The sweep above used to cover that whole window on `Closed` alone, so the item's body AND its markers
+    // went unread — and one sweep then failed in three registers: `who` answered EMPTY for a live claim,
+    // `batch` reserved NOTHING (a second worker could be handed the holder's tree — #1858's class), and
+    // `delivery` reported the reader's blindness as the ITEM's own incomplete `Paths:` declaration.
+    //
+    // The transport here is the INVERSE of the sweep test's: body and markers MUST be read, and the fixture
+    // supplies both. If the sweep ever widens back over the stamp, the claim below stops reserving and this
+    // test goes red on `InFlight` — the assertion the three registers all reduce to.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    let marker =
+        $"""[{{"id":902,"body":"<!-- fsgg:claim worker=curlew-8afd lease=120 prev=In%%20review -->","updated_at":"%s{now}"}}]"""
+
+    // `In review` + CLOSED: the exact shape of an item whose PR has merged while its worker still owes
+    // obligations. Deliberately NOT `In progress` — that column is the one arm `who` already covered, and a
+    // fixture using it would pass without the fix.
+    let closedUnstamped =
+        { aRow with
+            State = Closed
+            Status = InReview }
+
+    let transport = routed (issueBody "Paths: src/Audio/**") marker
+
+    match Scan.snapshot transport [ closedUnstamped ] None false None 120 with
+    | Error e -> failwith $"a closed, unstamped item must be READ, not swept — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.Candidates)
+        Assert.Equal(0, receipt.BodiesUnreadable)
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"the closed, unstamped row must round-trip: %s{detail}"
+        | Ok request ->
+            let item = request.Candidates.[0].Item
+            Assert.Equal(Closed, item.State)
+
+            // THE TOUCH-SET IS READ, not invented. `Undeclared` here is the #2225 defect exactly: the body
+            // was never fetched and the engine reported a confident omission about an item nobody looked at.
+            match item.TouchSet with
+            | Declared [ Matchable "src/Audio/**" ] -> ()
+            | Undeclared ->
+                failwith "the closed body went unread and became a confident 'no touch-set declared' — that is .github#2225"
+            | other -> failwith $"expected the declared touch-set — got %A{other}"
+
+            // THE CLAIM SURVIVES, so `who` can see it.
+            match item.Claim with
+            | Some(claim, LeaseHeld) -> Assert.Equal(WorkerId "curlew-8afd", claim.Worker)
+            | other -> failwith $"a live claim on a closed item must survive — got %A{other}"
+
+            // AND IT RESERVES, so `batch` cannot hand a second worker the holder's tree.
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(worker, _, _, _) -> Assert.Equal(WorkerId "curlew-8afd", worker)
+                | other -> failwith $"a live claim on a closed item reserves as a LiveClaim — got %A{other}"
+            | other -> failwith $"the post-merge window must reserve exactly one touch-set — got %A{other}"
 
 // ---- blockers ---------------------------------------------------------------------------------------
 

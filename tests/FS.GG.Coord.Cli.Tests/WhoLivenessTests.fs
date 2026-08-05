@@ -96,7 +96,7 @@ module WhoLivenessTests =
 
         $"""[{{"id":9003,"body":"<!-- fsgg:claim worker=heron-99e5 lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}},{{"id":9004,"user":{{"login":"EHotwagner"}},"created_at":"%s{old}","updated_at":"%s{old}"}}]"""
 
-    let private world (comments: string) =
+    let private worldWith (board: string -> string option) (comments: string) =
         Fake.Recorder(fun (req: Request) ->
             let path = req.Path.Trim '/'
 
@@ -104,7 +104,7 @@ module WhoLivenessTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->
-                    match graphqlAnswer document with
+                    match board document with
                     | Some answer -> ok answer
                     | None -> Error(Errors.NotFound "the fixture serves no board WRITE — the lock is what is under test")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -116,6 +116,9 @@ module WhoLivenessTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok comments
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok """{"number":42,"body":"Paths: src/Thing.fs"}"""
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    /// The #1668 board: one OPEN row, `In progress`.
+    let private world (comments: string) = worldWith graphqlAnswer comments
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -290,3 +293,81 @@ module WhoLivenessTests =
         // literal "`body`" would never match however correct the payload was — a gate that fails for a
         // reason with nothing to do with what it is testing.
         Assert.Contains("no readable", out)
+
+    // ---- THE POST-MERGE WINDOW (.github#2225) ----------------------------------------------------
+    //
+    // The SAME substitution this file is about — "I could not look" rendered as "I looked, and it is
+    // empty" — reached through a third route: not a comment the reader could not classify, but an issue
+    // whose marker was never REQUESTED at all.
+    //
+    // `who`'s candidate set was arm A (board rows whose column is `In progress`) UNION arm B
+    // (`Reads.openIssues`). An item whose PR has merged is CLOSED, so arm B cannot see it, and it has
+    // usually already left `In progress`, so arm A cannot either. Its claim marker sat intact on the
+    // issue and nothing ever read it — and the hardened per-candidate read below could not save it,
+    // because a read nobody issues has no incompleteness to report. `who` answered EMPTY.
+    //
+    // That is worse than #1668's shape rather than milder: #1668 at least rendered a ROW. Here the held
+    // item is absent from the answer entirely, which reads as "nothing in flight" to the one operator
+    // who could act — and it happens in the window where the work is most valuable and least reversible.
+
+    /// The post-merge board: one row, `In review` and CLOSED. Deliberately NOT `In progress` — that is
+    /// arm A, which already worked; a fixture using it would pass without the repair.
+    let private graphqlPostMerge (query: string) : string option =
+        if query.Contains "projectsV2" then
+            Some
+                """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        elif query.Contains "fields(first" then
+            Some
+                """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_rev","name":"In review"},{"id":"opt_done","name":"Done"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        elif query.Contains "items(first" then
+            Some
+                """{"data":{"organization":{"projectV2":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"status":{"name":"In review"},"blockedBy":null,"content":{"__typename":"Issue","number":42,"title":"item 42","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+        else
+            None
+
+    /// A LIVE, perfectly readable claim marker. Nothing here is hidden or malformed — the only reason it
+    /// could go unreported is that nobody asked for it.
+    let private liveMarker =
+        let now = DateTimeOffset.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+
+        $"""[{{"id":9005,"body":"<!-- fsgg:claim worker=curlew-8afd lease=120 -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{now}","updated_at":"%s{now}"}}]"""
+
+    [<Fact>]
+    let ``.github#2225 a live claim on a CLOSED, UNSTAMPED item is REPORTED - silence is not an answer`` () =
+        let transport = worldWith graphqlPostMerge liveMarker
+
+        let code, out, err = runWho transport [ "who"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(0, code)
+
+        // THE LINE THAT FAILED BEFORE THE REPAIR. The row was absent entirely and `who` printed only its
+        // scope header, which an operator reads as "nothing is in flight".
+        Assert.Contains("FS.GG.SDD#42", out)
+
+        // And it names the HOLDER, because "something is in flight" and "curlew-8afd is in flight, talk to
+        // them" are different instructions (#428).
+        Assert.Contains("curlew-8afd", out)
+
+        // The claim is WITHIN its lease, so it is held — not stale, and emphatically not reapable. A row
+        // that appeared but said STALE would invite `reap` on a live lock, which is a worse outcome than
+        // the silence it replaced.
+        Assert.DoesNotContain("STALE", out)
+
+        // Closing is not a protocol violation, so no accusation rides along.
+        Assert.DoesNotContain("working outside the protocol", err)
+
+    [<Fact>]
+    let ``.github#2225 a CLOSED item with NO marker is still silent - the repair widens the read, not the verdict`` () =
+        let transport = worldWith graphqlPostMerge noComments
+
+        let code, out, _ = runWho transport [ "who"; "--repo"; "FS.GG.SDD" ]
+
+        Assert.Equal(0, code)
+
+        // THE THING THE REPAIR MUST NOT BREAK. Arm C adds closed rows to the set of issues whose markers
+        // are READ; it does not license a verdict about them. A markerless closed row is not in flight and
+        // must not appear — and it must certainly never be `UNCLAIMED`, which is an accusation reserved for
+        // an `In progress` column with no marker (work outside the protocol). A released claim on a merged
+        // item is the ORDINARY end of the lifecycle, not a violation.
+        Assert.DoesNotContain("FS.GG.SDD#42", out)
+        Assert.DoesNotContain("UNCLAIMED", out)

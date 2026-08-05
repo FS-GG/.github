@@ -775,12 +775,28 @@ module Scan =
         for row in candidates do
             if failure.IsNone then
                 match row.State with
-                // A CLOSED ISSUE IS SWEPT, NOT READ (#520, and case 51's "the issue is closed"). It stays a
-                // candidate so `decide` can name it — `Schedulability` answers `Closed -> IssueClosed` as its
-                // FIRST question, before column, blockers, touch-set or lock — but it needs none of those
-                // reads to do so. Fetching its body/markers would pay the budget that dies first (#418) for a
-                // verdict `state` alone already settles, and bash never fetches them either.
-                | Closed ->
+                // A CLOSED AND STAMPED ITEM IS SWEPT, NOT READ (#520, and case 51's "the issue is closed").
+                // It stays a candidate so `decide` can name it — `Schedulability` answers
+                // `Closed -> IssueClosed` as its FIRST question, before column, blockers, touch-set or lock
+                // — but it needs none of those reads to do so. Fetching its body/markers would pay the
+                // budget that dies first (#418) for a verdict `state` alone already settles, and bash never
+                // fetches them either.
+                //
+                // THE GUARD IS THE DONE STAMP, NOT `Closed` (.github#2225). This arm swept on `Closed`
+                // alone, and the sentence licensing that — "its touch-set is never consulted" — was TRUE
+                // when it was written. `delivery` (#2131) began consulting it without touching this file,
+                // and neither site could see the other, so the licence expired silently while both halves
+                // still read as correct locally.
+                //
+                // In this protocol CLOSING IS THE MIDDLE OF AN ITEM, not its end: `merge-and-release` owes
+                // publication, byte-identity verification, receipts and registry records AFTER the merge
+                // that closes the issue, and only then a done stamp. Sweeping that whole window dropped the
+                // item's body AND its markers, and one sweep therefore failed in three registers — `who`
+                // reported EMPTY for a live claim, `batch` reserved NOTHING and could hand a second worker
+                // the tree its holder was standing in (#1858's class), and `delivery` blamed the ITEM's own
+                // `Paths:` line for the reader's blindness. The terminal fact is the STAMP; a
+                // closed-but-unstamped row is a first-class in-flight state.
+                | Closed when row.Status = Done ->
                     w.WriteStartObject()
                     w.WriteString("owner", row.Ref.Owner)
                     w.WriteString("repo", row.Ref.Repo)
@@ -790,6 +806,12 @@ module Scan =
                     w.WriteStartArray("blockers")
                     w.WriteEndArray()
                     w.WriteEndObject()
+                // A CLOSED, UNSTAMPED ROW READS EXACTLY LIKE AN OPEN ONE, and deliberately shares this path
+                // rather than getting a third arm of its own: it is the post-merge window, where the claim is
+                // live, the touch-set still reserves, and the item's declared facts are still consulted. The
+                // shared writer below already emits `state: CLOSED` for it (the `| Closed -> "CLOSED"` case),
+                // so the only thing that changes is that its body and markers are now READ.
+                | Closed
                 | Open ->
 
                 let blockers = blockersOf row
