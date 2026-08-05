@@ -73,7 +73,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.21.0</Version>
+    <Version>0.21.1</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +96,54 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.21.0 — MINOR on the 0.x line: the typed semantic diff-audit becomes a
+    <PackageReleaseNotes>0.21.1 — PATCH: a CLOSED but UNSTAMPED item is still in flight, and review-marker
+recognition stops discarding the markers it cannot place (.github#2225, .github#2221).
+
+FOUR merged engine commits since 0.21.0. The wire surface `src/FS.GG.Coord.Core/Protocol.fs` is
+UNTOUCHED — and so is the CLI verb table, `src/FS.GG.Coord.Cli/Options.fs`. PATCH is MEASURED rather
+than argued: `git diff coord-engine/v0.21.0..HEAD -- src/FS.GG.Coord.Core/Protocol.fs
+src/FS.GG.Coord.Cli/Options.fs` is empty, so no verb, flag, help entry, render name, result name or
+exit code is added, removed or re-spelled. The four commits touch only `Client.fs`, `Snapshot.fs`,
+`Driver.fs` and `Scan.fs`. This registry contract's declared surface names the CLI VERB surface
+first and independently of the exit-code contract — that is what made 0.21.0 a MINOR — and this cut
+adds no verb, so the same reading makes this one a PATCH.
+
+A CLOSED, UNSTAMPED ITEM IS STILL IN FLIGHT (.github#2225 — DEFECT class, and why this cut is OWED
+rather than merely due). Closing is the MIDDLE of an item in this protocol, not its end: the merge
+that closes the issue is followed by publication, receipts and registry records, and only then a
+done stamp. Three read paths used `state = Closed` as a stand-in for "terminal" at the point where
+facts are SELECTED, so the whole post-merge window went unread, and the one substitution failed in
+three registers — `who` reported EMPTY for a live claim ("nothing in flight", not "cannot see");
+`batch` reserved NOTHING, so a second worker could be dispatched into the holder's tree (.github#1858's
+class); and `delivery` blamed the item's own `Paths:` line for the reader's blindness. `Scan.fs`'s
+sweep is now gated on the done STAMP rather than on `Closed`; `Snapshot.fs`'s tolerance for an absent
+body narrows to match across all four body-derived parsers, so a missing body on a closed, unstamped
+row is a REFUSED document rather than an invented touch-set; and `who` gains arm C — closed board rows
+that are not yet Done — which widens the READ and never the verdict, so a markerless closed row stays
+silent rather than becoming UNCLAIMED. An overlapping candidate is refused with the byte-identical
+sentence used for an open holder, naming the holder. Cost measured on the live 2119-row board: 2086
+rows are closed and every one is stamped Done, so the extra reads are bounded by the number of workers
+actually inside the post-merge window.
+
+A QUOTED REVIEW MARKER IS INERT, NOT FATAL TO THE WHOLE PR (.github#2221). A comment that merely
+QUOTES a review marker no longer invalidates every genuine marker on the pull request.
+
+A MISPLACED MARKER IS REFUSED BY NAME, NOT SILENTLY DROPPED (.github#2221 round 1). A marker that is
+prose-first, or carries one leading space, was dropped and the chain then reported as accepted. It is
+now refused by name.
+
+AND THE MISPLACEMENT RULE IS NOT VACUOUS FOR THE FIELD-LESS KINDS (.github#2221 round 2). Round 1's
+discriminator required a protocol field key unconditionally, which made it vacuous for exactly the two
+kinds that carry no field grammar — escalation and repair-phase — so seven of eight real prose-first
+escalation shapes still vanished. Both kinds are now covered. Marker and field-read errors name the
+offending comment id/URL, the field, and missing-versus-duplicated.
+
+Every review chain this org parses until receivers restore 0.21.1 is parsed by the 0.21.0 engine that
+.github#2221 was filed about, and every claim on a closed, unstamped row still reserves nothing.
+
+PREVIOUS RELEASE NOTES (0.21.0):
+
+0.21.0 — MINOR on the 0.x line: the typed semantic diff-audit becomes a
 caller-visible engine command, and a mandatory, engine-recomputed gate on the live delivery path
 (.github#2144).
 
