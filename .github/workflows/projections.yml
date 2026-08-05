@@ -22,6 +22,7 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
+      - "tests/component-count/**"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
       - "docs/registry/compatibility.md"
@@ -39,6 +40,7 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
+      - "tests/component-count/**"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
       - "docs/registry/compatibility.md"
@@ -85,6 +87,19 @@ jobs:
 
       - name: Every projection is current
         run: bash scripts/generate-projections --check
+
+      # `--check` ONLY SEES WHAT MOVES ON TODAY'S DATA, and that is a narrower guarantee than it reads
+      # as. It compares the rendered regions against the committed tree, so a renderer change that is
+      # a no-op on the CURRENT registries passes whether it is right or wrong. .github#2245 changed
+      # `component-count`'s `$total` from `.repos | length` to the count of FABRIC rows; those agree on
+      # every roster this repo has ever committed, so reverting the change left `--check` green and the
+      # inversion survived (#2245 review round 1, F1). This fixture drives the shipped renderer over
+      # rosters the tree does not contain — including the `non-participant` row #2206's disposition
+      # will add — and asserts the sentence's own arithmetic: it says "those N plus this `.github`", so
+      # the total must be N + 1. Placed AFTER `--check` so the sharper, data-specific diagnostic wins
+      # when both would fire.
+      - name: Fixture — a renderer's guarantee is not "it agrees with today's data"
+        run: bash tests/component-count/run.sh
 
       # A GATE THAT CANNOT FAIL IS NOT A GATE (#266, #436). If the region markers were deleted, the
       # regenerator would have nothing to compare and would pass over a document that is now, once again,

@@ -780,7 +780,15 @@ cmd_validate() {
   [ -z "$dups" ] || err "duplicate repo id(s): $(echo "$dups" | tr '\n' ' ')"
 
   # --- per-repo fields + receives vocabulary ---
-  local id full role recv delivery cover cap
+  #
+  # `-` IS THE SENTINEL FOR AN EMPTY CAPABILITY LIST, so it may not also be a capability. Without
+  # this the sentinel below is ambiguous: `receives: ["-"]` and `receives: []` would arrive at the
+  # loop as the same bytes, and the first would be silently read as "receives nothing" — a row
+  # claiming a fabric it does not get, passing validation. `-` is not in KNOWN_CAPS, so this is
+  # refused rather than mapped; the vocabulary check below never sees it.
+  local dashcaps; dashcaps="$(echo "$json" | jq -r '[.repos[] | select(((.receives // []) | index("-"))) | .id] | join(" ")')"
+  [ -z "$dashcaps" ] || err "repo(s) [$dashcaps] list '-' under receives. '-' is this validator's sentinel for an EMPTY receives list (see below), so it cannot also name a capability; a row that means 'receives nothing' writes 'receives: []'."
+  local id full role recv delivery cover reason cap
   # `-` FOR AN ABSENT FIELD, NOT AN EMPTY ONE, AND THIS IS NOT COSMETIC. Tab is an IFS *whitespace*
   # character, so `read` with IFS=$'\t' collapses a run of tabs into ONE delimiter — an empty
   # `kit-delivery` therefore shifts `absence-cover` left into `$delivery`, and the validator reports
@@ -788,13 +796,52 @@ cmd_validate() {
   # kit-delivery was the LAST column (an empty trailing field is simply absent, which is what it
   # means); adding a sixth column is what made it reachable. jq emits `-` and this loop maps it back,
   # so the meaning of "absent" lives in one place and column order stops being load-bearing.
-  while IFS=$'\t' read -r id full role recv delivery cover; do
+  #
+  # `receives` NEVER GOT THAT TREATMENT, AND IT IS THE SAME DEFECT ONE COLUMN OVER (.github#2245).
+  # `((.receives // []) | join(" "))` emits the EMPTY STRING for `[]`, so `receives: []` collapsed
+  # exactly like an empty `kit-delivery` did and shifted the NEXT column left into `$recv` — which is
+  # why a row with no capabilities was reported as receiving an unknown capability named `-`. It is
+  # independent of who owns the repo: `- { id: spike, full: FS-GG/Spike.Repo, role: framework,
+  # receives: [] }` reproduced it. Every optional column now carries the sentinel, so "absent" is one
+  # rule rather than a property of which column happens to be last.
+  while IFS=$'\t' read -r id full role recv delivery cover reason; do
     [ -n "$id" ] || continue
+    [ "$recv" = "-" ] && recv=""
     [ "$delivery" = "-" ] && delivery=""
     [ "$cover" = "-" ] && cover=""
+    [ "$reason" = "-" ] && reason=""
     [[ "$id"   =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "repo id '$id' must be lowercase kebab/dotted."
-    [[ "$full" =~ ^FS-GG/.+ ]]               || err "repo '$id' full '$full' must be 'FS-GG/<repo>'."
-    case "$role" in authority|framework) ;; *) err "repo '$id' role '$role' invalid (authority|framework)." ;; esac
+    # OWNER-QUALIFIED, NOT `FS-GG`-ONLY (.github#2245). The roster is the org's list of the repos its
+    # fabrics and its BOARD must agree about, and that set is not the same as the set of repositories
+    # the org owns: `.github#2206`'s maintainer decision rosters `EHotwagner/S.I.R.`, a user-owned
+    # repo doing org work. An `^FS-GG/` regex here made that row unwritable and made `outside-fabric:`
+    # unwritable for the same repo, so NEITHER of the two registry-side dispositions could be
+    # expressed and only "delete it from the board" remained. The shape is still checked — a login is
+    # alphanumerics and hyphens, a name adds `.` and `_` — so a typo is still a violation; what is no
+    # longer checked here is WHO owns it, which is a separate fact the sweeps read off the owner.
+    [[ "$full" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]] \
+      || err "repo '$id' full '$full' must be '<owner>/<repo>'."
+    # `non-participant` (.github#2245): rostered and org-relevant, participating in NO fabric. It is
+    # the shape the roster could not express — every row had to be an FS-GG-owned fabric participant —
+    # and it is what lets the board's closure direction (#2206) name a repo without inventing a fabric
+    # membership for it. Constrained on both sides below: it may receive nothing, and it must say why.
+    case "$role" in authority|framework|non-participant) ;; *) err "repo '$id' role '$role' invalid (authority|framework|non-participant)." ;; esac
+    # WHY THIS ROW IS HERE, IN THE ROW. `outside-fabric:` has carried a mandatory `reason` since #269
+    # for exactly this argument: a standing entry that nothing can check is a mute button. A
+    # non-participant row is the same kind of claim from the inside — it excuses a repo from every
+    # capability sweep by declaring it participates in none — so it is refused without a reason.
+    # The reason is REJECTED on a participant role rather than ignored: an unread field reads as
+    # intent, which is the rule this file already applies to kit-delivery and absence-cover.
+    case "$role" in
+      non-participant)
+        [ -z "$recv" ] \
+          || err "repo '$id' is role 'non-participant' but receives [$recv]. A row that receives a capability IS a fabric participant; give it role 'framework', or drop the capabilities."
+        [ -n "$reason" ] \
+          || err "repo '$id' is role 'non-participant' and carries no 'reason'. A row that participates in nothing is excused from every capability sweep, so it states why it is rostered at all — the same rule 'outside-fabric' has enforced since #269." ;;
+      *)
+        [ -z "$reason" ] \
+          || err "repo '$id' sets 'reason' but is role '$role'. The field explains why a NON-PARTICIPANT is rostered; on a participating row nothing reads it, so it would read as intent while meaning nothing." ;;
+    esac
     for cap in $recv; do
       echo "$KNOWN_CAPS" | jq -e --arg c "$cap" 'index($c)' >/dev/null \
         || err "repo '$id' receives unknown capability '$cap' (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
@@ -828,7 +875,7 @@ cmd_validate() {
         err "repo '$id' sets absence-cover 'none'. That is not a declarable state (#1785/#1869): a receiver may not assert that NO unexcused view-root assertion/materialize path runs. repos-audit DERIVES that state and reds on it. Either name the path requirement (required|unrequired) or fix the repo." ;;
       *) err "repo '$id' absence-cover '$cover' invalid (required|unrequired)." ;;
     esac
-  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), ((."kit-delivery" // "-") | if . == "" then "-" else . end), ((."absence-cover" // "-") | if . == "" then "-" else . end)] | @tsv')
+  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ") | if . == "" then "-" else . end), ((."kit-delivery" // "-") | if . == "" then "-" else . end), ((."absence-cover" // "-") | if . == "" then "-" else . end), ((.reason // "-") | if . == "" then "-" else . end)] | @tsv')
 
   # --- exactly one authority, matching the top-level, and not a kit receiver ---
   local authct; authct="$(echo "$json" | jq '[.repos[] | select(.role=="authority")] | length')"
@@ -865,7 +912,12 @@ cmd_validate() {
   local ofull oreason
   while IFS=$'\t' read -r ofull oreason; do
     [ -n "$ofull" ] || continue
-    [[ "$ofull" =~ ^FS-GG/.+ ]] || err "outside-fabric '$ofull' must be 'FS-GG/<repo>'."
+    # OWNER-QUALIFIED for the same reason `repos[]` is (.github#2245): this was the second half of
+    # the trap. With `^FS-GG/` here too, a user-owned repo could be neither rostered NOR excused, so
+    # the exemption list — the escape hatch for exactly the repo a fabric should not iterate — was
+    # closed against the only class of repo that needed it.
+    [[ "$ofull" =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ ]] \
+      || err "outside-fabric '$ofull' must be '<owner>/<repo>'."
     [ -n "$oreason" ] || err "outside-fabric '$ofull' needs a 'reason' — an unexplained exemption is a mute button."
     echo "$json" | jq -e --arg f "$ofull" '[.repos[].full] | index($f)' >/dev/null \
       && err "outside-fabric '$ofull' is also rostered in repos[]; it cannot be both inside and outside the fabric."

@@ -22,6 +22,25 @@ This script asserts the roster is closed, from two directions:
      `repos.yml`, or an explicit row in its `outside-fabric:` opt-out list. This compares against
      REALITY rather than against a second record of it.
 
+     ITS SUBJECT IS THE ORG'S OWN REPOSITORIES, and since `.github#2245` the roster can name a repo
+     the org does NOT own (`.github#2206` rosters `EHotwagner/S.I.R.`). `GET /orgs/{org}/repos`
+     cannot return such a repo, so an owner-blind comparison would report it as an unreachable
+     subject on every run, forever.
+
+     AND THE COST OF THAT IS FAIL-OPEN, NOT A RED CHECK — which is the opposite of what it looks
+     like. `main()` treats ANY no-verdict from the visibility legs as a reason to skip
+     `org_closure_findings` entirely (the `if nv: … else:` below), and `coherence.yml:96-100` maps
+     exit 3 to `::warning::` + `exit 0`. So the permanent no-verdict would be a permanently GREEN
+     required check with the whole of direction B silently switched off: the FS.GG.Audio shape — a
+     repo live in the org and rostered nowhere — would stop being reported and nothing would say so.
+     Measured, not reasoned: owner-blind, with the S.I.R. row and a listing containing an unrostered
+     `FS-GG/FS.GG.Audio`, the script exits 3 and that finding does not appear
+     (`tests/roster-closure/run.sh`, "an unrostered ORG repo is still a finding alongside a
+     user-owned row", which reds under exactly that mutation).
+
+     Direction B therefore compares only the org-owned rows, and every row it does not grade is
+     PRINTED with the reason — never dropped, and never counted as verified.
+
 Neither reports a vacuous green — but "could not look" and "looked, and the world is open" are
 DIFFERENT answers and must not share an exit code (#1154). A human who sees a red treats it as a
 roster to fix; on a transient outage or a too-narrow token that is the wrong action, so the two are
@@ -71,6 +90,34 @@ def _full(owner: str, name: str) -> str:
     """
     name = str(name).strip()
     return name if "/" in name else f"{owner}/{name}"
+
+
+def _owner(full: str) -> str:
+    """The owner login of an `owner/name` reference, or `""` when it has none.
+
+    The roster used to be `FS-GG`-only by construction — `repos.sh validate` refused any other
+    `full:` — so every reader could treat "rostered" and "owned by this org" as the same set.
+    `.github#2245` ended that: `registry/repos.yml` now expresses a rostered repository the
+    organization does NOT own, because `.github#2206`'s maintainer decision rosters
+    `EHotwagner/S.I.R.` A reader that keeps the old assumption does not merely miss it — direction B
+    below asks GitHub for the org's repositories, which by construction can never return a repo owned
+    by somebody else, so an owner-blind comparison turns every such row into a permanent no-verdict,
+    and a permanent no-verdict here silently disables the whole of direction B (see the module
+    docstring: the caller skips the findings pass, and CI maps exit 3 to a warning). Fail-open.
+    """
+    return str(full).split("/", 1)[0] if "/" in str(full) else ""
+
+
+def _org_owned(fulls: set[str], org: str) -> set[str]:
+    """The subset of `fulls` that org `org` actually owns; the only subset direction B may grade.
+
+    Case-insensitive, because GitHub resolves owner logins case-insensitively and the roster is
+    hand-written — the same rule `repos-audit` applies to `owner/name` when it lowercases its
+    roster boundary (#1556). Treating `fs-gg/X` as foreign would resurrect the no-verdict this
+    function exists to prevent.
+    """
+    want = org.lower()
+    return {f for f in fulls if _owner(f).lower() == want}
 
 
 def _fetch_org_repos(org: str) -> list[str]:
@@ -189,7 +236,18 @@ def org_visibility_noverdicts(rostered: set[str], org: str, live_set: set[str],
     """
     nv: list[str] = []
 
-    for full in sorted(rostered):
+    # ONLY THE REPOS THIS ORG OWNS. `GET /orgs/{org}/repos` enumerates the org's own repositories and
+    # nothing else, so a rostered repo owned by a USER is absent from a complete listing exactly as
+    # loudly as it would be from a truncated one — and this leg cannot tell those apart.
+    #
+    # GRADING IT HERE WOULD FAIL OPEN, WHICH IS NOT WHAT A PERMANENT NO-VERDICT SOUNDS LIKE. It would
+    # return non-empty on every run, the caller's `if nv: … else:` would then never reach
+    # `org_closure_findings`, and `coherence.yml:96-100` turns exit 3 into `::warning::` + `exit 0` —
+    # so `main` would carry a GREEN required check over a direction that had stopped looking. The
+    # repo-live-in-the-org-and-rostered-nowhere finding (the FS.GG.Audio shape, the one thing no
+    # other gate can report) would simply stop appearing. Its rows are named out loud by the caller
+    # instead of silently dropped, and they are never counted as verified by this direction.
+    for full in sorted(_org_owned(rostered, org)):
         if full not in live_set:
             nv.append(
                 f"{full} is rostered in registry/repos.yml but did NOT come back from "
@@ -233,7 +291,13 @@ def org_closure_findings(roster: dict, org: str, live_set: set[str]) -> list[str
 
     # A stale exemption is a standing licence to ignore a repo that no longer exists; over time the
     # opt-out list stops describing the org and starts hiding it.
-    for full in sorted(exempt - live_set):
+    #
+    # Restricted to the org's OWN repositories for the reason `org_visibility_noverdicts` gives: the
+    # listing cannot contain a user-owned repo, so "not in the listing" would report every
+    # non-org-owned exemption as stale and demand its removal — turning the escape hatch
+    # `.github#2245` reopened straight back into a violation. The staleness of an exemption naming a
+    # repository this org does not own is a claim this listing cannot settle, and the caller says so.
+    for full in sorted(_org_owned(exempt, org) - live_set):
         errors.append(
             f"{full} is listed under `outside-fabric:` in registry/repos.yml but does not exist in "
             f"org {org!r}. Remove the stale exemption.")
@@ -271,6 +335,24 @@ def main(argv: list[str]) -> int:
     # it only ever contributes violations.
     findings = check_registry_closure(roster, deps, args.org.split("/")[0])
     noverdicts: list[str] = []
+
+    # NAMED, NEVER SILENTLY SKIPPED (.github#2245). Direction B's subject is `GET /orgs/{org}/repos`,
+    # so a roster row naming a repository the org does not own is outside what this gate can settle.
+    # Dropping it quietly would be the #266 shape — a row excused by an unstated rule — so every such
+    # row is printed with the reason it is not graded here, on stdout, whatever this run exits with.
+    # This is a REPORT, not a verdict: it neither passes nor fails those rows, and it is deliberately
+    # not routed through `findings`/`noverdicts`, which are answers about closure.
+    _rostered_all = {str(r.get("full", "")).strip() for r in (roster.get("repos") or [])}
+    _exempt_all = {str(e.get("full", "")).strip() for e in (roster.get("outside-fabric") or [])}
+    _outside_org = sorted((_rostered_all | _exempt_all) - _org_owned(_rostered_all | _exempt_all, args.org) - {""})
+    if _outside_org:
+        print(f"roster-closure: {len(_outside_org)} roster row(s) name a repository org {args.org!r} "
+              f"does not own — {', '.join(_outside_org)}. GET /orgs/{args.org}/repos never returns "
+              f"them, so org closure (direction B) does not grade them and does not count them as "
+              f"verified; their existence and their fabric participation are asserted elsewhere "
+              f"(repos-audit reads them off the roster with the run's own credentials). Registry "
+              f"closure (direction A) is owner-blind and unchanged: a dependencies.yml participant "
+              f"still needs a roster row whoever owns it.")
 
     if args.skip_org:
         print(f"WARNING: org closure NOT checked (--skip-org). Only registry closure was verified; "

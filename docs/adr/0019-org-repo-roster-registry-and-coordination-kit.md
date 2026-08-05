@@ -40,6 +40,40 @@ participant-side analog of what `skills.yml` is for skills.
    Each repo carries a `receives:` capability list from a controlled vocabulary (`labels`,
    `coordination-kit`, `build-config`, `lockfile-sync`, `contract-coherence`). `receives` is to a
    repo what `materializes-when` is to a skill: it gates PARTICIPATION per fabric.
+
+   > **Amendment (2026-08-05, schemaVersion 11). "Framework repos" was never the whole roster's
+   > subject, and encoding it as one made a decided disposition unwritable**
+   > ([#2245](https://github.com/FS-GG/.github/issues/2245),
+   > [#2206](https://github.com/FS-GG/.github/issues/2206)). The roster is the list the org's fabrics
+   > **and its board** must agree about, and that set is not the same as "repositories `FS-GG` owns
+   > that participate in a fabric". `full:` is now **owner-qualified** rather than `FS-GG`-only, in
+   > `repos:` and in `outside-fabric:` alike, and `role:` gains **`non-participant`** — rostered,
+   > org-relevant, taking no capability — which must carry `receives: []` and a mandatory `reason:`
+   > (`outside-fabric:`'s rule since [#269](https://github.com/FS-GG/.github/issues/269): a standing
+   > row nothing can check is a mute button). The first such row will be `EHotwagner/S.I.R.`, per
+   > #2206's maintainer decision; the schema change and the row are deliberately separate acts, because
+   > rostering a repository subjects it to boundaries whose remedies may lie outside this organization.
+   >
+   > **This narrows what a `role` says, and nothing else.** A `non-participant` row declares which
+   > FABRICS a repo takes; it is **not** an exemption from org-wide boundaries that are about
+   > repositories rather than fabrics. The collaborator-only issue-intake audit
+   > ([#2178](https://github.com/FS-GG/.github/issues/2178) acceptance 14) names "every repository in
+   > `registry/repos.yml`" with no owner qualifier, so `repos-audit` grades these rows exactly like
+   > any other. What ownership changes is the **remedy**: a finding against a repository this
+   > organization does not administer is cleared by its owner, and the sweep says so rather than
+   > leaving a reader to discover it. Every sweep starting from `repos.sh list --all` names such a row
+   > out loud and never counts it as verified without reading it. The one direction that genuinely
+   > cannot grade it is `check-roster-closure.py`'s ORG closure, because `GET /orgs/FS-GG/repos`
+   > cannot return somebody else's repository; it compares only the org-owned rows and prints each row
+   > it does not grade with that reason, so "not graded" is never reachable by silence.
+   >
+   > **The cost of getting that one wrong is fail-OPEN, and it does not look like it.** An owner-blind
+   > roster leg returns a no-verdict on every run; `main()` then never reaches the findings pass, and
+   > `coherence.yml:96-100` maps exit 3 to `::warning::` + `exit 0`. The result is a permanently
+   > **green** required check with the whole of direction B switched off — the FS.GG.Audio shape, the
+   > one thing no other gate can report, stops being reported and nothing says so. Recorded here
+   > because "permanent no-verdict" reads as a standing red, and a future reader acting on that
+   > reading would rank this consequence far below what it is.
 2. **`.github` is the authority/producer.** It holds the canonical fabrics and the coordination kit
    and mirrors them out — the analog of `fsgg-sdd` for product skills. The authority repo is the
    SOURCE of the coordination kit, never a receiver of it.
