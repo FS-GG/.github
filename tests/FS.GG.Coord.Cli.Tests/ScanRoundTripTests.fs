@@ -317,6 +317,102 @@ let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERV
                 | other -> failwith $"a live claim on a closed item reserves as a LiveClaim — got %A{other}"
             | other -> failwith $"the post-merge window must reserve exactly one touch-set — got %A{other}"
 
+[<Fact>]
+let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED holder is NAMED, word for word as an open one`` () =
+    // CRITERION 3, WHICH THE RESERVATION TEST ABOVE DOES NOT REACH. That test stops at `request.InFlight`:
+    // it proves the closed holder RESERVES. Criterion 3 asks for something strictly further on — that
+    // `batch`/`take` then REFUSE an overlapping candidate "with the same overlap message they emit for an
+    // open one, naming the holder" — and criterion 5 names that refusal as a third thing the fixture must
+    // assert. Reservation is the INPUT to `Batch.explainDecision`; the sentence a worker actually reads is
+    // the OUTPUT, and nothing between the two was pinned.
+    //
+    // The gap is not academic. `explainDecision` renders a collision from `CollidedWith`, and its
+    // holder-blind leg (`UnknownHolder`) prints "overlaps in-flight work: a ⇄ b" — true, useless, and the
+    // #428 regression by name. A reservation that arrives correctly but renders through that leg satisfies
+    // the test above and still tells the second worker nothing about who to talk to.
+    //
+    // THE ASSERTION IS AN EQUALITY, NOT A SUBSTRING, because criterion 3's word is "the SAME message". Two
+    // scans over the SAME transport differing in exactly one input — the holder's `State` — must produce a
+    // byte-identical sentence. That is deterministic here: `leaseWindow` has minute granularity and both
+    // scans read one `marker` timestamp captured once, microseconds apart, so both compute an age of 0s.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    let marker =
+        $"""[{{"id":903,"body":"<!-- fsgg:claim worker=curlew-8afd lease=120 prev=In%%20review -->","updated_at":"%s{now}"}}]"""
+
+    // #43 — a Ready candidate declaring a SUBTREE of #42's touch-set, so it MUST be refused either way.
+    let candidate43 =
+        { aRow with
+            Ref = { aRow.Ref with Number = 43 }
+            Status = Ready }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]" // no OFF-board claim; the reservation is the board row's own marker
+            elif req.Path.EndsWith "/42/comments" then
+                ok marker // #42 carries the LIVE claim
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // #43 carries none
+            elif req.Path.Contains "/issues/43" then
+                ok """{"number":43,"body":"Paths: src/Audio/Sub"}"""
+            else
+                ok (issueBody "Paths: src/Audio")) // #42's body
+
+    // The holder in the two states criterion 3 says must be treated ALIKE. `In review` both times, so
+    // `State` is the ONLY input that varies — an open row that differed in its column too would leave the
+    // equality below provable by coincidence.
+    let refusalFor (state: IssueState) =
+        let holder = { aRow with State = state; Status = InReview }
+
+        match Scan.snapshot transport [ holder; candidate43 ] None false None 120 with
+        | Error e -> failwith $"the scan must survive a %A{state} holder — got %A{e}"
+        | Ok(document, _) ->
+            match Snapshot.parse document with
+            | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
+            | Ok request ->
+                match
+                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                with
+                | Green result ->
+                    // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
+                    // those files. This is #1858's class, and on a CLOSED holder it is exactly what .github#2225
+                    // let through.
+                    Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
+
+                    let d43 = result.Decisions |> List.find (fun d -> d.Item.Ref.Number = 43)
+                    d43, Batch.explainDecision request.LeaseMinutes d43
+                | other -> failwith $"an overlap with a live %A{state} holder is a refusal, not %A{other}"
+
+    let dClosed, closedText = refusalFor Closed
+    let dOpen, openText = refusalFor Open
+
+    // THE HOLDER IS IDENTIFIED, and as a LIVE CLAIM — not `UnknownHolder`, and not `Unowned`. A closed row
+    // that reserved but collapsed to a holder-blind verdict would pass the reservation test and still send
+    // the second worker away with nobody to talk to.
+    let holderRef =
+        match dClosed.CollidedWith with
+        | Some(Batch.LiveClaim(WorkerId w, ref, _, _)) ->
+            Assert.Equal("curlew-8afd", w)
+            ref
+        | other -> failwith $"a CLOSED, unstamped holder must collide as a named LiveClaim — got %A{other}"
+
+    // AND THE SENTENCE NAMES THEM. `explainDecision`'s whole reason to exist is that "who reserved this
+    // path" is a fact about the batch, so a worker reading the refusal is told where to go (#428).
+    Assert.Contains("curlew-8afd", closedText)
+    Assert.Contains(holderRef.Short, closedText)
+
+    // CRITERION 3'S ACTUAL WORDS: the SAME overlap message an open holder emits. If the closed arm ever
+    // drifts — a different phrasing, a dropped holder, a lease window computed from a different clock —
+    // this is the assertion that catches it, and the diff is printed rather than described.
+    Assert.Equal(openText, closedText)
+
+    // The control that keeps the equality honest: the OPEN arm really did render the holder-naming leg, so
+    // an equality of two identically-degraded sentences cannot pass for agreement.
+    match dOpen.CollidedWith with
+    | Some(Batch.LiveClaim(WorkerId w, _, _, _)) -> Assert.Equal("curlew-8afd", w)
+    | other -> failwith $"the OPEN control must itself collide as a named LiveClaim — got %A{other}"
+
 // ---- blockers ---------------------------------------------------------------------------------------
 
 [<Fact>]
