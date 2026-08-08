@@ -193,6 +193,25 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
     | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
 
 [<Fact>]
+let ``a rejected new force admission evicts nothing and posts no marker`` () =
+    let mutable admissions = 0
+    let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
+
+    let rejected () =
+        admissions <- admissions + 1
+        Error(RateLimited(UnknownBudget, None))
+
+    match
+        claimScoped transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) (fun () -> None) rejected
+    with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"a rejected force admission must stop before eviction — got %A{other}"
+
+    Assert.Equal(1, admissions)
+    Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901")
+    Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
+
+[<Fact>]
 let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` () =
     // CONDITION 1, and the reason the chore queue shipped unwired. If N workers each call `next` and each is
     // handed the same chore, N of them do it — #464 (N workers file one finding N times) and #463 (two

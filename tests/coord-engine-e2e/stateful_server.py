@@ -93,6 +93,12 @@ def now_iso():
 
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
 
+# REST budget state is deliberately selectable by the write harness.  The production admission gate
+# learns only from response headers, so these modes let the compiled CLI prove its refusal leaves a
+# live force-steal target completely untouched.  ``unknown`` omits the authoritative headers rather
+# than inventing a sentinel value: absence is the state the client must fail closed on.
+REST_BUDGET_MODE = ["healthy"]
+
 # BOARD READS, COUNTED — so a leg can assert what was NOT spent. #733's `AfterDone` offer costs `done` a
 # scan it otherwise never makes, and `Chores.offer`'s step 1 (`choreLockRef`) is a pure string match that
 # answers None for six of the org's seven repos. Ordering the scan BEFORE that match would buy a board read,
@@ -398,11 +404,12 @@ class Handler(BaseHTTPRequestHandler):
         # The production client admits a first claim only after a real resource response has
         # established capacity.  This fixture is that real HTTP route, so model GitHub's resource
         # headers rather than leaving every command permanently UNKNOWN.
-        if self.path.split("?", 1)[0].rstrip("/") not in ("/graphql", "/rate_limit"):
+        if self.path.split("?", 1)[0].rstrip("/") not in ("/graphql", "/rate_limit") and REST_BUDGET_MODE[0] != "unknown":
+            remaining = {"healthy": "4800", "constrained": "99", "exhausted": "0"}[REST_BUDGET_MODE[0]]
             self.send_header("X-RateLimit-Resource", "core")
             self.send_header("X-RateLimit-Limit", "5000")
-            self.send_header("X-RateLimit-Remaining", "4800")
-            self.send_header("X-RateLimit-Used", "200")
+            self.send_header("X-RateLimit-Remaining", remaining)
+            self.send_header("X-RateLimit-Used", str(5000 - int(remaining)))
             self.send_header("X-RateLimit-Reset", "1893456000")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -558,6 +565,15 @@ class Handler(BaseHTTPRequestHandler):
                 spent = list(MUTATIONS)
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
+
+        # #2268: configure the headers seen by the *real* REST marker scan.  This is not a
+        # synthetic engine hook: the following command must derive admission entirely from these
+        # response headers, including the genuinely headerless Unknown case.
+        m = re.match(r"^/_fixture/rest-budget/(healthy|constrained|exhausted|unknown)$", path)
+        if m:
+            with LOCK:
+                REST_BUDGET_MODE[0] = m.group(1)
+                return self._send(200, {"mode": REST_BUDGET_MODE[0]})
 
         if path.rstrip("/") == "/_fixture/reset-reconcile-45":
             with LOCK:
