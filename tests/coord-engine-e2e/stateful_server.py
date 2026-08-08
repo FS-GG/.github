@@ -364,7 +364,11 @@ def graphql(query: str, variables: dict):
     if "addProjectV2ItemById" in query:
         # GitHub's mutation is idempotent.  The issue-side lookup above misses the external row, but
         # adding it again returns the existing Coordination item, whose live Status must then be read.
-        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_96"}}}}
+        # Intake creates an issue before projecting it.  The newest issue is therefore the only
+        # newly-created board candidate in this hermetic fixture; return its real project-item id so
+        # the subsequent Status mutation and readback exercise the same public transaction.
+        created = max(ISSUES)
+        return {"data": {"addProjectV2ItemById": {"item": {"id": f"PVTI_{created}"}}}}
     return None
 
 
@@ -448,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 number = NEXT_ROOM_NUMBER[0]
                 NEXT_ROOM_NUMBER[0] += 1
-                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": True}
+                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": False}
                 COMMENTS[number] = []
             return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
