@@ -1087,6 +1087,17 @@ for delivery_mode in bare apply; do
   fi
 done
 
+# #2207 adds an optional delivery diagnostic.  The established snapshot producer above predates it,
+# so omission must retain the guarded-land decision.  Invert the subject by supplying an empty value:
+# it must refuse rather than silently treating an invalid observed diagnostic as absent.
+delivery_empty_problem="${delivery_snapshot/\"landable\"/\"reviewProblem\":\"\",\"landable\"}"
+delivery_problem_out="$(printf '%s' "$delivery_empty_problem" | run delivery --snapshot /dev/stdin --json 2>&1)"; delivery_problem_rc=$?
+if [ "$delivery_problem_rc" -ne 0 ] && printf '%s' "$delivery_problem_out" | grep -F 'reviewProblem' >/dev/null; then
+  ok "#2207: an omitted legacy reviewProblem defaults to none, while an empty supplied diagnostic refuses"
+else
+  bad "#2207: an empty supplied reviewProblem must not masquerade as an omitted legacy field" "rc=$delivery_problem_rc output=$delivery_problem_out"
+fi
+
 # `predicate` is local too, but its successful arm needs a registry and its owning manifest.
 # The dedicated predicate suite owns the broader truth table; this small fixture merely makes the
 # command-contract driver's no-wire claim executable here.

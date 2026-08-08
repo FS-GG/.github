@@ -241,7 +241,10 @@ module DeliveryApplication =
                   PathsVerified = readBoolean "pathsVerified" root
                   InReview = readBoolean "inReview" root
                   Review = review root
-                  ReviewProblem = readOptionalString "reviewProblem" root
+                  // `reviewProblem` was added after the first delivery snapshot contract shipped.
+                  // Older producers omit it, which means no parser failure was observed; accepting
+                  // that shape as None preserves the pure adapter's established wire contract.
+                  ReviewProblem = readOptionalStringOrAbsent "reviewProblem" root
                   Landable = readBoolean "landable" root
                   Merged = readBoolean "merged" root
                   MergeReachable = readBoolean "mergeReachable" root

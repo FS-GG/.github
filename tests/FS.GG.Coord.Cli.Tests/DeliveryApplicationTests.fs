@@ -37,6 +37,38 @@ module DeliveryApplicationTests =
           Obligations = []
           ParkedReason = None }
 
+    let review id url body : Driver.ReviewComment = { Id = id; Url = url; Body = body }
+
+    [<Fact>]
+    let ``#2207 client delivery adapter retains malformed parser diagnostics`` () =
+        let malformed =
+            [ review 10L "https://reviews/initial" "<!-- fsgg:independent-review:v1 -->\nreviewed-head: head-a\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: adapter test"
+              review 20L "https://reviews/accepted" "<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-a\ninitial-review: https://reviews/initial\nlatest-confirmation: https://reviews/initial" ]
+        let parsed, problem = Client.deliveryReviewEvidence true malformed
+        let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
+
+        match Delivery.inspect facts with
+        | Delivery.Next transition ->
+            match transition.Action with
+            | Delivery.RefreshReview reason -> Assert.Contains("critic", reason)
+            | action -> failwithf "expected malformed review refresh, got %A" action
+        | Delivery.NoVerdict reason -> failwith reason
+
+    [<Fact>]
+    let ``#2207 client delivery adapter accepts a real multi-round chain for guarded land`` () =
+        let initialUrl = "https://reviews/initial"
+        let confirmationUrl = "https://reviews/round-1"
+        let chain =
+            [ review 10L initialUrl "<!-- fsgg:independent-review:v1 -->\ncritic: kestrel\nreviewed-head: head-a\nverdict: changes-required"
+              review 20L confirmationUrl $"<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: {initialUrl}\ncritic: kestrel\nround: 1\npreceding-review: {initialUrl}\nreviewed-head: head-a\nverdict: pass\nroute-applicability: not-meaningful\nroute-not-meaningful-reason: adapter test"
+              review 30L "https://reviews/accepted" $"<!-- fsgg:review-accepted:v1 -->\naccepted-head: head-a\ninitial-review: {initialUrl}\nlatest-confirmation: {confirmationUrl}" ]
+        let parsed, problem = Client.deliveryReviewEvidence true chain
+        let facts = { guardedLandingFacts "claim-generation-a" with Review = parsed; ReviewProblem = problem }
+
+        match Delivery.inspect facts with
+        | Delivery.Next transition -> Assert.Equal(Delivery.GuardedLand, transition.Action)
+        | Delivery.NoVerdict reason -> failwith reason
+
     [<Fact>]
     let ``#2131 non-empty obligation receipt is head-bound and verifies only its declared id`` () =
         let comments =

@@ -1152,6 +1152,14 @@ module Client =
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
 
+    /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
+    /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
+    /// an attempted-but-invalid review into the distinct fact that no review was posted.
+    let deliveryReviewEvidence (landable: bool) (comments: Driver.ReviewComment list) : Driver.ReviewChain option * string option =
+        match Driver.parseReviewComments comments with
+        | Ok parsed -> Some { parsed with ChecksGreen = landable }, None
+        | Error errors -> None, Some(String.concat "; " errors)
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -1223,10 +1231,7 @@ module Client =
                                     let review, reviewProblem =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                        |> Driver.parseReviewComments
-                                        |> function
-                                            | Ok parsed -> Some { parsed with ChecksGreen = landable = PrGreen }, None
-                                            | Error errors -> None, Some(String.concat "; " errors)
+                                        |> deliveryReviewEvidence (landable = PrGreen)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
                                     let pathsVerified =
