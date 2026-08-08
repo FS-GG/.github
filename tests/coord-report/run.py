@@ -32,6 +32,11 @@ def display_width(text):
 
 strip_ansi = lambda text: re.sub(r"\x1b\[[0-9;]*m", "", text)
 compact = lambda text: re.sub(r"[\s┌┬┐├┼┤└┴┘─│]+", "", strip_ansi(text))
+def human_escape(text):
+    return "".join(f"\\u{ord(character):04x}" if ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f else character for character in str(text))
+
+def raw_terminal_controls(text):
+    return [character for character in text if character != "\n" and (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f)]
 
 # The four routed variants inherit their canonical driver, rather than carrying a
 # sixth subtly different reporting recipe.  Assert both runtime roots so projection
@@ -188,6 +193,37 @@ with tempfile.TemporaryDirectory() as temp:
     projected = compact(unicode_plain)
     for scalar in scalars({"lanes":unicode_doc["lanes"],"laneCapacity":unicode_doc["laneCapacity"]}):
         assert compact(str(scalar)) in projected, scalar
+
+    # Caller facts cannot inject terminal control. JSON retains authoritative raw facts; human routes visibly encode them.
+    controls = "CSI:\x1b[31mred\x1b[0m OSC:\x1b]0;title\x07 BS:\x08 CR:\r C0:\x00\x01\x1f C1:\x80\x85\x9b DEL:\x7f"
+    assert "\x1b" in controls  # subject mutation: the former direct table projection emitted this byte unchanged.
+    control_event = {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"terminal-controls","item":"item\x08",
+                     "activity":"trigger "+controls,"blocker":"osc \x1b]8;;bad\x07"}
+    control_snapshot = {"freshness":"snap\x85","capacity":capacity(6,2,1,7,
+        reason("human-blocker","capacity "+controls,"source\x1b[2J","fresh\x7f")),
+        "lanes":[{"item":"item\x08","repository":"repo\rname","workState":"work\x00state","boardStatus":"In review",
+                  "worker":"worker\x9b31m","activity":"lane "+controls,"pr":"#2","blocker":"block\x7f",
+                  "freshness":"lane\x80"}]}
+    write(event, control_event); write(lanes, control_snapshot)
+    control_doc = json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
+    assert control_doc["trigger"]["activity"] == control_event["activity"]
+    assert control_doc["lanes"][0]["activity"] == control_snapshot["lanes"][0]["activity"]
+    assert control_doc["laneCapacity"]["reasons"][0]["detail"] == control_snapshot["capacity"]["reasons"][0]["detail"]
+    control_plain = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","plain","--width","40").stdout
+    control_rich = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","rich","--color","always","--width","40",env=colored_env).stdout
+    control_no_color = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","rich","--color","always","--width","40",env={**os.environ,"NO_COLOR":"1"}).stdout
+    assert not raw_terminal_controls(control_plain) and not raw_terminal_controls(control_no_color)
+    assert strip_ansi(control_rich) == control_plain == control_no_color
+    assert not raw_terminal_controls(strip_ansi(control_rich))
+    assert max(map(display_width, control_plain.splitlines())) <= 40
+    projected = compact(control_plain)
+    for scalar in scalars({"trigger":control_doc["trigger"],"lanes":control_doc["lanes"],
+                           "laneCapacity":control_doc["laneCapacity"],"snapshot":control_doc["snapshot"],
+                           "sessionTotals":control_doc["sessionTotals"]}):
+        assert compact(human_escape(scalar)) in projected, repr(scalar)
+    # Every rich ESC belongs to the renderer's SGR grammar; stripping those leaves none.
+    sgrs = re.findall(r"\x1b\[[0-9;]*m", control_rich)
+    assert sgrs and control_rich.count("\x1b") == len(sgrs)
     # Invert the schema boundary: caller structure cannot forge a session record or bypass dedupe.
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"done","eventKey":"reserved","item":"x","record":"session"})
     rejected = run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json", check=False)

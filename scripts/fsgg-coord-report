@@ -297,6 +297,18 @@ def cell_width(text: str) -> int:
     return width
 
 
+def terminal_safe(text: Any) -> str:
+    """Encode caller controls before any human projection; JSON remains authoritative/raw."""
+    result = []
+    for character in str(text):
+        code = ord(character)
+        if code < 0x20 or 0x7f <= code <= 0x9f:
+            result.append(f"\\u{code:04x}")
+        else:
+            result.append(character)
+    return "".join(result)
+
+
 def display_units(text: str) -> list[tuple[str, int]]:
     units: list[tuple[str, int]] = []
     for character in str(text):
@@ -366,7 +378,7 @@ def table(headers: list[str], values: list[list[str]], width: int, color: bool, 
     for index in range(remainder): sizes[index % columns] += 1
     def border(left: str, join: str, right: str) -> str: return left + join.join("─" * (size + 2) for size in sizes) + right
     def emit(row: list[str], header: bool = False) -> list[str]:
-        cells = [clip(value, sizes[index]) for index, value in enumerate(row)]
+        cells = [clip(terminal_safe(value), sizes[index]) for index, value in enumerate(row)]
         def cell(index: int, line: int) -> str:
             content = cells[index][line] if line < len(cells[index]) else ""
             padded = " " + content + " " * (sizes[index] - cell_width(content)) + " "
