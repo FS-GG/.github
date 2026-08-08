@@ -144,6 +144,27 @@ module BatchTests =
         Assert.Equal(Some(LiveClaim(WorkerId "w-alice", ref 1, 900, None)), d.CollidedWith)
 
     [<Fact>]
+    let ``#2229 a passed-over overlap names only the selected holder's collision pair`` () =
+        let reservation token holder =
+            { Owner = "FS-GG"
+              Repo = "FS.GG.SDD"
+              Paths = Declared [ Matchable token ]
+              Holder = holder }
+
+        let first = reservation "src/first.fs" (LiveClaim(WorkerId "w-first", ref 41, 60, None))
+        let second = reservation "src/second.fs" (LiveClaim(WorkerId "w-second", ref 42, 60, None))
+
+        let r = run [ first; second ] [ item 43 [ "src/first.fs"; "src/second.fs" ] ]
+        let d = r.Decisions |> List.exactlyOne
+        let sentence = explainDecision 120 d
+
+        Assert.Equal(Some(LiveClaim(WorkerId "w-first", ref 41, 60, None)), d.CollidedWith)
+        Assert.Contains("src/first.fs", sentence)
+        Assert.DoesNotContain("src/second.fs", sentence)
+        Assert.Contains("w-first on FS.GG.SDD#41", sentence)
+        Assert.DoesNotContain("w-second", sentence)
+
+    [<Fact>]
     let ``#581 an EXPIRED lease whose PR is open still reserves — the work is alive, so are its files`` () =
         // Lease expiry is EVIDENCE of abandonment, never proof, and its false positive is systematic:
         // work that takes longer than the lease. An open `item/<n>-*` PR is the worktree protocol's own

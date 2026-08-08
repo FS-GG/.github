@@ -552,18 +552,31 @@ module Batch =
 
             let result = schedulable allowBacklog visible item
 
-            let collidedWith =
+            let collidedWith, reportedResult =
                 match result with
-                | OverlapsInFlight((_, reservedToken) :: _) ->
+                | OverlapsInFlight((_, reservedToken) :: _ as hits) ->
                     // `conflicts` yields (candidateToken, reservedToken), and the RESERVED side is
                     // the key that joins this collision back to its owner (#428). Name the holder,
                     // not just the files: nobody can wait for, or talk to, a pair of paths.
-                    holderOf reserved owner repo reservedToken |> Option.orElse (Some UnknownHolder)
-                | _ -> None
+                    let holder = holderOf reserved owner repo reservedToken
+
+                    // `schedulable` aggregates every collision so the fold can still make its one
+                    // safety decision. The passed-over sentence, however, names one holder: keep its
+                    // evidence to that holder's tokens rather than attributing another reservation to
+                    // the first worker in the aggregate (#2229).
+                    let holderHits =
+                        holder
+                        |> Option.map (fun h ->
+                            hits
+                            |> List.filter (fun (_, token) -> holderOf reserved owner repo token = Some h))
+                        |> Option.defaultValue hits
+
+                    holder |> Option.orElse (Some UnknownHolder), OverlapsInFlight holderHits
+                | _ -> None, result
 
             decisions <-
                 { Item = item
-                  Result = result
+                  Result = reportedResult
                   CollidedWith = collidedWith
                   Rank = rank }
                 :: decisions
