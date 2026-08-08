@@ -176,6 +176,10 @@ module Chore =
         /// this closes, running backwards.
         | ClaimStatusLag of column: BoardStatus
 
+        /// `CLAIM-REVIEW-LAG` — a live claim has a freshly observed implementation PR while its board
+        /// status has not advanced to `In review`.
+        | ClaimReviewLag
+
         /// `CLOSED-ISSUE-NOT-DONE` — the ISSUE is closed but the column is not `Done`. Remedy: `Status = Done`.
         ///
         /// The column is a projection of the work; the issue IS the work, and when they disagree the issue

@@ -778,7 +778,7 @@ module ChoreTests =
     // a SIXTH kind cannot join the family unclassified.
 
     [<Fact>]
-    let ``#1738 AC5 CLAIM-STATUS-LAG cannot contradict step 5b — it fires only where ItemPr is None by construction`` () =
+    let ``#2264 a held implementation PR advances through the lifecycle projector`` () =
         // TWO independent reasons, and this leg pins the structural one. `CLAIM-STATUS-LAG` lives in the
         // RESERVED branch, and `Scan` probes for a markerless `item/<n>-*` PR ONLY where there is no marker —
         // so on this branch `ItemPr` is `None` by construction and there is no refusal to contradict. (The
@@ -792,7 +792,7 @@ module ChoreTests =
                 Claim = Some(claim other, LeaseHeld)
                 ItemPr = Some 1911 }
 
-        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], rules [ i ])
+        Assert.Equal<string list>([ "CLAIM-REVIEW-LAG" ], rules [ i ])
 
     [<Fact>]
     let ``#1738 AC5 STATUS-NOT-BLOCKED cannot contradict step 5b — its write AGREES with a refusal, in the same direction`` () =
