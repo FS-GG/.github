@@ -535,24 +535,34 @@ expect_fail "a 'reason' on a PARTICIPATING row is REJECTED, not ignored" \
 # named `-`. An ordinary org row reproduced it.
 expect_pass "an ORG-owned row with receives: [] VALIDATES (#2245 acceptance 3)" \
   "$(nonpart emptyrecv 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: []')"
-# ...AND THE LEG ABOVE IS NOT THE ONE THAT HOLDS THE SENTINEL, which is worth its own line because the
-# distinction is invisible and the gap it leaves is real (#2245 review round 1, F4). On that row
-# `receives` is the last field anyone SET, so every column after it is already `-`; bash collapses the
-# empty run and the `-` that lands in `$recv` is mapped back to "" by accident rather than by design.
-# Revert only the jq half of the sentinel and that leg still passes. The property is only observable
-# when a LATER column carries a real value, because then the shift moves that value into the wrong
-# variable: with `reason:` set, an unrepaired reader sees `absence-cover 'user-owned…'`. So the row
-# below — org-owned, so ownership is not what is under test — is what actually pins acceptance 3.
-expect_pass "receives: [] VALIDATES when a LATER column is SET — the sentinel, not the trailing-field accident (#2245 acceptance 3)" \
+# The empty value has a later non-empty `reason`; this is the case tab-based `read` gets wrong by
+# shifting that reason into another field. The unit separator must preserve the empty column.
+expect_pass "receives: [] VALIDATES when a LATER column is SET (#2253 acceptance 3)" \
   "$(nonpart emptyrecvmid 'id: spike, full: FS-GG/Spike.Repo, role: non-participant, receives: [], reason: an org-owned non-participant, so a real value follows the empty receives')"
-# THE SENTINEL MUST NOT DISABLE THE VOCABULARY CHECK. This is the fail-open direction of the fix: if
-# `-` mapped to "no capabilities" everywhere, an unknown word would still have to red — and a literal
-# `-` under receives must be refused rather than silently read as "receives nothing".
-expect_fail "an unknown capability is STILL rejected after the sentinel fix" \
+# Invert only the repos[] reader to its former tab-based form. The same row must red because the
+# later reason shifts into `absence-cover`; this proves the passing leg above exercises the reader,
+# rather than merely pinning an accidental trailing-empty case.
+TAB_REPOS_SH="$WORK/repos-tab-reader.sh"
+awk '
+  /read -r id full role recv delivery cover reason/ {
+    print "    IFS=$\047\\t$\047 read -r id full role recv delivery cover reason <<< \"${line}\""
+    next
+  }
+  { print }
+' "$REPOS_SH" > "$TAB_REPOS_SH"
+set +e
+tab_out="$(bash "$TAB_REPOS_SH" validate --registry "$(nonpart emptyrecvmid-tab 'id: spike, full: FS-GG/Spike.Repo, role: non-participant, receives: [], reason: an org-owned non-participant, so a real value follows the empty receives')" --root "$ROOT" 2>&1)"
+tab_rc=$?
+set -e
+[ "$tab_rc" -eq 1 ] && printf '%s' "$tab_out" | grep -q "receives \[an org-owned non-participant\]" \
+  && ok "inversion: the empty receives field reds with the former tab reader (#2253 acceptance 3)" \
+  || bad "inversion: the former tab reader must red the later-field fixture" "rc=$tab_rc: $tab_out"
+# Empty-field preservation must not weaken the vocabulary check, including for a literal '-'.
+expect_fail "an unknown capability is still rejected after the reader change" \
   1 "unknown capability 'bogus'" \
   "$(nonpart unknownstill 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: [bogus]')"
-expect_fail "a literal '-' under receives is REFUSED, never read as the empty-list sentinel" \
-  1 "sentinel for an EMPTY receives list" \
+expect_fail "a literal '-' under receives is rejected as an unknown capability" \
+  1 "unknown capability '-'" \
   "$(nonpart dashcap 'id: spike, full: FS-GG/Spike.Repo, role: framework, receives: ["-"]')"
 # ...and the role vocabulary is still closed: growing it by one word is not opening it.
 expect_fail "a role outside the GROWN vocabulary is STILL rejected" \

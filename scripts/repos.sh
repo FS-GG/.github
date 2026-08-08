@@ -753,7 +753,7 @@ cmd_validate() {
   # contract must be declared as one graph edge for repos-audit to grade.
   echo "$json" | jq -e '(.dispatches // []) | type=="array"' >/dev/null \
     || err "'dispatches' must be a list (omit it, or use [])."
-  local dp dt de dispatch_bad
+  local dp dt de dispatch_bad dline
   dispatch_bad="$(echo "$json" | jq -r '
     (.dispatches // [])[]
     | select(type != "object"
@@ -762,7 +762,8 @@ cmd_validate() {
         or (."event-type" | type != "string") or (."event-type" | length == 0))
     | @json')"
   [ -z "$dispatch_bad" ] || err "each dispatch must be an object with non-empty string producer, target, and event-type."
-  while IFS=$'\t' read -r dp dt de; do
+  while IFS= read -r dline; do
+    IFS=$'\x1f' read -r dp dt de <<< "${dline//$'\t'/$'\x1f'}"
     [ -n "$dp$dt$de" ] || continue
     [[ "$dp" =~ ^FS-GG/.+ ]] && [[ "$dt" =~ ^FS-GG/.+ ]] \
       || err "dispatch producer/target must be FS-GG/<repo>."
@@ -781,35 +782,13 @@ cmd_validate() {
 
   # --- per-repo fields + receives vocabulary ---
   #
-  # `-` IS THE SENTINEL FOR AN EMPTY CAPABILITY LIST, so it may not also be a capability. Without
-  # this the sentinel below is ambiguous: `receives: ["-"]` and `receives: []` would arrive at the
-  # loop as the same bytes, and the first would be silently read as "receives nothing" — a row
-  # claiming a fabric it does not get, passing validation. `-` is not in KNOWN_CAPS, so this is
-  # refused rather than mapped; the vocabulary check below never sees it.
-  local dashcaps; dashcaps="$(echo "$json" | jq -r '[.repos[] | select(((.receives // []) | index("-"))) | .id] | join(" ")')"
-  [ -z "$dashcaps" ] || err "repo(s) [$dashcaps] list '-' under receives. '-' is this validator's sentinel for an EMPTY receives list (see below), so it cannot also name a capability; a row that means 'receives nothing' writes 'receives: []'."
-  local id full role recv delivery cover reason cap
-  # `-` FOR AN ABSENT FIELD, NOT AN EMPTY ONE, AND THIS IS NOT COSMETIC. Tab is an IFS *whitespace*
-  # character, so `read` with IFS=$'\t' collapses a run of tabs into ONE delimiter — an empty
-  # `kit-delivery` therefore shifts `absence-cover` left into `$delivery`, and the validator reports
-  # `kit-delivery 'required' invalid` about a field the row never set. It was invisible while
-  # kit-delivery was the LAST column (an empty trailing field is simply absent, which is what it
-  # means); adding a sixth column is what made it reachable. jq emits `-` and this loop maps it back,
-  # so the meaning of "absent" lives in one place and column order stops being load-bearing.
-  #
-  # `receives` NEVER GOT THAT TREATMENT, AND IT IS THE SAME DEFECT ONE COLUMN OVER (.github#2245).
-  # `((.receives // []) | join(" "))` emits the EMPTY STRING for `[]`, so `receives: []` collapsed
-  # exactly like an empty `kit-delivery` did and shifted the NEXT column left into `$recv` — which is
-  # why a row with no capabilities was reported as receiving an unknown capability named `-`. It is
-  # independent of who owns the repo: `- { id: spike, full: FS-GG/Spike.Repo, role: framework,
-  # receives: [] }` reproduced it. Every optional column now carries the sentinel, so "absent" is one
-  # rule rather than a property of which column happens to be last.
-  while IFS=$'\t' read -r id full role recv delivery cover reason; do
+  local id full role recv delivery cover reason cap line
+  # Tab is IFS whitespace, so it collapses an empty TSV field and shifts every later value left.
+  # Re-delimit each jq @tsv row with the unit separator used by the capability and kit readers below:
+  # it is not IFS whitespace, so every empty optional field survives without a sentinel convention.
+  while IFS= read -r line; do
+    IFS=$'\x1f' read -r id full role recv delivery cover reason <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$id" ] || continue
-    [ "$recv" = "-" ] && recv=""
-    [ "$delivery" = "-" ] && delivery=""
-    [ "$cover" = "-" ] && cover=""
-    [ "$reason" = "-" ] && reason=""
     [[ "$id"   =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "repo id '$id' must be lowercase kebab/dotted."
     # OWNER-QUALIFIED, NOT `FS-GG`-ONLY (.github#2245). The roster is the org's list of the repos its
     # fabrics and its BOARD must agree about, and that set is not the same as the set of repositories
@@ -875,7 +854,7 @@ cmd_validate() {
         err "repo '$id' sets absence-cover 'none'. That is not a declarable state (#1785/#1869): a receiver may not assert that NO unexcused view-root assertion/materialize path runs. repos-audit DERIVES that state and reds on it. Either name the path requirement (required|unrequired) or fix the repo." ;;
       *) err "repo '$id' absence-cover '$cover' invalid (required|unrequired)." ;;
     esac
-  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ") | if . == "" then "-" else . end), ((."kit-delivery" // "-") | if . == "" then "-" else . end), ((."absence-cover" // "-") | if . == "" then "-" else . end), ((.reason // "-") | if . == "" then "-" else . end)] | @tsv')
+  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), (."kit-delivery" // ""), (."absence-cover" // ""), (.reason // "")] | @tsv')
 
   # --- exactly one authority, matching the top-level, and not a kit receiver ---
   local authct; authct="$(echo "$json" | jq '[.repos[] | select(.role=="authority")] | length')"
@@ -909,8 +888,9 @@ cmd_validate() {
   # the API; this validator only enforces the shape it can see offline.
   echo "$json" | jq -e '(."outside-fabric" // []) | type=="array"' >/dev/null \
     || err "'outside-fabric' must be a list (use [] when empty)."
-  local ofull oreason
-  while IFS=$'\t' read -r ofull oreason; do
+  local ofull oreason line
+  while IFS= read -r line; do
+    IFS=$'\x1f' read -r ofull oreason <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$ofull" ] || continue
     # OWNER-QUALIFIED for the same reason `repos[]` is (.github#2245): this was the second half of
     # the trap. With `^FS-GG/` here too, a user-owned repo could be neither rostered NOR excused, so
