@@ -33,7 +33,18 @@ def display_width(text):
 strip_ansi = lambda text: re.sub(r"\x1b\[[0-9;]*m", "", text)
 compact = lambda text: re.sub(r"[\s┌┬┐├┼┤└┴┘─│]+", "", strip_ansi(text))
 def human_escape(text):
-    return "".join(f"\\u{ord(character):04x}" if ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f else character for character in str(text))
+    return "".join("\\\\" if character == "\\" else f"\\u{ord(character):04x}" if ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f else character for character in str(text))
+
+def human_decode(text):
+    result, index = [], 0
+    while index < len(text):
+        if text[index] != "\\":
+            result.append(text[index]); index += 1; continue
+        if index + 1 < len(text) and text[index + 1] == "\\":
+            result.append("\\"); index += 2; continue
+        assert index + 5 < len(text) and text[index + 1] == "u"
+        result.append(chr(int(text[index + 2:index + 6], 16))); index += 6
+    return "".join(result)
 
 def raw_terminal_controls(text):
     return [character for character in text if character != "\n" and (ord(character) < 0x20 or 0x7f <= ord(character) <= 0x9f)]
@@ -224,6 +235,42 @@ with tempfile.TemporaryDirectory() as temp:
     # Every rich ESC belongs to the renderer's SGR grammar; stripping those leaves none.
     sgrs = re.findall(r"\x1b\[[0-9;]*m", control_rich)
     assert sgrs and control_rich.count("\x1b") == len(sgrs)
+
+    # Visible encoding is injective: a raw control and a caller's literal escape spelling remain distinct.
+    control_codes = [*range(0x20), *range(0x7f, 0xa0)]
+    raw_escape = "".join(map(chr, control_codes))
+    literal_escape = "".join(f"\\u{code:04x}" for code in control_codes)
+    assert human_escape(raw_escape) != human_escape(literal_escape)
+    assert human_decode(human_escape(raw_escape)) == raw_escape
+    assert human_decode(human_escape(literal_escape)) == literal_escape
+    for code in control_codes:
+        raw, literal = chr(code), f"\\u{code:04x}"
+        assert human_escape(raw) != human_escape(literal)
+        assert human_decode(human_escape(raw)) == raw and human_decode(human_escape(literal)) == literal
+    collision_event = {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"escape-collision",
+                       "item":"raw="+raw_escape,"activity":"raw="+raw_escape+" literal="+literal_escape}
+    collision_snapshot = {"freshness":"raw="+raw_escape+" literal="+literal_escape,
+        "capacity":capacity(6,2,2,6,reason("human-blocker","literal="+literal_escape,
+            "raw="+raw_escape,"raw="+raw_escape+" literal="+literal_escape)),
+        "lanes":[
+            {"item":"raw="+raw_escape,"repository":"literal="+literal_escape,"workState":"blocked","boardStatus":"In review","worker":"w","activity":"raw="+raw_escape+" literal="+literal_escape,"pr":"#2","blocker":"b"},
+            {"item":"literal="+literal_escape,"repository":"raw="+raw_escape,"workState":"blocked","boardStatus":"Blocked","worker":"w","activity":"literal="+literal_escape+" raw="+raw_escape,"pr":"#3","blocker":"b"},
+        ]}
+    write(event, collision_event); write(lanes, collision_snapshot)
+    collision_doc = json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
+    assert collision_doc["trigger"]["item"] != collision_doc["lanes"][1]["item"]
+    assert collision_doc["sessionTotals"]["unresolved"] == ["raw="+raw_escape,"literal="+literal_escape]
+    collision_plain = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","plain","--width","40").stdout
+    collision_rich = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","rich","--color","always","--width","40",env=colored_env).stdout
+    assert strip_ansi(collision_rich) == collision_plain and not raw_terminal_controls(collision_plain)
+    assert max(map(display_width, collision_plain.splitlines())) <= 40
+    collision_projection = compact(collision_plain)
+    assert compact("raw="+human_escape(raw_escape)) in collision_projection
+    assert compact("literal="+human_escape(literal_escape)) in collision_projection
+    for scalar in scalars({"trigger":collision_doc["trigger"],"lanes":collision_doc["lanes"],
+                           "laneCapacity":collision_doc["laneCapacity"],"snapshot":collision_doc["snapshot"],
+                           "sessionTotals":collision_doc["sessionTotals"]}):
+        assert compact(human_escape(scalar)) in collision_projection, repr(scalar)
     # Invert the schema boundary: caller structure cannot forge a session record or bypass dedupe.
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"done","eventKey":"reserved","item":"x","record":"session"})
     rejected = run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json", check=False)

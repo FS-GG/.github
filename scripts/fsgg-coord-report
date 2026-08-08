@@ -302,7 +302,9 @@ def terminal_safe(text: Any) -> str:
     result = []
     for character in str(text):
         code = ord(character)
-        if code < 0x20 or 0x7f <= code <= 0x9f:
+        if character == "\\":
+            result.append("\\\\")
+        elif code < 0x20 or 0x7f <= code <= 0x9f:
             result.append(f"\\u{code:04x}")
         else:
             result.append(character)
