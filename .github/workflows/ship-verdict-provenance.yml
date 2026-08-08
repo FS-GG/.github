@@ -1,0 +1,27 @@
+name: ship-verdict-provenance
+
+on:
+  pull_request:
+    paths: ["readiness/**", "scripts/check-ship-verdict-provenance.py", "tests/ship-verdict-provenance/**", ".github/workflows/ship-verdict-provenance.yml"]
+  push:
+    branches: [main]
+    paths: ["readiness/**", "scripts/check-ship-verdict-provenance.py", "tests/ship-verdict-provenance/**", ".github/workflows/ship-verdict-provenance.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ship-verdict-provenance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prove the gate detects a stale digest
+        run: bash tests/ship-verdict-provenance/run.sh
+      - name: Reject unverifiable provenance in shipped readiness verdicts
+        run: python3 scripts/check-ship-verdict-provenance.py
