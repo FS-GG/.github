@@ -30,7 +30,7 @@ def entries_start(text: str) -> int:
 
 def top_date(text: str) -> str:
     start = entries_start(text)
-    stray = re.search(r'^- \*\*(\d{4}-\d{2}-\d{2})\*\*', text[:start], re.M)
+    stray = re.search(r'^[*+-] \*\*(\d{4}-\d{2}-\d{2})\*\*', text[:start], re.M)
     if stray:
         line = text.count('\n', 0, stray.start()) + 1
         raise Refused(f'CHANGELOG.md has dated entry before Entries heading at line {line}')
