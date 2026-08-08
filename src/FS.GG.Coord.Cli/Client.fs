@@ -4881,30 +4881,22 @@ module Client =
     ///
     /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
     ///
-    /// - A claim on a **CLOSED** issue. `openIssues` is open-only, so a closed row is never read here and
-    ///   this gate can find no collision on it. **THE TWO ROUTES NO LONGER AGREE, AND THIS IS A KNOWN
-    ///   DIVERGENCE, NOT A DELIBERATE ONE — `.github#2250`.** Until `.github#2225` this bullet read *"and so
-    ///   is the scheduler: `Scan.snapshot` SWEEPS a closed candidate with no marker read at all (#520). The
-    ///   two agree, deliberately."* That agreement was real, and it was the SAME defect on both sides.
-    ///   `#2225` fixed the scheduler half: `Scan.snapshot` now sweeps only a closed **and STAMPED** row, so a
-    ///   closed-but-unstamped holder — the post-merge window — is read, reserves its touch-set, and is named
-    ///   by `batch`/`take`. This path was not changed with it, so measured over one such holder the two now
-    ///   answer opposite: the scheduler refuses the overlapping candidate and names its holder, while
-    ///   `overlap --active` answers `DISJOINT` with exit 0. `widen` gates its `#523` re-check on this same
-    ///   scan (below), so a worker widening into a held tree lands the declaration and the holder is never
-    ///   told.
+    /// - ~~A claim on a CLOSED issue.~~ **CLOSED by `.github#2250`.** `openIssues` remains open-only, but
+    ///   `activeCollisions` now unions its token-filtered candidates with same-repo board rows that are
+    ///   CLOSED and not `Done`, then reads each such body's declared paths before it reads a matching
+    ///   marker. A closed-but-unstamped post-merge holder therefore reserves on both this gate and
+    ///   `Scan.snapshot`; `overlap --active`, `widen`, `batch`, and `take` name the same holder rather than
+    ///   disagreeing.
     ///
-    ///   The direction is the safe one — `take` refuses what this gate permits, so the two-workers-in-one-
-    ///   tree failure (#1858's class) stays blocked — which is why `#2225` closed without closing this.
-    ///   Repairing it means giving `activeCollisions` a different candidate universe, and that is a GraphQL
-    ///   cost decision against the budget table above, not a one-line edit. `.github#2250` owns it.
+    ///   The cost is deliberate and measured: a cold gate pays the cached board universe (bootstrap's two
+    ///   resolver queries plus one board page) and one REST body read per closed, unstamped same-repo row.
+    ///   It still token-shortlists before every neighbour marker read, so it does not reintroduce the old
+    ///   per-In-progress marker sweep. `ApplicationServiceTests` and `coord-engine-e2e/writes.sh` pin both
+    ///   the cross-route result and this 3-GraphQL cold cost.
     ///
-    ///   **The citation of `#520` is deliberately gone.** The old sentence pinned this licence to `#520`'s
-    ///   sweep test — and `#2225` moved that very test's fixture from `Status = Ready` to `Status = Done`,
-    ///   falsifying the licence by editing the test it named, with nothing connecting the two. That is the
-    ///   exact shape `#2225` exists to stop (`Scan.fs`'s own note: a site licensed by a claim about another
-    ///   site, falsified without either able to notice), so it is not repeated here: this bullet now states
-    ///   what these two routes DO, and names the row that owns the gap.
+    ///   The old citation to `#520` stays absent: `#2225` moved that fixture from `Ready` to `Done`, which
+    ///   falsified the licence that had cited it. The replacement assertion drives one CLOSED, unstamped
+    ///   holder across BOTH production surfaces, so a future candidate-universe drift turns red.
     /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
     ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
     /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
@@ -4946,10 +4938,46 @@ module Client =
                     |> Option.bind (fun marker -> marker.PathRepo)
                     |> Option.defaultValue ref.Repo)
 
-        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo with
-        | Error e, _ -> Error e
-        | _, Error e -> Error e
-        | Ok targetPathRepo, Ok issues ->
+        // .github#2250 — `openIssues` is necessarily OPEN-only, but a CLOSED item is not terminal until
+        // its green Done stamp exists.  The scheduler already reads a closed-but-unstamped board row and
+        // lets its marker reserve paths during that post-merge window.  This gate must use that same
+        // candidate universe: a successful `widen` / `overlap --active` is final evidence workers act on,
+        // not an advisory that may disagree with `take`.
+        //
+        // COST, MADE EXPLICIT.  This adds the scheduler's cached Projects scan (normally one GraphQL page;
+        // the map bootstrap is day-cached) plus one REST body read per closed, unstamped row in THIS repo.
+        // It deliberately does not reinstate a per-In-progress-row marker sweep: tokens still shortlist
+        // candidates before their marker is read.  The post-merge set is normally tiny and bounded by
+        // unfinished delivery, while a false DISJOINT has no later CAS to repair it.
+        let closedUnstampedIssues =
+            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+            |> Result.bind (fun board ->
+                Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
+            |> Result.bind (fun rows ->
+                rows
+                |> List.filter (fun row ->
+                    row.Ref.Owner = ref.Owner
+                    // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
+                    && row.Ref.Repo = ref.Repo
+                    && not row.IsPullRequest
+                    && row.State = Closed
+                    && row.Status <> BoardStatus.Done)
+                |> List.fold
+                    (fun state row ->
+                        state
+                        |> Result.bind (fun issues ->
+                            Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                            |> Result.map (fun body ->
+                                ({ Number = row.Ref.Number
+                                   Body = Reads.BodyRead body }: Reads.OpenIssue)
+                                :: issues)))
+                    (Ok []))
+
+        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo, closedUnstampedIssues with
+        | Error e, _, _ -> Error e
+        | _, Error e, _ -> Error e
+        | _, _, Error e -> Error e
+        | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -4958,7 +4986,7 @@ module Client =
             // order, which is the project's, which no caller can predict — and `widen --json`'s
             // `collisions` array is a machine contract.
             let colliding =
-                issues
+                List.append openIssues closedIssues
                 |> List.sortBy (fun i -> i.Number)
                 |> List.choose (fun issue ->
                     if issue.Number = ref.Number then

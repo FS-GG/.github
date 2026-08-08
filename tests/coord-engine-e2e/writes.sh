@@ -708,11 +708,13 @@ ovn2="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovn2rc
 #
 # `.github#1086` got this same trade wrong by an order of magnitude by ESTIMATING it, and the first draft
 # of #1779 declined the whole design over an estimate of "~74 REST marker reads per widen". So the fixture
-# counts. `/_fixture/rest-reads` reports and resets; `/_fixture/board-reads` is the GraphQL board query,
-# which this path must no longer make at all.
+# counts. `/_fixture/rest-reads` reports and resets; `/_fixture/board-reads` is the GraphQL board query.
+# #2250 deliberately makes ONE cached-board scan so CLOSED, unstamped holders use the same candidate
+# universe as the scheduler. Disable its 90-second scan cache for this one invocation: the assertion is a
+# stable cold measurement (one page), not an accident of whatever an earlier e2e leg happened to cache.
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads" >/dev/null   # reset the meter
 br_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
-"$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 >/dev/null 2>&1
+FSGG_COORD_SCAN_TTL_SEC=0 "$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 >/dev/null 2>&1
 meter="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
 br_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
 rest_n="$(printf '%s' "$meter" | jq -r '.count')"
@@ -727,10 +729,11 @@ noise="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("/(42|99)/comment
 # The repo has FIVE open issues. Two of them declare `src/Verify/**` — #43 (whose marker was released
 # above, so it reserves nothing) and #46 (held by heron-822) — and #44 is the subject. So: ONE issue list,
 # THREE marker reads: the target verification plus one per shortlisted row rather than one per open row or
-# ZERO GraphQL board reads. The old scan read a marker AND a body for every `In progress` row whether or
-# not its tokens could ever collide, and paid a board query on top.
-[ "$lists" = "1" ] && [ "$markers" = "3" ] && [ "$noise" = "0" ] && [ "$br_before" = "$br_after" ] \
-  && ok "#1779 AC2: overlap --active spent $rest_n REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 0 GraphQL board reads" \
+# ONE GraphQL board page. #2250 adds it to include the post-merge window; it must stay ONE page, while
+# the REST shape remains token-first: the target verification, one open-issue list, then markers only for
+# shortlisted rows. The old scan read a marker AND a body for every `In progress` row.
+[ "$lists" = "1" ] && [ "$markers" = "3" ] && [ "$noise" = "0" ] && [ "$br_after" -eq "$((br_before + 1))" ] \
+  && ok "#1779/#2250 AC2: overlap --active spent $rest_n REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 1 GraphQL board read for closed-unstamped holders" \
   || bad "#1779 AC2: the measured cost is not the claimed cost" "rest=$rest_n lists=$lists markers=$markers noise=$noise boardReads $br_before -> $br_after: $meter"
 
 "$ENGINE" release FS.GG.SDD#46 --worker heron-822 >/dev/null 2>&1

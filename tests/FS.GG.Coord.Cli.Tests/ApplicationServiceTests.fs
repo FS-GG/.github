@@ -265,6 +265,10 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
                 bodies
                 |> Map.toList
+                // A closed item remains on the board, but GitHub's open-issues endpoint must not smuggle it
+                // into `activeCollisions`.  #2250 needs the gate to reach that holder through the board
+                // scan, exactly as production does.
+                |> List.filter (fun (_, body) -> not (body.Contains("<!-- fixture:closed -->")))
                 |> List.map (fun (n, body) -> {| number = n; state = "open"; body = body |})
                 |> JsonSerializer.Serialize
                 |> ok
@@ -1487,7 +1491,9 @@ module ApplicationServiceTests =
 
         Assert.Equal(0, code)
         Assert.Equal("disjoint", str "verdict" (parsed out))
-        Assert.Equal(0, world.GraphQlCalls)
+        // #2250 adds the cached board scan so closed-but-unstamped holders participate.  Cold: bootstrap
+        // (two resolver queries) plus one page; no per-holder GraphQL fan-out.
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Fact>]
     let ``#1732 active claims with equal tokens in one marker path scope still collide`` () =
@@ -1507,7 +1513,7 @@ module ApplicationServiceTests =
 
         Assert.Equal(6, code)
         Assert.Equal("overlap", str "verdict" (parsed out))
-        Assert.Equal(0, world.GraphQlCalls)
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Theory>]
     [<InlineData "widen">]
@@ -1674,14 +1680,13 @@ module ApplicationServiceTests =
         Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
 
     [<Fact>]
-    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and no board read decides it`` () =
+    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and the cached board scan preserves the result`` () =
         // THE NAME CHANGED WITH THE MECHANISM, AND IT HAD TO. As #1740 wrote it, this leg drove the column
         // through a stale cache window and asserted the cache tier fixed it. Since #1779 nothing on this
         // path reads a board, so the `column` ref below is a DEAD INPUT — the assertion would pass
-        // identically with it frozen. A test whose name promises a cache-tier check it can no longer make is
-        // the #266 shape in a test file, so it says what it now proves: this state collides, and it does so
-        // WITHOUT a board read (`world.GraphQlCalls = 0`, asserted at the end — which is the one thing here
-        // that a re-introduced board scan would break, and the reason to keep the leg rather than delete it).
+        // identically with it frozen. #2250 deliberately restores the scheduler's cached board scan so a
+        // closed-but-unstamped holder reaches this gate too; this leg pins that the second command reuses
+        // it rather than turning a cached scan into per-command GraphQL fan-out.
         let dir = cacheDir ()
 
         // The column is a `ref` the TEST moves, not something the transport counts — a fixture that flipped
@@ -1702,9 +1707,8 @@ module ApplicationServiceTests =
 
             // 3. ...but the cached scan is only seconds old. On `Cache.Scheduling` this second command was
             //    served that cached `Ready`, #75 never became a candidate, its marker was never read, and
-            //    the worker was told it may edit `src/Shared.fs`. THAT was the false DISJOINT. Since #1779
-            //    no board read decides this at all, so no cache tier can serve it a stale answer — this leg
-            //    now proves the replacement covers what the tier covered.
+            //    the worker was told it may edit `src/Shared.fs`. THAT was the false DISJOINT. The open
+            //    issue list still sees the marker regardless of the board cache, so this remains overlap.
             let code, out = runIn dir world (widenOnto "src/Shared.fs")
 
             let collision = soleCollision out
@@ -1713,10 +1717,9 @@ module ApplicationServiceTests =
             Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
             Assert.Equal(6, code)
 
-            // TWO commands ran against this world and NEITHER asked GraphQL anything. That is what makes
-            // the cache window irrelevant rather than merely survived, and it is the assertion that fails
-            // if a board read ever returns to this path — where the verdict assertions above would not.
-            Assert.Equal(0, world.GraphQlCalls)
+            // Two commands share one cached scan: two resolver calls plus one page, not six.  This is the
+            // bounded #2250 cost and fails if the cache is bypassed or a per-row query appears.
+            Assert.Equal(3, world.GraphQlCalls)
         finally
             try
                 Directory.Delete(dir, true)
@@ -2008,6 +2011,31 @@ module ApplicationServiceTests =
         Assert.Equal("disjoint", gateVerdict (contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty))
 
     [<Fact>]
+    let ``#2250: a CLOSED unstamped holder reserves on BOTH scheduler and collision-gate surfaces`` () =
+        // #75 is the post-merge window: CLOSED on the board, not Done, with a live marker.  The REST
+        // open-issues answer deliberately omits it (the fixture's `fixture:closed` switch), so the gate can
+        // only find it by selecting the closed board row and reading its body.  #76 proves the scheduler
+        // refuses that same holder; #74 drives the real `widen` gate.  KILLS: removing the closed-row arm
+        // makes the gate DISJOINT while #76 remains refused, which is the exact production divergence.
+        let bodies =
+            Map.ofList
+                [ 74, "Paths: scripts/fsgg-coord"
+                  75, "Paths: src/Shared.fs\n<!-- fixture:closed -->"
+                  76, "Paths: src/Shared.fs" ]
+
+        let status n =
+            match n with
+            | 75 -> "In review"
+            | 76 -> "Ready"
+            | _ -> "In progress"
+
+        let holders = Map.ofList [ 74, "kite-469"; 75, "curlew-8afd" ]
+        let world = worldOf status bodies holders Map.empty Set.empty false
+
+        Assert.DoesNotContain("FS-GG/FS.GG.SDD#76", scheduled world)
+        Assert.Equal("overlap", gateVerdict (worldOf status bodies holders Map.empty Set.empty false))
+
+    [<Fact>]
     let ``#1792: agreeing with the scheduler costs the gate NOTHING`` () =
         // .github#1779 made this scan CHEAPER — 24/27/31 GraphQL points to ZERO, REST at one issue-list read
         // plus one marker read per COLLIDING row — and #1792 must not spend that back. It does not, and this
@@ -2031,9 +2059,8 @@ module ApplicationServiceTests =
             let _, out = runIn dir world (widenOnto "src/Shared.fs")
             Assert.Equal("overlap", str "verdict" (parsed out))
 
-            // THE BOARD IS NOT READ. #1779's zero, still zero — and the only way to reach the one case
-            // #1792 declined (`RUnowned`, which is column-derived) is to break this.
-            Assert.Equal(0, world.GraphQlCalls)
+            // #2250 reads the same cached board universe as the scheduler: bootstrap plus one page.
+            Assert.Equal(3, world.GraphQlCalls)
 
             // REST: the issue-list read, one marker read for the ONE colliding row, and the writes `widen`
             // makes on top (the body PATCH and the courtesy notice). The number is pinned rather than
@@ -2157,7 +2184,7 @@ module ApplicationServiceTests =
     // the engine makes, exactly, which is what these two legs read.
 
     [<Fact>]
-    let ``#1779 AC2: the collision scan spends ZERO GraphQL and ONE marker read per COLLIDING row`` () =
+    let ``#1779/#2250: the collision scan spends one cached board scan and ONE marker read per COLLIDING row`` () =
         // Six open issues, one of which collides. The old scan read a marker AND a body for every
         // `In progress` row whether or not its tokens could ever collide; this one reads the repo's issue
         // list once and then exactly one marker.
@@ -2190,9 +2217,9 @@ module ApplicationServiceTests =
         Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 76")
         Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 79")
 
-        // ZERO GraphQL. The board query and the `bootstrapCached` behind it are gone from this path — which
-        // is why the live measurement is 0 points on a COLD cache too, not merely on a warm one.
-        Assert.Equal(0, world.GraphQlCalls)
+        // #2250 pays the scheduler-aligned cached board universe once: two bootstrap resolver queries and
+        // one page.  It must not regress to GraphQL per colliding row.
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Fact>]
     let ``#1779 AC2: a DISJOINT verdict costs the issue list and NOT ONE marker read`` () =
@@ -2216,7 +2243,7 @@ module ApplicationServiceTests =
             Assert.Equal(1, world.Count "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
             Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 75")
             Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 76")
-            Assert.Equal(0, world.GraphQlCalls)
+            Assert.Equal(3, world.GraphQlCalls)
         finally
             try
                 Directory.Delete(dir, true)
