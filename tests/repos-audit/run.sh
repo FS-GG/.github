@@ -3603,22 +3603,27 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "engine-manifest: a receiver declaring the engine its shim execs is GREEN" \
   || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
 
-# The registry reader must use the same yq-first ladder as workflow readers.  Remove PyYAML from
+# The registry reader must use the same yq-first ladder as workflow readers. Remove PyYAML from
 # the audit process while retaining the fixture's yq executable: a direct `import yaml` in the new
-# reader would abort before this green subject can be examined.
-export YQ_PYTHONPATH="${PYTHONPATH:?run this fixture with its PyYAML fixture path}"
+# reader would abort before this green subject can be examined. This is deliberately not a general
+# YAML parser: it accepts only the one yq query and the three fixture documents this run reaches.
+# The fixture therefore cannot borrow a parser from the caller (or silently widen its claimed world).
 cat > "$STUB/yq" <<'YQ'
 #!/usr/bin/env bash
 set -euo pipefail
-[ "$1" = "-o=json" ] && [ "$2" = "." ] || exit 64
-if [ "$3" = "-" ]; then
-  PYTHONPATH="$YQ_PYTHONPATH" python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)'
-else
-  PYTHONPATH="$YQ_PYTHONPATH" python3 - "$3" <<'PY'
-import sys,yaml,json
-with open(sys.argv[1], encoding="utf-8") as handle: json.dump(yaml.safe_load(handle), sys.stdout, default=str)
-PY
-fi
+[ "$#" -eq 3 ] && [ "$1" = "-o=json" ] && [ "$2" = "." ] || exit 64
+if [ "$3" = "-" ]; then document="$(cat)"; else document="$(cat "$3")"; fi
+case "$document" in
+  *$'contracts:\n  - id: coord-engine\n    version: "0.15.0"'*)
+    printf '%s\n' '{"contracts":[{"id":"coord-engine","version":"0.15.0"}]}' ;;
+  *$'schemaVersion: 5'*$'FS-GG/FS.GG.SDD'*$'FS-GG/FS.GG.Rendering'*$'id: coordination-kit'* )
+    printf '%s\n' '{"schemaVersion":5,"authority":"FS-GG/.github","repos":[{"id":".github","full":"FS-GG/.github","role":"authority","receives":["labels"]},{"id":"sdd","full":"FS-GG/FS.GG.SDD","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"},{"id":"rendering","full":"FS-GG/FS.GG.Rendering","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"}],"capabilities":[{"id":"coordination-kit","workflow":"coordination-coherence.yml"},{"id":"labels","push":true,"reason":"authority-pushed by apply-labels.sh; nothing is wired at the receiver"}]}' ;;
+  *'uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main'*)
+    printf '%s\n' '{"jobs":{"coordination":{"uses":"FS-GG/.github/.github/workflows/coordination-coherence.yml@main"}}}' ;;
+  *)
+    printf '%s\n' 'fixture yq received an unmodelled document' >&2
+    exit 65 ;;
+esac
 YQ
 chmod +x "$STUB/yq"
 out="$(env -u PYTHONPATH PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
