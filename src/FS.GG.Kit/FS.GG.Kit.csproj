@@ -434,7 +434,7 @@
     <!-- 0.41.0 -> 0.42.0, a MINOR (.github#2285): the kit gains the network-free
          fsgg-coord-report client. Receivers obtain a new executable/session-ledger contract, so
          a patch would make a declared coordination capability appear without the minor boundary. -->
-    <Version>0.42.0</Version>
+    <Version>0.43.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
