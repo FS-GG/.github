@@ -1527,8 +1527,17 @@ STUBSH
   # beside it (it does not — it expands the PARENT's, which happens to be the same value, so the code
   # was correct by coincidence rather than by construction). `env` makes the expansions unambiguously
   # the parent's, which is what was meant. Behaviour is identical. SC2097/SC2098, #648.
-  ( cd "$SBOX" && env SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
-      bash -eo pipefail "$STEP" ) > "$SBOX/stdout" 2>&1
+  # Several fixture subjects intentionally make the extracted workflow step fail.  Capture that
+  # process result explicitly: with this self-test's `set -e`, a bare failing subshell aborts the
+  # fixture before the later assertions (including the engine-pin subject inversion) execute.
+  # The workflow's published rc below remains the assertion subject; this value merely proves the
+  # fixture control flow survived to read it.
+  if ( cd "$SBOX" && env SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
+        bash -eo pipefail "$STEP" ) > "$SBOX/stdout" 2>&1; then
+    STEP_PROCESS_RC=0
+  else
+    STEP_PROCESS_RC=$?
+  fi
   STEP_OUT="$(cat "$SBOX/stdout")"
   STEP_RC="$(sed -n 's/^rc=//p' "$SBOX/gh_out")"
   PASSES="$(wc -l < "$SBOX/passes")"
