@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Gate the fleet's engine PIN against the version the org has PUBLISHED (.github#1196, epic #266).
+"""Gate .github's canonical engine PIN against the version the org has PUBLISHED (.github#1196, epic #266).
 
-THE DEFECT THIS CLOSES. `scripts/fsgg-coord` in a RECEIVER resolves the engine from the local tool
-manifest `dist/dotnet/.config/dotnet-tools.json` (ADR-0034 §4.4, `sync-not-fork`) — the pin
-`coordination-sync` byte-copies into every kit repo. So that pin is *the version every worker in the
-fleet actually restores and execs*. It is a scalar no gate looked at:
+THE SUBJECT OF THIS GATE. `dist/dotnet/.config/dotnet-tools.json` is `.github`'s own canonical
+tool manifest. It is the subject of this gate and is not distributed to receivers: ADR-0068 /
+.github#1615 retired that arrangement, as `registry/repos.yml` records. A receiver instead restores
+the engine from its own repo-root `.config/dotnet-tools.json`, whose Renovate-managed pins are the
+separate subject of .github#2249. Advancing this dist pin therefore does not deliver an engine to a
+receiver. This canonical pin is a scalar no gate looked at:
 
   * `source-coherence` asserts registry.version == source        (registry vs source)
   * `feed-coherence`   asserts registry.package-version == feed   (registry vs feed)
@@ -14,9 +16,7 @@ fleet actually restores and execs*. It is a scalar no gate looked at:
 The dist manifest pin is a NATIVE `dotnet-tools.json` pin — Renovate's nuget manager detects it with
 no annotation — so `pin-coherence` (annotated pins only) never sees it, and none of the other three
 looks at the pin at all. The result is the reported experience of .github#1196: source, registry and
-feed all agree at 0.6.0 and every coherence gate is GREEN, while the pin sits at 0.3.0 and every
-receiver `exec`s an engine three releases stale. A worker reads a synced recipe that calls
-`followup` and the binary answers `unknown command: followup`.
+feed all agree at 0.6.0 and every coherence gate is GREEN, while this canonical pin sits at 0.3.0.
 
 WHY IT KEPT HAPPENING, AND WHY A GATE. Renovate DOES open the bump PR (the pin is a real nuget dep),
 but automerge is disabled for it, so it needs a human — and the pin froze by hand at 0.1.0, 0.1.1,
@@ -36,19 +36,18 @@ THE COMPARISON POINT IS THE FEED, NOT THE REGISTRY, AND THAT IS DELIBERATE. Keyi
 (FR-007): the package is live on the feed BEFORE the registry row is flipped, so at release time the
 correct pin is the newly-published version while `package-version` still names the old one. A
 registry-keyed gate would then red the Renovate pin-bump PR as "AHEAD" — fighting the very mechanism
-that keeps the pin fresh. The feed is the ground truth for "what a receiver can actually restore", so
-the pin is measured against it directly. This is exactly `engine-freshness`'s reasoning: the subject
+that keeps the canonical pin fresh. The feed is the ground truth for the version this manifest names,
+so the pin is measured against it directly. This is exactly `engine-freshness`'s reasoning: the subject
 is MAIN (the pin) plus the FEED, a property no PR diff carries, fixed by merging the Renovate pin
 bump — not by editing some unrelated PR. So the live check runs on main, on a schedule, and on
 demand; a PR runs the fixture, whose subject IS the diff. The two gates are duals:
-`engine-freshness` asks "is a release owed?" (source ahead of feed); this asks "is the fleet
-restoring the release?" (pin behind feed).
+`engine-freshness` asks "is a release owed?" (source ahead of feed); this asks "is `.github`'s
+canonical pin current?" (pin behind feed).
 
 Two directions, two messages:
 
-  * pin BEHIND feed-newest  -> the fleet restores a stale engine (the .github#1196 / #677 case).
-  * pin AHEAD  of feed-newest -> the pin names a version the feed does not serve, which a receiver
-    cannot restore at all — worse than stale.
+  * pin BEHIND feed-newest  -> `.github`'s canonical manifest names a stale engine.
+  * pin AHEAD  of feed-newest -> the canonical manifest names a version the feed does not serve.
 
 FAILS CLOSED, which is the whole point of epic #266. "Nothing to check" and "checked, and it's fine"
 must not share an exit code. Every one of these is an ERROR, not a skip and never "in sync":
@@ -69,7 +68,7 @@ Usage:  scripts/check-engine-pin.py [--manifest <dotnet-tools.json>]
 and it refuses to run unless FSGG_ENGINE_PIN_FIXTURE_OK=1 — which only tests/engine-pin/ sets. A test
 hook that can silently turn the gate into a no-op is the very defect class above.
 
-Exit 0 = the pin the fleet restores is the newest engine the org has published.
+Exit 0 = .github's canonical pin is the newest engine the org has published.
 """
 from __future__ import annotations
 
@@ -94,10 +93,10 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     parse_version,
 )
 
-# The package the fleet restores and `scripts/fsgg-coord` execs in a receiver (ADR-0034 §4.4).
+# The package whose published version this gate compares to `.github`'s canonical manifest.
 PACKAGE = "FS.GG.Coord.Cli"
 
-# The pin the fleet restores. This path and tool id are the SUBJECT — a hard-coded subject that
+# `.github`'s canonical pin. This path and tool id are the SUBJECT — a hard-coded subject that
 # silently stops existing is the #266 fails-open shape, so `read_pin` reds rather than reporting "in
 # sync" when either is absent.
 MANIFEST = "dist/dotnet/.config/dotnet-tools.json"
@@ -122,7 +121,7 @@ def read_pin(manifest_path: str) -> str:
     if not isinstance(tool, dict):
         raise GateError(
             f"the tool manifest {manifest_path!r} declares no {TOOL_ID!r} tool. That is the pin the "
-            f"fleet restores; without it a receiver has no coordination engine at all. This is an "
+            f"gate measures; without it, the gate has no subject. This is an "
             f"ERROR, not 'in sync' (epic #266: a subject that has vanished must not report green)."
         )
     version = tool.get("version")
@@ -138,14 +137,14 @@ def newest_stable(resolve) -> str:
     """The newest STABLE feed version of PACKAGE. Raises GateError on any unreadable/empty feed."""
     live = resolve(PACKAGE)
     # The engine ships no prerelease: release-coord-engine.yml refuses one, because the org's Renovate
-    # preset sets ignoreUnstable=true and receivers would never see it. So the fleet's version is the
-    # newest STABLE, and a stray prerelease on the feed must not become the comparison point.
+    # preset sets ignoreUnstable=true. The canonical manifest is compared to the newest STABLE, and a
+    # stray prerelease on the feed must not become the comparison point.
     stable = [v for v in live if not is_prerelease(v)]
     if not stable:
         raise GateError(
             f"the feed serves no stable version of {PACKAGE} — only prereleases {sorted(live)}. "
-            f"release-coord-engine.yml refuses to publish a prerelease, so the fleet's engine "
-            f"cannot be one and the comparison point is unknown."
+            f"release-coord-engine.yml refuses to publish a prerelease, so the comparison point is "
+            f"unknown."
         )
     return newest(stable)
 
@@ -212,18 +211,16 @@ def main(argv: list[str]) -> int:
 
     if got == want:
         print(
-            f"ok: the fleet's {TOOL_ID} pin is {pin}, the newest {PACKAGE} live on the {ORG} feed. "
-            f"Every receiver restores current code."
+            f"ok: .github's canonical {TOOL_ID} pin is {pin}, the newest {PACKAGE} live on the "
+            f"{ORG} feed."
         )
         return 0
 
     if got < want:
         print(
-            f"::error::check-engine-pin: the fleet's engine pin is BEHIND the published engine — "
+            f"::error::check-engine-pin: .github's canonical engine pin is BEHIND the published engine — "
             f"{args.manifest} pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} on the {ORG} feed "
-            f"is {published!r}. Every receiver `exec`s an engine that predates {published}, so a "
-            f"worker reading a synced recipe can be refused by the binary (a verb the recipe calls "
-            f"that the pinned engine lacks — .github#1196). Bump the pin: set {TOOL_ID} to "
+            f"is {published!r}. This canonical manifest predates {published}. Bump the pin: set {TOOL_ID} to "
             f"{published!r} in {args.manifest} (this is what the open `renovate/{TOOL_ID}-*` PR "
             f"does; merge it, or bump by hand in the release PR).",
             file=sys.stderr,
@@ -231,10 +228,10 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(
-        f"::error::check-engine-pin: the fleet's engine pin is AHEAD of the feed — {args.manifest} "
+        f"::error::check-engine-pin: .github's canonical engine pin is AHEAD of the feed — {args.manifest} "
         f"pins {TOOL_ID} at {pin!r} but the newest {PACKAGE} on the {ORG} feed is {published!r}. "
-        f"The pin names a version the feed does not serve, so a receiver cannot restore it at all — "
-        f"worse than stale. Either publish {pin} (release-coord-engine.yml), or lower the pin to "
+        f"The canonical manifest names a version the feed does not serve. Either publish {pin} "
+        f"(release-coord-engine.yml), or lower the pin to "
         f"{published!r}.",
         file=sys.stderr,
     )
