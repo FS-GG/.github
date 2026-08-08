@@ -46,6 +46,11 @@ namespace FS.GG.Coord.GitHub
 /// how that whole family of bugs was born).
 module Writes =
 
+    /// Append a durable, caller-owned issue comment.  The caller supplies a fully validated marker;
+    /// this boundary returns its identity so subsequent live reads can bind evidence to the exact write.
+    val postIssueComment:
+        transport: Transport.IGitHubTransport -> ref: FS.GG.Coord.Types.Ref -> body: string -> Errors.IoResult<int64>
+
     /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
     val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
 
