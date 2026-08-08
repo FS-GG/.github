@@ -126,11 +126,30 @@ module DeliveryApplication =
                Verified = readBoolean "verified" obligation }: Delivery.Obligation))
         |> List.ofSeq
 
+    let private obligationId = "[a-z0-9][a-z0-9_.-]*"
+    let private obligationKind = "[a-z0-9][a-z0-9_-]*"
+    let private deliveryHead = "[0-9A-Za-z._-]+"
+    let private fieldValue = "[^ ]+"
+
     let private obligationDeclaration =
-        Regex("^<!-- fsgg:delivery-obligation id=(?<id>[a-z0-9][a-z0-9_-]*) kind=(?<kind>[a-z0-9][a-z0-9_-]*) head=(?<head>[0-9A-Za-z._-]+) -->$", RegexOptions.Compiled)
+        Regex($"^<!-- fsgg:delivery-obligation id=(?<id>{obligationId}) kind=(?<kind>{obligationKind}) head=(?<head>{deliveryHead}) -->$", RegexOptions.Compiled)
 
     let private obligationReceipt =
-        Regex("^<!-- fsgg:delivery-receipt id=(?<id>[a-z0-9][a-z0-9_-]*) head=(?<head>[0-9A-Za-z._-]+) evidence=(?<evidence>[^ >]+) -->$", RegexOptions.Compiled)
+        Regex($"^<!-- fsgg:delivery-receipt id=(?<id>{obligationId}) head=(?<head>{deliveryHead}) evidence=(?<evidence>{fieldValue}) -->$", RegexOptions.Compiled)
+
+    let private declarationFields =
+        Regex($"^<!-- fsgg:delivery-obligation id=(?<id>{fieldValue}) kind=(?<kind>{fieldValue}) head=(?<head>{fieldValue}) -->$", RegexOptions.Compiled)
+
+    let private receiptFields =
+        Regex($"^<!-- fsgg:delivery-receipt id=(?<id>{fieldValue}) head=(?<head>{fieldValue}) evidence=(?<evidence>{fieldValue}) -->$", RegexOptions.Compiled)
+
+    let private malformedField (comment: Driver.ReviewComment) (kind: string) (fields: Regex) =
+        let matched = fields.Match(comment.Body.Trim())
+        if not matched.Success then Error $"delivery {kind} comment {comment.Id} has malformed body"
+        elif not (Regex($"^{obligationId}$").IsMatch(matched.Groups.["id"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed id"
+        elif kind = "obligation declaration" && not (Regex($"^{obligationKind}$").IsMatch(matched.Groups.["kind"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed kind"
+        elif not (Regex($"^{deliveryHead}$").IsMatch(matched.Groups.["head"].Value)) then Error $"delivery {kind} comment {comment.Id} has malformed head"
+        else Error $"delivery {kind} comment {comment.Id} is malformed"
 
     let obligationsFromComments (headSha: string) (comments: Driver.ReviewComment list) : Result<Delivery.Obligation list, string> =
         let declarations = comments |> List.filter (fun comment -> comment.Body.StartsWith "<!-- fsgg:delivery-obligation")
@@ -146,7 +165,7 @@ module DeliveryApplication =
                 declarations
                 |> List.map (fun comment ->
                     let matched = obligationDeclaration.Match(comment.Body.Trim())
-                    if not matched.Success then Error "a delivery obligation declaration is malformed"
+                    if not matched.Success then malformedField comment "obligation declaration" declarationFields
                     elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation declaration is stale"
                     else Ok(matched.Groups.["id"].Value, matched.Groups.["kind"].Value))
             let firstError values = values |> List.tryPick (function Error error -> Some error | Ok _ -> None)
@@ -161,7 +180,7 @@ module DeliveryApplication =
                         receipts
                         |> List.map (fun comment ->
                             let matched = obligationReceipt.Match(comment.Body.Trim())
-                            if not matched.Success then Error "a delivery obligation receipt is malformed"
+                            if not matched.Success then malformedField comment "obligation receipt" receiptFields
                             elif matched.Groups.["head"].Value <> headSha then Error "a delivery obligation receipt is stale"
                             else Ok(matched.Groups.["id"].Value, matched.Groups.["evidence"].Value))
                     match parsedReceipts |> firstError with
