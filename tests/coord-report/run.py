@@ -9,11 +9,28 @@ CLIENT = ROOT / "scripts/fsgg-coord-report"
 
 EVENT_SCHEMA = "fsgg.coord.session-event/1"
 CAPACITY_SCHEMA = "fsgg.coord.lane-capacity/1"
+LANE_SNAPSHOT_SCHEMA = "fsgg.coord.lane-snapshot/1"
+COORDINATION = {"owner":"FS-GG","number":1,"title":"Coordination"}
 
 def run(*args, env=None, check=True):
     return subprocess.run([str(CLIENT), *args], text=True, capture_output=True, check=check, env=env)
 
-def write(path, value): path.write_text(json.dumps(value)); return str(path)
+def scoped(snapshot):
+    if "schema" in snapshot:
+        return snapshot
+    result = {"schema":LANE_SNAPSHOT_SCHEMA,"coordinationProject":COORDINATION,**snapshot}
+    for lane in result.get("lanes", []):
+        lane.setdefault("coordinationProject", COORDINATION)
+        lane.setdefault("board", {"status":lane.get("boardStatus", "unknown"),"observedAt":"2026-08-08T00:00:00Z"})
+        observed = {"state":lane.get("workState", "unknown"),"observedAt":"2026-08-08T00:00:00Z"}
+        if lane.get("worker") is not None: observed["claimHolder"] = lane["worker"]
+        if lane.get("pr") is not None: observed["pr"] = lane["pr"]
+        lane.setdefault("observed", observed)
+    return result
+
+def write(path, value):
+    if path.name == "lanes.json": value = scoped(value)
+    path.write_text(json.dumps(value)); return str(path)
 
 def capacity(implementation, review, active, open_slots, *reasons):
     return {"schema":CAPACITY_SCHEMA,"implementationCapacity":implementation,"reviewCapacity":review,
@@ -57,6 +74,8 @@ for runtime in (".claude", ".agents"):
         body = (ROOT / runtime / "skills" / canonical / "SKILL.md").read_text()
         assert "fsgg-coord-report" in body and "already-cached lane snapshot" in body
         assert "typed lane-capacity facts" in body and "indeterminate receipt" in body and "derived cache" in body
+        if canonical == "drive-board":
+            assert "Coordination project identity" in body and "append-only correction" in body
         for variant in variants:
             inherited = (ROOT / runtime / "skills" / variant / "SKILL.md").read_text()
             assert f"[{canonical}]" in inherited
@@ -73,7 +92,7 @@ with tempfile.TemporaryDirectory() as temp:
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"reviewed","eventKey":"reviewed","item":".github#1","fromStatus":"In progress","toStatus":"In review","activity":"review complete"})
     # Retry is deduplicated, restart only rereads the durable ledger, and supplied stale facts do not network.
     out = run("--state-dir", str(state), "show", "--session", "demo", "--event", str(event), "--lanes", str(lanes), "--mode", "json").stdout
-    doc = json.loads(out); assert doc["schema"] == "fsgg.coord.session-report/1"; assert doc["sessionTotals"]["done"] == 1
+    doc = json.loads(out); assert doc["schema"] == "fsgg.coord.session-report/2"; assert doc["sessionTotals"]["done"] == 1
     assert doc["snapshot"] == {"freshness":"stale","network":"not-used"}
     trace_env = {**os.environ,"FSGG_COORD_REPORT_CACHE_TRACE":"1"}
     # A fresh process reuses the exact schema/HWM/snapshot cache; derive() is only reached on a miss.
@@ -81,7 +100,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert cached.stderr.strip() == "fsgg-coord-report: cache hit"
     cache_file = state / "sessions" / "demo.derived.json"
     cached_value = json.loads(cache_file.read_text())
-    assert set(cached_value["derived"]) == {"session","lanes","laneCapacity","sessionTotals","snapshot"}
+    assert set(cached_value["derived"]) == {"session","lanes","laneCapacity","sessionTotals","snapshot","coordinationProject"}
 
     # A real append changes the high-water mark; retrying the identical heartbeat does not grow it and hits.
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"cache-hwm","item":".github#1"})
@@ -130,7 +149,6 @@ with tempfile.TemporaryDirectory() as temp:
     def scalars(value):
         if isinstance(value, dict):
             for key, child in value.items():
-                yield key
                 yield from scalars(child)
         elif isinstance(value, list):
             for child in value: yield from scalars(child)
@@ -187,6 +205,43 @@ with tempfile.TemporaryDirectory() as temp:
     assert observed_kinds == {"slot-cap-reached","review-slots-reserved","review-slots-in-use","touch-set-overlap",
         "no-schedulable-item","rest-reserve","rest-backoff","claim-contention","indeterminate-claim-receipt",
         "human-blocker","decision-blocker"}
+
+    # Scope is an explicit, typed project identity: a cross-project lane cannot be rendered into this ledger.
+    scoped_snapshot = scoped({"freshness":"current","capacity":capacity(3,2,1,4,reason("no-schedulable-item","fixture")),"lanes":[
+        {"item":".github#11","repository":"FS-GG/.github","activity":"aligned","board":{"status":"In progress","observedAt":"2026-08-08T01:00:00Z"},
+         "observed":{"state":"in-progress","observedAt":"2026-08-08T01:00:01Z","claimHolder":"wren","worktree":"/tmp/item","branch":"item/11-a","pr":"#12","head":"abc","checkGate":"pending"}},
+        {"item":".github#12","repository":"FS-GG/.github","activity":"repair ahead","board":{"status":"In review","observedAt":"2026-08-08T01:00:00Z"},
+         "observed":{"state":"local-repair","observedAt":"2026-08-08T01:00:02Z","claimHolder":"wren","worktree":"/tmp/item","branch":"item/12-a","pr":"#13","head":"def","checkGate":"red"}},
+        {"item":".github#13","repository":"FS-GG/.github","activity":"orphan","board":{"status":"In progress","observedAt":"2026-08-08T01:00:00Z"},
+         "observed":{"state":"in-progress","observedAt":"2026-08-08T01:00:03Z","claimHolder":"orphan"}},
+        {"item":".github#14","repository":"FS-GG/.github","activity":"unclaimed repair","board":{"status":"In progress","observedAt":"2026-08-08T01:00:00Z"},
+         "observed":{"state":"local-repair","observedAt":"2026-08-08T01:00:04Z","worktree":"/tmp/item","branch":"item/14-a","head":"fed"}},
+        {"item":".github#15","repository":"FS-GG/.github","activity":"unknown","board":{"status":"unknown","observedAt":"2026-08-08T01:00:00Z"},
+         "observed":{"state":"unknown","observedAt":"2026-08-08T01:00:05Z"}},
+    ]})
+    write(lanes, scoped_snapshot)
+    observed_doc = json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
+    assert [lane["disagreement"] for lane in observed_doc["lanes"]] == ["aligned","projection-lag","orphan-claim","work-without-claim","unknown"]
+    assert observed_doc["coordinationProject"] == COORDINATION
+    wrong_scope = json.loads(json.dumps(scoped_snapshot)); wrong_scope["lanes"][0]["coordinationProject"] = {"owner":"EHotwagner","number":75,"title":"Rogue3"}
+    write(lanes, wrong_scope)
+    rejected_scope = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",check=False)
+    assert rejected_scope.returncode != 0 and "does not match" in rejected_scope.stderr
+
+    # Corrections are append-only but remove a bad source event from effective session totals.
+    write(lanes, scoped_snapshot)
+    run("--state-dir",str(state),"start","--session","correction","--at","2026-08-08T02:00:00Z")
+    write(event,{"eventSchema":EVENT_SCHEMA,"kind":"reviewed","eventKey":"wrong-project-review","item":"EHotwagner/rogue3#75"})
+    run("--state-dir",str(state),"emit","--session","correction","--event",str(event),"--lanes",str(lanes),"--mode","json")
+    write(event,{"eventSchema":EVENT_SCHEMA,"kind":"corrected","eventKey":"remove-wrong-project-review","supersedes":"wrong-project-review","item":"EHotwagner/rogue3#75"})
+    run("--state-dir",str(state),"emit","--session","correction","--event",str(event),"--lanes",str(lanes),"--mode","json")
+    write(event,{"eventSchema":EVENT_SCHEMA,"kind":"repaired","eventKey":"repair","item":".github#12"})
+    run("--state-dir",str(state),"emit","--session","correction","--event",str(event),"--lanes",str(lanes),"--mode","json")
+    write(event,{"eventSchema":EVENT_SCHEMA,"kind":"reconciled","eventKey":"reconcile","item":".github#12"})
+    run("--state-dir",str(state),"emit","--session","correction","--event",str(event),"--lanes",str(lanes),"--mode","json")
+    correction_doc = json.loads(run("--state-dir",str(state),"show","--session","correction","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
+    assert correction_doc["sessionTotals"]["reviewed"] == 0 and correction_doc["sessionTotals"]["corrected"] == 1
+    assert correction_doc["sessionTotals"]["repaired"] == correction_doc["sessionTotals"]["reconciled"] == 1
 
     # Subject mutation for the former len()-based width gate: code points fit while display cells overflow.
     old_gate_mutant = "│" + "界" * 20 + "│"

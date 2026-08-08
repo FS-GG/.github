@@ -22,6 +22,12 @@ handoff, check that each assertion has one of those two forms; a missing field i
 evidence, not permission for the receiver to assume the claim was verified. This binds the host when it
 relays a worker's or critic's assertion as well as the original author.
 
+When emitting the session report, build its snapshot from the project-scoped `who --repo` and board
+receipts, not an organization-wide claim scan. Bind the exact Coordination project identity to every
+lane. Preserve both board and execution timestamps/evidence; a mismatch is a named report state, not a
+reason to overwrite either fact. If a prior event used the wrong scope, append a typed correction that
+supersedes it and continue from the corrected effective totals.
+
 <!-- BEGIN GENERATED: fsgg-protocol:wave-policy -->
 *Generated operational fact: the parser and driver consume this policy; do not restate its numbers.*
 
