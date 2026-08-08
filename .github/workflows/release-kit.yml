@@ -120,11 +120,11 @@ name: release-kit
 #
 # THE CREDENTIAL IS NOT WHAT BLOCKS ANY OF THIS (#1776 AC3). The `fs-gg-cross-repo-dispatch` App and
 # its org secrets were provisioned by .github#21, which is closed, and four workflows in this repo
-# mint tokens from them today. Which SCOPES that installation carries was #1923's question, and it is
-# ANSWERED there rather than restated here: dashboard-tick-selftest.yml's `credential` job mints with
-# `permission-issues: write` — a mint GitHub REFUSES when the installation lacks the scope — and then
-# reads every roster-derived receiver's dashboard back through that token. One assertion, on a
-# schedule, rather than two drifting paragraphs.
+# mint tokens from them today. Which SCOPES that installation carries is mechanised by
+# permission-coherence.yml (#2242): PRs compare every `permission-*` App-token input to its pinned,
+# reviewed grant inventory, and its scheduled credentialed arm compares that inventory to GitHub's
+# live installation record. A missing grant is therefore a red pre-merge check, not a second prose
+# assertion here or a runtime 422 after publication has begun.
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 on:
