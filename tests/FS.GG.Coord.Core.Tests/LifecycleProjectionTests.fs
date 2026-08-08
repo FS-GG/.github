@@ -79,6 +79,13 @@ module LifecycleProjectionTests =
         | result -> failwithf "expected contradictory event to be withheld, got %A" result
 
     [<Fact>]
+    let ``#2264 lifecycle watermark is durable and selects the newest valid receipt`` () =
+        let old : LifecycleProjection.Watermark = { ObservedAt = 4L; Status = InProgress }
+        let latest : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview }
+        let comments = [ "ordinary comment"; LifecycleProjection.watermarkMarker old; "<!-- fsgg:lifecycle-watermark v=1 observedAt=bad status=Done -->"; LifecycleProjection.watermarkMarker latest ]
+        Assert.Equal(Some latest, LifecycleProjection.tryWatermark comments)
+
+    [<Fact>]
     let ``#2264 unresolved blocker wins over an implementation claim`` () =
         let blocker = { Ref = None; Raw = "human action"; State = BlockerUnparseable }
         let value = { observation with Blockers = fact [ blocker ] }

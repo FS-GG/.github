@@ -1,5 +1,6 @@
 namespace FS.GG.Coord
 
+open System
 open FS.GG.Coord.Types
 
 /// One pure status projection shared by webhook and scheduled-reconciliation callers.
@@ -22,6 +23,39 @@ module LifecycleProjection =
     /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
     /// arrived late a no-op rather than an opportunity to re-derive an older column value.
     type Watermark = { ObservedAt: int64; Status: BoardStatus }
+
+    /// The comment-shaped receipt is deliberately small and append-only.  Project fields can be
+    /// deferred and later repaired; this receipt is the durable ordering fact which says which
+    /// lifecycle observation was actually verified on the row.
+    let watermarkMarker watermark =
+        $"<!-- fsgg:lifecycle-watermark v=1 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} -->"
+
+    let tryWatermark (comments: string list) =
+        let status = function
+            | "Backlog" -> Some Backlog
+            | "Ready" -> Some Ready
+            | "In progress" -> Some InProgress
+            | "Blocked" -> Some Blocked
+            | "In review" -> Some InReview
+            | "Done" -> Some Done
+            | _ -> None
+
+        comments
+        |> List.choose (fun body ->
+            let marker = "<!-- fsgg:lifecycle-watermark v=1 observedAt="
+            let start = body.IndexOf(marker, StringComparison.Ordinal)
+            if start < 0 then None
+            else
+                let tail = body.Substring(start + marker.Length)
+                let split = tail.IndexOf(" status=", StringComparison.Ordinal)
+                let close = tail.IndexOf(" -->", StringComparison.Ordinal)
+                if split < 1 || close < split then None
+                else
+                    match Int64.TryParse(tail.Substring(0, split)), status (tail.Substring(split + 8, close - split - 8)) with
+                    | (true, observedAt), Some value -> Some { ObservedAt = observedAt; Status = value }
+                    | _ -> None)
+        |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
+        |> List.tryHead
 
     let private latest observation =
         [ observation.Claim.ObservedAt; observation.PullRequest.ObservedAt; observation.Blockers.ObservedAt

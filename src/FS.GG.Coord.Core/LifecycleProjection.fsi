@@ -21,6 +21,12 @@ module LifecycleProjection =
     /// Persisted ordering receipt for lifecycle projections.
     type Watermark = { ObservedAt: int64; Status: BoardStatus }
 
+    /// Stable, append-only receipt written only after a fresh board verification.
+    val watermarkMarker: Watermark -> string
+
+    /// Reads the newest valid durable receipt from issue comments.
+    val tryWatermark: string list -> Watermark option
+
     /// Computes the newest coherent lifecycle status. Facts older than the newest observation are
     /// deliberately withheld, so delayed webhook delivery cannot regress the Project row.
     val project: Observation -> Result

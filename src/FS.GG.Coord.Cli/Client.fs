@@ -1952,15 +1952,16 @@ module Client =
                 // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
                 // facts again at the reconciliation boundary and send every coherent observation through
                 // the typed projector before handing its one repair to the existing verified write path.
-                // Comments are read only for terminal/review-shaped rows, where delivery evidence can
-                // change the answer; this keeps an hourly catch-up bounded instead of multiplying REST by
-                // every Ready row on the board.
-                let lifecycleChores =
+                // Comments are read for the terminal/review-shaped rows.  Besides delivery evidence they
+                // carry the verified projection watermark.  A Ready row has no prior lifecycle write to
+                // regress, so not reading it keeps the scheduled fallback bounded rather than turning it
+                // into a REST request per dormant board item.
+                let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
-                    |> List.choose (fun item ->
+                    |> List.fold (fun (chores, watermarks) item ->
                         let needsDeliveryRead = item.State = Closed || item.Status = InReview
                         let delivery =
-                            if not needsDeliveryRead then Some ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery)
+                            if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
                             else
                                 match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
                                 | Error _ -> None
@@ -1968,12 +1969,13 @@ module Client =
                                     let obligations = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-obligation "))
                                     let receipts = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-receipt "))
                                     Some
-                                        ({ Outstanding = not (List.isEmpty obligations) && List.isEmpty receipts
-                                           DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery)
+                                        (({ Outstanding = not (List.isEmpty obligations) && List.isEmpty receipts
+                                            DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery),
+                                         LifecycleProjection.tryWatermark comments)
 
                         match delivery with
-                        | None -> None // an unreadable fact withholds its write; scheduled reconciliation retries.
-                        | Some delivery ->
+                        | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
+                        | Some(delivery, watermark) ->
                             let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             let pullRequest =
                                 item.ItemPr
@@ -1984,9 +1986,14 @@ module Client =
                                   Blockers = { ObservedAt = observedAt; Value = item.Blockers }
                                   Delivery = { ObservedAt = observedAt; Value = delivery }
                                   Issue = { ObservedAt = observedAt; Value = item.State } }
-                            match LifecycleProjection.project observation with
-                            | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
-                            | LifecycleProjection.Withheld _ -> None)
+                            match LifecycleProjection.advance watermark observation with
+                            | LifecycleProjection.Project(destination, timestamp) ->
+                                match Chore.lifecycleProjection item destination with
+                                | Some chore ->
+                                    chore :: chores,
+                                    Map.add item.Ref ({ ObservedAt = timestamp; Status = destination }: LifecycleProjection.Watermark) watermarks
+                                | None -> chores, watermarks
+                            | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
 
                 let legacyChores = Chore.derive lifecycleItems
 
@@ -2391,11 +2398,27 @@ module Client =
                                       | Ok Board.Written ->
                                           match verifyWrites chore writes with
                                           | Ok observed ->
-                                              match opts.Render with
-                                              | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
-                                              | Json -> ()
-
-                                              { reconcileRow chore (Some Written) with Observed = Some observed }
+                                              // The write acknowledgement is not the ordering receipt.  Store
+                                              // the watermark only after the fresh scan above proved the row
+                                              // contains the projected status; otherwise a late event could
+                                              // be suppressed by a receipt for a mutation that never landed.
+                                              match chore.Kind, Map.tryFind chore.Subject lifecycleWatermarks with
+                                              | Chore.LifecycleProjectionLag _, Some watermark ->
+                                                  match Writes.lifecycleWatermark ctx.Transport chore.Subject (LifecycleProjection.watermarkMarker watermark) with
+                                                  | Error e ->
+                                                      failed <- true
+                                                      eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} was verified but its lifecycle watermark could not be persisted: %s{Errors.explain e}"
+                                                      { reconcileRow chore (Some(Failed "verified status has no durable lifecycle watermark")) with Observed = Some observed }
+                                                  | Ok () ->
+                                                      match opts.Render with
+                                                      | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                      | Json -> ()
+                                                      { reconcileRow chore (Some Written) with Observed = Some observed }
+                                              | _ ->
+                                                  match opts.Render with
+                                                  | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                  | Json -> ()
+                                                  { reconcileRow chore (Some Written) with Observed = Some observed }
                                           | Error(observed, reason) ->
                                               eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
                                               failed <- true
