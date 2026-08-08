@@ -28,6 +28,8 @@ module Options =
         | CommandContractCmd
         /// Validate an intake draft, or report that its live transaction is not yet available.
         | IntakeCmd
+        /// Record, inspect, or validate an explicit delivery-route receipt.
+        | RouteCmd
 
         // ---- the client command surface (ADR-0040 Phase D — wired to the IO layer) --------------------
 
