@@ -3386,7 +3386,7 @@ module Client =
                     // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
                     // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
                     // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
-                    let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
+                    let emitClaimReceipt (kind: string) (held: Writes.Held) (statusOutcome, statusPreserved) =
                         let markerObserved, markerId =
                             match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
                             | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
@@ -3420,18 +3420,23 @@ module Client =
                                     None, "failed"
 
                         let statusWrite =
-                            match statusOutcome with
-                            | Ok Board.Written -> "written"
-                            | Ok Board.Deferred -> "deferred"
-                            | Ok Board.NotOnBoard -> "not-on-board"
-                            | Error _ -> "failed"
+                            if statusPreserved then
+                                "preserved"
+                            else
+                                match statusOutcome with
+                                | Ok Board.Written -> "written"
+                                | Ok Board.Deferred -> "deferred"
+                                | Ok Board.NotOnBoard -> "not-on-board"
+                                | Error _ -> "failed"
 
                         let pending =
                             match Cache.pending () with
                             | Ok entries -> Some(List.length entries)
                             | Error _ -> None
 
-                        let converged = markerObserved && status = Some "In progress"
+                        let converged =
+                            markerObserved
+                            && (status = Some "In progress" || (kind = "renewed" && statusPreserved && status = Some "In review"))
 
                         let receipt: ClaimReceipt =
                             { Ref = ref
@@ -3460,13 +3465,15 @@ module Client =
                                 | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                             if converged then
-                                printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
+                                let lifecycle = if statusPreserved then "In review preserved" else "Status=In progress"
+                                printfn "%sboard confirmed: marker=%d, %s)" humanPrefix held.MarkerId lifecycle
                             else
                                 let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
                                 printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
                                 eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
 
-                        boardWriteNote ref "Status" "In progress" statusOutcome
+                        if not statusPreserved then
+                            boardWriteNote ref "Status" "In progress" statusOutcome
                         KitDigest.declaredWarn ctx.Transport ref
                         ExitGreen
 
@@ -3496,10 +3503,25 @@ module Client =
 
                     // Move the board column to In progress — the ONE board write, through the queue-aware
                     // path so an exhausted budget defers rather than drops (#510).
-                    let setInProgress () =
+                    let setInProgress preserveReview () =
+                        let write b =
+                            Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+
                         match board.Force() with
-                        | Error e -> Error e
-                        | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                        | Error e -> Error e, false
+                        | Ok b when not preserveReview ->
+                            // A fresh win/steal already owes exactly the pre-claim read plus the
+                            // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
+                            // only an idempotent renewal can preserve an existing review state.
+                            write b, false
+                        | Ok b ->
+                            // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
+                            // from In review back to In progress hides an active critic round, so preserve
+                            // that deliberate lifecycle state and report it distinctly in the receipt.
+                            match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                            | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
+                            | _ ->
+                                write b, false
 
                     let force =
                         if opts.Force then
@@ -3558,20 +3580,20 @@ module Client =
                     | Error e -> failWith opts.Render e
                     | Ok(Writes.Won(held, collected)) ->
                         announceCollected collected
-                        emitClaimReceipt "claimed" held (setInProgress ())
+                        emitClaimReceipt "claimed" held (setInProgress false ())
                     | Ok(Writes.Stolen(held, _, collected)) ->
                         // `announceTheft` has already run — it fired from inside the CAS, the moment the
                         // holder's marker went. All that is left here is the receipt, which reports the
                         // steal as a steal so a scripted caller can tell it from an ordinary win.
                         announceCollected collected
-                        emitClaimReceipt "stolen" held (setInProgress ())
+                        emitClaimReceipt "stolen" held (setInProgress false ())
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
                         // second (a `take` retry, or a worker beating its own lease). Any stale debris it
                         // claimed over was still collected, so tell the evicted workers exactly as a fresh
                         // win does.
                         announceCollected collected
-                        let outcome = setInProgress ()
+                        let outcome = setInProgress true ()
 
                         // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
                         // it renewed a marker on the strength of its worker id alone — and a marker bearing
