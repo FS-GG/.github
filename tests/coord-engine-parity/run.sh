@@ -3309,11 +3309,14 @@ oip() {  # oip <env-assignments...> -- <engine args...>
   OUT="$(mktemp)"
   env "${envs[@]}" python3 "$HERE/openissuespage_server.py" >"$OUT" 2>&1 & SRV=$!
   PORT=""; for _ in $(seq 1 50); do PORT="$(head -n1 "$OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
-  if [ -z "$PORT" ]; then OIP_OUT="fixture bound no port: $(cat "$OUT")"; OIP_RC=99
+  if [ -z "$PORT" ]; then OIP_OUT="fixture bound no port: $(cat "$OUT")"; OIP_RC=99; OIP_GRAPHQL=not-measured
   else
+    OIP_GRAPHQL_BEFORE="$(curl -fsS "http://127.0.0.1:$PORT/_graphql-reads" | jq -r '.graphqlReads')"
     OIP_OUT="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
                  FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
                  "$ENGINE" "$@" 2>&1)"; OIP_RC=$?
+    OIP_GRAPHQL_AFTER="$(curl -fsS "http://127.0.0.1:$PORT/_graphql-reads" | jq -r '.graphqlReads')"
+    OIP_GRAPHQL=$((OIP_GRAPHQL_AFTER - OIP_GRAPHQL_BEFORE))
   fi
   kill "$SRV" 2>/dev/null; rm -f "$OUT"
 }
@@ -3392,13 +3395,14 @@ printf '%s' "$OIP_OUT" | grep -q 'DISJOINT' \
   && ok "#1794 CONTROL: withhold the Link header and the SAME command answers DISJOINT — the boundary is real, and crossing it is what the leg above proves" \
   || bad "#1794 CONTROL: without pagination this must go DISJOINT, or the test is not testing pagination" "rc=$OIP_RC: $OIP_OUT"
 
-# ---- COST: this route still reads ZERO GraphQL ------------------------------------------------------
-# .github#1779 measured this scan from 24/27/31 GraphQL points to 0. The fixture serves NO `/graphql`
-# handler at all — a POST there 500s — so the clean run above is itself the proof that the board query has
-# not crept back in. Asserted explicitly so a regression reads as a cost finding, not a mystery failure.
+# ---- COST: this route reads the one #2250 cold board page --------------------------------------------
+# #2250 makes the collision gate use the scheduler's board universe for CLOSED/non-Done holders.  With a
+# fresh cache that is three GraphQL requests: two bootstrap resolvers and one board page.  This is asserted
+# beside #1794's pagination/body subjects so every production-route fixture carries the changed cost model.
 oip -- overlap 'FS.GG.SDD#501' --active
-refute "#1794/#1779: the collision scan costs 0 GraphQL — the fixture serves no /graphql and the scan never asks" \
-       "unhandled POST" "FS\.GG\.SDD#501"
+[ "$OIP_GRAPHQL" = 3 ] \
+  && ok "#1794/#2250: the collision scan costs 3 cold GraphQL reads (bootstrap plus one board page)" \
+  || bad "#1794/#2250: the cold board cost must be exactly 3 GraphQL reads" "reads=$OIP_GRAPHQL rc=$OIP_RC: $OIP_OUT"
 
 # ---- THE UNREADABLE ELEMENT: fail CLOSED, and only where it matters --------------------------------
 # `TouchSet.parse ""` answers `Undeclared`; `TouchSet.conflicts` reads `Undeclared` as colliding with

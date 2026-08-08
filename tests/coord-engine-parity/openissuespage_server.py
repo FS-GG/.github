@@ -77,10 +77,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# The board. `overlap --active` reads NO GraphQL since .github#1779 (measured at 0 points), so there is
-# no project query here at all — only the issue body, the open-issue list, and one marker read per
-# colliding row. If this fixture ever needs a `/graphql` handler, that is a COST REGRESSION and the
-# missing-handler 500 is the alarm.
+# The board. #2250 deliberately adds the scheduler's cached board universe to `overlap --active`, so the
+# post-merge window (a CLOSED, not-Done holder) cannot be DISJOINT here while `take` refuses it.  This
+# fixture has no such holder, but it must still serve and COUNT the one cold board page: otherwise a
+# pagination/body-read test turns into an unrelated 500 before it can reach its subject.
 BODIES = {
     501: "Paths: src/Scene/**",
     502: "Paths: docs/**",
@@ -89,6 +89,35 @@ BODIES = {
 }
 PAGE1 = [501, 502]
 PAGE2 = [503, 504]
+RATE = {"cost": 1, "remaining": 4977}
+GRAPHQL_READS = 0
+
+
+def board_items():
+    nodes = []
+    for n in PAGE1 + PAGE2:
+        nodes.append({
+            "status": {"name": "Ready"},
+            "blockedBy": None,
+            "content": {"__typename": "Issue", "number": n, "title": f"item {n}", "state": "OPEN",
+                        "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}},
+        })
+    return {"data": {"organization": {"projectV2": {"items": {
+        "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}}, "rateLimit": RATE}}
+
+
+def graphql(query):
+    if "projectsV2" in query:
+        return {"data": {"organization": {"projectsV2": {"nodes": [
+            {"number": 12, "title": "Coordination", "id": "PVT_coord"}]}}, "rateLimit": RATE}}
+    if "fields(first" in query:
+        return {"data": {"organization": {"projectV2": {"fields": {"nodes": [
+            {"id": "PVTSSF_status", "name": "Status", "dataType": "SINGLE_SELECT",
+             "options": [{"id": "opt_ready", "name": "Ready"}, {"id": "opt_done", "name": "Done"}]},
+            {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"}]}}}, "rateLimit": RATE}}
+    if "items(first" in query:
+        return board_items()
+    return None
 
 # Live claim markers (a claim marker IS a comment). 501 is the probe and holds nothing; 504 declares a
 # touch-set but nobody is holding it — colliding TOKENS are not a reservation.
@@ -192,16 +221,29 @@ class H(BaseHTTPRequestHandler):
         if path.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})
 
+        if path.rstrip("/") == "/_graphql-reads":
+            return self._send(200, {"graphqlReads": GRAPHQL_READS})
+
         self._send(500, {"message": f"unhandled GET {path}"})
 
     def do_POST(self):
-        # No GraphQL handler ON PURPOSE — see the note by BODIES. A 500 here means the collision scan
-        # started reading the board again, which is the cost regression .github#1779 measured away.
         try:
-            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            raw = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
         except (TypeError, ValueError):
-            pass
-        self._send(500, {"message": f"unhandled POST {self.path} — this route must cost 0 GraphQL"})
+            raw = ""
+
+        if self.path.split("?", 1)[0].rstrip("/") == "/graphql":
+            global GRAPHQL_READS
+            GRAPHQL_READS += 1
+            try:
+                query = json.loads(raw).get("query", "")
+            except json.JSONDecodeError:
+                return self._send(500, {"errors": [{"message": "bad GraphQL request"}]})
+
+            answer = graphql(query)
+            return self._send(200, answer if answer is not None else {"errors": [{"message": f"unhandled {query[:60]}"}]})
+
+        self._send(500, {"message": f"unhandled POST {self.path}"})
 
 
 srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
