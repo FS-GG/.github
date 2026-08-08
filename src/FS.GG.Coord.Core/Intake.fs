@@ -16,6 +16,14 @@ module Intake =
     let private required field value =
         if System.String.IsNullOrWhiteSpace value then Some { Field = field; Detail = "is required" } else None
 
+    let private validPath (path: string) =
+        not (System.String.IsNullOrWhiteSpace path)
+        && not (path.StartsWith "/")
+        && not (path.Contains "\\")
+        && path.Split('/') |> Array.forall (fun segment -> segment <> "" && segment <> "." && segment <> "..")
+
+    /// Validate the durable facts that do not require a live repository read.  The IO layer owns
+    /// ownership candidates, duplicate completeness, path existence and board/claim predicates.
     let validate (draft: Draft) =
         let findings =
             [ if draft.Schema <> Schema then yield { Field = "schema"; Detail = $"must be '{Schema}'" }
@@ -23,4 +31,16 @@ module Intake =
                   match required field value with | Some finding -> yield finding | None -> ()
               if List.isEmpty draft.Paths then yield { Field = "paths"; Detail = "must declare at least one path" }
               if draft.Paths |> List.exists System.String.IsNullOrWhiteSpace then yield { Field = "paths"; Detail = "must not contain an empty path" } ]
+            @ [ if draft.Owner.Contains "/" || draft.Owner.Contains " " then yield { Field = "owner"; Detail = "must be an owner name, not a repository ref" }
+                if draft.Repository.Contains "/" || draft.Repository.Contains " " then yield { Field = "repository"; Detail = "must be a repository name, not a repository ref" }
+                if draft.Id |> Seq.exists (fun c -> not (System.Char.IsLetterOrDigit c || c = '-' || c = '_' || c = '.')) then
+                    yield { Field = "id"; Detail = "must contain only letters, digits, '-', '_' or '.'" }
+                if draft.Paths |> List.exists (validPath >> not) then
+                    yield { Field = "paths"; Detail = "must be relative repository paths without empty, '.' or '..' segments" }
+                match draft.Disposition with
+                | None -> yield { Field = "disposition"; Detail = "must explicitly be create or reuse" }
+                | Some _ -> ()
+                match draft.Status with
+                | "Backlog" | "Ready" | "Blocked" -> ()
+                | _ -> yield { Field = "status"; Detail = "must be Backlog, Ready or Blocked" } ]
         if List.isEmpty findings then Ok draft else Error findings
