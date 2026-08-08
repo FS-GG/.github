@@ -63,6 +63,11 @@ ISSUES = {
     # set can select, because there is no row. It declares `src/Verify/**`, the same touch-set #44 does.
     46: {"body": "A claim that never reached the board.\n\nPaths: src/Verify/**",
          "state": "OPEN", "status": "Ready", "off_board": True},
+    # .github#2211 — an organization-board row whose issue belongs to another owner.  GitHub exposes
+    # this row from the board side, but the issue-side `projectItems` connection names only rogue3's
+    # own project.  The write legs use it to drive the compiled binary through that asymmetry.
+    96: {"body": "A cross-owner Coordination row.\n\nPaths: src/External/**",
+         "state": "OPEN", "status": "Backlog", "repo": "rogue3", "owner": "EHotwagner"},
 }
 
 
@@ -72,9 +77,13 @@ def off_board(n):
 def repo_of(n):
     return ISSUES.get(n, {}).get("repo", "FS.GG.SDD")
 
+
+def owner_of(n):
+    return ISSUES.get(n, {}).get("owner", "FS-GG")
+
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
-COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 1033: []}
+COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 96: [], 1033: []}
 NEXT_COMMENT_ID = [900]
 NEXT_ROOM_NUMBER = [700]
 def now_iso():
@@ -180,7 +189,7 @@ def board_items():
                     "number": n,
                     "title": f"item {n}",
                     "state": issue["state"],
-                    "repository": {"nameWithOwner": f"FS-GG/{repo_of(n)}"},
+                    "repository": {"nameWithOwner": f"{owner_of(n)}/{repo_of(n)}"},
                 },
             }
         )
@@ -206,6 +215,30 @@ def graphql(query: str, variables: dict):
         }
     if "fields(first" in query:
         return project_fields()
+    if "node(id: $projectId)" in query:
+        # External-owner item-id lookup: walk the Coordination board itself, because the issue-side
+        # connection below deliberately cannot see #96's organization-board placement.
+        nodes = []
+        for n, issue in sorted(ISSUES.items()):
+            if not off_board(n):
+                nodes.append({"id": f"PVTI_{n}", "content": {
+                    "number": n,
+                    "repository": {"nameWithOwner": f"{owner_of(n)}/{repo_of(n)}"},
+                }})
+        return {"data": {"node": {"items": {
+            "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}},
+            "rateLimit": RATE_LIMIT}}
+    if "node(id: $itemId)" in query:
+        item_id = str(variables.get("itemId", ""))
+        try:
+            n = int(item_id.removeprefix("PVTI_"))
+            issue = ISSUES[n]
+        except (KeyError, ValueError):
+            return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
+        field = variables.get("field")
+        value = issue.get("blocked_by") if field == "Blocked by" else issue.get("status")
+        field_value = ({"text": value} if field == "Blocked by" else {"name": value}) if value else None
+        return {"data": {"node": {"fieldValueByName": field_value}, "rateLimit": RATE_LIMIT}}
     if "items(first" in query:
         with LOCK:
             BOARD_READS[0] += 1
@@ -243,7 +276,14 @@ def graphql(query: str, variables: dict):
         # int(): the wire carries the number as a JSON number, so Python hands us 46.0, and 46.0 misses an
         # int-keyed lookup without erroring — which would silently put the off-board issue back on it.
         n = int(variables.get("number", 0))
-        nodes = [] if off_board(n) else [{"id": f"PVTI_{n}", "project": {"number": 12}}]
+        if off_board(n):
+            nodes = []
+        elif owner_of(n) != "FS-GG":
+            # This is the live issue-side shape for EHotwagner/rogue3#96: its personal project is
+            # visible, while the FS-GG organization board's row is absent.
+            nodes = [{"id": f"PVTI_user_{n}", "project": {"number": 7}}]
+        else:
+            nodes = [{"id": f"PVTI_{n}", "project": {"number": 12}}]
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": nodes}}},
@@ -286,7 +326,12 @@ def graphql(query: str, variables: dict):
             if item_id.startswith("PVTI_"):
                 try:
                     n = int(item_id.removeprefix("PVTI_"))
+                    # Single-field writes carry the selected option in variables. Batch writes inline
+                    # it in the GraphQL document, so read only the inline option values as a separate
+                    # shape — matching arbitrary document text would make unrelated batch fields look
+                    # like Status writes.
                     value = json.dumps(variables)
+                    inline_options = re.findall(r'singleSelectOptionId:\s*"([^"]+)"', query)
                     if n == 47 and RECONCILE_47_MISSING[0] > 0:
                         RECONCILE_47_MISSING[0] -= 1
                         ISSUES[n]["off_board"] = True
@@ -296,10 +341,14 @@ def graphql(query: str, variables: dict):
                     elif n == 47 and "f0:" in query and "f1:" in query:
                         ISSUES[n]["status"] = "Ready"
                         ISSUES[n]["blocked_by"] = ""
-                    elif "opt_done" in value:
+                    elif "opt_done" in value or "opt_done" in inline_options:
                         ISSUES[n]["status"] = "Done"
-                    elif "opt_ready" in value:
+                    elif "opt_wip" in value or "opt_wip" in inline_options:
+                        ISSUES[n]["status"] = "In progress"
+                    elif "opt_ready" in value or "opt_ready" in inline_options:
                         ISSUES[n]["status"] = "Ready"
+                    elif "opt_backlog" in value or "opt_backlog" in inline_options:
+                        ISSUES[n]["status"] = "Backlog"
                 except (ValueError, KeyError):
                     pass
             if RECONCILE_45_PROJECTION[0] > 0 and "opt_done" in json.dumps(variables):
@@ -307,7 +356,9 @@ def graphql(query: str, variables: dict):
                 ISSUES[45]["status"] = "Done"
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
     if "addProjectV2ItemById" in query:
-        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_added"}}}}
+        # GitHub's mutation is idempotent.  The issue-side lookup above misses the external row, but
+        # adding it again returns the existing Coordination item, whose live Status must then be read.
+        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_96"}}}}
     return None
 
 

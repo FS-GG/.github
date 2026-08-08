@@ -552,6 +552,37 @@ sleep 0.5
 
 rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
 
+# ---- .github#2211: the compiled binary reaches the cross-owner board-side route -------------------
+#
+# The external issue's own `projectItems` query deliberately omits Coordination, just as GitHub does for
+# EHotwagner/rogue3#96.  These legs therefore fail when an engine falls back to the issue-side route:
+# `claim` cannot converge, `release` has no column to restore, and `add` defaults a live row to Backlog.
+# They drive the real argv parser and HttpTransport; reading the Python fixture directly would only test
+# the fixture's shape, not the seam that previously escaped binary-level coverage.
+cross_claim="$("$ENGINE" claim EHotwagner/rogue3#96 --worker osprey-2211 --json 2>&1)"; cross_claim_rc=$?
+cross_converged="$(printf '%s' "$cross_claim" | jq -r '.converged // empty' 2>/dev/null)"
+[ "$cross_claim_rc" -eq 0 ] && [ "$cross_converged" = true ] \
+  && ok "#2211: cross-owner claim converges through the board-side item and Status read" \
+  || bad "#2211: cross-owner claim must converge" "rc=$cross_claim_rc converged=$cross_converged: $cross_claim"
+
+cross_release="$("$ENGINE" release EHotwagner/rogue3#96 --worker osprey-2211 2>&1)"; cross_release_rc=$?
+[ "$cross_release_rc" -eq 0 ] && printf '%s' "$cross_release" | grep -q 'Backlog' \
+  && ok "#2211: bare cross-owner release restores the pre-claim Backlog column" \
+  || bad "#2211: bare cross-owner release must restore its pre-claim column" "rc=$cross_release_rc: $cross_release"
+
+# Make the existing row's column live before exercising `add`. A pre-claim `In progress` column has the
+# same footprint as the claim's own write, for which bare `release` correctly falls back to Ready.
+cross_live="$("$ENGINE" set-field EHotwagner/rogue3#96 Status 'In progress' --worker osprey-2211 2>&1)"; cross_live_rc=$?
+[ "$cross_live_rc" -eq 0 ] && printf '%s' "$cross_live" | grep -q 'Status = In progress' \
+  && ok "#2211: fixture establishes a live external In progress column before add" \
+  || bad "#2211: fixture must establish the live external column" "rc=$cross_live_rc: $cross_live"
+
+cross_add="$("$ENGINE" add EHotwagner/rogue3#96 --worker osprey-2211 2>&1)"; cross_add_rc=$?
+[ "$cross_add_rc" -eq 0 ] && printf '%s' "$cross_add" | grep -q "Status='In progress'.*LEFT AS IT IS" \
+  && ! printf '%s' "$cross_add" | grep -q 'Status=Backlog' \
+  && ok "#2211: add preserves a live cross-owner Status instead of writing the Backlog default" \
+  || bad "#2211: add must not overwrite a live cross-owner Status" "rc=$cross_add_rc: $cross_add"
+
 # ---- .github#1740 / .github#1779: a live claim reserves whatever its board COLUMN says ---------------
 #
 # THE DEFECT, CONSTRUCTED RATHER THAN WAITED FOR. `activeCollisions` picked which claims to check by
@@ -1097,6 +1128,16 @@ must_mutate "add" run add FS.GG.SDD#46
 # Use a new worker: the fixture's normal driver holds an item, and the one-item-per-worker guard
 # would be a parser-shaped false driver rather than the scheduling-and-claim path being tested.
 "$ENGINE" release FS.GG.SDD#43 --worker otter-777 >/dev/null 2>&1
+# The preceding collision legs deliberately leave #43 at the claim column while releasing its marker.
+# `take` must start from a schedulable world, not from an unowned `In progress` projection that blocks
+# #42's overlapping path and turns its mutation proof into EX_NONE.  Establish and read back the one
+# precondition here; the `must_mutate` helper below still proves that `take` itself executes and writes.
+take_reset="$("$ENGINE" set-field FS.GG.SDD#43 Status Ready --worker ledger-take 2>&1)"; take_reset_rc=$?
+take_reset_status="$(run ready --repo FS.GG.SDD --worker ledger-take 2>/dev/null | jq -r '.[] | select(.number == 43) | .status')"
+take_reset_comments="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments")"
+[ "$take_reset_rc" -eq 0 ] && [ "$take_reset_status" = "Ready" ] && ! printf '%s' "$take_reset_comments" | grep -q 'fsgg:claim' \
+  && ok "#1569: take precondition is a Ready #43 with no claim marker" \
+  || bad "#1569: take must start after the collision fixture cleanup" "rc=$take_reset_rc status=$take_reset_status output=$take_reset comments=$take_reset_comments"
 must_mutate "take" "$ENGINE" take --repo FS.GG.SDD --worker ledger-take
 # A room is a net-new REST issue POST followed by body PATCHes on every member.  The fixture returns
 # the created issue number, letting the real command finish rather than treating the POST as enough.
