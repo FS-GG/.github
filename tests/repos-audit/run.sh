@@ -3613,17 +3613,32 @@ cat > "$STUB/yq" <<'YQ'
 set -euo pipefail
 [ "$#" -eq 3 ] && [ "$1" = "-o=json" ] && [ "$2" = "." ] || exit 64
 if [ "$3" = "-" ]; then document="$(cat)"; else document="$(cat "$3")"; fi
-case "$document" in
-  *$'contracts:\n  - id: coord-engine\n    version: "0.15.0"'*)
-    printf '%s\n' '{"contracts":[{"id":"coord-engine","version":"0.15.0"}]}' ;;
-  *$'schemaVersion: 5'*$'FS-GG/FS.GG.SDD'*$'FS-GG/FS.GG.Rendering'*$'id: coordination-kit'* )
-    printf '%s\n' '{"schemaVersion":5,"authority":"FS-GG/.github","repos":[{"id":".github","full":"FS-GG/.github","role":"authority","receives":["labels"]},{"id":"sdd","full":"FS-GG/FS.GG.SDD","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"},{"id":"rendering","full":"FS-GG/FS.GG.Rendering","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"}],"capabilities":[{"id":"coordination-kit","workflow":"coordination-coherence.yml"},{"id":"labels","push":true,"reason":"authority-pushed by apply-labels.sh; nothing is wired at the receiver"}]}' ;;
-  *'uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main'*)
-    printf '%s\n' '{"jobs":{"coordination":{"uses":"FS-GG/.github/.github/workflows/coordination-coherence.yml@main"}}}' ;;
-  *)
-    printf '%s\n' 'fixture yq received an unmodelled document' >&2
-    exit 65 ;;
-esac
+dependencies='contracts:
+  - id: coord-engine
+    version: "0.15.0"'
+registry='schemaVersion: 5
+updated: 2026-07-13
+authority: FS-GG/.github
+repos:
+  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
+  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit], kit-delivery: package, absence-cover: required }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+  - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }'
+workflow='jobs:
+  j1:
+    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main'
+if [ "$document" = "$dependencies" ]; then
+  printf '%s\n' '{"contracts":[{"id":"coord-engine","version":"0.15.0"}]}'
+elif [ "$document" = "$registry" ]; then
+  printf '%s\n' '{"schemaVersion":5,"authority":"FS-GG/.github","repos":[{"id":".github","full":"FS-GG/.github","role":"authority","receives":["labels"]},{"id":"sdd","full":"FS-GG/FS.GG.SDD","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"},{"id":"rendering","full":"FS-GG/FS.GG.Rendering","role":"framework","receives":["labels","coordination-kit"],"kit-delivery":"package","absence-cover":"required"}],"capabilities":[{"id":"coordination-kit","workflow":"coordination-coherence.yml"},{"id":"labels","push":true,"reason":"authority-pushed by apply-labels.sh; nothing is wired at the receiver"}]}'
+elif [ "$document" = "$workflow" ]; then
+  printf '%s\n' '{"jobs":{"j1":{"uses":"FS-GG/.github/.github/workflows/coordination-coherence.yml@main"}}}'
+else
+  printf '%s\n' 'fixture yq received an unmodelled document' >&2
+  exit 65
+fi
 YQ
 chmod +x "$STUB/yq"
 out="$(env -u PYTHONPATH PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
@@ -3631,6 +3646,10 @@ out="$(env -u PYTHONPATH PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPO
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
   && ok "engine-pin: yq-only reader stays green without PyYAML" \
   || bad "the declared-version reader must not bypass the yq-or-PyYAML ladder" "rc=$rc: $out"
+out="$(printf '%s\nunmodelled: true\n' "$(cat "$DEPS")" | env -u PYTHONPATH PATH="$STUB:$PATH" yq -o=json . - 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 65 ] && printf '%s' "$out" | grep -q 'fixture yq received an unmodelled document'; } \
+  && ok "engine-pin: yq fixture refuses a familiar document with one unmodelled byte-exact mutation" \
+  || bad "the yq fixture must refuse a document outside its exact model" "rc=$rc: $out"
 rm -f "$STUB/yq"
 
 # The registry target, not the feed's newest version or an open proposal, is the gate's subject.
