@@ -24,5 +24,5 @@ module Intake =
 
     type Finding = { Field: string; Detail: string }
 
-    /// Validate only intrinsic draft facts. Live ownership, duplicate and board facts belong to the IO layer.
+    /// Validate only intrinsic draft facts. Live ownership, duplicate, path existence and board facts belong to the IO layer.
     val validate: Draft -> Result<Draft, Finding list>

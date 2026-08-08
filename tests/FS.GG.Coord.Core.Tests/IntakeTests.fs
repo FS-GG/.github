@@ -21,3 +21,15 @@ module IntakeTests =
         match Intake.validate { draft with Paths = [ "" ] } with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "paths")
         | Ok _ -> failwith "an empty path must refuse"
+
+    [<Fact>]
+    let ``#2134 intake draft refuses an implicit duplicate disposition`` () =
+        match Intake.validate { draft with Disposition = None } with
+        | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "disposition")
+        | Ok _ -> failwith "apply must not infer create or reuse"
+
+    [<Fact>]
+    let ``#2134 intake draft refuses paths that escape the repository`` () =
+        match Intake.validate { draft with Paths = [ "../outside" ] } with
+        | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "paths")
+        | Ok _ -> failwith "a repository escape must refuse"
