@@ -26,6 +26,8 @@ module Options =
         | Facts
         /// Emit the parser's command/flag surface as JSON for documentation and tooling gates.
         | CommandContractCmd
+        /// Validate an intake draft, or report that its live transaction is not yet available.
+        | IntakeCmd
 
         // ---- the client command surface (ADR-0040 Phase D — wired to the IO layer) --------------------
 
