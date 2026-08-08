@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,16 @@ COUNTED = set(KINDS) - {"heartbeat"}
 ANSI = "\x1b["
 EVENT_FIELDS = {"eventSchema", "kind", "eventKey", "item", "repository", "fromStatus", "toStatus", "worker", "activity", "pr", "blocker", "freshness", "lifecycle", "sessionStart"}
 RESERVED_FIELDS = {"record", "schema", "sequence", "recordedAt", "session", "startedAt"}
+CAPACITY_SCHEMA = "fsgg.coord.lane-capacity/1"
+CAPACITY_REASON_KINDS = {
+    "slot-cap-reached", "review-slots-reserved", "review-slots-in-use",
+    "touch-set-overlap", "no-schedulable-item", "rest-reserve", "rest-backoff",
+    "claim-contention", "indeterminate-claim-receipt", "human-blocker", "decision-blocker",
+}
+CAPACITY_FIELDS = {
+    "schema", "implementationCapacity", "reviewCapacity", "activeLanes", "openSlots", "reasons",
+}
+CAPACITY_REASON_FIELDS = {"kind", "source", "freshness", "detail"}
 
 
 def fail(message: str) -> None:
@@ -136,7 +147,46 @@ def load(root: Path, session: str) -> list[dict[str, Any]]:
         return ledger_rows(ledger)
 
 
-def normalize_lanes(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+def normalize_capacity(snapshot: dict[str, Any]) -> dict[str, Any]:
+    capacity = snapshot.get("capacity")
+    if not isinstance(capacity, dict):
+        fail("lane snapshot must contain capacity (an object)")
+    unknown = set(capacity) - CAPACITY_FIELDS
+    if unknown:
+        fail("capacity has unknown fields: " + ", ".join(sorted(unknown)))
+    if capacity.get("schema") != CAPACITY_SCHEMA:
+        fail(f"capacity.schema must be {CAPACITY_SCHEMA!r}")
+    normalized: dict[str, Any] = {"schema": CAPACITY_SCHEMA}
+    for name in ("implementationCapacity", "reviewCapacity", "activeLanes", "openSlots"):
+        value = capacity.get(name)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            fail(f"capacity.{name} must be a non-negative integer")
+        normalized[name] = value
+    reasons = capacity.get("reasons")
+    if not isinstance(reasons, list) or not reasons:
+        fail("capacity.reasons must be a non-empty ordered array")
+    normalized_reasons = []
+    for index, reason in enumerate(reasons):
+        if not isinstance(reason, dict):
+            fail(f"capacity.reasons[{index}] must be an object")
+        unknown = set(reason) - CAPACITY_REASON_FIELDS
+        if unknown:
+            fail(f"capacity.reasons[{index}] has unknown fields: " + ", ".join(sorted(unknown)))
+        kind = reason.get("kind")
+        if kind not in CAPACITY_REASON_KINDS:
+            fail(f"capacity.reasons[{index}].kind is not a supported typed reason")
+        normalized_reason = {"kind": kind}
+        for name in ("source", "freshness", "detail"):
+            value = reason.get(name)
+            if not isinstance(value, str) or not value.strip():
+                fail(f"capacity.reasons[{index}].{name} must be a non-empty string")
+            normalized_reason[name] = value
+        normalized_reasons.append(normalized_reason)
+    normalized["reasons"] = normalized_reasons
+    return normalized
+
+
+def normalize_lanes(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], str, dict[str, Any]]:
     raw = snapshot.get("lanes", snapshot.get("items", []))
     if not isinstance(raw, list):
         fail("lane snapshot must contain lanes (an array)")
@@ -154,7 +204,7 @@ def normalize_lanes(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], str
             "worker": value("worker"), "activity": value("activity"), "pr": value("pr"),
             "blocker": value("blocker"), "freshness": value("freshness") if lane.get("freshness") is not None else freshness,
         })
-    return lanes, freshness
+    return lanes, freshness, normalize_capacity(snapshot)
 
 
 def report(session: str, trigger: dict[str, Any], snapshot: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -163,36 +213,75 @@ def report(session: str, trigger: dict[str, Any], snapshot: dict[str, Any], reco
         fail("ledger has no session record")
     events = [row for row in records if row.get("record") == "event"]
     totals = {kind: sum(row.get("kind") == kind for row in events) for kind in KINDS if kind in COUNTED}
-    lanes, freshness = normalize_lanes(snapshot)
+    lanes, freshness, capacity = normalize_lanes(snapshot)
     unresolved = [lane["item"] for lane in lanes if lane["boardStatus"] not in ("Done", "done", "Closed", "closed")]
     active = [lane["item"] for lane in lanes if lane["boardStatus"] in ("In progress", "In review", "Blocked")]
     lifecycle = next((str(row["lifecycle"]) for row in reversed(events) if row.get("lifecycle") in ("active", "ended")), header.get("lifecycle", "active"))
     return {
         "schema": SCHEMA, "session": {"id": session, "startedAt": header.get("startedAt"), "lifecycle": lifecycle},
-        "trigger": trigger, "lanes": lanes,
+        "trigger": trigger, "lanes": lanes, "laneCapacity": capacity,
         "sessionTotals": {**totals, "netActive": len(active), "unresolved": unresolved, "eventsRecorded": len(events)},
         "snapshot": {"freshness": freshness, "network": "not-used"},
     }
 
 
+def cell_width(text: str) -> int:
+    width = 0
+    for character in str(text):
+        if unicodedata.combining(character) or unicodedata.category(character) in ("Mn", "Me", "Cf"):
+            continue
+        width += 2 if unicodedata.east_asian_width(character) in ("W", "F") else 1
+    return width
+
+
+def display_units(text: str) -> list[tuple[str, int]]:
+    units: list[tuple[str, int]] = []
+    for character in str(text):
+        width = cell_width(character)
+        if width == 0 and units:
+            prior, prior_width = units[-1]
+            units[-1] = (prior + character, prior_width)
+        else:
+            units.append((character, width))
+    return units
+
+
+def split_cells(text: str, width: int) -> list[str]:
+    chunks: list[str] = []
+    chunk = ""
+    used = 0
+    for unit, unit_width in display_units(text):
+        if unit_width > width:
+            unit, unit_width = "…", 1
+        if chunk and used + unit_width > width:
+            chunks.append(chunk)
+            chunk, used = "", 0
+        chunk += unit
+        used += unit_width
+    if chunk or not chunks:
+        chunks.append(chunk)
+    return chunks
+
+
 def clip(text: str, width: int) -> list[str]:
     text = str(text)
     if width <= 1:
-        return [text[:max(0, width)]]
+        return split_cells(text, max(1, width))
     words = text.split() or [""]
     lines: list[str] = []
     line = ""
     for word in words:
         if not line:
-            while len(word) > width:
-                lines.append(word[:width])
-                word = word[width:]
-            line = word
-        elif len(line) + 1 + len(word) <= width:
+            pieces = split_cells(word, width)
+            lines.extend(pieces[:-1])
+            line = pieces[-1]
+        elif cell_width(line) + 1 + cell_width(word) <= width:
             line += " " + word
         else:
             lines.append(line)
-            line = word
+            pieces = split_cells(word, width)
+            lines.extend(pieces[:-1])
+            line = pieces[-1]
     lines.append(line)
     return lines
 
@@ -216,7 +305,8 @@ def table(headers: list[str], values: list[list[str]], width: int, color: bool, 
     def emit(row: list[str], header: bool = False) -> list[str]:
         cells = [clip(value, sizes[index]) for index, value in enumerate(row)]
         def cell(index: int, line: int) -> str:
-            padded = f" {(cells[index][line] if line < len(cells[index]) else ''):<{sizes[index]}} "
+            content = cells[index][line] if line < len(cells[index]) else ""
+            padded = " " + content + " " * (sizes[index] - cell_width(content)) + " "
             code = "1" if header else status_color(row[index]) if semantic_column == index else ""
             return style(padded, code, color) if code else padded
         return ["│" + "│".join(cell(index, line) for index in range(columns)) + "│" for line in range(max(map(len, cells)))]
@@ -235,6 +325,13 @@ def render(doc: dict[str, Any], mode: str, width: int, color: str) -> str:
         return [[key, json.dumps(raw, sort_keys=True, separators=(",", ":")) if not isinstance(raw, str) else raw] for key, raw in sorted(value.items())]
     fields = ("item", "repository", "workState", "boardStatus", "worker", "activity", "pr", "blocker", "freshness")
     lane_rows = [[lane[key] for key in fields] for lane in doc["lanes"]]
+    capacity = doc["laneCapacity"]
+    capacity_rows = [[name, str(capacity[name])] for name in ("schema", "implementationCapacity", "reviewCapacity", "activeLanes", "openSlots")]
+    capacity_rows.append(["reasons", str(len(capacity["reasons"]))])
+    for index, reason in enumerate(capacity["reasons"], 1):
+        for name in ("kind", "source", "freshness", "detail"):
+            capacity_rows.append([f"reason[{index}].{name}", reason[name]])
+    capacity_fact_rows = [[f"{name}={value}"] for name, value in capacity_rows]
     totals = doc["sessionTotals"]
     totals_rows = [[kind, str(totals.get(kind, 0))] for kind in ("created", "boarded", "claimed", "reviewed", "blocked", "merged", "published", "done")]
     totals_rows.extend([["netActive", str(totals["netActive"])], ["unresolved", ", ".join(totals["unresolved"]) or "none"], ["eventsRecorded", str(totals["eventsRecorded"])]] )
@@ -246,6 +343,7 @@ def render(doc: dict[str, Any], mode: str, width: int, color: str) -> str:
         style("session", "1;36", enabled), table(["field", "value"], facts(doc["session"]) + [["schema", doc["schema"]]], width, enabled),
         style("trigger", "1;36", enabled), table(["field", "value"], facts(trigger), width, enabled),
         style("snapshot", "1;36", enabled), table(["field", "value"], facts(doc["snapshot"]), width, enabled),
+        style("laneCapacity", "1;36", enabled), table(["capacity fact"], capacity_fact_rows, width, enabled),
         style("lanes", "1;36", enabled), lane_table,
         style("sessionTotals", "1;36", enabled), table(["transition", "count"], totals_rows, min(width, 56), enabled)))
 
