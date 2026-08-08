@@ -149,8 +149,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.CROSS_REPO_DISPATCH_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_DISPATCH_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
           owner: FS-GG
           permission-organization-administration: read
       - name: Assert the pinned App grant inventory is current
