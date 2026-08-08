@@ -8158,6 +8158,80 @@ module Client =
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
 
+    [<Literal>]
+    let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
+
+    let private deliveryRouteRevision (body: string) =
+        body
+        |> Text.Encoding.UTF8.GetBytes
+        |> Security.Cryptography.SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
+    /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
+    let private deliveryRouteFact (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+        | Error error, _
+        | _, Error error -> Error error
+        | Ok body, Ok comments ->
+            let revision = deliveryRouteRevision body
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
+            | DeliveryRoute.Current valid -> Ok(valid, revision)
+            | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+
+    let private deliveryRouteCmd (ctx: Context) (opts: Options) : int =
+        let target arg = parseRef ctx arg
+        match opts.Args with
+        | [ "show"; arg ] ->
+            match target arg with
+            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Ok ref ->
+                match deliveryRouteFact ctx ref with
+                | Error error -> fail error
+                | Ok(receipt, revision) ->
+                    let route =
+                        match receipt.Route with
+                        | Some DeliveryRoute.Lightweight -> "lightweight"
+                        | Some DeliveryRoute.SddRequired -> "sdd-required"
+                        | None -> ""
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; route = route; reasonCodes = receipt.ReasonCodes |})
+                    ExitGreen
+        | [ "record"; arg; path ] ->
+            match target arg with
+            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Ok ref ->
+                try
+                    let raw = File.ReadAllText path
+                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number, DeliveryRouteApplication.decode raw with
+                    | Error error, _ -> fail error
+                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: %s{reason}"; ExitError
+                    | Ok body, Ok receipt ->
+                        let revision = deliveryRouteRevision body
+                        match DeliveryRoute.validate ref.Canonical revision receipt with
+                        | Error errors ->
+                            let detail = String.concat "; " errors
+                            eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
+                            ExitError
+                        | Ok valid ->
+                            let marker = DeliveryRouteMarker + "\n" + raw.Trim()
+                            match Writes.postIssueComment ctx.Transport ref marker with
+                            | Error error -> fail error
+                            | Ok commentId ->
+                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId |})
+                                ExitGreen
+                with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
+        | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
+
     let run (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -8248,4 +8322,5 @@ module Client =
             | LintCmd -> lint ctx opts
             | Issues -> issues ctx opts
             | IntakeCmd -> intakeCmd ctx opts
+            | RouteCmd -> deliveryRouteCmd ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"
