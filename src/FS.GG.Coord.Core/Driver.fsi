@@ -68,14 +68,48 @@ module Driver =
           Outcome: string
           ReceiptId: string }
 
+    type ContentDisposition =
+        | NotReusable
+        | Skill
+        | ExampleFixture
+        | SkillAndExampleFixture
+
+    type ContentEvidence =
+        | EvidenceUrl of string
+        | EvidencePath of string
+
+    type ContentDispositionReceipt =
+        { SourceFinding: string
+          Disposition: ContentDisposition
+          ConsumerPaths: string list
+          DecisionMaker: string
+          Rationale: string
+          Evidence: ContentEvidence option
+          ObservedAt: int64
+          SourceSha: string
+          ReceiptId: string }
+
     type PlanningReceipt =
         { ObservedAt: int64
           SourceSha: string
           Complete: bool
           ConsolidationApproved: bool
-          Observations: PlanningObservation list }
+          Observations: PlanningObservation list
+          ContentIntakes: string list
+          ContentDispositions: ContentDispositionReceipt list }
 
     val observationReceiptId: kind: string -> observedAt: int64 -> sourceSha: string -> outcome: string -> string
+
+    val contentDispositionReceiptId:
+        sourceFinding: string ->
+        disposition: ContentDisposition ->
+        consumerPaths: string list ->
+        decisionMaker: string ->
+        rationale: string ->
+        evidence: ContentEvidence option ->
+        observedAt: int64 ->
+        sourceSha: string ->
+        string
 
     val planningReceiptFresh: now: int64 -> maxAgeSeconds: int64 -> sourceSha: string -> PlanningReceipt -> bool
 

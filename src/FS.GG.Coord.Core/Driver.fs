@@ -533,15 +533,59 @@ module Driver =
           Outcome: string
           ReceiptId: string }
 
+    type ContentDisposition =
+        | NotReusable
+        | Skill
+        | ExampleFixture
+        | SkillAndExampleFixture
+
+    type ContentEvidence =
+        | EvidenceUrl of string
+        | EvidencePath of string
+
+    type ContentDispositionReceipt =
+        { SourceFinding: string
+          Disposition: ContentDisposition
+          ConsumerPaths: string list
+          DecisionMaker: string
+          Rationale: string
+          Evidence: ContentEvidence option
+          ObservedAt: int64
+          SourceSha: string
+          ReceiptId: string }
+
     type PlanningReceipt =
         { ObservedAt: int64
           SourceSha: string
           Complete: bool
           ConsolidationApproved: bool
-          Observations: PlanningObservation list }
+          Observations: PlanningObservation list
+          ContentIntakes: string list
+          ContentDispositions: ContentDispositionReceipt list }
 
     let observationReceiptId kind observedAt sourceSha outcome =
         $"%s{kind}\n%d{observedAt}\n%s{sourceSha}\n%s{outcome}"
+        |> System.Text.Encoding.UTF8.GetBytes
+        |> System.Security.Cryptography.SHA256.HashData
+        |> System.Convert.ToHexString
+        |> fun value -> value.ToLowerInvariant()
+
+    let contentDispositionReceiptId sourceFinding disposition (consumerPaths: string list) decisionMaker rationale evidence (observedAt: int64) sourceSha =
+        let kind =
+            match disposition with
+            | NotReusable -> "not-reusable"
+            | Skill -> "skill"
+            | ExampleFixture -> "example/fixture"
+            | SkillAndExampleFixture -> "skill+example/fixture"
+
+        let evidenceText =
+            match evidence with
+            | Some(EvidenceUrl value) -> "url:" + value
+            | Some(EvidencePath value) -> "path:" + value
+            | None -> ""
+
+        [ sourceFinding; kind; String.concat "\u001f" consumerPaths; decisionMaker; rationale; evidenceText; string observedAt; sourceSha ]
+        |> String.concat "\n"
         |> System.Text.Encoding.UTF8.GetBytes
         |> System.Security.Cryptography.SHA256.HashData
         |> System.Convert.ToHexString
@@ -565,6 +609,74 @@ module Driver =
                         observation.Outcome
                 | _ -> false
 
+        let nonEmpty value = not (System.String.IsNullOrWhiteSpace value)
+        let skillPath (path: string) =
+            (path.StartsWith ".agents/skills/" || path.StartsWith ".claude/skills/")
+            && path.EndsWith ".md"
+        let executablePath (path: string) =
+            path.StartsWith "tests/"
+            || path.Contains "/fixtures/"
+            || path.EndsWith ".fsx"
+            || path.EndsWith ".sh"
+            || path.EndsWith ".py"
+        let evidencePathValid (value: string) =
+            let separator = value.LastIndexOf ':'
+            if separator <= 0 || separator = value.Length - 1 then
+                false
+            else
+                let path, line = value.Substring(0, separator), value.Substring(separator + 1)
+                match System.Int32.TryParse line with
+                | true, positiveLine ->
+                    nonEmpty path
+                    && path.Contains "/"
+                    && not (path.StartsWith "/")
+                    && not (path.Contains "..")
+                    && positiveLine > 0
+                | false, _ -> false
+        let evidenceUrlValid (value: string) =
+            match System.Uri.TryCreate(value, System.UriKind.Absolute) with
+            | true, uri -> (uri.Scheme = System.Uri.UriSchemeHttp || uri.Scheme = System.Uri.UriSchemeHttps) && nonEmpty uri.Host
+            | false, _ -> false
+        let evidenceValid = function
+            | Some(EvidenceUrl value) -> evidenceUrlValid value
+            | Some(EvidencePath value) -> evidencePathValid value
+            | None -> false
+        let dispositionValid disposition =
+            let consumerPaths = disposition.ConsumerPaths
+            let pathsAreConcrete = consumerPaths |> List.forall nonEmpty
+            let consumerShapeValid =
+                match disposition.Disposition with
+                | NotReusable -> List.isEmpty consumerPaths && nonEmpty disposition.Rationale && evidenceValid disposition.Evidence
+                | Skill -> pathsAreConcrete && (consumerPaths |> List.exists skillPath)
+                | ExampleFixture -> pathsAreConcrete && (consumerPaths |> List.exists executablePath)
+                | SkillAndExampleFixture ->
+                    pathsAreConcrete
+                    && (consumerPaths |> List.exists skillPath)
+                    && (consumerPaths |> List.exists executablePath)
+
+            nonEmpty disposition.SourceFinding
+            && nonEmpty disposition.DecisionMaker
+            && disposition.SourceSha = sourceSha
+            && now >= disposition.ObservedAt
+            && now - disposition.ObservedAt <= maxAgeSeconds
+            && consumerShapeValid
+            && disposition.ReceiptId = contentDispositionReceiptId
+                disposition.SourceFinding
+                disposition.Disposition
+                disposition.ConsumerPaths
+                disposition.DecisionMaker
+                disposition.Rationale
+                disposition.Evidence
+                disposition.ObservedAt
+                disposition.SourceSha
+
+        let inventoryValid =
+            receipt.ContentIntakes |> List.forall nonEmpty
+            && (receipt.ContentIntakes |> Set.ofList |> Set.count) = List.length receipt.ContentIntakes
+            && (receipt.ContentDispositions |> List.map (fun disposition -> disposition.SourceFinding) |> Set.ofList)
+                = (receipt.ContentIntakes |> Set.ofList)
+            && List.length receipt.ContentDispositions = List.length receipt.ContentIntakes
+
         receipt.Complete
         && not (System.String.IsNullOrWhiteSpace receipt.SourceSha)
         && receipt.SourceSha = sourceSha
@@ -572,6 +684,8 @@ module Driver =
         && now - receipt.ObservedAt <= maxAgeSeconds
         && List.length receipt.Observations = List.length expected
         && (expected |> List.forall observationValid)
+        && inventoryValid
+        && (receipt.ContentDispositions |> List.forall dispositionValid)
 
     type Action =
         | RequestHostIdentity

@@ -955,6 +955,12 @@ module Snapshot =
             w.WriteStartArray("observationFields")
             policy.ObservationFields |> List.iter w.WriteStringValue
             w.WriteEndArray()
+            w.WriteStartArray("contentIntakeFields")
+            policy.ContentIntakeFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
+            w.WriteStartArray("contentDispositionFields")
+            policy.ContentDispositionFields |> List.iter w.WriteStringValue
+            w.WriteEndArray()
             w.WriteStartArray("receiptFields")
             policy.ReceiptFields |> List.iter w.WriteStringValue
             w.WriteEndArray()

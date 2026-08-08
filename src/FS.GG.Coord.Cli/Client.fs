@@ -819,15 +819,22 @@ module Client =
             let root = document.RootElement
             let receiptFields = Protocol.ledgerPolicy.ReceiptFields
             let observationFields = Protocol.ledgerPolicy.ObservationFields
-            let schemaField, observedAtField, sourceShaField, completeField, consolidationApprovedField, observationsField =
+            let contentIntakeFields = Protocol.ledgerPolicy.ContentIntakeFields
+            let contentDispositionFields = Protocol.ledgerPolicy.ContentDispositionFields
+            let schemaField, observedAtField, sourceShaField, completeField, consolidationApprovedField, observationsField, contentIntakesField, contentDispositionsField =
                 match receiptFields with
-                | [ schema; observedAt; sourceSha; complete; consolidationApproved; observations ] ->
-                    schema, observedAt, sourceSha, complete, consolidationApproved, observations
+                | [ schema; observedAt; sourceSha; complete; consolidationApproved; observations; contentIntakes; contentDispositions ] ->
+                    schema, observedAt, sourceSha, complete, consolidationApproved, observations, contentIntakes, contentDispositions
                 | _ -> failwith "the ledger receipt field policy is malformed"
             let kindField, observationObservedAtField, observationSourceShaField, outcomeField, receiptIdField =
                 match observationFields with
                 | [ kind; observedAt; sourceSha; outcome; receiptId ] -> kind, observedAt, sourceSha, outcome, receiptId
                 | _ -> failwith "the ledger observation field policy is malformed"
+            let sourceFindingField, dispositionField, consumerPathsField, decisionMakerField, rationaleField, evidenceField, dispositionObservedAtField, dispositionSourceShaField, dispositionReceiptIdField =
+                match contentDispositionFields with
+                | [ sourceFinding; disposition; consumerPaths; decisionMaker; rationale; evidence; observedAt; sourceSha; receiptId ] ->
+                    sourceFinding, disposition, consumerPaths, decisionMaker, rationale, evidence, observedAt, sourceSha, receiptId
+                | _ -> failwith "the ledger content disposition field policy is malformed"
             let requireFields (fields: string list) (node: JsonElement) =
                 fields |> List.iter (fun name ->
                     let mutable value = Unchecked.defaultof<JsonElement>
@@ -836,6 +843,34 @@ module Client =
             if root.GetProperty(schemaField).GetString() <> Protocol.ledgerPolicy.Schema then
                 failwith "the ledger receipt schema is unsupported"
             let bool (name: string) (node: JsonElement) = node.GetProperty(name).GetBoolean()
+            let sourceFindingField =
+                match contentIntakeFields with
+                | [ sourceFinding ] -> sourceFinding
+                | _ -> failwith "the ledger content intake field policy is malformed"
+            let contentDisposition (item: JsonElement) : Driver.ContentDispositionReceipt =
+                requireFields contentDispositionFields item
+                let disposition =
+                    match item.GetProperty(dispositionField).GetString() with
+                    | "not-reusable" -> Driver.NotReusable
+                    | "skill" -> Driver.Skill
+                    | "example/fixture" -> Driver.ExampleFixture
+                    | "skill+example/fixture" -> Driver.SkillAndExampleFixture
+                    | _ -> failwith "the ledger content disposition is unsupported"
+                let evidence =
+                    match item.GetProperty(evidenceField).GetString() with
+                    | null | "" -> None
+                    | value when value.StartsWith "url:" -> Some(Driver.EvidenceUrl(value.Substring 4))
+                    | value when value.StartsWith "path:" -> Some(Driver.EvidencePath(value.Substring 5))
+                    | _ -> failwith "the ledger content evidence is unsupported"
+                { SourceFinding = item.GetProperty(sourceFindingField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Disposition = disposition
+                  ConsumerPaths = item.GetProperty(consumerPathsField).EnumerateArray() |> Seq.map (fun path -> path.GetString() |> Option.ofObj |> Option.defaultValue "") |> Seq.toList
+                  DecisionMaker = item.GetProperty(decisionMakerField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Rationale = item.GetProperty(rationaleField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                  Evidence = evidence
+                  ObservedAt = item.GetProperty(dispositionObservedAtField).GetInt64()
+                  SourceSha = item.GetProperty(dispositionSourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
+                  ReceiptId = item.GetProperty(dispositionReceiptIdField).GetString() |> Option.ofObj |> Option.defaultValue "" }
             let receipt: Driver.PlanningReceipt =
                 { ObservedAt = root.GetProperty(observedAtField).GetInt64()
                   SourceSha = root.GetProperty(sourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
@@ -850,6 +885,16 @@ module Client =
                            SourceSha = item.GetProperty(observationSourceShaField).GetString() |> Option.ofObj |> Option.defaultValue ""
                            Outcome = item.GetProperty(outcomeField).GetString() |> Option.ofObj |> Option.defaultValue ""
                            ReceiptId = item.GetProperty(receiptIdField).GetString() |> Option.ofObj |> Option.defaultValue "" }: Driver.PlanningObservation))
+                    |> Seq.toList
+                  ContentDispositions =
+                    root.GetProperty(contentDispositionsField).EnumerateArray()
+                    |> Seq.map contentDisposition
+                    |> Seq.toList
+                  ContentIntakes =
+                    root.GetProperty(contentIntakesField).EnumerateArray()
+                    |> Seq.map (fun item ->
+                        requireFields contentIntakeFields item
+                        item.GetProperty(sourceFindingField).GetString() |> Option.ofObj |> Option.defaultValue "")
                     |> Seq.toList }
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"

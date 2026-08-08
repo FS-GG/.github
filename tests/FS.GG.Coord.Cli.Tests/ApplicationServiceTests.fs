@@ -731,7 +731,7 @@ module ApplicationServiceTests =
                       "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ]
                     |> List.map (fun (kind, outcome) -> observation kind outcome)
                     |> String.concat ","
-                $"""{{"schema":"%s{schema}","observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}]}}"""
+                $"""{{"schema":"%s{schema}","observedAt":%d{observedAt},"sourceSha":"%s{source}","complete":true,"consolidationApproved":%s{if approved then "true" else "false"},"observations":[%s{observations}],"contentIntakes":[],"contentDispositions":[]}}"""
             let now = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             let schema = Protocol.ledgerPolicy.Schema
             File.WriteAllText(receiptPath, receipt schema false now sourceSha)
