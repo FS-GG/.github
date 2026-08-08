@@ -41,6 +41,9 @@ module Delivery =
           PathsVerified: bool
           InReview: bool
           Review: Driver.ReviewChain option
+          /// Parser failures are evidence that review was attempted but is malformed; retaining the
+          /// diagnostic keeps delivery from misdirecting the holder to wait for a review that exists.
+          ReviewProblem: string option
           Landable: bool
           Merged: bool
           MergeReachable: bool
@@ -125,11 +128,12 @@ module Delivery =
         else None
 
     let private reviewProblem snapshot =
-        match snapshot.Review with
-        | None -> Some "independent review evidence is absent"
-        | Some review when review.HeadSha <> Some snapshot.Freshness.HeadSha ->
+        match snapshot.ReviewProblem, snapshot.Review with
+        | Some problem, _ when not (System.String.IsNullOrWhiteSpace problem) -> Some problem
+        | _, None -> Some "independent review evidence is absent"
+        | _, Some review when review.HeadSha <> Some snapshot.Freshness.HeadSha ->
             Some "independent review is for a different head SHA"
-        | Some review ->
+        | _, Some review ->
             let ceiling = if review.RepairPhase then 10 else 3
             match Driver.validateReviewChain ceiling review with
             | [] -> None

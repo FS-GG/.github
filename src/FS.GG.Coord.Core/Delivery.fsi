@@ -43,6 +43,8 @@ module Delivery =
           PathsVerified: bool
           InReview: bool
           Review: Driver.ReviewChain option
+          /// Parser failures are evidence that review was attempted but is malformed.
+          ReviewProblem: string option
           Landable: bool
           Merged: bool
           MergeReachable: bool

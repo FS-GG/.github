@@ -1209,9 +1209,9 @@ module Client =
                             | Undeclared
                             | Unreadable _ -> []
 
-                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
+                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
                             match opts.Pr with
-                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, false, false, false, [])
+                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, None, false, false, false, [])
                             | Some pr ->
                                 match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
                                       Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
@@ -1220,12 +1220,13 @@ module Client =
                                       Reads.prFiles ctx.Transport target.Owner target.Repo pr,
                                       Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
                                 | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments ->
-                                    let review =
+                                    let review, reviewProblem =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
                                         |> Driver.parseReviewComments
-                                        |> Result.map (fun parsed -> { parsed with ChecksGreen = landable = PrGreen })
-                                        |> Result.toOption
+                                        |> function
+                                            | Ok parsed -> Some { parsed with ChecksGreen = landable = PrGreen }, None
+                                            | Error errors -> None, Some(String.concat "; " errors)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
                                     let pathsVerified =
@@ -1238,7 +1239,7 @@ module Client =
                                     let obligations = DeliveryApplication.obligationsFromComments head reviewComments
                                     let obligationsDeclared = Result.isOk obligations
                                     let obligations = obligations |> Result.defaultValue []
-                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
+                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, reviewProblem, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
                                 | Error error, _, _, _, _, _
                                 | _, Error error, _, _, _, _
                                 | _, _, _, Error error, _, _
@@ -1247,7 +1248,7 @@ module Client =
 
                         match branchAndPr with
                         | Error error -> fail error
-                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, landable, merged, obligationsDeclared, obligations) ->
+                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
                             let facts: Delivery.Snapshot =
                                 { Freshness =
                                     { ItemRef = target.Short
@@ -1264,6 +1265,7 @@ module Client =
                                   PathsVerified = if pr.IsSome then pathsVerified else false
                                   InReview = pr.IsSome
                                   Review = review
+                                  ReviewProblem = reviewProblem
                                   Landable = landable
                                   Merged = merged
                                   // `done` independently verifies GitHub's merged closing record before it

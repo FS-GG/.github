@@ -241,6 +241,7 @@ module DeliveryApplication =
                   PathsVerified = readBoolean "pathsVerified" root
                   InReview = readBoolean "inReview" root
                   Review = review root
+                  ReviewProblem = readOptionalString "reviewProblem" root
                   Landable = readBoolean "landable" root
                   Merged = readBoolean "merged" root
                   MergeReachable = readBoolean "mergeReachable" root
