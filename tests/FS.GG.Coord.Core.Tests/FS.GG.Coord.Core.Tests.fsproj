@@ -40,6 +40,7 @@
     <Compile Include="ChoreTests.fs" />
     <Compile Include="KitTests.fs" />
     <Compile Include="RegistryPredicateTests.fs" />
+    <Compile Include="IntakeTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
