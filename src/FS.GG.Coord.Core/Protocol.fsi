@@ -214,6 +214,8 @@ module Protocol =
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
+          ContentIntakeFields: string list
+          ContentDispositionFields: string list
           ReceiptFields: string list
           RequiredObservations: (string * string) list }
 

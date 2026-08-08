@@ -26,6 +26,21 @@ For every board-capable wave, in this order:
    identity and runs bare `scripts/fsgg-coord take --repo <this-repo> --json`. Never hand-pick Backlog
    items or use `--include-backlog` to bypass triage.
 
+## Feedback and audit content disposition
+
+Before declaring triage fresh, record every feedback or audit intake in the authoritative content-intake
+inventory and record exactly one typed content-disposition for each entry.
+The planning receipt rejects an unknown or stale disposition;
+absence is not a default `not-reusable` decision. Each record names the source finding, decision maker,
+current source SHA, observation time, and a receipt identity bound to all of those facts.
+
+Use exactly one of `not-reusable`, `skill`, `example/fixture`, or `skill+example/fixture`. A reusable
+record must name its durable consumer path: a skill/reference is under `.agents/skills/` or
+`.claude/skills/`, and an example/fixture is executable or gate-owned (for example under `tests/`), not
+a retrospective Markdown file under `docs/`. `not-reusable` has no consumer path and carries the
+evidence-backed rationale plus a typed URL or `path:line` reference for that explicit judgement. For a failure boundary captured in an example or
+fixture, include the negative/mutation case that proves the gate can fail.
+
 ## Exhaustive classifications
 
 ### Promote to Ready

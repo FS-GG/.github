@@ -60,7 +60,9 @@ module DriverTests =
                         ObservedAt = 100L
                         SourceSha = "snapshot"
                         Outcome = outcome
-                        ReceiptId = observationReceiptId kind 100L "snapshot" outcome } ] }
+                        ReceiptId = observationReceiptId kind 100L "snapshot" outcome } ]
+              ContentIntakes = []
+              ContentDispositions = [] }
 
         Assert.True(planningReceiptFresh 120L 30L "snapshot" planning)
         Assert.False(planningReceiptFresh 120L 30L "other" planning)
@@ -83,6 +85,80 @@ module DriverTests =
                             ReceiptId = "caller-authored" }) }
 
         Assert.False(planningReceiptFresh 120L 30L "snapshot" forged)
+
+    [<Fact>]
+    let ``#2162 triage content dispositions bind a durable consumer or evidenced one-off decision`` () =
+        let observation kind outcome =
+            { Kind = kind
+              ObservedAt = 100L
+              SourceSha = "snapshot"
+              Outcome = outcome
+              ReceiptId = observationReceiptId kind 100L "snapshot" outcome }
+        let disposition kind consumers rationale evidence =
+            { SourceFinding = "audit/2162: reusable failure boundary"
+              Disposition = kind
+              ConsumerPaths = consumers
+              DecisionMaker = "host-2162"
+              Rationale = rationale
+              Evidence = evidence
+              ObservedAt = 100L
+              SourceSha = "snapshot"
+              ReceiptId = contentDispositionReceiptId "audit/2162: reusable failure boundary" kind consumers "host-2162" rationale evidence 100L "snapshot" }
+        let receipt contentDispositions =
+            { ObservedAt = 100L
+              SourceSha = "snapshot"
+              Complete = true
+              ConsolidationApproved = true
+              Observations =
+                [ "reconcile-dry-run", "clean"
+                  "reconcile-apply", "applied-or-not-needed"
+                  "reconcile-fresh", "clean"
+                  "triage", "fresh"
+                  "engine-currency", "current-scoped" ]
+                |> List.map (fun (kind, outcome) -> observation kind outcome)
+              ContentIntakes = [ "audit/2162: reusable failure boundary" ]
+              ContentDispositions = contentDispositions }
+
+        let reusable =
+            disposition SkillAndExampleFixture
+                [ ".agents/skills/drive-board/references/backlog-triage.md"
+                  "tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs" ]
+                "The audit identifies a recurring worker-routing boundary."
+                None
+        Assert.True(planningReceiptFresh 120L 30L "snapshot" (receipt [ reusable ]))
+
+        let proseOnly =
+            disposition ExampleFixture [ "docs/coordination/triage.md" ] "A document is not an executable consumer." None
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" (receipt [ proseOnly ]))
+
+        let oneOff = disposition NotReusable [] "Measured as a repository-specific one-off with no reusable operator learning." (Some(EvidencePath "tests/FS.GG.Coord.Core.Tests/DriverTests.fs:130"))
+        Assert.True(planningReceiptFresh 120L 30L "snapshot" (receipt [ oneOff ]))
+
+        let unsupportedOneOff =
+            let evidence = None
+            { oneOff with
+                Evidence = evidence
+                ReceiptId = contentDispositionReceiptId oneOff.SourceFinding oneOff.Disposition oneOff.ConsumerPaths oneOff.DecisionMaker oneOff.Rationale evidence oneOff.ObservedAt oneOff.SourceSha }
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" (receipt [ unsupportedOneOff ]))
+
+        let malformedPath =
+            let evidence = Some(EvidencePath "not-a-path:not-a-line")
+            { oneOff with
+                Evidence = evidence
+                ReceiptId = contentDispositionReceiptId oneOff.SourceFinding oneOff.Disposition oneOff.ConsumerPaths oneOff.DecisionMaker oneOff.Rationale evidence oneOff.ObservedAt oneOff.SourceSha }
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" (receipt [ malformedPath ]))
+
+        let httpsEvidence =
+            let evidence = Some(EvidenceUrl "https://github.com/FS-GG/.github/issues/2162")
+            { oneOff with
+                Evidence = evidence
+                ReceiptId = contentDispositionReceiptId oneOff.SourceFinding oneOff.Disposition oneOff.ConsumerPaths oneOff.DecisionMaker oneOff.Rationale evidence oneOff.ObservedAt oneOff.SourceSha }
+        Assert.True(planningReceiptFresh 120L 30L "snapshot" (receipt [ httpsEvidence ]))
+
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" { receipt [] with ContentIntakes = [ "audit/2162: reusable failure boundary" ] })
+
+        let stale = { reusable with SourceSha = "old" }
+        Assert.False(planningReceiptFresh 120L 30L "snapshot" (receipt [ stale ]))
 
     [<Fact>]
     let ``#2127 6 to 2 consolidates then dispatches a fresh three-slot wave`` () =

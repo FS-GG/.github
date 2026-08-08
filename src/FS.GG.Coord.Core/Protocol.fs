@@ -92,6 +92,8 @@ module Protocol =
     type LedgerPolicyDoc =
         { Schema: string
           ObservationFields: string list
+          ContentIntakeFields: string list
+          ContentDispositionFields: string list
           ReceiptFields: string list
           RequiredObservations: (string * string) list }
 
@@ -679,9 +681,11 @@ module Protocol =
           HostAcceptanceFields = [ "accepted-head"; "initial-review"; "latest-confirmation" ] }
 
     let ledgerPolicy =
-        { Schema = "fsgg.coord.planning-receipt/1"
+        { Schema = "fsgg.coord.planning-receipt/3"
           ObservationFields = [ "kind"; "observedAt"; "sourceSha"; "outcome"; "receiptId" ]
-          ReceiptFields = [ "schema"; "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations" ]
+          ContentIntakeFields = [ "sourceFinding" ]
+          ContentDispositionFields = [ "sourceFinding"; "disposition"; "consumerPaths"; "decisionMaker"; "rationale"; "evidence"; "observedAt"; "sourceSha"; "receiptId" ]
+          ReceiptFields = [ "schema"; "observedAt"; "sourceSha"; "complete"; "consolidationApproved"; "observations"; "contentIntakes"; "contentDispositions" ]
           RequiredObservations =
             [ "reconcile-dry-run", "clean"; "reconcile-apply", "applied-or-not-needed"
               "reconcile-fresh", "clean"; "triage", "fresh"; "engine-currency", "current-scoped" ] }
