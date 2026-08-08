@@ -49,3 +49,8 @@ module LifecycleProjectionTests =
         let blocker = { Ref = None; Raw = "human action"; State = BlockerUnparseable }
         let value = { observation with Blockers = fact [ blocker ] }
         Assert.Equal(LifecycleProjection.Project(Blocked, 1L), LifecycleProjection.project value)
+
+    [<Fact>]
+    let ``#2264 expired orphan claim no longer projects active work`` () =
+        let value = { observation with Claim = fact (Some(claim, LeaseExpiredNoPr)) }
+        Assert.Equal(LifecycleProjection.Project(Ready, 1L), LifecycleProjection.project value)

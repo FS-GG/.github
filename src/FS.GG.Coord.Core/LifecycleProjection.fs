@@ -40,7 +40,9 @@ module LifecycleProjection =
             Project(InReview, observedAt)
         elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open) then
             Project(InReview, observedAt)
-        elif observation.Claim.Value |> Option.isSome then
+        elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LeaseHeld | LeaseExpiredPrOpen _ | LeaseExpiredBranchPushed -> true | _ -> false) then
             Project(InProgress, observedAt)
+        elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LivenessUnknown -> true | _ -> false) then
+            Withheld "claim liveness could not be observed"
         else
             Project(Ready, observedAt)
