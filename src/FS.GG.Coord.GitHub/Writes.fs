@@ -449,6 +449,10 @@ module Writes =
             match force with
             | RefuseLiveHolder -> Ok(Lost m.Worker)
             | StealLiveHolder ->
+                // A forced claim is still NEW dispatch.  Capacity admission must happen before
+                // `evictLive`: a constrained/unknown fleet may preserve accepted work, never delete
+                // somebody else's live marker and then discover it cannot continue.
+                admitNew () |> Result.bind (fun () ->
                 // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
                 // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
                 // to delete the winner and promote whatever was queued behind it.
@@ -505,7 +509,7 @@ module Writes =
                             // has been told. A destroyed lock nobody knows about is not recoverable, which
                             // is why the notice, not the marker, is what this guarantees.
                             onEvict evicted
-                            postAndResolve evicted
+                            postAndResolve evicted)
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
