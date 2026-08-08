@@ -333,6 +333,7 @@ let main argv =
             // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
             // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
             // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
+            | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
             | IntakeCmd -> Client.run opts
 
             | DriverCmd -> Client.run opts

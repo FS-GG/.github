@@ -13,6 +13,9 @@ namespace FS.GG.Coord.GitHub
 module Cache =
     val getIntakeReceipt: draftId: string -> Result<FS.GG.Coord.IntakeReceipt.Receipt option, string>
     val putIntakeReceipt: receipt: FS.GG.Coord.IntakeReceipt.Receipt -> Result<unit, string>
+    type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
+    val getIntakeIntent: draftId: string -> Result<IntakeIntent option, string>
+    val putIntakeIntent: intent: IntakeIntent -> Result<unit, string>
 
     open Errors
 

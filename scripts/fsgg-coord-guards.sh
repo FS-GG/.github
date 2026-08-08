@@ -180,7 +180,7 @@
 # One space between, spaces added once around the whole, and no pattern for an empty verb can match.
 
 # WRITES, UNCONDITIONALLY — every invocation of these can mutate state the whole fleet shares.
-BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-field set-paths take widen"
+BOARD_WRITES="add adopt child claim done flush heartbeat intake release room say set-field set-paths take widen"
 
 # WRITES ONLY UNDER A CONDITION — and the flat list above CANNOT say that, which is how it got wrong.
 # These are refused all the same, verb-level and fail-closed, and they are held in a set of their own so

@@ -20,7 +20,13 @@ module Intake =
           Paths: string list
           Class: string
           Status: string
-          Disposition: Disposition option }
+          Disposition: Disposition option
+          Phase: string option
+          Severity: string option
+          BlockedBy: string option
+          BlockedOn: string option
+          BacklogReason: string option
+          JudgementQuestion: string option }
 
     type Finding = { Field: string; Detail: string }
 

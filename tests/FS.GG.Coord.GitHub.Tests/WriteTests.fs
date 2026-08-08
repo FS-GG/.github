@@ -1908,7 +1908,7 @@ let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` (
 let ``#2134 createIntake refuses an invalid draft before any issue POST`` () =
     let transport = scripted []
     let draft: FS.GG.Coord.Intake.Draft =
-        { Schema = FS.GG.Coord.Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = "FS.GG.SDD"; Title = "t"; Observed = "o"; RootCause = "r"; Acceptance = "a"; Verification = "v"; Paths = []; Class = "hardening"; Status = "Backlog"; Disposition = Some FS.GG.Coord.Intake.Create }
+        { Schema = FS.GG.Coord.Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = "FS.GG.SDD"; Title = "t"; Observed = "o"; RootCause = "r"; Acceptance = "a"; Verification = "v"; Paths = []; Class = "hardening"; Status = "Backlog"; Disposition = Some FS.GG.Coord.Intake.Create; Phase = None; Severity = None; BlockedBy = None; BlockedOn = None; BacklogReason = Some "not-yet-actionable"; JudgementQuestion = None }
     match createIntake transport draft with
     | Error _ -> Assert.False(transport.Logged "issue-list FS-GG/FS.GG.SDD")
     | Ok _ -> failwith "invalid intake must refuse"

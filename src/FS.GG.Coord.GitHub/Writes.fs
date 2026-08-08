@@ -1021,7 +1021,15 @@ module Writes =
             Error(Malformed(draft.Id, $"invalid intake draft: %s{detail}"))
         | Ok valid ->
             let paths = String.concat " " valid.Paths
-            let body = $"## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n\nPaths: %s{paths}"
+            let optionalLines =
+                [ valid.Phase |> Option.map (sprintf "Phase: %s")
+                  valid.Severity |> Option.map (sprintf "Severity: %s")
+                  valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+                  valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+                  valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+                |> List.choose id
+                |> String.concat "\n"
+            let body = $"## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
             createRoom transport valid.Owner valid.Repository valid.Title body
 
     /// Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that

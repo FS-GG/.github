@@ -54,6 +54,28 @@ module Cache =
         r
 
     let private intakeReceiptFile draftId = Path.Combine(ensureRoot (), $"intake-%s{slug draftId}.json")
+    let private intakeIntentFile draftId = Path.Combine(ensureRoot (), $"intake-intent-%s{slug draftId}.json")
+
+    type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
+
+    let getIntakeIntent draftId =
+        let file = intakeIntentFile draftId
+        if not (File.Exists file) then Ok None else
+        try
+            use doc = JsonDocument.Parse(File.ReadAllText file)
+            let root = doc.RootElement
+            let read (name: string) = root.GetProperty(name).GetString()
+            Ok(Some { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; DraftDigest = read "draftDigest" })
+        with ex -> Error $"intake intent '%s{file}' is unreadable: %s{ex.Message}"
+
+    let putIntakeIntent (intent: IntakeIntent) =
+        try
+            let file = intakeIntentFile intent.DraftId
+            let json = $"{{\"draftId\":{JsonSerializer.Serialize intent.DraftId},\"owner\":{JsonSerializer.Serialize intent.Owner},\"repository\":{JsonSerializer.Serialize intent.Repository},\"draftDigest\":{JsonSerializer.Serialize intent.DraftDigest}}}"
+            File.WriteAllText(file + ".tmp", json)
+            File.Move(file + ".tmp", file, true)
+            Ok()
+        with ex -> Error $"could not persist intake intent: %s{ex.Message}"
 
     let getIntakeReceipt draftId =
         let file = intakeReceiptFile draftId
@@ -63,7 +85,7 @@ module Cache =
             let root = doc.RootElement
             let read (name: string) = root.GetProperty(name).GetString()
             let number = root.GetProperty("issueNumber").GetInt32()
-            let receipt: FS.GG.Coord.IntakeReceipt.Receipt = { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; IssueNumber = number }
+            let receipt: FS.GG.Coord.IntakeReceipt.Receipt = { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; IssueNumber = number; DraftDigest = read "draftDigest" }
             Ok(Some receipt)
         with ex -> Error $"intake receipt '%s{file}' is unreadable: %s{ex.Message}"
 
@@ -71,7 +93,7 @@ module Cache =
         try
             let file = intakeReceiptFile receipt.DraftId
             let temp = file + ".tmp"
-            let json = $"{{\"draftId\":{JsonSerializer.Serialize receipt.DraftId},\"owner\":{JsonSerializer.Serialize receipt.Owner},\"repository\":{JsonSerializer.Serialize receipt.Repository},\"issueNumber\":%d{receipt.IssueNumber}}}"
+            let json = $"{{\"draftId\":{JsonSerializer.Serialize receipt.DraftId},\"owner\":{JsonSerializer.Serialize receipt.Owner},\"repository\":{JsonSerializer.Serialize receipt.Repository},\"issueNumber\":%d{receipt.IssueNumber},\"draftDigest\":{JsonSerializer.Serialize receipt.DraftDigest}}}"
             File.WriteAllText(temp, json)
             File.Move(temp, file, true)
             Ok()

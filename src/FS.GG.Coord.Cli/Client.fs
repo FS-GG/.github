@@ -8024,23 +8024,36 @@ module Client =
                             |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
                             |> Result.map (fun r -> { Owner = r.Owner; Repo = r.Repository; Number = r.IssueNumber })
                         | Ok None ->
-                            Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
-                            |> Result.bind (fun candidates ->
-                                let candidate = candidates |> List.tryFind (fun c -> c.Title = draft.Title)
-                                match draft.Disposition, candidate with
-                                | Some Intake.Reuse, Some c -> Ok { Owner = draft.Owner; Repo = draft.Repository; Number = c.Number }
-                                | Some Intake.Reuse, None -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
-                                | Some Intake.Create, Some _ ->
-                                    // A complete all-state inventory found a same-title issue or PR.
-                                    // Semantic equivalence is an authored decision, but `create` is not
-                                    // allowed to spend a second POST while that decision is unresolved.
+                            let digest = IntakeReceipt.digest draft
+                            let intent =
+                                Cache.getIntakeIntent draft.Id
+                                |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                |> Result.bind (function
+                                    | None -> Ok None
+                                    | Some stored when stored.Owner = draft.Owner && stored.Repository = draft.Repository && stored.DraftDigest = digest -> Ok(Some stored)
+                                    | Some _ -> Error(Errors.Malformed(draft.Id, "intake intent does not match this draft")))
+                            intent |> Result.bind (fun intent ->
+                              Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
+                              |> Result.bind (fun candidates ->
+                                let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
+                                let persist number =
+                                    let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
+                                    Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                    |> Result.map (fun () -> { Owner = draft.Owner; Repo = draft.Repository; Number = number })
+                                match draft.Disposition, matches, intent with
+                                | Some Intake.Reuse, [ c ], _ -> persist c.Number
+                                | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
+                                | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
+                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest -> persist c.Number
+                                | Some Intake.Create, _ :: _, _ ->
                                     Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
-                                | Some Intake.Create, None ->
-                                    Writes.createIntake ctx.Transport draft
-                                    |> Result.bind (fun created ->
-                                        let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = created.Number }
-                                        Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message)) |> Result.map (fun () -> created))
-                                | None, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing")))
+                                | Some Intake.Create, [], _ ->
+                                    let intent: Cache.IntakeIntent = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; DraftDigest = digest }
+                                    Cache.putIntakeIntent intent
+                                    |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                    |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
+                                    |> Result.bind (fun created -> persist created.Number)
+                                | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
                     match receiptResult with
                     | Error e -> fail e
                     | Ok issue ->
@@ -8048,22 +8061,56 @@ module Client =
                         | Error e, _, _ -> fail e
                         | _, Error e, _ -> fail e
                         | _, _, Error code -> code
-                        | Ok _, Ok board, Ok w ->
-                            match requireCoherentParkIfBlocked ctx issue (if draft.Status = "Blocked" then Some BoardStatus.Blocked else None) with
+                        | Ok issueState, Ok board, Ok w ->
+                            let readyGuard =
+                                if draft.Status <> "Ready" then Ok()
+                                elif issueState = IssueState.Closed then Error(Errors.Malformed(draft.Id, "Ready is refused for a closed issue"))
+                                else
+                                    Reads.markerScan ctx.Transport issue.Owner issue.Repo issue.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan issue.Canonical)
+                                    |> Result.bind (fun markers ->
+                                        if not (List.isEmpty markers) then Error(Errors.Malformed(draft.Id, "Ready is refused while a claim is live"))
+                                        else Reads.prAlive ctx.Transport issue.Owner issue.Repo issue.Number
+                                             |> Result.bind (function
+                                                 | Types.LeaseExpiredNoPr -> Ok()
+                                                 | Types.LivenessUnknown -> Error(Errors.Malformed(draft.Id, "Ready eligibility could not verify implementation PR/branch absence"))
+                                                 | _ -> Error(Errors.Malformed(draft.Id, "Ready is refused while an implementation PR or branch is live"))))
+                            match readyGuard with
+                            | Error e -> fail e
+                            | Ok() ->
+                            // Intake's validated draft carries the dependency/sentinel and createIntake
+                            // persists it in the issue body. The atomic batch below establishes Status and
+                            // Blocked by together; the legacy single-write preflight cannot require the
+                            // not-yet-written board field without making coherent creation unreachable.
+                            match (Ok(): Result<unit, int>) with
                             | Error code -> code
                             | Ok() ->
                                 match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
                                 | Error e -> fail e
                                 | Ok _ ->
-                                    match Board.boardWrite ctx.Transport board issue.Owner issue.Repo issue.Number "Status" (Board.Set draft.Status) w.Id with
+                                    let writes =
+                                        [ yield "Status", Board.Set draft.Status
+                                          yield "Class", Board.Set draft.Class
+                                          match draft.Phase with Some value -> yield "Phase", Board.Set value | None -> ()
+                                          match draft.Severity with Some value -> yield "Severity", Board.Set value | None -> ()
+                                          match draft.BlockedBy with Some value -> yield "Blocked by", Board.Set value | None -> () ]
+                                    match Board.boardWriteBatch ctx.Transport board issue.Owner issue.Repo issue.Number writes w.Id with
                                     | Error e -> fail e
                                     | Ok Board.Deferred -> eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."; Errors.ExRate
                                     | Ok Board.NotOnBoard -> eprint "fsgg-coord-engine: intake add did not produce a readable board item."; ExitError
                                     | Ok Board.Written ->
+                                        for field, write in writes do
+                                            let value = match write with Board.Set value -> value | Board.Clear -> ""
+                                            let queued: Cache.Deferred =
+                                                { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
+                                                  Board = Some(board.Owner, board.Title) }
+                                            Cache.dropPending queued
                                         match Board.itemStatus ctx.Transport board issue.Owner issue.Repo issue.Number with
                                         | Error e -> fail e
                                         | Ok status when status = Reads.statusOfName draft.Status ->
-                                            printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"board\":%s,\"status\":%s,\"pendingWrites\":0}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize ctx.Title) (JsonSerializer.Serialize draft.Status)
+                                            let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
+                                            let fields = writes |> List.map fst |> JsonSerializer.Serialize
+                                            printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":0,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize disposition) (JsonSerializer.Serialize ctx.Title) (JsonSerializer.Serialize draft.Status) fields (JsonSerializer.Serialize draft.JudgementQuestion)
                                             ExitGreen
                                         | Ok _ -> eprint "fsgg-coord-engine: intake Status readback did not match the requested projection."; ExitError
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError

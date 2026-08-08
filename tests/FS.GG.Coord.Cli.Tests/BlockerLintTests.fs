@@ -57,9 +57,9 @@ module BlockerLintTests =
         let source = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Cli/Client.fs"))
         let chore = File.ReadAllText(Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Chore.fs"))
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
-        Assert.Equal(5, directStatusWrites)
-        Assert.Equal(11, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
-        Assert.Equal(2, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(4, directStatusWrites)
+        Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
+        Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(4, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("StatusNotBlocked", chore)

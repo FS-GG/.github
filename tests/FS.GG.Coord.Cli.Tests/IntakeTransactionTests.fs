@@ -14,7 +14,7 @@ open FS.GG.Coord.Cli
 /// second `POST /issues`.
 module IntakeTransactionTests =
     let private ok body = Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty }
-    let private draft = """{"schema":"fsgg.coord.intake/v1","id":"tx-2134","owner":"FS-GG","repository":".github","title":"same","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","disposition":"create"}"""
+    let private draft = """{"schema":"fsgg.coord.intake/v1","id":"tx-2134","owner":"FS-GG","repository":".github","title":"same","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}"""
 
     // `Options.parse` intentionally leaves intake's action/path in its generic positional bucket;
     // keep the test on the real parser, then make that command-local shape explicit for the handler.
@@ -23,13 +23,22 @@ module IntakeTransactionTests =
         { parsed with Args = [ "apply"; path ] }
     let private context transport : Client.Context = { Transport = transport; Owner = "FS-GG"; Title = "Coordination"; DefaultRepo = Some ".github"; ChoreLocks = [] }
 
-    let private invoke cache transport =
+    let private invokeDraft cache (json: string) transport =
         let path = Path.Combine(cache, "draft.json")
-        File.WriteAllText(path, draft)
+        File.WriteAllText(path, json)
         match IntakeApplication.readDraft path with
         | Error error -> failwith error
         | Ok _ -> ()
         Client.intakeCmd (context transport) (options path)
+
+    let private invoke cache transport = invokeDraft cache draft transport
+
+    let private draftDigest cache =
+        let path = Path.Combine(cache, "digest-draft.json")
+        File.WriteAllText(path, draft)
+        match IntakeApplication.readDraft path with
+        | Ok parsed -> IntakeReceipt.digest parsed
+        | Error error -> failwith error
 
     let private withCache action =
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
@@ -43,7 +52,7 @@ module IntakeTransactionTests =
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =
         withCache <| fun cache ->
-            Cache.putIntakeReceipt { IntakeReceipt.Receipt.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 77 } |> ignore
+            Cache.putIntakeReceipt { IntakeReceipt.Receipt.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 77; DraftDigest = draftDigest cache } |> ignore
             let mutable posts = 0
             let world = Fake.Recorder(fun req ->
                 if req.Method = "POST" && req.Path.EndsWith "/issues" then posts <- posts + 1
@@ -69,6 +78,23 @@ module IntakeTransactionTests =
             Assert.Equal(Client.ExitError, invoke cache retry)
             Assert.Equal(0, retryPosts)
 
+    [<Fact>]
+    let ``#2134 create-before-receipt crash converges through the durable intent`` () =
+        withCache <| fun cache ->
+            let digest = draftDigest cache
+            Cache.putIntakeIntent { Cache.IntakeIntent.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; DraftDigest = digest } |> Result.defaultWith failwith
+            let mutable posts = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"created before crash\"}]"
+                | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must not create again")
+                | _ -> Error(NotFound "stop after intent recovery"))
+            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(0, posts)
+            match Cache.getIntakeReceipt "tx-2134" with
+            | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
+            | other -> failwithf "intent recovery did not bind a receipt: %A" other
+
     [<Theory>]
     [<InlineData("{\"number\":7,\"state\":\"closed\",\"title\":\"same\",\"body\":\"x\"}")>]
     [<InlineData("{\"number\":8,\"state\":\"open\",\"title\":\"same\",\"body\":\"x\",\"pull_request\":{}}")>]
@@ -84,6 +110,22 @@ module IntakeTransactionTests =
             Assert.Equal(0, posts)
 
     [<Fact>]
+    let ``#2134 explicit reuse binds the selected candidate without create`` () =
+        withCache <| fun cache ->
+            let reuse = draft.Replace("\"disposition\":\"create\"", "\"disposition\":\"reuse\"")
+            let mutable creates = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":88,\"state\":\"open\",\"title\":\"same\",\"body\":\"existing\"}]"
+                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "reuse must not create")
+                | _ -> Error(NotFound "stop after reuse binding"))
+            Assert.Equal(Client.ExitError, invokeDraft cache reuse world)
+            Assert.Equal(0, creates)
+            match Cache.getIntakeReceipt "tx-2134" with
+            | Ok(Some receipt) -> Assert.Equal(88, receipt.IssueNumber)
+            | other -> failwithf "reuse did not bind a receipt: %A" other
+
+    [<Fact>]
     let ``#2134 unreadable and binding-mismatched receipts fail closed before POST`` () =
         withCache <| fun cache ->
             File.WriteAllText(Path.Combine(cache, "intake-tx-2134.json"), "not-json")
@@ -95,9 +137,21 @@ module IntakeTransactionTests =
             Assert.Equal(Client.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
 
-    [<Fact>]
-    let ``#2134 successful create binds receipt and verifies board projection`` () =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``#2134 successful create binds receipt and verifies org or user-owned board projection`` userOwned =
         withCache <| fun cache ->
+            let priorKind = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE"
+            let priorOwner = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER"
+            Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", if userOwned then "user" else null)
+            Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "FS-GG")
+            use _restore =
+                { new IDisposable with
+                    member _.Dispose() =
+                        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", priorKind)
+                        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", priorOwner) }
+            let ownerNode = if userOwned then "user" else "organization"
             let mutable creates = 0
             let mutable added = 0
             let mutable statusWrites = 0
@@ -110,8 +164,8 @@ module IntakeTransactionTests =
                 | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
                 | "POST", "graphql" ->
                     match req.Body with
-                    | Query(doc, _) when doc.Contains "projectsV2" -> ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                    | Query(doc, _) when doc.Contains "fields(first" -> ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "projectsV2" -> ok ("{\"data\":{\"OWNER\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
+                    | Query(doc, _) when doc.Contains "fields(first" -> ok ("{\"data\":{\"OWNER\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
                     | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
                         let field =
                             projectedStatus

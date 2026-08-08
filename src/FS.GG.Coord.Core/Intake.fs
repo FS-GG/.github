@@ -9,7 +9,9 @@ module Intake =
     type Draft =
         { Schema: string; Id: string; Owner: string; Repository: string; Title: string
           Observed: string; RootCause: string; Acceptance: string; Verification: string
-          Paths: string list; Class: string; Status: string; Disposition: Disposition option }
+          Paths: string list; Class: string; Status: string; Disposition: Disposition option
+          Phase: string option; Severity: string option; BlockedBy: string option
+          BlockedOn: string option; BacklogReason: string option; JudgementQuestion: string option }
 
     type Finding = { Field: string; Detail: string }
 
@@ -41,6 +43,17 @@ module Intake =
                 | None -> yield { Field = "disposition"; Detail = "must explicitly be create or reuse" }
                 | Some _ -> ()
                 match draft.Status with
-                | "Backlog" | "Ready" | "Blocked" -> ()
+                | "Backlog" ->
+                    match draft.BacklogReason with
+                    | Some ("parked" | "awaiting-judgement" | "epic" | "not-yet-actionable") -> ()
+                    | _ -> yield { Field = "backlogReason"; Detail = "must be parked, awaiting-judgement, epic or not-yet-actionable for Backlog" }
+                | "Blocked" ->
+                    match draft.BlockedBy, draft.BlockedOn with
+                    | Some dependency, None when dependency.Contains "#" -> ()
+                    | None, Some ("human/action" | "human/decision") -> ()
+                    | _ -> yield { Field = "blockedBy"; Detail = "Blocked requires exactly one canonical dependency or human/action|human/decision park" }
+                | "Ready" ->
+                    if draft.BlockedBy.IsSome || draft.BlockedOn.IsSome || draft.JudgementQuestion.IsSome then
+                        yield { Field = "status"; Detail = "Ready cannot carry a dependency, human park or judgement question" }
                 | _ -> yield { Field = "status"; Detail = "must be Backlog, Ready or Blocked" } ]
         if List.isEmpty findings then Ok draft else Error findings

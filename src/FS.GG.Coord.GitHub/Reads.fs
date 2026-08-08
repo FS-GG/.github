@@ -2489,7 +2489,9 @@ module Reads =
         let subject = $"%s{owner}/%s{repo} all duplicate candidates"
         let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
         transport.Send request |> Result.bind (fun response ->
-            parse subject response.Body |> Result.bind (fun doc ->
+            if response.NextLink.IsSome then
+                Error(Malformed(subject, "the transport returned an unmerged next page; duplicate inventory is incomplete"))
+            else parse subject response.Body |> Result.bind (fun doc ->
                 use doc = doc
                 if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "candidate list is not an array")) else
                 doc.RootElement.EnumerateArray()

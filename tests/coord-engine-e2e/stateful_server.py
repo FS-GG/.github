@@ -171,6 +171,12 @@ def project_fields():
                                     {"id": "opt_backlog", "name": "Backlog"},
                                 ],
                             },
+                            {
+                                "id": "PVTSSF_class",
+                                "name": "Class",
+                                "dataType": "SINGLE_SELECT",
+                                "options": [{"id": "opt_hardening", "name": "hardening"}],
+                            },
                             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"},
                         ]
                     }
@@ -189,6 +195,7 @@ def board_items():
         nodes.append(
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
+                "class": {"name": issue.get("class")} if issue.get("class") else None,
                 "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
@@ -359,6 +366,13 @@ def graphql(query: str, variables: dict):
                         ISSUES[n]["status"] = "Ready"
                     elif "opt_backlog" in value or "opt_backlog" in inline_options:
                         ISSUES[n]["status"] = "Backlog"
+                    elif "opt_blocked" in value or "opt_blocked" in inline_options:
+                        ISSUES[n]["status"] = "Blocked"
+                    if "opt_hardening" in value or "opt_hardening" in inline_options:
+                        ISSUES[n]["class"] = "hardening"
+                    blocked = re.search(r'fieldId:\s*"PVTF_blocked"[^}]*value:\s*\{text:\s*"([^"]+)"', query)
+                    if blocked:
+                        ISSUES[n]["blocked_by"] = blocked.group(1)
                 except (ValueError, KeyError):
                     pass
             if RECONCILE_45_PROJECTION[0] > 0 and "opt_done" in json.dumps(variables):
@@ -462,6 +476,7 @@ class Handler(BaseHTTPRequestHandler):
                     "body": payload.get("body", ""),
                     "state": "OPEN",
                     "status": None,
+                    "class": None,
                     "repo": m.group(1),
                     "off_board": True,
                 }
