@@ -36,6 +36,12 @@ type private Sandbox() =
 
 let private aScan = """[{"repo":"FS.GG.SDD","number":42,"status":"Ready"}]"""
 
+[<Fact>]
+let ``#2134 an unreadable intake receipt fails closed instead of looking absent`` () =
+    use sandbox = new Sandbox()
+    File.WriteAllText(Path.Combine(sandbox.Dir, "intake-d-1.json"), "not-json")
+    Assert.True(getIntakeReceipt "d-1" |> Result.isError)
+
 // ---- INVARIANT 1: a failed read is never rescued by the cache --------------------------------------
 
 [<Fact>]

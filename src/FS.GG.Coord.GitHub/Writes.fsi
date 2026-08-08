@@ -46,6 +46,9 @@ namespace FS.GG.Coord.GitHub
 /// how that whole family of bugs was born).
 module Writes =
 
+    /// Validate an intake draft before issuing its REST issue-create request. Invalid drafts spend no IO.
+    val createIntake: transport: Transport.IGitHubTransport -> draft: FS.GG.Coord.Intake.Draft -> Errors.IoResult<FS.GG.Coord.Types.Ref>
+
     open FS.GG.Coord.Types
     open Errors
     open Transport

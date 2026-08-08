@@ -43,11 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"
 FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -57,6 +57,10 @@ export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT"
 export GITHUB_TOKEN="fixture-token"
 export FSGG_COORD_OWNER="FS-GG" FSGG_COORD_PROJECT="Coordination"
 export FSGG_COORD_CACHE="$CACHE_DIR" FSGG_COORD_SCAN_TTL_SEC=0
+mkdir -p "$INTAKE_REPOS/FS.GG.SDD/src/Valid"
+git -C "$INTAKE_REPOS/FS.GG.SDD" init -q
+git -C "$INTAKE_REPOS/FS.GG.SDD" remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+export FSGG_REPOS_ROOT="$INTAKE_REPOS"
 export FSGG_CYCLE_JOURNAL="$CYCLE_FIX/journal.json"
 # A clean identity, so the derivation never depends on the CI runner's env.
 #
@@ -871,6 +875,77 @@ no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
 no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
+
+# `intake apply` is the public receipt-bound create/projection transaction.  The fixture's mutation
+# ledger classifies its REST issue POST separately from the two GraphQL board mutations, so this is a
+# real executable driver rather than a parser-only mark in the command-contract inventory.
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-wrong-repo-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"wrong checkout path","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core/**"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+wrong_path_out="$(run intake validate "$INTAKE_DRAFT" 2>&1)"; wrong_path_rc=$?
+if [ "$wrong_path_rc" -ne 0 ] && printf '%s' "$wrong_path_out" | grep -q 'target repository FS-GG/FS.GG.SDD'; then
+  ok "#2134: intake paths are validated in the draft target repository"
+else
+  bad "#2134: a path from the coordinator checkout must not validate for the target repository" "rc=$wrong_path_rc output=$wrong_path_out"
+fi
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","phase":"execution","severity":"high","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+mark_contract "intake" "public-create-and-projection"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+intake_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; intake_rc=$?
+intake_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+intake_pending="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
+if [ "$intake_rc" -eq 0 ] \
+  && printf '%s' "$intake_out" | jq -e --argjson pending "$intake_pending" '.kind == "applied" and .status == "Backlog" and .pendingWrites == $pending and (.fields | index("Class")) and (.fields | index("Phase")) and (.fields | index("Severity")) and .issueUrl == "https://github.com/FS-GG/FS.GG.SDD/issues/700" and .board.owner == "FS-GG" and .board.title == "Coordination" and .board.number == 12 and .board.id == "PVT_coord"' >/dev/null 2>&1 \
+  && printf '%s' "$intake_ledger" | jq -e '
+      .count == 3 and
+      ([.requests[] | select(.kind == "rest-mutation" and .method == "POST" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length == 1) and
+      ([.requests[] | select(.kind == "graphql-mutation")] | length == 2)' >/dev/null 2>&1; then
+  ok "#2134: intake applies one public create and converged board projection"
+else
+  bad "#2134: intake public transaction must create and project" "rc=$intake_rc output=$intake_out ledger=$intake_ledger"
+fi
+
+for projected_field in Class Phase Severity; do
+  field_id="$(printf '%s' "$projected_field" | tr '[:upper:]' '[:lower:]')"
+  printf '%s\n' "{\"schema\":\"fsgg.coord.intake/v1\",\"id\":\"e2e-intake-missing-$field_id-2134\",\"owner\":\"FS-GG\",\"repository\":\"FS.GG.SDD\",\"title\":\"missing $projected_field projection\",\"observed\":\"o\",\"rootCause\":\"r\",\"acceptance\":\"a\",\"verification\":\"v\",\"paths\":[\"src/Valid/**\"],\"class\":\"hardening\",\"phase\":\"execution\",\"severity\":\"high\",\"status\":\"Backlog\",\"backlogReason\":\"not-yet-actionable\",\"disposition\":\"create\"}" >"$INTAKE_DRAFT"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/drop-intake-field/$projected_field" >/dev/null
+  missing_field_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; missing_field_rc=$?
+  if [ "$missing_field_rc" -ne 0 ] && printf '%s' "$missing_field_out" | grep -q "fresh $projected_field readback"; then
+    ok "#2134: missing $projected_field persistence fails the intake transaction"
+  else
+    bad "#2134: projectionFresh requires live $projected_field readback" "rc=$missing_field_rc output=$missing_field_out"
+  fi
+done
+
+# Restore the canonical draft for the receipt-first queued retry below.
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","phase":"execution","severity":"high","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-blocked-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e blocked intake","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/FS.GG.SDD#42","disposition":"create"}' >"$INTAKE_BLOCKED_DRAFT"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+blocked_out="$(run intake apply "$INTAKE_BLOCKED_DRAFT" 2>&1)"; blocked_rc=$?
+blocked_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$blocked_rc" -eq 0 ] && printf '%s' "$blocked_out" | jq -e '.status == "Blocked" and (.fields | index("Blocked by"))' >/dev/null 2>&1 \
+  && [ "$(printf '%s' "$blocked_ledger" | jq -r .count)" = "3" ]; then
+  ok "#2134: Blocked intake creates and projects Status plus dependency coherently"
+else
+  bad "#2134: Blocked intake must project a coherent dependency" "rc=$blocked_rc output=$blocked_out ledger=$blocked_ledger"
+fi
+
+# A queued projection retry is receipt-first too: the first batch is refused and queued, the retry
+# converges without a second issue POST, retires its queued pairs, and reports zero pending writes.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+queued_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; queued_rc=$?
+run flush >/dev/null 2>&1
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+retry_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; retry_rc=$?
+queued_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+pending_after_retry="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
+if [ "$queued_rc" -eq 75 ] && [ "$retry_rc" -eq 0 ] && [ "$pending_after_retry" = "0" ] \
+  && printf '%s' "$retry_out" | jq -e '.kind == "applied" and .pendingWrites == 0' >/dev/null 2>&1 \
+  && [ "$(printf '%s' "$queued_ledger" | jq '[.requests[] | select(.kind == "rest-mutation" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length')" = "0" ]; then
+  ok "#2134: queued intake projection retries to zero pending without a second create"
+else
+  bad "#2134: queued intake retry must converge receipt-first" "first=$queued_rc:$queued_out retry=$retry_rc:$retry_out pending=$pending_after_retry ledger=$queued_ledger"
+fi
 
 # `cycle` is another pure snapshot boundary.  Feed it a valid one-unit ledger, rather than a
 # parser refusal, so command-contract coverage proves the command reaches its actual decision

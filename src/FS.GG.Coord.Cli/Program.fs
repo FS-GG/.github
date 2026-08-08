@@ -330,6 +330,12 @@ let main argv =
                 printfn "%s" (Options.renderCommandContract ())
                 ExitGreen
 
+            // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
+            // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
+            // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
+            | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
+            | IntakeCmd -> Client.run opts
+
             | DriverCmd -> Client.run opts
 
             | CycleCmd -> CycleLedgerApplication.run opts
@@ -388,7 +394,8 @@ let main argv =
             | Flush
             | LintCmd
             | RoomOpen
-            | Issues -> Client.run opts
+            | Issues
+            | IntakeCmd -> Client.run opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

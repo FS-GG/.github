@@ -11,6 +11,7 @@ module Options =
         | LanesView
         | Facts
         | CommandContractCmd
+        | IntakeCmd
         | WhoAmI
         | Budget
         | Next
@@ -280,6 +281,8 @@ DECISION (pure — no board, no network):
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
+  intake <validate|apply> <draft.json> [--json]
+                                             validate or atomically project one receipt-bound filing draft
 
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
@@ -546,6 +549,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // touch-set. Filed as a follow-up rather than reached into.
         | Scan -> JsonOnly
         | CommandContractCmd -> JsonOnly
+        | IntakeCmd -> JsonOnly
         | BoardCmd -> JsonOnly
         | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
 
@@ -968,6 +972,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
+        | IntakeCmd -> Writes // `intake apply` creates/reuses and projects the receipt-bound issue
 
         // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
         | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
@@ -1104,6 +1109,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LanesView -> "lanes"
         | Facts -> "facts"
         | CommandContractCmd -> "command-contract"
+        | IntakeCmd -> "intake"
         | WhoAmI -> "whoami"
         | Budget -> "budget"
         | Next -> "next"
@@ -1802,6 +1808,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
+        | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
 
         | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
         | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest

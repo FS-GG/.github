@@ -28,10 +28,11 @@ module BlockerLintTests =
                 | _ -> false)
 
         Assert.Equal<string list>(
-            [ "add --status Blocked"
-              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
-              "release --status Blocked"
-              "set-field --batch Status=Blocked"
+          [ "add --status Blocked";
+              "intake apply Status=Blocked";
+              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked";
+              "release --status Blocked";
+              "set-field --batch Status=Blocked";
               "set-field Status Blocked" ],
             deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
         )
@@ -58,7 +59,7 @@ module BlockerLintTests =
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
-        Assert.Equal(2, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(4, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("StatusNotBlocked", chore)

@@ -776,6 +776,17 @@ module Board =
         | true, tx when tx.ValueKind = JsonValueKind.String -> Some(tx.GetString())
         | _ -> None
 
+    let private stringOfFieldValue (fv: JsonElement) : string option =
+        match fv.TryGetProperty "name", fv.TryGetProperty "text" with
+        | (true, value), _ when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+        | _, (true, value) when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
+        | _ -> None
+
+    /// Freshly resolve any projected single-select/text field from the board item itself. Intake uses
+    /// this after its batch so `projectionFresh` covers every field named in the receipt.
+    let itemFieldValue transport board owner repo number field =
+        externalItemField transport board owner repo number field stringOfFieldValue
+
     /// Is this issue's owner the board's own owner? Only then can the issue-side connection see the row.
     let private ownedByBoardOwner (board: BoardMap) (owner: string) =
         String.Equals(owner, board.Owner, StringComparison.OrdinalIgnoreCase)

@@ -10,6 +10,8 @@ module Reads =
     open Errors
     open Transport
 
+    type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
+
     type Marker =
         { Id: int64
           Worker: WorkerId
@@ -2481,3 +2483,25 @@ module Reads =
 
                         Cache.putBody cacheKey validator filtered
                         Ok filtered
+
+    /// Complete, uncached all-state inventory for intake. Unlike `issues`, PRs remain candidates.
+    let duplicateCandidates (transport: IGitHubTransport) (owner: string) (repo: string) : IoResult<DuplicateCandidate list> =
+        let subject = $"%s{owner}/%s{repo} all duplicate candidates"
+        let request = { Method = "GET"; Path = $"repos/%s{owner}/%s{repo}/issues"; Query = [ "state", "all"; "per_page", "100" ]; Body = NoBody; Budget = Rest; IfNoneMatch = None; Subject = subject }
+        transport.Send request |> Result.bind (fun response ->
+            if response.NextLink.IsSome then
+                Error(Malformed(subject, "the transport returned an unmerged next page; duplicate inventory is incomplete"))
+            else parse subject response.Body |> Result.bind (fun doc ->
+                use doc = doc
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then Error(Malformed(subject, "candidate list is not an array")) else
+                doc.RootElement.EnumerateArray()
+                |> Seq.mapi (fun index item ->
+                    try
+                        let number = item.GetProperty("number").GetInt32()
+                        let state = item.GetProperty("state").GetString()
+                        let title = item.GetProperty("title").GetString()
+                        let body = match item.TryGetProperty "body" with | true, b when b.ValueKind = JsonValueKind.String -> b.GetString() | true, b when b.ValueKind = JsonValueKind.Null -> "" | _ -> raise (System.Exception "unreadable body")
+                        Ok { Number = number; State = state; Title = title; Body = body; IsPullRequest = item.TryGetProperty "pull_request" |> fst }
+                    with ex -> Error(Malformed(subject, $"candidate element %d{index} is unreadable: %s{ex.Message}")))
+                |> Seq.fold (fun state next -> state |> Result.bind (fun xs -> next |> Result.map (fun x -> x::xs))) (Ok [])
+                |> Result.map List.rev))

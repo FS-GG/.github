@@ -361,6 +361,7 @@ the worker's own heartbeat/release/done operations. Neither behavior is claimed 
          It is a LOCAL verb — no token, no board — and depends on `Client` for those two things only. -->
     <Compile Include="Followups.fsi" />
     <Compile Include="Followups.fs" />
+    <Compile Include="IntakeApplication.fs" />
     <Compile Include="Client.fs" />
     <Compile Include="SemanticDiffApplication.fs" />
     <Compile Include="Program.fs" />

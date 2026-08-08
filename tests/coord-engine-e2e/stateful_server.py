@@ -127,6 +127,7 @@ RECONCILE_45_PROJECTION = [0]
 # the next scan either sees only the Status half or no row at all.
 RECONCILE_47_PARTIAL = [0]
 RECONCILE_47_MISSING = [0]
+DROP_INTAKE_FIELDS = set()
 
 # .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
 # per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
@@ -171,6 +172,14 @@ def project_fields():
                                     {"id": "opt_backlog", "name": "Backlog"},
                                 ],
                             },
+                            {
+                                "id": "PVTSSF_class",
+                                "name": "Class",
+                                "dataType": "SINGLE_SELECT",
+                                "options": [{"id": "opt_hardening", "name": "hardening"}],
+                            },
+                            {"id": "PVTSSF_phase", "name": "Phase", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_execution", "name": "execution"}]},
+                            {"id": "PVTSSF_severity", "name": "Severity", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_high", "name": "high"}]},
                             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"},
                         ]
                     }
@@ -189,6 +198,7 @@ def board_items():
         nodes.append(
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
+                "class": {"name": issue.get("class")} if issue.get("class") else None,
                 "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
@@ -242,7 +252,8 @@ def graphql(query: str, variables: dict):
         except (KeyError, ValueError):
             return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
         field = variables.get("field")
-        value = issue.get("blocked_by") if field == "Blocked by" else issue.get("status")
+        values = {"Status": issue.get("status"), "Class": issue.get("class"), "Phase": issue.get("phase"), "Severity": issue.get("severity"), "Blocked by": issue.get("blocked_by")}
+        value = values.get(field)
         field_value = ({"text": value} if field == "Blocked by" else {"name": value}) if value else None
         return {"data": {"node": {"fieldValueByName": field_value}, "rateLimit": RATE_LIMIT}}
     if "items(first" in query:
@@ -289,7 +300,14 @@ def graphql(query: str, variables: dict):
             # visible, while the FS-GG organization board's row is absent.
             nodes = [{"id": f"PVTI_user_{n}", "project": {"number": 7}}]
         else:
-            nodes = [{"id": f"PVTI_{n}", "project": {"number": 12}}]
+            node = {"id": f"PVTI_{n}", "project": {"number": 12}}
+            if 'fieldValueByName(name: "Status")' in query:
+                status = ISSUES.get(n, {}).get("status")
+                node["fieldValueByName"] = {"name": status} if status else None
+            elif 'fieldValueByName(name: "Blocked by")' in query:
+                blocked_by = ISSUES.get(n, {}).get("blocked_by")
+                node["fieldValueByName"] = {"text": blocked_by} if blocked_by else None
+            nodes = [node]
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": nodes}}},
@@ -338,6 +356,8 @@ def graphql(query: str, variables: dict):
                     # like Status writes.
                     value = json.dumps(variables)
                     inline_options = re.findall(r'singleSelectOptionId:\s*"([^"]+)"', query)
+                    dropped = set(DROP_INTAKE_FIELDS)
+                    DROP_INTAKE_FIELDS.clear()
                     if n == 47 and RECONCILE_47_MISSING[0] > 0:
                         RECONCILE_47_MISSING[0] -= 1
                         ISSUES[n]["off_board"] = True
@@ -355,6 +375,17 @@ def graphql(query: str, variables: dict):
                         ISSUES[n]["status"] = "Ready"
                     elif "opt_backlog" in value or "opt_backlog" in inline_options:
                         ISSUES[n]["status"] = "Backlog"
+                    elif "opt_blocked" in value or "opt_blocked" in inline_options:
+                        ISSUES[n]["status"] = "Blocked"
+                    if "Class" not in dropped and ("opt_hardening" in value or "opt_hardening" in inline_options):
+                        ISSUES[n]["class"] = "hardening"
+                    if "Phase" not in dropped and ("opt_execution" in value or "opt_execution" in inline_options):
+                        ISSUES[n]["phase"] = "execution"
+                    if "Severity" not in dropped and ("opt_high" in value or "opt_high" in inline_options):
+                        ISSUES[n]["severity"] = "high"
+                    blocked = re.search(r'fieldId:\s*"PVTF_blocked"[^}]*value:\s*\{text:\s*"([^"]+)"', query)
+                    if blocked:
+                        ISSUES[n]["blocked_by"] = blocked.group(1)
                 except (ValueError, KeyError):
                     pass
             if RECONCILE_45_PROJECTION[0] > 0 and "opt_done" in json.dumps(variables):
@@ -364,7 +395,12 @@ def graphql(query: str, variables: dict):
     if "addProjectV2ItemById" in query:
         # GitHub's mutation is idempotent.  The issue-side lookup above misses the external row, but
         # adding it again returns the existing Coordination item, whose live Status must then be read.
-        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_96"}}}}
+        # Intake creates an issue before projecting it.  The newest issue is therefore the only
+        # newly-created board candidate in this hermetic fixture; return its real project-item id so
+        # the subsequent Status mutation and readback exercise the same public transaction.
+        created = max(ISSUES)
+        ISSUES[created]["off_board"] = False
+        return {"data": {"addProjectV2ItemById": {"item": {"id": f"PVTI_{created}"}}}}
     return None
 
 
@@ -448,7 +484,15 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 number = NEXT_ROOM_NUMBER[0]
                 NEXT_ROOM_NUMBER[0] += 1
-                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": True}
+                ISSUES[number] = {
+                    "title": payload.get("title", ""),
+                    "body": payload.get("body", ""),
+                    "state": "OPEN",
+                    "status": None,
+                    "class": None,
+                    "repo": m.group(1),
+                    "off_board": True,
+                }
                 COMMENTS[number] = []
             return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
@@ -566,6 +610,12 @@ class Handler(BaseHTTPRequestHandler):
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
 
+        m = re.match(r"^/_fixture/drop-intake-field/(Class|Phase|Severity)$", path)
+        if m:
+            with LOCK:
+                DROP_INTAKE_FIELDS.add(m.group(1))
+                return self._send(200, {"drop": m.group(1)})
+
         # #2268: configure the headers seen by the *real* REST marker scan.  This is not a
         # synthetic engine hook: the following command must derive admission entirely from these
         # response headers, including the genuinely headerless Unknown case.
@@ -635,7 +685,8 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             r = m.group(1)
             with LOCK:
-                return self._send(200, [{"number": n, "state": i["state"].lower(), "body": i["body"]}
+                return self._send(200, [{"number": n, "state": i["state"].lower(),
+                                         "title": i.get("title", f"item {n}"), "body": i["body"]}
                                         for n, i in sorted(ISSUES.items())
                                         if repo_of(n) == r and i["state"] == "OPEN"])
 
