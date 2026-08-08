@@ -19,6 +19,16 @@ let private serving (body: string) =
 /// A transport that fails every request.
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
 
+[<Fact>]
+let ``#2134 duplicate candidates retain both closed issues and PRs`` () =
+    let transport = serving """[{"number":7,"state":"closed","title":"same","body":"x"},{"number":8,"state":"open","title":"same","body":"y","pull_request":{}}]"""
+    match Reads.duplicateCandidates transport "FS-GG" ".github" with
+    | Ok candidates ->
+        Assert.Equal<int list>([ 7; 8 ], candidates |> List.map _.Number)
+        Assert.False(candidates[0].IsPullRequest)
+        Assert.True(candidates[1].IsPullRequest)
+    | Error e -> failwithf "candidate inventory failed: %A" e
+
 /// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
 /// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.
 let private prAndRefs (pulls: string) (refs: string) =
