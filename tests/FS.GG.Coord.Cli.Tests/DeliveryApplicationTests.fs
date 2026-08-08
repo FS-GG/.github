@@ -5,7 +5,8 @@ open FS.GG.Coord
 open FS.GG.Coord.Cli
 
 module DeliveryApplicationTests =
-    let comment body : Driver.ReviewComment = { Id = 1L; Url = "https://example.test/1"; Body = body }
+    let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
+    let comment body = commentWithId 1L body
 
     let guardedLandingFacts claimGeneration : Delivery.Snapshot =
         { Freshness =
@@ -46,6 +47,37 @@ module DeliveryApplicationTests =
             Assert.Equal("publication", obligation.Kind)
             Assert.True(obligation.Verified)
         | other -> failwithf "expected one verified obligation, got %A" other
+
+    [<Fact>]
+    let ``#2239 version-bearing obligation and receipt ids are accepted`` () =
+        let comments =
+            [ commentWithId 17L "<!-- fsgg:delivery-obligation id=new-sdd-workspace-0.9.0 kind=publication head=head-a -->"
+              commentWithId 18L "<!-- fsgg:delivery-receipt id=new-sdd-workspace-0.9.0 head=head-a evidence=https://nuget.example/package -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [ obligation ] ->
+            Assert.Equal("new-sdd-workspace-0.9.0", obligation.Id)
+            Assert.True(obligation.Verified)
+        | other -> failwithf "expected one verified version-bearing obligation, got %A" other
+
+    [<Fact>]
+    let ``#2239 malformed obligation ids name their comment and field`` () =
+        let comments = [ commentWithId 19L "<!-- fsgg:delivery-obligation id=New-Sdd kind=publication head=head-a -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Error reason ->
+            Assert.Contains("19", reason)
+            Assert.Contains("id", reason)
+        | other -> failwithf "expected malformed id refusal, got %A" other
+
+    [<Fact>]
+    let ``#2239 malformed receipt ids name their comment and field`` () =
+        let comments =
+            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->"
+              commentWithId 20L "<!-- fsgg:delivery-receipt id=New-Sdd head=head-a evidence=https://nuget.example/package -->" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Error reason ->
+            Assert.Contains("20", reason)
+            Assert.Contains("id", reason)
+        | other -> failwithf "expected malformed receipt id refusal, got %A" other
 
     [<Fact>]
     let ``#2131 stale and undeclared obligation facts are refused`` () =
