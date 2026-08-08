@@ -87,7 +87,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - name: Is the fleet's engine pin the newest published engine?
+      - name: Is .github's canonical engine pin the newest published engine?
         env:
           # Env-passed, never interpolated into the run script — the org's uniform anti-injection
           # pattern (cf. engine-freshness.yml, feed-coherence.yml). The run-scoped token carries

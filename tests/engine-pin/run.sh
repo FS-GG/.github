@@ -27,6 +27,7 @@ export FSGG_ENGINE_PIN_FIXTURE_OK=1
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GATE="$HERE/../../scripts/check-engine-pin.py"
+WORKFLOW="$HERE/../../.github/workflows/engine-pin-coherence.yml"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/engine-pin-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -82,6 +83,16 @@ must_fail() { # $1 = label, $2 = required reason pattern
 }
 
 echo "== check-engine-pin fixture =="
+
+# The visible live-step label is part of the gate's declared subject. Keep it bound to the same
+# canonical-manifest scope as the checker: this pin is not distributed to receivers (#2257).
+if grep -Fqx "      - name: Is .github's canonical engine pin the newest published engine?" "$WORKFLOW" \
+  && ! grep -Fq "fleet's engine pin" "$WORKFLOW"; then
+  ok "live workflow label names .github's canonical pin, not the fleet's"
+else
+  bad "live workflow label keeps the canonical-only subject" \
+      "expected the canonical label and no retired fleet-scope label in $WORKFLOW"
+fi
 
 # ---------------------------------------------------------------------------------------------
 # 1. GREEN: the pin equals the newest stable version on the feed.
