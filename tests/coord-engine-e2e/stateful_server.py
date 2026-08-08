@@ -127,6 +127,7 @@ RECONCILE_45_PROJECTION = [0]
 # the next scan either sees only the Status half or no row at all.
 RECONCILE_47_PARTIAL = [0]
 RECONCILE_47_MISSING = [0]
+DROP_INTAKE_FIELDS = set()
 
 # .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
 # per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
@@ -177,6 +178,8 @@ def project_fields():
                                 "dataType": "SINGLE_SELECT",
                                 "options": [{"id": "opt_hardening", "name": "hardening"}],
                             },
+                            {"id": "PVTSSF_phase", "name": "Phase", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_execution", "name": "execution"}]},
+                            {"id": "PVTSSF_severity", "name": "Severity", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_high", "name": "high"}]},
                             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"},
                         ]
                     }
@@ -249,7 +252,8 @@ def graphql(query: str, variables: dict):
         except (KeyError, ValueError):
             return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
         field = variables.get("field")
-        value = issue.get("blocked_by") if field == "Blocked by" else issue.get("status")
+        values = {"Status": issue.get("status"), "Class": issue.get("class"), "Phase": issue.get("phase"), "Severity": issue.get("severity"), "Blocked by": issue.get("blocked_by")}
+        value = values.get(field)
         field_value = ({"text": value} if field == "Blocked by" else {"name": value}) if value else None
         return {"data": {"node": {"fieldValueByName": field_value}, "rateLimit": RATE_LIMIT}}
     if "items(first" in query:
@@ -352,6 +356,8 @@ def graphql(query: str, variables: dict):
                     # like Status writes.
                     value = json.dumps(variables)
                     inline_options = re.findall(r'singleSelectOptionId:\s*"([^"]+)"', query)
+                    dropped = set(DROP_INTAKE_FIELDS)
+                    DROP_INTAKE_FIELDS.clear()
                     if n == 47 and RECONCILE_47_MISSING[0] > 0:
                         RECONCILE_47_MISSING[0] -= 1
                         ISSUES[n]["off_board"] = True
@@ -371,8 +377,12 @@ def graphql(query: str, variables: dict):
                         ISSUES[n]["status"] = "Backlog"
                     elif "opt_blocked" in value or "opt_blocked" in inline_options:
                         ISSUES[n]["status"] = "Blocked"
-                    if "opt_hardening" in value or "opt_hardening" in inline_options:
+                    if "Class" not in dropped and ("opt_hardening" in value or "opt_hardening" in inline_options):
                         ISSUES[n]["class"] = "hardening"
+                    if "Phase" not in dropped and ("opt_execution" in value or "opt_execution" in inline_options):
+                        ISSUES[n]["phase"] = "execution"
+                    if "Severity" not in dropped and ("opt_high" in value or "opt_high" in inline_options):
+                        ISSUES[n]["severity"] = "high"
                     blocked = re.search(r'fieldId:\s*"PVTF_blocked"[^}]*value:\s*\{text:\s*"([^"]+)"', query)
                     if blocked:
                         ISSUES[n]["blocked_by"] = blocked.group(1)
@@ -599,6 +609,12 @@ class Handler(BaseHTTPRequestHandler):
                 spent = list(MUTATIONS)
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
+
+        m = re.match(r"^/_fixture/drop-intake-field/(Class|Phase|Severity)$", path)
+        if m:
+            with LOCK:
+                DROP_INTAKE_FIELDS.add(m.group(1))
+                return self._send(200, {"drop": m.group(1)})
 
         # #2268: configure the headers seen by the *real* REST marker scan.  This is not a
         # synthetic engine hook: the following command must derive admission entirely from these

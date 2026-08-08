@@ -223,6 +223,7 @@ module IntakeTransactionTests =
             let mutable statusWrites = 0
             let mutable boardAdded = false
             let mutable projectedStatus: string option = None
+            let mutable projectedClass: string option = None
             let world = Fake.Recorder(fun req ->
                 match req.Method, req.Path.Trim '/' with
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
@@ -232,6 +233,11 @@ module IntakeTransactionTests =
                     match req.Body with
                     | Query(doc, _) when doc.Contains "projectsV2" -> ok ("{\"data\":{\"OWNER\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
                     | Query(doc, _) when doc.Contains "fields(first" -> ok ("{\"data\":{\"OWNER\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]},{\"id\":\"C\",\"name\":\"Class\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"H\",\"name\":\"hardening\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}".Replace("OWNER", ownerNode))
+                    | Query(doc, variables) when doc.Contains "node(id: $itemId)" ->
+                        let field = variables |> List.tryPick (function "field", VString value -> Some value | _ -> None)
+                        let value = match field with Some "Status" -> projectedStatus | Some "Class" -> projectedClass | _ -> None
+                        let node = value |> Option.map (fun projected -> $"{{\"name\":{System.Text.Json.JsonSerializer.Serialize projected}}}") |> Option.defaultValue "null"
+                        ok $"{{\"data\":{{\"node\":{{\"fieldValueByName\":%s{node}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}}}"
                     | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
                         let field =
                             projectedStatus
@@ -243,7 +249,7 @@ module IntakeTransactionTests =
                         ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}")
                     | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
                     | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> added <- added + 1; boardAdded <- true; ok "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
-                    | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" -> statusWrites <- statusWrites + 1; projectedStatus <- Some "Backlog"; ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" -> statusWrites <- statusWrites + 1; projectedStatus <- Some "Backlog"; projectedClass <- Some "hardening"; ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
                     | _ -> Error(NotFound "unrecognised board request")
                 | _ -> Error(NotFound "unrecognised request"))
             let code = invoke cache world

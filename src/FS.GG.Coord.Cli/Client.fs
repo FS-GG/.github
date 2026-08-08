@@ -8135,14 +8135,17 @@ module Client =
                                                   Board = Some(board.Owner, board.Title) }
                                             Cache.dropPending queued
                                         let readback =
-                                            Board.itemStatus ctx.Transport board issue.Owner issue.Repo issue.Number
-                                            |> Result.bind (fun status ->
-                                                match draft.BlockedBy with
-                                                | None -> Ok(status, None)
-                                                | Some _ -> Board.itemBlockedBy ctx.Transport board issue.Owner issue.Repo issue.Number |> Result.map (fun blockedBy -> status, blockedBy))
+                                            writes
+                                            |> List.fold (fun state (field, write) ->
+                                                state |> Result.bind (fun () ->
+                                                    let expected = match write with Board.Set value -> Some value | Board.Clear -> None
+                                                    Board.itemFieldValue ctx.Transport board issue.Owner issue.Repo issue.Number field
+                                                    |> Result.bind (fun actual ->
+                                                        if actual = expected then Ok()
+                                                        else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))) (Ok())
                                         match readback with
                                         | Error e -> fail e
-                                        | Ok(status, blockedBy) when status = Reads.statusOfName draft.Status && blockedBy = draft.BlockedBy ->
+                                        | Ok() ->
                                             let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
                                             let fields = writes |> List.map fst |> JsonSerializer.Serialize
                                             match Cache.pending () with
@@ -8152,7 +8155,6 @@ module Client =
                                                 let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
                                                 printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
                                                 ExitGreen
-                                        | Ok _ -> eprint "fsgg-coord-engine: intake Status/Blocked-by readback did not match the requested projection."; ExitError
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
 

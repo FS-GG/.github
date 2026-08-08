@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli
 
 open System
 open System.IO
+open System.Diagnostics
 open System.Text.Json
 open FS.GG.Coord
 open FS.GG.Coord.Cli.Options
@@ -79,15 +80,46 @@ module IntakeApplication =
             if isNull cursor then None
             elif Directory.Exists(Path.Combine(cursor.FullName, ".git")) || File.Exists(Path.Combine(cursor.FullName, ".git")) then Some cursor.FullName
             else gitRoot cursor.Parent
+        let originMatches root =
+            try
+                let info = ProcessStartInfo("git")
+                info.ArgumentList.Add "-C"
+                info.ArgumentList.Add root
+                info.ArgumentList.Add "remote"
+                info.ArgumentList.Add "get-url"
+                info.ArgumentList.Add "origin"
+                info.RedirectStandardOutput <- true
+                info.RedirectStandardError <- true
+                info.UseShellExecute <- false
+                use child = Process.Start info
+                let rawUrl = child.StandardOutput.ReadToEnd().Trim().TrimEnd('/')
+                let url = if rawUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase) then rawUrl.Substring(0, rawUrl.Length - 4) else rawUrl
+                child.WaitForExit()
+                let expected = $"%s{draft.Owner}/%s{draft.Repository}"
+                child.ExitCode = 0 && (url.EndsWith("/" + expected, StringComparison.OrdinalIgnoreCase) || url.EndsWith(":" + expected, StringComparison.OrdinalIgnoreCase))
+            with _ -> false
         match gitRoot start with
         | None -> Error "cannot locate the live repository checkout for path validation"
-        | Some root ->
-            let missing =
-                draft.Paths
-                |> List.map pathSubject
-                |> List.filter (fun path -> not (File.Exists(Path.Combine(root, path)) || Directory.Exists(Path.Combine(root, path))))
-            let rendered = String.concat ", " missing
-            if List.isEmpty missing then Ok() else Error $"paths do not exist in the live repository checkout: {rendered}"
+        | Some currentRoot ->
+            let envRoot = Environment.GetEnvironmentVariable "FSGG_REPOS_ROOT"
+            let rec ancestors (directory: DirectoryInfo) =
+                if isNull directory then [] else directory.FullName :: ancestors directory.Parent
+            let candidates =
+                [ yield currentRoot
+                  if not (String.IsNullOrWhiteSpace envRoot) then
+                      yield Path.Combine(envRoot, draft.Repository)
+                  for ancestor in ancestors (DirectoryInfo currentRoot) do
+                      yield Path.Combine(ancestor, draft.Repository) ]
+                |> List.distinct
+            match candidates |> List.tryFind (fun path -> Directory.Exists path && originMatches path) with
+            | None -> Error $"cannot locate a live checkout of target repository %s{draft.Owner}/%s{draft.Repository} for path validation"
+            | Some root ->
+                let missing =
+                    draft.Paths
+                    |> List.map pathSubject
+                    |> List.filter (fun path -> not (File.Exists(Path.Combine(root, path)) || Directory.Exists(Path.Combine(root, path))))
+                let rendered = String.concat ", " missing
+                if List.isEmpty missing then Ok() else Error $"paths do not exist in target repository %s{draft.Owner}/%s{draft.Repository}: {rendered}"
 
     let run (opts: Options) =
         match opts.Args with
