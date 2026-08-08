@@ -1949,7 +1949,46 @@ module Client =
                         else
                             item)
 
-                let chores = Chore.derive lifecycleItems
+                // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
+                // facts again at the reconciliation boundary and send every coherent observation through
+                // the typed projector before handing its one repair to the existing verified write path.
+                // Comments are read only for terminal/review-shaped rows, where delivery evidence can
+                // change the answer; this keeps an hourly catch-up bounded instead of multiplying REST by
+                // every Ready row on the board.
+                let lifecycleChores =
+                    lifecycleItems
+                    |> List.choose (fun item ->
+                        let needsDeliveryRead = item.State = Closed || item.Status = InReview
+                        let delivery =
+                            if not needsDeliveryRead then Some ({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery)
+                            else
+                                match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
+                                | Error _ -> None
+                                | Ok comments ->
+                                    let obligations = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-obligation "))
+                                    let receipts = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-receipt "))
+                                    Some
+                                        ({ Outstanding = not (List.isEmpty obligations) && List.isEmpty receipts
+                                           DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery)
+
+                        match delivery with
+                        | None -> None // an unreadable fact withholds its write; scheduled reconciliation retries.
+                        | Some delivery ->
+                            let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                            let pullRequest =
+                                item.ItemPr
+                                |> Option.map (fun number -> ({ Number = number; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
+                            let observation : LifecycleProjection.Observation =
+                                { Claim = { ObservedAt = observedAt; Value = item.Claim }
+                                  PullRequest = { ObservedAt = observedAt; Value = pullRequest }
+                                  Blockers = { ObservedAt = observedAt; Value = item.Blockers }
+                                  Delivery = { ObservedAt = observedAt; Value = delivery }
+                                  Issue = { ObservedAt = observedAt; Value = item.State } }
+                            match LifecycleProjection.project observation with
+                            | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
+                            | LifecycleProjection.Withheld _ -> None)
+
+                let chores = Chore.derive lifecycleItems @ lifecycleChores
 
                 // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
                 // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the

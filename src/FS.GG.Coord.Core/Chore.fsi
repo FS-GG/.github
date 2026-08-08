@@ -179,6 +179,8 @@ module Chore =
         /// `CLAIM-REVIEW-LAG` — a live claim has a freshly observed implementation PR while its board
         /// status has not advanced to `In review`.
         | ClaimReviewLag
+        /// A fresh lifecycle fact-set disagrees with the mutable Project Status column.
+        | LifecycleProjectionLag of destination: BoardStatus
 
         /// `CLOSED-ISSUE-NOT-DONE` — the ISSUE is closed but the column is not `Done`. Remedy: `Status = Done`.
         ///
@@ -522,6 +524,9 @@ module Chore =
     /// ignores the field entirely, and `ChoreTests` pins both halves: invariance across every touch-set for
     /// the rules that do not read it, and the fail-closed hold for the one that does.
     val derive: items: Item list -> Chore list
+
+    /// Convert a verified lifecycle projection into its one Status repair, if the board is stale.
+    val lifecycleProjection: item: Item -> destination: BoardStatus -> Chore option
 
     /// OFFER **AT MOST ONE** CHORE — condition 3's bound, and it is a hard one.
     ///
