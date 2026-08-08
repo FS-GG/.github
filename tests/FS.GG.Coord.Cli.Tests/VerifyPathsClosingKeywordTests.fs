@@ -3,6 +3,7 @@ namespace FS.GG.Coord.Cli.Tests
 open System
 open System.IO
 open Xunit
+open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
@@ -71,6 +72,20 @@ module VerifyPathsClosingKeywordTests =
 
     let private issueBody = """{"number":42,"body":"Paths: some/file.txt"}"""
     let private files = """[{"filename":"some/file.txt"}]"""
+
+    [<Fact>]
+    let ``#2264 delivery and verify-paths classify the generated registry lock outside authored Paths`` () =
+        let prBody =
+            """{"number":900,"body":"Closes #42","head":{"ref":"item/42-x"},"base":{"ref":"main"}}"""
+
+        let lockOnly = """[{"filename":"registry/repos.lock"}]"""
+        let code, out =
+            runVerifyPaths (serving prBody issueBody lockOnly) [ "verify-paths"; "--pr"; "900"; "--repo"; ".github" ]
+
+        Assert.Equal(Client.ExitGreen, code)
+        Assert.Contains("regenerated (expected)", out)
+        Assert.True(Client.deliveryPathsVerified (Declared [ Matchable "some/file.txt" ]) [ "registry/repos.lock" ])
+        Assert.False(Client.deliveryPathsVerified (Declared [ Matchable "some/file.txt" ]) [ "unrelated/file.txt" ])
 
     [<Fact>]
     let ``#2107 a board-shorthand closing keyword fails verify-paths even when the touch-set is clean`` () =

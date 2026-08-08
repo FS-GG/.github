@@ -1144,6 +1144,30 @@ module Client =
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
 
+    // `verifyPaths` and `delivery` ask the same question: which changed paths are generated and therefore
+    // intentionally absent from an item's authored touch-set?  The collector is initialized below, beside
+    // its bounded process implementation, before this module can serve a command.  Keeping the indirection
+    // here lets the earlier delivery adapter reuse that one fail-closed collector instead of acquiring a
+    // second, weaker list of generated paths.
+    let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
+
+    /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
+    /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
+    /// make this false (and block landing); it cannot turn an undeclared authored file into a pass.
+    let deliveryPathsVerified (touchSet: TouchSet) (files: string list) =
+        let generated =
+            match KitDigest.kitRoot () with
+            | Some root -> generatedPathCollector root
+            | None -> Set.empty
+
+        match touchSet with
+        | Declared tokens ->
+            files
+            |> List.forall (fun file ->
+                (tokens |> List.exists (fun token -> TouchSet.covers token file))
+                || Set.contains file generated)
+        | _ -> false
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -1220,10 +1244,7 @@ module Client =
                                         |> Result.toOption
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
-                                    let pathsVerified =
-                                        match candidate.Item.TouchSet with
-                                        | Declared tokens -> files |> List.forall (fun file -> tokens |> List.exists (fun token -> TouchSet.covers token file))
-                                        | _ -> false
+                                    let pathsVerified = deliveryPathsVerified candidate.Item.TouchSet files
                                     let reviewComments =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -6185,6 +6206,8 @@ module Client =
                     $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
 
                 Set.empty
+
+    do generatedPathCollector <- generatedPaths
 
     // ---- verify-paths ----------------------------------------------------------------------------------
 

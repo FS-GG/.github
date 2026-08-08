@@ -356,8 +356,10 @@ module Chore =
                   && item.Status <> InReview
                   ->
                   // Reconciliation is now routed through the typed lifecycle projector.  The scan
-                  // supplied this PR fact; no missing PR/review fact is fabricated here.
-                  let at = 0L
+                  // supplied this PR fact; no missing PR/review fact is fabricated here.  This is the
+                  // instant at which this reconciler observed the complete tuple, not a sentinel/default:
+                  // a fabricated zero would make a delayed observation indistinguishable from a fresh one.
+                  let at = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                   let pullRequest : LifecycleProjection.PullRequest =
                       { Number = item.ItemPr.Value; Open = true; ReviewOrCiActive = true }
                   let delivery : LifecycleProjection.Delivery =
