@@ -289,7 +289,11 @@ def graphql(query: str, variables: dict):
             # visible, while the FS-GG organization board's row is absent.
             nodes = [{"id": f"PVTI_user_{n}", "project": {"number": 7}}]
         else:
-            nodes = [{"id": f"PVTI_{n}", "project": {"number": 12}}]
+            node = {"id": f"PVTI_{n}", "project": {"number": 12}}
+            if 'fieldValueByName(name: "Status")' in query:
+                status = ISSUES.get(n, {}).get("status")
+                node["fieldValueByName"] = {"name": status} if status else None
+            nodes = [node]
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": nodes}}},
@@ -368,6 +372,7 @@ def graphql(query: str, variables: dict):
         # newly-created board candidate in this hermetic fixture; return its real project-item id so
         # the subsequent Status mutation and readback exercise the same public transaction.
         created = max(ISSUES)
+        ISSUES[created]["off_board"] = False
         return {"data": {"addProjectV2ItemById": {"item": {"id": f"PVTI_{created}"}}}}
     return None
 
@@ -452,7 +457,14 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 number = NEXT_ROOM_NUMBER[0]
                 NEXT_ROOM_NUMBER[0] += 1
-                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": False}
+                ISSUES[number] = {
+                    "title": payload.get("title", ""),
+                    "body": payload.get("body", ""),
+                    "state": "OPEN",
+                    "status": None,
+                    "repo": m.group(1),
+                    "off_board": True,
+                }
                 COMMENTS[number] = []
             return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
@@ -639,7 +651,8 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             r = m.group(1)
             with LOCK:
-                return self._send(200, [{"number": n, "state": i["state"].lower(), "body": i["body"]}
+                return self._send(200, [{"number": n, "state": i["state"].lower(),
+                                         "title": i.get("title", f"item {n}"), "body": i["body"]}
                                         for n, i in sorted(ISSUES.items())
                                         if repo_of(n) == r and i["state"] == "OPEN"])
 
