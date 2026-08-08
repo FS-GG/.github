@@ -556,6 +556,7 @@ kit:
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board }
   - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord }
+  - { id: fsgg-coord-report,       kind: client, source: scripts/fsgg-coord-report }
   # THE ENGINE TOOL MANIFEST IS NO LONGER A KIT ROW (#1615, 2026-07-28, ADR-0068). Read that ADR
   # before re-adding it — this is a decision, not an omission.
   #

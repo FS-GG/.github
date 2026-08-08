@@ -27,6 +27,7 @@ skills as real files — ADR-0011 — and the client must be executable):
 |---|---|
 | every file in each skill directory | `<skill-root>/<name>/<relative-path>`, for each root in `FsggKitSkillRoots` |
 | `fsgg-coord` client | `scripts/fsgg-coord` (made executable) |
+| `fsgg-coord-report` client | `scripts/fsgg-coord-report` (made executable; local session ledger) |
 | engine tool manifest | `.config/dotnet-tools.json` |
 | `skill-view` client | `scripts/skill-view` (made executable) |
 | `skill-view`'s libraries | `scripts/lib/args.sh`, `scripts/lib/roots.sh` |
