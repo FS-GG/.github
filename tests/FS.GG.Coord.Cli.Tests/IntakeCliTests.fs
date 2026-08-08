@@ -7,7 +7,7 @@ open FS.GG.Coord
 open FS.GG.Coord.Cli
 
 module IntakeCliTests =
-    let private invoke (json: string) (action: string) =
+    let private invokePure (json: string) (action: string) =
         let path = Path.GetTempFileName()
         File.WriteAllText(path, json)
         let old = Console.Out
@@ -25,20 +25,37 @@ module IntakeCliTests =
 
     [<Fact>]
     let ``#2134 intake validate renders a typed zero-write receipt`` () =
-        let code, output = invoke valid "validate"
+        let code, output = invokePure valid "validate"
         Assert.Equal(ExitCode.toInt ExitCode.Green, code)
         Assert.Contains("\"kind\":\"validated\"", output)
         Assert.Contains("\"writes\":0", output)
 
     [<Fact>]
     let ``#2134 intake decoder refuses unknown fields instead of ignoring them`` () =
-        let code, output = invoke (valid.Replace("}", ",\"surprise\":true}")) "validate"
+        let code, output = invokePure (valid.Replace("}", ",\"surprise\":true}")) "validate"
         Assert.Equal(ExitCode.toInt ExitCode.Error, code)
         Assert.Contains("\"kind\":\"refusal\"", output)
         Assert.Contains("unknown draft field", output)
 
     [<Fact>]
-    let ``#2134 intake apply refuses before its live transaction exists`` () =
-        let code, output = invoke valid "apply"
-        Assert.Equal(ExitCode.toInt ExitCode.Error, code)
-        Assert.Contains("live intake apply is not wired", output)
+    let ``#2134 public intake apply reaches the live transaction dispatcher`` () =
+        let path = Path.GetTempFileName()
+        File.WriteAllText(path, valid)
+        let previousToken = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+        let previousGhToken = Environment.GetEnvironmentVariable "GH_TOKEN"
+        let old = Console.Error
+        use writer = new StringWriter()
+        try
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null)
+            Environment.SetEnvironmentVariable("GH_TOKEN", null)
+            Console.SetError(writer)
+            let code = Program.main [| "intake"; "apply"; path |]
+            let output = writer.ToString()
+            Assert.Equal(ExitCode.toInt ExitCode.Error, code)
+            Assert.Contains("needs a GitHub token", output)
+            Assert.DoesNotContain("live intake apply is not wired", output)
+        finally
+            Console.SetError(old)
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", previousToken)
+            Environment.SetEnvironmentVariable("GH_TOKEN", previousGhToken)
+            File.Delete(path)
