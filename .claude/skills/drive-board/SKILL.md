@@ -11,7 +11,9 @@ cross-repo allocation, not item implementation.
 1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and consume its complete
    four-part result before making a scheduling decision.
 2. Run the [backlog-triage](references/backlog-triage.md) stage. Classify every relevant `Backlog`
-   row without guessing human judgement, and promote only evidenced actionable work to `Ready`.
+   row without guessing human judgement, and promote only evidenced actionable work to `Ready`. An
+   implementation row is actionable only with a current typed delivery-route receipt; inspect that
+   receipt and its SDD binding instead of inferring a route from effort, size, or prose.
 3. Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
    available agent slots. **Dispatch breadth-first across repositories:** inspect each rostered repo's
    safe lanes and assign one disjoint, high-ranked lane per repo before assigning a second lane in any
