@@ -240,6 +240,37 @@ else
   fail=$((fail+1))
 fi
 
+# `.github#2238`: manifests digest skill bodies that projections can rewrite. A manifest check
+# used to report current when it ran before its projection producer. Start from that stale input;
+# check must fail closed, and write must establish projection-before-manifest order.
+seed
+sed -i '/GENERATED: fsgg-versions/{n;s/^/STALE /;}' "$WORK/tree/docs/architecture.md"
+rc=0
+python3 "$WORK/tree/scripts/generate-driver-manifest" --check >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] \
+  && grep -Fq -- "STALE" "$WORK/out" \
+  && grep -Fq -- "refusing to digest" "$WORK/out"; then
+  echo "PASS  driver manifest refuses stale projection inputs before digesting them"
+  pass=$((pass+1))
+else
+  echo "FAIL  driver manifest accepted stale projection inputs (exit $rc)" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
+rc=0
+python3 "$WORK/tree/scripts/generate-driver-manifest" --write >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 0 ] \
+  && bash "$WORK/tree/scripts/generate-projections" --check >>"$WORK/out" 2>&1 \
+  && python3 "$WORK/tree/scripts/generate-driver-manifest" --check >>"$WORK/out" 2>&1; then
+  echo "PASS  driver manifest write projects before digesting"
+  pass=$((pass+1))
+else
+  echo "FAIL  driver manifest write did not establish projection-before-manifest order" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
 # `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
 # today. Each registry mutation below must make that generated region stale without touching the skill.
 expect_projection_stale() {

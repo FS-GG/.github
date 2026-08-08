@@ -41,9 +41,9 @@ The digest is read from the canonical `.claude` root (the `supplied-by` path), w
 resolves to for `source:` too.
 
 Usage:
-  scripts/generate-driver-manifest --check    # regenerate in memory, diff vs the committed file;
-                                              #   exit 1 on drift (the CI regeneration gate)
-  scripts/generate-driver-manifest --write    # (re)write registry/driver-skill-manifest.json
+  scripts/generate-driver-manifest --check    # first refuse stale projection output, then regenerate
+                                              #   in memory and diff vs the committed file; exit 1 on drift
+  scripts/generate-driver-manifest --write    # first regenerate projections, then (re)write the manifests
   scripts/generate-driver-manifest --list     # print the repo-relative path(s) this emits, one per
                                               #   line — the scripts/generated-paths roster contract
                                               #   (ADR-0044), so verify-paths subtracts the artifact
@@ -67,6 +67,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 # Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
@@ -610,6 +611,25 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
     return json.dumps({"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": rows}, indent=2) + "\n"
 
 
+def synchronize_projections(mode: str) -> int:
+    """Establish fresh projection bytes before digesting the skill tree.
+
+    Driver manifests digest skill bodies that `generate-projections` can rewrite.  Checking or
+    writing a manifest first cannot establish that its digest represents the required tree.
+    `--check` consequently fails closed; `--write` regenerates projections before its digest.
+    """
+    command = ["bash", os.path.join(REPO_ROOT, "scripts", "generate-projections")]
+    if mode == "check":
+        command.append("--check")
+    result = subprocess.run(command, cwd=REPO_ROOT, check=False)
+    if result.returncode:
+        sys.stderr.write(
+            "generate-driver-manifest: projection inputs are stale or could not be generated; "
+            "refusing to digest them.\n"
+        )
+    return result.returncode
+
+
 def main(argv: list[str]) -> int:
     mode = "check"
     catalog_root = REPO_ROOT
@@ -678,6 +698,12 @@ def main(argv: list[str]) -> int:
         return 1
     if mode == "catalog-report":
         return 0
+
+    # Manifest bytes digest documents projections can rewrite.  The producer must run first so a
+    # green manifest check means it digested the repository's current projection bytes.
+    projection_result = synchronize_projections(mode)
+    if projection_result:
+        return projection_result
 
     generated = build_manifest(catalog_root)
     kit_generated = build_kit_manifest(catalog_root)
