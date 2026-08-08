@@ -15,6 +15,7 @@
     <Compile Include="CrossRepoRankTests.fs" />
     <Compile Include="OptionsTests.fs" />
     <Compile Include="IntakeCliTests.fs" />
+    <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverCommandTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />

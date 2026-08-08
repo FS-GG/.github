@@ -7998,7 +7998,10 @@ module Client =
 
     /// #2134's receipt-first intake transaction. The receipt is persisted immediately after the only
     /// REST create, so a retry repairs the same issue's projection rather than issuing a second POST.
-    let private intakeCmd (ctx: Context) (opts: Options) : int =
+    /// Execute the live receipt-first intake transaction.  This is public so the transaction can be
+    /// driven over a recording transport: the tests must count the issue-create POST, not infer it
+    /// from a later board result.
+    let intakeCmd (ctx: Context) (opts: Options) : int =
         match opts.Args with
         | [ action; path ] ->
             match IntakeApplication.readDraft path, action with
@@ -8027,7 +8030,12 @@ module Client =
                                 match draft.Disposition, candidate with
                                 | Some Intake.Reuse, Some c -> Ok { Owner = draft.Owner; Repo = draft.Repository; Number = c.Number }
                                 | Some Intake.Reuse, None -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
-                                | Some Intake.Create, _ ->
+                                | Some Intake.Create, Some _ ->
+                                    // A complete all-state inventory found a same-title issue or PR.
+                                    // Semantic equivalence is an authored decision, but `create` is not
+                                    // allowed to spend a second POST while that decision is unresolved.
+                                    Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
+                                | Some Intake.Create, None ->
                                     Writes.createIntake ctx.Transport draft
                                     |> Result.bind (fun created ->
                                         let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = created.Number }
