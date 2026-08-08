@@ -112,7 +112,13 @@ module Writes =
 
         let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
 
-        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
+        // GitHub only advances an issue comment's `updated_at` when its body actually changes.  Lease age
+        // is measured from that server timestamp, so re-sending the byte-identical marker made a green
+        // heartbeat leave the lease clock counting down.  This opaque renewal token makes every successful
+        // PATCH a real server-side update; readers deliberately do not need to interpret it.
+        let renewalToken = DateTimeOffset.UtcNow.Ticks
+
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
 
     /// IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
     ///

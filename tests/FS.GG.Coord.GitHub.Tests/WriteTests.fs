@@ -918,6 +918,22 @@ let ``#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS`` 
     | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
 
 [<Fact>]
+let ``#2217 heartbeat changes the marker body so GitHub advances the server lease clock`` () =
+    // A PATCH carrying the exact marker body GitHub already has is a no-op: `updated_at` stays at the
+    // original claim time and the lease expires while heartbeat reports green.  The renewal token is the
+    // deliberately unparsed changing field that turns this into a real server-side update.
+    let transport, bodies =
+        capturing
+            [ ok (comments [ marker 901 "vole-418" " session=S1" ])
+              ok "" ]
+
+    let held = holdAs "S1" transport
+
+    match heartbeat transport 120 held with
+    | Ok _ -> Assert.Contains("renewed=", Seq.last bodies)
+    | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
+
+[<Fact>]
 let ``#1732 heartbeat re-emits marker path scope`` () =
     let transport, bodies =
         capturing
