@@ -12,7 +12,17 @@ CAPACITY_SCHEMA = "fsgg.coord.lane-capacity/1"
 LANE_SNAPSHOT_SCHEMA = "fsgg.coord.lane-snapshot/1"
 COORDINATION = {"owner":"FS-GG","number":1,"title":"Coordination"}
 
+def scope_for(lanes_path):
+    path = Path(lanes_path).with_name("coordination-scope.json")
+    path.write_text(json.dumps({"schema":"fsgg.coord.coordination-scope-receipt/1","project":COORDINATION,
+        "observedAt":"2026-08-08T00:00:00Z","source":{"kind":"project-scoped-driver-receipt",
+        "repository":"FS-GG/.github","receiptId":"who-repo-fsgg-github"}}))
+    return str(path)
+
 def run(*args, env=None, check=True):
+    args = list(args)
+    if "--lanes" in args and "--scope" not in args:
+        args.extend(("--scope", scope_for(args[args.index("--lanes") + 1])))
     return subprocess.run([str(CLIENT), *args], text=True, capture_output=True, check=check, env=env)
 
 def scoped(snapshot):
@@ -129,8 +139,8 @@ with tempfile.TemporaryDirectory() as temp:
     # Emit/show serialize on the session lock; every result and the atomically replaced cache remain complete JSON.
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"cache-concurrent","item":".github#1"})
     concurrent_commands = [
-        [str(CLIENT),"--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json"],
-        *[[str(CLIENT),"--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json"] for _ in range(3)],
+        [str(CLIENT),"--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--scope",scope_for(str(lanes)),"--mode","json"],
+        *[[str(CLIENT),"--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--scope",scope_for(str(lanes)),"--mode","json"] for _ in range(3)],
     ]
     concurrent = [subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for command in concurrent_commands]
     for process in concurrent:
@@ -164,7 +174,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert "\x1b[" not in no_color
     # Parallel repeats share the fcntl-protected append and retain one receipt.
     write(event, {"eventSchema":EVENT_SCHEMA,"kind":"done","eventKey":"parallel","item":".github#1"})
-    processes = [subprocess.Popen([str(CLIENT), "--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json"], stdout=subprocess.PIPE, text=True) for _ in range(4)]
+    processes = [subprocess.Popen([str(CLIENT), "--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--scope",scope_for(str(lanes)),"--mode","json"], stdout=subprocess.PIPE, text=True) for _ in range(4)]
     [p.communicate() for p in processes]
     assert json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)["sessionTotals"]["done"] == 2
     ended = json.loads(run("--state-dir",str(state),"end","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
@@ -222,11 +232,18 @@ with tempfile.TemporaryDirectory() as temp:
     write(lanes, scoped_snapshot)
     observed_doc = json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
     assert [lane["disagreement"] for lane in observed_doc["lanes"]] == ["aligned","projection-lag","orphan-claim","work-without-claim","unknown"]
-    assert observed_doc["coordinationProject"] == COORDINATION
+    assert observed_doc["coordinationProject"] == {**COORDINATION,"scopeObservedAt":"2026-08-08T00:00:00Z","scopeReceipt":"who-repo-fsgg-github"}
     wrong_scope = json.loads(json.dumps(scoped_snapshot)); wrong_scope["lanes"][0]["coordinationProject"] = {"owner":"EHotwagner","number":75,"title":"Rogue3"}
     write(lanes, wrong_scope)
     rejected_scope = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",check=False)
     assert rejected_scope.returncode != 0 and "does not match" in rejected_scope.stderr
+    # Subject inversion: a fully self-consistent foreign snapshot must still fail against the driver-supplied scope receipt.
+    rogue_snapshot = json.loads(json.dumps(scoped_snapshot)); rogue = {"owner":"EHotwagner","number":75,"title":"Rogue3"}
+    rogue_snapshot["coordinationProject"] = rogue
+    for lane in rogue_snapshot["lanes"]: lane["coordinationProject"] = rogue
+    write(lanes, rogue_snapshot)
+    rejected_foreign = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",check=False)
+    assert rejected_foreign.returncode != 0 and "externally supplied Coordination scope receipt" in rejected_foreign.stderr
 
     # Corrections are append-only but remove a bad source event from effective session totals.
     write(lanes, scoped_snapshot)

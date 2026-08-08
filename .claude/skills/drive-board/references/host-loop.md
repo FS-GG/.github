@@ -23,8 +23,9 @@ evidence, not permission for the receiver to assume the claim was verified. This
 relays a worker's or critic's assertion as well as the original author.
 
 When emitting the session report, build its snapshot from the project-scoped `who --repo` and board
-receipts, not an organization-wide claim scan. Bind the exact Coordination project identity to every
-lane. Preserve both board and execution timestamps/evidence; a mismatch is a named report state, not a
+receipts, not an organization-wide claim scan. Serialize that independent receipt as the reporter's
+`--scope` input, then bind the exact Coordination project identity to every lane; an identity inside the
+lane snapshot is not its own authority. Preserve both board and execution timestamps/evidence; a mismatch is a named report state, not a
 reason to overwrite either fact. If a prior event used the wrong scope, append a typed correction that
 supersedes it and continue from the corrected effective totals.
 

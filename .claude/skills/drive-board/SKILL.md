@@ -33,8 +33,9 @@ cross-repo allocation, not item implementation.
    implementer may never fill one.
 5. Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
    explicit local session at driver entry. Every supplied lane snapshot must bind every lane to the
-   exact Coordination project identity that produced it; `who --all-repos` is never a Coordination
-   inventory. On every material transition — and on an unchanged
+   exact Coordination project identity that produced it; pass the separate project-scoped driver
+   receipt to the reporter as `--scope`, rather than trusting an identity embedded in that snapshot.
+   `who --all-repos` is never a Coordination inventory. On every material transition — and on an unchanged
    heartbeat — pass its stable receipt as the trigger plus the already-cached lane snapshot; do not
    perform a compensating GitHub read merely to print. Emit the reporter's rich projection when the
    terminal supports it, otherwise its byte-stable plain projection. Its JSON/JSONL ledger is the
