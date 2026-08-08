@@ -31,7 +31,20 @@ cross-repo allocation, not item implementation.
    [host-loop](references/host-loop.md)'s two-wave, fixed-slot cap and consolidation rule — do not
    restate or vary those numbers here; its two review slots are reserved for independent critics and an
    implementer may never fill one.
-5. Report live item state immediately. Whenever the host changes or observes a material transition
+5. Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
+   explicit local session at driver entry. On every material transition — and on an unchanged
+   heartbeat — pass its stable receipt as the trigger plus the already-cached lane snapshot; do not
+   perform a compensating GitHub read merely to print. Emit the reporter's rich projection when the
+   terminal supports it, otherwise its byte-stable plain projection. Its JSON/JSONL ledger is the
+   session's source for cumulative totals, so never maintain parallel prose counters. The canonical
+   workflow here is inherited unchanged by `drive-board-normal` and `drive-board-best`.
+   The supplied snapshot always includes typed lane-capacity facts: configured implementation and
+   review capacity, active lanes, open slots, and ordered limiting reasons with source/freshness.
+   Account explicitly for slot/review caps, overlap, no schedulable item, REST reserve/backoff, claim
+   contention or an indeterminate receipt, and human/decision blockers; never print a low activity
+   count without its measured cause. Reuse the reporter's session-locked derived cache for unchanged
+   heartbeats; width and color are local projections and never justify another board read.
+   Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:
    - `<item> — <new status>: <work in progress or gate being awaited>`
