@@ -95,6 +95,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The driver-manifest gate checks its projection producer first.  Projections read typed
+      # coordination facts, so build that source engine before either generator can claim current.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Build the coord engine for projection freshness
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
       - uses: ./.github/actions/setup-policy-python
 
       # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
