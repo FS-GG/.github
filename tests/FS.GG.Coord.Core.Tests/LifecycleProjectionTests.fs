@@ -26,6 +26,12 @@ module LifecycleProjectionTests =
         Assert.Equal(LifecycleProjection.Project(InReview, 1L), LifecycleProjection.project value)
 
     [<Fact>]
+    let ``#2264 active review or CI remains In review even after the PR closes`` () =
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = false; ReviewOrCiActive = true }
+        let value = { observation with PullRequest = fact (Some pr) }
+        Assert.Equal(LifecycleProjection.Project(InReview, 1L), LifecycleProjection.project value)
+
+    [<Fact>]
     let ``#2264 delivery obligation remains In review after merge`` () =
         let delivery : LifecycleProjection.Delivery = { Outstanding = true; DoneStamped = false }
         let value = { observation with Claim = fact None; Delivery = fact delivery }

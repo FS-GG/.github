@@ -38,7 +38,7 @@ module LifecycleProjection =
             Project(Done, observedAt)
         elif observation.Delivery.Value.Outstanding then
             Project(InReview, observedAt)
-        elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open) then
+        elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open || pr.ReviewOrCiActive) then
             Project(InReview, observedAt)
         elif observation.Claim.Value |> Option.exists (fun (_, liveness) -> match liveness with LeaseHeld | LeaseExpiredPrOpen _ | LeaseExpiredBranchPushed -> true | _ -> false) then
             Project(InProgress, observedAt)
