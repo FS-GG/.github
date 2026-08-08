@@ -3504,8 +3504,16 @@ module Client =
                     // Move the board column to In progress — the ONE board write, through the queue-aware
                     // path so an exhausted budget defers rather than drops (#510).
                     let setInProgress preserveReview () =
+                        let write b =
+                            Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+
                         match board.Force() with
                         | Error e -> Error e, false
+                        | Ok b when not preserveReview ->
+                            // A fresh win/steal already owes exactly the pre-claim read plus the
+                            // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
+                            // only an idempotent renewal can preserve an existing review state.
+                            write b, false
                         | Ok b ->
                             // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
                             // from In review back to In progress hides an active critic round, so preserve
@@ -3513,8 +3521,7 @@ module Client =
                             match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
                             | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
                             | _ ->
-                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id,
-                                false
+                                write b, false
 
                     let force =
                         if opts.Force then
