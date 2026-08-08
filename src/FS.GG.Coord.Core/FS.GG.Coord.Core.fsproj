@@ -71,6 +71,8 @@
     <Compile Include="CycleLedger.fs" />
     <Compile Include="Delivery.fsi" />
     <Compile Include="Delivery.fs" />
+    <Compile Include="LifecycleProjection.fsi" />
+    <Compile Include="LifecycleProjection.fs" />
     <Compile Include="Lanes.fsi" />
     <Compile Include="Lanes.fs" />
     <Compile Include="Landable.fsi" />

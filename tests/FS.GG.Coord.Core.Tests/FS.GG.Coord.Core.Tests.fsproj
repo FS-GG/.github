@@ -34,6 +34,7 @@
     <Compile Include="DriverTests.fs" />
     <Compile Include="CycleLedgerTests.fs" />
     <Compile Include="DeliveryTests.fs" />
+    <Compile Include="LifecycleProjectionTests.fs" />
     <Compile Include="ProtocolTests.fs" />
     <Compile Include="LanesTests.fs" />
     <Compile Include="LandableTests.fs" />
