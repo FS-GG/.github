@@ -44,6 +44,13 @@ module LifecycleProjectionTests =
         Assert.Equal(LifecycleProjection.Project(Done, 1L), LifecycleProjection.project value)
 
     [<Fact>]
+    let ``#2264 a closed issue without a verified done receipt is withheld`` () =
+        let value = { observation with Claim = fact None; Issue = fact Closed }
+        match LifecycleProjection.project value with
+        | LifecycleProjection.Withheld reason -> Assert.Contains("verified done", reason)
+        | result -> failwithf "expected terminal evidence to be withheld, got %A" result
+
+    [<Fact>]
     let ``#2264 delayed event is withheld rather than regressing status`` () =
         let value = { observation with PullRequest = { ObservedAt = 2L; Value = None } }
         match LifecycleProjection.project value with

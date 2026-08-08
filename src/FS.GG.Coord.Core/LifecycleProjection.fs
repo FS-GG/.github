@@ -41,6 +41,11 @@ module LifecycleProjection =
             Project(Blocked, observedAt)
         elif observation.Delivery.Value.DoneStamped && observation.Issue.Value = Closed then
             Project(Done, observedAt)
+        // Closure alone is not an instruction to erase the board's lifecycle state.  `Done` is earned
+        // only by its immutable receipt; without it a scheduled pass must leave the terminal row for the
+        // normal delivery path rather than projecting it back to Ready.
+        elif observation.Issue.Value = Closed then
+            Withheld "closed issue has no verified done receipt"
         elif observation.Delivery.Value.Outstanding then
             Project(InReview, observedAt)
         elif observation.PullRequest.Value |> Option.exists (fun pr -> pr.Open || pr.ReviewOrCiActive) then

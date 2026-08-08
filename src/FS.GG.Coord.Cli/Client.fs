@@ -1988,7 +1988,26 @@ module Client =
                             | LifecycleProjection.Project(destination, _) -> Chore.lifecycleProjection item destination
                             | LifecycleProjection.Withheld _ -> None)
 
-                let chores = Chore.derive lifecycleItems @ lifecycleChores
+                let legacyChores = Chore.derive lifecycleItems
+
+                // A reconcile pass is allowed one Status decision per item.  The long-standing Chore
+                // rules carry facts the lifecycle projector intentionally does not (for example the
+                // `Paths: none` destination and the coupled `Blocked by` clear), so they are the
+                // authority whenever they have already derived a Status remedy.  The lifecycle projector
+                // fills the remaining gaps (PR/review/CI, delivery and verified terminal evidence); it is
+                // never appended as a second competing writer.  This is precedence, not a de-dup after
+                // the fact: the losing observation produces no receipt and no mutation.
+                let legacyStatusSubjects =
+                    legacyChores
+                    |> List.choose (fun chore ->
+                        match chore.Kind.Write with
+                        | Some("Status", _) -> Some chore.Subject
+                        | _ -> None)
+                    |> Set.ofList
+
+                let chores =
+                    legacyChores
+                    @ (lifecycleChores |> List.filter (fun chore -> not (legacyStatusSubjects.Contains chore.Subject)))
 
                 // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
                 // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
