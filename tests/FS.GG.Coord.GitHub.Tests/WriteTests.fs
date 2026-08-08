@@ -1905,6 +1905,15 @@ let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` (
     | Error e -> failwith $"createRoom must return the new room's ref — got %A{e}"
 
 [<Fact>]
+let ``#2134 createIntake refuses an invalid draft before any issue POST`` () =
+    let transport = scripted []
+    let draft: FS.GG.Coord.Intake.Draft =
+        { Schema = FS.GG.Coord.Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = "FS.GG.SDD"; Title = "t"; Observed = "o"; RootCause = "r"; Acceptance = "a"; Verification = "v"; Paths = []; Class = "hardening"; Status = "Backlog"; Disposition = Some FS.GG.Coord.Intake.Create }
+    match createIntake transport draft with
+    | Error _ -> Assert.False(transport.Logged "issue-list FS-GG/FS.GG.SDD")
+    | Ok _ -> failwith "invalid intake must refuse"
+
+[<Fact>]
 let ``createRoom fails LOUDLY when the response carries no number`` () =
     // We cannot reference a room we cannot name — a created-but-unnameable room must be an error, not a
     // silent success that then writes back-references to nothing.

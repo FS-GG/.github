@@ -1013,6 +1013,17 @@ module Writes =
             with :? JsonException as e ->
                 Error(Malformed($"%s{owner}/%s{repo}", $"the issue-create response is not JSON: %s{e.Message}"))
 
+    /// The first write boundary of #2134: a malformed draft cannot reach issue creation.
+    let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =
+        match Intake.validate draft with
+        | Error findings ->
+            let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
+            Error(Malformed(draft.Id, $"invalid intake draft: %s{detail}"))
+        | Ok valid ->
+            let paths = String.concat " " valid.Paths
+            let body = $"## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n\nPaths: %s{paths}"
+            createRoom transport valid.Owner valid.Repository valid.Title body
+
     /// Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
     /// currently references it is done, and the caller (`done --flip`'s roll-up) has already established
     /// that. This just PATCHes the issue closed — a room carries no lock and no lease, so there is nothing

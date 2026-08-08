@@ -35,6 +35,8 @@
          pure `Chore.derive` reads it (.github#1203). -->
     <Compile Include="RegistryPredicate.fsi" />
     <Compile Include="RegistryPredicate.fs" />
+    <Compile Include="Intake.fsi" />
+    <Compile Include="Intake.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="Markdown.fsi" />
