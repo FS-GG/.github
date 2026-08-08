@@ -19,7 +19,7 @@ module IntakeApplication =
         | true, _ -> Error $"{name} must be a string"
         | false, _ -> Error $"{name} is required"
 
-    let private decode path =
+    let private readDraft path =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement
@@ -58,7 +58,7 @@ module IntakeApplication =
     let run (opts: Options) =
         match opts.Args with
         | [ action; path ] ->
-            match decode path with
+            match readDraft path with
             | Error reason -> error reason
             | Ok draft ->
                 match action, Intake.validate draft with
