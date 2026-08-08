@@ -34,9 +34,11 @@ module IntakeTransactionTests =
     let private withCache action =
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousWorker = Environment.GetEnvironmentVariable "FSGG_WORKER"
         Directory.CreateDirectory cache |> ignore
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
-        try action cache finally Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous); Directory.Delete(cache, true)
+        Environment.SetEnvironmentVariable("FSGG_WORKER", "intake-test")
+        try action cache finally Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous); Environment.SetEnvironmentVariable("FSGG_WORKER", previousWorker); Directory.Delete(cache, true)
 
     [<Fact>]
     let ``#2134 a durable receipt bypasses issue creation`` () =
@@ -92,3 +94,43 @@ module IntakeTransactionTests =
             let mismatched = Fake.Recorder(fun _ -> Error(NotFound "must not read network"))
             Assert.Equal(Client.ExitError, invoke cache mismatched)
             Assert.Equal(0, mismatched.RestCalls)
+
+    [<Fact>]
+    let ``#2134 successful create binds receipt and verifies board projection`` () =
+        withCache <| fun cache ->
+            let mutable creates = 0
+            let mutable added = 0
+            let mutable statusWrites = 0
+            let mutable boardAdded = false
+            let mutable projectedStatus: string option = None
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
+                | "POST", "repos/FS-GG/.github/issues" -> creates <- creates + 1; ok "{\"number\":77}"
+                | "GET", "repos/FS-GG/.github/issues/77" -> ok "{\"number\":77,\"state\":\"open\"}"
+                | "POST", "graphql" ->
+                    match req.Body with
+                    | Query(doc, _) when doc.Contains "projectsV2" -> ok "{\"data\":{\"organization\":{\"projectsV2\":{\"nodes\":[{\"number\":1,\"title\":\"Coordination\",\"id\":\"PVT\"}]}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "fields(first" -> ok "{\"data\":{\"organization\":{\"projectV2\":{\"fields\":{\"nodes\":[{\"id\":\"F\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"B\",\"name\":\"Backlog\"}]}]}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "projectItems(first" && doc.Contains "fieldValueByName" ->
+                        let field =
+                            projectedStatus
+                            |> Option.map (fun status -> $"{{\"name\":\"%s{status}\"}}")
+                            |> Option.defaultValue "null"
+                        ok $"{{\"data\":{{\"repository\":{{\"issue\":{{\"projectItems\":{{\"nodes\":[{{\"project\":{{\"number\":1}},\"fieldValueByName\":%s{field}}}]}}}}}}}},\"rateLimit\":{{\"cost\":1,\"remaining\":1}}}}"
+                    | Query(doc, _) when doc.Contains "projectItems(first" ->
+                        let nodes = if boardAdded then "[{\"id\":\"PI\",\"project\":{\"number\":1}}]" else "[]"
+                        ok ("{\"data\":{\"repository\":{\"issue\":{\"projectItems\":{\"nodes\":" + nodes + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}")
+                    | Query(doc, _) when doc.Contains "issue(number" -> ok "{\"data\":{\"repository\":{\"issue\":{\"id\":\"I\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "addProjectV2ItemById" -> added <- added + 1; boardAdded <- true; ok "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | Query(doc, _) when doc.Contains "updateProjectV2ItemFieldValue" -> statusWrites <- statusWrites + 1; projectedStatus <- Some "Backlog"; ok "{\"data\":{\"updateProjectV2ItemFieldValue\":{\"projectV2Item\":{\"id\":\"PI\"}}},\"rateLimit\":{\"cost\":1,\"remaining\":1}}"
+                    | _ -> Error(NotFound "unrecognised board request")
+                | _ -> Error(NotFound "unrecognised request"))
+            let code = invoke cache world
+            if code <> Client.ExitGreen then failwith (String.concat "\n" world.Log)
+            Assert.Equal(1, creates)
+            Assert.Equal(1, added)
+            Assert.Equal(1, statusWrites)
+            match Cache.getIntakeReceipt "tx-2134" with
+            | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
+            | other -> failwithf "receipt was not durably persisted: %A" other
