@@ -3603,11 +3603,23 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "engine-manifest: a receiver declaring the engine its shim execs is GREEN" \
   || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
 
-# The registry reader must use the same yq-first ladder as workflow readers. Remove PyYAML from
-# the audit process while retaining the fixture's yq executable: a direct `import yaml` in the new
-# reader would abort before this green subject can be examined. This is deliberately not a general
+# The registry reader must use the same yq-first ladder as workflow readers. Refuse the old direct
+# `python3 - "$DEPENDENCIES"` reader while retaining PyYAML for the audit's unrelated, established
+# Python gates: removing PyYAML from the whole process tests those gates rather than this reader and
+# lets an ambient system install decide the result. The yq fixture is deliberately not a general
 # YAML parser: it accepts only the one yq query and the three fixture documents this run reaches.
 # The fixture therefore cannot borrow a parser from the caller (or silently widen its claimed world).
+REAL_PYTHON3="$(command -v python3)"
+cat > "$STUB/python3" <<'PYTHON3'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = "-" ] && [ "${2:-}" = "${FSGG_YQ_ONLY_DEPENDENCIES:?}" ]; then
+  echo 'fixture python3 refused the direct dependencies-registry YAML reader' >&2
+  exit 79
+fi
+exec "${FSGG_REAL_PYTHON3:?}" "$@"
+PYTHON3
+chmod +x "$STUB/python3"
 cat > "$STUB/yq" <<'YQ'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -3641,16 +3653,17 @@ else
 fi
 YQ
 chmod +x "$STUB/yq"
-out="$(env -u PYTHONPATH PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
+out="$(FSGG_REAL_PYTHON3="$REAL_PYTHON3" FSGG_YQ_ONLY_DEPENDENCIES="$DEPS" \
+  PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
   bash "$AUDIT" --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
-  && ok "engine-pin: yq-only reader stays green without PyYAML" \
+  && ok "engine-pin: yq reader stays green while the direct Python YAML route is refused" \
   || bad "the declared-version reader must not bypass the yq-or-PyYAML ladder" "rc=$rc: $out"
 out="$(printf '%s\nunmodelled: true\n' "$(cat "$DEPS")" | env -u PYTHONPATH PATH="$STUB:$PATH" yq -o=json . - 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 65 ] && printf '%s' "$out" | grep -q 'fixture yq received an unmodelled document'; } \
   && ok "engine-pin: yq fixture refuses a familiar document with one unmodelled byte-exact mutation" \
   || bad "the yq fixture must refuse a document outside its exact model" "rc=$rc: $out"
-rm -f "$STUB/yq"
+rm -f "$STUB/yq" "$STUB/python3"
 
 # The registry target, not the feed's newest version or an open proposal, is the gate's subject.
 # Both receiver manifests remain at feed-newest 0.15.0; mutating only the declared coord-engine
