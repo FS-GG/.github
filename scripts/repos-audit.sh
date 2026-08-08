@@ -130,6 +130,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOS_SH="$HERE/repos.sh"
 REGISTRY=""                       # empty => repos.sh default
+DEPENDENCIES="$HERE/../registry/dependencies.yml"
 AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers call
 
 # THE SPARSE-CHECKOUT CLOSURE RULE, IMPORTED RATHER THAN RETYPED (#1529, closing #1522's reach).
@@ -179,6 +180,7 @@ die() { echo "::error::repos-audit: $*" >&2; exit 3; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --registry) need_val "$@"; REGISTRY="$2"; shift 2 ;;
+    --dependencies) need_val "$@"; DEPENDENCIES="$2"; shift 2 ;;
     --repos-sh) need_val "$@"; REPOS_SH="$2"; shift 2 ;;
     # Print the header block itself — every comment line after the shebang, up to the first line that
     # is not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range
@@ -201,6 +203,8 @@ command -v python3 >/dev/null 2>&1 \
 command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
   || die "need yq or python3+pyyaml to read a receiver's workflow YAML (the same ladder scripts/repos.sh uses)."
 [ -x "$REPOS_SH" ] || [ -f "$REPOS_SH" ] || die "repos.sh not found at $REPOS_SH."
+[ -f "$DEPENDENCIES" ] \
+  || die "dependencies registry not found at $DEPENDENCIES. The engine-pin sweep compares receiver manifests to its declared coord-engine version, so without this source it has no comparison point."
 # The sweep's rule is a file, so its absence is a missing dependency and NOT a clean sweep. Asserted
 # up front for the same reason python3 is: a rule that cannot be loaded must be a permanent
 # no-verdict about the audit, never a silent "no repository enumerates anything" over ten repos.
@@ -216,6 +220,31 @@ command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
 KIT_FEED_LIB="$HERE/fsgg_feed.py"
 [ -f "$KIT_FEED_LIB" ] \
   || die "the NuGet feed reader is not at $KIT_FEED_LIB. The kit-pin freshness sweep (#1540) IMPORTS its version ordering and its nuget.org reader from there rather than restating either, so without it no receiver's pin can be compared to the published kit — and reporting that as a clean sweep is the same fail-open."
+
+# The receiver engine contract is owned by registry/dependencies.yml, not inferred from whichever
+# package happens to be newest on a feed.  A release is published before the registry flips, and an
+# unpublished registry value is equally not a receiver target; feed-coherence owns those two facts.
+# This sweep's distinct question is whether every receiver runs the version the registry DECLARES.
+dependencies_yaml2json() {
+  if command -v yq >/dev/null 2>&1; then
+    yq -o=json '.' - 2>/dev/null
+  else
+    python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)' 2>/dev/null
+  fi
+}
+
+ENGINE_DECLARED_VERSION="$(dependencies_yaml2json < "$DEPENDENCIES" | python3 -c '
+import sys, json
+try: document = json.load(sys.stdin)
+except Exception as exc: raise SystemExit(f"cannot parse dependencies registry: {exc}")
+contracts = document.get("contracts") if isinstance(document, dict) else None
+if not isinstance(contracts, list): raise SystemExit("dependencies registry has no contracts list")
+rows = [row for row in contracts if isinstance(row, dict) and row.get("id") == "coord-engine"]
+if len(rows) != 1: raise SystemExit(f"dependencies registry must declare exactly one coord-engine contract (found {len(rows)})")
+version = rows[0].get("version")
+if not isinstance(version, str) or not version.strip(): raise SystemExit("dependencies registry has no usable coord-engine version")
+print(version)
+')" || die "could not read the declared coord-engine version — the receiver-pin sweep has no comparison point."
 
 # The capabilities and their detectors come from the ROSTER (`capabilities:`), not from a constant
 # here. They used to be a `wf_for_cap` case statement plus an `AUDITED_CAPS` string — two
@@ -2304,25 +2333,31 @@ PY
 # receiver gets the SAME `scripts/fsgg-coord` shim and needs the same engine to exec, so narrowing
 # would carve the #1077 defect's two original victims back out of the check written to replace it.
 #
-# WHAT IT DOES NOT ASSERT, said out loud so the terminal line is not misread (#266). It does not
-# grade the engine VERSION — whether a receiver's `fs.gg.coord.cli` is the newest published one is
-# the kit-pin sweep's shape, one package over, and is deliberately not this sweep's question.
-# #1077's invariant was never "runs the newest engine"; it was "can run the engine at all", and
-# widening it here would red the whole fleet on the day the engine ships a version, which is the
-# opposite of what #1615 bought.
+# It also grades the engine VERSION, but against the declared `coord-engine` contract version from
+# registry/dependencies.yml — never merely the newest feed version.  That is the coherent-set
+# promise: a receiver does not satisfy `delivery` by restoring any engine, nor by having a Renovate
+# PR open; it satisfies it when its checked-in tool manifest equals the version the registry says
+# the fleet runs. Feed-coherence remains responsible for establishing that the declared target is
+# published.  The offer sweep below still compares against the feed because it answers the separate
+# operational question, "has a bump to the published version been proposed?".
 MANIFEST_PY=$(cat <<'PY'
 import json, os, sys
 
 sys.path.insert(0, os.environ["FSGG_SCRIPTS_DIR"])
 import fsgg_feed  # noqa: E402
 
-STAGE, MANIFEST = sys.argv[1], sys.argv[2]
+STAGE, MANIFEST, TARGET = sys.argv[1], sys.argv[2], sys.argv[3]
 TOOL = "fs.gg.coord.cli"
 PATH = ".config/dotnet-tools.json"
 
 _base = os.environ.get("FSGG_NUGET_ORG_BASE", "").strip()
 if _base:
     fsgg_feed.NUGET_ORG = _base.rstrip("/")
+
+try:
+    TARGET_VERSION = fsgg_feed.parse_version(TARGET)
+except fsgg_feed.GateError as exc:
+    raise SystemExit(f"declared coord-engine version {TARGET!r} is not a NuGet version: {exc}")
 
 out = []
 def emit(kind, *fields):
@@ -2404,6 +2439,11 @@ for row in rows:
         continue
 
     emit("ok", repo, f"declares {TOOL} {version} in {PATH} — it can restore the engine its shim execs.")
+    try:
+        if fsgg_feed.parse_version(version) != TARGET_VERSION:
+            emit("engine-drift", repo, version, TARGET, PATH)
+    except fsgg_feed.GateError:
+        emit("undetermined", repo, f"cannot order engine pin {version!r} against declared coord-engine {TARGET!r}")
     if published is not None:
         try:
             if fsgg_feed.parse_version(version) < fsgg_feed.parse_version(published):
@@ -3507,7 +3547,7 @@ fi
 # `--kit-delivery package`; this one must not, because a byte-copy receiver gets the same shim and
 # needs the same engine. Using the wrong variable here would carve #1077's two original victims back
 # out of the check written to replace it, and the run would still say OK.
-engman_findings=0; engman_refusals=0; engman_undet=0; engman_feed_undet=0; engman_ok=0; engman_receivers=0; engman_read=0
+engman_findings=0; engman_drift=0; engman_refusals=0; engman_undet=0; engman_feed_undet=0; engman_ok=0; engman_receivers=0; engman_read=0
 engman_graded=0
 : > "$ENGMAN_DIR/manifest.tsv"
 if [ "$kit_cap_declared" -eq 1 ]; then
@@ -3540,19 +3580,21 @@ if [ "$kit_cap_declared" -eq 0 ]; then
 elif [ "$engman_receivers" -eq 0 ]; then
   echo "repos-audit: engine-manifest (#1615) — the roster declares '$KIT_CAP' and lists NO receiver for it, so this sweep graded nothing. NOTHING was asserted; that is not a clean bill."
 else
-  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$MANIFEST_PY" "$ENGMAN_DIR" "$ENGMAN_DIR/manifest.tsv" >> "$ENGMAN_FILE" \
+  FSGG_SCRIPTS_DIR="$HERE" python3 -c "$MANIFEST_PY" "$ENGMAN_DIR" "$ENGMAN_DIR/manifest.tsv" "$ENGINE_DECLARED_VERSION" >> "$ENGMAN_FILE" \
     || die "the engine-manifest verdict program failed to run. That is not a clean sweep — no receiver's engine declaration was graded."
 
   engman_count() { grep -cE "^$1"$'\t' "$ENGMAN_FILE" 2>/dev/null || true; }
   engman_findings="$(engman_count finding)"
+  engman_drift="$(engman_count engine-drift)"
   engman_refusals="$(engman_count refusal)"
   engman_undet="$(engman_count undetermined)"
   engman_feed_undet="$(awk -F'\t' '$1 == "undetermined" && $2 == "*" { n++ } END { print n+0 }' "$ENGMAN_FILE")"
   engman_ok="$(engman_count ok)"
 
-  while IFS=$'\t' read -r kind a b; do
+  while IFS=$'\t' read -r kind a b c d; do
     case "$kind" in
       finding)      echo "::error::repos-audit: engine-manifest — $a $b" ;;
+      engine-drift) echo "::error::repos-audit: engine-pin — $a pins fs.gg.coord.cli $b, but registry/dependencies.yml declares coord-engine $c. Update $d so every coordination-kit receiver runs the declared delivery surface." ;;
       refusal)      echo "::error::repos-audit: engine-manifest REFUSED a manifest it cannot grade — $a: $b" ;;
       undetermined) echo "::error::repos-audit: engine-manifest — $a: $b" ;;
       ok)           echo "  ok: $a $b" ;;
@@ -3565,7 +3607,7 @@ else
   if [ "$engman_graded" -eq 0 ]; then
     echo "repos-audit: engine-manifest (#1615) — none of the $engman_receivers $KIT_CAP receiver(s) could be read, so NOTHING was asserted about whether any of them can run the fsgg-coord shim it receives. That is not a clean bill."
   else
-    echo "repos-audit: engine-manifest (#1615) — graded $engman_graded of $engman_receivers $KIT_CAP receiver(s): $engman_ok declare fs.gg.coord.cli, $engman_findings do NOT, $engman_refusals refusal(s), $engman_undet undetermined. This is f(roster, receiver tree) and it replaces the repos.sh validate co-fabric rule #1077 used to carry (ADR-0068) — that rule read only THIS repo's roster, so a receiver that deleted its own manifest stayed green. It does NOT grade the engine VERSION; that is the kit-pin sweep's shape, one package over."
+    echo "repos-audit: engine-manifest (#1615) — graded $engman_graded of $engman_receivers $KIT_CAP receiver(s): $engman_ok declare fs.gg.coord.cli, $engman_findings do NOT, $engman_drift differ from declared coord-engine $ENGINE_DECLARED_VERSION, $engman_refusals refusal(s), $engman_undet undetermined. This is f(registry, roster, receiver tree): it replaces the repos.sh validate co-fabric rule #1077 used to carry (ADR-0068), and detects a receiver that either deleted its own manifest or lags the declared delivery surface."
   fi
 fi
 
@@ -3820,7 +3862,7 @@ fi
 offer_actionable=$(( offer_none + offer_superseded + offer_ratelimited ))
 engoffer_actionable=$(( engoffer_none + engoffer_superseded + engoffer_ratelimited ))
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ "$kitpin_findings" -ne 0 ] \
-   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engoffer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] \
+   || [ "$viewgen_findings" -ne 0 ] || [ "$offer_actionable" -ne 0 ] || [ "$engoffer_actionable" -ne 0 ] || [ "$engman_findings" -ne 0 ] || [ "$engman_drift" -ne 0 ] \
    || [ "$absentok_findings" -ne 0 ] || [ "$dispatch_findings" -ne 0 ] || [ "$issue_policy_findings" -ne 0 ]; then
   [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
   [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
@@ -3828,6 +3870,7 @@ if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ] || [ "$sparse_findings" -ne 0 ] || [ 
   [ "$kitpin_findings" -eq 0 ] || echo "::error::repos-audit: $kitpin_findings coordination-kit receiver(s) pin an FS.GG.Kit version that is not the newest published one. Their materialized kit is stale NOW; coordination-coherence will only say so on their next push (#1540/#1560/#266)." >&2
   [ "$viewgen_findings" -eq 0 ] || echo "::error::repos-audit: $viewgen_findings receiver(s) declare a view skill root that NOTHING generates before FsggKitCheckSkillView. A view root is absent in every fresh checkout (ADR-0067 §6), so their next materialize reds on a tree nobody touched — including under kit-materialize.yml, a \`uses:\` they cannot add a step to (#1715 B5, #1759)." >&2
   [ "$engman_findings" -eq 0 ] || echo "::error::repos-audit: $engman_findings coordination-kit receiver(s) hold the fsgg-coord shim and declare NO fs.gg.coord.cli in .config/dotnet-tools.json — a tool they receive and cannot run (#1077). Since #1615 (ADR-0068) took the engine manifest off the kit, this is the check that asserts that invariant, and it reads the RECEIVER'S TREE rather than this repo's roster." >&2
+  [ "$engman_drift" -eq 0 ] || echo "::error::repos-audit: $engman_drift coordination-kit receiver(s) pin fs.gg.coord.cli at a version different from registry/dependencies.yml's declared coord-engine $ENGINE_DECLARED_VERSION. A proposed Renovate bump is not delivery: each receiver must merge the declared pin before it can run the fleet's typed delivery contract (.github#2249)." >&2
   [ "$absentok_findings" -eq 0 ] || echo "::error::repos-audit: $absentok_findings receiver(s) do not match the roster's historical \`absence-cover:\` word for them, or declare none. That word records whether an unexcused view-root assertion/materialize path is branch-required, and live workflows plus protection say otherwise (#1785/#1869)." >&2
   [ "$dispatch_findings" -eq 0 ] || echo "::error::repos-audit: $dispatch_findings repository_dispatch graph mismatch(es): a declared sender/listener/event-type is absent, or a live sender/listener is unrostered (#1919)." >&2
   [ "$issue_policy_findings" -eq 0 ] || echo "::error::repos-audit: $issue_policy_findings rostered repository/repositories allow issue creation beyond collaborators." >&2
@@ -3865,7 +3908,7 @@ fi
 # nobody has not earned a clean bill, and the claim must name what it covers. "Can run the engine" is
 # NOT "runs the newest engine" — this line deliberately does not say the second thing (#1615/#266).
 if [ "$engman_graded" -gt 0 ]; then
-  echo "repos-audit: OK — all $engman_graded graded $KIT_CAP receiver(s) declare fs.gg.coord.cli, so every repo that receives the fsgg-coord shim can restore the engine it execs (#1077's invariant, asserted per ADR-0068). Nothing is claimed about which engine VERSION they pin."
+  echo "repos-audit: OK — all $engman_graded graded $KIT_CAP receiver(s) declare fs.gg.coord.cli at registry/dependencies.yml's coord-engine $ENGINE_DECLARED_VERSION, so every repo that receives the fsgg-coord shim can restore the declared delivery surface."
 else
   echo "repos-audit: OK — NO receiver's engine manifest was graded, so nothing is claimed about whether any repo can run the fsgg-coord shim it receives."
 fi
