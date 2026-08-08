@@ -19,6 +19,7 @@ module Schedulability =
         | BlockedBy of Blocker list
         /// A `Blocked on: human/...` sentinel refuses the item regardless of its touch-set (#1103 leg 2).
         | AwaitingHuman of HumanBlock
+        | AwaitingDeliveryRouteDecision of reasons: string list
         | HeldBy of WorkerId
         | HeldByLiveWork of WorkerId * pr: int
         | ItemPrOpen of pr: int
@@ -131,6 +132,14 @@ module Schedulability =
         | Some Decision, _ -> AwaitingHuman AwaitingHumanDecision
         | _, Some hb -> AwaitingHuman hb
         | _, None ->
+
+        // 3c. DELIVERY ROUTE.  Every implementation item is explicitly classified by an agent before
+        // dispatch.  The checklist is evidence, not an inference engine; any absent, stale, or unreadable
+        // receipt returns to the decision checkpoint rather than silently choosing lightweight.
+        match item.DeliveryRoute with
+        | DeliveryRoute.Stale reasons
+        | DeliveryRoute.Unreadable reasons -> AwaitingDeliveryRouteDecision reasons
+        | DeliveryRoute.Current _ ->
 
         // 4. THE TOUCH-SET, BEFORE THE LOCK. "Nobody can claim this item" is a stronger and cheaper
         //    statement than "somebody already has", and a worker told the second when the first is
@@ -315,6 +324,7 @@ module Schedulability =
         // wire as DETAIL (`Snapshot.writeDetail` emits `humanBlock: decision|action`), the same edge
         // `wrong-status` uses for its column.
         | AwaitingHuman _ -> "awaiting-human"
+        | AwaitingDeliveryRouteDecision _ -> "awaiting-delivery-route-decision"
         | HeldBy _ -> "held-by"
         | HeldByLiveWork _ -> "held-by-live-work"
         | ItemPrOpen _ -> "item-pr-open"
@@ -339,6 +349,9 @@ module Schedulability =
         | NoTouchSet ->
             $"%s{id} — no 'Paths:' declared (cannot schedule — this is an OMISSION; declare one, or 'Paths: none' if it truly has no touch-set)"
         | DeliberatelyNoTouchSet -> $"%s{id} — 'Paths: none' (deliberately has no touch-set; not schedulable by design)"
+        | AwaitingDeliveryRouteDecision reasons ->
+            let detail = String.concat "; " reasons
+            $"%s{id} — awaiting an explicit current delivery-route decision (%s{detail})"
         | UnusableTouchSet tokens ->
             let toks = String.concat ", " tokens
             $"%s{id} — unmatchable 'Paths:' token(s): %s{toks} (cannot schedule; %s{TouchSetGrammar})"

@@ -55,6 +55,10 @@ item still runs inside the existing pnext-item envelope: a current agent-authore
 selects lightweight or SDD-required delivery, and the worker finalizes the schema-v2 development-feedback report
 before its PR.
 
+The **simple-versus-complex SDD lifecycle branch** is an explicit receipt-bound agent judgement, never a
+host heuristic: the checklist supplies evidence, while the selected lightweight or SDD-required route
+supplies the lifecycle obligations.
+
 ### Retain in Backlog
 
 Retain only with a concrete reason already supported by the issue or its comments, such as an explicit

@@ -1,5 +1,9 @@
 module FS.GG.Coord.Cli.Tests.ScanRoundTripTests
 
+open System
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -46,7 +50,27 @@ let private aRow: Scan.Row =
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
 /// bare `/issues` list; these worlds have no off-board claim, so it answers empty — the honest scan result.
+let private currentRouteComment (subject: string) (body: string) =
+    let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let receipt =
+        $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-42","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+    "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+
 let private routed (body: string) (comments: string) =
+    // Success fixtures must carry the same source-bound receipt production reads.  A missing receipt is
+    // now a deliberate refusal state, never the old implicit lightweight bypass.
+    let comments =
+        if comments = "[]" then
+            use document = JsonDocument.Parse body
+            let issueBody = document.RootElement.GetProperty("body").GetString()
+            JsonSerializer.Serialize
+                [ {| id = 7001
+                     body = currentRouteComment "FS-GG/FS.GG.SDD#42" issueBody
+                     user = {| login = "fixture" |}
+                     created_at = "2026-01-01T00:00:00Z"
+                     updated_at = "2026-01-01T00:00:00Z" |} ]
+        else comments
+
     Fake.Recorder(fun req ->
         if req.Path.EndsWith "/issues" then
             ok "[]"
@@ -58,6 +82,25 @@ let private routed (body: string) (comments: string) =
 let private issueBody (text: string) =
     let escaped = text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
     $"""{{"number":42,"body":"%s{escaped}"}}"""
+
+/// `Scan.snapshot` deliberately records only pure board/lock facts; the client reads route evidence at its
+/// live boundary.  These direct pure-scheduler fixtures state that already-observed current fact explicitly.
+let private withCurrentRoute item =
+    let receipt: DeliveryRoute.Receipt =
+        { Schema = DeliveryRoute.Schema
+          Subject = item.Ref.Canonical
+          SubjectRevision = "fixture"
+          Route = Some DeliveryRoute.Lightweight
+          Agent = "fixture-42"
+          Timestamp = "2026-01-01T00:00:00Z"
+          ReasonCodes = [ "fixture" ]
+          Rationale = "fixture route receipt"
+          DeclaredImpacts = [ "internal" ]
+          ObservedFacts = [ "localized" ]
+          SddWorkId = None
+          SpecHome = None
+          RequiredGates = [] }
+    { item with DeliveryRoute = DeliveryRoute.Current receipt }
 
 // ---- the round trip ---------------------------------------------------------------------------------
 
@@ -125,7 +168,7 @@ let ``a scanned item is SCHEDULABLE end to end - scan, parse, decide`` () =
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
-                    (request.Candidates |> List.map (fun c -> c.Item))
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
 
             match decision with
             | Green result ->
@@ -185,13 +228,14 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
             | Undeclared -> failwith "an unread body became a confident 'no touch-set declared' — that is #496"
             | other -> failwith $"expected Unreadable — got %A{other}"
 
-            // AND IT IS UNDETERMINED, NEVER SILENTLY SKIPPED.
+            // The unreadable source also makes its source-bound route evidence unreadable.  It must park
+            // at the mandatory route checkpoint, never become an implicit lightweight decision.
             let verdict =
                 Schedulability.schedulable false [] request.Candidates.[0].Item
 
             match verdict with
-            | Schedulability.Undetermined _ -> ()
-            | other -> failwith $"an item whose touch-set we could not read is UNDETERMINED — got %A{other}"
+            | Schedulability.AwaitingDeliveryRouteDecision _ -> ()
+            | other -> failwith $"an item whose source body could not be read must await a route decision — got %A{other}"
 
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"the scan must survive one unreadable body — got %A{e}"
@@ -372,7 +416,7 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
             | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
             | Ok request ->
                 match
-                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
                 with
                 | Green result ->
                     // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
@@ -549,7 +593,7 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
-                    (request.Candidates |> List.map (fun c -> c.Item))
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
 
             match decision with
             | Green result -> Assert.Empty(result.Chosen)
@@ -595,7 +639,7 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED: a stale lock is not scheduled over, only reaped.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result -> Assert.Empty(result.Chosen)
             | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
@@ -757,7 +801,7 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
 
             // AND THE OVERLAPPING Ready CANDIDATE IS REFUSED, its collision naming the Unowned reserver.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result ->
                 Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
@@ -827,7 +871,7 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
             // THE FIX, ARM 2: the batch is RED. A reservation whose surface we never saw makes every later
             // comparison a lie, so #43 is refused rather than handed files #42's holder may be standing in.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Red reasons -> Assert.True(reasons |> List.exists (fun (m: string) -> m.Contains "vole-418"))
             | other ->

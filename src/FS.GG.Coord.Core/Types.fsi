@@ -359,6 +359,10 @@ module Types =
           /// which is the fail-closed answer — a projection we could not observe is not one we may write.
           BoardClass: ItemClass option
 
+          /// The mandatory, source-bound delivery-route verdict observed for this item. Missing, stale,
+          /// or unreadable evidence is a scheduling hold, never an inferred lightweight route.
+          DeliveryRoute: DeliveryRoute.Verdict
+
           /// The observed `Severity` column. Missing/unrecognised values are represented as `Unset`.
           Severity: Severity
 

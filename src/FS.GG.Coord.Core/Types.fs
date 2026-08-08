@@ -203,6 +203,11 @@ module Types =
           /// split, for the same reason, as `Predicate` above.
           BoardClass: ItemClass option
 
+          /// The mandatory, source-bound delivery-route verdict observed for this item.  This is a
+          /// scheduling fact rather than a UI hint: missing, stale, or unreadable evidence must never
+          /// become an implicit lightweight route.
+          DeliveryRoute: DeliveryRoute.Verdict
+
           /// The board's `Severity` column as observed. Missing or unrecognised values become `Unset`,
           /// the explicit fail-loud value that ranks last and remains visible to lint.
           Severity: Severity

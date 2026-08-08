@@ -396,6 +396,67 @@ module Client =
 
     // ---- the read / schedule commands ------------------------------------------------------------------
 
+    [<Literal>]
+    let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
+
+    let private deliveryRouteRevision (body: string) =
+        body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
+    /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
+    /// unreadable, rather than collapsing into a missing/lightweight decision.
+    let private readDeliveryRouteVerdict (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+        | Error error, _
+        | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
+        | Ok body, Ok comments ->
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+            DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
+
+    /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
+    /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
+    /// a malformed/missing route and accidentally lose its back-off contract.
+    let private requireCurrentDeliveryRoute (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+        | Error error, _
+        | _, Error error -> Error error
+        | Ok body, Ok comments ->
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+
+            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
+            | DeliveryRoute.Current route -> Ok route
+            | DeliveryRoute.Stale reasons
+            | DeliveryRoute.Unreadable reasons ->
+                Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
+
+    let private offlineDeliveryRoute =
+        DeliveryRoute.Current
+            { Schema = DeliveryRoute.Schema; Subject = "offline"; SubjectRevision = "offline"; Route = Some DeliveryRoute.Lightweight
+              Agent = "offline"; Timestamp = "1970-01-01T00:00:00Z"; ReasonCodes = [ "offline" ]; Rationale = "offline diagnostic"
+              DeclaredImpacts = [ "offline" ]; ObservedFacts = [ "offline" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
+
+    let private enrichDeliveryRoutes (ctx: Context) (request: Snapshot.Request) =
+        { request with
+            Candidates =
+                request.Candidates
+                |> List.map (fun candidate ->
+                    let route = readDeliveryRouteVerdict ctx candidate.Item.Ref
+                    { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
+
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
     let private scanAndDecide (ctx: Context) (opts: Options) (intent: Cache.ReadIntent) =
@@ -564,7 +625,7 @@ module Client =
     /// truncated. Not `private`, because AC2 asks for a fixture that ranks a cross-repo hub from a
     /// `--repo`-scoped batch, and only this composition — real `Scan.snapshot` bytes, the real enrichment,
     /// the real fold — can answer that. A fixture built on the pieces would pass while the wiring rotted.
-    let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+    let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
             for e in errors do
@@ -572,7 +633,7 @@ module Client =
 
             Result.Error ExitError
         | Ok parsed ->
-            let request = enrichBoardFacts rows parsed
+            let request = parsed |> enrichBoardFacts rows |> enrichDeliveryRoutes ctx
 
             match
                 Batch.scheduleWith
@@ -593,6 +654,22 @@ module Client =
             | Verdict.NoVerdict reason ->
                 eprint $"UNDETERMINED — %s{reason}"
                 Result.Error ExitNoVerdict
+
+    /// Pure snapshot projection retained for offline diagnostics. Live board commands use
+    /// `renderLiveDecision`, which always reads the mandatory route ledger immediately before scheduling.
+    let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+        match Snapshot.parse doc with
+        | Error errors ->
+            for e in errors do eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
+            Result.Error ExitError
+        | Ok parsed ->
+            let request =
+                parsed |> enrichBoardFacts rows
+                |> fun r -> { r with Candidates = r.Candidates |> List.map (fun c -> { c with Item = { c.Item with DeliveryRoute = offlineDeliveryRoute } }) }
+            match Batch.scheduleWith (boardBlockingCounts rows) request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map _.Item) with
+            | Green result -> Ok result
+            | Red reasons -> reasons |> List.iter (fun r -> eprint $"  %s{r}"); Result.Error ExitRed
+            | Verdict.NoVerdict reason -> eprint $"UNDETERMINED — %s{reason}"; Result.Error ExitNoVerdict
 
     /// The candidates the scheduler LOOKED AT and refused. One spelling, because two call sites print this
     /// list and a third reports its COUNT on the wire (`take --json`'s `passedOver`, .github#1525) — a
@@ -776,7 +853,7 @@ module Client =
         | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts rows doc with
+            match renderLiveDecision ctx opts rows doc with
             | Error code -> code
             | Ok result ->
                 match opts.Render with
@@ -1807,7 +1884,7 @@ module Client =
         | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts rows doc with
+            match renderLiveDecision ctx opts rows doc with
             | Error code -> code
             | Ok result ->
                 match result.Chosen with
@@ -3362,9 +3439,16 @@ module Client =
                 // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
                 // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
                 let heldCheck =
-                    // The bounded existing claim scan is the first real-resource observation for a
-                    // fresh session.  Check admission only after it, still before the claim CAS/post.
-                    if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    // Re-read the source body and receipt ledger immediately before EVERY claim path —
+                    // including --force and idempotent renewal.  A scheduler snapshot is advisory once
+                    // a CAS/post/status mutation is about to occur; this is the mutation boundary that
+                    // closes the scan-to-claim race and prevents an implicit route after scope changes.
+                    match requireCurrentDeliveryRoute ctx ref with
+                    | Ok _ ->
+                        // The bounded existing claim scan is the first real-resource observation for a
+                        // fresh session.  Check admission only after it, still before the claim CAS/post.
+                        if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    | Error error -> Error error
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e
@@ -4510,7 +4594,7 @@ module Client =
             | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 
-                match renderDecision { opts with Limit = Some 1 } rows doc with
+                match renderLiveDecision ctx { opts with Limit = Some 1 } rows doc with
                 | Error code -> code
                 | Ok result ->
                     match result.Chosen with
@@ -8084,7 +8168,12 @@ module Client =
                                        || body.Contains("Blocked on: human/", StringComparison.OrdinalIgnoreCase)
                                        || body.Contains("Judgement question:", StringComparison.OrdinalIgnoreCase) then
                                         Error(Errors.Malformed(draft.Id, "Ready is refused while the reused/live issue still declares a dependency or human choice"))
-                                    else Ok())
+                                    else
+                                        match readDeliveryRouteVerdict ctx issue with
+                                        | DeliveryRoute.Current _ -> Ok()
+                                        | DeliveryRoute.Stale reasons
+                                        | DeliveryRoute.Unreadable reasons ->
+                                            Error(Errors.Malformed(draft.Id, "Ready is refused until a current delivery-route receipt exists: " + String.concat "; " reasons)))
                         match preProjectionReadyGuard, Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
                         | Error e, _, _, _ -> fail e
                         | _, Error e, _, _ -> fail e
@@ -8157,16 +8246,6 @@ module Client =
                                                 ExitGreen
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
-
-    [<Literal>]
-    let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
-
-    let private deliveryRouteRevision (body: string) =
-        body
-        |> Text.Encoding.UTF8.GetBytes
-        |> Security.Cryptography.SHA256.HashData
-        |> Convert.ToHexString
-        |> _.ToLowerInvariant()
 
     /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     /// are the append-only receipt ledger: a failure in either direction is not a missing decision.

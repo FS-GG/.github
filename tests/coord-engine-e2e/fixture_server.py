@@ -21,6 +21,7 @@ end, over HTTP, produces the right verdict without a token or a network.
 """
 
 import json
+import hashlib
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -46,7 +47,35 @@ BOARD_ITEMS = [
 ]
 
 ISSUE_BODIES = {42: "A schedulable item.\n\nPaths: src/Thing/**"}
-ISSUE_COMMENTS = {42: []}  # no claim markers → the item is free
+
+
+def delivery_route_comment(number: int, body: str):
+    """The ordinary success fixture includes the same source-bound agent decision production requires."""
+    receipt = {
+        "schema": "fsgg.coord.delivery-route/v1",
+        "subject": f"{OWNER}/{REPO}#{number}",
+        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
+        "route": "lightweight",
+        "agent": "fixture-route",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "reasonCodes": ["fixture"],
+        "rationale": "Hermetic current route receipt.",
+        "declaredImpacts": ["internal"],
+        "observedFacts": ["localized"],
+        "sddWorkId": None,
+        "specHome": None,
+        "requiredGates": [],
+    }
+    return {
+        "id": 7042,
+        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "user": {"login": "fixture"},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+ISSUE_COMMENTS = {42: [delivery_route_comment(42, ISSUE_BODIES[42])]}  # no claim marker → item is free
 
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
 

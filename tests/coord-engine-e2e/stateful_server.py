@@ -16,6 +16,7 @@ binary's real writes across a process boundary and see the state change — not 
 """
 
 import json
+import hashlib
 import re
 import sys
 import threading
@@ -80,6 +81,46 @@ def repo_of(n):
 
 def owner_of(n):
     return ISSUES.get(n, {}).get("owner", "FS-GG")
+
+
+def route_receipt_comment(n):
+    """Model the mandatory current receipt for ordinary scripted-success paths.
+
+    The route is bound to the exact source body the fixture serves.  Negative route cases use their
+    own transports/unit fixtures; this stateful fixture must not accidentally model the old implicit
+    lightweight admission path.
+    """
+    issue = ISSUES[n]
+    body = issue["body"]
+    receipt = {
+        "schema": "fsgg.coord.delivery-route/v1",
+        "subject": f"{owner_of(n)}/{repo_of(n)}#{n}",
+        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
+        "route": "lightweight",
+        "agent": "fixture-route",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "reasonCodes": ["fixture"],
+        "rationale": "Stateful fixture route receipt.",
+        "declaredImpacts": ["internal"],
+        "observedFacts": ["localized"],
+        "sddWorkId": None,
+        "specHome": None,
+        "requiredGates": [],
+    }
+    return {
+        "id": 700000 + n,
+        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "user": {"login": "fixture"},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+def comments_for(n):
+    # Chore locks deliberately have no issue/source body and therefore no delivery route receipt.
+    if n not in ISSUES:
+        return list(COMMENTS.get(n, []))
+    return [route_receipt_comment(n)] + list(COMMENTS.get(n, []))
 
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
@@ -669,7 +710,7 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             with LOCK:
-                return self._send(200, list(COMMENTS.get(int(m.group(1)), [])))
+                return self._send(200, comments_for(int(m.group(1))))
 
         # THE OFF-BOARD OPEN-ISSUE SCAN (bash's `active_claims` arm B). `Scan.snapshot` asks each in-scope
         # repo for its open issues so it can reserve a live claim on an issue the BOARD never listed.
