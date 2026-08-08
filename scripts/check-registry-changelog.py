@@ -22,10 +22,19 @@ def updated(text: str) -> str:
     return hits[0]
 
 
-def top_date(text: str) -> str:
+def entries_start(text: str) -> int:
     marker = re.search(r'^## Entries\s*$', text, re.M)
     if not marker: raise Refused("CHANGELOG.md lacks its Entries heading")
-    hit = re.search(r'^- \*\*(\d{4}-\d{2}-\d{2})\*\*', text[marker.end():], re.M)
+    return marker.end()
+
+
+def top_date(text: str) -> str:
+    start = entries_start(text)
+    stray = re.search(r'^- \*\*(\d{4}-\d{2}-\d{2})\*\*', text[:start], re.M)
+    if stray:
+        line = text.count('\n', 0, stray.start()) + 1
+        raise Refused(f'CHANGELOG.md has dated entry before Entries heading at line {line}')
+    hit = re.search(r'^- \*\*(\d{4}-\d{2}-\d{2})\*\*', text[start:], re.M)
     if not hit: raise Refused("CHANGELOG.md has no dated entry")
     return hit[1]
 
