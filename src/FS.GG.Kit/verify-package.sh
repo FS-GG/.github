@@ -105,6 +105,7 @@ for root in .claude/skills .agents/skills; do
   done
 done
 [ -x "$recv/scripts/fsgg-coord" ]        || fail "client not materialized executable at scripts/fsgg-coord"
+[ -x "$recv/scripts/fsgg-coord-report" ] || fail "client not materialized executable at scripts/fsgg-coord-report"
 [ -x "$recv/scripts/skill-view" ]        || fail "client not materialized executable at scripts/skill-view"
 [ -f "$recv/scripts/lib/args.sh" ]       || fail "skill-view library not materialized at scripts/lib/args.sh (#1696)"
 [ -f "$recv/scripts/lib/roots.sh" ]      || fail "skill-view library not materialized at scripts/lib/roots.sh (#1696)"
@@ -134,7 +135,7 @@ unexpected_exec="$(find "$recv/.claude/skills" "$recv/.agents/skills" \
 [ -z "$unexpected_exec" ] || fail "non-client receiver output is executable after fresh materialize: $unexpected_exec"
 # build-config is OPT-IN: the default materialize must NOT write it.
 [ ! -f "$recv/Directory.Build.props" ]    || fail "build-config materialized without opt-in (Directory.Build.props at receiver root)"
-echo "   4 skills × 2 roots + 2 executable clients + 2 libraries; engine manifest correctly NOT delivered (#1615); build-config correctly withheld (opt-in off)"
+echo "   4 skills × 2 roots + 3 executable clients + 2 libraries; engine manifest correctly NOT delivered (#1615); build-config correctly withheld (opt-in off)"
 
 echo "== 3a. overwrite + byte-identical materialization normalize metadata =="
 probe="$recv/.agents/skills/check-board/SKILL.md"

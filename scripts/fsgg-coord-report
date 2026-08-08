@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""Append and render the local, network-free Coordination board session ledger.
+
+The JSON document is the contract.  Rich and plain output are projections of that
+same document; this client intentionally never imports a GitHub client or reads a
+credential.  Board drivers supply their already-read lane snapshot and the receipt
+that caused the transition.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import fcntl
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA = "fsgg.coord.session-report/1"
+LEDGER_SCHEMA = "fsgg.coord.session-ledger/1"
+EVENT_SCHEMA = "fsgg.coord.session-event/1"
+KINDS = ("created", "boarded", "claimed", "reviewed", "blocked", "merged", "published", "done", "heartbeat")
+COUNTED = set(KINDS) - {"heartbeat"}
+ANSI = "\x1b["
+EVENT_FIELDS = {"eventSchema", "kind", "eventKey", "item", "repository", "fromStatus", "toStatus", "worker", "activity", "pr", "blocker", "freshness", "lifecycle", "sessionStart"}
+RESERVED_FIELDS = {"record", "schema", "sequence", "recordedAt", "session", "startedAt"}
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"fsgg-coord-report: {message}")
+
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def read_json(path: str) -> Any:
+    try:
+        with open(path, encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"cannot read JSON {path}: {exc}")
+
+
+def object_from(path: str, label: str) -> dict[str, Any]:
+    value = read_json(path)
+    if not isinstance(value, dict):
+        fail(f"{label} must be a JSON object")
+    return value
+
+
+def state_root(raw: str | None) -> Path:
+    return Path(raw or os.environ.get("FSGG_COORD_REPORT_DIR") or ".fsgg/coord-report")
+
+
+def session_name(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
+        fail("--session must be a safe, non-empty session id")
+    return value
+
+
+def paths(root: Path, session: str) -> tuple[Path, Path]:
+    sessions = root / "sessions"
+    return sessions / f"{session}.jsonl", sessions / f"{session}.lock"
+
+
+def locked(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stream = open(path, "a+", encoding="utf-8")
+    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+    stream.seek(0)
+    return stream
+
+
+def rows(stream) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for number, line in enumerate(stream, 1):
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            fail(f"ledger is corrupt at line {number}: {exc}")
+        if not isinstance(value, dict):
+            fail(f"ledger is corrupt at line {number}: object expected")
+        result.append(value)
+    return result
+
+
+def ledger_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    with open(path, encoding="utf-8") as stream:
+        return rows(stream)
+
+
+def append(root: Path, session: str, event: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    unknown = set(event) - EVENT_FIELDS
+    reserved = set(event) & RESERVED_FIELDS
+    if reserved:
+        fail("event may not set ledger fields: " + ", ".join(sorted(reserved)))
+    if unknown:
+        fail("event has unknown fields: " + ", ".join(sorted(unknown)))
+    if event.get("eventSchema") != EVENT_SCHEMA:
+        fail(f"event.eventSchema must be {EVENT_SCHEMA!r}")
+    kind = event.get("kind")
+    key = event.get("eventKey")
+    if kind not in KINDS:
+        fail("event.kind must be one of " + ", ".join(KINDS))
+    if not isinstance(key, str) or not key.strip():
+        fail("event.eventKey must be a stable non-empty string")
+    ledger, lock = paths(root, session)
+    with locked(lock) as guard:
+        existing = ledger_rows(ledger)
+        headers = [row for row in existing if row.get("record") == "session"]
+        if not headers:
+            header = {"record": "session", "schema": LEDGER_SCHEMA, "session": session, "startedAt": event.get("sessionStart") or now()}
+            with open(ledger, "a", encoding="utf-8") as out:
+                out.write(json.dumps(header, sort_keys=True, separators=(",", ":")) + "\n")
+            existing.append(header)
+        for row in existing:
+            if row.get("record") == "event" and row.get("eventKey") == key:
+                return row, False
+        record = {**event, "record": "event", "schema": LEDGER_SCHEMA,
+                  "sequence": sum(row.get("record") == "event" for row in existing) + 1, "recordedAt": now()}
+        with open(ledger, "a", encoding="utf-8") as out:
+            out.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        return record, True
+
+
+def load(root: Path, session: str) -> list[dict[str, Any]]:
+    ledger, lock = paths(root, session)
+    if not ledger.exists():
+        fail(f"session {session!r} has not been started")
+    with locked(lock) as guard:
+        return ledger_rows(ledger)
+
+
+def normalize_lanes(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    raw = snapshot.get("lanes", snapshot.get("items", []))
+    if not isinstance(raw, list):
+        fail("lane snapshot must contain lanes (an array)")
+    freshness = str(snapshot.get("freshness", snapshot.get("state", "unknown")))
+    lanes = []
+    for lane in raw:
+        if not isinstance(lane, dict):
+            fail("every lane must be an object")
+        def value(name: str) -> str:
+            raw_value = lane.get(name)
+            return "unknown" if raw_value is None or raw_value == "" else str(raw_value)
+        lanes.append({
+            "item": value("item"), "repository": value("repository"),
+            "workState": value("workState"), "boardStatus": value("boardStatus"),
+            "worker": value("worker"), "activity": value("activity"), "pr": value("pr"),
+            "blocker": value("blocker"), "freshness": value("freshness") if lane.get("freshness") is not None else freshness,
+        })
+    return lanes, freshness
+
+
+def report(session: str, trigger: dict[str, Any], snapshot: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+    header = next((row for row in records if row.get("record") == "session"), None)
+    if header is None:
+        fail("ledger has no session record")
+    events = [row for row in records if row.get("record") == "event"]
+    totals = {kind: sum(row.get("kind") == kind for row in events) for kind in KINDS if kind in COUNTED}
+    lanes, freshness = normalize_lanes(snapshot)
+    unresolved = [lane["item"] for lane in lanes if lane["boardStatus"] not in ("Done", "done", "Closed", "closed")]
+    active = [lane["item"] for lane in lanes if lane["boardStatus"] in ("In progress", "In review", "Blocked")]
+    lifecycle = next((str(row["lifecycle"]) for row in reversed(events) if row.get("lifecycle") in ("active", "ended")), header.get("lifecycle", "active"))
+    return {
+        "schema": SCHEMA, "session": {"id": session, "startedAt": header.get("startedAt"), "lifecycle": lifecycle},
+        "trigger": trigger, "lanes": lanes,
+        "sessionTotals": {**totals, "netActive": len(active), "unresolved": unresolved, "eventsRecorded": len(events)},
+        "snapshot": {"freshness": freshness, "network": "not-used"},
+    }
+
+
+def clip(text: str, width: int) -> list[str]:
+    text = str(text)
+    if width <= 1:
+        return [text[:max(0, width)]]
+    words = text.split() or [""]
+    lines: list[str] = []
+    line = ""
+    for word in words:
+        if not line:
+            while len(word) > width:
+                lines.append(word[:width])
+                word = word[width:]
+            line = word
+        elif len(line) + 1 + len(word) <= width:
+            line += " " + word
+        else:
+            lines.append(line)
+            line = word
+    lines.append(line)
+    return lines
+
+
+def style(text: str, code: str, color: bool) -> str:
+    return f"{ANSI}{code}m{text}{ANSI}0m" if color else text
+
+
+def status_color(value: str) -> str:
+    return "31" if value.lower() == "blocked" else "32" if value.lower() in ("done", "closed") else "33" if value.lower() in ("in progress", "in review") else "37"
+
+
+def table(headers: list[str], values: list[list[str]], width: int, color: bool, semantic_column: int | None = None) -> str:
+    columns = len(headers)
+    available = max(columns, width - 3 * columns - 1)
+    base = max(1, available // columns)
+    sizes = [base] * columns
+    remainder = available - base * columns
+    for index in range(remainder): sizes[index % columns] += 1
+    def border(left: str, join: str, right: str) -> str: return left + join.join("─" * (size + 2) for size in sizes) + right
+    def emit(row: list[str], header: bool = False) -> list[str]:
+        cells = [clip(value, sizes[index]) for index, value in enumerate(row)]
+        def cell(index: int, line: int) -> str:
+            padded = f" {(cells[index][line] if line < len(cells[index]) else ''):<{sizes[index]}} "
+            code = "1" if header else status_color(row[index]) if semantic_column == index else ""
+            return style(padded, code, color) if code else padded
+        return ["│" + "│".join(cell(index, line) for index in range(columns)) + "│" for line in range(max(map(len, cells)))]
+    lines = [border("┌", "┬", "┐"), *emit(headers, True), border("├", "┼", "┤")]
+    for row in values: lines.extend(emit(row))
+    lines.append(border("└", "┴", "┘"))
+    return "\n".join(lines)
+
+
+def render(doc: dict[str, Any], mode: str, width: int, color: str) -> str:
+    if mode == "json": return json.dumps(doc, sort_keys=True, separators=(",", ":"))
+    enabled = mode == "rich" and color != "never" and not os.environ.get("NO_COLOR") and (color == "always" or sys.stdout.isatty())
+    trigger = doc["trigger"]
+    title = f"SESSION REPORT {doc['session']['id']}"
+    def facts(value: dict[str, Any]) -> list[list[str]]:
+        return [[key, json.dumps(raw, sort_keys=True, separators=(",", ":")) if not isinstance(raw, str) else raw] for key, raw in sorted(value.items())]
+    fields = ("item", "repository", "workState", "boardStatus", "worker", "activity", "pr", "blocker", "freshness")
+    lane_rows = [[lane[key] for key in fields] for lane in doc["lanes"]]
+    totals = doc["sessionTotals"]
+    totals_rows = [[kind, str(totals.get(kind, 0))] for kind in ("created", "boarded", "claimed", "reviewed", "blocked", "merged", "published", "done")]
+    totals_rows.extend([["netActive", str(totals["netActive"])], ["unresolved", ", ".join(totals["unresolved"]) or "none"], ["eventsRecorded", str(totals["eventsRecorded"])]] )
+    lane_table = table(["item", "repository", "workState", "boardStatus", "worker", "activity", "pr", "blocker", "freshness"], lane_rows or [["none"] * 9], width, enabled, 3)
+    if width < 80:
+        labels = ("item", "repository", "workState", "boardStatus", "worker", "activity", "pr", "blocker", "freshness")
+        lane_table = table(["Field", "Value"], [[label, value] for row in lane_rows for label, value in zip(labels, row)] or [["Item", "none"]], width, enabled)
+    return "\n".join((*[style(line, "1;36", enabled) for line in clip(title, width)],
+        style("session", "1;36", enabled), table(["field", "value"], facts(doc["session"]) + [["schema", doc["schema"]]], width, enabled),
+        style("trigger", "1;36", enabled), table(["field", "value"], facts(trigger), width, enabled),
+        style("snapshot", "1;36", enabled), table(["field", "value"], facts(doc["snapshot"]), width, enabled),
+        style("lanes", "1;36", enabled), lane_table,
+        style("sessionTotals", "1;36", enabled), table(["transition", "count"], totals_rows, min(width, 56), enabled)))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--state-dir")
+    sub = parser.add_subparsers(dest="command", required=True)
+    def common(p):
+        p.add_argument("--session", required=True); p.add_argument("--event", required=True); p.add_argument("--lanes", required=True)
+        p.add_argument("--mode", choices=("json", "plain", "rich"), default="plain"); p.add_argument("--width", type=int, default=120)
+        p.add_argument("--color", choices=("auto", "always", "never"), default="auto")
+    start = sub.add_parser("start"); start.add_argument("--session", required=True); start.add_argument("--at", default=None)
+    emit = sub.add_parser("emit"); common(emit)
+    show = sub.add_parser("show"); common(show)
+    end = sub.add_parser("end"); common(end)
+    args = parser.parse_args()
+    root = state_root(args.state_dir)
+    session = session_name(args.session)
+    if args.command == "start":
+        append(root, session, {"eventSchema": EVENT_SCHEMA, "kind": "heartbeat", "eventKey": f"start:{session}:{args.at or now()}", "sessionStart": args.at or now()})
+        return
+    event, snapshot = object_from(args.event, "event"), object_from(args.lanes, "lane snapshot")
+    if args.command == "end": event = {**event, "kind": "heartbeat", "eventKey": f"end:{session}", "lifecycle": "ended"}
+    if args.command in ("emit", "end"): trigger, _ = append(root, session, event)
+    else: trigger = event
+    doc = report(session, trigger, snapshot, load(root, session))
+    print(render(doc, args.mode, max(40, args.width), args.color))
+
+
+if __name__ == "__main__":
+    main()
