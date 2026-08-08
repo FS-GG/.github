@@ -19,6 +19,8 @@ namespace FS.GG.Coord.GitHub
 /// API, and EVERYTHING ELSE goes on REST — above all the lock. **A lock may never live on the budget that
 /// dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Reads =
+    type DuplicateCandidate = { Number: int; State: string; Title: string; Body: string; IsPullRequest: bool }
+    val duplicateCandidates: transport: Transport.IGitHubTransport -> owner: string -> repo: string -> Errors.IoResult<DuplicateCandidate list>
 
     open FS.GG.Coord
     open FS.GG.Coord.Types
