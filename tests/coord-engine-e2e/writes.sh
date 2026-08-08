@@ -882,7 +882,10 @@ intake_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; intake_rc=$?
 intake_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
 if [ "$intake_rc" -eq 0 ] \
   && printf '%s' "$intake_out" | jq -e '.kind == "applied" and .status == "Backlog" and .pendingWrites == 0' >/dev/null 2>&1 \
-  && printf '%s' "$intake_ledger" | jq -e '[.mutations[].kind] | (index("rest-mutation") != null) and ([.[] | select(. == "graphql-mutation")] | length >= 2)' >/dev/null 2>&1; then
+  && printf '%s' "$intake_ledger" | jq -e '
+      .count == 3 and
+      ([.requests[] | select(.kind == "rest-mutation" and .method == "POST" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length == 1) and
+      ([.requests[] | select(.kind == "graphql-mutation")] | length == 2)' >/dev/null 2>&1; then
   ok "#2134: intake applies one public create and converged board projection"
 else
   bad "#2134: intake public transaction must create and project" "rc=$intake_rc output=$intake_out ledger=$intake_ledger"
