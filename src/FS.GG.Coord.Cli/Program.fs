@@ -330,7 +330,10 @@ let main argv =
                 printfn "%s" (Options.renderCommandContract ())
                 ExitGreen
 
-            | IntakeCmd -> IntakeApplication.run opts
+            // `validate` is pure, but `apply` is the receipt-bound live transaction in `Client.intakeCmd`.
+            // Routing the whole verb through IntakeApplication made the public `apply` command a permanent
+            // refusal while unit tests that invoked Client.intakeCmd directly stayed green (#2134).
+            | IntakeCmd -> Client.run opts
 
             | DriverCmd -> Client.run opts
 
