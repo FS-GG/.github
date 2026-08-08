@@ -199,6 +199,42 @@ algebra "a job-level block that satisfies the callee passes, despite a bare top 
         $'    permissions:\n      contents: read\n      packages: read'
 
 # =============================================================================================
+# 2b. App-token installation grants. A request outside the pinned grant inventory makes GitHub
+# refuse the ENTIRE mint before any later step runs, so it must be a pre-merge finding too.
+# =============================================================================================
+cat > "$RC/.github/workflows/app-token.yml" <<'YAML'
+name: app token fixture
+on: { workflow_dispatch: }
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        with:
+          app-id: 1
+          private-key: x
+          permission-issues: write
+YAML
+WAPP="$WORK/w-app-token"; mkdir -p "$WAPP/FS-GG__R"
+caller "$WAPP/FS-GG__R/c.yml" $'permissions:\n  contents: read\n  packages: read' "cal.yml@main"
+expect "an App-token request outside the pinned installation grants is caught before merge" \
+  1 "issues: requests write, installation grants none" "$WAPP" "$RC" \
+  --app-grants contents:read
+expect "the same App-token request is green when the inventory grants it" \
+  0 "ok:" "$WAPP" "$RC" \
+  --app-grants contents:read,issues:write
+
+# This is the inversion record: changing the real historical bad scope back into the workflow
+# makes the gate red.  It proves the new relation, rather than merely exercising a synthetic parser.
+cp .github/workflows/kit-auto-publish.yml "$RC/.github/workflows/kit-auto-publish.before.yml"
+sed -i '/permission-issues: write/a\          permission-organization-packages: read' \
+  "$RC/.github/workflows/kit-auto-publish.before.yml"
+expect "INVERSION: pre-#2234 kit-auto-publish organisation-packages request red-lights" \
+  1 "organization_packages: requests read, installation grants none" "$WAPP" "$RC" \
+  --app-grants contents:write,issues:write,packages:read,pull_requests:write
+rm "$RC/.github/workflows/kit-auto-publish.before.yml"
+
+# =============================================================================================
 # 3. Fail closed. "I could not check" is never green, and never a finding either.
 # =============================================================================================
 WU="$WORK/w-unreach"; mkdir -p "$WU/FS-GG__R"; : > "$WU/FS-GG__R.unreachable"
@@ -289,8 +325,12 @@ assert isinstance(perms, dict) and perms.get("contents") == "read", f"top-level 
 body = "".join(str(s.get("run", "")) for j in d["jobs"].values() for s in j.get("steps", []))
 assert "check-workflow-permissions.py" in body, "the gate workflow never runs the gate"
 assert "tests/workflow-permissions/run.sh" in body, "the gate workflow never runs this fixture"
+assert "--app-grants" in body and "FSGG_APP_GRANTS" in body, "the gate never checks App-token grants"
+live = d["jobs"].get("installation-grants-current", {})
+assert live.get("timeout-minutes"), "live grant reconciliation has no timeout"
+assert "permission-organization-administration" in str(live), "live grant reconciliation cannot read the installation"
 PY
-then ok "the shipped permission-coherence.yml declares contents: read and runs both the gate and this fixture"
+then ok "the shipped permission-coherence.yml runs caller and App-token checks plus live grant reconciliation"
 else bad "the shipped permission-coherence.yml is not the shape this fixture asserts"
 fi
 
