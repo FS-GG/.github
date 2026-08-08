@@ -37,6 +37,8 @@
     <Compile Include="RegistryPredicate.fs" />
     <Compile Include="Intake.fsi" />
     <Compile Include="Intake.fs" />
+    <Compile Include="IntakeReceipt.fsi" />
+    <Compile Include="IntakeReceipt.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="Markdown.fsi" />

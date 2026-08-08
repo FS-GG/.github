@@ -33,3 +33,8 @@ module IntakeTests =
         match Intake.validate { draft with Paths = [ "../outside" ] } with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "paths")
         | Ok _ -> failwith "a repository escape must refuse"
+
+    [<Fact>]
+    let ``#2134 receipt cannot turn a different draft into a retry`` () =
+        let receipt: IntakeReceipt.Receipt = { DraftId = "other"; Owner = "FS-GG"; Repository = ".github"; IssueNumber = 42 }
+        Assert.True(IntakeReceipt.validate draft receipt |> Result.isError)
