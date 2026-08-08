@@ -42,7 +42,8 @@ cross-repo allocation, not item implementation.
    review capacity, active lanes, open slots, and ordered limiting reasons with source/freshness.
    Account explicitly for slot/review caps, overlap, no schedulable item, REST reserve/backoff, claim
    contention or an indeterminate receipt, and human/decision blockers; never print a low activity
-   count without its measured cause.
+   count without its measured cause. Reuse the reporter's session-locked derived cache for unchanged
+   heartbeats; width and color are local projections and never justify another board read.
    Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

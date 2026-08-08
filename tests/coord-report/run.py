@@ -40,14 +40,15 @@ for runtime in (".claude", ".agents"):
     for canonical, variants in (("drive-board", ("drive-board-normal", "drive-board-best")), ("work-board", ("work-board-normal", "work-board-best"))):
         body = (ROOT / runtime / "skills" / canonical / "SKILL.md").read_text()
         assert "fsgg-coord-report" in body and "already-cached lane snapshot" in body
-        assert "typed lane-capacity facts" in body and "indeterminate receipt" in body
+        assert "typed lane-capacity facts" in body and "indeterminate receipt" in body and "derived cache" in body
         for variant in variants:
             inherited = (ROOT / runtime / "skills" / variant / "SKILL.md").read_text()
             assert f"[{canonical}]" in inherited
 
 with tempfile.TemporaryDirectory() as temp:
     state = Path(temp) / "state"; event = Path(temp) / "event.json"; lanes = Path(temp) / "lanes.json"
-    write(lanes, {"freshness":"stale","capacity":capacity(6,2,1,7,reason("no-schedulable-item","cached scheduler found no additional Ready item","batch receipt","stale")),"lanes":[{"item":".github#1","repository":"FS-GG/.github","workState":"merged","boardStatus":"Done","worker":"kite","activity":"stamp","pr":"#2","blocker":None}]})
+    base_snapshot = {"freshness":"stale","capacity":capacity(6,2,1,7,reason("no-schedulable-item","cached scheduler found no additional Ready item","batch receipt","stale")),"lanes":[{"item":".github#1","repository":"FS-GG/.github","workState":"merged","boardStatus":"Done","worker":"kite","activity":"stamp","pr":"#2","blocker":None}]}
+    write(lanes, base_snapshot)
     run("--state-dir", str(state), "start", "--session", "demo", "--at", "2026-08-08T00:00:00Z")
     kinds = ["created", "boarded", "claimed", "reviewed", "blocked", "merged", "published", "done"]
     for kind in kinds:
@@ -58,6 +59,50 @@ with tempfile.TemporaryDirectory() as temp:
     out = run("--state-dir", str(state), "show", "--session", "demo", "--event", str(event), "--lanes", str(lanes), "--mode", "json").stdout
     doc = json.loads(out); assert doc["schema"] == "fsgg.coord.session-report/1"; assert doc["sessionTotals"]["done"] == 1
     assert doc["snapshot"] == {"freshness":"stale","network":"not-used"}
+    trace_env = {**os.environ,"FSGG_COORD_REPORT_CACHE_TRACE":"1"}
+    # A fresh process reuses the exact schema/HWM/snapshot cache; derive() is only reached on a miss.
+    cached = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env)
+    assert cached.stderr.strip() == "fsgg-coord-report: cache hit"
+    cache_file = state / "sessions" / "demo.derived.json"
+    cached_value = json.loads(cache_file.read_text())
+    assert set(cached_value["derived"]) == {"session","lanes","laneCapacity","sessionTotals","snapshot"}
+
+    # A real append changes the high-water mark; retrying the identical heartbeat does not grow it and hits.
+    write(event, {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"cache-hwm","item":".github#1"})
+    first_heartbeat = run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env)
+    assert first_heartbeat.stderr.strip() == "fsgg-coord-report: cache miss"
+    ledger_file = state / "sessions" / "demo.jsonl"; before_retry = ledger_file.read_bytes()
+    repeated_heartbeat = run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env)
+    assert repeated_heartbeat.stderr.strip() == "fsgg-coord-report: cache hit" and ledger_file.read_bytes() == before_retry
+
+    # Snapshot reason/freshness are in the digest and invalidate independently of the append-only ledger.
+    changed_reason = json.loads(json.dumps(base_snapshot)); changed_reason["capacity"]["reasons"][0]["detail"] = "a different limiting cause"
+    write(lanes, changed_reason)
+    assert "cache miss" in run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env).stderr
+    changed_freshness = json.loads(json.dumps(changed_reason)); changed_freshness["freshness"] = "current"
+    write(lanes, changed_freshness)
+    assert "cache miss" in run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env).stderr
+
+    # A stale schema key and corrupt cache both fail closed to atomic recomputation without ledger loss.
+    cache_doc = json.loads(cache_file.read_text()); cache_doc["key"]["reportSchema"] = "fsgg.coord.session-report/0"; cache_file.write_text(json.dumps(cache_doc))
+    assert "cache miss" in run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env).stderr
+    ledger_before_corruption = ledger_file.read_bytes(); cache_file.write_text("{corrupt")
+    repaired_cache = run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json",env=trace_env)
+    assert "cache miss" in repaired_cache.stderr and ledger_file.read_bytes() == ledger_before_corruption
+    json.loads(cache_file.read_text())
+
+    # Emit/show serialize on the session lock; every result and the atomically replaced cache remain complete JSON.
+    write(event, {"eventSchema":EVENT_SCHEMA,"kind":"heartbeat","eventKey":"cache-concurrent","item":".github#1"})
+    concurrent_commands = [
+        [str(CLIENT),"--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json"],
+        *[[str(CLIENT),"--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json"] for _ in range(3)],
+    ]
+    concurrent = [subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True) for command in concurrent_commands]
+    for process in concurrent:
+        stdout, stderr = process.communicate(); assert process.returncode == 0, stderr; json.loads(stdout)
+    json.loads(cache_file.read_text())
+    write(lanes, base_snapshot)
+    write(event, {"eventSchema":EVENT_SCHEMA,"kind":"reviewed","eventKey":"reviewed","item":".github#1","fromStatus":"In progress","toStatus":"In review","activity":"review complete"})
     plain = run("--state-dir", str(state), "show", "--session", "demo", "--event", str(event), "--lanes", str(lanes), "--mode", "plain", "--width", "40").stdout
     assert "\x1b[" not in plain and "┌" in plain and max(map(len, plain.splitlines())) <= 40
     colored_env = {key: value for key, value in os.environ.items() if key != "NO_COLOR"}
@@ -151,5 +196,5 @@ with tempfile.TemporaryDirectory() as temp:
     run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json")
     run("--state-dir",str(state),"emit","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json")
     final = json.loads(run("--state-dir",str(state),"show","--session","demo","--event",str(event),"--lanes",str(lanes),"--mode","json").stdout)
-    assert final["sessionTotals"]["done"] == 3 and final["sessionTotals"]["eventsRecorded"] == 12
+    assert final["sessionTotals"]["done"] == 3 and final["sessionTotals"]["eventsRecorded"] == 14
 print("coord-report fixtures: PASS")

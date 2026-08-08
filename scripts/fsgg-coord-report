@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -37,6 +38,7 @@ CAPACITY_FIELDS = {
     "schema", "implementationCapacity", "reviewCapacity", "activeLanes", "openSlots", "reasons",
 }
 CAPACITY_REASON_FIELDS = {"kind", "source", "freshness", "detail"}
+CACHE_SCHEMA = "fsgg.coord.session-derived-cache/1"
 
 
 def fail(message: str) -> None:
@@ -75,6 +77,10 @@ def session_name(value: str) -> str:
 def paths(root: Path, session: str) -> tuple[Path, Path]:
     sessions = root / "sessions"
     return sessions / f"{session}.jsonl", sessions / f"{session}.lock"
+
+
+def cache_path(root: Path, session: str) -> Path:
+    return root / "sessions" / f"{session}.derived.json"
 
 
 def locked(path: Path):
@@ -139,12 +145,30 @@ def append(root: Path, session: str, event: dict[str, Any]) -> tuple[dict[str, A
         return record, True
 
 
-def load(root: Path, session: str) -> list[dict[str, Any]]:
-    ledger, lock = paths(root, session)
-    if not ledger.exists():
-        fail(f"session {session!r} has not been started")
-    with locked(lock) as guard:
-        return ledger_rows(ledger)
+def cache_trace(outcome: str) -> None:
+    if os.environ.get("FSGG_COORD_REPORT_CACHE_TRACE"):
+        print(f"fsgg-coord-report: cache {outcome}", file=sys.stderr)
+
+
+def atomic_json(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def json_digest(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def normalize_capacity(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -207,7 +231,7 @@ def normalize_lanes(snapshot: dict[str, Any]) -> tuple[list[dict[str, Any]], str
     return lanes, freshness, normalize_capacity(snapshot)
 
 
-def report(session: str, trigger: dict[str, Any], snapshot: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+def derive(session: str, snapshot: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
     header = next((row for row in records if row.get("record") == "session"), None)
     if header is None:
         fail("ledger has no session record")
@@ -218,11 +242,50 @@ def report(session: str, trigger: dict[str, Any], snapshot: dict[str, Any], reco
     active = [lane["item"] for lane in lanes if lane["boardStatus"] in ("In progress", "In review", "Blocked")]
     lifecycle = next((str(row["lifecycle"]) for row in reversed(events) if row.get("lifecycle") in ("active", "ended")), header.get("lifecycle", "active"))
     return {
-        "schema": SCHEMA, "session": {"id": session, "startedAt": header.get("startedAt"), "lifecycle": lifecycle},
-        "trigger": trigger, "lanes": lanes, "laneCapacity": capacity,
+        "session": {"id": session, "startedAt": header.get("startedAt"), "lifecycle": lifecycle},
+        "lanes": lanes, "laneCapacity": capacity,
         "sessionTotals": {**totals, "netActive": len(active), "unresolved": unresolved, "eventsRecorded": len(events)},
         "snapshot": {"freshness": freshness, "network": "not-used"},
     }
+
+
+def cached_report(root: Path, session: str, trigger: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
+    ledger, lock = paths(root, session)
+    if not ledger.exists():
+        fail(f"session {session!r} has not been started")
+    snapshot_digest = json_digest(snapshot)
+    cache = cache_path(root, session)
+    with locked(lock) as guard:
+        records = ledger_rows(ledger)
+        events = [row for row in records if row.get("record") == "event"]
+        key = {
+            "reportSchema": SCHEMA,
+            "ledgerHighWaterMark": {
+                "records": len(records),
+                "events": len(events),
+                "lastSequence": max((int(row.get("sequence", 0)) for row in events), default=0),
+            },
+            "laneSnapshotSha256": snapshot_digest,
+        }
+        cached: Any = None
+        try:
+            with open(cache, encoding="utf-8") as stream:
+                cached = json.load(stream)
+        except (OSError, json.JSONDecodeError, UnicodeError):
+            cached = None
+        hit = (isinstance(cached, dict) and cached.get("schema") == CACHE_SCHEMA
+               and cached.get("key") == key and isinstance(cached.get("derived"), dict)
+               and cached.get("derivedSha256") == json_digest(cached.get("derived")))
+        if hit:
+            derived = cached["derived"]
+            required = {"session", "lanes", "laneCapacity", "sessionTotals", "snapshot"}
+            hit = set(derived) == required
+        if not hit:
+            derived = derive(session, snapshot, records)
+            atomic_json(cache, {"schema": CACHE_SCHEMA, "key": key,
+                                "derivedSha256": json_digest(derived), "derived": derived})
+        cache_trace("hit" if hit else "miss")
+    return {"schema": SCHEMA, "trigger": trigger, **derived}
 
 
 def cell_width(text: str) -> int:
@@ -370,7 +433,7 @@ def main() -> None:
     if args.command == "end": event = {**event, "kind": "heartbeat", "eventKey": f"end:{session}", "lifecycle": "ended"}
     if args.command in ("emit", "end"): trigger, _ = append(root, session, event)
     else: trigger = event
-    doc = report(session, trigger, snapshot, load(root, session))
+    doc = cached_report(root, session, trigger, snapshot)
     print(render(doc, args.mode, max(40, args.width), args.color))
 
 
