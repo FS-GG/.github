@@ -53,6 +53,30 @@ module Cache =
         Directory.CreateDirectory r |> ignore
         r
 
+    let private intakeReceiptFile draftId = Path.Combine(ensureRoot (), $"intake-%s{slug draftId}.json")
+
+    let getIntakeReceipt draftId =
+        let file = intakeReceiptFile draftId
+        if not (File.Exists file) then Ok None else
+        try
+            use doc = JsonDocument.Parse(File.ReadAllText file)
+            let root = doc.RootElement
+            let read (name: string) = root.GetProperty(name).GetString()
+            let number = root.GetProperty("issueNumber").GetInt32()
+            let receipt: FS.GG.Coord.IntakeReceipt.Receipt = { DraftId = read "draftId"; Owner = read "owner"; Repository = read "repository"; IssueNumber = number }
+            Ok(Some receipt)
+        with ex -> Error $"intake receipt '%s{file}' is unreadable: %s{ex.Message}"
+
+    let putIntakeReceipt (receipt: FS.GG.Coord.IntakeReceipt.Receipt) =
+        try
+            let file = intakeReceiptFile receipt.DraftId
+            let temp = file + ".tmp"
+            let json = $"{{\"draftId\":{JsonSerializer.Serialize receipt.DraftId},\"owner\":{JsonSerializer.Serialize receipt.Owner},\"repository\":{JsonSerializer.Serialize receipt.Repository},\"issueNumber\":%d{receipt.IssueNumber}}}"
+            File.WriteAllText(temp, json)
+            File.Move(temp, file, true)
+            Ok()
+        with ex -> Error $"could not persist intake receipt: %s{ex.Message}"
+
     let private scanFile (owner: string) (title: string) =
         Path.Combine(ensureRoot (), $"scan-%s{slug owner}-%s{slug title}.json")
 

@@ -11,6 +11,8 @@ namespace FS.GG.Coord.GitHub
 /// every worker for the next ninety seconds, wearing the clothes of a fact. Both invariants below exist
 /// to stop exactly that.
 module Cache =
+    val getIntakeReceipt: draftId: string -> Result<FS.GG.Coord.IntakeReceipt.Receipt option, string>
+    val putIntakeReceipt: receipt: FS.GG.Coord.IntakeReceipt.Receipt -> Result<unit, string>
 
     open Errors
 
