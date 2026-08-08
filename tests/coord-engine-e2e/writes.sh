@@ -1128,6 +1128,16 @@ must_mutate "add" run add FS.GG.SDD#46
 # Use a new worker: the fixture's normal driver holds an item, and the one-item-per-worker guard
 # would be a parser-shaped false driver rather than the scheduling-and-claim path being tested.
 "$ENGINE" release FS.GG.SDD#43 --worker otter-777 >/dev/null 2>&1
+# The preceding collision legs deliberately leave #43 at the claim column while releasing its marker.
+# `take` must start from a schedulable world, not from an unowned `In progress` projection that blocks
+# #42's overlapping path and turns its mutation proof into EX_NONE.  Establish and read back the one
+# precondition here; the `must_mutate` helper below still proves that `take` itself executes and writes.
+take_reset="$("$ENGINE" set-field FS.GG.SDD#43 Status Ready --worker ledger-take 2>&1)"; take_reset_rc=$?
+take_reset_status="$(run ready --repo FS.GG.SDD --worker ledger-take 2>/dev/null | jq -r '.[] | select(.number == 43) | .status')"
+take_reset_comments="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43/comments")"
+[ "$take_reset_rc" -eq 0 ] && [ "$take_reset_status" = "Ready" ] && ! printf '%s' "$take_reset_comments" | grep -q 'fsgg:claim' \
+  && ok "#1569: take precondition is a Ready #43 with no claim marker" \
+  || bad "#1569: take must start after the collision fixture cleanup" "rc=$take_reset_rc status=$take_reset_status output=$take_reset comments=$take_reset_comments"
 must_mutate "take" "$ENGINE" take --repo FS.GG.SDD --worker ledger-take
 # A room is a net-new REST issue POST followed by body PATCHes on every member.  The fixture returns
 # the created issue number, letting the real command finish rather than treating the POST as enough.

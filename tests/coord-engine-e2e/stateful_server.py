@@ -326,7 +326,12 @@ def graphql(query: str, variables: dict):
             if item_id.startswith("PVTI_"):
                 try:
                     n = int(item_id.removeprefix("PVTI_"))
+                    # Single-field writes carry the selected option in variables. Batch writes inline
+                    # it in the GraphQL document, so read only the inline option values as a separate
+                    # shape — matching arbitrary document text would make unrelated batch fields look
+                    # like Status writes.
                     value = json.dumps(variables)
+                    inline_options = re.findall(r'singleSelectOptionId:\s*"([^"]+)"', query)
                     if n == 47 and RECONCILE_47_MISSING[0] > 0:
                         RECONCILE_47_MISSING[0] -= 1
                         ISSUES[n]["off_board"] = True
@@ -336,13 +341,13 @@ def graphql(query: str, variables: dict):
                     elif n == 47 and "f0:" in query and "f1:" in query:
                         ISSUES[n]["status"] = "Ready"
                         ISSUES[n]["blocked_by"] = ""
-                    elif "opt_done" in value:
+                    elif "opt_done" in value or "opt_done" in inline_options:
                         ISSUES[n]["status"] = "Done"
-                    elif "opt_wip" in value:
+                    elif "opt_wip" in value or "opt_wip" in inline_options:
                         ISSUES[n]["status"] = "In progress"
-                    elif "opt_ready" in value:
+                    elif "opt_ready" in value or "opt_ready" in inline_options:
                         ISSUES[n]["status"] = "Ready"
-                    elif "opt_backlog" in value:
+                    elif "opt_backlog" in value or "opt_backlog" in inline_options:
                         ISSUES[n]["status"] = "Backlog"
                 except (ValueError, KeyError):
                     pass
