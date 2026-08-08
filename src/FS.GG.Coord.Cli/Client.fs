@@ -4184,6 +4184,7 @@ module Client =
           DeliberatePark "set-field Status Blocked"
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
+          DeliberatePark "intake apply Status=Blocked"
           DeliberatePark "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
           GuardedRestore "release (recorded previous Status=Blocked)"
           GuardedRestore "reap (recorded previous Status=Blocked)" ]
@@ -7995,6 +7996,71 @@ module Client =
             // condition worth retrying as the one condition never worth retrying.
             | Error e -> fail e
 
+    /// #2134's receipt-first intake transaction. The receipt is persisted immediately after the only
+    /// REST create, so a retry repairs the same issue's projection rather than issuing a second POST.
+    let private intakeCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ action; path ] ->
+            match IntakeApplication.readDraft path, action with
+            | Error reason, _ -> eprint $"fsgg-coord-engine: intake: %s{reason}"; ExitError
+            | Ok draft, "validate" ->
+                match Intake.validate draft with
+                | Ok _ ->
+                    printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"validated\",\"draftId\":%s,\"writes\":0}" (JsonSerializer.Serialize draft.Id)
+                    ExitGreen
+                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
+            | Ok draft, "apply" ->
+                match Intake.validate draft with
+                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
+                | Ok _ ->
+                    let receiptResult =
+                        match Cache.getIntakeReceipt draft.Id with
+                        | Error e -> Error(Errors.Malformed(draft.Id, e))
+                        | Ok(Some receipt) ->
+                            IntakeReceipt.validate draft receipt
+                            |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                            |> Result.map (fun r -> { Owner = r.Owner; Repo = r.Repository; Number = r.IssueNumber })
+                        | Ok None ->
+                            Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
+                            |> Result.bind (fun candidates ->
+                                let candidate = candidates |> List.tryFind (fun c -> c.Title = draft.Title)
+                                match draft.Disposition, candidate with
+                                | Some Intake.Reuse, Some c -> Ok { Owner = draft.Owner; Repo = draft.Repository; Number = c.Number }
+                                | Some Intake.Reuse, None -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
+                                | Some Intake.Create, _ ->
+                                    Writes.createIntake ctx.Transport draft
+                                    |> Result.bind (fun created ->
+                                        let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = created.Number }
+                                        Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message)) |> Result.map (fun () -> created))
+                                | None, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing")))
+                    match receiptResult with
+                    | Error e -> fail e
+                    | Ok issue ->
+                        match Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
+                        | Error e, _, _ -> fail e
+                        | _, Error e, _ -> fail e
+                        | _, _, Error code -> code
+                        | Ok _, Ok board, Ok w ->
+                            match requireCoherentParkIfBlocked ctx issue (if draft.Status = "Blocked" then Some BoardStatus.Blocked else None) with
+                            | Error code -> code
+                            | Ok() ->
+                                match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
+                                | Error e -> fail e
+                                | Ok _ ->
+                                    match Board.boardWrite ctx.Transport board issue.Owner issue.Repo issue.Number "Status" (Board.Set draft.Status) w.Id with
+                                    | Error e -> fail e
+                                    | Ok Board.Deferred -> eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."; Errors.ExRate
+                                    | Ok Board.NotOnBoard -> eprint "fsgg-coord-engine: intake add did not produce a readable board item."; ExitError
+                                    | Ok Board.Written ->
+                                        match Board.itemStatus ctx.Transport board issue.Owner issue.Repo issue.Number with
+                                        | Error e -> fail e
+                                        | Ok status when status = Reads.statusOfName draft.Status ->
+                                            printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"board\":%s,\"status\":%s,\"pendingWrites\":0}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize ctx.Title) (JsonSerializer.Serialize draft.Status)
+                                            ExitGreen
+                                        | Ok _ -> eprint "fsgg-coord-engine: intake Status readback did not match the requested projection."; ExitError
+            | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
+        | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
+
     let run (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -8084,4 +8150,5 @@ module Client =
             | Flush -> flushCmd ctx opts
             | LintCmd -> lint ctx opts
             | Issues -> issues ctx opts
+            | IntakeCmd -> intakeCmd ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

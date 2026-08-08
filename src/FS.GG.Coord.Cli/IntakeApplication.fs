@@ -19,7 +19,9 @@ module IntakeApplication =
         | true, _ -> Error $"{name} must be a string"
         | false, _ -> Error $"{name} is required"
 
-    let private readDraft path =
+    /// Decode a draft once, before either the local validation projection or the live transaction.
+    /// Keeping this public prevents `intake apply` growing a second, subtly different JSON decoder.
+    let readDraft path =
         try
             use document = JsonDocument.Parse(File.ReadAllText path)
             let root = document.RootElement

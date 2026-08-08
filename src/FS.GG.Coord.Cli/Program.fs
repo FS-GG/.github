@@ -390,7 +390,8 @@ let main argv =
             | Flush
             | LintCmd
             | RoomOpen
-            | Issues -> Client.run opts
+            | Issues
+            | IntakeCmd -> Client.run opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
