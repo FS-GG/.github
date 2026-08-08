@@ -191,9 +191,8 @@ jobs:
       # The org GitHub Packages feed requires AUTHENTICATION even to read, and only 1 of the 6 receiver
       # repos configures it as a NuGet source. The other five restore every FS.GG.* package they use
       # from PUBLIC NUGET.ORG — which is why they need no org-feed credential at all. So an engine that
-      # exists only on the org feed cannot reach them: adding it to the shared `.config/dotnet-tools.json`
-      # (which sync-build-config byte-copies into all six) would simply break `dotnet tool restore` in
-      # five repos.
+      # exists only on the org feed cannot reach them: every receiver restores its own repo-root
+      # `.config/dotnet-tools.json`, and five of them have no org-feed credential at all.
       #
       # And the receivers are the whole point. `scripts/fsgg-coord` resolves this package and `exec`s it,
       # so a receiver that cannot restore it has no coordination tool at all — not a slower one, none.
@@ -242,9 +241,11 @@ jobs:
           owner: FS-GG
           permission-issues: write
 
-      # The subject set is the SAME seven repos as the kit's, and that is not a copy-paste slip: the
-      # engine reaches receivers through the kit's `.config/dotnet-tools.json`, so `receives:
-      # coordination-kit` + `kit-delivery: package` is exactly who pins `fs.gg.coord.cli`.
+      # The subject set is the SAME seven repos as the kit's, and that is not a copy-paste slip: each
+      # receiver's own repo-root `.config/dotnet-tools.json` pins `fs.gg.coord.cli`. `.github`'s
+      # `dist/dotnet/.config/dotnet-tools.json` is its canonical manifest only; ADR-0068 / .github#1615
+      # stopped distributing it. Thus `receives: coordination-kit` + `kit-delivery: package` is exactly
+      # who needs the release notification, while .github#2249 verifies their pins.
       - name: Tell every engine receiver the release exists
         if: steps.v.outputs.push == 'true'
         env:

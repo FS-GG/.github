@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Fixture for scripts/check-engine-pin.py — the gate that asks whether the version the FLEET restores
-# (the dist tool-manifest pin) is the newest engine the org has PUBLISHED (the org feed). .github#1196,
-# epic #266.
+# Fixture for scripts/check-engine-pin.py — the gate that asks whether `.github`'s canonical dist
+# tool-manifest pin is the newest engine the org has PUBLISHED (the org feed). .github#1196, epic #266.
 #
 # The gate exists because that pin is a scalar no other coherence gate looked at: source/feed/pin
-# coherence and engine-freshness all stayed GREEN while the fleet ran a three-releases-stale engine.
+# coherence and engine-freshness all stayed GREEN while the canonical pin was three releases stale.
 # So this fixture spends most of its length on the FAILURE legs: it proves the gate reds when the pin
 # is BEHIND or AHEAD of the feed's newest stable version, and ERRORS — never "in sync" — when the
 # manifest or the pin it measures is missing/malformed, or the feed is unreadable.
@@ -28,6 +27,7 @@ export FSGG_ENGINE_PIN_FIXTURE_OK=1
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GATE="$HERE/../../scripts/check-engine-pin.py"
+WORKFLOW="$HERE/../../.github/workflows/engine-pin-coherence.yml"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/engine-pin-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -84,13 +84,23 @@ must_fail() { # $1 = label, $2 = required reason pattern
 
 echo "== check-engine-pin fixture =="
 
+# The visible live-step label is part of the gate's declared subject. Keep it bound to the same
+# canonical-manifest scope as the checker: this pin is not distributed to receivers (#2257).
+if grep -Fqx "      - name: Is .github's canonical engine pin the newest published engine?" "$WORKFLOW" \
+  && ! grep -Fq "fleet's engine pin" "$WORKFLOW"; then
+  ok "live workflow label names .github's canonical pin, not the fleet's"
+else
+  bad "live workflow label keeps the canonical-only subject" \
+      "expected the canonical label and no retired fleet-scope label in $WORKFLOW"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 1. GREEN: the pin equals the newest stable version on the feed.
 # ---------------------------------------------------------------------------------------------
 M="$WORK/m-ok.json";  manifest "$M" "0.6.0"
 F="$WORK/f-ok.json";  feed "$F" 0.3.0 0.4.0 0.5.0 0.6.0
 run "$M" "$F"
-must_pass "pin == feed-newest is IN SYNC" "the fleet's fs.gg.coord.cli pin is 0.6.0"
+must_pass "pin == feed-newest is IN SYNC" ".github's canonical fs.gg.coord.cli pin is 0.6.0"
 
 # ---------------------------------------------------------------------------------------------
 # 2. THE ACCEPTANCE CASE: the pin is BEHIND the feed (the .github#1196 state exactly).
@@ -108,7 +118,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 3. The other direction: the pin is AHEAD of the feed — names a version no receiver can restore.
+# 3. The other direction: the canonical pin is AHEAD of the feed — names an unpublished version.
 # ---------------------------------------------------------------------------------------------
 M="$WORK/m-ahead.json"; manifest "$M" "0.7.0"
 F="$WORK/f-ahead.json"; feed "$F" 0.5.0 0.6.0

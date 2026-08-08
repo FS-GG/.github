@@ -1,12 +1,14 @@
-# Does the fleet's engine PIN match the newest engine the org has published? (.github#1196, epic #266)
+# Does .github's canonical engine PIN match the newest engine the org has published? (.github#1196, epic #266)
 #
-# `scripts/fsgg-coord` in a receiver restores the engine from dist/dotnet/.config/dotnet-tools.json —
-# the pin coordination-sync byte-copies into every kit repo. That pin is a scalar no other gate looked
+# `dist/dotnet/.config/dotnet-tools.json` is `.github`'s own canonical manifest and this gate's
+# subject. It is not distributed to receivers: ADR-0068 / .github#1615 retired that arrangement, as
+# `registry/repos.yml` records. Each receiver instead restores its own repo-root
+# `.config/dotnet-tools.json`; those Renovate-managed receiver pins are .github#2249's subject. A
+# bump here does not deliver an engine to a receiver. This canonical pin is a scalar no other gate looked
 # at: source-coherence (registry vs source), feed-coherence (registry vs feed) and engine-freshness
 # (source vs feed) never touch it, and pin-coherence gates only `# renovate:` ANNOTATED pins — the dist
 # manifest pin is a native dotnet-tools.json pin, so it escaped all four. The result was .github#1196:
-# every coherence gate GREEN at 0.6.0 while the fleet restored a stale 0.3.0 and a synced recipe called
-# a verb the pinned engine lacked (`unknown command: followup`).
+# every coherence gate GREEN at 0.6.0 while this canonical pin remained at 0.3.0.
 #
 # THE COMPARISON POINT IS THE FEED, NOT THE REGISTRY — see the gate docstring. Keying on
 # registry.package-version would red the Renovate pin-bump PR during publish-before-flip (FR-007), when
@@ -85,7 +87,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - name: Is the fleet's engine pin the newest published engine?
+      - name: Is .github's canonical engine pin the newest published engine?
         env:
           # Env-passed, never interpolated into the run script — the org's uniform anti-injection
           # pattern (cf. engine-freshness.yml, feed-coherence.yml). The run-scoped token carries
