@@ -1,6 +1,9 @@
 module FS.GG.Coord.GitHub.Tests.BudgetTests
 
 open Xunit
+open System
+open System.IO
+open System.Threading.Tasks
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 
@@ -16,6 +19,104 @@ let private headers (pairs: (string * string) list) : string -> string option =
         pairs
         |> List.tryFind (fun (k, _) -> System.String.Equals(k, name, System.StringComparison.OrdinalIgnoreCase))
         |> Option.map snd
+
+[<Fact>]
+let ``a real REST header observation is credential-scoped and preserves the named resource`` () =
+    let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-test-" + Guid.NewGuid().ToString "N")
+
+    try
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+
+        Budget.observeRestHeaders
+            "test-token-a"
+            (headers
+                [ "X-RateLimit-Resource", "search"
+                  "X-RateLimit-Limit", "30"
+                  "X-RateLimit-Remaining", "0"
+                  "X-RateLimit-Used", "30"
+                  "X-RateLimit-Reset", "1760000000" ])
+
+        match Budget.readRestObservation "test-token-a" with
+        | Some observation ->
+            Assert.Equal("search", observation.Resource)
+            Assert.Equal(Some 0, observation.Remaining)
+            Assert.Equal(Some 30, observation.Limit)
+            Assert.Equal("response-header", observation.Source)
+        | None -> failwith "the real resource observation was not persisted"
+
+        Budget.observeRestHeaders
+            "test-token-a"
+            (headers
+                [ "X-RateLimit-Resource", "core"
+                  "X-RateLimit-Limit", "5000"
+                  "X-RateLimit-Remaining", "4200" ])
+
+        let resources = Budget.readRestObservations "test-token-a" |> List.map _.Resource |> Set.ofList
+        Assert.True((resources = set [ "core"; "search" ]))
+
+        Assert.True((Budget.readRestObservation "test-token-b").IsNone)
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+
+[<Fact>]
+let ``REST fleet state is pessimistic across resources and only a successful resource response clears exhaustion`` () =
+    let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-state-" + Guid.NewGuid().ToString "N")
+
+    try
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+        let token = "test-token-state"
+        let record resource remaining =
+            Budget.observeRestHeaders
+                token
+                (headers
+                    [ "X-RateLimit-Resource", resource
+                      "X-RateLimit-Limit", "5000"
+                      "X-RateLimit-Remaining", string remaining
+                      "X-RateLimit-Used", string (5000 - remaining)
+                      "X-RateLimit-Reset", "1760000000" ])
+
+        // A healthy core reading cannot erase the independent search refusal.
+        record "core" 4800
+        record "search" 0
+        Assert.Equal(Budget.Exhausted, Budget.readRestObservations token |> Budget.fleetState)
+
+        // Passing wall-clock time is not evidence.  Only the later successful response for `search`
+        // replaces that resource's authoritative refusal.
+        record "search" 29
+        Assert.Equal(Budget.Constrained, Budget.readRestObservations token |> Budget.fleetState)
+        record "search" 200
+        Assert.Equal(Budget.Healthy, Budget.readRestObservations token |> Budget.fleetState)
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
+
+[<Fact>]
+let ``concurrent workers retain one credential-scoped observation per REST resource`` () =
+    let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+    let cache = Path.Combine(Path.GetTempPath(), "fsgg-budget-concurrent-" + Guid.NewGuid().ToString "N")
+
+    try
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
+        let token = "test-token-concurrent"
+        let resources = [ "core"; "search"; "code_search"; "integration_manifest" ]
+
+        resources
+        |> List.map (fun resource ->
+            Task.Run(fun () ->
+                Budget.observeRestHeaders
+                    token
+                    (headers
+                        [ "X-RateLimit-Resource", resource
+                          "X-RateLimit-Limit", "5000"
+                          "X-RateLimit-Remaining", "4000" ])))
+        |> List.toArray
+        |> Task.WaitAll
+
+        let actual = Budget.readRestObservations token |> List.map _.Resource |> Set.ofList
+        Assert.Equal<Set<string>>(Set.ofList resources, actual)
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)
 
 // ---- #421: an exhausted budget is NOT an absent item ----------------------------------------------
 //

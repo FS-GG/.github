@@ -44,7 +44,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private marker (id: int) (worker: string) =
     let body = $"<!-- fsgg:claim worker=%s{worker} lease=10 -->"

@@ -43,7 +43,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private scripted (responses: IoResult<Response> list) =
     let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)

@@ -62,7 +62,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 [<Fact>]
 let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =

@@ -14,7 +14,7 @@ let private serving (body: string) =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None })
+              NextLink = None; Headers = Map.empty })
 
 /// A transport that fails every request.
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
@@ -32,7 +32,7 @@ let private prAndRefs (pulls: string) (refs: string) =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None })
+              NextLink = None; Headers = Map.empty })
 
 /// `prAlive` finds no PR, then the branch probe itself FAILS — the #1055 fail-closed case. The open-PR
 /// read succeeds (empty), the `matching-refs` read errors.
@@ -45,7 +45,7 @@ let private prNoneRefsFail (error: IoError) =
                 { Status = 200
                   Body = "[]"
                   ETag = None
-                  NextLink = None })
+                  NextLink = None; Headers = Map.empty })
 
 // ---- #461: the lock is never guessed at ------------------------------------------------------------
 
@@ -714,8 +714,8 @@ type private IssuesCache() =
 let private etagServer (body: string) (etag: string) =
     Fake.Recorder(fun (req: Request) ->
         match req.IfNoneMatch with
-        | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None }
-        | _ -> Ok { Status = 200; Body = body; ETag = Some etag; NextLink = None })
+        | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None; Headers = Map.empty }
+        | _ -> Ok { Status = 200; Body = body; ETag = Some etag; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``issues returns the raw body, then revalidates with the stored ETag and serves the 304 from cache (#418)`` () =
@@ -840,13 +840,13 @@ type private LandableServer(sha: string, ?runs: int, ?nextLink: string) =
                 let etag = etagOf req.Path
 
                 match req.IfNoneMatch with
-                | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None }
+                | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None; Headers = Map.empty }
                 | _ ->
                     Ok
                         { Status = 200
                           Body = body
                           ETag = Some etag
-                          NextLink = nextLink })
+                          NextLink = nextLink; Headers = Map.empty })
 
 /// The three reads of one `landable` poll.
 let private pollPaths (sha: string) =
@@ -949,7 +949,7 @@ let ``issues judges headroom on the RAW page, not on the filtered projection (#6
     let recorder =
         Fake.Recorder(fun (req: Request) ->
             seen.Add req.IfNoneMatch
-            Ok { Status = 200; Body = raw; ETag = Some "W/\"full-page\""; NextLink = None })
+            Ok { Status = 200; Body = raw; ETag = Some "W/\"full-page\""; NextLink = None; Headers = Map.empty })
 
     match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
     | Ok body -> Assert.DoesNotContain("pull_request", body) // the projection still drops PRs
@@ -983,7 +983,7 @@ let ``a page we cannot COUNT is never memoised - headroom unproven is headroom r
                 else
                     "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\"sha-x\"}}"
 
-            Ok { Status = 200; Body = body; ETag = Some "W/\"v1\""; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = Some "W/\"v1\""; NextLink = None; Headers = Map.empty })
 
     Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
     Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
@@ -1035,7 +1035,7 @@ type private MergeablePrServer(tokenFor: int -> string) =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``a mergeable still COMPUTING past the re-read budget is pending, not unknown — so --wait waits`` () =
@@ -1085,7 +1085,7 @@ let ``an ABSENT mergeable field is still unknown, and still settles — the fail
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1127,7 +1127,7 @@ type private MergeablePrAtSha(token: string, headSha: string) =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``a CONFLICTED about the commit you replaced is pending, not a verdict — the false arm reaches --sha`` () =
@@ -1234,7 +1234,7 @@ type private ConflictedPrWithBranch(headSha: string, tipSha: string) =
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``a conflicted whose PR head LAGS the branch tip is pending — no --sha, and none needed`` () =
@@ -1293,16 +1293,16 @@ let ``a branch tip we cannot READ leaves the conflict standing — fail-closed, 
         Fake.Recorder(fun (req: Request) ->
             if req.Path.Contains "git/ref/heads/" then
                 // The ref read fails. It must not manufacture a verdict in either direction.
-                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None }
+                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
                     { Status = 200
                       Body =
                         """{"number":801,"state":"open","mergeable":false,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             else
-                Ok { Status = 200; Body = """{"total_count":0,"workflow_runs":[]}"""; ETag = None; NextLink = None })
+                Ok { Status = 200; Body = """{"total_count":0,"workflow_runs":[]}"""; ETag = None; NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1355,7 +1355,7 @@ let ``the green path reconciles ONCE — #989's bound, as #995 revised it`` () =
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1384,7 +1384,7 @@ type private GreenPrWithBranch(headSha: string, tipSha: string, conclusion: stri
                 else
                     $"""{{"total_count":1,"check_runs":[{{"name":"build","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{conclusion}"}}]}}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``a GREEN scored over the commit you REPLACED is pending, not green — the fail-OPEN twin of #955`` () =
@@ -1471,28 +1471,28 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
     let recorder =
         Fake.Recorder(fun (req: Request) ->
             if req.Path.Contains "git/ref/heads/" then
-                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None }
+                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
                     { Status = 200
                       Body =
                         """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "actions/runs" then
                 Ok
                     { Status = 200
                       Body =
                         """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             else
                 Ok
                     { Status = 200
                       Body =
                         """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                       ETag = None
-                      NextLink = None })
+                      NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1558,10 +1558,10 @@ type private MergeStatePrServer
                         { Status = 200
                           Body = protectionRequiring (defaultArg demanded [])
                           ETag = None
-                          NextLink = None }
+                          NextLink = None; Headers = Map.empty }
             elif isRulesetRead req.Path then
                 policyReads <- policyReads + 1
-                Ok { Status = 200; Body = defaultArg rules "[]"; ETag = None; NextLink = None }
+                Ok { Status = 200; Body = defaultArg rules "[]"; ETag = None; NextLink = None; Headers = Map.empty }
             else
 
             let body =
@@ -1582,7 +1582,7 @@ type private MergeStatePrServer
 
                     $"""{{"total_count":%d{List.length reported},"check_runs":[%s{runs}]}}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``#1575 a BLOCKED PR whose reporting checks are all green is pending — the green GitHub refused`` () =
@@ -1723,28 +1723,28 @@ let ``#1575 an ABSENT mergeable_state is NO OPINION, not a refusal — it must n
                     { Status = 200
                       Body = """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/801" then
                 Ok
                     { Status = 200
                       Body =
                         """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "actions/runs" then
                 Ok
                     { Status = 200
                       Body =
                         """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
                       ETag = None
-                      NextLink = None }
+                      NextLink = None; Headers = Map.empty }
             else
                 Ok
                     { Status = 200
                       Body =
                         """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
                       ETag = None
-                      NextLink = None })
+                      NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1840,7 +1840,7 @@ type private ClosedPrServer(state: string, merged: bool) =
                     otherReads <- otherReads + 1
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
 [<Fact>]
 let ``#1680 AC1 a MERGED pr is NOT pending and NOT exit 7`` () =
@@ -1948,7 +1948,7 @@ let ``#1680 an OPEN pr carrying merged:false is untouched — the guard reads st
                 else
                     """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
     let state, n, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
@@ -1971,7 +1971,7 @@ let ``#1680 a PR body with no `merged` field at all is NOT read as merged`` () =
                 else
                     """{"total_count":0,"workflow_runs":[]}"""
 
-            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None; Headers = Map.empty })
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 

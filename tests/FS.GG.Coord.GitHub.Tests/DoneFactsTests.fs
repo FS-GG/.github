@@ -36,7 +36,7 @@ let private serving (body: string) =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None })
+              NextLink = None; Headers = Map.empty })
 
 /// The done-stamp query's response, with the pieces a test wants to vary.
 let private response

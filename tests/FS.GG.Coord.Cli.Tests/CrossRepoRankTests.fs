@@ -29,7 +29,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private ref' repo n : Ref =
     { Owner = "FS-GG"
