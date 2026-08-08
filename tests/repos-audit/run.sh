@@ -49,6 +49,16 @@ export FSGG_NUGET_ORG_BASE="file://$KITFEED"
 # as a prerelease, which is the second thing this feed shape pins.
 KIT_PUBLISHED="0.8.0"
 
+# The receiver-engine sweep compares receiver manifests with the registry's declared coord-engine
+# target. Keep that target independent from the feed fixture: a later test can make them differ and
+# prove the audit reads the declared contract rather than accidentally reusing feed-newest.
+DEPS="$WORK/dependencies.yml"
+cat > "$DEPS" <<'YAML'
+contracts:
+  - id: coord-engine
+    version: "0.15.0"
+YAML
+
 # The pin every repo is served unless a leg says otherwise, so the legs that predate this sweep and
 # have nothing to do with pins stay green. See the `pinlocal` arm of the gh stub.
 mkpin() { cat > "$2" <<XML
@@ -916,7 +926,7 @@ invisible()      { noflows "$1"; local slug="${1//\//__}"; : > "$FIX/$slug.gone"
 # it is the trap — a later `run --apply` would then have its flag SILENTLY swallowed rather than
 # forwarded to the audit, which is a fixture that lies about what it ran. #648
 run() { PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
-          bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" "$@"; }
+          bash "$AUDIT" --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" "$@"; }
 
 # run, with every gh call the stub served recorded to <logfile> (#1556 criterion 5, which is a claim
 # about API TRAFFIC and cannot be checked from the audit's output).
@@ -930,7 +940,7 @@ run() { PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DEL
 run_logged() {
   local log="$1" rc=0; shift; : > "$log"
   GH_CALL_LOG="$log" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
-    bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" "$@" || rc=$?
+    bash "$AUDIT" --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" "$@" || rc=$?
   return "$rc"
 }
 
@@ -1017,7 +1027,7 @@ mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 # would make this leg fail on a reordering that changes nothing it cares about. What it must pin is
 # the CLAIM: whatever could not be enumerated, an unreadable roster is not an empty one.
 BADREG="$WORK/bad.yml"; printf 'schemaVersion: 1\nrepos: [ {id: x,\n' > "$BADREG"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qE 'cannot enumerate (audited capabilities|receivers)' \
     && printf '%s' "$out" | grep -q 'not the same as empty' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1035,7 +1045,7 @@ repos:
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 YAML
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "capability 'coordination-kit'" \
     && printf '%s' "$out" | grep -q '0 rostered receivers' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1059,7 +1069,7 @@ capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none, reason: nobody receives it in this fixture }
 $LABELS_CAP
 YAML
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$ALLNONE" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$ALLNONE" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "every capability recording 'receivers: none' -> exit 3; each leg honest, the audit vacuous" \
@@ -1076,7 +1086,7 @@ repos:
   - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
 YAML
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NOCAPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NOCAPS" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'declares no audited capabilities' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "a roster with no capabilities: block -> exit 3, not a vacuous OK" \
@@ -1215,7 +1225,7 @@ mkreg2 "$MASKREG" "labels, coordination-kit" "labels, coordination-kit" \
   "- { id: coordination-kit, workflow: coordination-coherence.yml }" \
   "- { id: lockfile-sync,    workflow: lockfile-sync.yml }"
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MASKREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MASKREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "capability 'lockfile-sync'" \
     && printf '%s' "$out" | grep -q '0 rostered receivers' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1229,7 +1239,7 @@ mkreg2 "$NONEREG" "labels, coordination-kit" "labels, coordination-kit" \
   "- { id: coordination-kit,   workflow: coordination-coherence.yml }" \
   "- { id: contract-coherence, workflow: contract-coherence.yml, receivers: none, reason: nobody adopted it yet }"
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'nobody adopted it yet' \
     && printf '%s' "$out" | grep -q 'The claim holds'; } \
   && ok "'receivers: none' + no adopter -> passes, and the log says the claim was CHECKED" \
@@ -1240,7 +1250,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS
 #      audit must go red and say the recorded claim is false — not skip the leg because a human once
 #      wrote a reason down.
 wire FS-GG/FS.GG.SDD; wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml contract-coherence.yml
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering references' \
     && printf '%s' "$out" | grep -qi 'claim is now FALSE' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1257,7 +1267,7 @@ mkreg2 "$DRIFTREG" "labels, coordination-kit, lockfile-sync" "labels, coordinati
   "- { id: lockfile-sync,    workflow: lockfile-sync.yml }"
 wire_wf FS-GG/FS.GG.SDD       coordination-coherence.yml lockfile-sync.yml
 wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml lockfile-sync.yml   # adopted, never rostered
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS.GG.Rendering references .*lockfile-sync\.yml" \
     && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1279,7 +1289,7 @@ for q in '"' "'"; do
   qwire FS-GG/FS.GG.SDD "$q" coordination-coherence.yml lockfile-sync.yml
   # undeclared + quoted -> must still be caught as an unrostered adopter.
   qwire FS-GG/FS.GG.Rendering "$q" coordination-coherence.yml lockfile-sync.yml
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
       && ! printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but nothing in its workflows references'; } \
     && ok "a quoted ($q) uses: is still matched — no false gap, and the drift check still sees it" \
@@ -1598,7 +1608,7 @@ SCRIPTREG="$WORK/script.yml"
 mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
 wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/FS.GG.Rendering "_org-build/scripts/sync-build-config.sh"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
   && ok "script capability: both receivers wired -> ok, whatever path prefix they run it from" \
   || bad "script detector must match on the basename" "rc=$rc: $out"
@@ -1606,7 +1616,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REP
 # (17b) declared + NOT wired -> a GAP. A receiver that quietly drops the drift job is the thing this
 #       detector exists to catch, and before #628 nothing could see it.
 wire_script FS-GG/FS.GG.SDD ".github/scripts/sync-build-config.sh"; unwired FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
     && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
   && ok "script capability: a declared receiver that does not run the script -> a gap (exit 1)" \
@@ -1618,7 +1628,7 @@ DRIFTSCRIPT="$WORK/driftscript.yml"
 mkreg2 "$DRIFTSCRIPT" "labels, build-config" "labels" "$SCRIPTCAP"
 wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/FS.GG.Rendering ".github/scripts/sync-build-config.sh"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTSCRIPT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTSCRIPT" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering references .* does not declare 'receives: build-config'" \
     && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "script capability: an unrostered repo that really runs it -> drift (exit 1) — #628 itself" \
@@ -1631,7 +1641,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTSCRIPT" --repos-sh "$R
 mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
 wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/FS.GG.Rendering "scripts/my-sync-build-config.sh"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'"; } \
   && ok "script capability: a receiver's own fork of the script does not count as wiring it" \
   || bad "a forked script must not satisfy the authority's detector" "rc=$rc: $out"
@@ -1644,7 +1654,7 @@ NODETECT="$WORK/nodetect.yml"
 mkreg2 "$NODETECT" "labels, coordination-kit, build-config" "labels, coordination-kit" \
   "- { id: coordination-kit, workflow: coordination-coherence.yml }"
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NODETECT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NODETECT" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "receive 'build-config'" \
     && printf '%s' "$out" | grep -q "no 'capabilities:' row" \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
@@ -1656,7 +1666,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NODETECT" --repos-sh "$REPO
 #      the pair count: the pairs line is a count of what this audit actually LOOKED at, and folding in
 #      something it did not examine would be claiming an examination that never happened.
 mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'labels — 3 rostered receiver(s), PUSHED' \
     && printf '%s' "$out" | grep -q '2 receiver-capability pair(s)' \
     && ! printf '%s' "$out" | grep -q "receives 'labels' but nothing"; } \
@@ -1674,7 +1684,7 @@ mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
 wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/FS.GG.Rendering ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/.github         "scripts/sync-build-config.sh"     # the authority, using its OWN file
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 unrostered adopter' \
     && ! printf '%s' "$out" | grep -q "FS-GG/.github references"; } \
   && ok "the authority running its OWN script is not adoption — no phantom unrostered adopter" \
@@ -1691,7 +1701,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REP
 mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
 wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
 wire_script FS-GG/FS.GG.Rendering "scripts/sync-build-config.sh" --no-provenance   # vendored fork
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
     && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
   && ok "script capability: a VENDORED fork (no authority checkout) is not wiring — provenance is required" \
@@ -1706,7 +1716,7 @@ clearfail FS-GG/FS.GG.Rendering
 mkdir -p "$FIX/FS-GG__FS.GG.Rendering"; printf '%s\n' "gate.yml" > "$FIX/FS-GG__FS.GG.Rendering.list"
 printf 'jobs:\n  build:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n      # we used to run sync-build-config.sh here, but it was removed\n      - run: echo hi\n' \
   > "$FIX/FS-GG__FS.GG.Rendering/gate.yml"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
     && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
   && ok "script capability: a COMMENT naming the script is not wiring — prose cannot satisfy the gate" \
@@ -1720,7 +1730,7 @@ mkreg2 "$BOTHREG" "labels, coordination-kit, build-config" "labels, coordination
   "- { id: coordination-kit, workflow: coordination-coherence.yml }" "$SCRIPTCAP"
 wire_both FS-GG/FS.GG.SDD       coordination-coherence.yml ".github/scripts/sync-build-config.sh"
 wire_both FS-GG/FS.GG.Rendering coordination-coherence.yml "_org-build/scripts/sync-build-config.sh"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BOTHREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BOTHREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '4 receiver-capability pair(s) — 4 wired'; } \
   && ok "one repo wiring BOTH a workflow and a script capability -> both detected in a single pass" \
   || bad "the two detector kinds must not be mutually exclusive" "rc=$rc: $out"
@@ -1752,7 +1762,7 @@ bigwire() { clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"
 bigwire FS-GG/FS.GG.SDD; bigwire FS-GG/FS.GG.Rendering
 big_ok=1
 for _ in 1 2 3 4 5; do
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BIGREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BIGREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } || { big_ok=0; break; }
 done
 [ "$big_ok" -eq 1 ] \
@@ -1772,7 +1782,7 @@ mkreg2 "$MATREG" "labels, build-config" "labels, build-config" "$MATCAP"
 
 wire_materializer FS-GG/FS.GG.SDD
 wire_materializer FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
   && ok "materializer: package provenance + explicit opt-in + CI materialize/diff -> wired" \
   || bad "the current package build-config contract must audit green" "rc=$rc: $out"
@@ -1782,7 +1792,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_
 wire_materializer FS-GG/FS.GG.SDD
 wire_materializer FS-GG/FS.GG.Rendering
 : > "$FIX/FS-GG__FS.GG.Rendering.failreceiver"
-out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'reading .config/kit/FS.GG.Kit.receiver.proj failed' \
     && printf '%s' "$out" | grep -q '1 undetermined'; } \
   && ok "materializer: unreadable receiver project -> retryable no-verdict, never a fabricated gap" \
@@ -1790,20 +1800,20 @@ out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 bash "$AUDIT" --registry "$MATREG"
 
 wire_materializer FS-GG/FS.GG.SDD
 wire_materializer FS-GG/FS.GG.Rendering missing true
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
     && printf '%s' "$out" | grep -q 'FS.GG.Kit package provenance plus explicit'; } \
   && ok "materializer: declared receiver missing explicit opt-in -> gap" \
   || bad "missing materializer opt-in must not pass" "rc=$rc: $out"
 
 wire_materializer FS-GG/FS.GG.Rendering no-package true
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Kit package provenance plus explicit'; } \
   && ok "materializer: true property without FS.GG.Kit package provenance -> gap" \
   || bad "a bare property must not impersonate package adoption" "rc=$rc: $out"
 
 wire_materializer FS-GG/FS.GG.Rendering true missing
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement' \
     && ! printf '%s' "$out" | grep -q 'missing: FS.GG.Kit package provenance'; } \
   && ok "materializer: declared receiver missing CI enforcement -> gap, exact half named" \
@@ -1812,19 +1822,19 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_
 # Workflow-wide co-occurrence is not an execution relationship. Separate run blocks (and therefore
 # potentially separate jobs/clean checkouts) cannot prove the diff examines what materialization wrote.
 wire_materializer FS-GG/FS.GG.Rendering true split
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
   && ok "materializer: split run blocks cannot assemble a false enforcement contract" \
   || bad "materialize and diff in different run blocks must not pass" "rc=$rc: $out"
 
 wire_materializer FS-GG/FS.GG.Rendering true swallowed
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
   && ok "materializer: a swallowed diff is observation, not enforcement" \
   || bad "git diff followed by || true must not pass" "rc=$rc: $out"
 
 wire_materializer FS-GG/FS.GG.Rendering true no-fail
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
   && ok "materializer: a diff guard without a non-zero exit does not enforce drift" \
   || bad "a non-failing diff guard must not pass" "rc=$rc: $out"
@@ -1833,7 +1843,7 @@ DRIFTMAT="$WORK/driftmaterializer.yml"
 mkreg2 "$DRIFTMAT" "labels, build-config" "labels" "$MATCAP"
 wire_materializer FS-GG/FS.GG.SDD
 wire_materializer FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering adopts .* does not declare 'receives: build-config'" \
     && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "materializer: fully wired but unrostered adopter -> drift" \
@@ -1842,14 +1852,14 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --repos-sh "$REPO
 # Incomplete unrostered adoption is drift too: either real half is an attempted capability adoption,
 # and leaving it unrostered would make the eventual second half invisible to the fabric.
 wire_materializer FS-GG/FS.GG.Rendering true missing
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "materializer: unrostered opt-in without enforcement is still drift" \
   || bad "partial unrostered adoption must fail loud" "rc=$rc: $out"
 
 wire_materializer FS-GG/FS.GG.SDD
 wire_materializer FS-GG/FS.GG.Rendering commented commented
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
     && printf '%s' "$out" | grep -q 'package provenance plus explicit' \
     && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize'; } \
@@ -1864,7 +1874,7 @@ mkreg2 "$MULTIMAT" "labels, build-config, coordination-kit" "labels, build-confi
   "$MATCAP" "- { id: coordination-kit, workflow: coordination-coherence.yml }"
 wire_materializer_and_workflow FS-GG/FS.GG.SDD coordination-coherence.yml
 wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml true missing
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTIMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTIMAT" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement' \
     && ! printf '%s' "$out" | grep -q 'missing: FS.GG.Kit package provenance'; } \
   && ok "materializer: detector id is capability-local when a later detector row is different" \
@@ -1887,7 +1897,7 @@ mkreg2 "$CALLERREG" "labels, skill-union" "labels, skill-union" "$CALLERCAP"
 
 wire_caller FS-GG/FS.GG.SDD
 wire_caller FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
   && ok "caller: own-root call + three-root pull_request trigger -> wired" \
   || bad "the canonical skill-union receiver caller must audit green" "rc=$rc: $out"
@@ -1896,13 +1906,13 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 # caller with no `with:` block at all is the most correct caller there is — a detector that demanded the
 # inputs be spelled out would report it as a gap and teach receivers to write redundant YAML.
 wire_caller FS-GG/FS.GG.Rendering default-inputs
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
   && ok "caller: absent product-path/roots take the workflow defaults -> wired" \
   || bad "default inputs must satisfy the call half" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering unfiltered
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
   && ok "caller: an UNFILTERED pull_request trigger is wider than covered -> wired" \
   || bad "an unfiltered trigger must not read as a coverage gap" "rc=$rc: $out"
@@ -1911,14 +1921,14 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 # aimed at a generated product. Under a `workflow:` detector this is indistinguishable from the genuine
 # article, and the capability would report green over ungated committed roots.
 wire_caller FS-GG/FS.GG.Rendering product
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'" \
     && printf '%s' "$out" | grep -q 'GENERATED product'; } \
   && ok "caller: a call aimed at a GENERATED product is not a gate on the committed roots -> gap" \
   || bad "a generated-product call must not satisfy the full-union capability" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering narrow-roots
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
   && ok "caller: a narrowed roots: is a smaller audit than the capability claims -> gap" \
   || bad "a one-root call must not certify the two-root union" "rc=$rc: $out"
@@ -1927,20 +1937,20 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 # without ever re-running the workflow that would have caught it. The diagnostic must name the TRIGGER,
 # not report "nothing calls it" — the remedy is a different edit.
 wire_caller FS-GG/FS.GG.Rendering no-agents-trigger
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'does not RUN when a committed skill root changes' \
     && ! printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
   && ok "caller: a trigger covering 1 of 2 roots -> gap, and the diagnostic names the TRIGGER half" \
   || bad "a partial root trigger must fail and blame the right half" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering ignore-root
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'does not RUN when a committed skill root changes'; } \
   && ok "caller: a paths-ignore: that excludes a root disarms the gate -> gap" \
   || bad "an excluded root must not pass" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering push-only
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'does not RUN when a committed skill root changes'; } \
   && ok "caller: a push-only workflow reports nothing on a PR, so it cannot be the required check -> gap" \
   || bad "a push-only caller must not satisfy a receiver gate" "rc=$rc: $out"
@@ -1949,13 +1959,13 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 # DELETED its caller and left the line commented must read as a gap, or the one thing this capability
 # exists to find reports green.
 wire_caller FS-GG/FS.GG.Rendering commented
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
   && ok "caller: a commented-out uses: is prose about calling, not a call -> gap" \
   || bad "a commented caller must not satisfy the call half" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering local
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
   && ok "caller: a LOCAL uses: ./ is running your own gate, not joining the authority's fabric -> gap" \
   || bad "a local uses: must not count as participation" "rc=$rc: $out"
@@ -1964,7 +1974,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 # runs, and the workflow that AUDITS them does not. Workflow-wide co-occurrence is the same non-relation
 # the materializer detector refuses across run blocks.
 wire_caller FS-GG/FS.GG.Rendering split
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'does not RUN when a committed skill root changes'; } \
   && ok "caller: a root trigger in a DIFFERENT workflow file cannot arm the caller -> gap" \
   || bad "split call/trigger must not assemble a false gate" "rc=$rc: $out"
@@ -1976,7 +1986,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 wire_caller FS-GG/FS.GG.SDD
 wire_caller FS-GG/FS.GG.Rendering
 wire_caller FS-GG/.github
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 # Match the authority as a SUBJECT of a verdict, not merely as a string: the capability's own
 # description names `FS-GG/.github/.github/workflows/skill-union-assert.yml`, so a bare grep for the
 # repo would match every ok/gap line about somebody else and could never fail.
@@ -1992,7 +2002,7 @@ DRIFTCALLER="$WORK/driftcaller.yml"
 mkreg2 "$DRIFTCALLER" "labels, skill-union" "labels" "$CALLERCAP"
 wire_caller FS-GG/FS.GG.SDD
 wire_caller FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering adopts .* does not declare 'receives: skill-union'" \
     && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "caller: fully wired but unrostered adopter -> drift" \
@@ -2001,7 +2011,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$R
 # An unrostered repo that has the CALL but not the trigger is drift too: it is an attempted adoption,
 # and leaving it unrostered makes the eventual second half invisible to the fabric.
 wire_caller FS-GG/FS.GG.Rendering no-agents-trigger
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "caller: an unrostered call without its trigger is still drift" \
   || bad "partial unrostered caller adoption must fail loud" "rc=$rc: $out"
@@ -2010,7 +2020,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$R
 # thing (FS.GG.Templates#49), and reporting it as an unrostered adopter of the committed-root capability
 # would make the drift leg cry wolf on correct behaviour — the one thing that teaches an operator to skip it.
 wire_caller FS-GG/FS.GG.Rendering product
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 unrostered adopter'; } \
   && ok "caller: a generated-product call is not an unrostered adopter of the committed-root capability" \
   || bad "the drift leg must not fire on a legitimate generated-product audit" "rc=$rc: $out"
@@ -2027,7 +2037,7 @@ wire_caller FS-GG/FS.GG.SDD
 printf '%s\n%s\n' "skill-union.yml" "coord.yml" > "$FIX/FS-GG__FS.GG.SDD.list"
 printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/FS-GG__FS.GG.SDD/coord.yml"
 wire FS-GG/FS.GG.Rendering
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONECALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONECALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "records capability 'skill-union' as having NO receivers"; } \
   && ok "caller: 'receivers: none' + a real adopter -> the recorded claim is falsified, not trusted" \
   || bad "a false 'receivers: none' must go red for the caller kind too" "rc=$rc: $out"
@@ -2043,7 +2053,7 @@ printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/coordination-coh
 wire_caller FS-GG/FS.GG.Rendering product
 printf '%s\n%s\n' "skill-union.yml" "coord.yml" > "$FIX/FS-GG__FS.GG.Rendering.list"
 printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/FS-GG__FS.GG.Rendering/coord.yml"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTICALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTICALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'GENERATED product' \
     && printf '%s' "$out" | grep -q "ok: FS-GG/FS.GG.Rendering wires .*coordination-coherence.yml"; } \
   && ok "caller: the detector id is capability-local alongside a workflow row" \
@@ -2060,7 +2070,7 @@ wire_caller FS-GG/FS.GG.SDD                       # the honest caller, unchanged
 # certified as the committed-root gate — the fail-open the whole `caller:` kind exists to close.
 for mode in flow-with-product with-before-uses flow-with-narrow-roots expression-product; do
   wire_caller FS-GG/FS.GG.Rendering "$mode"
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
     && ok "caller/yaml: '$mode' does not satisfy the call half" \
     || bad "caller/yaml: '$mode' must not certify the committed-root gate" "rc=$rc: $out"
@@ -2070,7 +2080,7 @@ done
 # in a trailing comment must read as a gap — the whole-line `commented` leg above never covered this.
 for mode in inline-comment-uses step-level-uses local commented; do
   wire_caller FS-GG/FS.GG.Rendering "$mode"
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
     && ok "caller/yaml: '$mode' is not a job-level call of the authority's workflow" \
     || bad "caller/yaml: '$mode' must not satisfy the call half" "rc=$rc: $out"
@@ -2080,7 +2090,7 @@ done
 # root changes, and each read as armed under the scanner.
 for mode in flow-on-narrow flow-pr-narrow negated-root archive-lookalike pr-target; do
   wire_caller FS-GG/FS.GG.Rendering "$mode"
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
     && ok "caller/yaml: '$mode' is not an armed gate over the declared roots" \
     || bad "caller/yaml: '$mode' must not satisfy the trigger half" "rc=$rc: $out"
@@ -2091,7 +2101,7 @@ done
 # the gate is broken). `broad-paths` and `ignore-nonroot` are WIDER than covered, which passes.
 for mode in paths-at-key-indent inline-paths alias-paths broad-paths ignore-nonroot two-calls crlf; do
   wire_caller FS-GG/FS.GG.Rendering "$mode"
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
     && ok "caller/yaml: '$mode' is a correctly wired gate and audits green" \
     || bad "caller/yaml: '$mode' must not be reported as a gap" "rc=$rc: $out"
@@ -2100,7 +2110,7 @@ done
 # A workflow GitHub cannot parse cannot be the live gate — but it must not take the repo's verdict with
 # it either. The sibling workflow in the same repo IS the gate, and the verdict is about that.
 wire_caller FS-GG/FS.GG.Rendering unparseable
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)' \
     && printf '%s' "$out" | grep -q '0 undetermined'; } \
   && ok "caller/yaml: an unparseable sibling workflow yields no caller token and no no-verdict" \
@@ -2112,7 +2122,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REP
 BADCALLER="$WORK/badcaller.yml"
 mkreg2 "$BADCALLER" "labels, skill-union" "labels, skill-union" \
   "- { id: skill-union, caller: bogus-detector, reason: not a supported caller id }"
-out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADCALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADCALLER" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'unsupported caller detector'; } \
   && ok "caller: an unsupported caller id -> exit 3 (permanent), never a fabricated gap" \
   || bad "an unknown caller detector must be a permanent no-verdict" "rc=$rc: $out"
@@ -2485,7 +2495,7 @@ wire FS-GG/FS.GG.SDD; unwired FS-GG/.allstar; wire_sparse FS-GG/FS.GG.Rendering 
 # `run_logged` documents, one layer out.
 : > "$WORK/calls.dotted"
 out="$(GH_CALL_LOG="$WORK/calls.dotted" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 \
-       REPOS_AUDIT_RETRY_DELAY=0 bash "$AUDIT" --registry "$DOTREG" --repos-sh "$REPOS_SH" 2>&1)" \
+       REPOS_AUDIT_RETRY_DELAY=0 bash "$AUDIT" --registry "$DOTREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" \
   && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'selects no tracked path' \
     && printf '%s' "$out" | grep -q 'FS.GG.Rendering/.github/workflows/fetch.yml' \
@@ -2780,7 +2790,7 @@ wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 # (a) the rule file is GONE. Caught up front, beside the `gh` and `python3` checks, because a missing
 #     dependency is a permanent no-verdict about the audit and not a fact about anybody's tree.
 out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
-        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+        --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'sparse-checkout closure rule is not at' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "sparse: a MISSING rule file is a permanent no-verdict, not a clean org" \
@@ -2792,7 +2802,7 @@ out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
 printf '"""A rule module that no longer exposes the borrowed names (models #1530s hoist)."""\n' \
   > "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
 out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
-        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+        --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 #     `SparseRefusal` is named explicitly alongside `grade_document` (#1599 criterion 3): the
 #     no-verdict type the borrower must catch is part of the borrowed interface, and a leg that only
 #     greps for a GRADING symbol would go on passing if it silently dropped off the list again.
@@ -2983,7 +2993,7 @@ pin FS-GG/FS.GG.SDD 0.1.0; pin FS-GG/FS.GG.Rendering 0.1.0
 #      it ends on must not claim kit freshness it never looked at. That claim is what the earlier
 #      draft printed over two receivers pinning 0.1.0, five stable releases behind.
 out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
-        bash "$AUDIT" --registry "$KITREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+        bash "$AUDIT" --registry "$KITREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { printf '%s' "$out" | grep -q "declares no 'coordination-kit' capability" \
     && printf '%s' "$out" | grep -q 'NO kit pin was graded, so nothing is claimed' \
     && ! printf '%s' "$out" | grep -q 'pin the published FS.GG.Kit'; } \
@@ -3010,7 +3020,7 @@ YAML
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
 nopin FS-GG/FS.GG.Rendering        # a byte-copy receiver genuinely has no PackageReference
 out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
-        bash "$AUDIT" --registry "$BCREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+        bash "$AUDIT" --registry "$BCREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '1 byte-copy, not graded' \
     && ! printf '%s' "$out" | grep -q 'REFUSED a repo it cannot grade'; } \
   && ok "kit-pin: a byte-copy receiver is EXCLUDED, not refused, and the exclusion is counted" \
@@ -3085,7 +3095,7 @@ unpin FS-GG/FS.GG.Rendering
 rm -f "$SPARSEBOX/scripts/fsgg_feed.py"
 cp "$HERE/../../scripts/check-sparse-checkout-closure.py" "$SPARSEBOX/scripts/check-sparse-checkout-closure.py"
 out="$(PATH="$STUB:$PATH" bash "$SPARSEBOX/scripts/repos-audit.sh" \
-        --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+        --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'NuGet feed reader is not at' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "kit-pin: a MISSING feed reader is a permanent no-verdict, not a clean org" \
@@ -3546,7 +3556,7 @@ offer_clear FS-GG/FS.GG.Rendering
 # this file uses: the flag cannot simply be appended to `run`, which already supplies `--registry`.
 run_reg() { local reg="$1"; shift
   PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
-    bash "$AUDIT" --registry "$reg" --repos-sh "$REPOS_SH" "$@"; }
+    bash "$AUDIT" --registry "$reg" --dependencies "$DEPS" --repos-sh "$REPOS_SH" "$@"; }
 
 # (0) NOTHING TO ASSERT IS NOT A CLEAN BILL. A roster whose coordination-kit capability is spelled
 #     something else entirely has no subject for this sweep, and must say so rather than printing the
@@ -3582,6 +3592,19 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
   && ok "engine-manifest: a receiver declaring the engine its shim execs is GREEN" \
   || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
+
+# The registry target, not the feed's newest version or an open proposal, is the gate's subject.
+# Both receiver manifests remain at feed-newest 0.15.0; mutating only the declared coord-engine
+# version must red both. This is the required gate inversion for #2249's new equality assertion.
+sed -i 's/version: "0.15.0"/version: "0.14.0"/' "$DEPS"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'engine-pin — FS-GG/FS.GG.SDD pins fs.gg.coord.cli 0.15.0, but registry/dependencies.yml declares coord-engine 0.14.0' \
+    && printf '%s' "$out" | grep -q 'engine-pin — FS-GG/FS.GG.Rendering pins fs.gg.coord.cli 0.15.0, but registry/dependencies.yml declares coord-engine 0.14.0' \
+    && printf '%s' "$out" | grep -q '2 coordination-kit receiver(s) pin fs.gg.coord.cli at a version different from registry/dependencies.yml'; } \
+  && ok "engine-pin: MUTATION-PROVEN — changing only the declared contract version reds every divergent receiver" \
+  || bad "receiver engine pins must be compared to the registry declaration, not feed-newest" "rc=$rc: $out"
+sed -i 's/version: "0.14.0"/version: "0.15.0"/' "$DEPS"
 
 # (2) THE LEG THAT CAN FAIL, AND THE ONE THE OLD RULE COULD NOT — #1615 AC2. A receiver with a
 #     PERFECTLY VALID manifest that simply does not declare the engine. `dotnet tool restore`
@@ -3688,7 +3711,7 @@ $LABELS_CAP
 YAML
 ENGLOG="$WORK/calls-engman.log"; : > "$ENGLOG"
 out3="$(GH_CALL_LOG="$ENGLOG" PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 REPOS_AUDIT_RETRY_DELAY=0 \
-          bash "$AUDIT" --registry "$THREEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc3=0 || rc3=$?
+          bash "$AUDIT" --registry "$THREEREG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc3=0 || rc3=$?
 toolman_reads="$(grep -cE '^toolman'$'\t' "$ENGLOG" || true)"
 # (c) — one receiver's bytes change, and ONLY that receiver's verdict moves.
 tool_manifest FS-GG/FS.GG.Governance missing
@@ -3762,9 +3785,11 @@ sed '0,/emit("offer-none", repo,/s//emit("offer-current", repo,/' "$AUDIT" > "$M
 AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
 out="$(run 2>&1)" && rc=0 || rc=$?
 AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
-{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q '::error::repos-audit: engine bump-offer'; } \
-  && ok "engine bump-offer: MUTATION-PROVEN — forcing offer-none to current kills the engine leg" \
-  || bad "engine offer verdict mutation must change this leg" "rc=$rc: $out"
+{ [ "$rc" -eq 1 ] \
+    && ! printf '%s' "$out" | grep -q '::error::repos-audit: engine bump-offer' \
+    && printf '%s' "$out" | grep -q '::error::repos-audit: engine-pin'; } \
+  && ok "engine bump-offer: MUTATION-PROVEN — forcing offer-none to current clears only the proposal finding; the unmerged receiver pin still reds" \
+  || bad "a healthy bump offer must not mask the receiver's declared-version drift" "rc=$rc: $out"
 
 # Mutation 2: narrow the real engine receiver enumeration to package-delivery rows. Rendering is
 # byte-copy and behind, so this false green proves the baseline's subject came from every
@@ -3787,7 +3812,9 @@ cat > "$FIX/FS-GG__FS.GG.Rendering/ref/renovate__fs.gg.coord.cli-0.x" <<'JSON'
 {"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.15.0","commands":["fsgg-coord-engine"]}}}
 JSON
 out="$(run_reg "$ENGBCREG" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'PR #1803 offers fs.gg.coord.cli 0.15.0, which is the published version'; } \
+{ [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -q 'PR #1803 offers fs.gg.coord.cli 0.15.0, which is the published version' \
+    && printf '%s' "$out" | grep -q '::error::repos-audit: engine-pin'; } \
   && ok "engine bump-offer: JSON tool-pin PR at the separate feed version is offer-current" \
   || bad "engine offer must parse a JSON tool pin at the PR head" "rc=$rc: $out"
 
