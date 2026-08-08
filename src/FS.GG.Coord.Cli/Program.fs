@@ -330,6 +330,8 @@ let main argv =
                 printfn "%s" (Options.renderCommandContract ())
                 ExitGreen
 
+            | IntakeCmd -> IntakeApplication.run opts
+
             | DriverCmd -> Client.run opts
 
             | CycleCmd -> CycleLedgerApplication.run opts

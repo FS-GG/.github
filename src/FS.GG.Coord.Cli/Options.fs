@@ -11,6 +11,7 @@ module Options =
         | LanesView
         | Facts
         | CommandContractCmd
+        | IntakeCmd
         | WhoAmI
         | Budget
         | Next
@@ -546,6 +547,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // touch-set. Filed as a follow-up rather than reached into.
         | Scan -> JsonOnly
         | CommandContractCmd -> JsonOnly
+        | IntakeCmd -> JsonOnly
         | BoardCmd -> JsonOnly
         | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
 
@@ -968,6 +970,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
+        | IntakeCmd -> Reads
 
         // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
         | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
@@ -1104,6 +1107,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LanesView -> "lanes"
         | Facts -> "facts"
         | CommandContractCmd -> "command-contract"
+        | IntakeCmd -> "intake"
         | WhoAmI -> "whoami"
         | Budget -> "budget"
         | Next -> "next"
@@ -1802,6 +1806,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
+        | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
 
         | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
         | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest
