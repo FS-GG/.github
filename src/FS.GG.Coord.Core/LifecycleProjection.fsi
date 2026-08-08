@@ -18,6 +18,12 @@ module LifecycleProjection =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
 
+    /// Persisted ordering receipt for lifecycle projections.
+    type Watermark = { ObservedAt: int64; Status: BoardStatus }
+
     /// Computes the newest coherent lifecycle status. Facts older than the newest observation are
     /// deliberately withheld, so delayed webhook delivery cannot regress the Project row.
     val project: Observation -> Result
+
+    /// Rejects stale or contradictory event observations against a persisted projection receipt.
+    val advance: Watermark option -> Observation -> Result

@@ -51,6 +51,27 @@ module LifecycleProjectionTests =
         | result -> failwithf "expected withheld stale event, got %A" result
 
     [<Fact>]
+    let ``#2264 persisted watermark makes an out-of-order event a no-op`` () =
+        let pr : LifecycleProjection.PullRequest = { Number = 12; Open = true; ReviewOrCiActive = true }
+        let newer = { observation with PullRequest = { ObservedAt = 3L; Value = Some pr }
+                                       Claim = { ObservedAt = 3L; Value = observation.Claim.Value }
+                                       Blockers = { ObservedAt = 3L; Value = observation.Blockers.Value }
+                                       Delivery = { ObservedAt = 3L; Value = observation.Delivery.Value }
+                                       Issue = { ObservedAt = 3L; Value = observation.Issue.Value } }
+        let receipt : LifecycleProjection.Watermark = { ObservedAt = 3L; Status = InReview }
+        match LifecycleProjection.advance (Some receipt) observation with
+        | LifecycleProjection.Withheld reason -> Assert.Contains("predates", reason)
+        | result -> failwithf "expected stale event to be withheld, got %A" result
+        Assert.Equal(LifecycleProjection.Project(InReview, 3L), LifecycleProjection.advance None newer)
+
+    [<Fact>]
+    let ``#2264 equal-time contradictory events are withheld`` () =
+        let receipt : LifecycleProjection.Watermark = { ObservedAt = 1L; Status = InReview }
+        match LifecycleProjection.advance (Some receipt) observation with
+        | LifecycleProjection.Withheld reason -> Assert.Contains("conflicts", reason)
+        | result -> failwithf "expected contradictory event to be withheld, got %A" result
+
+    [<Fact>]
     let ``#2264 unresolved blocker wins over an implementation claim`` () =
         let blocker = { Ref = None; Raw = "human action"; State = BlockerUnparseable }
         let value = { observation with Blockers = fact [ blocker ] }

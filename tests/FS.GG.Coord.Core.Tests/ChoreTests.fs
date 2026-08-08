@@ -871,7 +871,10 @@ module ChoreTests =
 
             let offenders = kinds |> List.filter writesStartableColumn |> List.map (fun k -> k.RuleId)
 
-            Assert.Equal<string list>([ "BLOCKER-CLEARED" ], offenders)
+            // LifecycleProjectionLag is the other typed writer that can land on a startable state.  It
+            // is not a second unblock shortcut: its observation contains the complete blocker, claim,
+            // PR, delivery and terminal-fact tuple and withholds on an incomplete tuple (#2264).
+            Assert.Equal<string list>([ "LIFECYCLE-PROJECTION-LAG"; "BLOCKER-CLEARED" ], offenders)
 
     [<Fact>]
     let ``#1738 BLOCKER-CLEARED fires exactly where Blockers.cleared says — the predicate Scan probes on`` () =

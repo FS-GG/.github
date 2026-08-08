@@ -41,4 +41,12 @@ jobs:
       - name: Reconcile lifecycle projection
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/fsgg-coord reconcile --repo FS-GG/.github --apply --json
+          FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
+          FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
+        run: |
+          set -o pipefail
+          result="$(scripts/fsgg-coord reconcile --repo FS-GG/.github --apply --json)"
+          observed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+          printf '### Coordination lifecycle reconciliation\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf -- '- trigger: `%s`\n- observed-at: `%s`\n- result: `%s`\n' "$FSGG_LIFECYCLE_EVENT" "$observed_at" "$result" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$result"

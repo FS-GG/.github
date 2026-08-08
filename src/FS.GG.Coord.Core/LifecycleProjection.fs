@@ -18,6 +18,11 @@ module LifecycleProjection =
         | Project of status: BoardStatus * observedAt: int64
         | Withheld of reason: string
 
+    /// The durable portion of a projection receipt.  Callers persist this beside the status write and
+    /// feed it back on the next event.  Keeping the water-mark in the typed boundary makes an event that
+    /// arrived late a no-op rather than an opportunity to re-derive an older column value.
+    type Watermark = { ObservedAt: int64; Status: BoardStatus }
+
     let private latest observation =
         [ observation.Claim.ObservedAt; observation.PullRequest.ObservedAt; observation.Blockers.ObservedAt
           observation.Delivery.ObservedAt; observation.Issue.ObservedAt ]
@@ -46,3 +51,17 @@ module LifecycleProjection =
             Withheld "claim liveness could not be observed"
         else
             Project(Ready, observedAt)
+
+    /// Accept a newly projected lifecycle result only when it is newer than the last applied receipt.
+    /// Equal timestamps are idempotent only when they agree; different values at the same timestamp are
+    /// withheld because the ordering source was not strong enough to decide which event won.
+    let advance watermark observation =
+        match project observation with
+        | Withheld reason -> Withheld reason
+        | Project(status, observedAt) ->
+            match watermark with
+            | Some previous when observedAt < previous.ObservedAt ->
+                Withheld "lifecycle observation predates the persisted projection watermark"
+            | Some previous when observedAt = previous.ObservedAt && status <> previous.Status ->
+                Withheld "lifecycle observation conflicts with the persisted projection watermark"
+            | _ -> Project(status, observedAt)
