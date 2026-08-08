@@ -29,7 +29,7 @@ chmod +x "$work/bin/gh"
 run_case() {
   local fixture=$1 expected=$2 visibility=$3
   set +e
-  PROJECTS_AUDIT_FIXTURE="$fixture" PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility "$visibility" --trusted-writers platform >"$work/out" 2>&1
+  (cd "$work" && PROJECTS_AUDIT_FIXTURE="$fixture" PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility "$visibility" --trusted-writers platform >"$work/out" 2>&1)
   rc=$?
   set -e
   [ "$rc" = "$expected" ] || { cat "$work/out"; exit 1; }
@@ -68,6 +68,21 @@ sed -i "s/__TODAY__/$today/; s/__EXPIRES__/$expires/" "$work/docs/coordination/p
 grep -q 'access attestation current' "$work/out"
 grep -q "verified $today by operator; expires $expires" "$work/out"
 
+sed -i '/verifier=operator/a unrecognised=field' "$work/docs/coordination/project-access-attestation.md"
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+grep -q 'access attestation unknown' "$work/out"
+grep -q 'record is malformed' "$work/out"
+if grep -q 'access attestation current' "$work/out"; then
+  cat "$work/out"
+  exit 1
+fi
+
+sed -i '/unrecognised=field/d; s/writers=platform/writers=other/' "$work/docs/coordination/project-access-attestation.md"
+(cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
+grep -q 'access attestation unknown' "$work/out"
+grep -q 'does not match required base Read and writers \[platform\]' "$work/out"
+
+sed -i 's/writers=other/writers=platform/' "$work/docs/coordination/project-access-attestation.md"
 sed -i 's/expires=.*/expires=2000-01-01/' "$work/docs/coordination/project-access-attestation.md"
 (cd "$work" && PROJECTS_AUDIT_FIXTURE=correct PATH="$work/bin:$PATH" "$root/scripts/projects-audit.sh" --project acme/Roadmap --visibility public --trusted-writers platform >"$work/out" 2>&1)
 grep -q 'access attestation stale' "$work/out"

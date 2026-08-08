@@ -41,35 +41,50 @@ if [ -f "$attestation" ]; then
     attestation_state=unknown
     attestation_detail="record is malformed"
   else
-    attested_project=$(sed -n 's/^project=//p' <<<"$marker")
-    verified=$(sed -n 's/^verified=//p' <<<"$marker")
-    expires=$(sed -n 's/^expires=//p' <<<"$marker")
-    base_permission=$(sed -n 's/^base-permission=//p' <<<"$marker")
-    attested_writers=$(sed -n 's/^writers=//p' <<<"$marker")
-    verifier=$(sed -n 's/^verifier=//p' <<<"$marker")
-    today=$(date -u +%F)
+    mapfile -t marker_lines <<<"$marker"
+    expected_fields=(project verified expires base-permission writers verifier)
+    marker_is_exact=true
+    [ "${#marker_lines[@]}" -eq 8 ] || marker_is_exact=false
+    [ "${marker_lines[0]:-}" = '<!-- fsgg:project-access-attestation v1' ] || marker_is_exact=false
+    [ "${marker_lines[7]:-}" = '-->' ] || marker_is_exact=false
+    for index in "${!expected_fields[@]}"; do
+      [[ "${marker_lines[$((index + 1))]:-}" =~ ^${expected_fields[$index]}=.+$ ]] || marker_is_exact=false
+    done
 
-    if [ "$attested_project" != "$project" ] || [ -z "$verified" ] || [ -z "$expires" ] || [ -z "$base_permission" ] || [ -z "$attested_writers" ] || [ -z "$verifier" ]; then
+    if [ "$marker_is_exact" != true ]; then
+      attestation_state=unknown
+      attestation_detail="record is malformed"
+    else
+      attested_project=${marker_lines[1]#project=}
+      verified=${marker_lines[2]#verified=}
+      expires=${marker_lines[3]#expires=}
+      base_permission=${marker_lines[4]#base-permission=}
+      attested_writers=${marker_lines[5]#writers=}
+      verifier=${marker_lines[6]#verifier=}
+      today=$(date -u +%F)
+
+      if [ "$attested_project" != "$project" ]; then
       attestation_state=unknown
       attestation_detail="record is incomplete or names another project"
-    elif [[ ! "$verified" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ ! "$expires" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+      elif [[ ! "$verified" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ ! "$expires" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
       attestation_state=unknown
       attestation_detail="record has an invalid date"
-    elif ! max_expires=$(date -u -d "$verified + 30 days" +%F 2>/dev/null) || ! date -u -d "$expires" +%F >/dev/null 2>&1; then
+      elif ! max_expires=$(date -u -d "$verified + 30 days" +%F 2>/dev/null) || ! date -u -d "$expires" +%F >/dev/null 2>&1; then
       attestation_state=unknown
       attestation_detail="record has an invalid calendar date"
-    elif [ "$verified" \> "$today" ] || [ "$expires" \> "$max_expires" ]; then
+      elif [ "$verified" \> "$today" ] || [ "$expires" \> "$max_expires" ]; then
       attestation_state=unknown
       attestation_detail="record exceeds the 30-day attestation interval"
-    elif [ "$expires" \< "$today" ]; then
+      elif [ "$expires" \< "$today" ]; then
       attestation_state=stale
       attestation_detail="expired $expires (verified $verified by $verifier)"
-    elif [ "$base_permission" != Read ] || [ "$attested_writers" != "$writers" ]; then
+      elif [ "$base_permission" != Read ] || [ "$attested_writers" != "$writers" ]; then
       attestation_state=unknown
       attestation_detail="does not match required base Read and writers [$writers]"
-    else
+      else
       attestation_state=current
       attestation_detail="verified $verified by $verifier; expires $expires; base $base_permission; writers [$attested_writers]"
+      fi
     fi
   fi
 fi
