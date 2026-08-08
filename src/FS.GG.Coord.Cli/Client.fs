@@ -1933,7 +1933,23 @@ module Client =
                     |> fun r -> r.Candidates
                     |> List.map (fun c -> c.Item)
 
-                let chores = Chore.derive items
+                // `CLOSED-ISSUE-NOT-DONE` predates the auditable done receipt and used closure as a
+                // terminal proxy.  Keep its established mechanical writer, but feed it only the terminal
+                // fact it is entitled to project: a freshly read immutable receipt.  An unreadable comment
+                // collection is deliberately equivalent to no receipt here, so a transient REST failure
+                // can withhold a repair but can never manufacture Done.
+                let lifecycleItems =
+                    items
+                    |> List.map (fun item ->
+                        if item.State = Closed && item.Status <> Done then
+                            match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
+                            | Ok comments when Done.hasReceipt comments -> item
+                            | Ok _
+                            | Error _ -> { item with State = Open }
+                        else
+                            item)
+
+                let chores = Chore.derive lifecycleItems
 
                 // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
                 // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
@@ -5811,6 +5827,13 @@ module Client =
                         | Verdict.NoVerdict _ -> ExitNoVerdict
                         | Red _ -> ExitRed
                         | Green _ ->
+                            // Write durable evidence before the mutable Project projection.  If the latter
+                            // is deferred, the scheduled lifecycle reconciler can later prove that this was
+                            // a verified terminal transition rather than guessing from issue closure.
+                            match Writes.doneReceipt ctx.Transport ref (Done.render ref verdict) with
+                            | Error e ->
+                                eprint $"fsgg-coord-engine: verified done but could not record its lifecycle receipt: %s{Errors.explain e}"
+                            | Ok() -> ()
                             // Stamp the board Done. A board-write failure leaves the stamp GREEN (the work
                             // IS done) and reports the note — the same rule as the bash client. #1151: the
                             // outcome was `|> ignore`d directly under the "reports the note" comment, so a

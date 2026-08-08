@@ -64,6 +64,13 @@ module Done =
         | ParentLeftOpen of Ref * reasons: string list
         | NoParent
 
+    /// A closed issue is not terminal evidence.  This marker is written by `doneCmd` only after `verify`
+    /// is green, and lets an event/scheduled projector distinguish a verified completion from an ordinary
+    /// issue close without treating the mutable Project column as proof of itself.
+    let hasReceipt (comments: string list) =
+        comments
+        |> List.exists (fun body -> body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal))
+
     // ---- THE PRECONDITIONS, PURE -------------------------------------------------------------------
 
     let verify (prOverride: int option) (resolvedWithoutPr: string option) (facts: Facts) : Verdict<Closure> =

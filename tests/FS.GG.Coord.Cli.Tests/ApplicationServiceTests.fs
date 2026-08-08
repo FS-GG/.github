@@ -2373,7 +2373,8 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
             // exists only to keep an unexpected REST call loud rather than silently empty.
-            | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | "GET", path when path.EndsWith "/comments" ->
+                ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     /// A BLOCKER-CLEARED apply whose accepted batch projects Status=Ready but leaves Blocked by stale.
