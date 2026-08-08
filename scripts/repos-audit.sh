@@ -225,29 +225,26 @@ KIT_FEED_LIB="$HERE/fsgg_feed.py"
 # package happens to be newest on a feed.  A release is published before the registry flips, and an
 # unpublished registry value is equally not a receiver target; feed-coherence owns those two facts.
 # This sweep's distinct question is whether every receiver runs the version the registry DECLARES.
-ENGINE_DECLARED_VERSION="$(python3 - "$DEPENDENCIES" <<'PY'
-import sys
-import yaml
+dependencies_yaml2json() {
+  if command -v yq >/dev/null 2>&1; then
+    yq -o=json '.' - 2>/dev/null
+  else
+    python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)' 2>/dev/null
+  fi
+}
 
-path = sys.argv[1]
-try:
-    with open(path, encoding="utf-8") as handle:
-        document = yaml.safe_load(handle)
-except Exception as exc:
-    raise SystemExit(f"cannot parse dependencies registry {path!r}: {exc}")
-
+ENGINE_DECLARED_VERSION="$(dependencies_yaml2json < "$DEPENDENCIES" | python3 -c '
+import sys, json
+try: document = json.load(sys.stdin)
+except Exception as exc: raise SystemExit(f"cannot parse dependencies registry: {exc}")
 contracts = document.get("contracts") if isinstance(document, dict) else None
-if not isinstance(contracts, list):
-    raise SystemExit(f"dependencies registry {path!r} has no contracts list")
+if not isinstance(contracts, list): raise SystemExit("dependencies registry has no contracts list")
 rows = [row for row in contracts if isinstance(row, dict) and row.get("id") == "coord-engine"]
-if len(rows) != 1:
-    raise SystemExit(f"dependencies registry {path!r} must declare exactly one coord-engine contract (found {len(rows)})")
+if len(rows) != 1: raise SystemExit(f"dependencies registry must declare exactly one coord-engine contract (found {len(rows)})")
 version = rows[0].get("version")
-if not isinstance(version, str) or not version.strip():
-    raise SystemExit(f"dependencies registry {path!r} has no usable coord-engine version")
+if not isinstance(version, str) or not version.strip(): raise SystemExit("dependencies registry has no usable coord-engine version")
 print(version)
-PY
-)" || die "could not read the declared coord-engine version — the receiver-pin sweep has no comparison point."
+')" || die "could not read the declared coord-engine version — the receiver-pin sweep has no comparison point."
 
 # The capabilities and their detectors come from the ROSTER (`capabilities:`), not from a constant
 # here. They used to be a `wf_for_cap` case statement plus an `AUDITED_CAPS` string — two

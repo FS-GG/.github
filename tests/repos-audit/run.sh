@@ -25,6 +25,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/repos-audit-fixture.XXXXXX")"
 MUTATED_AUDIT=""
 trap 'rm -rf "$WORK"; [ -z "$MUTATED_AUDIT" ] || rm -f "$MUTATED_AUDIT"' EXIT
 STUB="$WORK/bin"; mkdir -p "$STUB"
+
 export FIX="$WORK/fix"; mkdir -p "$FIX"
 
 # --- the kit-pin freshness sweep's world (#1540) -------------------------------------------------
@@ -3601,6 +3602,31 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
   && ok "engine-manifest: a receiver declaring the engine its shim execs is GREEN" \
   || bad "the accepted shape must pass, or every leg below proves nothing" "rc=$rc: $out"
+
+# The registry reader must use the same yq-first ladder as workflow readers.  Remove PyYAML from
+# the audit process while retaining the fixture's yq executable: a direct `import yaml` in the new
+# reader would abort before this green subject can be examined.
+export YQ_PYTHONPATH="${PYTHONPATH:?run this fixture with its PyYAML fixture path}"
+cat > "$STUB/yq" <<'YQ'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$1" = "-o=json" ] && [ "$2" = "." ] || exit 64
+if [ "$3" = "-" ]; then
+  PYTHONPATH="$YQ_PYTHONPATH" python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)'
+else
+  PYTHONPATH="$YQ_PYTHONPATH" python3 - "$3" <<'PY'
+import sys,yaml,json
+with open(sys.argv[1], encoding="utf-8") as handle: json.dump(yaml.safe_load(handle), sys.stdout, default=str)
+PY
+fi
+YQ
+chmod +x "$STUB/yq"
+out="$(env -u PYTHONPATH PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
+  bash "$AUDIT" --registry "$REG" --dependencies "$DEPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'all 2 graded coordination-kit receiver(s) declare fs.gg.coord.cli'; } \
+  && ok "engine-pin: yq-only reader stays green without PyYAML" \
+  || bad "the declared-version reader must not bypass the yq-or-PyYAML ladder" "rc=$rc: $out"
+rm -f "$STUB/yq"
 
 # The registry target, not the feed's newest version or an open proposal, is the gate's subject.
 # Both receiver manifests remain at feed-newest 0.15.0; mutating only the declared coord-engine
