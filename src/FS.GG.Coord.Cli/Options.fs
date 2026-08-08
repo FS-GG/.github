@@ -281,6 +281,8 @@ DECISION (pure — no board, no network):
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
   command-contract [--json]                  emit the parser's command/flag contract for tooling
+  intake <validate|apply> <draft.json> [--json]
+                                             validate or atomically project one receipt-bound filing draft
 
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
@@ -970,7 +972,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LanesView -> Reads
         | Facts -> Reads
         | CommandContractCmd -> Reads
-        | IntakeCmd -> Reads
+        | IntakeCmd -> Writes // `intake apply` creates/reuses and projects the receipt-bound issue
 
         // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
         | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it

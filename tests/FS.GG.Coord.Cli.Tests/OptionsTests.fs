@@ -823,6 +823,7 @@ module OptionsTests =
           "board", Json
           "issues", Json
           "diff-audit", Json
+          "intake", Json
 
           // TEXT only — prose, a bare id, or one verdict word. These are the fifteen VERBS that moved
           // (`--help`/`--version` moved too, but are reached by flag and have no bare form to pin), plus
