@@ -395,6 +395,15 @@ class Handler(BaseHTTPRequestHandler):
         body = b"" if status in (204, 304) else json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        # The production client admits a first claim only after a real resource response has
+        # established capacity.  This fixture is that real HTTP route, so model GitHub's resource
+        # headers rather than leaving every command permanently UNKNOWN.
+        if self.path.split("?", 1)[0].rstrip("/") not in ("/graphql", "/rate_limit"):
+            self.send_header("X-RateLimit-Resource", "core")
+            self.send_header("X-RateLimit-Limit", "5000")
+            self.send_header("X-RateLimit-Remaining", "4800")
+            self.send_header("X-RateLimit-Used", "200")
+            self.send_header("X-RateLimit-Reset", "1893456000")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if body:

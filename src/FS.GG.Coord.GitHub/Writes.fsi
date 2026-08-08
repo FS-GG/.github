@@ -288,6 +288,7 @@ module Writes =
         ref: Ref ->
         readPreviousStatus: (unit -> BoardStatus option) ->
         readPathRepo: (unit -> string option) ->
+        admitNew: (unit -> IoResult<unit>) ->
             IoResult<ClaimOutcome>
 
     /// Backward-compatible claim for subjects with no board path-scope projection.

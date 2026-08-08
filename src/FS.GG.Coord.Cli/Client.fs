@@ -3349,32 +3349,15 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                let dispatchAllowed =
-                    if not (usesLiveHttp ctx) then Ok()
-                    else
-                        match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
-                        | null
-                        | "" -> Error "REST fleet state is unknown (no credential-scoped observation is available)"
-                        | token ->
-                            match Budget.fleetState (Budget.readRestObservations token) with
-                            | Budget.Healthy -> Ok()
-                            | Budget.Exhausted -> Error "REST fleet state is exhausted (the protected landing and cleanup reserve is retained)"
-                            | Budget.Constrained ->
-                                Error $"REST fleet state is constrained (%d{Budget.dispatchReserve ()} requests reserved for guarded landing and cleanup)"
-                            | Budget.Unknown -> Error "REST fleet state is unknown (no successful real-resource response has established capacity)"
-
                 let session = w.Session |> Option.map SessionId
 
                 // #516: refuse a SECOND live hold before the CAS. `--force` is the deliberate override — a
                 // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
                 // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
                 let heldCheck =
-                    match dispatchAllowed with
-                    | Error reason ->
-                        eprint $"fsgg-coord-engine: refusing new claim — %s{reason}. Existing claims may still heartbeat, land, or clean up."
-                        Error(Errors.RateLimited(Errors.UnknownBudget, None))
-                    | Ok() when opts.Force -> Ok []
-                    | Ok() -> heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    // The bounded existing claim scan is the first real-resource observation for a
+                    // fresh session.  Check admission only after it, still before the claim CAS/post.
+                    if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e
@@ -3624,6 +3607,20 @@ module Client =
                             ref
                             readPreviousStatus
                             readPathRepo
+                            (fun () ->
+                                if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                                else
+                                    match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                                    | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                                    | token ->
+                                        let establish =
+                                            if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
+                                                Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
+                                            else Ok()
+                                        establish |> Result.bind (fun () ->
+                                            match Budget.fleetState (Budget.readRestObservations token) with
+                                            | Budget.Healthy -> Ok()
+                                            | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
                     with
                     | Error e -> failWith opts.Render e
                     | Ok(Writes.Won(held, collected)) ->

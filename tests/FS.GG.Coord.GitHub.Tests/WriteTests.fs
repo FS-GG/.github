@@ -185,6 +185,7 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
             aRef
             (fun () -> None)
             (fun () -> Some "FS.GG.Rendering")
+            (fun () -> Ok())
     with
     | Ok(Won(held, _)) ->
         Assert.Equal(Some "FS.GG.Rendering", held.PathRepo)

@@ -304,6 +304,10 @@ module Transport =
                 let headerValue (name: string) =
                     headers
                     |> Map.tryFind name
+                    |> Option.orElseWith (fun () ->
+                        headers
+                        |> Map.tryPick (fun actual value ->
+                            if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None))
 
                 let etag = headerValue "ETag"
 

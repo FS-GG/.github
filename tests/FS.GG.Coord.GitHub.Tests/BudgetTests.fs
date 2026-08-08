@@ -67,7 +67,7 @@ let ``REST fleet state is pessimistic across resources and only a successful res
     try
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", cache)
         let token = "test-token-state"
-        let record resource remaining =
+        let record resource remaining reset =
             Budget.observeRestHeaders
                 token
                 (headers
@@ -75,18 +75,22 @@ let ``REST fleet state is pessimistic across resources and only a successful res
                       "X-RateLimit-Limit", "5000"
                       "X-RateLimit-Remaining", string remaining
                       "X-RateLimit-Used", string (5000 - remaining)
-                      "X-RateLimit-Reset", "1760000000" ])
+                      "X-RateLimit-Reset", string reset ])
 
         // A healthy core reading cannot erase the independent search refusal.
-        record "core" 4800
-        record "search" 0
+        record "core" 4800 1760000000
+        record "search" 0 1760000000
+        Assert.Equal(Budget.Exhausted, Budget.readRestObservations token |> Budget.fleetState)
+
+        // A delayed success from the same window is stale, not a reset.
+        record "search" 29 1760000000
         Assert.Equal(Budget.Exhausted, Budget.readRestObservations token |> Budget.fleetState)
 
         // Passing wall-clock time is not evidence.  Only the later successful response for `search`
         // replaces that resource's authoritative refusal.
-        record "search" 29
+        record "search" 29 1760000100
         Assert.Equal(Budget.Constrained, Budget.readRestObservations token |> Budget.fleetState)
-        record "search" 200
+        record "search" 200 1760000100
         Assert.Equal(Budget.Healthy, Budget.readRestObservations token |> Budget.fleetState)
     finally
         Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previous)

@@ -261,6 +261,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         (readPathRepo: unit -> string option)
+        (admitNew: unit -> IoResult<unit>)
         : IoResult<ClaimOutcome> =
 
         // 0. ARE WE THE WORKER WE SAY WE ARE? (#1646) — BEFORE THE READ, AND BEFORE ANY ARM.
@@ -555,7 +556,7 @@ module Writes =
                 Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo), collected))
 
         // Nobody holds it. Post and race, evicting nothing.
-        | None -> postAndResolve []
+        | None -> admitNew () |> Result.bind (fun () -> postAndResolve [])
 
     /// Compatibility entry point for callers that do not have a board path scope (notably chore
     /// locks and focused CAS tests). Its marker is intentionally legacy-shaped.
@@ -570,7 +571,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
-        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None)
+        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None) (fun () -> Ok())
 
     let mergeAtHead (transport: IGitHubTransport) (ref: Ref) (pr: int) (headSha: string) : IoResult<bool> =
         let payload =

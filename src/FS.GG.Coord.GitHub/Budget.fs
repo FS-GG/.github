@@ -90,7 +90,14 @@ module Budget =
                             else []
 
                         let next =
-                            observation :: (existing |> List.filter (fun prior -> not (prior.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))))
+                            let prior = existing |> List.tryFind (fun value -> value.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))
+                            // A late success from the same rate-limit window cannot erase a refusal that
+                            // already named zero.  GitHub advances the reset window on genuine recovery;
+                            // that later successful response is the only fact allowed to restore dispatch.
+                            match prior with
+                            | Some exhausted when exhausted.Remaining = Some 0 && observation.Remaining <> Some 0
+                                                   && observation.ResetAt <= exhausted.ResetAt -> existing
+                            | _ -> observation :: (existing |> List.filter (fun value -> not (value.Resource.Equals(observation.Resource, StringComparison.OrdinalIgnoreCase))))
 
                         File.WriteAllText(temp, JsonSerializer.Serialize next)
                         File.Move(temp, file, true)

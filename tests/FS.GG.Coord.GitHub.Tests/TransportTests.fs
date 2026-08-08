@@ -22,6 +22,18 @@ let request path budget =
       IfNoneMatch = None
       Subject = path }
 
+[<Fact>]
+let ``response header lookup is case-insensitive for GitHub rate-limit headers`` () =
+    let response =
+        { Status = 403
+          Body = "rate limited"
+          Headers = Map.ofList [ "x-ratelimit-resource", "core"; "x-ratelimit-reset", "1893456000" ]
+          ETag = None
+          NextLink = None }
+
+    Assert.Equal(Some "core", Transport.header "X-RateLimit-Resource" response)
+    Assert.Equal(Some "1893456000", Transport.header "X-RateLimit-Reset" response)
+
 // ---- the call counters: the corpus's `gcount`, ported ---------------------------------------------
 
 [<Fact>]
