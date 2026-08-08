@@ -34,6 +34,7 @@ module DeliveryTests =
           PathsVerified = true
           InReview = true
           Review = Some(review head)
+          ReviewProblem = None
           Landable = true
           Merged = false
           MergeReachable = false
@@ -89,6 +90,11 @@ module DeliveryTests =
     let ``#2131 changed head after acceptance requires fresh review`` () =
         let changed = { snapshot "head-b" with Review = Some(review "head-a") }
         transition Delivery.ReviewActive (Delivery.RefreshReview "independent review is for a different head SHA") (Delivery.inspect changed)
+
+    [<Fact>]
+    let ``#2207 malformed review evidence is refreshed rather than reported absent`` () =
+        let malformed = { snapshot "head-a" with Review = None; ReviewProblem = Some "comment 42 is missing the required 'verdict' field" }
+        transition Delivery.ReviewActive (Delivery.RefreshReview "comment 42 is missing the required 'verdict' field") (Delivery.inspect malformed)
 
     [<Fact>]
     let ``#2131 missing closing linkage blocks review handoff`` () =
