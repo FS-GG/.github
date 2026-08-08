@@ -934,6 +934,52 @@ let ``#2217 heartbeat changes the marker body so GitHub advances the server leas
     | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
 
 [<Fact>]
+let ``#2217 two heartbeats renew a lapsed server lease only when each PATCH changes its stored body`` () =
+    // This is a small GitHub comment model, including the fact the live API matters for: an identical
+    // PATCH is a no-op and leaves `updated_at` untouched.  Start with a capability acquired while live,
+    // advance that stored server clock beyond the 120-minute window, then beat twice.  The final scan is
+    // the lease fact the operator depends on, not merely a request-shape assertion.
+    let mutable stored = "<!-- fsgg:claim worker=vole-418 lease=120 renewed=constant session=S1 -->"
+    let mutable updatedAt = System.DateTimeOffset.UtcNow
+    let patches = System.Collections.Generic.List<string>()
+
+    let comments () =
+        System.Text.Json.JsonSerializer.Serialize [ {| id = 901; body = stored; updated_at = updatedAt.ToString("o") |} ]
+
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method, request.Path with
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (comments ())
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/comments/901" ->
+                match request.Body with
+                | Json payload ->
+                    use doc = System.Text.Json.JsonDocument.Parse payload
+                    let body = doc.RootElement.GetProperty("body").GetString()
+                    patches.Add body
+
+                    // The controlled server behavior: a byte-identical PATCH does not advance the clock.
+                    if body <> stored then
+                        stored <- body
+                        updatedAt <- System.DateTimeOffset.UtcNow
+
+                    ok ""
+                | _ -> failwith "heartbeat must PATCH a JSON comment body"
+            | method', path -> failwith $"unexpected #2217 fixture request: %s{method'} %s{path}")
+
+    let held = holdAs "S1" transport
+    updatedAt <- System.DateTimeOffset.UtcNow.AddHours(-3.0) // the lease is now past its 120-minute window
+
+    match heartbeat transport 120 held, heartbeat transport 120 held with
+    | Ok _, Ok _ ->
+        Assert.Equal(2, patches.Count)
+        Assert.NotEqual<string>(patches.[0], patches.[1])
+
+        match verifyHeld transport 120 me itsMe (Some(SessionId "S1")) aRef with
+        | Ok(Holds _) -> () // changed bodies advanced `updated_at`, so the lapsed lease is live again
+        | other -> failwith $"two real renewal PATCHes must revive the server lease — got %A{other}"
+    | first, second -> failwith $"both heartbeats must land — got %A{first}, %A{second}"
+
+[<Fact>]
 let ``#1732 heartbeat re-emits marker path scope`` () =
     let transport, bodies =
         capturing
