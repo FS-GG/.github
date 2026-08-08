@@ -199,6 +199,14 @@ module Client =
           /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
           ChoreLocks: Ref list }
 
+    /// Fake transports are deterministic in-process fixtures: they do not receive HTTP response
+    /// headers and therefore cannot populate the credential ledger. Production admission is applied
+    /// only at the real HTTP boundary; unit fixtures exercise the command's own pre-existing CAS paths.
+    let private usesLiveHttp (ctx: Context) =
+        match box ctx.Transport with
+        | :? Transport.HttpTransport -> true
+        | _ -> false
+
     /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
     /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
     ///
@@ -3192,6 +3200,14 @@ module Client =
         match Reads.rateLimit ctx.Transport with
         | Error e -> fail e
         | Ok meter ->
+            let rests =
+                match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                | null
+                | "" -> []
+                | token -> Budget.readRestObservations token
+
+            let fleetState = Budget.fleetState rests |> Budget.fleetStateText
+
             let pending =
                 match Cache.pending () with
                 | Ok entries -> Some(List.length entries)
@@ -3210,7 +3226,9 @@ module Client =
                             {| remaining = meter.Remaining
                                limit = meter.Limit
                                source = "github:/rate_limit" |}
-                           restReported = false
+                           restReported = not rests.IsEmpty
+                           rest = rests
+                           fleetState = fleetState
                            pendingBoardWrites = pending |}
                     )
 
@@ -3223,6 +3241,17 @@ module Client =
                 // own. It reports ONE bucket, read from GitHub's own free `/rate_limit`, and the claim lock
                 // does not live in it. Neither does a secondary limit, which never appears there at all.
                 printfn "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining" meter.Remaining meter.Limit
+
+                match rests with
+                | [] ->
+                    printfn "REST resource telemetry: unknown (no real-resource header observation yet); fleet unknown for new dispatch."
+                | observations ->
+                    for observation in observations |> List.sortBy _.Resource do
+                        let remaining = observation.Remaining |> Option.map string |> Option.defaultValue "unknown"
+                        let limit = observation.Limit |> Option.map string |> Option.defaultValue "unknown"
+                        let used = observation.Used |> Option.map string |> Option.defaultValue "unknown"
+                        let reset = observation.ResetAt |> Option.map (fun instant -> instant.ToString "o") |> Option.defaultValue "unknown"
+                        printfn "REST %s (real response headers): %s / %s remaining; used %s; reset %s; observed %s; source %s; fleet %s" observation.Resource remaining limit used reset (observation.ObservedAt.ToString "o") observation.Source fleetState
 
                 printfn
                     "REST requests: NOT REPORTED here — /rate_limit's `core` figure disagrees with the counter real requests are billed against on this account, and a SECONDARY (abuse-detection) limit never appears in it. The claim lock lives on REST (ADR-0034 §3), so a healthy line above is not evidence that `claim`/`take`/`who` will run."
@@ -3326,6 +3355,8 @@ module Client =
                 // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
                 // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
                 let heldCheck =
+                    // The bounded existing claim scan is the first real-resource observation for a
+                    // fresh session.  Check admission only after it, still before the claim CAS/post.
                     if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
 
                 match heldCheck with
@@ -3576,6 +3607,20 @@ module Client =
                             ref
                             readPreviousStatus
                             readPathRepo
+                            (fun () ->
+                                if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                                else
+                                    match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                                    | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                                    | token ->
+                                        let establish =
+                                            if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
+                                                Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
+                                            else Ok()
+                                        establish |> Result.bind (fun () ->
+                                            match Budget.fleetState (Budget.readRestObservations token) with
+                                            | Budget.Healthy -> Ok()
+                                            | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
                     with
                     | Error e -> failWith opts.Render e
                     | Ok(Writes.Won(held, collected)) ->
@@ -4443,6 +4488,10 @@ module Client =
         match worker opts with
         | Error c -> c
         | Ok w ->
+            // A first-ever process has no cached header observation.  Its normal bounded scan is the
+            // one real-resource read that establishes one; admission remains enforced by `claim`
+            // immediately before its mutation.  Blocking here on an empty cache would deadlock every
+            // fresh session (budget -> take could never produce the observation it requires).
             match scanAndDecide ctx { opts with Limit = Some 1 } Cache.Scheduling with
             // #585: a board we could not read is NOT an empty queue — but that distinction is already
             // carried by the code `fail` returns (EX_RATE for a budget, a non-zero read error otherwise),

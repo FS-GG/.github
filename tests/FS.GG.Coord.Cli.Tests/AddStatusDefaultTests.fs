@@ -35,7 +35,7 @@ module AddStatusDefaultTests =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None }
+              NextLink = None; Headers = Map.empty }
 
     /// What the board's `Status` column holds for FS.GG.SDD#42 before `add` runs.
     type private Column =

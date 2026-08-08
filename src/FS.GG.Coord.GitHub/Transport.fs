@@ -38,11 +38,23 @@ module Transport =
     type Response =
         { Status: int
           Body: string
+          /// Response headers preserved from the resource that actually answered this request.
+          /// Rate-limit telemetry must prefer these over a later `/rate_limit` summary: the headers
+          /// describe the request GitHub just billed (or refused), while the summary can lag it.
+          Headers: Map<string, string>
           ETag: string option
           NextLink: string option }
 
     let (|NotModified|_|) (response: Response) =
         if response.Status = 304 then Some() else None
+
+    let header (name: string) (response: Response) =
+        response.Headers
+        |> Map.tryFind name
+        |> Option.orElseWith (fun () ->
+            response.Headers
+            |> Map.tryPick (fun actual value ->
+                if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None))
 
     type IGitHubTransport =
         abstract Send: request: Request -> IoResult<Response>
@@ -284,12 +296,26 @@ module Transport =
                     use reader = new IO.StreamReader(response.Content.ReadAsStream())
                     reader.ReadToEnd()
 
+                let headers =
+                    response.Headers
+                    |> Seq.collect (fun h -> h.Value |> Seq.map (fun value -> h.Key, value))
+                    |> Map.ofSeq
+
                 let headerValue (name: string) =
-                    match response.Headers.TryGetValues name with
-                    | true, values -> values |> Seq.tryHead
-                    | _ -> None
+                    headers
+                    |> Map.tryFind name
+                    |> Option.orElseWith (fun () ->
+                        headers
+                        |> Map.tryPick (fun actual value ->
+                            if actual.Equals(name, StringComparison.OrdinalIgnoreCase) then Some value else None))
 
                 let etag = headerValue "ETag"
+
+                // The real response, not a later account summary, is authoritative for the resource that
+                // just answered. This is deliberately before the status split: a 403's headers are the
+                // most important observation we receive.
+                if request.Budget = Rest && not (String.IsNullOrWhiteSpace token) then
+                    Budget.observeRestHeaders token headerValue
 
                 // A 304 IS A SUCCESS. It says "what you already have is current", and it is the whole
                 // reason the conditional path costs nothing. Classifying it as a failure would send the
@@ -298,12 +324,14 @@ module Transport =
                     Ok
                         { Status = 304
                           Body = ""
+                          Headers = headers
                           ETag = etag
                           NextLink = None }
                 elif status >= 200 && status < 300 then
                     Ok
                         { Status = status
                           Body = body
+                          Headers = headers
                           ETag = etag
                           NextLink = headerValue "Link" |> Option.bind parseNextLink }
                 else

@@ -62,7 +62,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 [<Fact>]
 let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
@@ -185,11 +185,31 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
             aRef
             (fun () -> None)
             (fun () -> Some "FS.GG.Rendering")
+            (fun () -> Ok())
     with
     | Ok(Won(held, _)) ->
         Assert.Equal(Some "FS.GG.Rendering", held.PathRepo)
         Assert.Contains("pathRepo=FS.GG.Rendering", Seq.last bodies)
     | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
+
+[<Fact>]
+let ``a rejected new force admission evicts nothing and posts no marker`` () =
+    let mutable admissions = 0
+    let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
+
+    let rejected () =
+        admissions <- admissions + 1
+        Error(RateLimited(UnknownBudget, None))
+
+    match
+        claimScoped transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) (fun () -> None) rejected
+    with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"a rejected force admission must stop before eviction — got %A{other}"
+
+    Assert.Equal(1, admissions)
+    Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901")
+    Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
 
 [<Fact>]
 let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` () =

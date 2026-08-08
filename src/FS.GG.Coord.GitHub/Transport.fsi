@@ -88,6 +88,9 @@ module Transport =
     type Response =
         { Status: int
           Body: string
+          /// Headers from the response that actually served this resource. Header names preserve the
+          /// transport's received spelling; callers use the case-insensitive `header` accessor below.
+          Headers: Map<string, string>
           /// The response's validator, for a conditional re-read.
           ///
           /// **`None` WHENEVER `Body` IS A MERGE, AND THAT IS A GUARANTEE THIS TYPE MAKES.** An ETag belongs
@@ -111,6 +114,10 @@ module Transport =
           /// because *a lock has no 100-issue limit* and a truncated first page is a claim scan that
           /// silently cannot see half the markers.
           NextLink: string option }
+
+    /// Read one response header case-insensitively. `None` means the response did not carry it; callers
+    /// must not infer a rate-limit resource or reset instant when GitHub did not send one.
+    val header: name: string -> response: Response -> string option
 
     /// A 304 is NOT an error and it is NOT an empty body. It is "what you already have is current", and
     /// the caller must have somewhere to get that from — `Cache.conditional` is the only sanctioned way to

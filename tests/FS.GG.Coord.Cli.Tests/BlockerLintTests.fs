@@ -190,7 +190,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         let subject: Ref =
             { Owner = "FS-GG"
@@ -427,7 +427,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// Serves ONLY the REST body read `requireSentinelIfBlockedByCleared` makes. Any GraphQL call —
         /// in particular the live `Blocked by` resolver read (`fieldValueByName`) — is a hard refusal, so
@@ -487,7 +487,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// A full board fixture for `Client.setField --batch`: discovery (`projectsV2`, `fields(first`),
         /// the item-id lookup (`projectItems`), the aliased mutation itself
@@ -647,7 +647,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
         /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
@@ -735,7 +735,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) =
             // `Scan.parseRow` reads `nested node "blockedBy" "text"` — the TEXT field's value is a
@@ -863,7 +863,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// A live claim marker, or none — `Writes.verifyHeld`'s subject, `ForceStealTests.Thread` scaled
         /// down to what this fixture needs (no POST, since `release` never adds a comment).

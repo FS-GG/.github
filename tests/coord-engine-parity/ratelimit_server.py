@@ -76,6 +76,10 @@ class H(BaseHTTPRequestHandler):
     def _send(self, code, payload, headers=None):
         b = json.dumps(payload).encode()
         self.send_response(code)
+        if headers is None:
+            self.send_header("X-RateLimit-Resource", "core")
+            self.send_header("X-RateLimit-Limit", "5000")
+            self.send_header("X-RateLimit-Remaining", "4800")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.send_header("Content-Type", "application/json")

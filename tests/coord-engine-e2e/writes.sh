@@ -44,9 +44,10 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
 SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"
+FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -89,6 +90,47 @@ if [ "$lrc" -ne 0 ] && printf '%s' "$lost" | grep -qi 'already held by vole-418'
 else
   bad "a second worker loses to the live lock" "rc=$lrc: $lost"
 fi
+
+# #2268: force is a NEW claim, so capacity admission happens before force can evict the live
+# holder.  Drive this through the compiled CLI and the stateful HTTP server: each refusal must leave
+# the exact marker body, board Status, and mutation ledger unchanged.  A new cache per mode is
+# essential: it proves exhausted/unknown from the response being exercised rather than from a prior
+# healthy observation.
+force_budget_case() {
+  local mode="$1" before_marker before_status after_marker after_status out rc ledger
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-budget/$mode" >/dev/null
+  before_marker="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+  before_status="$(run ready --repo FS.GG.SDD --status any 2>/dev/null | jq -r '.[] | select(.number == 42) | .status')"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  rm -rf "$FORCE_BUDGET_CACHE"; FORCE_BUDGET_CACHE="$(mktemp -d)"
+  out="$(FSGG_COORD_CACHE="$FORCE_BUDGET_CACHE" "$ENGINE" claim FS.GG.SDD#42 --force --worker kite-461 2>&1)"; rc=$?
+  ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  after_marker="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+  after_status="$(run ready --repo FS.GG.SDD --status any 2>/dev/null | jq -r '.[] | select(.number == 42) | .status')"
+  if [ "$rc" -ne 0 ] && [ "$before_marker" = "$after_marker" ] && [ "$before_status" = "$after_status" ] \
+       && [ "$(printf '%s' "$ledger" | jq -r .count)" = "0" ]; then
+    ok "#2268: $mode force admission refuses before marker/status mutation"
+  else
+    bad "#2268: $mode force admission must not evict or write" "rc=$rc status=$before_status->$after_status ledger=$ledger output=$out"
+  fi
+}
+
+force_budget_case constrained
+force_budget_case exhausted
+force_budget_case unknown
+
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-budget/healthy" >/dev/null
+rm -rf "$FORCE_BUDGET_CACHE"; FORCE_BUDGET_CACHE="$(mktemp -d)"
+healthy_force="$(FSGG_COORD_CACHE="$FORCE_BUDGET_CACHE" "$ENGINE" claim FS.GG.SDD#42 --force --worker kite-461 2>&1)"; healthy_force_rc=$?
+if [ "$healthy_force_rc" -eq 0 ] && printf '%s' "$healthy_force" | grep -q 'STOLE FS.GG.SDD#42'; then
+  ok "#2268: healthy force admission still steals the live claim"
+else
+  bad "#2268: healthy force admission must preserve force success" "rc=$healthy_force_rc: $healthy_force"
+fi
+
+# Hand it back before the longstanding adopt composition proof below.
+"$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
+run claim FS.GG.SDD#42 >/dev/null 2>&1
 
 # ---- heartbeat renews the held lease ---------------------------------------------------------------
 hb="$(run heartbeat FS.GG.SDD#42 2>&1)"; hrc=$?

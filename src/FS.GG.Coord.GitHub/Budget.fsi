@@ -22,6 +22,40 @@ namespace FS.GG.Coord.GitHub
 /// budget that dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Budget =
 
+    type RestObservation =
+        { Resource: string
+          Limit: int option
+          Remaining: int option
+          Used: int option
+          ResetAt: System.DateTimeOffset option
+          ObservedAt: System.DateTimeOffset
+          Source: string }
+
+    /// Persist a credential-hashed observation from real REST response headers. Missing or malformed
+    /// headers are not inferred into a resource reading.
+    val observeRestHeaders: token: string -> header: (string -> string option) -> unit
+
+    /// Read the credential-scoped real-resource observation, if one has been recorded.
+    val readRestObservation: token: string -> RestObservation option
+
+    /// Read all independent REST resource observations for the credential. A healthy resource never
+    /// overwrites an exhausted sibling resource.
+    val readRestObservations: token: string -> RestObservation list
+
+    /// Configured REST requests retained for guarded landing and cleanup. Invalid values retain the
+    /// conservative default rather than disabling admission control.
+    val dispatchReserve: unit -> int
+
+    /// A conservative projection across every observed REST resource.
+    type FleetState =
+        | Healthy
+        | Constrained
+        | Exhausted
+        | Unknown
+
+    val fleetState: observations: RestObservation list -> FleetState
+    val fleetStateText: state: FleetState -> string
+
     open Errors
 
     /// What a GraphQL response told us about the meter.

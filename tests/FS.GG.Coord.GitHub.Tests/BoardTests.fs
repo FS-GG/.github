@@ -48,7 +48,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private serving (body: string) = Fake.Recorder(fun _ -> ok body)
 let private failing (e: IoError) = Fake.Recorder(fun _ -> Error e)

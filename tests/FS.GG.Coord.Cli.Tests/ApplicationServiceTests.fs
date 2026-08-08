@@ -194,7 +194,7 @@ module ApplicationServiceTests =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None }
+              NextLink = None; Headers = Map.empty }
 
     /// A transport serving one repo AND one board. `bodies` is issue number → issue body (its `Paths:`
     /// declaration), `holders` is issue number → the worker whose claim marker sits on it, `markerAge` is

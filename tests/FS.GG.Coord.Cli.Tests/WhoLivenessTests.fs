@@ -49,7 +49,7 @@ module WhoLivenessTests =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None }
+              NextLink = None; Headers = Map.empty }
 
     /// One board, one row, `In progress` — the only column that licenses an `unclaimed` verdict at all, so
     /// the fixture must serve it or neither leg is testing what it says it is.

@@ -261,6 +261,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         (readPathRepo: unit -> string option)
+        (admitNew: unit -> IoResult<unit>)
         : IoResult<ClaimOutcome> =
 
         // 0. ARE WE THE WORKER WE SAY WE ARE? (#1646) — BEFORE THE READ, AND BEFORE ANY ARM.
@@ -448,6 +449,10 @@ module Writes =
             match force with
             | RefuseLiveHolder -> Ok(Lost m.Worker)
             | StealLiveHolder ->
+                // A forced claim is still NEW dispatch.  Capacity admission must happen before
+                // `evictLive`: a constrained/unknown fleet may preserve accepted work, never delete
+                // somebody else's live marker and then discover it cannot continue.
+                admitNew () |> Result.bind (fun () ->
                 // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
                 // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
                 // to delete the winner and promote whatever was queued behind it.
@@ -504,7 +509,7 @@ module Writes =
                             // has been told. A destroyed lock nobody knows about is not recoverable, which
                             // is why the notice, not the marker, is what this guarantees.
                             onEvict evicted
-                            postAndResolve evicted
+                            postAndResolve evicted)
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
@@ -555,7 +560,7 @@ module Writes =
                 Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo), collected))
 
         // Nobody holds it. Post and race, evicting nothing.
-        | None -> postAndResolve []
+        | None -> admitNew () |> Result.bind (fun () -> postAndResolve [])
 
     /// Compatibility entry point for callers that do not have a board path scope (notably chore
     /// locks and focused CAS tests). Its marker is intentionally legacy-shaped.
@@ -570,7 +575,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
-        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None)
+        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None) (fun () -> Ok())
 
     let mergeAtHead (transport: IGitHubTransport) (ref: Ref) (pr: int) (headSha: string) : IoResult<bool> =
         let payload =

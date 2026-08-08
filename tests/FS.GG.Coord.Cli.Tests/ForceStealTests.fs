@@ -44,7 +44,7 @@ module ForceStealTests =
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None }
+              NextLink = None; Headers = Map.empty }
 
     /// The board the fixture serves — enough of one that `claim` can bootstrap and read a column back.
     /// The Status WRITE is deliberately not served: it fails, the receipt reports `statusWrite:"failed"`,
