@@ -77,6 +77,14 @@ module Cache =
             Ok()
         with ex -> Error $"could not persist intake intent: %s{ex.Message}"
 
+    let withIntakeLock draftId action =
+        try
+            let file = Path.Combine(ensureRoot (), $"intake-lock-%s{slug draftId}")
+            use _lock = new FileStream(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+            Ok(action ())
+        with :? IOException ->
+            Error $"intake '%s{draftId}' is already being applied; retry after the active transaction finishes"
+
     let getIntakeReceipt draftId =
         let file = intakeReceiptFile draftId
         if not (File.Exists file) then Ok None else

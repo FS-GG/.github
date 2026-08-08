@@ -875,13 +875,14 @@ no_mutation "whoami" run whoami
 # `intake apply` is the public receipt-bound create/projection transaction.  The fixture's mutation
 # ledger classifies its REST issue POST separately from the two GraphQL board mutations, so this is a
 # real executable driver rather than a parser-only mark in the command-contract inventory.
-printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Intake/**"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core/**"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
 mark_contract "intake" "public-create-and-projection"
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 intake_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; intake_rc=$?
 intake_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+intake_pending="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
 if [ "$intake_rc" -eq 0 ] \
-  && printf '%s' "$intake_out" | jq -e '.kind == "applied" and .status == "Backlog" and .pendingWrites == 0' >/dev/null 2>&1 \
+  && printf '%s' "$intake_out" | jq -e --argjson pending "$intake_pending" '.kind == "applied" and .status == "Backlog" and .pendingWrites == $pending and .issueUrl == "https://github.com/FS-GG/FS.GG.SDD/issues/700" and .board.owner == "FS-GG" and .board.title == "Coordination" and .board.number == 12 and .board.id == "PVT_coord"' >/dev/null 2>&1 \
   && printf '%s' "$intake_ledger" | jq -e '
       .count == 3 and
       ([.requests[] | select(.kind == "rest-mutation" and .method == "POST" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length == 1) and
@@ -891,7 +892,7 @@ else
   bad "#2134: intake public transaction must create and project" "rc=$intake_rc output=$intake_out ledger=$intake_ledger"
 fi
 
-printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-blocked-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e blocked intake","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Blocked/**"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/FS.GG.SDD#42","disposition":"create"}' >"$INTAKE_BLOCKED_DRAFT"
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-blocked-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e blocked intake","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core/**"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/FS.GG.SDD#42","disposition":"create"}' >"$INTAKE_BLOCKED_DRAFT"
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 blocked_out="$(run intake apply "$INTAKE_BLOCKED_DRAFT" 2>&1)"; blocked_rc=$?
 blocked_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
@@ -907,9 +908,10 @@ fi
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 queued_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; queued_rc=$?
+run flush >/dev/null 2>&1
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
 retry_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; retry_rc=$?
 queued_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
-run flush >/dev/null 2>&1
 pending_after_retry="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
 if [ "$queued_rc" -eq 75 ] && [ "$retry_rc" -eq 0 ] && [ "$pending_after_retry" = "0" ] \
   && printf '%s' "$retry_out" | jq -e '.kind == "applied" and .pendingWrites == 0' >/dev/null 2>&1 \

@@ -8013,10 +8013,22 @@ module Client =
                     ExitGreen
                 | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
             | Ok draft, "apply" ->
-                match Intake.validate draft with
+                match Intake.validate draft |> Result.bind (fun valid -> IntakeApplication.validateLivePaths valid |> Result.map (fun () -> valid) |> Result.mapError (fun reason -> [ { Intake.Finding.Field = "paths"; Detail = reason } ])) with
                 | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
                 | Ok _ ->
-                    let receiptResult =
+                    let dependencyGuard =
+                        match draft.BlockedBy with
+                        | None -> Ok()
+                        | Some raw ->
+                            match parseRefIn draft.Owner (Some draft.Repository) raw with
+                            | Error reason -> Error(Errors.Malformed(draft.Id, $"Blocked dependency is not canonical: %s{reason}"))
+                            | Ok dependency ->
+                                Reads.blockerState ctx.Transport dependency.Owner dependency.Repo dependency.Number
+                                |> Result.bind (function
+                                    | Types.BlockerOpen -> Ok()
+                                    | Types.BlockerClosed | Types.BlockerMerged -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is already resolved"))
+                                    | Types.BlockerUnknown | Types.BlockerUnparseable -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is not live/readable")))
+                    let receiptTransactionCore () =
                         match Cache.getIntakeReceipt draft.Id with
                         | Error e -> Error(Errors.Malformed(draft.Id, e))
                         | Ok(Some receipt) ->
@@ -8036,6 +8048,7 @@ module Client =
                               Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
                               |> Result.bind (fun candidates ->
                                 let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
+                                let provenance = IntakeReceipt.marker draft
                                 let persist number =
                                     let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
                                     Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
@@ -8044,7 +8057,7 @@ module Client =
                                 | Some Intake.Reuse, [ c ], _ -> persist c.Number
                                 | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
                                 | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
-                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest -> persist c.Number
+                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest && c.Body.Contains(provenance, StringComparison.Ordinal) -> persist c.Number
                                 | Some Intake.Create, _ :: _, _ ->
                                     Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
                                 | Some Intake.Create, [], _ ->
@@ -8054,14 +8067,30 @@ module Client =
                                     |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
                                     |> Result.bind (fun created -> persist created.Number)
                                 | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
+                    let receiptTransaction () = dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
+                    let receiptResult =
+                        Cache.withIntakeLock draft.Id receiptTransaction
+                        |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                        |> Result.bind id
                     match receiptResult with
                     | Error e -> fail e
                     | Ok issue ->
-                        match Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
-                        | Error e, _, _ -> fail e
-                        | _, Error e, _ -> fail e
-                        | _, _, Error code -> code
-                        | Ok issueState, Ok board, Ok w ->
+                        let preProjectionReadyGuard =
+                            if draft.Status <> "Ready" then Ok()
+                            else
+                                Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number
+                                |> Result.bind (fun body ->
+                                    if body.Contains("Blocked by:", StringComparison.OrdinalIgnoreCase)
+                                       || body.Contains("Blocked on: human/", StringComparison.OrdinalIgnoreCase)
+                                       || body.Contains("Judgement question:", StringComparison.OrdinalIgnoreCase) then
+                                        Error(Errors.Malformed(draft.Id, "Ready is refused while the reused/live issue still declares a dependency or human choice"))
+                                    else Ok())
+                        match preProjectionReadyGuard, Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
+                        | Error e, _, _, _ -> fail e
+                        | _, Error e, _, _ -> fail e
+                        | _, _, Error e, _ -> fail e
+                        | _, _, _, Error code -> code
+                        | Ok(), Ok issueState, Ok board, Ok w ->
                             let readyGuard =
                                 if draft.Status <> "Ready" then Ok()
                                 elif issueState = IssueState.Closed then Error(Errors.Malformed(draft.Id, "Ready is refused for a closed issue"))
@@ -8105,14 +8134,25 @@ module Client =
                                                 { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
                                                   Board = Some(board.Owner, board.Title) }
                                             Cache.dropPending queued
-                                        match Board.itemStatus ctx.Transport board issue.Owner issue.Repo issue.Number with
+                                        let readback =
+                                            Board.itemStatus ctx.Transport board issue.Owner issue.Repo issue.Number
+                                            |> Result.bind (fun status ->
+                                                match draft.BlockedBy with
+                                                | None -> Ok(status, None)
+                                                | Some _ -> Board.itemBlockedBy ctx.Transport board issue.Owner issue.Repo issue.Number |> Result.map (fun blockedBy -> status, blockedBy))
+                                        match readback with
                                         | Error e -> fail e
-                                        | Ok status when status = Reads.statusOfName draft.Status ->
+                                        | Ok(status, blockedBy) when status = Reads.statusOfName draft.Status && blockedBy = draft.BlockedBy ->
                                             let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
                                             let fields = writes |> List.map fst |> JsonSerializer.Serialize
-                                            printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":0,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize disposition) (JsonSerializer.Serialize ctx.Title) (JsonSerializer.Serialize draft.Status) fields (JsonSerializer.Serialize draft.JudgementQuestion)
-                                            ExitGreen
-                                        | Ok _ -> eprint "fsgg-coord-engine: intake Status readback did not match the requested projection."; ExitError
+                                            match Cache.pending () with
+                                            | Error e -> fail e
+                                            | Ok pending ->
+                                                let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
+                                                let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+                                                printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
+                                                ExitGreen
+                                        | Ok _ -> eprint "fsgg-coord-engine: intake Status/Blocked-by readback did not match the requested projection."; ExitError
             | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
         | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
 

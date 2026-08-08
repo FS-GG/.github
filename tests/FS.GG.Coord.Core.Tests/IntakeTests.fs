@@ -53,6 +53,12 @@ module IntakeTests =
         | Ok _ -> failwith "incoherent Blocked must refuse"
 
     [<Fact>]
+    let ``#2134 Blocked refuses a noncanonical dependency token`` () =
+        match Intake.validate { draft with Status = "Blocked"; BacklogReason = None; BlockedBy = Some "x#y" } with
+        | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "blockedBy")
+        | Ok _ -> failwith "x#y is not a canonical dependency"
+
+    [<Fact>]
     let ``#2134 Ready refuses unresolved judgement`` () =
         match Intake.validate { draft with Status = "Ready"; BacklogReason = None; JudgementQuestion = Some "owner?" } with
         | Error findings -> Assert.Contains(findings, fun finding -> finding.Field = "status")

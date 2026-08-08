@@ -40,6 +40,13 @@ module IntakeTransactionTests =
         | Ok parsed -> IntakeReceipt.digest parsed
         | Error error -> failwith error
 
+    let private draftMarker cache =
+        let path = Path.Combine(cache, "marker-draft.json")
+        File.WriteAllText(path, draft)
+        match IntakeApplication.readDraft path with
+        | Ok parsed -> IntakeReceipt.marker parsed
+        | Error error -> failwith error
+
     let private withCache action =
         let cache = Path.Combine(Path.GetTempPath(), "fsgg-intake-" + Guid.NewGuid().ToString("N"))
         let previous = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
@@ -59,6 +66,43 @@ module IntakeTransactionTests =
                 Error(NotFound "stop after receipt recovery"))
             Assert.Equal(Client.ExitError, invoke cache world)
             Assert.Equal(0, posts)
+
+    [<Fact>]
+    let ``#2134 apply refuses a nonexistent live path before transport`` () =
+        withCache <| fun cache ->
+            let invalid = draft.Replace("src/FS.GG.Coord.Core", "definitely/not/a/live/path-2134")
+            let world = Fake.Recorder(fun _ -> Error(NotFound "live-path refusal must precede transport"))
+            Assert.Equal(Client.ExitError, invokeDraft cache invalid world)
+            Assert.Equal(0, world.RestCalls + world.GraphQlCalls)
+
+    [<Fact>]
+    let ``#2134 apply refuses a resolved Blocked dependency before create`` () =
+        withCache <| fun cache ->
+            let blocked = """{"schema":"fsgg.coord.intake/v1","id":"blocked-2134","owner":"FS-GG","repository":".github","title":"blocked","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/.github#42","disposition":"create"}"""
+            let mutable creates = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues/42" -> ok "{\"number\":42,\"state\":\"closed\"}"
+                | "POST", path when path.EndsWith "/issues" -> creates <- creates + 1; Error(NotFound "must refuse before create")
+                | _ -> Error(NotFound "unexpected request"))
+            Assert.Equal(Client.ExitError, invokeDraft cache blocked world)
+            Assert.Equal(0, creates)
+
+    [<Fact>]
+    let ``#2134 Ready reuse refuses a live human-choice marker`` () =
+        withCache <| fun cache ->
+            let ready = """{"schema":"fsgg.coord.intake/v1","id":"ready-2134","owner":"FS-GG","repository":".github","title":"ready","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core"],"class":"hardening","status":"Ready","disposition":"reuse"}"""
+            let draftPath = Path.Combine(cache, "ready-digest.json")
+            File.WriteAllText(draftPath, ready)
+            let parsed = IntakeApplication.readDraft draftPath |> Result.defaultWith failwith
+            Cache.putIntakeReceipt { IntakeReceipt.Receipt.DraftId = parsed.Id; Owner = parsed.Owner; Repository = parsed.Repository; IssueNumber = 88; DraftDigest = IntakeReceipt.digest parsed } |> Result.defaultWith failwith
+            let mutable bodyReads = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues/88" -> bodyReads <- bodyReads + 1; ok "{\"number\":88,\"state\":\"open\",\"body\":\"Blocked on: human/decision\"}"
+                | _ -> Error(NotFound "Ready guard must refuse before board projection"))
+            Assert.Equal(Client.ExitError, invokeDraft cache ready world)
+            Assert.True(bodyReads >= 1, "the Ready gate must inspect the live issue body")
 
     [<Fact>]
     let ``#2134 interruption after create persists receipt and retry issues no second POST`` () =
@@ -86,7 +130,7 @@ module IntakeTransactionTests =
             let mutable posts = 0
             let world = Fake.Recorder(fun req ->
                 match req.Method, req.Path.Trim '/' with
-                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"created before crash\"}]"
+                | "GET", "repos/FS-GG/.github/issues" -> ok ($"[{{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":{System.Text.Json.JsonSerializer.Serialize(draftMarker cache)}}}]")
                 | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must not create again")
                 | _ -> Error(NotFound "stop after intent recovery"))
             Assert.Equal(Client.ExitError, invoke cache world)
@@ -94,6 +138,28 @@ module IntakeTransactionTests =
             match Cache.getIntakeReceipt "tx-2134" with
             | Ok(Some receipt) -> Assert.Equal(77, receipt.IssueNumber)
             | other -> failwithf "intent recovery did not bind a receipt: %A" other
+
+    [<Fact>]
+    let ``#2134 intent never binds an unrelated same-title issue`` () =
+        withCache <| fun cache ->
+            Cache.putIntakeIntent { Cache.IntakeIntent.DraftId = "tx-2134"; Owner = "FS-GG"; Repository = ".github"; DraftDigest = draftDigest cache } |> Result.defaultWith failwith
+            let mutable posts = 0
+            let world = Fake.Recorder(fun req ->
+                match req.Method, req.Path.Trim '/' with
+                | "GET", "repos/FS-GG/.github/issues" -> ok "[{\"number\":77,\"state\":\"open\",\"title\":\"same\",\"body\":\"unrelated issue filed by another actor\"}]"
+                | "POST", path when path.EndsWith "/issues" -> posts <- posts + 1; Error(NotFound "must refuse, not create")
+                | _ -> Error(NotFound "stop after provenance refusal"))
+            Assert.Equal(Client.ExitError, invoke cache world)
+            Assert.Equal(0, posts)
+            Assert.Equal(Ok None, Cache.getIntakeReceipt "tx-2134")
+
+    [<Fact>]
+    let ``#2134 the per-draft lock refuses a concurrent create window`` () =
+        withCache <| fun _ ->
+            let result = Cache.withIntakeLock "tx-2134" (fun () -> Cache.withIntakeLock "tx-2134" (fun () -> 1))
+            match result with
+            | Ok(Error reason) -> Assert.Contains("already being applied", reason)
+            | other -> failwithf "concurrent intake unexpectedly entered the create window: %A" other
 
     [<Theory>]
     [<InlineData("{\"number\":7,\"state\":\"closed\",\"title\":\"same\",\"body\":\"x\"}")>]

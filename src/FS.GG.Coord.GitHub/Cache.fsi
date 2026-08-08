@@ -16,6 +16,8 @@ module Cache =
     type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
     val getIntakeIntent: draftId: string -> Result<IntakeIntent option, string>
     val putIntakeIntent: intent: IntakeIntent -> Result<unit, string>
+    /// Serialize one draft's receipt/create boundary. The OS releases the lock on process death.
+    val withIntakeLock: draftId: string -> action: (unit -> 'a) -> Result<'a, string>
 
     open Errors
 

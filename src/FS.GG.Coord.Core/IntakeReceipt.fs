@@ -16,6 +16,11 @@ module IntakeReceipt =
               string draft.BlockedOn; string draft.BacklogReason; string draft.JudgementQuestion ]
         SHA256.HashData(Encoding.UTF8.GetBytes(String.concat "\u001e" parts)) |> System.Convert.ToHexString |> fun value -> value.ToLowerInvariant()
 
+    /// Durable provenance embedded in the created issue.  A title is human text and cannot identify the
+    /// result of a crashed transaction; this content-bound marker can.
+    let marker (draft: Intake.Draft) =
+        $"<!-- fsgg:intake:v1 id=%s{draft.Id} digest=%s{digest draft} -->"
+
     let validate (draft: Intake.Draft) (receipt: Receipt) =
         if receipt.IssueNumber <= 0 then Error "receipt issueNumber must be positive"
         elif receipt.DraftId <> draft.Id then Error "receipt draft id does not match this draft"

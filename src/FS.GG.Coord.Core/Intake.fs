@@ -1,5 +1,7 @@
 namespace FS.GG.Coord
 
+open System.Text.RegularExpressions
+
 module Intake =
     [<Literal>]
     let Schema = "fsgg.coord.intake/v1"
@@ -49,7 +51,7 @@ module Intake =
                     | _ -> yield { Field = "backlogReason"; Detail = "must be parked, awaiting-judgement, epic or not-yet-actionable for Backlog" }
                 | "Blocked" ->
                     match draft.BlockedBy, draft.BlockedOn with
-                    | Some dependency, None when dependency.Contains "#" -> ()
+                    | Some dependency, None when Regex.IsMatch(dependency, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*$") -> ()
                     | None, Some ("human/action" | "human/decision") -> ()
                     | _ -> yield { Field = "blockedBy"; Detail = "Blocked requires exactly one canonical dependency or human/action|human/decision park" }
                 | "Ready" ->

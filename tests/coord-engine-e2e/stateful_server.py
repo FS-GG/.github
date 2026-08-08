@@ -300,6 +300,9 @@ def graphql(query: str, variables: dict):
             if 'fieldValueByName(name: "Status")' in query:
                 status = ISSUES.get(n, {}).get("status")
                 node["fieldValueByName"] = {"name": status} if status else None
+            elif 'fieldValueByName(name: "Blocked by")' in query:
+                blocked_by = ISSUES.get(n, {}).get("blocked_by")
+                node["fieldValueByName"] = {"text": blocked_by} if blocked_by else None
             nodes = [node]
         return {
             "data": {

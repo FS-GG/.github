@@ -73,7 +73,7 @@ module IntakeApplication =
         elif path.EndsWith "/" then path.TrimEnd '/'
         else path
 
-    let private validateLivePaths (draft: Intake.Draft) =
+    let validateLivePaths (draft: Intake.Draft) =
         let start = DirectoryInfo(Directory.GetCurrentDirectory())
         let rec gitRoot (cursor: DirectoryInfo) =
             if isNull cursor then None
