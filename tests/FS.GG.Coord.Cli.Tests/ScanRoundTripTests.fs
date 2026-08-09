@@ -250,14 +250,14 @@ let ``#641 a PULL REQUEST on the board is not a candidate`` () =
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
-let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
+let ``#520 a CLOSED and STAMPED issue ALREADY CLASSED is a candidate, SWEPT with no read, and decided IssueClosed`` () =
     // One was handed to a worker two hours after it was closed as completed, because candidate selection
     // read the board COLUMN and nothing else — and then it was PROMOTED back to Ready on release, re-arming
     // it for the next worker. The fix is NOT to drop it from the candidates: that gets the right answer
     // (never scheduled) with no WORDS, so a worker asking "why isn't #502 offered?" gets nothing for it,
     // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
     // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
-    // needs neither a body read nor a marker read, and the reason survives to `decide`.
+    // needs neither a marker read nor, for a row that already carries a board `Class` value, a body read.
     //
     // THE FIXTURE IS `Done`, NOT `Ready`, SINCE .github#2225. This test used to drive `State = Closed;
     // Status = Ready` — a CLOSED, UNSTAMPED row, which is now precisely the post-merge window that MUST be
@@ -265,7 +265,17 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
     // the test agreed with the code, and both were describing a rule nobody had checked against `delivery`.
     // The sweep is real and worth keeping — it is just gated on the STAMP now, which is what `Done` says.
     // Its unstamped twin is the test immediately below.
-    let closed = { aRow with State = Closed; Status = Done }
+    //
+    // `BoardClass = Some Hardening`, NOT THE FIXTURE DEFAULT, SINCE .github#2254. `aRow.BoardClass` is
+    // `None`, and a `None` board column is now precisely the population that IS read (the next test) — a
+    // row that closed with an empty `Class` column is exactly what CLASS-PROJECTION-LAG could never
+    // examine again once it was Open-only. This fixture instead pins the OTHER half: a row that already
+    // carries some class value on the board stays fully swept, because nothing needs its body to know that.
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+            BoardClass = Some Hardening }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
     // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
@@ -275,7 +285,7 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
             if req.Path.EndsWith "/issues" then
                 ok "[]"
             else
-                Error(Errors.Transport "the closed sweep must read no body and no marker"))
+                Error(Errors.Transport "an already-classed closed sweep must read no body and no marker"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
     | Error e -> failwith $"a swept closed item reads nothing, so the scan cannot fail — got %A{e}"
@@ -296,6 +306,89 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
             match Schedulability.schedulable false [] item with
             | Schedulability.IssueClosed -> ()
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
+
+[<Fact>]
+let ``#2254 a CLOSED and STAMPED issue with an EMPTY board Class column has its body read, once`` () =
+    // THE GAP THIS PINS. `CLASS-PROJECTION-LAG` (`Chore.fs`) is no longer `Open`-only, but it can only fire
+    // on a `Some declared` `Item.Class` — and a swept closed row's `Item.Class` was UNCONDITIONALLY `None`,
+    // because the sweep above never sent a body to derive one from. A row that reached `Done` before any
+    // reconcile pass observed it `Open` therefore carried a genuinely EMPTY `Class` column forever: not
+    // examined, not reported, not repaired. `FS.GG.Templates#398` is the live instance — filed, classed
+    // `hardening` in its own text, merged and closed inside one gap window, and both `reconcile --json` and
+    // `lint` stayed clean about it.
+    //
+    // THE FIX IS NARROW ON PURPOSE. Reading every `Done` row's body on every pass would undo the sweep
+    // #418 exists to keep cheap. `row.BoardClass` is already free — the same resolver-field read the file
+    // header's cost model measures, never a second fetch — so the read fires only when it is `None`, the
+    // population AC1 of #2254 names (an EMPTY column), never for a row that already carries some value.
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+            BoardClass = None }
+
+    // The body IS read here — unlike the sibling test above — but nothing else is: no marker/comment read.
+    // A green run therefore also proves the read stayed narrow rather than reintroducing the full
+    // closed-row read .github#2225 deliberately keeps gated on the STAMP.
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]"
+            elif req.Path.EndsWith "/comments" then
+                Error(Errors.Transport "an empty-column closed sweep must read the body, never markers")
+            else
+                ok (issueBody "Paths: src/Audio/**\n\nClass: hardening\n"))
+
+    match Scan.snapshot transport [ closed ] None false None 120 with
+    | Error e -> failwith $"the narrow body read must not fail the scan — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.Candidates)
+        Assert.Equal(0, receipt.BodiesUnreadable) // the read SUCCEEDED — this counts only FAILURES
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"a closed row with an empty Class column must still round-trip: %s{detail}"
+        | Ok request ->
+            let item = request.Candidates.[0].Item
+            Assert.Equal(Closed, item.State)
+
+            // THE WHOLE POINT: the item's own declared Class now reaches `Item.Class`, exactly as it would
+            // for a genuinely open row — which is what lets `Chore.derive`'s `CLASS-PROJECTION-LAG` see the
+            // disagreement (`ChoreTests` pins the derivation itself; this pins the document that feeds it).
+            Assert.Equal(Some Hardening, item.Class)
+
+[<Fact>]
+let ``#2254 a CLOSED and STAMPED issue's FAILED body read is counted, not silently dropped`` () =
+    // #266's rule, applied to the new narrow read: a body this pass could not fetch must be COUNTED and
+    // named — `bodyUnreadable`, never a fact this row simply declares nothing, and never a failure that
+    // takes the whole scan down for one row #520 already established must not fail it.
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+            BoardClass = None }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then ok "[]"
+            else Error(Errors.Transport "rate limited"))
+
+    match Scan.snapshot transport [ closed ] None false None 120 with
+    | Error e -> failwith $"a failed body read must not fail the whole scan — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.BodiesUnreadable)
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"a swept closed item with an unreadable body must still parse: %s{detail}"
+        | Ok request ->
+            Assert.Equal(None, request.Candidates.[0].Item.Class)
 
 [<Fact>]
 let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERVES its touch-set`` () =

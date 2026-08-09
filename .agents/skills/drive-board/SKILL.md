@@ -97,6 +97,17 @@ cross-repo allocation, not item implementation.
     the board is defect-free. Fixing one thing legitimately files two, so a wave producing only
     `hardening` and `decision` is completion, not a stall.
 
+    **The census this depends on now also reaches a `Done`/closed row (.github#2254) — bounded, not
+    exhaustive.** `CLASS-PROJECTION-LAG` is no longer `Open`-only: a row that reaches `Done` between two
+    reconcile passes used to keep an EMPTY `Class` column forever, invisible to both `reconcile` and
+    `lint` alike, because nothing examined it again once it closed. `reconcile`'s scan now pays one extra
+    body read for exactly that population — a closed row whose board `Class` column is `None` — so a
+    fresh `reconcile --apply` reaches it the same as an open row. **The bound is deliberate**: a closed
+    row that already carries SOME `Class` value is never re-read (re-reading every `Done` row's body on
+    every pass would undo the cost model the scan exists to keep cheap), so a WRONG (non-empty) `Class`
+    value on an already-classed closed row is still not re-examined by this pass — that gap is unchanged
+    from before #2254, and closing it would need a human or a fresh `Open` pass, not a bigger scan.
+
 Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.
 Load [deep detail](references/deep-detail.md) only for recovery paths and extended rationale.

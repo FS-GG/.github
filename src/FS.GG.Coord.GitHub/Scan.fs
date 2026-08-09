@@ -778,9 +778,10 @@ module Scan =
                 // A CLOSED AND STAMPED ITEM IS SWEPT, NOT READ (#520, and case 51's "the issue is closed").
                 // It stays a candidate so `decide` can name it — `Schedulability` answers
                 // `Closed -> IssueClosed` as its FIRST question, before column, blockers, touch-set or lock
-                // — but it needs none of those reads to do so. Fetching its body/markers would pay the
-                // budget that dies first (#418) for a verdict `state` alone already settles, and bash never
-                // fetches them either.
+                // — but it needs none of those reads to do so. Fetching its markers would pay the budget
+                // that dies first (#418) for a verdict `state` alone already settles, and bash never
+                // fetches them either. The body is likewise never fetched EXCEPT for the narrow,
+                // already-free-to-detect population .github#2254 names — see the arm below.
                 //
                 // THE GUARD IS THE DONE STAMP, NOT `Closed` (.github#2225). This arm swept on `Closed`
                 // alone, and the sentence licensing that — "its touch-set is never consulted" — was TRUE
@@ -805,6 +806,28 @@ module Scan =
                     w.WriteString("state", "CLOSED")
                     w.WriteStartArray("blockers")
                     w.WriteEndArray()
+
+                    // .github#2254: `CLASS-PROJECTION-LAG`'s own gate is `Open` (`Chore.fs`), so a row that
+                    // reaches Done/CLOSED before any reconcile pass ever observes it while still Open keeps
+                    // its disagreement — an EMPTY board `Class` column beside a body that DOES declare one
+                    // — examined by nothing, forever. This sweep is exactly why: it never sends the body
+                    // that disagreement would be read from. `row.BoardClass` is already FREE here (the same
+                    // resolver-field read the cost-model header measures, not a second fetch), so when it
+                    // is `None` — the population #2254's AC1 names, an EMPTY column, not a merely wrong one
+                    // — the body is read once, letting `Snapshot.parse`/`Chore.derive` see the item's own
+                    // declared `Class:` exactly as they would for a genuinely open row. A row that ALREADY
+                    // carries some `Class` value stays fully swept: paying `Reads.issueBody` (#418's
+                    // expensive read) for every `Done` row on the board would undo the sweep this file
+                    // exists to keep cheap, for a population #2254 does not ask this rule to cover.
+                    match row.BoardClass with
+                    | Some _ -> ()
+                    | None ->
+                        match Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        | Ok text -> w.WriteString("body", text)
+                        | Error e ->
+                            bodiesUnreadable <- bodiesUnreadable + 1
+                            w.WriteString("bodyUnreadable", explain e)
+
                     w.WriteEndObject()
                 // A CLOSED, UNSTAMPED ROW READS EXACTLY LIKE AN OPEN ONE, and deliberately shares this path
                 // rather than getting a third arm of its own: it is the post-merge window, where the claim is

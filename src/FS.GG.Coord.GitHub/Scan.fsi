@@ -63,6 +63,14 @@ module Scan =
           /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
           /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
           /// looked at. Here the source is the body, and `lint` reads it directly.
+          ///
+          /// ALSO WHAT DECIDES WHETHER A CLOSED-AND-DONE ROW'S BODY GETS READ AT ALL (.github#2254). That
+          /// population is otherwise SWEPT — see `snapshot`'s own comment for why — precisely because
+          /// `CLASS-PROJECTION-LAG` used to be `Open`-only, so nothing downstream ever needed the body of a
+          /// row that had already closed. A row that closes before any reconcile pass observes it Open now
+          /// keeps its disagreement forever unless something reads the body again; `snapshot` pays that read
+          /// — once, narrowly — exactly when this field is `None` on such a row, which is the population
+          /// AC1 names (an EMPTY column), never for a row that already carries some value here.
           BoardClass: ItemClass option
 
           /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
