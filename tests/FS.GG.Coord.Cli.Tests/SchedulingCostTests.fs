@@ -342,6 +342,37 @@ module SchedulingCostTests =
         Assert.Equal(0, gets)
         Assert.Equal(0, comments)
 
+    [<Fact>]
+    let ``#2300 repair 1: a human-held candidate never pays a delivery-route read, however stale its receipt would be`` () =
+        // Independent review, round 1: `AwaitingHuman` is one of the four verdicts `routeCannotChangeVerdict`
+        // matches to skip enrichment, and IS route-independent by `Schedulability.schedulable`'s own order
+        // (step 3b, `Blocked on: human/...`, strictly BEFORE step 3c's route check) — the critic confirmed
+        // this by reading the source. But nothing exercised it: removing the `AwaitingHuman` arm in a local
+        // mutation left the full 650-test Cli corpus green, because no fixture combined a human hold with a
+        // NON-`Current` route.
+        //
+        // NOT `ForbidComments` here (unlike the AC1/AC2/AC4 tests above): `Scan.snapshot`'s own
+        // unconditional per-open-row read (out of this item's `Paths:`, .github#2308) ALSO reads this
+        // candidate's body and markers regardless of the `AwaitingHuman` arm, so `ForbidComments` would
+        // fail the fixture for a reason unrelated to what this test pins. The precise, arm-specific
+        // signal is the EXACT COUNT: `Scan.snapshot` alone pays ONE `issue-get` + ONE `comment-list`; a
+        // SECOND pair means `enrichDeliveryRoutes` ran too, which only happens if the arm is gone.
+        let humanHeld =
+            { candidate 77 "Ready" "OPEN" with
+                Body = "Paths: src/item-77.fs\nBlocked on: human/action"
+                WithRoute = false }
+
+        let transport = world (humanHeld :: [ schedulableRow 999 ])
+
+        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+
+        Assert.Equal(0, code)
+        Assert.Contains("FS-GG/FS.GG.SDD#999", out)
+
+        let gets, comments = readsFor transport 77
+        Assert.Equal(1, gets)
+        Assert.Equal(1, comments)
+
     // ---- AC3 — the gate still fails closed ---------------------------------------------------------------
 
     [<Fact>]
