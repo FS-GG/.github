@@ -23,13 +23,21 @@ module Delivery =
           HeadSha: string
           Verified: bool }
 
-    /// A decision-boundary touch-set fact: either genuinely read (empty or not — a chore, an explicit
-    /// `Paths: none`, and a body with no `Paths:` line at all are ALL `Known []` here; that omission
-    /// distinction belongs to Schedulability, not to this decision), or NOT READ, which must say why
-    /// rather than pose as `Known []`. See `.github#2233`: an `Unreadable` touch-set silently collapsing
-    /// to `[]` let a fact nobody looked at answer a scheduling verdict as if it were a genuine omission.
+    /// A decision-boundary touch-set fact, carrying the SAME three-way distinction
+    /// `Schedulability.NoTouchSet` / `DeliberatelyNoTouchSet` already draws for scheduling, so a
+    /// consumer of `Delivery`'s own output does not have to open the issue body to tell them apart
+    /// (.github#2233 acceptance 4):
+    ///   - `Known` — tokens actually declared and read (includes the `any` chore sentinel).
+    ///   - `DeclaredNone` — an explicit, read `Paths: none`: a DELIBERATE empty reservation.
+    ///   - `Undeclared` — a read body with no `Paths:` line at all: nobody ever declared one.
+    ///   - `Unread` — the body was never read. This is UNKNOWN, not absent, and must never be supplied
+    ///     as any of the three read cases above — see `.github#2233`: an `Unreadable` touch-set used to
+    ///     collapse to the SAME `[]` a genuine omission answered, letting a fact nobody looked at answer
+    ///     a scheduling verdict as if it were read.
     type DeclaredPaths =
         | Known of string list
+        | DeclaredNone
+        | Undeclared
         | Unread of reason: string
 
     type Freshness =
@@ -95,12 +103,15 @@ module Delivery =
         |> Convert.ToHexString
         |> fun hash -> hash.ToLowerInvariant()
 
-    /// Folds the CASE in as well as the tokens, so `Unread "x"` cannot hash to the same token as
-    /// `Known []`, or as `Known [ "x" ]` — a receipt minted from a read fact must never be redeemable
-    /// against an unread one, and vice versa (.github#2233 scope item 3).
+    /// Folds the CASE in as well as the tokens, so none of the four cases can hash to the same token as
+    /// another — `Unread "x"` cannot collide with `Known [ "x" ]`, and `DeclaredNone` cannot collide
+    /// with `Undeclared` or an empty `Known []` — a receipt minted from one fact must never be
+    /// redeemable against a differently-cased one (.github#2233 scope item 3).
     let private declaredPathsToken =
         function
         | Known paths -> "known\n" + String.concat "\n" paths
+        | DeclaredNone -> "declaredNone"
+        | Undeclared -> "undeclared"
         | Unread reason -> "unread\n" + reason
 
     let freshnessToken freshness =
@@ -119,21 +130,27 @@ module Delivery =
     let private missing value label =
         if String.IsNullOrWhiteSpace value then Some label else None
 
-    /// The reason a decision cannot proceed for the touch-set fact alone. An unread fact NAMES THE READ
-    /// as the failure and never the item's own declaration — the reader is at fault, not the item
-    /// (.github#2233 acceptance 2). A genuinely empty, READ touch-set answers the same generic
-    /// "declared paths" reason this validator has always given a `Paths:`-less item.
+    /// The reason a decision cannot proceed for the touch-set fact alone. Each of the three empty-ish
+    /// cases gets its OWN reason text, so a worker reading a `noVerdict` can tell which one it is
+    /// without opening the issue body (.github#2233 acceptance 4): `Unread` NAMES THE READ as the
+    /// failure and never the item's own declaration — the reader is at fault, not the item (acceptance
+    /// 2) — while `DeclaredNone` and `Undeclared` are both facts genuinely read off the body, so they
+    /// name the item's own state rather than a reader failure, and each keeps the "declared paths"
+    /// family wording so the omission is still recognizable as the same KIND of gap this validator has
+    /// always reported (acceptance 2's "the omission reason it answers today").
     ///
     /// Skipped entirely once the snapshot is `CleanupEligible`: a terminal item (stamped, closed, claim
     /// released, nothing pending) has nothing left to touch, so `CleanupWorktree` does not need to know
     /// what it once reserved — demanding the field here would block a stamped item's cleanup transition
-    /// forever on a residual `[]` (.github#2233, the measured `#2225` residue).
+    /// forever on a residual empty fact (.github#2233, the measured `#2225` residue).
     let private declaredPathsProblem snapshot =
         if snapshot.CleanupEligible then
             None
         else
             match snapshot.Freshness.DeclaredPaths with
             | Unread reason -> Some $"declared paths were not read: %s{reason}"
+            | Undeclared -> Some "declared paths were never declared (no Paths: line)"
+            | DeclaredNone -> Some "declared paths are deliberately empty (Paths: none)"
             | Known [] -> Some "declared paths"
             | Known _ -> None
 

@@ -424,6 +424,13 @@ module LintApplication =
     /// An `Unmatchable` token reserves nothing and therefore overlaps nothing (#273) — admitting it here
     /// would let two rows be called the same work on the strength of two tokens that name no file. The
     /// four token-less shapes yield nothing to compare, and each is another rule's business (#496).
+    ///
+    /// `Unreadable _ -> []` is an ADVICE consumer, safe as written (.github#2233 scope item 5 audit):
+    /// `consolidationVerdict` below tracks `Unreadable` rows in its OWN separate `unreadable` field and
+    /// reports them as a no-verdict, never as an absence of clusters — so a row this function returns
+    /// `[]` for is merely excluded from pairwise comparison, never read as "declares nothing." This
+    /// function only ever ADDS a consolidation suggestion; it never reaches a scheduling or verdict
+    /// decision on the strength of an unread body.
     let private comparableStems (touchSet: TouchSet) : string list =
         match touchSet with
         | Declared tokens ->

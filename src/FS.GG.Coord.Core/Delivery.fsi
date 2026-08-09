@@ -22,14 +22,20 @@ module Delivery =
           HeadSha: string
           Verified: bool }
 
-    /// A decision-boundary touch-set fact. `Known []` is a GENUINE, read omission — a chore's empty
-    /// reservation, an explicit `Paths: none`, and a body with no `Paths:` line at all are all `Known
-    /// []` here, because none of those differences change what a decision may safely do with an empty
-    /// list. `Unread reason` is a fact nobody looked at, and it is not, and must never be supplied as,
-    /// `Known []`: a caller that has not read the touch-set has to say so, or a decision boundary would
-    /// treat a fact it never saw as a confident reservation of nothing (.github#2233).
+    /// A decision-boundary touch-set fact, drawing the same three-way distinction
+    /// `Schedulability.NoTouchSet`/`DeliberatelyNoTouchSet` already draws for scheduling, so a
+    /// consumer of `Delivery`'s own output can tell the three apart without opening the issue body
+    /// (.github#2233 acceptance 4):
+    ///   - `Known` — tokens actually declared and read (includes the `any` chore sentinel).
+    ///   - `DeclaredNone` — an explicit, read `Paths: none`: a DELIBERATE empty reservation.
+    ///   - `Undeclared` — a read body with no `Paths:` line at all: nobody ever declared one.
+    ///   - `Unread reason` — the body was never read. This is UNKNOWN, not absent, and must never be
+    ///     supplied as any of the three read cases above: a caller that has not read the touch-set has
+    ///     to say so, or a decision boundary would treat a fact it never saw as a confident read.
     type DeclaredPaths =
         | Known of string list
+        | DeclaredNone
+        | Undeclared
         | Unread of reason: string
 
     /// Facts which must stay identical between inspection and a following mutating transition.

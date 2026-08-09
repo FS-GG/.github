@@ -1341,13 +1341,14 @@ module Client =
                     | Error error, _ -> fail error
                     | _, Error error -> fail error
                     | Ok marker, Ok pending ->
-                        // `Unreadable` no longer collapses into the SAME `[]` a genuine omission answers
-                        // (.github#2233): a body nobody read becomes `Delivery.Unread`, never
-                        // `Delivery.Known []`, so `Delivery.validate` can name the read, not the item, as
-                        // the failure. `DeclaredNone` and `Undeclared` stay `Known []` — both are facts
-                        // actually read off the body, and the difference between "deliberately none" and
-                        // "never declared" is Schedulability's distinction (`NoTouchSet` vs
-                        // `DeliberatelyNoTouchSet`), not this decision boundary's.
+                        // Preserves the SAME three-way distinction `Schedulability` already draws for
+                        // scheduling (`Undeclared -> NoTouchSet`, `DeclaredNone -> DeliberatelyNoTouchSet`)
+                        // rather than collapsing every empty-ish case into one `Delivery.Known []`, so a
+                        // worker reading `delivery`'s own `noVerdict` can tell a deliberate `Paths: none`
+                        // from a forgotten declaration from an unread body without opening the issue body
+                        // (.github#2233 acceptance 4). `Unreadable` is never posed as any of the three read
+                        // cases: a body nobody read becomes `Delivery.Unread`, so `Delivery.validate` can
+                        // name the read, not the item, as the failure.
                         let declaredPaths =
                             match candidate.Item.TouchSet with
                             | Declared tokens ->
@@ -1356,8 +1357,8 @@ module Client =
                                     |> List.map (function | Matchable value | Unmatchable value -> value)
                                 )
                             | DeclaredChore -> Delivery.Known [ "any" ]
-                            | DeclaredNone
-                            | Undeclared -> Delivery.Known []
+                            | TouchSet.DeclaredNone -> Delivery.DeclaredNone
+                            | TouchSet.Undeclared -> Delivery.Undeclared
                             | Unreadable reason -> Delivery.Unread reason
 
                         let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
@@ -2533,6 +2534,14 @@ module Client =
     /// The touch-set a claim reserves (or an In-progress item declares) — the `paths` a consumer keys on
     /// (case 25). Read from the issue body; an undeclared or unreadable one is an empty list, because `who`
     /// reports what is reserved, and nothing is reserved on a surface nobody declared.
+    ///
+    /// `Unreadable _ -> []` is an ADVICE consumer, safe as written (.github#2233 scope item 5 audit):
+    /// `who` is purely informational (case 25 above; its production call site's own comment,
+    /// `.github#1794`, says "the reserved touch-set is informational, so a body we could not read is an
+    /// empty list, not a failed `who` — a body is not a lock"). This function never reaches a
+    /// scheduling or verdict decision on the strength of an unread body — it only ever reports what a
+    /// worker may safely treat as reserved, and an unread body reserves nothing to REPORT, whatever it
+    /// may turn out to reserve once read.
     let private pathNames (ts: TouchSet) : string list =
         match ts with
         | Declared tokens ->

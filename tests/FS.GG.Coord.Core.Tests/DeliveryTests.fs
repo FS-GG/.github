@@ -245,3 +245,50 @@ module DeliveryTests =
         match Delivery.advance receipt.FreshnessToken receipt.ActionKey sameShapeButUnread with
         | Delivery.NoVerdict reason -> Assert.Contains("stale", reason)
         | result -> failwithf "expected a stale receipt refusal, got %A" result
+
+    // -- repair round 1 (critic `crake-0420`, PR #2301): acceptance 4's full three-way distinction --
+
+    let private noVerdictReason (declaredPaths: Delivery.DeclaredPaths) =
+        match Delivery.inspect { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } } with
+        | Delivery.NoVerdict reason -> reason
+        | result -> failwithf "expected no-verdict, got %A" result
+
+    [<Fact>]
+    let ``#2233 DeclaredNone, Undeclared and Unread each answer their own NoVerdict reason`` () =
+        let declaredNoneReason = noVerdictReason Delivery.DeclaredNone
+        let undeclaredReason = noVerdictReason Delivery.Undeclared
+        let unreadReason = noVerdictReason (Delivery.Unread "issue body fetch timed out")
+        // Pairwise distinct: a worker can tell which of the three it is without opening the issue body.
+        Assert.NotEqual<string>(declaredNoneReason, undeclaredReason)
+        Assert.NotEqual<string>(declaredNoneReason, unreadReason)
+        Assert.NotEqual<string>(undeclaredReason, unreadReason)
+        // Only the unread reason blames the read; the other two name the item's own read state.
+        Assert.Contains("were not read", unreadReason)
+        Assert.DoesNotContain("were not read", declaredNoneReason)
+        Assert.DoesNotContain("were not read", undeclaredReason)
+        Assert.Contains("Paths: none", declaredNoneReason)
+        Assert.Contains("no Paths: line", undeclaredReason)
+
+    [<Fact>]
+    let ``#2233 a freshness token distinguishes DeclaredNone from Undeclared from Known empty`` () =
+        let declaredNone = { freshness "head-a" with DeclaredPaths = Delivery.DeclaredNone }
+        let undeclared = { freshness "head-a" with DeclaredPaths = Delivery.Undeclared }
+        let known = { freshness "head-a" with DeclaredPaths = Delivery.Known [] }
+        let tokens = [ Delivery.freshnessToken declaredNone; Delivery.freshnessToken undeclared; Delivery.freshnessToken known ]
+        Assert.Equal(3, tokens |> List.distinct |> List.length)
+
+    [<Fact>]
+    let ``#2233 DeclaredNone and Undeclared at a terminal snapshot do not block cleanup either`` () =
+        let terminal (snapshot: Delivery.Snapshot) =
+            { snapshot with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true }
+        for declaredPaths in [ Delivery.DeclaredNone; Delivery.Undeclared ] do
+            let terminalSnapshot =
+                terminal { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } }
+            transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalSnapshot)
