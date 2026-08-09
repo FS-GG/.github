@@ -122,11 +122,58 @@ module ForceStealTests =
 
         member _.Remove(id: int64) = comments.Remove id |> ignore
 
+        /// .github#2300 repair 2: the SAME thread `.Json()` serves the REST `/comments` endpoint from —
+        /// the route marker first, then any live claim marker — as bare bodies, oldest first, for the
+        /// bounded GraphQL `comments(last: N)` read to truncate. `\\n`/`\"` are un-escaped back out of a
+        /// claim body's stored form (`.Add` escapes them for the REST JSON string); the route marker was
+        /// never escaped in the first place, so it passes through unchanged.
+        member _.Bodies =
+            let claims =
+                comments
+                |> Seq.sortBy (fun kv -> kv.Key)
+                |> Seq.map (fun kv -> kv.Value.Replace("\\n", "\n").Replace("\\\"", "\""))
+                |> List.ofSeq
+
+            currentRouteComment () :: claims
+
     let private world (thread: Thread) =
         Fake.Recorder(fun (req: Request) ->
             let path = req.Path.Trim '/'
 
             match req.Method, path with
+            // .github#2300 repair 2: `requireCurrentDeliveryRoute`'s bounded marker search — served from
+            // the SAME `thread` the REST `/comments` arm below reads, so a steal/renewal that appends a
+            // new claim marker mid-test is visible to both arms identically.
+            | "POST", "graphql" when
+                (match req.Body with
+                 | Query(document, _) -> document.Contains "comments(last:"
+                 | _ -> false)
+                ->
+                match req.Body with
+                | Query(_, variables) ->
+                    let lastVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "last")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    match lastVar with
+                    | Some last ->
+                        let recent =
+                            thread.Bodies
+                            |> List.rev
+                            |> List.truncate last
+                            |> List.rev
+                            |> List.map (fun body -> {| body = body |})
+                            |> JsonSerializer.Serialize
+
+                        let payload =
+                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                            + recent
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                        ok payload
+                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->

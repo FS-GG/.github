@@ -242,6 +242,38 @@ module ApplicationServiceTests =
 
         "[" + String.concat "," (route @ claim) + "]"
 
+    /// .github#2300 repair 2: the SAME route-marker-then-claim-marker thread `commentsAgedScoped` builds
+    /// for the REST `/comments` endpoint, as bare BODIES rather than full comment JSON — what the bounded
+    /// GraphQL `comments(last: N)` read now serves instead of `Reads.commentBodies`'s unbounded REST scan.
+    /// No fixture in this file ever builds a thread longer than two comments (a route marker and a claim
+    /// marker), so `last` truncation is a no-op in every existing test here; it is still applied for real
+    /// rather than ignored, so a future test that DOES build a deep thread gets correct behaviour for
+    /// free instead of a silent gap.
+    let private recentCommentBodiesScoped
+        (bodies: Map<int, string>)
+        (holders: Map<int, string>)
+        (pathRepos: Map<int, string>)
+        (number: int)
+        (last: int)
+        =
+        let route =
+            Map.tryFind number bodies
+            |> Option.map (fun body -> currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body)
+            |> Option.toList
+
+        let claim =
+            match Map.tryFind number holders with
+            | None -> []
+            | Some worker ->
+                let pathRepo =
+                    Map.tryFind number pathRepos
+                    |> Option.map (fun repo -> $" pathRepo=%s{repo}")
+                    |> Option.defaultValue ""
+
+                [ $"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld" ]
+
+        (route @ claim) |> List.rev |> List.truncate last |> List.rev
+
     let private commentsAged bodies holders ageMinutes number =
         commentsAgedScoped bodies holders ageMinutes Map.empty number
 
@@ -304,6 +336,41 @@ module ApplicationServiceTests =
                     None
 
             match req.Method, path with
+            // .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) —
+            // served from the SAME `bodies`/`holders`/`pathRepos` the REST `/comments` arm below reads,
+            // via `recentCommentBodiesScoped`.
+            | "POST", "graphql" when
+                (match req.Body with
+                 | Query(document, _) -> document.Contains "comments(last:"
+                 | _ -> false)
+                ->
+                match req.Body with
+                | Query(_, variables) ->
+                    let numberVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "number")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    let lastVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "last")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    match numberVar, lastVar with
+                    | Some n, Some last ->
+                        let recent =
+                            recentCommentBodiesScoped bodies holders pathRepos n last
+                            |> List.map (fun body -> {| body = body |})
+                            |> JsonSerializer.Serialize
+
+                        let payload =
+                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                            + recent
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                        ok payload
+                    | _ -> Error(Errors.NotFound "the recent-comments query is missing owner/repo/number/last variables")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->
@@ -494,24 +561,32 @@ module ApplicationServiceTests =
 
                 $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
 
-            let comments owner =
+            /// The bare bodies `comments` below serializes into full REST comment JSON — the single
+            /// source both that REST arm and the new bounded GraphQL route read (.github#2300 repair 2)
+            /// build their answer from, so an external claim posted mid-test (`externalMarker`) is visible
+            /// to both identically.
+            let bodies owner =
                 let source = "Paths: src/Rogue3/"
                 let subject = $"%s{owner}/rogue3#96"
                 let route = currentRouteComment subject source
+
                 let markers =
                     match owner, externalMarker with
                     | "EHotwagner", Some body -> [ body ]
                     | _ -> []
 
+                [ route ] @ markers
+
+            let comments owner =
                 let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
-                JsonSerializer.Serialize
-                    ([ route ] @ markers
-                     |> List.mapi (fun index body ->
-                         {| id = 9195 + index
-                            body = body
-                            user = {| login = "EHotwagner" |}
-                            created_at = timestamp
-                            updated_at = timestamp |}))
+                bodies owner
+                |> List.mapi (fun index body ->
+                    {| id = 9195 + index
+                       body = body
+                       user = {| login = "EHotwagner" |}
+                       created_at = timestamp
+                       updated_at = timestamp |})
+                |> JsonSerializer.Serialize
 
             let transport =
                 Fake.Recorder(fun (req: Request) ->
@@ -521,6 +596,35 @@ module ApplicationServiceTests =
                     | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                     | "POST", "graphql" ->
                         match req.Body with
+                        // .github#2300 repair 2: the bounded route-marker search. `owner` distinguishes
+                        // the two same-numbered twins exactly as the REST arms below key on the URL's
+                        // owner segment.
+                        | Query(document, variables) when document.Contains "comments(last:" ->
+                            let ownerVar =
+                                variable "owner" variables |> Option.map asString
+                            let lastVar =
+                                variable "last" variables
+                                |> Option.map (function
+                                    | VNumber n -> int n
+                                    | value -> failwithf "expected numeric `last`, got %A" value)
+
+                            match ownerVar, lastVar with
+                            | Some owner, Some last ->
+                                let recent =
+                                    bodies owner
+                                    |> List.rev
+                                    |> List.truncate last
+                                    |> List.rev
+                                    |> List.map (fun body -> {| body = body |})
+                                    |> JsonSerializer.Serialize
+
+                                let payload =
+                                    "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                    + recent
+                                    + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                                ok payload
+                            | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/last: %A{variables}")
                         | Query(document, variables) when document.Contains "projectsV2" ->
                             ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         | Query(document, _) when document.Contains "fields(first" ->

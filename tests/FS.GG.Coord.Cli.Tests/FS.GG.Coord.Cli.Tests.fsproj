@@ -39,6 +39,7 @@
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
     <Compile Include="VerifyPathsClosingKeywordTests.fs" />
+    <Compile Include="SchedulingCostTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

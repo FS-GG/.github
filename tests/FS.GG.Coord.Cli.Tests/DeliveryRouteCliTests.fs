@@ -85,6 +85,38 @@ module DeliveryRouteCliTests =
             let path = req.Path.Trim '/'
 
             match req.Method, path with
+            // .github#2300 repair 2: `requireCurrentDeliveryRoute`/`deliveryRouteFact` now search for
+            // the marker over a BOUNDED GraphQL call (`Reads.recentCommentBodies`), not the REST
+            // `commentBodies` this fixture answered before. Served from the SAME live `thread` the REST
+            // arm below reads, truncated to the requested `last` window — exactly the "last N, in Relay
+            // order" contract the real GraphQL connection has, so a fixture growth of `thread` (e.g. via
+            // `record`'s own `POST .../comments` append) is visible to both arms identically.
+            | "POST", "graphql" ->
+                match req.Body with
+                | Query(document, variables) when document.Contains "comments(last:" ->
+                    let lastVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "last")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    match lastVar with
+                    | Some last ->
+                        let recent =
+                            thread.Bodies
+                            |> List.rev
+                            |> List.truncate last
+                            |> List.rev
+                            |> List.map (fun body -> {| body = body |})
+                            |> JsonSerializer.Serialize
+
+                        let payload =
+                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                            + recent
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                        ok payload
+                    | None -> Error(Errors.NotFound "the recent-comments query is missing a `last` variable")
+                | _ -> Error(Errors.NotFound "this fixture answers only the recent-comments GraphQL query")
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42" -> ok (JsonSerializer.Serialize {| number = 42; body = issueBodyText |})
             | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (thread.Json())
             | "POST", "repos/FS-GG/FS.GG.SDD/issues/42/comments" ->
@@ -367,6 +399,29 @@ module DeliveryRouteCliTests =
 
     let private claimArgs = [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-2298"; "--json" ]
 
+    /// THE DISCRIMINATOR ITSELF (.github#2300 repair 2, correcting a first attempt the host caught).
+    ///
+    /// The three tests below exist because `.github#2298`'s critic proved `requireCurrentDeliveryRoute`
+    /// was DECORATIVE: mutated to swallow `Stale`/`Unreadable` into success, the whole 2,093-assertion
+    /// suite stayed green. Their value was never "the exit code is non-zero" — a broken fixture can
+    /// produce that for the wrong reason — it was `GraphQlCalls = 0`: proof that refusal happens BEFORE
+    /// `heldElsewhere`'s `Board.bootstrapCached`, the first GraphQL call on the success path, rather than
+    /// merely "somewhere before the write".
+    ///
+    /// Repair 2 makes the ROUTE READ ITSELF a GraphQL call, so `GraphQlCalls = 0` can no longer hold on
+    /// ANY outcome — refusal included. Relaxing it to `= 1` (my first attempt) would have made the
+    /// assertion true under the M6 mutation too, the instant `Board.bootstrapCached` added its own
+    /// GraphQL call on top: 1 (route) + board calls > 1, so `>= 1` or an unexamined `= 1` are both too
+    /// weak the moment the mutant's OWN GraphQl usage is anything other than exactly zero extra calls,
+    /// and neither actually checks WHICH call happened. What the property needs is the ORDERING fact
+    /// itself, stated directly: the EXACT call sequence a refusal makes is `issueBody` (REST) then the
+    /// bounded route GraphQL call, and NOTHING ELSE — no bootstrap, no comment-post, no third call of any
+    /// kind. `transport.Log` is ordered and complete, so asserting it against the exact expected sequence
+    /// is a stronger, more literal restatement of "refusal happens before the board bootstrap" than a
+    /// bare count ever was: it catches a bootstrap call appearing ANYWHERE, in ANY position, of ANY kind.
+    let private refusedBeforeBootstrap: string list =
+        [ "issue-get FS-GG/FS.GG.SDD 42"; "graphql FS-GG/FS.GG.SDD#42 recent comments (last 100)" ]
+
     [<Fact>]
     let ``#2298 claim refuses with zero writes when NO delivery-route receipt exists`` () =
         // Confirmed to go RED under the critic's M6 mutation (requireCurrentDeliveryRoute's
@@ -379,8 +434,7 @@ module DeliveryRouteCliTests =
 
         Assert.NotEqual(0, code)
         Assert.DoesNotContain("claimed", out)
-        Assert.Equal(0, transport.Count "comment-post")
-        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Equal<string list>(refusedBeforeBootstrap, transport.Log)
 
     [<Fact>]
     let ``#2298 claim refuses with zero writes when the delivery-route receipt is STALE`` () =
@@ -394,8 +448,7 @@ module DeliveryRouteCliTests =
 
         Assert.NotEqual(0, code)
         Assert.DoesNotContain("claimed", out)
-        Assert.Equal(0, transport.Count "comment-post")
-        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Equal<string list>(refusedBeforeBootstrap, transport.Log)
 
     [<Fact>]
     let ``#2298 claim refuses with zero writes when the delivery-route comment is UNDECODABLE`` () =
@@ -410,5 +463,4 @@ module DeliveryRouteCliTests =
 
         Assert.NotEqual(0, code)
         Assert.DoesNotContain("claimed", out)
-        Assert.Equal(0, transport.Count "comment-post")
-        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Equal<string list>(refusedBeforeBootstrap, transport.Log)
