@@ -261,6 +261,23 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    if "comments(last:" in query:
+        # .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) — served
+        # from the SAME `comments_for()` the REST `/comments` endpoint answers from (route receipt
+        # first, then any live claim/message markers, exactly as that endpoint already orders them),
+        # truncated to the trailing `last` entries.
+        n = variables.get("number")
+        last = variables.get("last")
+        if n is None or last is None:
+            return None
+        n, last = int(n), int(last)
+        with LOCK:
+            thread = comments_for(n)
+        recent = thread[-last:] if last > 0 else []
+        return {
+            "data": {"repository": {"issue": {"comments": {"nodes": [{"body": c["body"]} for c in recent]}}}},
+            "rateLimit": RATE_LIMIT,
+        }
     if "issue(number" in query and "projectItems" not in query:
         return {"data": {"repository": {"issue": {"id": "I_contract_probe"}}, "rateLimit": RATE_LIMIT}}
     if "projectsV2" in query:

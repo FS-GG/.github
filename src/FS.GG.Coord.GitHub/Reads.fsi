@@ -96,6 +96,31 @@ module Reads =
     val commentBodies:
         transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<string list>
 
+    /// The most recent `limit` comment bodies of an issue, oldest-of-the-window first, in ONE bounded
+    /// GraphQL call (.github#2300 repair 2) — unlike `commentBodies`, whose REST pagination is
+    /// unbounded (a comment page carries no server-side end short of the whole thread, and the
+    /// transport auto-follows every `Link: rel=next` page it is given).
+    ///
+    /// CHOOSING `limit`: pick the smallest bound the caller's search is expected to comfortably need,
+    /// not the largest the caller can afford — a bigger window does not make a "latest match" search
+    /// more correct, only slower. `Client.fs`'s `DeliveryRouteCommentWindow = 100` is the concrete
+    /// precedent: 100 matches this codebase's own REST `per_page` convention (`commentBodies`,
+    /// `markerScan`) and GitHub's usual Relay connection page ceiling, chosen for a search that only
+    /// ever wants the LATEST matching marker and is self-correcting (a stale receipt is cleared by
+    /// posting a fresh one, which becomes the newest comment and is found on the very next read,
+    /// bounded or not) — see that binding's own doc comment for the measured evidence behind it.
+    ///
+    /// FAIL-CLOSED, NOT FAIL-EMPTY: a caller searching this for the latest matching marker and finding
+    /// none must treat that as "not among the last `limit`", never as "does not exist" — those are
+    /// different facts, and a route/lock caller that collapses them into "absent" converts a receipt
+    /// that is merely OUT OF THE WINDOW into one this function never claimed to have seen. Every current
+    /// caller (`Client.fs`'s `readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute`/`deliveryRouteFact`
+    /// — confirmed the only three, `grep -rn "recentCommentBodies" src/`) already reads an empty/no-match
+    /// result as `Unreadable`/`Stale`, which REFUSES rather than guesses — the safe direction, at the
+    /// cost of a real but recoverable stall for a row whose comment volume has outrun the window.
+    val recentCommentBodies:
+        transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> limit: int -> IoResult<string list>
+
     /// Require `MarkerScan.Unreadable` to be empty, returning the complete marker list or a malformed-read
     /// error that names every unclassifiable comment.
     ///

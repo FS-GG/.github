@@ -453,12 +453,54 @@ module Client =
                   yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
         | _ -> []
 
+    /// .github#2300 repair 2: BOUNDED, not the full thread. All three call sites below —
+    /// `readDeliveryRouteVerdict` (scheduling), `requireCurrentDeliveryRoute` (the claim/take mutation
+    /// boundary), and `deliveryRouteFact` (`delivery-route show`/`record`) — search for the LATEST
+    /// matching marker (`List.rev |> List.tryPick`) and render or act on ONLY that one receipt (`show`
+    /// prints `kind = "current"`, never a history). None of the three ever needed more than the tail of
+    /// the comment thread; the unbounded `Reads.commentBodies` (REST, paginates with the whole thread's
+    /// length — .github#2300's own growth defect) was paying for history none of them read.
+    /// `Reads.commentBodies` has no remaining caller in this file after this change. It is NOT removed:
+    /// deleting a public `Reads.fsi` surface is a separate decision from bounding these three reads, and
+    /// nothing here rules out a future caller that genuinely needs the complete thread.
+    ///
+    /// **THE BUDGET THIS MOVES, NOT ELIMINATES.** `Reads.recentCommentBodies` is a GraphQL call
+    /// (`Budget = GraphQl`), and GraphQL is a SEPARATE 5,000-point-per-hour budget from the REST core
+    /// these reads used to spend. Net effect per candidate that reaches real enrichment: REST cost for
+    /// its route search drops from `1 + ceil(comments/100)` (unbounded) to 0 (the `issueBody` read beside
+    /// it stays REST, unchanged); GraphQL cost rises by exactly 1 bounded call. On a board where REST has
+    /// been the binding constraint all session and GraphQL sits mostly idle, this is very likely a
+    /// straight win — but it is a shift between two meters, and a future reader measuring only REST would
+    /// wrongly conclude the cost vanished rather than moved.
+    ///
+    /// **WHY 100, AND WHAT HAPPENS WHEN A MARKER IS OLDER THAN THAT:**
+    /// - 100 matches the `per_page` this codebase already uses for REST comment pages (`Reads.fs`'s
+    ///   `commentBodies`/`markerScan`) and is GitHub's own conventional connection-page ceiling — not a
+    ///   number invented for this repair.
+    /// - The receipt search only ever wants the MOST RECENT matching marker, and a receipt is re-affirmed
+    ///   whenever the body it binds to changes (or whenever an agent chooses to), so ordinary staleness is
+    ///   self-correcting: a fresh `record` becomes the newest comment and is found on the very next read,
+    ///   bound or not.
+    /// - Measured on the live board this repair was built against (`gh issue view`, single-issue reads,
+    ///   no board scan): the heaviest rows carried 10-11 comments; `.github#2300` itself gathered 4 in
+    ///   roughly 5h17m while sitting `Ready` and unclaimed. Crossing 100 comments on one row between two
+    ///   re-affirmations was not observed anywhere in this session's evidence.
+    /// - IF IT HAPPENS ANYWAY: a receipt more than `DeliveryRouteCommentWindow` comments behind the
+    ///   issue's own recent activity reads as NO RECEIPT — `DeliveryRoute.Unreadable`/`Stale`, which
+    ///   REFUSES scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing one direction or the
+    ///   other. That is safe (never schedules on a receipt this call could not see) but not free: the row
+    ///   becomes unschedulable until someone posts a fresh receipt — a RECOVERABLE stall, not `.github#2298`'s
+    ///   permanent deadlock (there, no actor was ever positioned to satisfy the gate at all; here, any
+    ///   agent who can comment on the issue clears it with one `delivery-route record`).
+    [<Literal>]
+    let private DeliveryRouteCommentWindow = 100
+
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
     let private readDeliveryRouteVerdict (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
         | Error error, _
         | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
         | Ok body, Ok comments ->
@@ -476,7 +518,7 @@ module Client =
     /// a malformed/missing route and accidentally lose its back-off contract.
     let private requireCurrentDeliveryRoute (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->
@@ -8358,9 +8400,13 @@ module Client =
 
     /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
     /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
+    /// `show` renders only the CURRENT (latest-matching) receipt (`kind = "current"`, never a history), so
+    /// it needs exactly the same bounded search `readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute`
+    /// do — the third and last of the three near-identical marker searches this repair unifies onto
+    /// `Reads.recentCommentBodies` (.github#2300 repair 2).
     let private deliveryRouteFact (ctx: Context) (target: Ref) =
         match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
-              Reads.commentBodies ctx.Transport target.Owner target.Repo target.Number with
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
         | Error error, _
         | _, Error error -> Error error
         | Ok body, Ok comments ->

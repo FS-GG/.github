@@ -80,7 +80,35 @@ ISSUE_COMMENTS = {42: [delivery_route_comment(42, ISSUE_BODIES[42])]}  # no clai
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
 
 
-def graphql(query: str):
+def recent_comments(number: int, last: int):
+    """.github#2300 repair 2: the bounded route-marker search — `Reads.recentCommentBodies`'s
+    `comments(last: N)` GraphQL query, served from the SAME `ISSUE_COMMENTS` the REST `/comments`
+    endpoint below answers from, truncated to the trailing `last` entries. This fixture never builds a
+    thread longer than one comment, so truncation is a no-op here; it is still applied for real (not
+    hard-coded to "return everything") so this fixture cannot silently drift from what the unit-level
+    `SchedulingCostTests.fs`/`DeliveryRouteCliTests.fs` fixtures already prove about the bound.
+    """
+    thread = ISSUE_COMMENTS.get(number, [])
+    windowed = thread[-last:] if last > 0 else []
+    return {
+        "data": {
+            "repository": {
+                "issue": {
+                    "comments": {"nodes": [{"body": c["body"]} for c in windowed]}
+                }
+            }
+        },
+        "rateLimit": RATE_LIMIT,
+    }
+
+
+def graphql(query: str, variables: dict):
+    if "comments(last:" in query:
+        number = variables.get("number")
+        last = variables.get("last")
+        if number is None or last is None:
+            return None
+        return recent_comments(int(number), int(last))
     if "projectsV2" in query:
         return {
             "data": {
@@ -160,10 +188,12 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length).decode()
         try:
-            query = json.loads(raw).get("query", "")
+            payload = json.loads(raw)
         except json.JSONDecodeError:
             return self._fail("POST body is not JSON")
-        answer = graphql(query)
+        query = payload.get("query", "")
+        variables = payload.get("variables", {}) or {}
+        answer = graphql(query, variables)
         if answer is None:
             return self._fail(f"GraphQL query not recognised: {query[:80]}")
         self._send(200, answer)

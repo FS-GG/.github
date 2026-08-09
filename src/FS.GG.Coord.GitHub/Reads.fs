@@ -656,6 +656,84 @@ module Reads =
                         (Ok [])
                     |> Result.map List.rev
 
+    [<Literal>]
+    let private RecentCommentsDoc =
+        "query($owner: String!, $repo: String!, $number: Int!, $last: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { comments(last: $last) { nodes { body } } } } rateLimit { cost remaining } }"
+
+    /// The MOST RECENT `limit` comment bodies of an issue, oldest-of-the-window first — one bounded
+    /// GraphQL call, never more (.github#2300 repair 2).
+    ///
+    /// `commentBodies`'s REST pagination is UNBOUNDED: the transport auto-follows every `Link: rel=next`
+    /// page (`Transport.fs`'s `follow`, guarded only at 100 PAGES, i.e. up to 10,000 comments), and
+    /// nothing short of exhausting the thread ever stops it — that is `.github#2300`'s own growth defect.
+    /// A delivery-route search only ever needs the LATEST matching marker
+    /// (`Client.readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute` both search from the end and take
+    /// the first hit), so it only ever needed the TAIL of the thread. This fetches exactly that tail, in
+    /// ONE HTTP round-trip, whatever the thread's true length: a GraphQL response carries no `Link`
+    /// header, so `Transport.fs`'s REST auto-pagination — which is unconditional and cannot be told to
+    /// stop early over REST (there is no per-request opt-out on `Request`, and adding one is a
+    /// `Transport.fs` change this item does not reach) — never engages here. Bounded by construction, not
+    /// by a promise a caller has to keep.
+    ///
+    /// **FAILS CLOSED WHEN THE MARKER IS OLDER THAN `limit`.** A caller that searches this list for the
+    /// latest matching marker and finds none must read that as "no receipt among the last `limit`
+    /// comments", never as "no receipt exists" — those are different facts, and `Client.fs`'s callers
+    /// both already collapse an absent match into `DeliveryRoute.Unreadable`/`Stale`, which REFUSES
+    /// scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing. So a genuinely CURRENT receipt
+    /// that some other actor buried under `limit` unrelated comments without re-affirming it reads as
+    /// missing and the item is refused — safe (never schedules on a receipt this call could not see), but
+    /// a real usability cost or a stale-looking row for that one, comment-heavy issue. That trade is
+    /// deliberate: the alternative is the unbounded read this repair exists to remove.
+    let recentCommentBodies (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) (limit: int) : IoResult<string list> =
+        let subject = $"%s{owner}/%s{repo}#%d{number} recent comments (last %d{limit})"
+
+        let request =
+            { Method = "POST"
+              Path = "graphql"
+              Query = []
+              Body =
+                Transport.Query(
+                    RecentCommentsDoc,
+                    [ "owner", Transport.VString owner
+                      "repo", Transport.VString repo
+                      "number", Transport.VNumber(double number)
+                      "last", Transport.VNumber(double limit) ]
+                )
+              Budget = GraphQl
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                try
+                    let nodes =
+                        doc.RootElement
+                            .GetProperty("data")
+                            .GetProperty("repository")
+                            .GetProperty("issue")
+                            .GetProperty("comments")
+                            .GetProperty("nodes")
+
+                    nodes.EnumerateArray()
+                    |> Seq.map (fun c ->
+                        match str c "body" with
+                        | Some body -> Ok body
+                        | None -> Error(Malformed(subject, "a comment has no readable body")))
+                    |> Seq.fold
+                        (fun state next -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) next) state)
+                        (Ok [])
+                    |> Result.map List.rev
+                with
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? System.NullReferenceException ->
+                    Error(Malformed(subject, "the recent-comments response is missing `repository.issue.comments`"))
+
     // ---- the issue body ---------------------------------------------------------------------------
 
     let issueBody (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<string> =

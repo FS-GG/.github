@@ -55,9 +55,15 @@ module SchedulingCostTests =
               Headers = Map.empty }
 
     /// One board candidate. `ForbidComments`, when set, makes the fixture ERROR OUT if this issue's
-    /// `/comments` endpoint is EVER requested — the sharp instrument for "prove growth is gone": a
+    /// `/comments` endpoint (REST) is EVER requested — the sharp instrument for "prove growth is gone": a
     /// regression that starts paying for this candidate's (hypothetically huge) comment thread fails the
     /// test immediately and explicitly, rather than merely running slower.
+    ///
+    /// `Thread`, when `Some`, is the candidate's FULL comment history, chronological oldest-first — the
+    /// single source both the REST `/comments` endpoint (still used by `Scan.snapshot`'s `markerScan`,
+    /// out of this item's `Paths:`) and the new bounded GraphQL `comments(last: N)` query serve from,
+    /// exactly as production reads both off the same underlying issue. `None` falls back to the ordinary
+    /// `WithRoute` single-marker-or-nothing shape every earlier test in this file already uses.
     type private Row =
         { Number: int
           Status: string
@@ -65,7 +71,8 @@ module SchedulingCostTests =
           Body: string
           BlockedBy: string option
           WithRoute: bool
-          ForbidComments: bool }
+          ForbidComments: bool
+          Thread: string list option }
 
     /// Each candidate declares a UNIQUE `Paths:` token (`src/item-<n>.fs`) — a shared literal across every
     /// row would make every candidate collide with every other under the OVERLAP check (step 6), which
@@ -77,7 +84,15 @@ module SchedulingCostTests =
           Body = $"Paths: src/item-%d{number}.fs"
           BlockedBy = None
           WithRoute = false
-          ForbidComments = false }
+          ForbidComments = false
+          Thread = None }
+
+    /// The candidate's full comment history, oldest first — `Thread` if the test set one explicitly,
+    /// else the legacy single-marker-or-nothing shape.
+    let private effectiveThread (r: Row) =
+        match r.Thread with
+        | Some t -> t
+        | None -> if r.WithRoute then [ currentRouteComment $"FS-GG/FS.GG.SDD#%d{r.Number}" r.Body ] else []
 
     let private graphqlAnswer (items: string) (query: string) : string option =
         if query.Contains "projectsV2" then
@@ -125,9 +140,50 @@ module SchedulingCostTests =
                 else
                     None
 
+            /// The GraphQL body variable helper — `req.Body`'s `Query(document, variables)` carries
+            /// `variables` as a typed `(string * Var) list`, not serialized JSON, so this reads them
+            /// directly rather than re-parsing a payload.
+            let numberVar (variables: (string * Var) list) =
+                variables
+                |> List.tryFind (fun (k, _) -> k = "number")
+                |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+            let lastVar (variables: (string * Var) list) =
+                variables
+                |> List.tryFind (fun (k, _) -> k = "last")
+                |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
             match req.Method, path with
             | "POST", "graphql" ->
                 match req.Body with
+                | Query(document, variables) when document.Contains "comments(last:" ->
+                    // `Reads.recentCommentBodies` — .github#2300 repair 2. Honour `last` for real (a
+                    // fixture that ignored it and always returned everything would validate nothing about
+                    // the fail-closed-beyond-the-bound case), and match the exact "tail of the list"
+                    // semantics the Relay `last:` connection argument has: the most recent `last` items,
+                    // still oldest-of-that-window first.
+                    match numberVar variables, lastVar variables with
+                    | Some n, Some last ->
+                        match Map.tryFind n byNumber with
+                        | Some r when r.ForbidComments ->
+                            Error(Errors.NotFound $"#2300 AC4: the route GraphQL read for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds")
+                        | Some r ->
+                            let recent =
+                                effectiveThread r
+                                |> List.rev
+                                |> List.truncate last
+                                |> List.rev
+                                |> List.map (fun body -> {| body = body |})
+                                |> JsonSerializer.Serialize
+
+                            let payload =
+                                "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                + recent
+                                + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                            ok payload
+                        | None -> Error(Errors.NotFound $"no thread fixture for #%d{n}")
+                    | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/repo/number/last variables: %A{variables}")
                 | Query(document, _) ->
                     match graphqlAnswer itemsDoc document with
                     | Some answer -> ok answer
@@ -147,18 +203,17 @@ module SchedulingCostTests =
                 | Some r when r.ForbidComments ->
                     Error(Errors.NotFound $"#2300 AC4: /comments for #%d{n} must NEVER be requested — this candidate is rejected on locally-known grounds")
                 | Some r ->
-                    let route =
-                        if r.WithRoute then
-                            [ JsonSerializer.Serialize
-                                  {| id = 7000 + n
-                                     body = currentRouteComment $"FS-GG/FS.GG.SDD#%d{n}" r.Body
-                                     user = {| login = "EHotwagner" |}
-                                     created_at = "2026-01-01T00:00:00Z"
-                                     updated_at = "2026-01-01T00:00:00Z" |} ]
-                        else
-                            []
+                    let comments =
+                        effectiveThread r
+                        |> List.mapi (fun i body ->
+                            JsonSerializer.Serialize
+                                {| id = 7000 + n * 1000 + i
+                                   body = body
+                                   user = {| login = "EHotwagner" |}
+                                   created_at = "2026-01-01T00:00:00Z"
+                                   updated_at = "2026-01-01T00:00:00Z" |})
 
-                    ok ("[" + String.concat "," route + "]")
+                    ok ("[" + String.concat "," comments + "]")
                 | None -> Error(Errors.NotFound $"no comments fixture for #%d{n}")
             | ("GET" | "PATCH"), _ when (issueNumber "").IsSome ->
                 let n = (issueNumber "").Value
@@ -254,6 +309,13 @@ module SchedulingCostTests =
     let private readsFor (transport: Fake.Recorder) (n: int) =
         countExact transport $"issue-get FS-GG/FS.GG.SDD %d{n}", countExact transport $"comment-list FS-GG/FS.GG.SDD %d{n}"
 
+    /// How many times the BOUNDED GraphQL route read (`Reads.recentCommentBodies`, repair 2) fired for
+    /// this candidate — the log line `Fake.fs`'s `describe` renders for any GraphQL call it does not
+    /// otherwise classify: `"graphql " + request.Subject`, and `Reads.recentCommentBodies`'s own subject
+    /// names the issue and the window.
+    let private routeGraphQlCalls (transport: Fake.Recorder) (n: int) =
+        countExact transport $"graphql FS-GG/FS.GG.SDD#%d{n} recent comments (last 100)"
+
     // ---- AC1/AC2 — bounded by the SCHEDULABLE set, not the candidate set --------------------------------
 
     [<Fact>]
@@ -272,20 +334,22 @@ module SchedulingCostTests =
         Assert.Equal(0, code)
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
 
-        // Zero REST for every one of the 40 closed rows: `issue-get`/`comment-list` never appear for
-        // them, and only the ONE schedulable candidate's route (plus the fixed board-bootstrap and
-        // bulk-issue-list overhead) is paid.
+        // Zero REST AND zero GraphQL for every one of the 40 closed rows: neither `issue-get`/`comment-list`
+        // (Scan.snapshot's kind of read) nor the bounded route GraphQL call ever appear for them.
         for n in 1..40 do
             let gets, comments = readsFor transport n
             Assert.Equal(0, gets)
             Assert.Equal(0, comments)
+            Assert.Equal(0, routeGraphQlCalls transport n)
 
         // The schedulable candidate's route WAS read for real (AC3: the gate still consults a receipt
-        // when one could matter) — TWICE, once from `Scan.snapshot`'s own unconditional per-open-row read
-        // (needed to build the `inFlight` lock set; out of this item's `Paths:`) and once from
-        // `enrichDeliveryRoutes`. Both calls are pre-existing/expected for a candidate whose real answer
-        // matters; nothing here claims to remove either of them for #999.
-        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        // when one could matter): ONE REST `comment-list`, from `Scan.snapshot`'s own unconditional
+        // per-open-row read (needed to build the `inFlight` lock set; out of this item's `Paths:`), and
+        // ONE bounded GraphQL call, from `enrichDeliveryRoutes` via the repair-2 route read. Repair 2
+        // moved the SECOND read from REST to GraphQL; it did not remove it — the candidate whose real
+        // answer matters still gets one.
+        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        Assert.Equal(1, routeGraphQlCalls transport 999)
 
     [<Fact>]
     let ``#2300 AC1/AC2: candidates rejected on column, blocker, or human grounds pay at most ONE issue read each, not two`` () =
@@ -310,25 +374,29 @@ module SchedulingCostTests =
         Assert.Contains("FS-GG/FS.GG.SDD#999", out)
 
         for n in (wrongStatus @ blocked) |> List.map (fun r -> r.Number) do
-            // AT MOST ONE, not zero: `Scan.snapshot`'s own unconditional read is out of this item's
-            // reach. The property under test is that it is not TWO.
+            // AT MOST ONE REST comment read, not zero: `Scan.snapshot`'s own unconditional read is out of
+            // this item's reach. The property under test is that it is not TWO — and the bounded GraphQL
+            // route call must be zero, since these candidates never reach `enrichDeliveryRoutes` at all.
             let gets, comments = readsFor transport n
             Assert.Equal(1, gets)
             Assert.Equal(1, comments)
+            Assert.Equal(0, routeGraphQlCalls transport n)
 
-        // The schedulable candidate still gets its real route read (twice — once from each of the two
-        // independent call sites, exactly as before this fix; this item narrows WHO pays the cost, not
-        // whether the one candidate that needs an answer gets one).
-        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        // The schedulable candidate still gets its real route read: one REST `comment-list`
+        // (`Scan.snapshot`) and one bounded GraphQL call (`enrichDeliveryRoutes`'s repair-2 route read) —
+        // this item narrows WHO pays the cost and WHICH BUDGET it lands on, not whether the one candidate
+        // that needs an answer gets one.
+        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 999")
+        Assert.Equal(1, routeGraphQlCalls transport 999)
 
     // ---- AC4 (sharpened): growth in comment-thread size does not grow scan cost for a rejected row -----
 
     [<Fact>]
     let ``#2300 AC4: a rejected candidate's own comment-thread size cannot affect scan cost`` () =
         // The sharpest form of "prove the growth is gone": a candidate marked `ForbidComments` makes the
-        // fixture ERROR if its `/comments` endpoint is ever hit, however large that thread would have
-        // been. If the fix regresses to reading it, this fails LOUDLY and immediately rather than merely
-        // running slower on a bigger fixture.
+        // fixture ERROR if its `/comments` endpoint OR its bounded route GraphQL call is ever hit, however
+        // large that thread would have been. If the fix regresses to reading it, this fails LOUDLY and
+        // immediately rather than merely running slower on a bigger fixture.
         let hugeThreadClosed = { candidate 500 "Done" "CLOSED" with ForbidComments = true }
         let ordinary = [ 1..5 ] |> List.map (fun n -> candidate n "In progress" "OPEN")
 
@@ -341,6 +409,7 @@ module SchedulingCostTests =
         let gets, comments = readsFor transport 500
         Assert.Equal(0, gets)
         Assert.Equal(0, comments)
+        Assert.Equal(0, routeGraphQlCalls transport 500)
 
     [<Fact>]
     let ``#2300 repair 1: a human-held candidate never pays a delivery-route read, however stale its receipt would be`` () =
@@ -372,6 +441,7 @@ module SchedulingCostTests =
         let gets, comments = readsFor transport 77
         Assert.Equal(1, gets)
         Assert.Equal(1, comments)
+        Assert.Equal(0, routeGraphQlCalls transport 77)
 
     // ---- AC3 — the gate still fails closed ---------------------------------------------------------------
 
@@ -388,10 +458,12 @@ module SchedulingCostTests =
 
         let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
 
-        // The real route WAS consulted (once from `Scan.snapshot`, once from `enrichDeliveryRoutes` —
-        // same accounting as the schedulable candidate above) even though it decided nothing: this is the
-        // read AC3 requires, distinct from the reads AC1/AC2 remove.
-        Assert.Equal(2, countExact transport "comment-list FS-GG/FS.GG.SDD 42")
+        // The real route WAS consulted (one REST `comment-list` from `Scan.snapshot`, one bounded GraphQL
+        // call from `enrichDeliveryRoutes` — same accounting as the schedulable candidate above) even
+        // though it decided nothing: this is the read AC3 requires, distinct from the reads AC1/AC2
+        // remove.
+        Assert.Equal(1, countExact transport "comment-list FS-GG/FS.GG.SDD 42")
+        Assert.Equal(1, routeGraphQlCalls transport 42)
 
         // NEVER CHOSEN, and the refusal names the delivery route as the reason — the fail-closed behaviour
         // is unchanged by this fix. `batch --json` exits 0 on an empty-but-valid result (the same
@@ -401,3 +473,68 @@ module SchedulingCostTests =
         Assert.Equal("[]", out.Trim())
         Assert.Contains("FS.GG.SDD#42", err)
         Assert.Contains("delivery-route", err)
+
+    // ---- Repair 2: the route search is bounded by construction, not by a promise --------------------
+
+    [<Fact>]
+    let ``#2300 repair 2: a route search costs the SAME one GraphQL call whether the thread has 1 comment or 251`` () =
+        // "Prove the growth is gone, not the constant" — the sharpened form the host held this repair to.
+        // Construct a candidate whose comment thread crosses at least two of the OLD REST `per_page=100`
+        // pages, and show the bounded read costs no more than a one-comment candidate. The recorded
+        // marker sits as the very LAST of 251 comments — recent, so a "last 100" fetch finds it without
+        // difficulty; the point under test here is the CALL COUNT, not recall (that is repair 2's other
+        // test, below).
+        let deepButRecent =
+            let marker = currentRouteComment "FS-GG/FS.GG.SDD#600" "Paths: src/item-600.fs"
+            let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
+            { candidate 600 "Ready" "OPEN" with Thread = Some(noise @ [ marker ]) }
+
+        let shallow = schedulableRow 999
+
+        let transport = world [ deepButRecent; shallow ]
+
+        let code, out, _ = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "2"; "--json" ]
+
+        Assert.Equal(0, code)
+        // BOTH are found and scheduled — the 251-comment thread's marker was still recent enough.
+        Assert.Contains("FS-GG/FS.GG.SDD#600", out)
+        Assert.Contains("FS-GG/FS.GG.SDD#999", out)
+
+        // THE PROOF: identical call count, 251 comments or 1. Cost does not scale with thread length.
+        Assert.Equal(1, routeGraphQlCalls transport 600)
+        Assert.Equal(1, routeGraphQlCalls transport 999)
+
+    [<Fact>]
+    let ``#2300 repair 2: a receipt older than the window reads as missing, refuses the row, and never falls back to an unbounded scan`` () =
+        // The fail-closed consequence the host asked to be made explicit — proven, not argued. The route
+        // marker here is the FIRST of 251 comments: 151 comments older than the trailing 100-wide window
+        // `Reads.recentCommentBodies` fetches, so the bounded read genuinely cannot see it. A receipt this
+        // is — a real, valid one, just buried — is exactly the case `Client.fs`'s `DeliveryRouteCommentWindow`
+        // doc comment names: it reads as no receipt, and the row is refused rather than guessed at.
+        let buriedMarker =
+            let marker = currentRouteComment "FS-GG/FS.GG.SDD#700" "Paths: src/item-700.fs"
+            let noise = List.init 250 (fun i -> $"unrelated discussion comment %d{i}")
+            { candidate 700 "Ready" "OPEN" with Thread = Some(marker :: noise) }
+
+        let transport = world [ buriedMarker ]
+
+        let code, out, err = runQueue transport [ "batch"; "--repo"; "FS.GG.SDD"; "-n"; "1"; "--json" ]
+
+        // REFUSED — the safe direction, exactly AC3's guarantee, now exercised on a receipt that is
+        // genuinely present but outside the window, rather than on one that is absent altogether.
+        Assert.Equal(0, code)
+        Assert.Equal("[]", out.Trim())
+        Assert.Contains("FS.GG.SDD#700", err)
+        Assert.Contains("delivery-route", err)
+
+        // BOUNDED EVEN ON A MISS: exactly one GraphQL call — never a retry, and never a fallback to the
+        // unbounded REST search this repair exists to remove. `gets` is 2, not 1: `readDeliveryRouteVerdict`
+        // still reads the issue BODY over REST (unchanged by repair 2, only the comment search moved to
+        // GraphQL), on top of `Scan.snapshot`'s own unavoidable `issue-get` (out of this item's `Paths:`)
+        // — this candidate is NOT locally rejected, so both fire, same as every other schedulable-reaching
+        // candidate in this file. `comments` stays 1: the only REST `/comments` call left is
+        // `Scan.snapshot`'s `markerScan`.
+        Assert.Equal(1, routeGraphQlCalls transport 700)
+        let gets, comments = readsFor transport 700
+        Assert.Equal(2, gets)
+        Assert.Equal(1, comments)
