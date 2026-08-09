@@ -24,7 +24,7 @@ module DeliveryTests =
           Worktree = "/worktrees/2131"
           PullRequest = Some 99
           HeadSha = head
-          DeclaredPaths = [ "src/FS.GG.Coord.Core" ]
+          DeclaredPaths = Delivery.Known [ "src/FS.GG.Coord.Core" ]
           BoardState = "In progress" }
 
     let snapshot head : Delivery.Snapshot =
@@ -149,3 +149,146 @@ module DeliveryTests =
                 PendingWrites = 0
                 CleanupEligible = true }
         transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminal)
+
+    // -- .github#2233: `Unreadable` no longer collapses into the same `[]` a genuine omission answers --
+
+    [<Fact>]
+    let ``#2233 an unread touch-set names the read as the failure`` () =
+        let unread =
+            { snapshot "head-a" with
+                Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Unread "issue body fetch timed out" } }
+        match Delivery.inspect unread with
+        | Delivery.NoVerdict reason ->
+            Assert.Contains("were not read", reason)
+            Assert.Contains("issue body fetch timed out", reason)
+        | result -> failwithf "expected no-verdict, got %A" result
+
+    [<Fact>]
+    let ``#2233 a genuine paths-less item still answers the omission reason it answered before this change`` () =
+        let empty =
+            { snapshot "head-a" with
+                Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Known [] } }
+        match Delivery.inspect empty with
+        | Delivery.NoVerdict reason -> Assert.Equal("delivery facts are incomplete: declared paths", reason)
+        | result -> failwithf "expected no-verdict, got %A" result
+
+    [<Fact>]
+    let ``#2233 an unread touch-set and a genuine omission answer different NoVerdict reasons`` () =
+        let unreadReason =
+            match Delivery.inspect { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Unread "issue body fetch timed out" } } with
+            | Delivery.NoVerdict reason -> reason
+            | result -> failwithf "expected no-verdict, got %A" result
+        let omittedReason =
+            match Delivery.inspect { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Known [] } } with
+            | Delivery.NoVerdict reason -> reason
+            | result -> failwithf "expected no-verdict, got %A" result
+        Assert.NotEqual<string>(unreadReason, omittedReason)
+
+    [<Fact>]
+    let ``#2233 an unread touch-set at a terminal snapshot does not block cleanup`` () =
+        // A stamped, closed, claim-released item has nothing left to touch; CleanupWorktree does not
+        // need to know what it once reserved, so an `Unread` (or `Known []`) fact must not block it.
+        let terminalButUnread =
+            { snapshot "head-a" with
+                Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Unread "issue body fetch timed out" }
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true }
+        transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalButUnread)
+
+    [<Fact>]
+    let ``#2233 a freshness token computed over Unread differs from one computed over Known empty`` () =
+        let known = { freshness "head-a" with DeclaredPaths = Delivery.Known [] }
+        let unread = { freshness "head-a" with DeclaredPaths = Delivery.Unread "issue body fetch timed out" }
+        Assert.NotEqual<string>(Delivery.freshnessToken known, Delivery.freshnessToken unread)
+
+    [<Fact>]
+    let ``#2233 the case is folded in, not just the text — an Unread reason cannot collide with the Known path it textually matches`` () =
+        // Without a case tag, `Unread "shared text"` and `Known [ "shared text" ]` fold to the exact
+        // same joined string, so this is the collision the case fold exists to prevent.
+        let known = { freshness "head-a" with DeclaredPaths = Delivery.Known [ "shared text" ] }
+        let unread = { freshness "head-a" with DeclaredPaths = Delivery.Unread "shared text" }
+        Assert.NotEqual<string>(Delivery.freshnessToken known, Delivery.freshnessToken unread)
+
+    [<Fact>]
+    let ``#2233 a freshness token distinguishes two different unread reasons`` () =
+        let timedOut = { freshness "head-a" with DeclaredPaths = Delivery.Unread "issue body fetch timed out" }
+        let rateLimited = { freshness "head-a" with DeclaredPaths = Delivery.Unread "rate limited" }
+        Assert.NotEqual<string>(Delivery.freshnessToken timedOut, Delivery.freshnessToken rateLimited)
+
+    [<Fact>]
+    let ``#2233 a receipt minted from a read fact cannot be redeemed against an unread one`` () =
+        // Both snapshots are terminal/CleanupEligible so DeclaredPaths never blocks `inspect` itself for
+        // either — the only thing that can differ between them is the freshness token, which is exactly
+        // what `advance` re-checks before authorizing the SAME transition off newer facts.
+        let terminal (snapshot: Delivery.Snapshot) =
+            { snapshot with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true }
+        let read =
+            terminal { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = Delivery.Known [ "src" ] } }
+        let receipt =
+            match Delivery.inspect read with
+            | Delivery.Next transition -> transition
+            | result -> failwithf "expected a receipt, got %A" result
+        let sameShapeButUnread =
+            { read with Freshness = { read.Freshness with DeclaredPaths = Delivery.Unread "issue body fetch timed out" } }
+        match Delivery.advance receipt.FreshnessToken receipt.ActionKey sameShapeButUnread with
+        | Delivery.NoVerdict reason -> Assert.Contains("stale", reason)
+        | result -> failwithf "expected a stale receipt refusal, got %A" result
+
+    // -- repair round 1 (critic `crake-0420`, PR #2301): acceptance 4's full three-way distinction --
+
+    let private noVerdictReason (declaredPaths: Delivery.DeclaredPaths) =
+        match Delivery.inspect { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } } with
+        | Delivery.NoVerdict reason -> reason
+        | result -> failwithf "expected no-verdict, got %A" result
+
+    [<Fact>]
+    let ``#2233 DeclaredNone, Undeclared and Unread each answer their own NoVerdict reason`` () =
+        let declaredNoneReason = noVerdictReason Delivery.DeclaredNone
+        let undeclaredReason = noVerdictReason Delivery.Undeclared
+        let unreadReason = noVerdictReason (Delivery.Unread "issue body fetch timed out")
+        // Pairwise distinct: a worker can tell which of the three it is without opening the issue body.
+        Assert.NotEqual<string>(declaredNoneReason, undeclaredReason)
+        Assert.NotEqual<string>(declaredNoneReason, unreadReason)
+        Assert.NotEqual<string>(undeclaredReason, unreadReason)
+        // Only the unread reason blames the read; the other two name the item's own read state.
+        Assert.Contains("were not read", unreadReason)
+        Assert.DoesNotContain("were not read", declaredNoneReason)
+        Assert.DoesNotContain("were not read", undeclaredReason)
+        Assert.Contains("Paths: none", declaredNoneReason)
+        Assert.Contains("no Paths: line", undeclaredReason)
+
+    [<Fact>]
+    let ``#2233 a freshness token distinguishes DeclaredNone from Undeclared from Known empty`` () =
+        let declaredNone = { freshness "head-a" with DeclaredPaths = Delivery.DeclaredNone }
+        let undeclared = { freshness "head-a" with DeclaredPaths = Delivery.Undeclared }
+        let known = { freshness "head-a" with DeclaredPaths = Delivery.Known [] }
+        let tokens = [ Delivery.freshnessToken declaredNone; Delivery.freshnessToken undeclared; Delivery.freshnessToken known ]
+        Assert.Equal(3, tokens |> List.distinct |> List.length)
+
+    [<Fact>]
+    let ``#2233 DeclaredNone and Undeclared at a terminal snapshot do not block cleanup either`` () =
+        let terminal (snapshot: Delivery.Snapshot) =
+            { snapshot with
+                Merged = true
+                MergeReachable = true
+                IssueClosed = true
+                BoardDone = true
+                ClaimReleased = true
+                PendingWrites = 0
+                CleanupEligible = true }
+        for declaredPaths in [ Delivery.DeclaredNone; Delivery.Undeclared ] do
+            let terminalSnapshot =
+                terminal { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } }
+            transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalSnapshot)

@@ -47,15 +47,35 @@ module DeliveryApplication =
         | JsonValueKind.Null -> None
         | _ -> Some(readInteger name element)
 
-    let private readStrings (name: string) (element: JsonElement) : string list =
-        let value = required name element
-        if value.ValueKind <> JsonValueKind.Array then invalidArg name "must be an array"
-        value.EnumerateArray()
-        |> Seq.map (fun item ->
-            if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
-                invalidArg name "must contain non-empty strings"
-            item.GetString())
-        |> List.ofSeq
+    /// `declaredPaths` accepts its original wire shape — a plain array of strings, read as tokens
+    /// actually declared — or one of three tagged objects distinguishing the ways a touch-set can be
+    /// empty-ish (.github#2233 acceptance 4): `{"declaredNone": true}` (an explicit, read `Paths:
+    /// none`), `{"undeclared": true}` (a read body with no `Paths:` line at all), or `{"unread":
+    /// "<reason>"}` (the body was never read). The array form stays byte-for-byte what every existing
+    /// producer (including `tests/coord-engine-e2e/writes.sh`, outside this item's declared `Paths:`)
+    /// already emits, so this is additive rather than a breaking wire change.
+    let private declaredPaths (element: JsonElement) : Delivery.DeclaredPaths =
+        let value = required "declaredPaths" element
+        match value.ValueKind with
+        | JsonValueKind.Array ->
+            let paths =
+                value.EnumerateArray()
+                |> Seq.map (fun item ->
+                    if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
+                        invalidArg "declaredPaths" "must contain non-empty strings"
+                    item.GetString())
+                |> List.ofSeq
+            Delivery.Known paths
+        | JsonValueKind.Object ->
+            if fst (value.TryGetProperty "unread") then
+                Delivery.Unread(readString "unread" value)
+            elif fst (value.TryGetProperty "declaredNone") then
+                Delivery.DeclaredNone
+            elif fst (value.TryGetProperty "undeclared") then
+                Delivery.Undeclared
+            else
+                invalidArg "declaredPaths" "object must be {\"unread\": reason}, {\"declaredNone\": true}, or {\"undeclared\": true}"
+        | _ -> invalidArg "declaredPaths" "must be an array of paths or a tagged object naming why it has none"
 
     let private readOptionalString (name: string) (element: JsonElement) : string option =
         let value = required name element
@@ -232,7 +252,7 @@ module DeliveryApplication =
                   Worktree = readString "worktree" freshnessElement
                   PullRequest = readOptionalInteger "pullRequest" freshnessElement
                   HeadSha = readString "headSha" freshnessElement
-                  DeclaredPaths = readStrings "declaredPaths" freshnessElement
+                  DeclaredPaths = declaredPaths freshnessElement
                   BoardState = readString "boardState" freshnessElement }
             Ok
                 { Freshness = freshness
