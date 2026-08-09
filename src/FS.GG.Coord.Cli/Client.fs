@@ -500,13 +500,53 @@ module Client =
               Agent = "offline"; Timestamp = "1970-01-01T00:00:00Z"; ReasonCodes = [ "offline" ]; Rationale = "offline diagnostic"
               DeclaredImpacts = [ "offline" ]; ObservedFacts = [ "offline" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
 
+    /// .github#2300 AC1/AC2/AC4: is this candidate's schedulability verdict ALREADY DECIDED by steps
+    /// that run strictly before the route check, so the real delivery-route receipt could not change it?
+    ///
+    /// `Schedulability.schedulable`'s own ordering comment (step "3c. DELIVERY ROUTE") places the route
+    /// match arm AFTER issue state (1), board column (2), blockers (3), and the human hold (3b) — every
+    /// one of which is already a known, free fact by the time a candidate reaches here (`Snapshot.parse`
+    /// plus the board scan `enrichBoardFacts` already ran). So this previews `schedulable` against a
+    /// NEUTRAL placeholder route: `offlineDeliveryRoute` is already `Current`, so it can never itself be
+    /// the reason the preview stops, and the four cases matched below are exactly the verdicts steps
+    /// 1-3b can produce on their own. `inFlight = []` for the same reason — every step this preview can
+    /// reach (1 through 3b) reads neither `item.TouchSet` nor the lock/overlap facts.
+    ///
+    /// A preview verdict OUTSIDE those four cases means steps 1-3b did NOT already decide the item —
+    /// touch-set, lock, or the route itself still could — so the real receipt is read for real (AC3: the
+    /// gate still fails closed for a genuinely schedulable row with a missing/stale/unreadable receipt).
+    let private routeCannotChangeVerdict (allowBacklog: bool) (item: Item) : bool =
+        match Schedulability.schedulable allowBacklog [] { item with DeliveryRoute = offlineDeliveryRoute } with
+        | Schedulability.IssueClosed
+        | Schedulability.WrongStatus _
+        | Schedulability.BlockedBy _
+        | Schedulability.AwaitingHuman _ -> true
+        | _ -> false
+
+    /// THE FIX FOR .github#2300. Before this, every candidate — closed, `Blocked`, `Backlog`-without-opt-
+    /// in, all of them — paid `readDeliveryRouteVerdict`'s two REST reads (`issueBody` plus a
+    /// `commentBodies` that PAGINATES with how much protocol traffic the issue has accumulated, comment
+    /// 4) whether or not the eventual decision would ever consult the answer. On an 887-candidate board
+    /// where the overwhelming majority are exactly those already-decided rows, that is the whole of the
+    /// measured cost.
+    ///
+    /// A candidate `routeCannotChangeVerdict` clears is left UNENRICHED, deliberately: its
+    /// `Item.DeliveryRoute` keeps whatever `Snapshot.parse` defaulted it to (`Unreadable [...]`, read by
+    /// nobody), because `Batch.scheduleWith`'s real `Schedulability.schedulable` call on this same item
+    /// hits the identical early exit and never reaches its own route match arm either. The two engines
+    /// cannot disagree because they are the SAME function, run twice on the same inputs at two different
+    /// times — a preview now, the real decision in `renderLiveDecision` — never two rules that could
+    /// drift (#485).
     let private enrichDeliveryRoutes (ctx: Context) (request: Snapshot.Request) =
         { request with
             Candidates =
                 request.Candidates
                 |> List.map (fun candidate ->
-                    let route = readDeliveryRouteVerdict ctx candidate.Item.Ref
-                    { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
+                    if routeCannotChangeVerdict request.AllowBacklog candidate.Item then
+                        candidate
+                    else
+                        let route = readDeliveryRouteVerdict ctx candidate.Item.Ref
+                        { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
 
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
