@@ -436,6 +436,26 @@ if [ "$partition_ok" -eq 1 ]; then
   done
   [ "$rfail" -eq 0 ] && ok "staleness: every read verb the shim declares still runs (with a warning) on a stale engine —$permitted"
 
+  # `delivery-route` is deliberately conditional: validate/show are evidence reads, while record posts a
+  # receipt. The stale guard receives the first subcommand token, so pin both read spellings as
+  # warning-but-run and the record spelling as refusal-before-engine; a new top-level command cannot hide
+  # a write arm behind its friendly read modes.
+  for route_read in "delivery-route validate FS.GG.SDD#70 receipt.json" "delivery-route show FS.GG.SDD#70"; do
+    out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN $SHIM $route_read 2>/dev/null)"; rc=$?
+    err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN $SHIM $route_read 2>&1 >/dev/null)"
+    if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' && printf '%s' "$err" | grep -qi stale; then
+      ok "staleness: stale $route_read warns and runs as a delivery-route read"
+    else
+      bad "staleness: stale $route_read must warn and run" "rc=$rc out=$out err=$err"
+    fi
+  done
+  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" delivery-route record FS.GG.SDD#70 receipt.json 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' && printf '%s' "$out" | grep -qi refused; then
+    ok "staleness: delivery-route record is refused before its receipt write"
+  else
+    bad "staleness: stale delivery-route record must be refused before write" "rc=$rc out=$out"
+  fi
+
   # THE PAIR THAT STARTED IT (.github#1528). `widen` and `set-paths` are one function — both reach
   # `Writes.widen` through `updateTouchSet` — and the guard covered only `widen`. Asserted by NAME as well
   # as by the loop above, because the loop's subject is whatever the shim says and this leg's subject is the
