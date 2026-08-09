@@ -402,10 +402,12 @@ module Client =
     let private deliveryRouteRevision (body: string) =
         body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
-    /// Static receipt validation proves that an SDD route says which work package it governs.  This
-    /// boundary also consumes the package's live readiness evidence before allowing the route to make a
-    /// board item schedulable or writable.  A deleted work/spec, an analysis for another work id, or a
-    /// non-ready analysis is stale evidence, never permission to fall back to lightweight behaviour.
+    /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
+    /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
+    /// (#2298): requiring it to be true before the receipt records or the item schedules made `sdd-required`
+    /// permanently unreachable for any item that does not already carry a package, because the only actor
+    /// positioned to author that package — a CLAIMED WORKER, inside a worktree, via `fsgg-sdd` — could never
+    /// get claimed to do so. `sddEvidenceErrors` is reported (by `record` and `show`) but never refuses.
     /// Decode the current SDD analysis fact for the named work.  The route boundary owns this one
     /// interpretation so a `workId` substitution and an unready analysis cannot be accepted on one
     /// command path while another merely checks that JSON was present.
@@ -421,8 +423,9 @@ module Client =
               | _ -> yield "sdd readiness status is not implementationReady" ]
         with error -> [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
 
-    /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof used by
+    /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
     /// route reads and route recording, so the test can pin both the current and missing-work inversions.
+    /// ADVISORY ONLY (#2298) — see the doc comment above. Never fed back into a `DeliveryRoute.Verdict`.
     let sddEvidenceErrors (receipt: DeliveryRoute.Receipt) =
         match receipt.Route, receipt.SddWorkId, receipt.SpecHome with
         | Some DeliveryRoute.SddRequired, Some workId, Some specHome ->
@@ -450,14 +453,6 @@ module Client =
                   yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
         | _ -> []
 
-    let private bindSddEvidence verdict =
-        match verdict with
-        | DeliveryRoute.Current receipt ->
-            match sddEvidenceErrors receipt with
-            | [] -> verdict
-            | errors -> DeliveryRoute.Stale errors
-        | _ -> verdict
-
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
@@ -475,7 +470,6 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
             DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
-            |> bindSddEvidence
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -494,7 +488,7 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
 
-            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt |> bindSddEvidence with
+            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
@@ -8338,12 +8332,14 @@ module Client =
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            match DeliveryRoute.decide target.Canonical (Some revision) receipt |> bindSddEvidence with
+            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
             | DeliveryRoute.Current valid -> Ok(valid, revision)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
 
-    let private deliveryRouteCmd (ctx: Context) (opts: Options) : int =
+    /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
+    /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
+    let deliveryRouteCmd (ctx: Context) (opts: Options) : int =
         let target arg = parseRef ctx arg
         match opts.Args with
         | [ "show"; arg ] ->
@@ -8358,7 +8354,11 @@ module Client =
                         | Some DeliveryRoute.Lightweight -> "lightweight"
                         | Some DeliveryRoute.SddRequired -> "sdd-required"
                         | None -> ""
-                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; route = route; reasonCodes = receipt.ReasonCodes |})
+                    // #2298: the SDD package's on-disk readiness is reported, not enforced here — the
+                    // claimed worker is the actor who completes it, and this command must stay readable
+                    // (and postable, below) before that worker exists.
+                    let sddNotes = sddEvidenceErrors receipt
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
                     ExitGreen
         | [ "record"; arg; path ] ->
             match target arg with
@@ -8377,18 +8377,26 @@ module Client =
                             eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
                             ExitError
                         | Ok valid ->
-                            match sddEvidenceErrors valid with
-                            | errors when not (List.isEmpty errors) ->
-                                let detail = String.concat "; " errors
-                                eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
-                                ExitError
-                            | _ ->
-                                let marker = DeliveryRouteMarker + "\n" + raw.Trim()
-                                match Writes.postIssueComment ctx.Transport ref marker with
-                                | Error error -> fail error
-                                | Ok commentId ->
-                                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId |})
-                                    ExitGreen
+                            // #2298: an `sdd-required` decision records on the strength of the AGENT'S
+                            // explicit, structurally valid receipt alone.  The coordinator authoring it
+                            // holds no worktree and cannot produce `work/<id>/spec.md` or the readiness
+                            // analysis (SB-002 of work/2137-delivery-route/spec.md: fsgg-coord does not
+                            // author SDD specifications). Requiring that package to exist here made
+                            // `sdd-required` permanently unrecordable for any item that did not already
+                            // carry one — the deadlock this fix removes. The evidence is still read and
+                            // reported so the ledger carries the honest state at record time; it never
+                            // refuses the write. The claimed worker owns completing it, before touching
+                            // the item's declared `Paths:` (see `.claude/skills/pnext-item` step 1).
+                            let sddNotes = sddEvidenceErrors valid
+                            if not (List.isEmpty sddNotes) then
+                                let detail = String.concat "; " sddNotes
+                                eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
+                            let marker = DeliveryRouteMarker + "\n" + raw.Trim()
+                            match Writes.postIssueComment ctx.Transport ref marker with
+                            | Error error -> fail error
+                            | Ok commentId ->
+                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                                ExitGreen
                 with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
         | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
 

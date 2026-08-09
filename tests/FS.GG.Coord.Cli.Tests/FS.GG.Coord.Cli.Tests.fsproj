@@ -34,6 +34,7 @@
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
     <Compile Include="ForceStealTests.fs" />
+    <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
