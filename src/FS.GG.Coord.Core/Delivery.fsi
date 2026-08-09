@@ -22,6 +22,16 @@ module Delivery =
           HeadSha: string
           Verified: bool }
 
+    /// A decision-boundary touch-set fact. `Known []` is a GENUINE, read omission — a chore's empty
+    /// reservation, an explicit `Paths: none`, and a body with no `Paths:` line at all are all `Known
+    /// []` here, because none of those differences change what a decision may safely do with an empty
+    /// list. `Unread reason` is a fact nobody looked at, and it is not, and must never be supplied as,
+    /// `Known []`: a caller that has not read the touch-set has to say so, or a decision boundary would
+    /// treat a fact it never saw as a confident reservation of nothing (.github#2233).
+    type DeclaredPaths =
+        | Known of string list
+        | Unread of reason: string
+
     /// Facts which must stay identical between inspection and a following mutating transition.
     type Freshness =
         { ItemRef: string
@@ -32,7 +42,7 @@ module Delivery =
           /// None while the claimed work has not reached a reviewable pull request.
           PullRequest: int option
           HeadSha: string
-          DeclaredPaths: string list
+          DeclaredPaths: DeclaredPaths
           BoardState: string }
 
     /// The complete delivery fact set read by the application/GitHub boundary.

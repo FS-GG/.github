@@ -1341,15 +1341,24 @@ module Client =
                     | Error error, _ -> fail error
                     | _, Error error -> fail error
                     | Ok marker, Ok pending ->
+                        // `Unreadable` no longer collapses into the SAME `[]` a genuine omission answers
+                        // (.github#2233): a body nobody read becomes `Delivery.Unread`, never
+                        // `Delivery.Known []`, so `Delivery.validate` can name the read, not the item, as
+                        // the failure. `DeclaredNone` and `Undeclared` stay `Known []` — both are facts
+                        // actually read off the body, and the difference between "deliberately none" and
+                        // "never declared" is Schedulability's distinction (`NoTouchSet` vs
+                        // `DeliberatelyNoTouchSet`), not this decision boundary's.
                         let declaredPaths =
                             match candidate.Item.TouchSet with
                             | Declared tokens ->
-                                tokens
-                                |> List.map (function | Matchable value | Unmatchable value -> value)
-                            | DeclaredChore -> [ "any" ]
+                                Delivery.Known(
+                                    tokens
+                                    |> List.map (function | Matchable value | Unmatchable value -> value)
+                                )
+                            | DeclaredChore -> Delivery.Known [ "any" ]
                             | DeclaredNone
-                            | Undeclared
-                            | Unreadable _ -> []
+                            | Undeclared -> Delivery.Known []
+                            | Unreadable reason -> Delivery.Unread reason
 
                         let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
                             match opts.Pr with

@@ -47,15 +47,25 @@ module DeliveryApplication =
         | JsonValueKind.Null -> None
         | _ -> Some(readInteger name element)
 
-    let private readStrings (name: string) (element: JsonElement) : string list =
-        let value = required name element
-        if value.ValueKind <> JsonValueKind.Array then invalidArg name "must be an array"
-        value.EnumerateArray()
-        |> Seq.map (fun item ->
-            if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
-                invalidArg name "must contain non-empty strings"
-            item.GetString())
-        |> List.ofSeq
+    /// `declaredPaths` accepts either its original wire shape — a plain array of strings, read as a
+    /// genuinely known (possibly empty) touch-set — or `{"unread": "<reason>"}`, naming a touch-set that
+    /// was never read (.github#2233). The array form stays byte-for-byte what every existing producer
+    /// (including `tests/coord-engine-e2e/writes.sh`, outside this item's declared `Paths:`) already
+    /// emits, so this is additive rather than a breaking wire change.
+    let private declaredPaths (element: JsonElement) : Delivery.DeclaredPaths =
+        let value = required "declaredPaths" element
+        match value.ValueKind with
+        | JsonValueKind.Array ->
+            let paths =
+                value.EnumerateArray()
+                |> Seq.map (fun item ->
+                    if item.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(item.GetString()) then
+                        invalidArg "declaredPaths" "must contain non-empty strings"
+                    item.GetString())
+                |> List.ofSeq
+            Delivery.Known paths
+        | JsonValueKind.Object -> Delivery.Unread(readString "unread" value)
+        | _ -> invalidArg "declaredPaths" "must be an array of paths or an object naming why it is unread"
 
     let private readOptionalString (name: string) (element: JsonElement) : string option =
         let value = required name element
@@ -232,7 +242,7 @@ module DeliveryApplication =
                   Worktree = readString "worktree" freshnessElement
                   PullRequest = readOptionalInteger "pullRequest" freshnessElement
                   HeadSha = readString "headSha" freshnessElement
-                  DeclaredPaths = readStrings "declaredPaths" freshnessElement
+                  DeclaredPaths = declaredPaths freshnessElement
                   BoardState = readString "boardState" freshnessElement }
             Ok
                 { Freshness = freshness
