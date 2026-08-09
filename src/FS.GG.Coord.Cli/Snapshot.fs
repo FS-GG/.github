@@ -363,6 +363,7 @@ module Snapshot =
                       // chore reads it as a disagreement — so a context that never enriches writes the
                       // column it already holds, an idempotent write, rather than suppressing a real one.
                       BoardClass = None
+                      DeliveryRoute = DeliveryRoute.Unreadable [ "delivery-route receipt was not observed in this snapshot" ]
                       // Severity is a board-column fact and this pure snapshot does not carry it.
                       Severity = Unset
                       // The board's `Phase` COLUMN and the issue's `createdAt` are not on this document
@@ -651,6 +652,10 @@ module Snapshot =
         // action lands), and a reader of the divergence log must be able to tell them apart.
         | AwaitingHuman AwaitingHumanDecision -> w.WriteString("humanBlock", "decision")
         | AwaitingHuman AwaitingHumanAction -> w.WriteString("humanBlock", "action")
+        | AwaitingDeliveryRouteDecision reasons ->
+            w.WriteStartArray("deliveryRouteReasons")
+            reasons |> List.iter w.WriteStringValue
+            w.WriteEndArray()
         | Startable
         | IssueClosed
         | NoTouchSet

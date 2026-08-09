@@ -30,6 +30,7 @@ module SchedulabilityTests =
           Predicate = None
           Class = None
           BoardClass = None
+          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
           Severity = Unset
           Phase = None
           AgeDays = None }
@@ -50,6 +51,16 @@ module SchedulabilityTests =
     [<Fact>]
     let ``a Ready, open, declared, unblocked, unheld item is Startable`` () =
         Assert.Equal(Startable, ask (item 1))
+
+    [<Fact>]
+    let ``a missing delivery route is never inferred as lightweight`` () =
+        let actual = ask { item 1 with DeliveryRoute = DeliveryRoute.Stale [ "delivery-route receipt is missing" ] }
+        Assert.Equal(AwaitingDeliveryRouteDecision [ "delivery-route receipt is missing" ], actual)
+
+    [<Fact>]
+    let ``an unreadable delivery route fails closed`` () =
+        let actual = ask { item 1 with DeliveryRoute = DeliveryRoute.Unreadable [ "comments unavailable" ] }
+        Assert.Equal(AwaitingDeliveryRouteDecision [ "comments unavailable" ], actual)
 
     // ================================================================================================
     // #520 — THE SIXTH DISAGREEMENT. A CLOSED ISSUE IS NOT SCHEDULABLE.

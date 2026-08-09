@@ -12,6 +12,7 @@ module Options =
         | Facts
         | CommandContractCmd
         | IntakeCmd
+        | RouteCmd
         | WhoAmI
         | Budget
         | Next
@@ -283,6 +284,8 @@ DECISION (pure — no board, no network):
   command-contract [--json]                  emit the parser's command/flag contract for tooling
   intake <validate|apply> <draft.json> [--json]
                                              validate or atomically project one receipt-bound filing draft
+  delivery-route <show REF|record REF receipt.json> [--json]
+                                             inspect or append a source-bound agent delivery-route receipt
 
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
@@ -550,6 +553,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Scan -> JsonOnly
         | CommandContractCmd -> JsonOnly
         | IntakeCmd -> JsonOnly
+        | RouteCmd -> JsonOnly
         | BoardCmd -> JsonOnly
         | Issues -> JsonOnly // the raw REST array; the caller projects it with jq
 
@@ -973,6 +977,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> Reads
         | CommandContractCmd -> Reads
         | IntakeCmd -> Writes // `intake apply` creates/reuses and projects the receipt-bound issue
+        | RouteCmd -> Writes // `record` appends the validated durable decision receipt
 
         // ---- LOCAL — a file, an identity, a registry read; no token, no board --------------------------
         | WhoAmI -> Reads // derives/mints an id; `--mint` prints one, it does not register it
@@ -1110,6 +1115,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> "facts"
         | CommandContractCmd -> "command-contract"
         | IntakeCmd -> "intake"
+        | RouteCmd -> "delivery-route"
         | WhoAmI -> "whoami"
         | Budget -> "budget"
         | Next -> "next"
@@ -1809,6 +1815,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
         | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
         | "intake" :: rest -> flags (start { defaults with Command = IntakeCmd }) rest
+        | "delivery-route" :: rest -> flags (start { defaults with Command = RouteCmd }) rest
 
         | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
         | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest

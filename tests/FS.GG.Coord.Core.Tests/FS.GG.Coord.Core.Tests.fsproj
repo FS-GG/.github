@@ -41,6 +41,7 @@
     <Compile Include="KitTests.fs" />
     <Compile Include="RegistryPredicateTests.fs" />
     <Compile Include="IntakeTests.fs" />
+    <Compile Include="DeliveryRouteTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

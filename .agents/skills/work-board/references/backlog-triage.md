@@ -51,9 +51,13 @@ has no active claim or PR, and requires no human choice. Re-read the row before 
 
 Promotion changes eligibility, not assignment. The item enters the normal single-repo `batch`/`take`
 collision boundary, which remains responsible for selecting a touch-set-disjoint set. Every promoted
-item still runs inside the existing pnext-item envelope: the simple-versus-complex SDD lifecycle branch
-is selected by item complexity, and the worker finalizes the schema-v2 development-feedback report
+item still runs inside the existing pnext-item envelope: a current agent-authored delivery-route receipt
+selects lightweight or SDD-required delivery, and the worker finalizes the schema-v2 development-feedback report
 before its PR.
+
+The **simple-versus-complex SDD lifecycle branch** is an explicit receipt-bound agent judgement, never a
+host heuristic: the checklist supplies evidence, while the selected lightweight or SDD-required route
+supplies the lifecycle obligations.
 
 ### Retain in Backlog
 

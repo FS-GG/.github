@@ -98,6 +98,7 @@ module ProtocolTests =
               Schedulability.WrongStatus Backlog, "wrong-status"
               Schedulability.BlockedBy [], "blocked-by"
               Schedulability.AwaitingHuman AwaitingHumanDecision, "awaiting-human"
+              Schedulability.AwaitingDeliveryRouteDecision [], "awaiting-delivery-route-decision"
               Schedulability.NoTouchSet, "no-touch-set"
               Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
               Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
@@ -576,6 +577,7 @@ module ProtocolTests =
           Predicate = None
           Class = None
           BoardClass = None
+          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
           Severity = Unset
           Phase = None
           AgeDays = None }

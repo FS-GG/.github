@@ -336,6 +336,8 @@ let main argv =
             | IntakeCmd when opts.Args |> List.tryHead = Some "validate" -> IntakeApplication.run opts
             | IntakeCmd -> Client.run opts
 
+            | RouteCmd -> Client.run opts
+
             | DriverCmd -> Client.run opts
 
             | CycleCmd -> CycleLedgerApplication.run opts

@@ -71,28 +71,36 @@ else
   bad "scan emits the snapshot carrying the board item" "$(cat "$SNAP")"
 fi
 
-# ---- 2. decide turns that snapshot into the right verdict ------------------------------------------
+# ---- 2. Offline decide refuses to invent a live route decision -------------------------------------
 DEC="$(mktemp)"
 "$ENGINE" decide --text <"$SNAP" >"$DEC" 2>&1
 dec_rc=$?
 [ "$dec_rc" -eq 0 ] && ok "decide exits 0 (green) on the fixture snapshot" \
   || bad "decide exits 0 on the fixture snapshot" "rc=$dec_rc: $(cat "$DEC")"
 
-if grep -q 'FS.GG.SDD#42' "$DEC" && grep -qi 'schedulable in parallel' "$DEC"; then
-  ok "decide reports FS.GG.SDD#42 schedulable"
+if grep -q 'FS.GG.SDD#42' "$DEC" && grep -qi 'awaiting an explicit current delivery-route decision' "$DEC"; then
+  ok "offline decide refuses to infer a delivery route from the snapshot"
 else
-  bad "decide reports FS.GG.SDD#42 schedulable" "$(cat "$DEC")"
+  bad "offline decide refuses to infer a delivery route" "$(cat "$DEC")"
 fi
 
-# ---- 3. the WHOLE pipeline, no bash anywhere in it -------------------------------------------------
+# ---- 3. The live batch reads the source-bound receipt and schedules the item -----------------------
+batch_out="$("$ENGINE" batch --repo FS.GG.SDD --text 2>&1)"
+if printf '%s' "$batch_out" | grep -q 'FS.GG.SDD#42' && printf '%s' "$batch_out" | grep -qi 'schedulable in parallel'; then
+  ok "live batch reads the current route receipt and schedules FS.GG.SDD#42"
+else
+  bad "live batch reads the current route receipt and schedules FS.GG.SDD#42" "$batch_out"
+fi
+
+# ---- 4. the offline pipeline remains fail-closed, with no bash decision bypass --------------------
 pipe_out="$("$ENGINE" scan --repo FS.GG.SDD 2>/dev/null | "$ENGINE" decide --text 2>&1)"
-if printf '%s' "$pipe_out" | grep -q 'FS.GG.SDD#42'; then
-  ok "scan | decide is a complete scheduling pass with no bash in it"
+if printf '%s' "$pipe_out" | grep -qi 'awaiting an explicit current delivery-route decision'; then
+  ok "scan | decide stays fail-closed without a live route read"
 else
-  bad "scan | decide is a complete scheduling pass" "$pipe_out"
+  bad "scan | decide stays fail-closed without a live route read" "$pipe_out"
 fi
 
-# ---- 4. it FAILS CLOSED with no token — an empty board is never invented ---------------------------
+# ---- 5. it FAILS CLOSED with no token — an empty board is never invented ---------------------------
 notok_out="$(env -u GITHUB_TOKEN -u GH_TOKEN "$ENGINE" scan --repo FS.GG.SDD 2>&1)"
 notok_rc=$?
 [ "$notok_rc" -ne 0 ] && ok "scan REFUSES without a token (never invents an empty board)" \

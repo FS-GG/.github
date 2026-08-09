@@ -592,6 +592,7 @@ module Batch =
                     // candidate evaluated everything; reporting a cap that did not bite would be its
                     // own small lie.
                     truncated <- List.length decisions < List.length ordered
+            | AwaitingDeliveryRouteDecision _ -> ()
 
             // Held — by a live lease, or by a lapsed one whose `item/<n>-*` PR proves the work is
             // still alive (#581). Either way its worker is IN those files.

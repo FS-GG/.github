@@ -11,7 +11,7 @@ the complete four-part `check-board` result, classify the current workspace Back
 Allocate only schedulable touch-set-disjoint lanes within the fixed slot cap below; never exceed it.
 Every worker must mint its own `FSGG_WORKER` identity and hold its own claim: a host session, account,
 or parent identity is not a substitute. Give it one bounded item, a stable feedback cycle id, and the
-complete item-driver contract, including the simple-versus-complex SDD lifecycle branch and schema-v2
+complete item-driver contract, including the mandatory typed delivery-route receipt and schema-v2
 feedback envelope, plus the shared
 control-plane provenance guidance in the `pnext-item` contract. Do not hand it a second item. It MAY, after its done stamp, drain its OWN follow-up
 queue sequentially — one claim at a time, never interleaved.

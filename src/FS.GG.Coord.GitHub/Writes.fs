@@ -204,6 +204,10 @@ module Writes =
             with :? JsonException as e ->
                 Error(Malformed(ref.Short, $"the comment-post response is not JSON: %s{e.Message}"))
 
+    /// A deliberately narrow public route for durable protocol evidence.  Claim mutation still owns its
+    /// private CAS primitive; callers here have no capability to edit or remove another protocol marker.
+    let postIssueComment transport ref body = postComment transport ref body
+
     /// Delete a comment. **A 404 IS SUCCESS.**
     ///
     /// "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the

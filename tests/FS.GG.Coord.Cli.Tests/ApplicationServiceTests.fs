@@ -2,6 +2,8 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open Xunit
 open FS.GG.Coord
@@ -11,6 +13,46 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
 
 module ApplicationServiceTests =
+
+    /// Scripted success worlds deliberately model the production route gate: a receipt binds the exact
+    /// issue body revision.  Callers that mean to exercise missing/stale/unreadable evidence override the
+    /// endpoint instead; they never inherit an implicit lightweight route from this helper.
+    let private currentRouteComment (subject: string) (body: string) =
+        let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let receipt =
+            $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-route","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+        "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+
+    [<Fact>]
+    let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
+        let current : DeliveryRoute.Receipt =
+            { Schema = DeliveryRoute.Schema
+              Subject = "FS-GG/.github#2137"
+              SubjectRevision = "fixture"
+              Route = Some DeliveryRoute.SddRequired
+              Agent = "fixture-route"
+              Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "fixture" ]
+              Rationale = "fixture route receipt"
+              DeclaredImpacts = [ "internal" ]
+              ObservedFacts = [ "localized" ]
+              SddWorkId = Some "2137-delivery-route"
+              SpecHome = Some "work/2137-delivery-route/spec.md"
+              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
+
+        Assert.Empty(Client.sddEvidenceErrors current)
+
+        let nonexistent =
+            { current with
+                SddWorkId = Some "does-not-exist"
+                SpecHome = Some "work/does-not-exist/spec.md" }
+
+        Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
+
+    [<Fact>]
+    let ``#2137 SDD readiness rejects a substituted work id and non-implementation-ready status`` () =
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"other-work","status":"implementationReady"}""")
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"2137-delivery-route","status":"analyzing"}""")
 
     [<Fact>]
     let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
@@ -166,6 +208,7 @@ module ApplicationServiceTests =
     /// that can only build the first cannot tell a scan that reads the lease from one that returns `Some`
     /// for any marker at all. 0 is NOW, which is what every pre-#1779 caller means.
     let private commentsAgedScoped
+        (bodies: Map<int, string>)
         (holders: Map<int, string>)
         (ageMinutes: Map<int, int>)
         (pathRepos: Map<int, string>)
@@ -174,20 +217,34 @@ module ApplicationServiceTests =
         let age = Map.tryFind number ageMinutes |> Option.defaultValue 0
         let ts = DateTime.UtcNow.AddMinutes(float -age).ToString "yyyy-MM-ddTHH:mm:ssZ"
 
-        match Map.tryFind number holders with
-        | None -> "[]"
-        | Some worker ->
-            let pathRepo =
-                Map.tryFind number pathRepos
-                |> Option.map (fun repo -> $" pathRepo=%s{repo}")
-                |> Option.defaultValue ""
+        let route =
+            Map.tryFind number bodies
+            |> Option.map (fun body ->
+                JsonSerializer.Serialize
+                    {| id = 7000 + number
+                       body = currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body
+                       user = {| login = "EHotwagner" |}
+                       created_at = ts
+                       updated_at = ts |})
+            |> Option.toList
 
-            $"""[{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}]"""
+        let claim =
+            match Map.tryFind number holders with
+            | None -> []
+            | Some worker ->
+                let pathRepo =
+                    Map.tryFind number pathRepos
+                    |> Option.map (fun repo -> $" pathRepo=%s{repo}")
+                    |> Option.defaultValue ""
 
-    let private commentsAged holders ageMinutes number =
-        commentsAgedScoped holders ageMinutes Map.empty number
+                [ $"""{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""" ]
 
-    let private commentsFor (holders: Map<int, string>) (number: int) = commentsAged holders Map.empty number
+        "[" + String.concat "," (route @ claim) + "]"
+
+    let private commentsAged bodies holders ageMinutes number =
+        commentsAgedScoped bodies holders ageMinutes Map.empty number
+
+    let private commentsFor bodies (holders: Map<int, string>) (number: int) = commentsAged bodies holders Map.empty number
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
@@ -280,7 +337,7 @@ module ApplicationServiceTests =
                 Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
             | "GET", _ when (issueNumber "/comments").IsSome ->
                 let n = (issueNumber "/comments").Value
-                let readable = commentsAgedScoped holders markerAge pathRepos n
+                let readable = commentsAgedScoped bodies holders markerAge pathRepos n
 
                 let body =
                     if incomplete.Contains n then
@@ -437,19 +494,23 @@ module ApplicationServiceTests =
                 $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
 
             let comments owner =
-                if owner <> "EHotwagner" then
-                    "[]"
-                else
-                    match externalMarker with
-                    | None -> "[]"
-                    | Some body ->
-                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
-                        JsonSerializer.Serialize
-                            [ {| id = 9196
-                                 body = body
-                                 user = {| login = "EHotwagner" |}
-                                 created_at = timestamp
-                                 updated_at = timestamp |} ]
+                let source = "Paths: src/Rogue3/"
+                let subject = $"%s{owner}/rogue3#96"
+                let route = currentRouteComment subject source
+                let markers =
+                    match owner, externalMarker with
+                    | "EHotwagner", Some body -> [ body ]
+                    | _ -> []
+
+                let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+                JsonSerializer.Serialize
+                    ([ route ] @ markers
+                     |> List.mapi (fun index body ->
+                         {| id = 9195 + index
+                            body = body
+                            user = {| login = "EHotwagner" |}
+                            created_at = timestamp
+                            updated_at = timestamp |}))
 
             let transport =
                 Fake.Recorder(fun (req: Request) ->
@@ -680,7 +741,21 @@ module ApplicationServiceTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
                 | "GET", "repos/FS-GG/.github/issues/2127" -> ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
                 | "GET", "repos/FS-GG/.github/issues/2127/comments" ->
-                    if claimed then ok (commentsFor (Map.ofList [ 2127, "worker-2127" ]) 2127) else ok "[]"
+                    if claimed then
+                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+                        let payload =
+                            [ {| id = 7127
+                                 body = currentRouteComment "FS-GG/.github#2127" "Paths: src/FS.GG.Coord.Core/Driver.fs"
+                                 user = {| login = "fixture" |}
+                                 created_at = timestamp
+                                 updated_at = timestamp |}
+                              {| id = 8127
+                                 body = "<!-- fsgg:claim worker=worker-2127 lease=120 -->"
+                                 user = {| login = "fixture" |}
+                                 created_at = timestamp
+                                 updated_at = timestamp |} ]
+                        ok (JsonSerializer.Serialize payload)
+                    else ok "[]"
                 | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
                 | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
                 | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
@@ -3493,7 +3568,8 @@ module ApplicationServiceTests =
     /// whose `GET …/comments` answers `[]` (3, contended), `adopt` finds no expired claim to collect (3),
     /// `widen`/`set-paths` refuse a lock the worker does not hold (1, #706), and `predicate`'s oracle
     /// fails closed with no registry (4, no verdict). `take`'s 5 is EX_NONE, #585's "looked, found
-    /// nothing"; the remaining reads are a green empty answer.
+    /// nothing"; the remaining reads are a green empty answer.  `claim` now refuses one step earlier on
+    /// a missing source-bound route receipt (1): that is the required zero-write admission gate.
     let private sweptArms: (Options.Command * string list * int) list =
         [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 5
           Options.DriverCmd, [ "driver"; "--repo"; "FS.GG.SDD"; "--json" ], 1
@@ -3506,7 +3582,7 @@ module ApplicationServiceTests =
           Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 0
           Options.Budget, [ "budget"; "--json" ], 0
           Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ], 4
-          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
+          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
           Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
           Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ], 1
           Options.SetPaths,
@@ -3536,6 +3612,8 @@ module ApplicationServiceTests =
           "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
           Options.IntakeCmd,
           "`Client.intakeCmd` is private; audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
+          Options.RouteCmd,
+          "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
           Options.DiffAudit,
           "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
 

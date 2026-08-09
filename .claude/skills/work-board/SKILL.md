@@ -66,7 +66,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
-   plan while the simple-versus-complex SDD lifecycle branch remains inside each item worker.
+   plan while each item worker consumes its current agent-authored delivery-route receipt. The fixed
+   checklist is evidence only: it never derives a simple/complex or lightweight/SDD route.
 8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and
    every completed cycle is covered by a validated workspace feedback roll-up. Surface deliberately
    parked and human-blocked backlog without spinning; then update/land the workspace report.

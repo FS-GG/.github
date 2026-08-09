@@ -1,0 +1,90 @@
+namespace FS.GG.Coord.Cli
+
+open System
+open System.IO
+open System.Text.Json
+open FS.GG.Coord
+open FS.GG.Coord.Cli.Options
+
+/// The local half of `route validate`.  It deliberately has no fallback route: a caller must supply a
+/// complete versioned receipt and the live Client boundary will later bind the same decoded shape to an
+/// issue comment before it is permitted to claim or project a Ready row.
+module DeliveryRouteApplication =
+    let private requiredString (root: JsonElement) (name: string) =
+        match root.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.String -> Ok(value.GetString())
+        | true, _ -> Error $"{name} must be a string"
+        | false, _ -> Error $"{name} is required"
+
+    let private optionalString (root: JsonElement) (name: string) =
+        match root.TryGetProperty name with
+        | false, _ -> Ok None
+        | true, value when value.ValueKind = JsonValueKind.Null -> Ok None
+        | true, value when value.ValueKind = JsonValueKind.String -> Ok(Some(value.GetString()))
+        | true, _ -> Error $"{name} must be a string or null"
+
+    let private strings (root: JsonElement) (name: string) =
+        match root.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Array && value.EnumerateArray() |> Seq.forall (fun item -> item.ValueKind = JsonValueKind.String) ->
+            Ok(value.EnumerateArray() |> Seq.map _.GetString() |> List.ofSeq)
+        | true, _ -> Error $"{name} must be an array of strings"
+        | false, _ -> Error $"{name} is required"
+
+    let private route (root: JsonElement) =
+        match root.TryGetProperty "route" with
+        | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "lightweight" -> Ok(Some DeliveryRoute.Lightweight)
+        | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "sdd-required" -> Ok(Some DeliveryRoute.SddRequired)
+        | true, value when value.ValueKind = JsonValueKind.Null -> Ok None
+        | true, _ -> Error "route must be lightweight, sdd-required, or null"
+        | false, _ -> Error "route is required"
+
+    let decode (raw: string) =
+        try
+            use document = JsonDocument.Parse raw
+            let root = document.RootElement
+            if root.ValueKind <> JsonValueKind.Object then Error "receipt must be a JSON object" else
+            let schema = requiredString root "schema"
+            let subject = requiredString root "subject"
+            let revision = requiredString root "subjectRevision"
+            let selectedRoute = route root
+            let agent = requiredString root "agent"
+            let timestamp = requiredString root "timestamp"
+            let reasons = strings root "reasonCodes"
+            let rationale = requiredString root "rationale"
+            let impacts = strings root "declaredImpacts"
+            let facts = strings root "observedFacts"
+            let work = optionalString root "sddWorkId"
+            let spec = optionalString root "specHome"
+            let gates = strings root "requiredGates"
+            match schema, subject, revision, selectedRoute, agent, timestamp, reasons, rationale, impacts, facts, work, spec, gates with
+            | Ok schema, Ok subject, Ok revision, Ok selectedRoute, Ok agent, Ok timestamp, Ok reasons, Ok rationale,
+              Ok impacts, Ok facts, Ok work, Ok spec, Ok gates ->
+                Ok ({ Schema = schema; Subject = subject; SubjectRevision = revision; Route = selectedRoute;
+                     Agent = agent; Timestamp = timestamp; ReasonCodes = reasons; Rationale = rationale;
+                     DeclaredImpacts = impacts; ObservedFacts = facts; SddWorkId = work; SpecHome = spec; RequiredGates = gates }: DeliveryRoute.Receipt)
+            | _ ->
+                let error = function Error value -> [ value ] | Ok _ -> []
+                [ yield! error schema; yield! error subject; yield! error revision; yield! error selectedRoute
+                  yield! error agent; yield! error timestamp; yield! error reasons; yield! error rationale
+                  yield! error impacts; yield! error facts; yield! error work; yield! error spec; yield! error gates ]
+                |> String.concat "; " |> Error
+        with :? JsonException as error -> Error $"receipt is not valid JSON: {error.Message}"
+
+    let private render kind errors =
+        let detail = errors |> String.concat "; "
+        printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = kind; errors = errors; detail = detail |})
+
+    let run opts =
+        match opts.Args with
+        | [ "validate"; subject; revision; path ] ->
+            match File.ReadAllText path |> decode with
+            | Error error -> render "refusal" [ error ]; ExitCode.toInt ExitCode.Error
+            | Ok receipt ->
+                match DeliveryRoute.validate subject revision receipt with
+                | Ok _ -> render "current" []; ExitCode.toInt ExitCode.Green
+                | Error errors -> render "refusal" errors; ExitCode.toInt ExitCode.Error
+        | [ "record"; _ ]
+        | [ "show"; _ ] ->
+            render "refusal" [ "route record/show require the live GitHub receipt boundary" ]; ExitCode.toInt ExitCode.Error
+        | _ ->
+            render "refusal" [ "usage: route validate <subject> <subject-revision> <receipt.json>" ]; ExitCode.toInt ExitCode.Error

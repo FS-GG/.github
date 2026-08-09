@@ -3,6 +3,8 @@ namespace FS.GG.Coord.Cli.Tests
 open System
 open System.Collections.Generic
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open Xunit
 open FS.GG.Coord.GitHub
@@ -38,6 +40,12 @@ open FS.GG.Coord.Cli
 /// agree again, `--force` has drifted back to a no-op, and it costs a red build rather than an operator
 /// discovering it mid-recovery with a dead holder's release PR stranded on the item.
 module ForceStealTests =
+
+    let private currentRouteComment () =
+        let source = "Paths: src/Thing.fs"
+        let revision = SHA256.HashData(Encoding.UTF8.GetBytes source) |> Convert.ToHexString |> _.ToLowerInvariant()
+        "<!-- fsgg:delivery-route/v1 -->\n"
+        + $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-force","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
@@ -89,12 +97,22 @@ module ForceStealTests =
         member _.Json() =
             let ts = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
 
-            comments
-            |> Seq.sortBy (fun kv -> kv.Key)
-            |> Seq.map (fun kv ->
-                $"""{{"id":%d{kv.Key},"body":"%s{kv.Value}","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""")
-            |> String.concat ","
-            |> sprintf "[%s]"
+            let route =
+                JsonSerializer.Serialize
+                    {| id = 7001L
+                       body = currentRouteComment ()
+                       user = {| login = "EHotwagner" |}
+                       created_at = ts
+                       updated_at = ts |}
+
+            let claims =
+                comments
+                |> Seq.sortBy (fun kv -> kv.Key)
+                |> Seq.map (fun kv ->
+                    $"""{{"id":%d{kv.Key},"body":"%s{kv.Value}","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""")
+                |> String.concat ","
+
+            "[" + route + (if String.IsNullOrEmpty claims then "" else "," + claims) + "]"
 
         member _.Add(body: string) =
             nextId <- nextId + 1L

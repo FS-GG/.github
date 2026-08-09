@@ -69,7 +69,10 @@ the evidence supports a different column; it is the explicit decision, and it wi
 Set only fields supported by evidence:
 
 - `Ready` for open, actionable work with valid paths, no unresolved dependency, no active claim, and no
-  open implementation PR;
+  open implementation PR **and a current agent-authored delivery-route receipt**. Every implementation
+  draft first enters `AwaitingDeliveryRouteDecision`; the fixed checklist records evidence (multi-repo,
+  public contracts, migration/release/security/recovery, coordinated phases/providers, and independent
+  evidence classes) but never selects lightweight or SDD on the agent's behalf;
 - `Blocked` only when `Blocked by:` names a live implementation dependency;
 - `Backlog` for a parked decision **and** for anything not yet evidenced as `Ready` — it is the default
   `add` writes, and it means "visible to triage, not startable", not "deliberately shelved";

@@ -80,6 +80,9 @@ module Schedulability =
         /// never from the lag-prone board `Class` projection.
         | AwaitingHuman of HumanBlock
 
+        /// A mandatory route receipt is missing, stale, malformed, or its live evidence could not be read.
+        | AwaitingDeliveryRouteDecision of reasons: string list
+
         /// Another worker holds it, and the lock is live.
         | HeldBy of WorkerId
 
