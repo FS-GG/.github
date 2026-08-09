@@ -445,19 +445,19 @@
          claims — who does the SDD work and when — not a prose tidy of already-true guidance: before
          this, no packed text named an owner for that work at all (#2298's root cause). Packed member
          set and destinations unchanged. -->
-    <!-- 0.45.0 -> 0.45.1, a PATCH (.github#2248): the packed pnext-item review guidance now states,
-         through the generated `fsgg-protocol:review-policy` region, the quoted-versus-competing marker
-         rule `.github#2221` already put into `Driver.parseReviewCommentsCore` — a quotation (fenced,
-         indented, or bare prose mention) is inert, and a canonical marker repeated in one comment's own
-         leading marker block is a competing marker and is refused. That enforcement has been LIVE in
-         the engine since #2221 shipped; this kit version only adds the prose explanation of it to
-         `pnext-item/references/independent-review.md`. No marker name, field, ceiling, or other
-         review-policy VALUE changes, and no required worker or critic action changes — a critic who
-         never reads the new paragraph is bound by, and already complies with, the identical engine
-         behaviour a critic who does read it complies with. This is the 0.19.1/0.21.1 shape: a
-         kit-delivered reference file's prose catches up with already-true, already-enforced behaviour,
-         not a new receiver-visible requirement. Packed member set and destinations unchanged. -->
-    <Version>0.45.1</Version>
+    <!-- 0.45.0 -> 0.46.0, a MINOR (.github#2248): the packed pnext-item review guidance now states,
+         for the FIRST TIME, the quoted-versus-competing marker rule through the generated
+         `fsgg-protocol:review-policy` region — a quotation (fenced, indented, or bare prose mention)
+         is inert, and a canonical marker repeated in one comment's own leading marker block is a
+         competing marker and is refused. Before this kit version, no packed text stated the rule at
+         all (`independent-review.md` at 0.45.0 carries zero mentions of it), so this is NEW guidance,
+         not a correction of already-stated prose — the 0.19.1/0.21.1 patch shape does not apply; those
+         corrected text that was already there and wrong. This is the same shape as #2298's
+         0.44.0 -> 0.45.0: a rule previously invisible to the packed guidance now names it for the
+         first time, which is a change in what a receiver's critic can act on, not a prose tidy of
+         already-true guidance — before this, no packed text named the rule at all (#2248's root
+         cause). Packed member set and destinations unchanged. -->
+    <Version>0.46.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
