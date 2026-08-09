@@ -64,13 +64,9 @@ module Scan =
           /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
           /// looked at. Here the source is the body, and `lint` reads it directly.
           ///
-          /// ALSO WHAT DECIDES WHETHER A CLOSED-AND-DONE ROW'S BODY GETS READ AT ALL (.github#2254). That
-          /// population is otherwise SWEPT — see `snapshot`'s own comment for why — precisely because
-          /// `CLASS-PROJECTION-LAG` used to be `Open`-only, so nothing downstream ever needed the body of a
-          /// row that had already closed. A row that closes before any reconcile pass observes it Open now
-          /// keeps its disagreement forever unless something reads the body again; `snapshot` pays that read
-          /// — once, narrowly — exactly when this field is `None` on such a row, which is the population
-          /// AC1 names (an EMPTY column), never for a row that already carries some value here.
+          /// WHETHER THIS FIELD IS `None` ON A CLOSED-AND-`Done` ROW IS PART OF WHAT DECIDES `SweptBody`
+          /// BELOW (.github#2254) — see that field's doc for the full mechanism. `BoardClass` itself is
+          /// unchanged by that: it remains purely the OBSERVED column, never a place this repair writes.
           BoardClass: ItemClass option
 
           /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
@@ -97,7 +93,30 @@ module Scan =
           ///
           /// `None` when the field was absent or did not parse — never a zero age, which would be the
           /// YOUNGEST possible answer and the one that can never trigger starvation escalation.
-          CreatedAt: System.DateTimeOffset option }
+          CreatedAt: System.DateTimeOffset option
+
+          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT, read ONLY for a closed-and-
+          /// `Done` candidate whose `BoardClass` was EMPTY at the moment `scanFresh` ran with
+          /// `Cache.Reconciling` — never for `Scheduling`/`Offering`, and never merely to double-check a
+          /// column that already carries a value.
+          ///
+          /// `None` is "not applicable, or this scan's intent never asked" — true of the overwhelming
+          /// majority of rows on every scan, including every `Scheduling` scan regardless of population.
+          /// `Some(Ok text)` is the body; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
+          /// naming, so a failed census read is COUNTED, never silently dropped (#266).
+          ///
+          /// `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself, which is
+          /// the whole mechanism that keeps the extra read off every caller but `reconcile`: `board`
+          /// already receives `Cache.ReadIntent` from an UNCHANGED `Client.fs` call site, so gating the
+          /// read HERE — inside `scanFresh`, upstream of `snapshot` entirely — needed no new parameter on
+          /// `snapshot` and no edit to `Client.fs` at all.
+          ///
+          /// DELIBERATELY UNCACHED: `renderRows`/`parseRows` never round-trip it. `Cache.getScan` already
+          /// refuses to serve a hit for `Reconciling`/`Offering`, so every scan that could populate this
+          /// reaches `scanFresh` fresh regardless — nothing is lost by excluding it from the cache file,
+          /// and excluding it is what stops a `Scheduling` read that happens to share a cache file from
+          /// ever inheriting a census read it never asked for and never paid for.
+          SweptBody: IoResult<string> option }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///
@@ -193,8 +212,13 @@ module Scan =
           /// be offered AND cannot be passed over with a reason.
           BodiesUnreadable: int }
 
-    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. `Cache.Scheduling`'s answer, and
-    /// the ONLY cost every caller but `reconcile` may pay (.github#2254 repair 1) — see `snapshotFor`.
+    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Cost is IDENTICAL for every
+    /// caller regardless of `Cache.ReadIntent` (.github#2254 repair 1, `heron-fef6`) — this function never
+    /// sees that type and never calls `Reads.issueBody` itself; it only ever renders `Row.SweptBody`,
+    /// which `board`/`scanFresh` populate BEFORE this runs, gated on `Cache.Reconciling` alone. So
+    /// `next`/`batch`/`take`/`scan` and `reconcile` share this one signature and this one cost model, and
+    /// a future caller cannot reintroduce the read the critic measured by forgetting to opt in here — the
+    /// opt-in already happened, upstream, or it did not happen at all.
     ///
     /// For every candidate this reads the issue BODY (the touch-set) and its claim MARKERS — both REST,
     /// both on the budget that survives, and the markers UNCONDITIONALLY, because a lock may never be read
@@ -205,37 +229,10 @@ module Scan =
     /// schedule every other item against a surface it cannot see.
     ///
     /// A closed-and-`Done` row is SWEPT: no body, no markers — `Schedulability` answers `Closed ->
-    /// IssueClosed` on `state` alone, so neither is ever consulted for it. That sweep is unconditional
-    /// here, on every intent this function is fixed to (`Cache.Scheduling`); see `snapshotFor` for the
-    /// ONE additional, narrowly-gated read `Cache.Reconciling` may add to it.
+    /// IssueClosed` on `state` alone, so neither is ever consulted for it. The ONE exception is
+    /// `Row.SweptBody`, rendered into `body`/`bodyUnreadable` exactly as an open row's would be when it
+    /// carries a value — see that field's own doc for who populates it and when.
     val snapshot:
-        transport: IGitHubTransport ->
-        rows: Row list ->
-        repo: string option ->
-        allowBacklog: bool ->
-        limit: int option ->
-        leaseMinutes: int ->
-            IoResult<string * Receipt>
-
-    /// `snapshot` above, PARAMETERISED ON THE SAME `Cache.ReadIntent` `board` already threads
-    /// (.github#2254 repair 1, `heron-fef6`). Identical for `Cache.Scheduling` and `Cache.Offering` —
-    /// `snapshot` IS `snapshotFor Cache.Scheduling`, not a second implementation that might drift from it.
-    ///
-    /// `Cache.Reconciling` alone may additionally pay ONE more read per closed-and-`Done` candidate: when
-    /// (and only when) its board `Class` column is EMPTY (`BoardClass = None`), `reconcile`'s census needs
-    /// the body `CLASS-PROJECTION-LAG`'s widened rule (`Chore.fs`) reads its declared class from — the
-    /// swept branch is otherwise identical to `snapshot`'s. A row that already carries some `Class` value
-    /// is never re-read regardless of intent: the bound is the EMPTY column, not "every closed row",
-    /// which is what keeps `reconcile`'s own cost close to `snapshot`'s for a board where most closed rows
-    /// were already classed while they were open.
-    ///
-    /// `next`, `batch`, `take`, `scan`, and every caller that is not `reconcile` MUST keep calling
-    /// `snapshot`, never this with `Cache.Reconciling` — `Schedulability.schedulable` decides a closed
-    /// row on `state` alone and never reaches `Item.Class`, so a scheduling caller that paid this read
-    /// would be spending REST (the budget `.github#2300` measured exhausting twice) on an answer nothing
-    /// downstream of it consults.
-    val snapshotFor:
-        intent: Cache.ReadIntent ->
         transport: IGitHubTransport ->
         rows: Row list ->
         repo: string option ->

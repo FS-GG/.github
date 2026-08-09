@@ -305,7 +305,8 @@ let private classRow (boardClass: ItemClass option) : Scan.Row =
       BoardClass = boardClass
       Severity = Unset
       Phase = None
-      CreatedAt = None }
+      CreatedAt = None
+      SweptBody = None }
 
 /// The scan's OWN document for those rows, written by the engine's writer rather than by this test.
 let private snapshotOf (rows: Scan.Row list) =
@@ -622,16 +623,20 @@ let ``#1679: reconcile and the offer path reach the SAME verdict for the same it
 // `#398`-shaped row to `tests/coord-engine-e2e/stateful_server.py`, and read the fixture's REST-read
 // counter across `batch --json`: 11 reads pre-fix, 12 at the (then-)head — one extra `GET .../issues/398`
 // `Scan.snapshot` paid on EVERY caller, including the scheduling path that never consults `Item.Class` for
-// a closed row. `Client.batch`/`Client.next`/`Client.take` share `scanAndDecide` (`Client.fs:519`) with
-// `Client.reconcile` — same function, one `Cache.ReadIntent` argument apart (`Cache.Scheduling` vs
-// `Cache.Reconciling`) — so the fix is `Scan.snapshotFor`, gated on THAT argument, plumbed through
-// `scanAndDecide` unchanged in every other respect.
+// a closed row.
 //
-// THIS PINS THE PLUMBING, NOT JUST THE GATE. `ScanRoundTripTests`' `#2254` legs already pin `Scan.fs`'s own
-// conditional read in isolation; what only THIS layer can catch is `scanAndDecide` (Client.fs) forwarding
-// the WRONG intent, or forwarding none at all — a defect invisible to a test that constructs its own
-// `Cache.ReadIntent` and calls `Scan.snapshotFor` directly, because such a test would still be right about
-// `Scan.fs` while `Client.fs` silently disagreed with it.
+// THE REPAIR MOVES THE DECISION, NOT JUST THE READ. `Scan.snapshot` no longer decides whether to pay this
+// read at all — it only ever RENDERS `Row.SweptBody` (`ScanRoundTripTests` pins that half in isolation,
+// network-free). The decision now lives inside `Scan.board`/`scanFresh`, gated on `Cache.ReadIntent`
+// (`ScanBoardTests` pins THAT half). Both `Client.batch`'s and `Client.reconcile`'s existing,
+// UNCHANGED call sites already pass their own intent into `Scan.board` — `Cache.Scheduling` and
+// `Cache.Reconciling` respectively — so no new parameter, and no edit to `Client.fs`, was needed to wire
+// this: the two calls already agreed on intent, `scanFresh` simply started asking for it.
+//
+// THIS PINS THE FULL PIPELINE, NOT JUST ONE LAYER. `ScanBoardTests` and `ScanRoundTripTests` each pin their
+// own half in isolation; what only THIS layer can catch is a defect in how they COMPOSE through the real
+// `Client.reconcile`/`Client.batch` — e.g. a future edit that stops `scanAndDecide` forwarding its own
+// `intent` into `Scan.board` at all, which neither half alone would ever see.
 
 /// A one-row `.github` board: `#398`, CLOSED and `Done`, its own text declaring `Class: hardening`
 /// (`classedBody`, .github#1588's own fixture text) — the `FS.GG.Templates#398` shape #2254's own issue
@@ -645,14 +650,16 @@ let private closedDoneRowJson (boardClass: string option) =
 
     $"""{{"status":{{"name":"Done"}},"blockedBy":null,"class":%s{classField},"phase":null,"content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class","state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
 
-/// `.github`'s board, ONE closed-and-Done row (`#398`), `Class` column EMPTY — .github#2254's AC1 shape.
-/// `bodyReads` counts every `GET .../issues/398` (the singular, body-carrying endpoint) the fixture serves
-/// — the SAME fact the critic's `stateful_server.py` counter measured, at this layer instead. A transport
-/// is the only place "which caller paid for this read" can be observed from OUTSIDE the engine.
-let private closedDoneEmptyClassBoard (bodyReads: int ref) =
+/// `.github`'s board, ONE closed-and-Done row (`#398`), the `Class` column under `boardClass`'s control —
+/// `None` is .github#2254's AC1 shape (empty column). `bodyReads` counts every `GET .../issues/398` (the
+/// singular, body-carrying endpoint) the fixture serves — the SAME fact the critic's `stateful_server.py`
+/// counter measured, at this layer instead. A plain ROUTE FUNCTION, not yet a `Recorder`, so a caller that
+/// needs to override one endpoint (the refusal leg below) can compose it rather than try to call one
+/// `Recorder` from inside another, which `IGitHubTransport` does not offer as a function application.
+let private closedDoneBoardRoute (boardClass: string option) (bodyReads: int ref) : Request -> IoResult<Response> =
     let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
 
-    Fake.Recorder(fun (req: Request) ->
+    fun (req: Request) ->
         let path = req.Path.Trim '/'
 
         match req.Method, path with
@@ -665,7 +672,7 @@ let private closedDoneEmptyClassBoard (bodyReads: int ref) =
                     ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                 elif document.Contains "items(first" then
                     ok
-                        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{closedDoneRowJson None}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{closedDoneRowJson boardClass}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                 else
                     Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
             | _ -> Error(Errors.NotFound "a graphql call with no document")
@@ -676,12 +683,15 @@ let private closedDoneEmptyClassBoard (bodyReads: int ref) =
             bodyReads.Value <- bodyReads.Value + 1
             ok $"""{{"number":398,"body":"%s{body}"}}"""
         | "GET", "repos/FS-GG/.github/issues/398/comments" -> ok "[]"
-        | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+        | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}")
+
+let private closedDoneBoard (boardClass: string option) (bodyReads: int ref) =
+    Fake.Recorder(closedDoneBoardRoute boardClass bodyReads)
 
 [<Fact>]
 let ``#2254 reconcile PAYS the census read and reports the row - the critic's reconcile half`` () =
     let bodyReads = ref 0
-    let transport = closedDoneEmptyClassBoard bodyReads
+    let transport = closedDoneBoard None bodyReads
 
     let ids = reconcileIds transport
 
@@ -695,16 +705,14 @@ let ``#2254 batch does NOT pay the census read - the critic's measured regressio
     // is the stronger form of the same claim — `#520`'s own sibling tests already use "refuse, don't count"
     // for exactly this reason (a green run proves the read never happened, not merely that it happened zero
     // times THIS run by chance of ordering).
+    let baseRoute = closedDoneBoardRoute None (ref 0)
+
     let refusingTransport =
         Fake.Recorder(fun (req: Request) ->
-            let path = req.Path.Trim '/'
-
-            match req.Method, path with
+            match req.Method, req.Path.Trim '/' with
             | "GET", "repos/FS-GG/.github/issues/398" ->
                 Error(Errors.Transport "batch must not pay the census read #2254 reserves for reconcile")
-            | _ ->
-                match (closedDoneEmptyClassBoard (ref 0)) req with
-                | result -> result)
+            | _ -> baseRoute req)
 
     let stdout = System.Console.Out
     use captured = new System.IO.StringWriter()
@@ -720,38 +728,12 @@ let ``#2254 batch does NOT pay the census read - the critic's measured regressio
 
 [<Fact>]
 let ``#2254 an ALREADY-CLASSED Done row costs reconcile nothing either - the bound is real, not just named`` () =
-    // The narrowing this fix leans on: `Scan.snapshot`'s swept branch reads the body only when the board
-    // `Class` column is EMPTY (.github#2254 AC1), never merely to double-check an existing value. A board
-    // where `#398` already carries `Class: hardening` must cost `reconcile` zero extra reads too — the
-    // bound `drive-board`'s SKILL.md now documents is not just prose.
+    // The narrowing this fix leans on: `scanFresh` reads the body only when the board `Class` column is
+    // EMPTY (.github#2254 AC1), never merely to double-check an existing value. A board where `#398`
+    // already carries `Class: hardening` must cost `reconcile` zero extra reads too — the bound
+    // `drive-board`'s SKILL.md now documents is not just prose.
     let bodyReads = ref 0
-
-    let body = classedBody.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
-
-    let transport =
-        Fake.Recorder(fun (req: Request) ->
-            let path = req.Path.Trim '/'
-
-            match req.Method, path with
-            | "POST", "graphql" ->
-                match req.Body with
-                | Query(document, _) ->
-                    if document.Contains "projectsV2" then
-                        ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "fields(first" then
-                        ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[{"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_done","name":"Done"}]},{"id":"PVTSSF_class","name":"Class","dataType":"SINGLE_SELECT","options":[{"id":"opt_hardening","name":"hardening"}]}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
-                    elif document.Contains "items(first" then
-                        ok
-                            $"""{{"data":{{"organization":{{"projectV2":{{"items":{{"pageInfo":{{"hasNextPage":false,"endCursor":null}},"nodes":[%s{closedDoneRowJson (Some "hardening")}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
-                    else
-                        Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
-                | _ -> Error(Errors.NotFound "a graphql call with no document")
-            | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
-            | "GET", "repos/FS-GG/.github/issues/398" ->
-                bodyReads.Value <- bodyReads.Value + 1
-                ok $"""{{"number":398,"body":"%s{body}"}}"""
-            | "GET", "repos/FS-GG/.github/issues/398/comments" -> ok "[]"
-            | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+    let transport = closedDoneBoard (Some "hardening") bodyReads
 
     let ids = reconcileIds transport
 

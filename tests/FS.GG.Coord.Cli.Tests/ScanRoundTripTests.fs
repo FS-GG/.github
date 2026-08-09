@@ -45,7 +45,8 @@ let private aRow: Scan.Row =
       BoardClass = None
       Severity = Unset
       Phase = None
-      CreatedAt = None }
+      CreatedAt = None
+      SweptBody = None }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
@@ -250,14 +251,14 @@ let ``#641 a PULL REQUEST on the board is not a candidate`` () =
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
-let ``#520 a CLOSED and STAMPED issue ALREADY CLASSED is a candidate, SWEPT with no read, and decided IssueClosed`` () =
+let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
     // One was handed to a worker two hours after it was closed as completed, because candidate selection
     // read the board COLUMN and nothing else — and then it was PROMOTED back to Ready on release, re-arming
     // it for the next worker. The fix is NOT to drop it from the candidates: that gets the right answer
     // (never scheduled) with no WORDS, so a worker asking "why isn't #502 offered?" gets nothing for it,
     // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
     // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
-    // needs neither a marker read nor, for a row that already carries a board `Class` value, a body read.
+    // needs neither a body nor a marker read.
     //
     // THE FIXTURE IS `Done`, NOT `Ready`, SINCE .github#2225. This test used to drive `State = Closed;
     // Status = Ready` — a CLOSED, UNSTAMPED row, which is now precisely the post-merge window that MUST be
@@ -266,16 +267,13 @@ let ``#520 a CLOSED and STAMPED issue ALREADY CLASSED is a candidate, SWEPT with
     // The sweep is real and worth keeping — it is just gated on the STAMP now, which is what `Done` says.
     // Its unstamped twin is the test immediately below.
     //
-    // `BoardClass = Some Hardening`, NOT THE FIXTURE DEFAULT, SINCE .github#2254. `aRow.BoardClass` is
-    // `None`, and a `None` board column is now precisely the population that IS read (the next test) — a
-    // row that closed with an empty `Class` column is exactly what CLASS-PROJECTION-LAG could never
-    // examine again once it was Open-only. This fixture instead pins the OTHER half: a row that already
-    // carries some class value on the board stays fully swept, because nothing needs its body to know that.
-    let closed =
-        { aRow with
-            State = Closed
-            Status = Done
-            BoardClass = Some Hardening }
+    // .github#2254 REPAIR 1: `Scan.snapshot` no longer decides whether to pay a body read for a swept row
+    // AT ALL — that decision, and the one REST call it can cost, now live entirely in `Scan.board`/
+    // `scanFresh` (`ScanBoardTests`), gated on `Cache.ReadIntent`. This function only ever RENDERS
+    // `Row.SweptBody`, which `aRow` (like every fixture that predates this repair) carries as `None` — so
+    // this test is now, additionally, proof that `Scan.snapshot` ITSELF performs no network I/O for a
+    // swept row on any `BoardClass`, having no `Cache.ReadIntent` to consult in the first place.
+    let closed = { aRow with State = Closed; Status = Done }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
     // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
@@ -285,7 +283,7 @@ let ``#520 a CLOSED and STAMPED issue ALREADY CLASSED is a candidate, SWEPT with
             if req.Path.EndsWith "/issues" then
                 ok "[]"
             else
-                Error(Errors.Transport "an already-classed closed sweep must read no body and no marker"))
+                Error(Errors.Transport "the closed sweep must read no body and no marker"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
     | Error e -> failwith $"a swept closed item reads nothing, so the scan cannot fail — got %A{e}"
@@ -308,39 +306,37 @@ let ``#520 a CLOSED and STAMPED issue ALREADY CLASSED is a candidate, SWEPT with
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
 
 [<Fact>]
-let ``#2254 a CLOSED and STAMPED issue with an EMPTY board Class column has its body read, once`` () =
+let ``#2254 SweptBody, when carried, is RENDERED into the swept row's body — Scan.snapshot's half of the fix`` () =
     // THE GAP THIS PINS. `CLASS-PROJECTION-LAG` (`Chore.fs`) is no longer `Open`-only, but it can only fire
     // on a `Some declared` `Item.Class` — and a swept closed row's `Item.Class` was UNCONDITIONALLY `None`,
-    // because the sweep above never sent a body to derive one from. A row that reached `Done` before any
+    // because the sweep never sent a body to derive one from. A row that reached `Done` before any
     // reconcile pass observed it `Open` therefore carried a genuinely EMPTY `Class` column forever: not
     // examined, not reported, not repaired. `FS.GG.Templates#398` is the live instance — filed, classed
     // `hardening` in its own text, merged and closed inside one gap window, and both `reconcile --json` and
     // `lint` stayed clean about it.
     //
-    // THE FIX IS NARROW ON PURPOSE. Reading every `Done` row's body on every pass would undo the sweep
-    // #418 exists to keep cheap. `row.BoardClass` is already free — the same resolver-field read the file
-    // header's cost model measures, never a second fetch — so the read fires only when it is `None`, the
-    // population AC1 of #2254 names (an EMPTY column), never for a row that already carries some value.
+    // WHO DECIDES TO PAY THE READ IS NOT THIS FUNCTION (repair 1, `heron-fef6`): `Scan.board`/`scanFresh`
+    // does, gated on `Cache.ReadIntent` (`ScanBoardTests` pins that half). This function's whole job is
+    // downstream and NETWORK-FREE — render `Row.SweptBody` when the caller already carries one, which is
+    // why this fixture sets it directly rather than driving a transport at all.
     let closed =
         { aRow with
             State = Closed
             Status = Done
-            BoardClass = None }
+            SweptBody = Some(Ok "Paths: src/Audio/**\n\nClass: hardening\n") }
 
-    // The body IS read here — unlike the sibling test above — but nothing else is: no marker/comment read.
-    // A green run therefore also proves the read stayed narrow rather than reintroducing the full
-    // closed-row read .github#2225 deliberately keeps gated on the STAMP.
+    // Every OTHER read stays unreachable: nothing about rendering an already-carried `SweptBody` may touch
+    // the network for BODY or MARKER purposes. `/issues` still answers — the off-board blocker sweep runs
+    // unconditionally, on `#520`'s own terms, and has nothing to do with the fact under test here.
     let transport =
         Fake.Recorder(fun req ->
             if req.Path.EndsWith "/issues" then
                 ok "[]"
-            elif req.Path.EndsWith "/comments" then
-                Error(Errors.Transport "an empty-column closed sweep must read the body, never markers")
             else
-                ok (issueBody "Paths: src/Audio/**\n\nClass: hardening\n"))
+                Error(Errors.Transport "rendering SweptBody must never read the network"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
-    | Error e -> failwith $"the narrow body read must not fail the scan — got %A{e}"
+    | Error e -> failwith $"rendering a carried SweptBody must not fail the scan — got %A{e}"
     | Ok(document, receipt) ->
         Assert.Equal(1, receipt.Candidates)
         Assert.Equal(0, receipt.BodiesUnreadable) // the read SUCCEEDED — this counts only FAILURES
@@ -350,7 +346,7 @@ let ``#2254 a CLOSED and STAMPED issue with an EMPTY board Class column has its 
             let detail =
                 errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
 
-            failwith $"a closed row with an empty Class column must still round-trip: %s{detail}"
+            failwith $"a closed row carrying SweptBody must still round-trip: %s{detail}"
         | Ok request ->
             let item = request.Candidates.[0].Item
             Assert.Equal(Closed, item.State)
@@ -361,23 +357,26 @@ let ``#2254 a CLOSED and STAMPED issue with an EMPTY board Class column has its 
             Assert.Equal(Some Hardening, item.Class)
 
 [<Fact>]
-let ``#2254 a CLOSED and STAMPED issue's FAILED body read is counted, not silently dropped`` () =
-    // #266's rule, applied to the new narrow read: a body this pass could not fetch must be COUNTED and
-    // named — `bodyUnreadable`, never a fact this row simply declares nothing, and never a failure that
-    // takes the whole scan down for one row #520 already established must not fail it.
+let ``#2254 a carried SweptBody FAILURE is rendered as bodyUnreadable and counted, not silently dropped`` () =
+    // #266's rule, applied to the narrow read `Scan.board`/`scanFresh` may now perform: a body that read
+    // could not fetch must be COUNTED and named — `bodyUnreadable`, never a fact this row simply declares
+    // nothing, and never a failure that takes the whole scan down for one row #520 already established
+    // must not fail it. Network-free, on the SAME terms as the success leg above.
     let closed =
         { aRow with
             State = Closed
             Status = Done
-            BoardClass = None }
+            SweptBody = Some(Error(Errors.Transport "rate limited")) }
 
     let transport =
         Fake.Recorder(fun req ->
-            if req.Path.EndsWith "/issues" then ok "[]"
-            else Error(Errors.Transport "rate limited"))
+            if req.Path.EndsWith "/issues" then
+                ok "[]"
+            else
+                Error(Errors.Transport "rendering a carried SweptBody must never read the network"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
-    | Error e -> failwith $"a failed body read must not fail the whole scan — got %A{e}"
+    | Error e -> failwith $"a carried SweptBody failure must not fail the whole scan — got %A{e}"
     | Ok(document, receipt) ->
         Assert.Equal(1, receipt.BodiesUnreadable)
 
@@ -386,7 +385,7 @@ let ``#2254 a CLOSED and STAMPED issue's FAILED body read is counted, not silent
             let detail =
                 errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
 
-            failwith $"a swept closed item with an unreadable body must still parse: %s{detail}"
+            failwith $"a swept closed item with an unreadable SweptBody must still parse: %s{detail}"
         | Ok request ->
             Assert.Equal(None, request.Candidates.[0].Item.Class)
 
