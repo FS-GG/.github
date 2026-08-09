@@ -43,11 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"
 FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -120,6 +120,39 @@ rm -f "$route_missing_sdd"
 [ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
   && ok "#2137: nonexistent SDD delivery package is refused with zero writes" \
   || bad "#2137: nonexistent SDD delivery package must not post" "rc=$route_rc comments=$route_before->$route_after"
+
+# A present directory is not enough: the route's named analysis must be for that work and must already
+# be implementationReady.  These run through `delivery-route record`, its live body read and the real
+# POST ledger.  Each refusal proves there was no route-comment, claim, Status, or board mutation.
+mkdir -p "$SDD_ROOT/work/fixture-sdd" "$SDD_ROOT/readiness/fixture-sdd"
+printf '%s\n' '# fixture' >"$SDD_ROOT/work/fixture-sdd/spec.md"
+route_sdd="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"SDD readiness receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"fixture-sdd\",\"specHome\":\"work/fixture-sdd/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_sdd"
+route_sdd_case() {
+  local label="$1" analysis="$2" expected="$3" route_before route_after route_rc
+  printf '%s' "$analysis" >"$SDD_ROOT/readiness/fixture-sdd/analysis.json"
+  route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+  FSGG_COORD_SDD_ROOT="$SDD_ROOT" "$ENGINE" delivery-route record FS.GG.SDD#42 "$route_sdd" >/dev/null 2>&1; route_rc=$?
+  route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+  if [ "$expected" = success ]; then
+    [ "$route_rc" -eq 0 ] && [ "$route_after" -eq $((route_before + 1)) ] \
+      && ok "#2137: current implementationReady SDD route records once" \
+      || bad "#2137: healthy SDD route must record once" "rc=$route_rc comments=$route_before->$route_after"
+  else
+    [ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
+      && ok "#2137: $label SDD readiness is refused with zero writes" \
+      || bad "#2137: $label SDD readiness must not mutate" "rc=$route_rc comments=$route_before->$route_after"
+  fi
+}
+route_sdd_case "mismatched workId" '{"workId":"other-work","status":"implementationReady"}' refusal
+route_sdd_case "unready status" '{"workId":"fixture-sdd","status":"analyzing"}' refusal
+route_sdd_case "current" '{"workId":"fixture-sdd","status":"implementationReady"}' success
+# The later lock-contract legs intentionally run in the fixture's ordinary lightweight world.  Restore
+# that route through the same command rather than reaching into server state, so their precondition is
+# explicit and the SDD success probe cannot leak a checkout-local evidence dependency into another test.
+"$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" >/dev/null 2>&1 \
+  || bad "#2137: restore the fixture's ordinary current route after SDD driver"
+rm -f "$route_sdd"
 
 # ---- the claim CAS: post, re-read, WIN -------------------------------------------------------------
 out="$(run claim FS.GG.SDD#42 2>&1)"; rc=$?

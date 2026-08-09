@@ -50,6 +50,11 @@ module ApplicationServiceTests =
         Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
 
     [<Fact>]
+    let ``#2137 SDD readiness rejects a substituted work id and non-implementation-ready status`` () =
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"other-work","status":"implementationReady"}""")
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"2137-delivery-route","status":"analyzing"}""")
+
+    [<Fact>]
     let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
         let existing =
             Snapshot.parse

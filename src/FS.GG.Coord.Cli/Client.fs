@@ -406,6 +406,21 @@ module Client =
     /// boundary also consumes the package's live readiness evidence before allowing the route to make a
     /// board item schedulable or writable.  A deleted work/spec, an analysis for another work id, or a
     /// non-ready analysis is stale evidence, never permission to fall back to lightweight behaviour.
+    /// Decode the current SDD analysis fact for the named work.  The route boundary owns this one
+    /// interpretation so a `workId` substitution and an unready analysis cannot be accepted on one
+    /// command path while another merely checks that JSON was present.
+    let sddReadinessEvidenceErrors workId (raw: string) =
+        try
+            use document = JsonDocument.Parse raw
+            let root = document.RootElement
+            [ match root.TryGetProperty "workId" with
+              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
+              | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
+              match root.TryGetProperty "status" with
+              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
+              | _ -> yield "sdd readiness status is not implementationReady" ]
+        with error -> [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
+
     /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof used by
     /// route reads and route recording, so the test can pin both the current and missing-work inversions.
     let sddEvidenceErrors (receipt: DeliveryRoute.Receipt) =
@@ -420,7 +435,10 @@ module Client =
                 elif isNull directory.Parent then None
                 else findRoot directory.Parent
 
-            let root = findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
+            let root =
+                match env "FSGG_COORD_SDD_ROOT" "" with
+                | "" -> findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
+                | value -> Some value
             let atRoot relative = root |> Option.map (fun value -> Path.Combine(value, relative)) |> Option.defaultValue relative
             let specPath = atRoot specHome
             let readiness = atRoot (Path.Combine("readiness", workId, "analysis.json"))
@@ -429,17 +447,7 @@ module Client =
               if not (File.Exists readiness) then
                   yield $"sdd readiness evidence does not exist: %s{readiness}"
               elif File.Exists readiness then
-                  try
-                      use document = JsonDocument.Parse(File.ReadAllText readiness)
-                      let root = document.RootElement
-                      match root.TryGetProperty "workId" with
-                      | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
-                      | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
-                      match root.TryGetProperty "status" with
-                      | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
-                      | _ -> yield "sdd readiness status is not implementationReady"
-                  with error ->
-                      yield $"sdd readiness evidence is unreadable: %s{error.Message}" ]
+                  yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
         | _ -> []
 
     let private bindSddEvidence verdict =
