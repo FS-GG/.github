@@ -24,6 +24,32 @@ module ApplicationServiceTests =
         "<!-- fsgg:delivery-route/v1 -->\n" + receipt
 
     [<Fact>]
+    let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
+        let current : DeliveryRoute.Receipt =
+            { Schema = DeliveryRoute.Schema
+              Subject = "FS-GG/.github#2137"
+              SubjectRevision = "fixture"
+              Route = Some DeliveryRoute.SddRequired
+              Agent = "fixture-route"
+              Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "fixture" ]
+              Rationale = "fixture route receipt"
+              DeclaredImpacts = [ "internal" ]
+              ObservedFacts = [ "localized" ]
+              SddWorkId = Some "2137-delivery-route"
+              SpecHome = Some "work/2137-delivery-route/spec.md"
+              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
+
+        Assert.Empty(Client.sddEvidenceErrors current)
+
+        let nonexistent =
+            { current with
+                SddWorkId = Some "does-not-exist"
+                SpecHome = Some "work/does-not-exist/spec.md" }
+
+        Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
+
+    [<Fact>]
     let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
         let existing =
             Snapshot.parse

@@ -402,6 +402,54 @@ module Client =
     let private deliveryRouteRevision (body: string) =
         body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
+    /// Static receipt validation proves that an SDD route says which work package it governs.  This
+    /// boundary also consumes the package's live readiness evidence before allowing the route to make a
+    /// board item schedulable or writable.  A deleted work/spec, an analysis for another work id, or a
+    /// non-ready analysis is stale evidence, never permission to fall back to lightweight behaviour.
+    /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof used by
+    /// route reads and route recording, so the test can pin both the current and missing-work inversions.
+    let sddEvidenceErrors (receipt: DeliveryRoute.Receipt) =
+        match receipt.Route, receipt.SddWorkId, receipt.SpecHome with
+        | Some DeliveryRoute.SddRequired, Some workId, Some specHome ->
+            let rec findRoot (directory: DirectoryInfo) =
+                let hasEvidence =
+                    Directory.Exists(Path.Combine(directory.FullName, "work"))
+                    && Directory.Exists(Path.Combine(directory.FullName, "readiness"))
+
+                if hasEvidence then Some directory.FullName
+                elif isNull directory.Parent then None
+                else findRoot directory.Parent
+
+            let root = findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
+            let atRoot relative = root |> Option.map (fun value -> Path.Combine(value, relative)) |> Option.defaultValue relative
+            let specPath = atRoot specHome
+            let readiness = atRoot (Path.Combine("readiness", workId, "analysis.json"))
+            [ if not (File.Exists specPath) then
+                  yield $"sdd spec does not exist: %s{specHome}"
+              if not (File.Exists readiness) then
+                  yield $"sdd readiness evidence does not exist: %s{readiness}"
+              elif File.Exists readiness then
+                  try
+                      use document = JsonDocument.Parse(File.ReadAllText readiness)
+                      let root = document.RootElement
+                      match root.TryGetProperty "workId" with
+                      | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
+                      | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
+                      match root.TryGetProperty "status" with
+                      | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
+                      | _ -> yield "sdd readiness status is not implementationReady"
+                  with error ->
+                      yield $"sdd readiness evidence is unreadable: %s{error.Message}" ]
+        | _ -> []
+
+    let private bindSddEvidence verdict =
+        match verdict with
+        | DeliveryRoute.Current receipt ->
+            match sddEvidenceErrors receipt with
+            | [] -> verdict
+            | errors -> DeliveryRoute.Stale errors
+        | _ -> verdict
+
     /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
     /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
     /// unreadable, rather than collapsing into a missing/lightweight decision.
@@ -419,6 +467,7 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
             DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
+            |> bindSddEvidence
 
     /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
     /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
@@ -437,7 +486,7 @@ module Client =
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
 
-            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
+            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt |> bindSddEvidence with
             | DeliveryRoute.Current route -> Ok route
             | DeliveryRoute.Stale reasons
             | DeliveryRoute.Unreadable reasons ->
@@ -8263,7 +8312,7 @@ module Client =
                     if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
                         DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
                     else None)
-            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
+            match DeliveryRoute.decide target.Canonical (Some revision) receipt |> bindSddEvidence with
             | DeliveryRoute.Current valid -> Ok(valid, revision)
             | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
             | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
@@ -8302,12 +8351,18 @@ module Client =
                             eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
                             ExitError
                         | Ok valid ->
-                            let marker = DeliveryRouteMarker + "\n" + raw.Trim()
-                            match Writes.postIssueComment ctx.Transport ref marker with
-                            | Error error -> fail error
-                            | Ok commentId ->
-                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId |})
-                                ExitGreen
+                            match sddEvidenceErrors valid with
+                            | errors when not (List.isEmpty errors) ->
+                                let detail = String.concat "; " errors
+                                eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
+                                ExitError
+                            | _ ->
+                                let marker = DeliveryRouteMarker + "\n" + raw.Trim()
+                                match Writes.postIssueComment ctx.Transport ref marker with
+                                | Error error -> fail error
+                                | Ok commentId ->
+                                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId |})
+                                    ExitGreen
                 with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
         | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
 

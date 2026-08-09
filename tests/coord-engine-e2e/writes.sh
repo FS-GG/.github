@@ -43,11 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"
 FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -78,6 +78,48 @@ unset CLAUDE_CODE_SESSION_ID OPENCODE_SESSION_ID FSGG_AGENT_SESSION_ID FSGG_AGEN
 export FSGG_WORKER=""
 
 run() { "$ENGINE" "$@" --worker vole-418; }
+
+# ---- #2137: delivery-route record is the declared, source-bound comment write ----------------------
+#
+# This is one COMMAND contract driver, not a helper-level codec check: the real executable reads the
+# issue body, validates the exact receipt, then makes its one append-only POST.  The two inversions pin
+# the security property the command exists for — stale source evidence and a nonexistent SDD package
+# must both fail before the ledger changes.
+route_body='A schedulable item.
+
+Paths: src/Thing/**'
+route_revision="$(printf '%s' "$route_body" | sha256sum | awk '{print $1}')"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful source-bound route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$ROUTE_RECEIPT"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" 2>&1)"; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+if [ "$route_rc" -eq 0 ] && printf '%s' "$route_out" | jq -e '.kind == "recorded"' >/dev/null \
+   && [ "$route_after" -eq $((route_before + 1)) ]; then
+  ok "#2137: delivery-route record posts exactly one current source-bound receipt"
+else
+  bad "#2137: delivery-route record must post its current receipt once" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
+fi
+mark_contract "delivery-route" "source-bound-record-and-zero-write-inversions"
+
+route_stale="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"stale\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stale source receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$route_stale"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+"$ENGINE" delivery-route record FS.GG.SDD#42 "$route_stale" >/dev/null 2>&1; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+rm -f "$route_stale"
+[ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
+  && ok "#2137: stale delivery-route receipt is refused with zero writes" \
+  || bad "#2137: stale delivery-route receipt must not post" "rc=$route_rc comments=$route_before->$route_after"
+
+route_missing_sdd="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Missing SDD receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"does-not-exist\",\"specHome\":\"work/does-not-exist/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_missing_sdd"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+"$ENGINE" delivery-route record FS.GG.SDD#42 "$route_missing_sdd" >/dev/null 2>&1; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+rm -f "$route_missing_sdd"
+[ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
+  && ok "#2137: nonexistent SDD delivery package is refused with zero writes" \
+  || bad "#2137: nonexistent SDD delivery package must not post" "rc=$route_rc comments=$route_before->$route_after"
 
 # ---- the claim CAS: post, re-read, WIN -------------------------------------------------------------
 out="$(run claim FS.GG.SDD#42 2>&1)"; rc=$?

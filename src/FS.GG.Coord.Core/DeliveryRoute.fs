@@ -31,6 +31,20 @@ module DeliveryRoute =
             || value |> Seq.exists (fun c -> not (System.Char.IsLetterOrDigit c || c = '-' || c = '_' || c = '.'))
         if values |> List.exists malformed then [ $"%s{field} must contain non-empty machine tokens" ] else []
 
+    /// An SDD route is bound to one concrete work package.  This is deliberately stricter than
+    /// merely carrying non-empty strings: otherwise a receipt could name a removed work directory or
+    /// silently substitute a neighbouring specification while still looking complete on the board.
+    let validateSddBinding receipt =
+        match receipt.Route, receipt.SddWorkId, receipt.SpecHome with
+        | Some SddRequired, Some workId, Some specHome when not (System.String.IsNullOrWhiteSpace workId) ->
+            let expectedSpec = $"work/%s{workId}/spec.md"
+            [ yield! tokens "sddWorkId" [ workId ]
+              if specHome <> expectedSpec then
+                  yield $"specHome must bind sddWorkId at '%s{expectedSpec}'"
+              if receipt.RequiredGates <> [ "implementationReady"; "analyze"; "verify"; "ship" ] then
+                  yield "requiredGates must be implementationReady, analyze, verify, ship in lifecycle order" ]
+        | _ -> []
+
     let validate expectedSubject expectedRevision receipt =
         let errors =
             [ if receipt.Schema <> Schema then yield $"schema must be '%s{Schema}'"
@@ -58,7 +72,8 @@ module DeliveryRoute =
                   match receipt.SpecHome with
                   | Some value when not (System.String.IsNullOrWhiteSpace value) -> ()
                   | _ -> yield "sdd-required route requires specHome"
-                  yield! nonEmptyList "requiredGates" receipt.RequiredGates ]
+                  yield! nonEmptyList "requiredGates" receipt.RequiredGates
+                  yield! validateSddBinding receipt ]
         if List.isEmpty errors then Ok receipt else Error errors
 
     let decide expectedSubject expectedRevision receipt =

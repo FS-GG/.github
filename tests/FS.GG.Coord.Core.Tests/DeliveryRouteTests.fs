@@ -17,7 +17,7 @@ module DeliveryRouteTests =
           ObservedFacts = [ "current-board-read" ]
           SddWorkId = Some "2137-delivery-route"
           SpecHome = Some "work/2137-delivery-route/spec.md"
-          RequiredGates = [ "implementationReady" ] }
+          RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
 
     [<Fact>]
     let ``#2137 SDD routing is explicit and current rather than inferred from checklist facts`` () =
@@ -32,6 +32,19 @@ module DeliveryRouteTests =
     let ``#2137 SDD route cannot omit its work binding or required gate`` () =
         let missingBinding = { receipt (Some DeliveryRoute.SddRequired) with SddWorkId = None; RequiredGates = [] }
         Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" missingBinding |> Result.isError)
+
+    [<Fact>]
+    let ``#2137 SDD route rejects a mismatched spec home or lifecycle gate contract`` () =
+        let mismatchedSpec =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                SpecHome = Some "work/another-item/spec.md" }
+
+        let mismatchedGates =
+            { receipt (Some DeliveryRoute.SddRequired) with
+                RequiredGates = [ "implementationReady"; "verify" ] }
+
+        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedSpec |> Result.isError)
+        Assert.True(DeliveryRoute.validate "FS-GG/.github#2137" "body-sha" mismatchedGates |> Result.isError)
 
     [<Fact>]
     let ``#2137 decision facts never select a route and unreadable revisions produce no verdict`` () =
