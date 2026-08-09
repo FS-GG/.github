@@ -939,6 +939,7 @@ module Snapshot =
             w.WriteString("repairPhaseMarker", policy.RepairPhaseMarker)
             w.WriteNumber("maxAutomatedRepairRounds", policy.MaxAutomatedRepairRounds)
             w.WriteNumber("repairPhaseMaxRounds", policy.RepairPhaseMaxRounds)
+            w.WriteString("quotedMarkerRule", policy.QuotedMarkerRule)
             w.WriteEndObject()
 
         let writeLifecyclePolicy (key: string) (policy: Protocol.LifecyclePolicyDoc) =
