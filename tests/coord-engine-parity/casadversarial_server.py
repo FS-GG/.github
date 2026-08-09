@@ -17,7 +17,7 @@ The world is ONE repo (FS.GG.SDD). Each issue carries the marker state its leg n
              so the forged marker does not hold the item and #88 is still CLAIMABLE
     (f) #89  a MALFORMED marker, `worker=` absent (id 815, fresh)  claim: fails CLOSED — a half-written
                                                                     lock BLOCKS the item, never vanishes
-    (g) #90  EMPTY; the CAS RE-READ FAULTS (502 on every read after the first) — claim withdraws its own
+    (g) #90  EMPTY; the CAS RE-READ FAULTS (502 after the route and CAS-initial reads) — claim withdraws its own
              just-posted marker (a failed re-read is a LOSS, never an orphan)
     (i) #92  EMPTY; the CAS RE-READ returns [] (our marker VANISHED) — claim treats "we cannot tell" as a
              LOSS and does not announce a lock it cannot show
@@ -259,10 +259,10 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 seen = _COMMENT_READS.get(n, 0)
                 _COMMENT_READS[n] = seen + 1
-                # (g) #90: the CAS RE-READ FAULTS. The first read (the CAS's initial look) is honest — []
-                # — and EVERY read after it is a 502, so a retrying transport still fails and `claim`
-                # withdraws the marker it posted rather than orphaning it.
-                if n == 90 and seen >= 1:
+                # (g) #90: source-bound delivery routing consumes the first comment read, then the CAS
+                # gets one honest initial look.  EVERY read after those two is a 502, so the CAS re-read
+                # still fails and `claim` withdraws the marker it posted rather than orphaning it.
+                if n == 90 and seen >= 2:
                     return self._send(502, {"message": "upstream read failed (leg g)"})
                 # (i) #92: the marker VANISHES — the re-read never serves what was POSTed, so `winner` is
                 # None and "we cannot tell who holds this" is treated as a LOSS.
