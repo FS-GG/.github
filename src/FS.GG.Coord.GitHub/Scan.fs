@@ -635,7 +635,15 @@ module Scan =
         | RvNames of string list
         | RvUnreadable of reason: string
 
-    let snapshot
+    /// .github#2254 REPAIR 1 (`heron-fef6`, round 1). `snapshot` below is `Cache.Scheduling`'s answer —
+    /// UNCHANGED cost, the only shape `next`/`batch`/`take`/`scan` and every other caller may pay for,
+    /// because `Schedulability.schedulable` never consults `Item.Class` on a closed row and a read it
+    /// cannot spend is a read that must never leave the sweep. `reconcile` alone needs the census body
+    /// read this function's swept branch conditionally pays — see there — so it alone calls THIS, passing
+    /// `Cache.Reconciling` down the exact channel `board` above already uses for its own freshness gate,
+    /// never a second one invented for this rule.
+    let snapshotFor
+        (intent: Cache.ReadIntent)
         (transport: IGitHubTransport)
         (rows: Row list)
         (repo: string option)
@@ -819,9 +827,20 @@ module Scan =
                     // carries some `Class` value stays fully swept: paying `Reads.issueBody` (#418's
                     // expensive read) for every `Done` row on the board would undo the sweep this file
                     // exists to keep cheap, for a population #2254 does not ask this rule to cover.
-                    match row.BoardClass with
-                    | Some _ -> ()
-                    | None ->
+                    //
+                    // AND ONLY WHEN `intent = Cache.Reconciling` (repair 1, `heron-fef6`). The empty-column
+                    // check alone is not narrow enough: `snapshotFor` is `scanAndDecide`'s shared body
+                    // (`Client.fs:519`), so a naive `BoardClass = None` gate paid this read for `next`,
+                    // `batch` and `take` too — measured, `+1 GET .../issues/398` on `batch --json` — even
+                    // though `Schedulability.schedulable` decides a closed row on `state` alone and never
+                    // reaches `Item.Class`. The census this read serves is `reconcile`'s; every other caller
+                    // stays on the ZERO-extra-cost sweep it always had, via the `snapshot` wrapper below,
+                    // which fixes `intent = Cache.Scheduling` and can never reach this branch.
+                    match row.BoardClass, intent with
+                    | Some _, _
+                    | None, Cache.Scheduling
+                    | None, Cache.Offering -> ()
+                    | None, Cache.Reconciling ->
                         match Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                         | Ok text -> w.WriteString("body", text)
                         | Error e ->
@@ -1278,3 +1297,19 @@ module Scan =
                   OffBoardSkipped = offBoardSkipped
                   BodiesUnreadable = bodiesUnreadable }
             )
+
+    /// Assemble the snapshot `decide` consumes — `Cache.Scheduling`'s answer, and the ONLY one every
+    /// caller but `reconcile` may ever pay for (.github#2254 repair 1). `next`, `batch`, `take`, `scan`,
+    /// `add`'s sibling-lane check and every test fixture that predates this rule call this, unchanged in
+    /// signature and in cost: it never pays `snapshotFor`'s conditional census body read, because
+    /// `Schedulability.schedulable` decides a closed row on `state` alone and a byte this path fetched
+    /// would be a byte spent on an answer nothing here reads.
+    let snapshot
+        (transport: IGitHubTransport)
+        (rows: Row list)
+        (repo: string option)
+        (allowBacklog: bool)
+        (limit: int option)
+        (leaseMinutes: int)
+        : IoResult<string * Receipt> =
+        snapshotFor Cache.Scheduling transport rows repo allowBacklog limit leaseMinutes
