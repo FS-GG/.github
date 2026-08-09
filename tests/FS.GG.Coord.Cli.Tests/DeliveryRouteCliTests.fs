@@ -50,6 +50,11 @@ module DeliveryRouteCliTests =
     let private sddRequiredReceipt workId =
         $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{issueRevision}","route":"sdd-required","agent":"fixture-2298","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture sdd-required receipt for #2298","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":"%s{workId}","specHome":"work/%s{workId}/spec.md","requiredGates":["implementationReady","analyze","verify","ship"]}}"""
 
+    /// A `lightweight` receipt bound to the given `subjectRevision` — the field `claim`'s refusal turns
+    /// on when it disagrees with the live issue body's own hash.
+    let private lightweightReceipt (subjectRevision: string) =
+        $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"FS-GG/FS.GG.SDD#42","subjectRevision":"%s{subjectRevision}","route":"lightweight","agent":"fixture-2298","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture lightweight receipt for #2298","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+
     /// A live comment thread, mutated only the way `record` would mutate it (append). Bodies round-trip
     /// through `JsonSerializer` rather than hand-escaped string interpolation, so a marker's embedded
     /// `\n` and quotes cannot corrupt the fixture's own JSON.
@@ -293,3 +298,117 @@ module DeliveryRouteCliTests =
             Assert.Empty(thread.Bodies)
         finally
             Directory.Delete(root, true)
+
+    // ---- `claim`/`take`'s OWN gate: `requireCurrentDeliveryRoute`, pinned directly ------------------
+    //
+    // This function is the one `claim` (and, through it, `take`) actually calls to refuse a missing,
+    // stale, or unreadable route decision (Client.fs `requireCurrentDeliveryRoute`, just above the
+    // scheduling-read helpers this file already drives). This diff removes its `|> bindSddEvidence`
+    // pipe — a real edit to a function that, before this file, had ZERO test coverage anywhere in the
+    // repository. A critic proved that by mutating it to swallow `Stale`/`Unreadable` verdicts and
+    // rebuilding: 2,093 assertions across every suite stayed green (.github#2298 review round 1).
+    //
+    // These three legs close that gap at the command boundary `claim` itself uses — not by re-testing
+    // `DeliveryRoute.decide` (already pinned in `DeliveryRouteTests.fs`), but by proving `claim` REFUSES
+    // and posts NOTHING for exactly the three ways a route decision can fail to be current: no receipt
+    // comment at all, a receipt whose `subjectRevision` has gone stale, and a receipt comment present but
+    // undecodable as a valid receipt. Each is a distinct INPUT that reaches the same `Stale`-producing
+    // path `requireCurrentDeliveryRoute` swallows under the critic's mutation — so each is expected to,
+    // and was confirmed to, go red under it (see the inline note on each test).
+    //
+    // `requireCurrentDeliveryRoute` runs BEFORE the board/GraphQL bootstrap `heldElsewhere` needs, so a
+    // refusal here never reaches it — the fixture below serves only the issue and its comments, and
+    // asserts zero POSTs and zero GraphQL calls, not just a nonzero exit code.
+
+    /// The identity ladder `claim` measures every marker against (.github#1646): a caller's session must
+    /// be pinned, or this process's derived id depends on whatever harness ran the test. Mirrors
+    /// `ForceStealTests.sessionVars`/`runClaim` exactly, for the same reason.
+    let private sessionVars =
+        [ "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID"; "FSGG_WORKER" ]
+
+    let private runClaim (transport: Fake.Recorder) (args: string list) : int * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-2298-claim-" + Guid.NewGuid().ToString "n")
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let previousSessions = sessionVars |> List.map (fun v -> v, Environment.GetEnvironmentVariable v)
+        let stdout = Console.Out
+        use captured = new StringWriter()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("OPENCODE_SESSION_ID", null)
+            Environment.SetEnvironmentVariable("FSGG_AGENT_SESSION_ID", "fixture-session-2298")
+            Environment.SetEnvironmentVariable("FSGG_WORKER", "vole-2298")
+            Console.SetOut captured
+
+            let opts =
+                match Options.parse args with
+                | Ok o -> o
+                | Error e -> failwithf "the fixture's own argv did not parse: %s" e
+
+            let code = Client.claim (context transport) opts
+            Console.Out.Flush()
+            code, captured.ToString()
+        finally
+            Console.SetOut stdout
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            for name, value in previousSessions do
+                Environment.SetEnvironmentVariable(name, value)
+
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    let private claimArgs = [ "claim"; "FS.GG.SDD#42"; "--worker"; "vole-2298"; "--json" ]
+
+    [<Fact>]
+    let ``#2298 claim refuses with zero writes when NO delivery-route receipt exists`` () =
+        // Confirmed to go RED under the critic's M6 mutation (requireCurrentDeliveryRoute's
+        // `Stale`/`Unreadable` arm swallowed into success): `receipt=None` here reaches exactly that arm
+        // via `DeliveryRoute.decide`'s `Some _, None -> Stale [...]` leg.
+        let thread = Thread [] // no `fsgg:delivery-route/v1` comment at all
+        let transport = world thread
+
+        let code, out = runClaim transport claimArgs
+
+        Assert.NotEqual(0, code)
+        Assert.DoesNotContain("claimed", out)
+        Assert.Equal(0, transport.Count "comment-post")
+        Assert.Equal(0, transport.GraphQlCalls)
+
+    [<Fact>]
+    let ``#2298 claim refuses with zero writes when the delivery-route receipt is STALE`` () =
+        // Confirmed to go RED under the critic's M6 mutation: a `subjectRevision` that disagrees with
+        // the live issue body's hash reaches `DeliveryRoute.validate`'s `subjectRevision is stale` leg,
+        // which `decide` reports as `Stale` — the same arm the mutation swallows.
+        let thread = Thread [ DeliveryRouteMarker + "\n" + (lightweightReceipt "not-the-current-body-hash") ]
+        let transport = world thread
+
+        let code, out = runClaim transport claimArgs
+
+        Assert.NotEqual(0, code)
+        Assert.DoesNotContain("claimed", out)
+        Assert.Equal(0, transport.Count "comment-post")
+        Assert.Equal(0, transport.GraphQlCalls)
+
+    [<Fact>]
+    let ``#2298 claim refuses with zero writes when the delivery-route comment is UNDECODABLE`` () =
+        // Confirmed to go RED under the critic's M6 mutation, via the SAME `Stale` arm as the missing-
+        // receipt leg above: an undecodable comment fails `DeliveryRouteApplication.decode`, so
+        // `List.tryPick` treats it as absent and `decide` reports `Stale ["...receipt is missing"]`,
+        // identically to no comment existing at all — a distinct INPUT, the same swallowed OUTPUT.
+        let thread = Thread [ DeliveryRouteMarker + "\n" + """{"schema":"fsgg.coord.delivery-route/v1","subject":"not even the right shape"}""" ]
+        let transport = world thread
+
+        let code, out = runClaim transport claimArgs
+
+        Assert.NotEqual(0, code)
+        Assert.DoesNotContain("claimed", out)
+        Assert.Equal(0, transport.Count "comment-post")
+        Assert.Equal(0, transport.GraphQlCalls)
