@@ -1105,8 +1105,10 @@ module ChoreTests =
         // column set to Done AND its declared class projected; neither write is the other's business, and
         // suppressing one to preserve "at most one chore" would leave a real repair underived forever.
         //
-        // Note the item is OPEN: `CLASS-PROJECTION-LAG` is scoped to open rows, so the coexistence has to be
-        // demonstrated against a rule that fires on one — `STATUS-NOT-BLOCKED` here.
+        // The item is OPEN here so the pairing is demonstrated against a rule that ALSO requires it —
+        // `STATUS-NOT-BLOCKED` fires only on an open row. `CLASS-PROJECTION-LAG` itself is no longer
+        // open-only (.github#2254; see the tests below), but choosing an open fixture keeps this test about
+        // the field-partition claim in its own name and not about the state axis.
         let i =
             { item 1 with
                 Status = Ready
@@ -1136,9 +1138,15 @@ module ChoreTests =
         // AC3, as an invariant. `Class = None` is the common case today (a board where nobody has written a
         // `Class:` line yet), and the one thing this rule must never do is stamp such a row with a class the
         // engine made up. `lint`'s CLASS-UNSET reports it to a human instead.
-        for board in everyClassValue do
-            let i = { item 1 with Class = None; BoardClass = board }
-            Assert.Empty(derive [ i ] |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG"))
+        //
+        // BOTH STATES, SINCE .github#2254. This is also how the widened rule stays narrower than "every
+        // closed row": `Scan.snapshot` only ever populates `Item.Class` for a closed-and-Done row when its
+        // `BoardClass` was `None` (see `Scan.fs`), so a closed row with a WRONG board value never carries a
+        // `Some declared` here at all — this loop pins that `derive` itself would decline it even if it did.
+        for state in [ Open; Closed ] do
+            for board in everyClassValue do
+                let i = { item 1 with State = state; Class = None; BoardClass = board }
+                Assert.Empty(derive [ i ] |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG"))
 
     [<Fact>]
     let ``#1588 the projection RETIRES once the column agrees — or reconcile could never come clean`` () =
@@ -1168,6 +1176,93 @@ module ChoreTests =
         )
 
         Assert.Equal<(string * string) option>(Some("Class", "defect"), (List.head (derive [ i ])).Kind.Write)
+
+    // ---- .github#2254: a Done row's Class column that closed before any reconcile ever saw it Open ------
+
+    [<Fact>]
+    let ``#2254 AC2 — BREAK THE SUBJECT: a Done row carrying Class: hardening, its board column cleared, is reported`` () =
+        // THE DEMONSTRATION THE ACCEPTANCE CRITERION ASKS FOR, LITERALLY: "take a row that is `Done` with a
+        // `Class:` line, clear the column, and show the pass reports it — not merely that a new test
+        // exists." `FS.GG.Templates#398` is the live instance this reproduces: filed with `Class: hardening`
+        // in its own text, merged and closed before any reconcile pass ever observed it `Open`, so the old
+        // `Open`-only gate meant its board `Class` column stayed empty forever — `reconcile --json` reported
+        // `[]` and `lint` said nothing, the exact clean-but-wrong readings #2254's Observed section quotes.
+        let doneRowClassCleared =
+            { item 398 with
+                State = Closed
+                Status = Done
+                Class = Some Hardening // what #398's own body declares
+                BoardClass = None } // the board column, CLEARED — #398's `"class": null`
+
+        let derived = derive [ doneRowClassCleared ]
+
+        Assert.Equal<string list>([ "CLASS-PROJECTION-LAG" ], derived |> List.map (fun c -> c.Kind.RuleId))
+        Assert.Equal<(string * string) option>(Some("Class", "hardening"), (List.head derived).Kind.Write)
+
+    [<Fact>]
+    let ``#2254 the same Done row, agreeing, is NOT reported — the census fix does not manufacture noise`` () =
+        // The negative control for the test immediately above: once the column is written (or was never
+        // cleared), a Done row with the SAME declared class derives nothing. Otherwise #2254's fix would
+        // turn every already-correct Done row into permanent noise, which is the opposite of a census fix.
+        let doneRowClassSet =
+            { item 398 with
+                State = Closed
+                Status = Done
+                Class = Some Hardening
+                BoardClass = Some Hardening }
+
+        Assert.Empty(derive [ doneRowClassSet ] |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG"))
+
+    [<Fact>]
+    let ``#2254 a Done row's WRONG (non-empty) Class column still projects, once the item carries a declared class`` () =
+        // `Chore.fs`'s own rule is DISAGREEMENT, not merely ABSENCE — `#1588 a DISAGREEING column is
+        // rewritten` above pins that for an open row, and this is its closed-row twin. In practice
+        // `Scan.snapshot` never populates `Item.Class` for a closed row whose `BoardClass` was already
+        // non-`None` (see `Scan.fs` and the `derives NO class` test above), so this fixture is a Core-level
+        // statement of the RULE in isolation — should a future caller ever supply both facts for a closed
+        // row, `derive` corrects a wrong value exactly as it does for an open one, rather than treating
+        // "board says something" as "board is right".
+        let i =
+            { item 398 with
+                State = Closed
+                Status = Done
+                Class = Some Defect
+                BoardClass = Some Hardening }
+
+        Assert.Equal<string list>([ "CLASS-PROJECTION-LAG" ], derive [ i ] |> List.map (fun c -> c.Kind.RuleId))
+        Assert.Equal<(string * string) option>(Some("Class", "defect"), (List.head (derive [ i ])).Kind.Write)
+
+    [<Fact>]
+    let ``#2254 the widened rule RETIRES for a closed row too, on the same terms as an open one`` () =
+        for c in everyCaseOf<ItemClass> noFields do
+            let repaired = { item 398 with State = Closed; Status = Done; Class = Some c; BoardClass = Some c }
+            Assert.Empty(derive [ repaired ] |> List.filter (fun x -> x.Kind.RuleId = "CLASS-PROJECTION-LAG"))
+
+            let lagging = { item 398 with State = Closed; Status = Done; Class = Some c; BoardClass = None }
+            let chores = derive [ lagging ] |> List.filter (fun x -> x.Kind.RuleId = "CLASS-PROJECTION-LAG")
+            Assert.Single chores |> ignore
+            Assert.True(isRetired (List.head chores) [ repaired ], "the closed-row chore did not retire against an agreeing board")
+
+    [<Fact>]
+    let ``#2254 AC3 — the four repairs from the 2026-08-05 run still apply identically, all open`` () =
+        // AC3, pinned by the shape of the live run the item cites: `.github#2249`, `#2251`, `#2253` and
+        // `FS.GG.Templates#400`, each `applied … Class=hardening` against an OPEN row while `#398` — closed
+        // in the same run — went unrepaired. This is that population, generalised rather than replayed
+        // number-for-number (their exact bodies are not fixtures here): an OPEN row whose text declares a
+        // class the board does not carry still derives CLASS-PROJECTION-LAG, unaffected by #2254 widening
+        // the rule to ALSO reach a closed row it previously ignored.
+        for n in [ 2249; 2251; 2253; 400 ] do
+            let openRowNeedingClass =
+                { item n with
+                    State = Open
+                    Status = Ready
+                    Class = Some Hardening
+                    BoardClass = None }
+
+            let derived = derive [ openRowNeedingClass ]
+
+            Assert.Equal<string list>([ "CLASS-PROJECTION-LAG" ], derived |> List.map (fun c -> c.Kind.RuleId))
+            Assert.Equal<(string * string) option>(Some("Class", "hardening"), (List.head derived).Kind.Write)
 
     // ---- what is NOT a chore: fixes only ever write to the BOARD -------------------------------------
 

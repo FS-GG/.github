@@ -45,7 +45,30 @@ module Scan =
           /// Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
           /// to disk today and read tomorrow must not report yesterday's age. The count is derived where
           /// the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
-          CreatedAt: DateTimeOffset option }
+          CreatedAt: DateTimeOffset option
+
+          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
+          /// closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
+          /// made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
+          /// never merely to double-check a column that already carries a value.
+          ///
+          /// `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
+          /// rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
+          /// own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
+          /// (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
+          /// which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
+          /// `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
+          /// (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
+          /// new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
+          /// on intent, they simply never shared this one narrow fact before.
+          ///
+          /// DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
+          /// refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
+          /// Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
+          /// is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
+          /// read that happens to share a cache file from ever being able to inherit a census read it never
+          /// asked for and never paid for.
+          SweptBody: IoResult<string> option }
 
     [<Literal>]
     let OffBoardCap = 60
@@ -243,7 +266,10 @@ module Scan =
                       // field (every parity fixture, and any board but the live one) reads `None` rather
                       // than failing the scan.
                       Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
-                      CreatedAt = str content "createdAt" |> instant }
+                      CreatedAt = str content "createdAt" |> instant
+                      // The board scan proper never reads a body — `SweptBody` is `scanFresh`'s own,
+                      // strictly-later, `Cache.Reconciling`-gated enrichment (.github#2254 repair 1).
+                      SweptBody = None }
 
             | _ -> None
 
@@ -365,7 +391,14 @@ module Scan =
                               // cache therefore under-prioritises for at most one cache lifetime; the
                               // opposite default would let an unread entry outrank the whole board.
                               Phase = s "phase" |> Option.bind phaseOfWireName
-                              CreatedAt = s "createdAt" |> instant }
+                              CreatedAt = s "createdAt" |> instant
+                              // NEVER ROUND-TRIPPED (.github#2254 repair 1) — `renderRows` above never
+                              // writes it, and `Cache.getScan` already refuses to SERVE a hit for
+                              // `Reconciling`/`Offering`, so every scan that could use it reaches
+                              // `scanFresh` fresh regardless. Carrying a cached census read forward here
+                              // would be the one way a `Scheduling` read could inherit a fact it never
+                              // paid for.
+                              SweptBody = None }
                     | _ -> None)
                 |> List.ofSeq
                 |> Some
@@ -375,6 +408,7 @@ module Scan =
 
     let private scanFresh
         (transport: IGitHubTransport)
+        (intent: Cache.ReadIntent)
         (owner: string)
         (title: string)
         (projectNumber: int)
@@ -468,9 +502,29 @@ module Scan =
         match page None [] 100 with
         | Error e -> Error e
         | Ok rows ->
+            // .github#2254 REPAIR 1. `Cache.Reconciling` ALONE may enrich a swept closed-and-`Done` row
+            // with its own body TEXT — and only the narrow population AC1 names: `BoardClass = None`. This
+            // is the ONE extra REST read `scanFresh` ever performs beyond the GraphQL page loop above, and
+            // it exists so `Scan.snapshot`'s swept branch (see there) can see the item's own declared
+            // `Class:` without EVERY caller of `scanFresh` paying for it — `Cache.Scheduling`/`Offering`
+            // leave `SweptBody = None` on every row, exactly as `parseRow` already does above.
+            let rows =
+                match intent with
+                | Cache.Reconciling ->
+                    rows
+                    |> List.map (fun row ->
+                        if row.State = Closed && row.Status = Done && row.BoardClass.IsNone then
+                            { row with SweptBody = Some(Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number) }
+                        else
+                            row)
+                | Cache.Scheduling
+                | Cache.Offering -> rows
+
             // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it — an empty document is
             // refused there, at the write, because this is the last moment "the board is empty" and "I could
-            // not read the board" are still distinguishable.
+            // not read the board" are still distinguishable. `renderRows` never serialises `SweptBody`
+            // (see its own field doc), so this cache entry carries none of the read above regardless of
+            // which branch produced `rows`.
             Cache.putScan owner title (renderRows rows) |> ignore
             Ok rows
 
@@ -491,9 +545,9 @@ module Scan =
             // A CACHE WE CANNOT PARSE IS A MISS, NEVER A FAILURE. Falling through to a real scan is always
             // safe; failing the caller because our own optimisation rotted would make the cache strictly
             // worse than not having one.
-            | None -> scanFresh transport owner title projectNumber
+            | None -> scanFresh transport cache owner title projectNumber
 
-        | None -> scanFresh transport owner title projectNumber
+        | None -> scanFresh transport cache owner title projectNumber
 
     // ---- blockers ------------------------------------------------------------------------------------
 
@@ -635,6 +689,14 @@ module Scan =
         | RvNames of string list
         | RvUnreadable of reason: string
 
+    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Every caller's cost is IDENTICAL
+    /// regardless of intent (.github#2254 repair 1, `heron-fef6`): the one extra body read a closed-and-
+    /// `Done` row with an empty `Class` column needs for `reconcile`'s census is paid, if at all, inside
+    /// `scanFresh` — gated on `Cache.Reconciling`, which `board` already receives from an UNCHANGED
+    /// `Client.fs` call site — and simply carried here on `Row.SweptBody`. This function reads that field;
+    /// it never calls `Reads.issueBody` itself and never sees `Cache.ReadIntent` at all, which is what
+    /// keeps `next`/`batch`/`take`/`scan` byte-identical to their pre-#2254 cost with no signature change
+    /// of their own to make.
     let snapshot
         (transport: IGitHubTransport)
         (rows: Row list)
@@ -778,9 +840,10 @@ module Scan =
                 // A CLOSED AND STAMPED ITEM IS SWEPT, NOT READ (#520, and case 51's "the issue is closed").
                 // It stays a candidate so `decide` can name it — `Schedulability` answers
                 // `Closed -> IssueClosed` as its FIRST question, before column, blockers, touch-set or lock
-                // — but it needs none of those reads to do so. Fetching its body/markers would pay the
-                // budget that dies first (#418) for a verdict `state` alone already settles, and bash never
-                // fetches them either.
+                // — but it needs none of those reads to do so. Fetching its markers would pay the budget
+                // that dies first (#418) for a verdict `state` alone already settles, and bash never
+                // fetches them either. The body is likewise never fetched EXCEPT for the narrow,
+                // already-free-to-detect population .github#2254 names — see the arm below.
                 //
                 // THE GUARD IS THE DONE STAMP, NOT `Closed` (.github#2225). This arm swept on `Closed`
                 // alone, and the sentence licensing that — "its touch-set is never consulted" — was TRUE
@@ -805,6 +868,30 @@ module Scan =
                     w.WriteString("state", "CLOSED")
                     w.WriteStartArray("blockers")
                     w.WriteEndArray()
+
+                    // .github#2254: `CLASS-PROJECTION-LAG`'s own gate is `Open` (`Chore.fs`), so a row that
+                    // reaches Done/CLOSED before any reconcile pass ever observes it while still Open keeps
+                    // its disagreement — an EMPTY board `Class` column beside a body that DOES declare one
+                    // — examined by nothing, forever. This sweep is exactly why: it never sends the body
+                    // that disagreement would be read from.
+                    //
+                    // REPAIR 1 (`heron-fef6`): this function no longer decides whether to pay that read.
+                    // `row.SweptBody` already carries the answer — `Some` only when `scanFresh` populated it
+                    // for a `Cache.Reconciling` scan of exactly this row (empty `BoardClass`), `None` on
+                    // every `Scheduling`/`Offering` scan and on every row that already carried a `Class`
+                    // value. A naive gate HERE on `BoardClass` alone once paid this read for `next`, `batch`
+                    // and `take` too — measured, `+1 GET .../issues/398` on `batch --json` — even though
+                    // `Schedulability.schedulable` decides a closed row on `state` alone and never reaches
+                    // `Item.Class`. Reading `SweptBody` instead of `Reads.issueBody` directly is what keeps
+                    // this function itself blind to `Cache.ReadIntent`, so it cannot re-introduce that
+                    // regression by acquiring a new caller that forgets to gate.
+                    match row.SweptBody with
+                    | None -> ()
+                    | Some(Ok text) -> w.WriteString("body", text)
+                    | Some(Error e) ->
+                        bodiesUnreadable <- bodiesUnreadable + 1
+                        w.WriteString("bodyUnreadable", explain e)
+
                     w.WriteEndObject()
                 // A CLOSED, UNSTAMPED ROW READS EXACTLY LIKE AN OPEN ONE, and deliberately shares this path
                 // rather than getting a third arm of its own: it is the post-merge window, where the claim is

@@ -418,7 +418,8 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       BoardClass = None
       Severity = Unset
       Phase = None
-      CreatedAt = None }
+      CreatedAt = None
+      SweptBody = None }
 
 let private scopeBoard =
     [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
@@ -433,6 +434,67 @@ let ``#1732 Repo Scope supplies the path repository while Ref remains the issue 
         Assert.Equal(".github", row.Ref.Repo)
         Assert.Equal("audio", row.PathRepo)
     | other -> failwithf "expected one scoped row, got %A" other
+
+// ---- .github#2254 REPAIR 1: `scanFresh`'s own gate on `Row.SweptBody` -------------------------------
+
+/// A closed-and-`Done` board node for `#398`, `Class` column under `boardClass`'s control — the
+/// `FS.GG.Templates#398` shape #2254's issue names, reproduced here because the fixture cannot reach a
+/// second repo.
+let private closedDoneNode (boardClass: string option) =
+    let classField =
+        match boardClass with
+        | None -> "null"
+        | Some c -> $"""{{"name":"%s{c}"}}"""
+
+    $"""{{"status":{{"name":"Done"}},"class":%s{classField},
+          "content":{{"__typename":"Issue","number":398,"title":"a Done row declaring its own class",
+                      "state":"CLOSED","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}"""
+
+[<Fact>]
+let ``#2254 Cache.Reconciling enriches SweptBody for a closed Done row with an EMPTY Class column`` () =
+    // THE POSITIVE LEG. `scanFresh` pays exactly ONE extra REST read — scripted second, so `scripted`
+    // itself proves nothing more is asked — and the parsed body reaches `Row.SweptBody`.
+    use sandbox = new Sandbox()
+
+    let transport =
+        scripted
+            [ ok (page (closedDoneNode None) false "")
+              ok """{"number":398,"body":"Paths: none\n\nClass: hardening\n"}""" ]
+
+    match Scan.board transport Cache.Reconciling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] ->
+        match row.SweptBody with
+        | Some(Ok body) -> Assert.Contains("Class: hardening", body)
+        | other -> failwithf "a Reconciling scan of an empty-column closed row must populate SweptBody — got %A" other
+    | other -> failwithf "expected one row — got %A" other
+
+[<Fact>]
+let ``#2254 Cache.Scheduling never enriches SweptBody, even for the identical empty-column closed row`` () =
+    // THE CRITIC'S OWN REGRESSION, PINNED AT ITS SOURCE. `heron-fef6` measured `+1 GET .../issues/398` on
+    // `batch --json` at the pre-repair head — this is `batch`'s own read, `Scan.board`, called with
+    // `Cache.Scheduling`. `scripted` carries exactly ONE response (the board page); a second call of ANY
+    // shape — the extra read the critic measured — throws "called more times than scripted" rather than
+    // merely going unobserved, so a green run is proof the read never happened.
+    use sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "0") // force scanFresh, not a cache hit
+
+    let transport = scripted [ ok (page (closedDoneNode None) false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] -> Assert.Equal(None, row.SweptBody)
+    | other -> failwithf "expected one row — got %A" other
+
+[<Fact>]
+let ``#2254 Cache.Reconciling does NOT enrich SweptBody when the Class column already carries a value`` () =
+    // THE BOUND, PINNED AT ITS SOURCE. A closed row that already carries SOME `Class` value costs
+    // `Reconciling` nothing extra either — `scripted`'s single response is the same proof as the leg above.
+    use sandbox = new Sandbox()
+
+    let transport = scripted [ ok (page (closedDoneNode (Some "hardening")) false "") ]
+
+    match Scan.board transport Cache.Reconciling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] -> Assert.Equal(None, row.SweptBody)
+    | other -> failwithf "expected one row — got %A" other
 
 [<Fact>]
 let ``#979 a --repo naming no board row REPORTS, and does not merely return empty`` () =
