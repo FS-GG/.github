@@ -82,9 +82,14 @@ run() { "$ENGINE" "$@" --worker vole-418; }
 # ---- #2137: delivery-route record is the declared, source-bound comment write ----------------------
 #
 # This is one COMMAND contract driver, not a helper-level codec check: the real executable reads the
-# issue body, validates the exact receipt, then makes its one append-only POST.  The two inversions pin
-# the security property the command exists for — stale source evidence and a nonexistent SDD package
-# must both fail before the ledger changes.
+# issue body, validates the exact receipt, then makes its one append-only POST.  The inversion pins the
+# security property the command exists for — stale source evidence must fail before the ledger changes.
+#
+# An `sdd-required` route whose SDD package does not exist yet (or is not yet `implementationReady`) is
+# DIFFERENT (#2298): it records — the coordinator's decision is honest and explicit even before the
+# package exists, because the CLAIMED WORKER is the actor who produces that package, and could never be
+# claimed to do so if recording it required the package first. Each case below asserts the receipt
+# posts and reports `sddPackageReady` truthfully, never that it refuses.
 route_body='A schedulable item.
 
 Paths: src/Thing/**'
@@ -112,41 +117,43 @@ rm -f "$route_stale"
   || bad "#2137: stale delivery-route receipt must not post" "rc=$route_rc comments=$route_before->$route_after"
 
 route_missing_sdd="$(mktemp)"
-printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Missing SDD receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"does-not-exist\",\"specHome\":\"work/does-not-exist/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_missing_sdd"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"No SDD package yet.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"does-not-exist\",\"specHome\":\"work/does-not-exist/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_missing_sdd"
 route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
-"$ENGINE" delivery-route record FS.GG.SDD#42 "$route_missing_sdd" >/dev/null 2>&1; route_rc=$?
+route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$route_missing_sdd" 2>/dev/null)"; route_rc=$?
 route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
 rm -f "$route_missing_sdd"
-[ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
-  && ok "#2137: nonexistent SDD delivery package is refused with zero writes" \
-  || bad "#2137: nonexistent SDD delivery package must not post" "rc=$route_rc comments=$route_before->$route_after"
+if [ "$route_rc" -eq 0 ] && printf '%s' "$route_out" | jq -e '.kind == "recorded" and .sddPackageReady == false' >/dev/null \
+   && [ "$route_after" -eq $((route_before + 1)) ]; then
+  ok "#2298: an sdd-required receipt with no SDD package on disk yet still records, honestly not-ready"
+else
+  bad "#2298: an sdd-required receipt with no SDD package must still record" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
+fi
 
-# A present directory is not enough: the route's named analysis must be for that work and must already
-# be implementationReady.  These run through `delivery-route record`, its live body read and the real
-# POST ledger.  Each refusal proves there was no route-comment, claim, Status, or board mutation.
+# A present directory is not enough on its own: the route's named analysis must be for that work and
+# must already be `implementationReady` for `sddPackageReady` to report true. None of these run through
+# `delivery-route record`'s REFUSAL path any more (#2298) — the SDD package's readiness is now reported
+# on the posted receipt, never a precondition for posting it.
 mkdir -p "$SDD_ROOT/work/fixture-sdd" "$SDD_ROOT/readiness/fixture-sdd"
 printf '%s\n' '# fixture' >"$SDD_ROOT/work/fixture-sdd/spec.md"
 route_sdd="$(mktemp)"
 printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"SDD readiness receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"fixture-sdd\",\"specHome\":\"work/fixture-sdd/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_sdd"
 route_sdd_case() {
-  local label="$1" analysis="$2" expected="$3" route_before route_after route_rc
+  local label="$1" analysis="$2" expected_ready="$3" route_before route_after route_rc route_out
   printf '%s' "$analysis" >"$SDD_ROOT/readiness/fixture-sdd/analysis.json"
   route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
-  FSGG_COORD_SDD_ROOT="$SDD_ROOT" "$ENGINE" delivery-route record FS.GG.SDD#42 "$route_sdd" >/dev/null 2>&1; route_rc=$?
+  route_out="$(FSGG_COORD_SDD_ROOT="$SDD_ROOT" "$ENGINE" delivery-route record FS.GG.SDD#42 "$route_sdd" 2>/dev/null)"; route_rc=$?
   route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
-  if [ "$expected" = success ]; then
-    [ "$route_rc" -eq 0 ] && [ "$route_after" -eq $((route_before + 1)) ] \
-      && ok "#2137: current implementationReady SDD route records once" \
-      || bad "#2137: healthy SDD route must record once" "rc=$route_rc comments=$route_before->$route_after"
+  if [ "$route_rc" -eq 0 ] \
+     && printf '%s' "$route_out" | jq -e ".kind == \"recorded\" and .sddPackageReady == $expected_ready" >/dev/null \
+     && [ "$route_after" -eq $((route_before + 1)) ]; then
+    ok "#2298: $label SDD readiness records, reporting sddPackageReady=$expected_ready"
   else
-    [ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
-      && ok "#2137: $label SDD readiness is refused with zero writes" \
-      || bad "#2137: $label SDD readiness must not mutate" "rc=$route_rc comments=$route_before->$route_after"
+    bad "#2298: $label SDD readiness must record with sddPackageReady=$expected_ready" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
   fi
 }
-route_sdd_case "mismatched workId" '{"workId":"other-work","status":"implementationReady"}' refusal
-route_sdd_case "unready status" '{"workId":"fixture-sdd","status":"analyzing"}' refusal
-route_sdd_case "current" '{"workId":"fixture-sdd","status":"implementationReady"}' success
+route_sdd_case "mismatched workId" '{"workId":"other-work","status":"implementationReady"}' false
+route_sdd_case "unready status" '{"workId":"fixture-sdd","status":"analyzing"}' false
+route_sdd_case "current implementationReady" '{"workId":"fixture-sdd","status":"implementationReady"}' true
 # The later lock-contract legs intentionally run in the fixture's ordinary lightweight world.  Restore
 # that route through the same command rather than reaching into server state, so their precondition is
 # explicit and the SDD success probe cannot leak a checkout-local evidence dependency into another test.
