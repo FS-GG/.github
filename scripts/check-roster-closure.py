@@ -192,12 +192,51 @@ def _org_owned(fulls: set[str], org: str) -> set[str]:
     return {f for f in fulls if _owner(f).lower() == want}
 
 
+def _validate_org_repos(raw: object) -> list[str]:
+    """Coerce `raw` (a `GET /orgs/{org}/repos` page, or an equivalent `--org-repos-json` fixture)
+    into a validated `list[str]` of `owner/name` full names, or raise `ValueError`.
+
+    Mirrors `_validate_board_items` (`.github#2206`, direction C): an element this reader cannot
+    parse might be exactly the crash `.github#2330` exists to prevent — silently skipping it, or
+    crashing past it with an uncaught `TypeError`, would let a malformed org listing either drop a
+    repo unreported or collide direction B's "could not look" with its own exit-1 "definite
+    violation" meaning. So every shape problem — a non-list top level, an element that is neither a
+    non-blank string nor an object with a usable `full_name` — is a `ValueError` the caller turns
+    into the same distinguishable no-verdict AC-4 requires, never a silent skip and never an
+    uncaught exception. Called from both direction-B consumers of an org listing — the
+    `--org-repos-json` fixture path in `main()` and `_fetch_org_repos`'s live GitHub API path below
+    — so the two cannot diverge on how they guard against malformed input.
+    """
+    if not isinstance(raw, list):
+        raise ValueError(f"expected a JSON array of repos, got {type(raw).__name__}")
+    out: list[str] = []
+    for index, entry in enumerate(raw):
+        if isinstance(entry, str):
+            if not entry.strip():
+                raise ValueError(f"item[{index}] is a blank string, expected a non-empty full name")
+            out.append(entry)
+            continue
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"item[{index}] is a {type(entry).__name__}, expected a string full name or an "
+                f"object with a `full_name`")
+        full_name = entry.get("full_name")
+        if not isinstance(full_name, str) or not full_name.strip():
+            raise ValueError(f"item[{index}] has a missing/non-string/blank `full_name`")
+        out.append(full_name)
+    return out
+
+
 def _fetch_org_repos(org: str) -> list[str]:
     """Every repo in the org, following pagination. Raises on any non-200 or malformed page.
 
     Anonymous requests see public repos; a token (GITHUB_TOKEN) is used when present. Either way a
     private repo the caller cannot see is invisible — which is exactly why the caller cross-checks
     that every rostered repo came back (see `org_visibility_noverdicts`). Silence is not evidence.
+    Every page is run through `_validate_org_repos` before extraction (`.github#2330`): the old
+    `isinstance(page, list)` check proved only the top level was a list, so a page whose elements
+    were not all dicts with `full_name` raised an uncaught `TypeError` on the very next line — on
+    every LIVE `roster-closure` CI run, not just under a fixture flag.
     """
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
     url = f"{API}/orgs/{org}/repos?per_page=100&type=all"
@@ -211,9 +250,10 @@ def _fetch_org_repos(org: str) -> list[str]:
         })
         with urllib.request.urlopen(req, timeout=30) as resp:
             page = json.loads(resp.read().decode("utf-8"))
-            if not isinstance(page, list):
-                raise ValueError(f"expected a JSON array from {url}, got {type(page).__name__}")
-            out.extend(str(r["full_name"]) for r in page)
+            try:
+                out.extend(_validate_org_repos(page))
+            except ValueError as exc:
+                raise ValueError(f"{exc} (from {url})") from exc
             url = _next_link(resp.headers.get("Link", ""))
     return out
 
@@ -642,14 +682,26 @@ def main(argv: list[str]) -> int:
               f"a repo present in org {args.org!r} but absent from the roster would go unreported.",
               file=sys.stderr)
     else:
+        # EVERY step that can fail on a malformed/unreadable org listing — the JSON parse, the
+        # per-element shape check, AND the fetch itself — lives inside this one try/except. The
+        # `--org-repos-json` path used to build `live` directly with `str(r["full_name"])` on every
+        # element with no shape check first: a fixture (or, via `_fetch_org_repos`, a live API page)
+        # whose elements were not all dicts with `full_name` (`[1,2,3]`, a list of nulls, a list of
+        # strings mixed with non-dicts) raised an uncaught `TypeError`, propagating a Python
+        # traceback that exits 1 — colliding with this script's own "exit 1 = definite violation"
+        # meaning, the exact vacuous-failure shape #266 exists to prevent (`.github#2330`, the same
+        # class independent review found for direction C in `.github#2206`). `_validate_org_repos`
+        # now rejects every such shape BEFORE the list is trusted, in both consumers, and `TypeError`
+        # is caught here too as a second line of defense against a residual defect in either path.
         live: list[str] | None = None
         try:
             if args.org_repos_json:
                 raw = json.load(open(args.org_repos_json, encoding="utf-8"))
-                live = [r if isinstance(r, str) else str(r["full_name"]) for r in raw]
+                live = _validate_org_repos(raw)
             else:
                 live = _fetch_org_repos(args.org)
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, KeyError) as exc:
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, KeyError,
+                TypeError) as exc:
             noverdicts.append(f"could not read the repo list for org {args.org!r}: {exc}. "
                               f"'Could not look' is not 'looked, and the world is closed'.")
 
