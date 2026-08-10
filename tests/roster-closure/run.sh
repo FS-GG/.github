@@ -87,8 +87,11 @@ except Exception:
 print(json.dumps({"public_repos": n, "total_private_repos": 0}))
 PY
   fi
+  # --skip-board: this file's directions A/B fixtures (sections 1-8) are not about the board — the
+  # board direction gets its own fixtures in section 9, injected via --board-json rather than a live
+  # `gh api graphql` call, which would make this offline suite hit the network and hang/fail in CI.
   python3 "$TOOL" --roster "$roster" --deps "$deps" --org FS-GG \
-    --org-repos-json "$live" --org-meta-json "$meta" 2>&1
+    --org-repos-json "$live" --org-meta-json "$meta" --skip-board 2>&1
 }
 
 # expect_finding <name> <needle> <roster> <deps> <live> [meta] — a VIOLATION: exit 1 AND why.
@@ -155,7 +158,7 @@ expect_noverdict "a listing missing a rostered repo is no verdict (unreachable s
   "did NOT come back from" "$ROSTER" "$DEPS" "$NARROW"
 
 # An unreachable listing is no verdict, never a skip and never a finding.
-rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG --skip-board \
         --org-repos-json "$WORK/does-not-exist.json" 2>&1)" || rc=$?
 { [ "$rc" -eq 3 ] && grep -qF "could not read the repo list" <<<"$out"; } \
   && ok "an unreadable org listing is no verdict (exit 3)" || bad "unreadable listing (want exit 3)" "$out"
@@ -202,11 +205,11 @@ expect_finding "the repos[0] repo being both rostered and exempt fails (jq index
   "BOTH rostered and listed" "$ROSTER_BOTH0" "$DEPS" "$LIVE"
 
 # --- 5. --skip-org is loud, and still runs the offline half ---------------------------------------
-rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS_AUDIO" --skip-org 2>&1)" || rc=$?
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS_AUDIO" --skip-org --skip-board 2>&1)" || rc=$?
 { [ "$rc" -ne 0 ] && grep -qF "contract participant" <<<"$out"; } \
   && ok "--skip-org still enforces registry closure" || bad "--skip-org enforces (A)" "$out"
 # Expects exit 0; guard it anyway, or `set -e` would abort the run instead of reporting a clean FAIL.
-rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org 2>&1)" || rc=$?
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org --skip-board 2>&1)" || rc=$?
 { [ "$rc" -eq 0 ] && grep -qF "org closure NOT checked" <<<"$out"; } \
   && ok "--skip-org announces the unanswered question" || bad "--skip-org is loud" "$out"
 
@@ -238,11 +241,11 @@ fi
 # --- 7. CI guard on the real, checked-in registry -------------------------------------------------
 # Offline half only: the org half needs the network and runs as its own workflow step.
 if python3 "$TOOL" --roster "$REPO_ROOT/registry/repos.yml" \
-     --deps "$REPO_ROOT/registry/dependencies.yml" --skip-org >/dev/null 2>&1; then
+     --deps "$REPO_ROOT/registry/dependencies.yml" --skip-org --skip-board >/dev/null 2>&1; then
   ok "the checked-in registry closes over dependencies.yml"
 else
   bad "real registry closure" \
-    "$(python3 "$TOOL" --roster "$REPO_ROOT/registry/repos.yml" --deps "$REPO_ROOT/registry/dependencies.yml" --skip-org 2>&1)"
+    "$(python3 "$TOOL" --roster "$REPO_ROOT/registry/repos.yml" --deps "$REPO_ROOT/registry/dependencies.yml" --skip-org --skip-board 2>&1)"
 fi
 
 # --- 8. org-visibility: the whole org, not just the rostered part (#1154) --------------------------
@@ -274,7 +277,7 @@ out="$(run "$ROSTER" "$DEPS" "$LIVE" "$META_OK")" \
 
 # Unreadable org metadata is a could-not-look, distinct from a finding: valid listing, but the meta
 # read fails.
-rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG \
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG --skip-board \
         --org-repos-json "$LIVE" --org-meta-json "$WORK/meta-does-not-exist.json" 2>&1)" || rc=$?
 { [ "$rc" -eq 3 ] && grep -qF "could not read org metadata" <<<"$out"; } \
   && ok "unreadable org metadata is no verdict (exit 3)" || bad "unreadable metadata (want exit 3)" "$out"
@@ -363,6 +366,154 @@ if bash "$REPOS_SH" validate --registry "$ROSTER_USEREXEMPT" >/dev/null 2>&1; th
 else
   bad "user-owned exemption does not validate" "$(bash "$REPOS_SH" validate --registry "$ROSTER_USEREXEMPT" 2>&1)"
 fi
+
+# --- 10. BOARD closure (direction C, .github#2206) -------------------------------------------------
+# Every case here runs OFFLINE via --board-json (never `gh api graphql`) and --skip-org, so direction
+# B contributes nothing and only direction C's verdict shows through. Direction A still runs against
+# $DEPS, which names only repos $ROSTER already rosters, so it stays green throughout this section.
+
+# run_board <roster> <board-json> — direction C alone, offline.
+run_board() {
+  local roster="$1" board="$2"
+  python3 "$TOOL" --roster "$roster" --deps "$DEPS" --skip-org --board-json "$board" 2>&1
+}
+
+# THE ACCEPTANCE CASE THIS ITEM WAS FILED FOR: a schedulable board row naming a repository absent
+# from both repos.yml and outside-fabric: is a violation, and it is NAMED — the .github#2206 shape.
+BOARD_VIOLATION="$WORK/board-violation.json"
+cat > "$BOARD_VIOLATION" <<'JSON'
+[{"owner": "FS-GG", "repo": "Unrostered.Repo", "number": 42, "status": "Ready"}]
+JSON
+rc=0; out="$(run_board "$ROSTER" "$BOARD_VIOLATION")" || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qF "FS-GG/Unrostered.Repo" <<<"$out" && grep -qF "roster-closure-2206 shape" <<<"$out"; } \
+  && ok "a schedulable row on an unrostered, unexempt repo is a BOARD closure violation" \
+  || bad "board violation (want exit 1, named)" "$out"
+
+# A row on a REPOS.YML-rostered repo is closed — no violation.
+BOARD_ROSTERED="$WORK/board-rostered.json"
+cat > "$BOARD_ROSTERED" <<'JSON'
+[{"owner": "FS-GG", "repo": ".github", "number": 1, "status": "In review"}]
+JSON
+out="$(run_board "$ROSTER" "$BOARD_ROSTERED")" \
+  && ok "a schedulable row on a rostered repo is closed" || bad "rostered row closed" "$out"
+
+# A row on an OUTSIDE-FABRIC repo is closed too — the existing opt-out is BOARD direction's opt-out.
+BOARD_EXEMPT="$WORK/board-exempt.json"
+cat > "$BOARD_EXEMPT" <<'JSON'
+[{"owner": "FS-GG", "repo": "Scratch.Repo", "number": 7, "status": "Ready"}]
+JSON
+out="$(run_board "$ROSTER_EXEMPT" "$BOARD_EXEMPT")" \
+  && ok "a schedulable row on an outside-fabric repo is closed (reused opt-out, no new schema)" \
+  || bad "outside-fabric row closed" "$out"
+
+# A DONE row on an unrostered repo is NOT a violation — the maintainer's own predicate
+# (.github#2206): closed history costs nothing, only a SCHEDULABLE row re-triggers. This is exactly
+# what lets EHotwagner/rogue3 need no roster action while its only board row stays Done.
+BOARD_DONE="$WORK/board-done.json"
+cat > "$BOARD_DONE" <<'JSON'
+[{"owner": "FS-GG", "repo": "Unrostered.ButDone", "number": 99, "status": "Done"}]
+JSON
+out="$(run_board "$ROSTER" "$BOARD_DONE")" \
+  && ok "a Done row on an unrostered repo is NOT a violation (not schedulable)" \
+  || bad "Done row should not violate" "$out"
+# Status is graded case-insensitively, and an unset/empty status counts as non-Done (schedulable).
+BOARD_DONE_CASE="$WORK/board-done-case.json"
+cat > "$BOARD_DONE_CASE" <<'JSON'
+[{"owner": "FS-GG", "repo": "Unrostered.ButDone", "number": 100, "status": "DONE"}]
+JSON
+out="$(run_board "$ROSTER" "$BOARD_DONE_CASE")" \
+  && ok "Done is matched case-insensitively" || bad "case-insensitive Done" "$out"
+BOARD_NOSTATUS="$WORK/board-nostatus.json"
+cat > "$BOARD_NOSTATUS" <<'JSON'
+[{"owner": "FS-GG", "repo": "Unrostered.NoStatus", "number": 101, "status": ""}]
+JSON
+rc=0; out="$(run_board "$ROSTER" "$BOARD_NOSTATUS")" || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qF "FS-GG/Unrostered.NoStatus" <<<"$out"; } \
+  && ok "an unset/empty status counts as non-Done (schedulable)" \
+  || bad "empty status should be schedulable" "$out"
+
+# THE .github#2206 SHAPE ITSELF: a USER-OWNED repo with a schedulable row and no roster/exempt entry
+# is a violation, proving direction C does not inherit direction B's org-enumeration blind spot — it
+# never calls GET /orgs/{org}/repos at all, so a user-owned row is graded exactly like an org-owned
+# one instead of being structurally invisible.
+BOARD_USERVIOLATION="$WORK/board-user-violation.json"
+cat > "$BOARD_USERVIOLATION" <<'JSON'
+[{"owner": "EHotwagner", "repo": "rogue3", "number": 96, "status": "In review"}]
+JSON
+rc=0; out="$(run_board "$ROSTER" "$BOARD_USERVIOLATION")" || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qF "EHotwagner/rogue3" <<<"$out"; } \
+  && ok "a SCHEDULABLE user-owned repo with no disposition is a violation (no org-enumeration blind spot)" \
+  || bad "user-owned schedulable violation" "$out"
+
+# A user-owned repo that IS rostered (role: non-participant, .github#2245's mechanism) is closed —
+# the S.I.R. shape.
+BOARD_USERROSTERED="$WORK/board-user-rostered.json"
+cat > "$BOARD_USERROSTERED" <<'JSON'
+[{"owner": "EHotwagner", "repo": "S.I.R.", "number": 138, "status": "In progress"}]
+JSON
+out="$(run_board "$ROSTER_USEROWNED" "$BOARD_USERROSTERED")" \
+  && ok "a rostered non-participant user-owned repo (S.I.R. shape) is closed" \
+  || bad "user-owned rostered row closed" "$out"
+
+# A user-owned repo under outside-fabric: is closed too.
+BOARD_USEREXEMPT="$WORK/board-user-exempt.json"
+cat > "$BOARD_USEREXEMPT" <<'JSON'
+[{"owner": "EHotwagner", "repo": "rogue3", "number": 96, "status": "Ready"}]
+JSON
+out="$(run_board "$ROSTER_USEREXEMPT" "$BOARD_USEREXEMPT")" \
+  && ok "a user-owned outside-fabric repo is closed" || bad "user-owned exempt row closed" "$out"
+
+# Multiple schedulable rows on the SAME unrostered repo collapse into ONE violation naming both.
+BOARD_MULTI="$WORK/board-multi.json"
+cat > "$BOARD_MULTI" <<'JSON'
+[{"owner": "FS-GG", "repo": "Unrostered.Repo", "number": 42, "status": "Ready"},
+ {"owner": "FS-GG", "repo": "Unrostered.Repo", "number": 43, "status": "Blocked"}]
+JSON
+rc=0; out="$(run_board "$ROSTER" "$BOARD_MULTI")" || rc=$?
+nviol="$(grep -c '::error::roster-closure: FS-GG/Unrostered.Repo holds' <<<"$out" || true)"
+{ [ "$rc" -eq 1 ] && [ "$nviol" -eq 1 ] && grep -qF "#42" <<<"$out" && grep -qF "#43" <<<"$out"; } \
+  && ok "multiple schedulable rows on one unrostered repo collapse into ONE violation naming both" \
+  || bad "multi-row collapse" "$out"
+
+# The `{"items": [...]}` wrapped shape (what a captured snapshot document looks like) is accepted,
+# not just a bare array.
+BOARD_WRAPPED="$WORK/board-wrapped.json"
+cat > "$BOARD_WRAPPED" <<'JSON'
+{"schema": "fsgg.coord.snapshot/1", "items": [{"owner": "FS-GG", "repo": ".github", "number": 1, "status": "Ready"}]}
+JSON
+out="$(run_board "$ROSTER" "$BOARD_WRAPPED")" \
+  && ok "the wrapped {items: [...]} board-json shape is accepted" || bad "wrapped shape accepted" "$out"
+
+# --- the fails-open traps AC-4 exists to close: "could not read the board" must fail CLOSED and be
+# DISTINGUISHABLE from both a clean green and a violation (#266, #1154's board-direction analog).
+rc=0; out="$(run_board "$ROSTER" "$WORK/board-does-not-exist.json")" || rc=$?
+{ [ "$rc" -eq 3 ] && grep -qF "could not read the Coordination board" <<<"$out"; } \
+  && ok "an unreadable board-json path is a no-verdict (exit 3), not a vacuous green" \
+  || bad "unreadable board (want exit 3)" "$out"
+
+BOARD_MALFORMED="$WORK/board-malformed.json"; printf '{"not": "a list"}\n' > "$BOARD_MALFORMED"
+rc=0; out="$(run_board "$ROSTER" "$BOARD_MALFORMED")" || rc=$?
+{ [ "$rc" -eq 3 ] && grep -qF "could not read the Coordination board" <<<"$out"; } \
+  && ok "a malformed board-json (no items array) is a no-verdict, not a traceback" \
+  || bad "malformed board (want exit 3)" "$out"
+
+BOARD_EMPTY="$WORK/board-empty.json"; printf '[]\n' > "$BOARD_EMPTY"
+rc=0; out="$(run_board "$ROSTER" "$BOARD_EMPTY")" || rc=$?
+{ [ "$rc" -eq 3 ] && grep -qF "reported ZERO items" <<<"$out"; } \
+  && ok "an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)" \
+  || bad "empty board (want exit 3)" "$out"
+
+# A definite BOARD violation outranks a simultaneous no-verdict elsewhere, same precedence as A/B.
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" \
+        --org-repos-json "$WORK/does-not-exist.json" --board-json "$BOARD_VIOLATION" 2>&1)" || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qF "FS-GG/Unrostered.Repo" <<<"$out"; } \
+  && ok "a definite BOARD violation outranks a simultaneous org no-verdict" \
+  || bad "violation outranks no-verdict" "$out"
+
+# --skip-board is loud, offline, and leaves the board question unanswered — mirrors --skip-org.
+rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org --skip-board 2>&1)" || rc=$?
+{ [ "$rc" -eq 0 ] && grep -qF "board closure NOT checked" <<<"$out"; } \
+  && ok "--skip-board announces the unanswered question" || bad "--skip-board is loud" "$out"
 
 echo "roster-closure fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::roster-closure fixture FAILED"; exit 1; }

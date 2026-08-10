@@ -1,0 +1,390 @@
+schemaVersion: 1
+workId: 2206-board-roster-closure
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2206-board-roster-closure/spec.md
+sourceClarifications: work/2206-board-roster-closure/clarifications.md
+sourceChecklist: work/2206-board-roster-closure/checklist.md
+sourcePlan: work/2206-board-roster-closure/plan.md
+sourceTasks: work/2206-board-roster-closure/tasks.yml
+sourceAnalysis: readiness/2206-board-roster-closure/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2206-board-roster-closure/analysis.json
+    digest: 5738e0c38d6ec8c88d8575ef26d7195eaaeb028ce34c0a0488fa3903c5ad715d
+    schemaVersion: 1
+  - label: checklist
+    path: work/2206-board-roster-closure/checklist.md
+    digest: 05bb4b7ba6e9f0e7094e06b5873eac083b1eb4b0388a0f28d8637554d42e7f9f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2206-board-roster-closure/clarifications.md
+    digest: 6c0e08c45acb6274acdd4e0eccf64b59370bcc3822935403f3969599ba5b18a4
+    schemaVersion: 1
+  - label: plan
+    path: work/2206-board-roster-closure/plan.md
+    digest: e537d3162eacc265839277cd660ba5ca8a85b2a2146a09bb81acf25a37ef7dd0
+    schemaVersion: 1
+  - label: spec
+    path: work/2206-board-roster-closure/spec.md
+    digest: a84777951917aa195c25ecbeac4fb0ce657de9bb67f80753beee922834afffdc
+    schemaVersion: 1
+  - label: tasks
+    path: work/2206-board-roster-closure/tasks.yml
+    digest: fa9e83a872325af2cab457d16762d5facd57b2bad13aaf086169a706fd7b1931
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [scripts/check-roster-closure.py, tests/roster-closure/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["bash tests/roster-closure/run.sh -> 49 assertion(s): 49 passed, 0 failed.", "board_closure_findings() implemented in scripts/check-roster-closure.py, wired into main()'s findings bucket.", "tests/roster-closure/run.sh section 10, case \"a schedulable row on an unrostered, unexempt repo is a BOARD closure violation\": exit 1, message names FS-GG/Unrostered.Repo and the roster-closure-2206 shape."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-002]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/check-roster-closure.py, tests/roster-closure/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["No new opt-out schema added; board_closure_findings() reads the same rostered/exempt sets directions A/B already compute.", "tests/roster-closure/run.sh: \"a schedulable row on a rostered repo is closed\", \"...on an outside-fabric repo is closed (reused opt-out, no new schema)\", \"a rostered non-participant user-owned repo (S.I.R. shape) is closed\", \"a user-owned outside-fabric repo is closed\" — all PASS."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/check-roster-closure.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["_fetch_board_items/_resolve_board_project_number call only `gh api graphql` against organization(login:...){projectV2/projectsV2}; grep -n 'orgs/' scripts/check-roster-closure.py shows GET /orgs/{org}/repos used only inside _fetch_org_repos/_fetch_org_meta (direction B), never in the board-closure path.", "tests/roster-closure/run.sh: \"a SCHEDULABLE user-owned repo with no disposition is a violation (no org-enumeration blind spot)\" — EHotwagner/rogue3 (a non-FS-GG-owned repo) is graded and reported as a violation using only --board-json, no org listing supplied. PASS."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-004]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/check-roster-closure.py, tests/roster-closure/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: [Mutation/gate-inversion evidence for the same claim recorded under EV011., "tests/roster-closure/run.sh: \"an unreadable board-json path is a no-verdict (exit 3), not a vacuous green\", \"a malformed board-json (no items array) is a no-verdict, not a traceback\", \"an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)\", \"a definite BOARD violation outranks a simultaneous org no-verdict\" — all PASS, each asserting exit 3 with text distinct from both the exit-0 and exit-1 messages."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [".github/workflows/coherence.yml"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["This step's live board read cannot be exercised inside this worktree (no CI run available to a worker); its correctness is established by the identical local invocation recorded under EV006/EV012, and its exit-code handling is unchanged from the pre-existing, already-CI-proven org-closure logic.", "python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/coherence.yml'))\" -> parses cleanly.", "roster-closure job's existing two steps now cover direction C: the fixture step already runs tests/roster-closure/run.sh's new section 10; the live step's single `python scripts/check-roster-closure.py --org FS-GG` call runs A+B+C together and reuses the same exit-3-warns/exit-1-fails logic (no new step needed, per plan.md PD-005)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: [AC-006]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [scripts/check-roster-closure.py]
+    sourceRefs:
+      - kind: artifact
+        path: work/2206-board-roster-closure/spec.md
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Direct live confirmation of each repository's disposition via _fetch_board_items('FS-GG','Coordination'): EHotwagner/S.I.R.#138 status=Ready (schedulable), closed because registry/repos.yml rosters it role: non-participant (#2245). EHotwagner/rogue3#96 status=Done (not schedulable under the #2206 predicate), so it needs no roster action and is correctly excluded from the graded population rather than silently skipped.", "Live run, 2026-08-10: `python3 scripts/check-roster-closure.py --skip-org` against the real FS-GG/Coordination board (2162 items) -> exit 0, \"ok: registry and 2162 board item(s) closed\".", "rogue3's registry disposition (rostered / outside-fabric / removed) is left undecided by this item, per .github#2206 acceptance 6 and spec.md SB-006 — only visibility and requiredness are in scope."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV007]
+    artifacts: [scripts/check-roster-closure.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Exit codes 0/1/3 keep their existing meanings; direction C only adds new conditions under each, verified by the full fixture suite (49/49) covering both the pre-existing 33 A/B cases (unchanged) and the 16 new C cases."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV008]
+    artifacts: [scripts/check-roster-closure.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["--board-json, --skip-board, --board-owner, --board-title added to the argparse parser; exercised throughout tests/roster-closure/run.sh section 10 (--board-json, --skip-board) and by the live run under EV006 (default --board-owner/--board-title resolving FS-GG/Coordination by title)."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [".github/workflows/coherence.yml"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["YAML parses (see EV005); step names/comments updated to describe A+B+C; no new job or step added, matching plan.md PC-003."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-004]
+    obligationRefs: [EV010]
+    artifacts: [tests/roster-closure/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["bash tests/roster-closure/run.sh -> \"roster-closure fixture — 49 assertion(s): 49 passed, 0 failed\" (33 pre-existing A/B cases + 16 new direction-C cases added in section 10)."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [scripts/check-roster-closure.py, tests/roster-closure/run.sh]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Gate-inversion mutation: board_closure_findings()'s `if full in rostered or full in exempt: continue` was temporarily replaced with `if True: continue` (neutering the closure check).", "Mutation reverted (verified via diff against pre-mutation copy); bash tests/roster-closure/run.sh -> 49/49 passed again, confirming the fix and its tests are the cause of the observed red, not a coincidence.", "Re-ran bash tests/roster-closure/run.sh under the mutation: exactly the 5 tests that assert a BOARD violation is DETECTED went RED (\"board violation\", \"empty status should be schedulable\", \"user-owned schedulable violation\", \"multi-row collapse\", \"violation outranks no-verdict\"); the other 44 (including the no-verdict/closed-world/A/B cases) stayed green, as expected since the mutation only disables violation detection. roster-closure fixture — 49 assertion(s): 44 passed, 5 failed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV012]
+    artifacts: [scripts/check-roster-closure.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Same live-board evidence as EV006 (live network read against FS-GG/Coordination, 2162 items, exit 0; EHotwagner/S.I.R.#138 and EHotwagner/rogue3#96 each confirmed dispositioned)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [registry/repos.yml, scripts/check-roster-closure.py]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
+      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["Additive migration confirmed: all 33 pre-existing directions-A/B fixture cases pass byte-for-byte unchanged (only --skip-board was added to their invocations, a test-harness change, not a behavior change under those flags).", "registry/repos.yml required no data or schema change: EHotwagner/S.I.R. is already rostered role: non-participant (.github#2245, merged b6c0073c); EHotwagner/rogue3 needs no row because its only board row is Done (confirmed live, EV006)."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV014]
+    artifacts: [readiness/2206-board-roster-closure/analysis.json, readiness/2206-board-roster-closure/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: work/2206-board-roster-closure/test-results/generated-view-junit.xml
+      digest: "sha256:0b73de4316c79a1adfe9c617afb77964c84a2f8feca9f7d5622ed51a7964c2d2"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 1
+      failed: 0
+      skipped: 0
+    notes: ["fsgg-sdd analyze --work 2206-board-roster-closure -> analysisReadiness: implementationReady, regenerating both files from the current plan/tasks sources after every PD-###/PC-###/VO-### edit."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

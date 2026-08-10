@@ -1,0 +1,52 @@
+<testsuite name="bash" tests="1" failures="0"><testcase name="bash"><system-out><![CDATA[PASS  a closed world passes
+PASS  dependencies.yml participant absent from the roster fails (registry closure)
+PASS  repo live in the org but rostered nowhere fails (org closure)
+PASS  an EMPTY org listing is no verdict (not a finding, not green)
+PASS  a listing missing a rostered repo is no verdict (unreachable subject, not vacuous green)
+PASS  an unreadable org listing is no verdict (exit 3)
+PASS  an absent dependencies.yml repos: block fails (no vacuous pass)
+PASS  an explicit outside-fabric exemption is honored
+PASS  an outside-fabric row naming a repo not in the org fails (stale exemption)
+PASS  a repo both rostered and exempt fails
+PASS  a mis-shaped dependencies.yml repos: block fails cleanly
+PASS  the repos[0] repo being both rostered and exempt fails (jq index()==0 is a match)
+PASS  --skip-org still enforces registry closure
+PASS  --skip-org announces the unanswered question
+PASS  an outside-fabric row without a reason is rejected
+PASS  a repo both rostered and exempt is rejected by repos.sh too
+PASS  the repos[0] repo both rostered and exempt is rejected by repos.sh too
+PASS  a well-formed, non-rostered outside-fabric row validates
+PASS  the checked-in registry closes over dependencies.yml
+PASS  an invisible unrostered private repo yields no verdict, not a vacuous green (#1154)
+PASS  a token that cannot read total_private_repos yields no verdict
+PASS  an org whose whole repo total is visible passes
+PASS  unreadable org metadata is no verdict (exit 3)
+PASS  a mis-shaped org meta (array, not object) is a clean no-verdict, not a traceback
+PASS  a rostered repo the org does not own does not make org closure a no-verdict
+PASS  the ungraded user-owned row is NAMED with its reason, not silently skipped
+PASS  the report states the ungraded row is not counted as verified
+PASS  an ORG-owned rostered repo missing from the listing is still a no-verdict
+PASS  an unrostered ORG repo is still a finding alongside a user-owned row (owner-blind, this is where direction B goes SILENT)
+PASS  a user-owned outside-fabric row is not reported as a stale exemption
+PASS  a stale ORG-owned exemption is still a finding alongside a user-owned one
+PASS  the user-owned non-participant roster validates under repos.sh
+PASS  the user-owned outside-fabric roster validates under repos.sh
+PASS  a schedulable row on an unrostered, unexempt repo is a BOARD closure violation
+PASS  a schedulable row on a rostered repo is closed
+PASS  a schedulable row on an outside-fabric repo is closed (reused opt-out, no new schema)
+PASS  a Done row on an unrostered repo is NOT a violation (not schedulable)
+PASS  Done is matched case-insensitively
+PASS  an unset/empty status counts as non-Done (schedulable)
+PASS  a SCHEDULABLE user-owned repo with no disposition is a violation (no org-enumeration blind spot)
+PASS  a rostered non-participant user-owned repo (S.I.R. shape) is closed
+PASS  a user-owned outside-fabric repo is closed
+PASS  multiple schedulable rows on one unrostered repo collapse into ONE violation naming both
+PASS  the wrapped {items: [...]} board-json shape is accepted
+PASS  an unreadable board-json path is a no-verdict (exit 3), not a vacuous green
+PASS  a malformed board-json (no items array) is a no-verdict, not a traceback
+PASS  an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)
+PASS  a definite BOARD violation outranks a simultaneous org no-verdict
+PASS  --skip-board announces the unanswered question
+roster-closure fixture — 49 assertion(s): 49 passed, 0 failed
+roster-closure fixture — OK
+]]></system-out></testcase></testsuite>

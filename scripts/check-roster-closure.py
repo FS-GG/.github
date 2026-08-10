@@ -12,7 +12,7 @@ FS.GG.Audio proved it. The org's seventh repo was transferred in, registered in
 `repos.yml`. No fabric iterated it; no gate could say so. `repos-audit.yml` was no help either: it
 audits repos IN the roster, so a repo absent from the roster is absent from the audit.
 
-This script asserts the roster is closed, from two directions:
+This script asserts the roster is closed, from three directions:
 
   A. REGISTRY closure (offline, no token).  Every repo in `dependencies.yml`'s `repos:` block has a
      row in `repos.yml`. Audio sat in one and not the other for weeks; this is the cheap, strictly-
@@ -41,37 +41,73 @@ This script asserts the roster is closed, from two directions:
      Direction B therefore compares only the org-owned rows, and every row it does not grade is
      PRINTED with the reason — never dropped, and never counted as verified.
 
+  C. BOARD closure (one `gh api graphql` call).  Every repository naming a non-`Done` row on the
+     FS-GG Coordination Projects v2 board has a row in `repos.yml`, or an explicit `outside-fabric:`
+     entry (`.github#2206`). This is the direction that actually found the defect this script was
+     extended for: two user-owned repos (`EHotwagner/rogue3`, `EHotwagner/S.I.R.`) held live board
+     rows while absent from `repos.yml` and from `outside-fabric:`, and neither direction A nor B
+     could see it — A is offline and knows nothing about the board, and B enumerates the GitHub
+     **organization**, which by construction can never return a repository a **user** owns.
+
+     ITS SUBJECT IS THE BOARD'S OWN ITEM SET, READ DIRECTLY. Each board item already carries its own
+     `owner`/`repo` (the issue's or PR's repository), so direction C needs no org-membership proof at
+     all — unlike direction B, it applies no `_org_owned` filter, and a user-owned board row is graded
+     exactly like an org-owned one. This is deliberate: direction B's blind spot is owner enumeration,
+     and the fix is a direction that never enumerates an owner in the first place.
+
+     "Every repository" here means every repository with at least one **schedulable** row — status not
+     `Done` (case-insensitive; a missing/unset status counts as non-Done; #2206's maintainer decision).
+     A row whose status is `Done` costs nothing to leave unrostered: its closed history is a non-event,
+     and a *future* schedulable row on that repository is what re-triggers the check. This is why
+     `EHotwagner/rogue3` needs no roster action from this script — its only board row is `Done` — while
+     `EHotwagner/S.I.R.` (rostered `role: non-participant` per `.github#2245`) is graded closed.
+
+     The disposition vocabulary is NOT new. A schedulable board row is closed by either an existing
+     `repos.yml` row (any `role:`, including `non-participant` + its mandatory `reason:`) or an
+     existing `outside-fabric:` entry (its own mandatory `reason:`, `repos.sh validate`-enforced). Both
+     are already falsifiable — a row with no `reason:` does not validate — so no third opt-out list is
+     introduced here; the falsifiability #2206 asked for was already shipped by `.github#2245`.
+
 Neither reports a vacuous green — but "could not look" and "looked, and the world is open" are
 DIFFERENT answers and must not share an exit code (#1154). A human who sees a red treats it as a
 roster to fix; on a transient outage or a too-narrow token that is the wrong action, so the two are
 split three ways:
 
-  * exit 0 — the world is closed: the roster covers every repo the listing (proven complete) holds.
+  * exit 0 — the world is closed: the roster covers every repo the listing (proven complete) holds,
+    including every schedulable board row.
   * exit 1 — a VIOLATION the roster must fix: a `dependencies.yml` participant with no roster row;
     a repo live in the org and rostered nowhere (the FS.GG.Audio shape); a stale or contradictory
-    `outside-fabric:` exemption.
+    `outside-fabric:` exemption; a schedulable board row naming a repo with no roster row and no
+    `outside-fabric:` entry (the `.github#2206` shape).
   * exit 3 — NO VERDICT, the gate could not look: an unreachable/errored/empty org listing; a
-    rostered repo missing from the listing; or — the #1154 gap — a token that cannot prove it sees
-    the WHOLE org. Org closure needs the listing to be at least as large as the org's own repo
-    total (`public_repos + total_private_repos`); a run-scoped token cannot read the private count,
-    so it can prove the PUBLIC world closed but not the private one, and says so rather than
-    guessing 0. A definite violation outranks a no-verdict when both are present.
+    rostered repo missing from the listing; an unreachable/errored/empty/malformed board read; or —
+    the #1154 gap — a token that cannot prove it sees the WHOLE org. Org closure needs the listing to
+    be at least as large as the org's own repo total (`public_repos + total_private_repos`); a
+    run-scoped token cannot read the private count, so it can prove the PUBLIC world closed but not
+    the private one, and says so rather than guessing 0. A definite violation outranks a no-verdict
+    when both are present.
 
 Nothing here auto-exempts archived or forked repos: "archived" would be a one-click hole in the
 gate. Exemption is always an explicit, reviewed row.
 
-Pure-stdlib + PyYAML (already a coherence-gate dependency).
+Pure-stdlib + PyYAML (already a coherence-gate dependency) for directions A and B. Direction C shells
+out to the `gh` CLI's `api graphql` (already a repo-wide dependency — `scripts/project-field-options`
+uses the identical subprocess pattern) rather than adding an HTTP/GraphQL library; there is no
+REST enumeration of Projects v2 item content, so unlike A/B this direction cannot be `urllib`-only.
 
 Usage:
   scripts/check-roster-closure.py [--roster registry/repos.yml] [--deps registry/dependencies.yml]
                                   [--org FS-GG] [--org-repos-json FILE] [--org-meta-json FILE]
                                   [--skip-org]
+                                  [--board-owner FS-GG] [--board-title Coordination]
+                                  [--board-json FILE] [--skip-board]
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -79,6 +115,41 @@ import urllib.request
 import yaml
 
 API = "https://api.github.com"
+
+DEFAULT_BOARD_OWNER = "FS-GG"
+DEFAULT_BOARD_TITLE = "Coordination"
+
+# `content` covers both possible board-item shapes: an Issue (the normal row) and a PullRequest (a
+# board can carry one directly). A DraftIssue — the third possible `content` — has no `repository`
+# and is intentionally NOT queried here: it names no repository, so it is not this direction's
+# subject and is skipped rather than treated as an error.
+_BOARD_ITEMS_QUERY = r"""
+query RosterClosureBoardItems($owner:String!,$number:Int!,$after:String){
+  organization(login:$owner){projectV2(number:$number){
+    id number title
+    items(first:100,after:$after){
+      totalCount
+      pageInfo{hasNextPage endCursor}
+      nodes{
+        status: fieldValueByName(name:"Status"){
+          ... on ProjectV2ItemFieldSingleSelectValue{name}
+        }
+        content{
+          __typename
+          ... on Issue{number repository{owner{login} name}}
+          ... on PullRequest{number repository{owner{login} name}}
+        }
+      }
+    }
+  }}
+}
+"""
+
+_BOARD_PROJECT_LOOKUP_QUERY = r"""
+query RosterClosureBoardProject($owner:String!){
+  organization(login:$owner){projectsV2(first:50){nodes{number title}}}
+}
+"""
 
 
 def _full(owner: str, name: str) -> str:
@@ -183,6 +254,153 @@ def _fetch_org_meta(org: str) -> tuple[int, int | None]:
     public = int(obj["public_repos"])  # KeyError -> caught by the caller as an unreadable subject
     private = obj.get("total_private_repos")
     return public, (int(private) if private is not None else None)
+
+
+def _gh_graphql(query: str, variables: dict) -> dict:
+    """Run one GraphQL query through the `gh` CLI and return its `data`. Raises on any failure.
+
+    Mirrors `scripts/project-field-options`'s `graphql()` helper exactly (same subprocess shape,
+    same error taxonomy) rather than importing it: that script is a standalone tool with no public
+    module surface, and duplicating four lines here is cheaper than inventing one. `gh` is already a
+    load-bearing dependency of this repo's Projects v2 tooling.
+    """
+    payload = json.dumps({"query": query, "variables": variables}, sort_keys=True)
+    try:
+        proc = subprocess.run(
+            ["gh", "api", "graphql", "--input", "-"],
+            input=payload.encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"could not run `gh api graphql`: {exc}") from exc
+    if proc.returncode:
+        raise RuntimeError(f"`gh api graphql` failed ({proc.returncode}): {proc.stderr.decode(errors='replace').strip()}")
+    try:
+        reply = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"`gh api graphql` returned invalid JSON: {exc}") from exc
+    if not isinstance(reply, dict):
+        raise RuntimeError(f"`gh api graphql` returned a {type(reply).__name__}, expected an object")
+    if reply.get("errors"):
+        raise RuntimeError("GraphQL refused the query: " + json.dumps(reply["errors"], sort_keys=True))
+    if "data" not in reply or not isinstance(reply["data"], dict):
+        raise RuntimeError("GraphQL reply carried neither `data` nor `errors`")
+    return reply["data"]
+
+
+def _resolve_board_project_number(owner: str, title: str) -> int:
+    """The Projects v2 `number` for `owner`'s project named `title`. Raises if 0 or >1 match.
+
+    Read by TITLE, not hardcoded, so a project renumbering does not silently point this gate at the
+    wrong board — the same title-verification discipline `project-field-options.project_field` uses.
+    """
+    data = _gh_graphql(_BOARD_PROJECT_LOOKUP_QUERY, {"owner": owner})
+    org = data.get("organization") or {}
+    nodes = ((org.get("projectsV2") or {}).get("nodes")) or []
+    matches = [n for n in nodes if isinstance(n, dict) and n.get("title") == title]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"expected exactly one Projects v2 board named {title!r} under {owner!r}, found "
+            f"{len(matches)} (of {len(nodes)} project(s) readable at all)")
+    return int(matches[0]["number"])
+
+
+def _fetch_board_items(owner: str, title: str) -> list[dict]:
+    """Every item on `owner`'s `title` Projects v2 board, normalized to `{owner, repo, number,
+    status}` per row. Raises on any transport/shape failure or a page-count disagreement.
+
+    Only `Issue`/`PullRequest` content carries a `repository` — the direction's whole subject is
+    "which repository does this row name", so a `DraftIssue` (no repository) is silently skipped
+    rather than treated as unreadable; it names no repository to close over.
+    """
+    number = _resolve_board_project_number(owner, title)
+    out: list[dict] = []
+    after: str | None = None
+    total: int | None = None
+    while True:
+        data = _gh_graphql(_BOARD_ITEMS_QUERY, {"owner": owner, "number": number, "after": after})
+        project = (data.get("organization") or {}).get("projectV2")
+        if not project:
+            raise RuntimeError(f"board {owner}/{number} was not readable while paging items")
+        page = project.get("items") or {}
+        page_total = int(page.get("totalCount", -1))
+        if total is None:
+            total = page_total
+        elif total != page_total:
+            raise RuntimeError(
+                f"board item count changed while paging ({total} -> {page_total}); the board "
+                f"mutated mid-read, so this pass cannot be trusted as a complete snapshot")
+        for raw in page.get("nodes") or []:
+            content = (raw or {}).get("content") or {}
+            repo = content.get("repository")
+            if not repo:
+                continue  # a DraftIssue, or content this schema cannot classify: no repo to close
+            status = ((raw.get("status") or {}).get("name")) or ""
+            out.append({
+                "owner": str(((repo.get("owner") or {}).get("login")) or ""),
+                "repo": str(repo.get("name") or ""),
+                "number": content.get("number"),
+                "status": str(status),
+            })
+        info = page.get("pageInfo") or {}
+        if not info.get("hasNextPage"):
+            break
+        after = info.get("endCursor")
+        if not after:
+            raise RuntimeError("board reported hasNextPage=true but no endCursor to page with")
+    return out
+
+
+def board_closure_findings(roster: dict, items: list[dict]) -> list[str]:
+    """(C) Every SCHEDULABLE board row's repository is rostered or explicitly exempted.
+
+    "Schedulable" is status != Done (case-insensitive; unset counts as non-Done) — the maintainer's
+    own predicate on `.github#2206`: a `Done` row's history is a non-event and costs nothing to leave
+    unrostered, while a future schedulable row on that repository re-triggers this finding. This is
+    what lets `EHotwagner/rogue3` (its one board row is Done) need no roster action at all, while a
+    same-shaped repo with a live row still fails loudly.
+
+    Deliberately NO `_org_owned` filter, unlike `org_closure_findings`: a board item already names its
+    own owner, so grading it needs no proof of GitHub org membership — this is the direction
+    `.github#2206` was filed to add precisely because direction B's org enumeration cannot see a
+    user-owned repository at all.
+    """
+    errors: list[str] = []
+    rostered = {str(r.get("full", "")).strip() for r in (roster.get("repos") or [])}
+    exempt = {str(e.get("full", "")).strip() for e in (roster.get("outside-fabric") or [])}
+
+    examples: dict[str, list[str]] = {}
+    for item in items:
+        status = item.get("status") or ""
+        if status.strip().lower() == "done":
+            continue
+        owner = item.get("owner") or ""
+        repo = item.get("repo") or ""
+        if not owner or not repo:
+            continue
+        full = f"{owner}/{repo}"
+        if full in rostered or full in exempt:
+            continue
+        num = item.get("number")
+        tag = f"{full}#{num}" if num is not None else full
+        examples.setdefault(full, []).append(tag)
+
+    for full in sorted(examples):
+        shown = ", ".join(examples[full][:3])
+        more = len(examples[full]) - 3
+        suffix = f" (+{more} more)" if more > 0 else ""
+        errors.append(
+            f"{full} holds a schedulable (non-Done) Coordination board row ({shown}{suffix}) but is "
+            f"in NEITHER registry/repos.yml NOR its `outside-fabric:` opt-out list. This is the "
+            f"roster-closure-2206 shape: a repository can sit on the board — including a user-owned "
+            f"one, invisible to org enumeration — while every org fabric and every other closure "
+            f"direction stays blind to it. Roster it (a `role: non-participant` row with a `reason:` "
+            f"is valid for a repo that takes no fabric), or add an `outside-fabric:` row saying why "
+            f"it is deliberately outside.")
+    return errors
 
 
 def check_registry_closure(roster: dict, deps: dict, owner: str) -> list[str]:
@@ -325,6 +543,20 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--skip-org", action="store_true",
                     help="Run only the offline registry-closure check (A). Loud, and never the CI "
                          "default: it leaves the org-closure question unanswered.")
+    ap.add_argument("--board-owner", default=DEFAULT_BOARD_OWNER,
+                    help="The login that owns the Coordination Projects v2 board (default: "
+                         f"{DEFAULT_BOARD_OWNER!r}).")
+    ap.add_argument("--board-title", default=DEFAULT_BOARD_TITLE,
+                    help="The Projects v2 board's title, used to resolve its number (default: "
+                         f"{DEFAULT_BOARD_TITLE!r}).")
+    ap.add_argument("--board-json", default=None,
+                    help="Read board items from a JSON file instead of `gh api graphql` — either a "
+                         "bare array of {owner, repo, number, status} objects, or an object with an "
+                         "`items` key holding that array. For fixtures.")
+    ap.add_argument("--skip-board", action="store_true",
+                    help="Run only registry/org closure (A/B). Loud, and never the CI default: it "
+                         "leaves the board-closure question unanswered — the direction `.github#2206` "
+                         "was filed to add.")
     args = ap.parse_args(argv)
 
     roster = yaml.safe_load(open(args.roster, encoding="utf-8"))
@@ -398,6 +630,41 @@ def main(argv: list[str]) -> int:
                 else:
                     findings += org_closure_findings(roster, args.org, live_set)
 
+    # Direction C (BOARD closure, `.github#2206`). Independent of the org-closure block above: it
+    # reads its own subject (the board's item set) and shares only the `findings`/`noverdicts`
+    # buckets and this script's one exit-code contract. A board read failure never borrows direction
+    # B's org-unreachable wording, and vice versa — each no-verdict names its own subject so a reader
+    # never has to guess which direction went dark.
+    nboard = 0
+    if args.skip_board:
+        print(f"WARNING: board closure NOT checked (--skip-board). Only registry/org closure was "
+              f"verified; a repo holding a schedulable Coordination board row but absent from the "
+              f"roster would go unreported.", file=sys.stderr)
+    else:
+        board_items: list[dict] | None = None
+        try:
+            if args.board_json:
+                raw = json.load(open(args.board_json, encoding="utf-8"))
+                board_items = raw.get("items") if isinstance(raw, dict) else raw
+                if not isinstance(board_items, list):
+                    raise ValueError(
+                        f"expected a JSON array (or an object with an `items` array), got "
+                        f"{type(raw).__name__}")
+            else:
+                board_items = _fetch_board_items(args.board_owner, args.board_title)
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
+            noverdicts.append(f"could not read the Coordination board ({args.board_owner}/"
+                              f"{args.board_title!r}): {exc}. 'Could not look' is not 'looked, and "
+                              f"the board is closed'.")
+
+        if board_items is not None and not board_items:
+            noverdicts.append(f"the Coordination board ({args.board_owner}/{args.board_title!r}) "
+                              f"reported ZERO items. An empty read cannot distinguish 'the board is "
+                              f"empty' from 'this read saw nothing'.")
+        elif board_items is not None:
+            nboard = len(board_items)
+            findings += board_closure_findings(roster, board_items)
+
     if findings:
         for e in findings:
             print(f"::error::roster-closure: {e}", file=sys.stderr)
@@ -410,16 +677,21 @@ def main(argv: list[str]) -> int:
     if noverdicts:
         for n in noverdicts:
             print(f"roster-closure: no verdict: {n}", file=sys.stderr)
-        print(f"\n{len(noverdicts)} roster-closure no-verdict condition(s) — the gate could not "
-              f"establish that it sees the whole org, so it neither passes nor fails closure "
-              f"(#1154).", file=sys.stderr)
+        print(f"\n{len(noverdicts)} roster-closure no-verdict condition(s) — at least one direction "
+              f"could not establish that it sees its whole subject (the org, or the board), so the "
+              f"gate neither passes nor fails closure for that direction (#1154). See each line above "
+              f"for which subject and why.", file=sys.stderr)
         return 3
 
     nrost = len(roster.get("repos") or [])
     nexempt = len(roster.get("outside-fabric") or [])
     ndeps = len(deps.get("repos") or {})
-    scope = "registry closure only" if args.skip_org else f"org {args.org} is closed"
-    print(f"ok: {scope} — {nrost} rostered repo(s), {nexempt} explicit exemption(s), "
+    scopes = []
+    scopes.append("registry" if args.skip_org else f"registry + org {args.org}")
+    if not args.skip_board:
+        scopes.append(f"{nboard} board item(s)")
+    scope = " and ".join(scopes)
+    print(f"ok: {scope} closed — {nrost} rostered repo(s), {nexempt} explicit exemption(s), "
           f"all {ndeps} dependencies.yml participant(s) rostered.")
     return 0
 
