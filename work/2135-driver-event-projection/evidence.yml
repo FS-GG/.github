@@ -1,0 +1,413 @@
+schemaVersion: 1
+workId: 2135-driver-event-projection
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2135-driver-event-projection/spec.md
+sourceClarifications: work/2135-driver-event-projection/clarifications.md
+sourceChecklist: work/2135-driver-event-projection/checklist.md
+sourcePlan: work/2135-driver-event-projection/plan.md
+sourceTasks: work/2135-driver-event-projection/tasks.yml
+sourceAnalysis: readiness/2135-driver-event-projection/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2135-driver-event-projection/analysis.json
+    digest: b8be6bb9f8faed5952732cea952e190ace77b738a4a7c60b6bec25b1812333cf
+    schemaVersion: 1
+  - label: checklist
+    path: work/2135-driver-event-projection/checklist.md
+    digest: 07fd68d2d7ae7925324128e76c19f15e925482eb70dcb807f16afdb7eeefc434
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2135-driver-event-projection/clarifications.md
+    digest: 9f64fcc5ae33e89219d7b1132aa62d6d21d950401bfab6563e66926fd594d93d
+    schemaVersion: 1
+  - label: plan
+    path: work/2135-driver-event-projection/plan.md
+    digest: 16411cf87c59f9ff2934635bd1b483b7306c2caf09cd59794bdff73225c199c5
+    schemaVersion: 1
+  - label: spec
+    path: work/2135-driver-event-projection/spec.md
+    digest: 7a2e3a0dd52f59e226d8916800d7e18b6e771d351d420a29146bfe3b415a4d08
+    schemaVersion: 1
+  - label: tasks
+    path: work/2135-driver-event-projection/tasks.yml
+    digest: a32ee2898971dcee6d731d429850f0410a254cefe61f3c97c09f462311dcb5f7
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/FS.GG.Coord.Cli/Client.fs, src/FS.GG.Coord.Cli/Options.fs, tests/FS.GG.Coord.Cli.Tests/DriverCommandTests.fs, tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs, src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV011]
+    artifacts: [".agents/skills/drive-board/SKILL.md", ".agents/skills/work-board/SKILL.md", ".claude/skills/drive-board/SKILL.md", ".claude/skills/work-board/SKILL.md"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["drive-board/work-board SKILL.md edited identically in .agents and .claude roots (diff confirms byte-equal); both call `driver --events`."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/DriverCommandTests.fs, tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs, tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV013]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverEventsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["dotnet test tests/FS.GG.Coord.Core.Tests -c Release: 679/679 passed (26 DriverEventsTests); dotnet build src/FS.GG.Coord.Cli -c Release: 0 errors."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/FS.GG.Coord.Core/DriverEvents.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["Additive only: DriverEvents/CLI flags/cursor file are new surface; existing driver/delivery JSON schemas are unchanged (dotnet test: FS.GG.Coord.Cli.Tests 675/675 passed)."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [registry/coordination-kit-skill-manifest.json, registry/driver-skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: "work/2135-driver-event-projection/test-results/core-tests.trx"
+      digest: "sha256:5aa907f9452a64a9098d2cd8017691c884b560dab22b65a250bc1e51f270b82f"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 679
+      failed: 0
+      skipped: 0
+    notes: ["registry/driver-skill-manifest.json regenerated via `scripts/generate-driver-manifest --write`; `--check` now reports current."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

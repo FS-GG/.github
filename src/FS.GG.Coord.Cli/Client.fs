@@ -1117,6 +1117,149 @@ module Client =
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"
 
+    /// One candidate's live board/claim/PR/review/delivery facts, projected into the shape
+    /// `DriverEvents.classify` consumes (.github#2135). Named and pure over its inputs — no `ctx`, no
+    /// IO — precisely so it is unit-testable without a live board scan
+    /// (fsgg:independent-review:v1 round 1, finding 3: "the entire CLI execution path ... has zero
+    /// test coverage"). `reviewByPr`/`mergedFactsByRef` are pre-computed by the caller from the SAME
+    /// live reads `driver`'s existing planning path already performs.
+    let candidateToItemFacts
+        (reviewByPr: Map<int, Driver.ReviewChain>)
+        (mergedFactsByRef: Map<string, int * bool * Delivery.Obligation list>)
+        (now: int64)
+        (sourceSha: string)
+        (candidate: Snapshot.Candidate)
+        : DriverEvents.ItemFacts =
+        let refText = candidate.Item.Ref.Canonical
+        let claimWorker = candidate.Item.Claim |> Option.map (fun (claim, _) -> claim.Worker.Value)
+        let review = candidate.Item.ItemPr |> Option.bind (fun pr -> Map.tryFind pr reviewByPr)
+
+        let merged, obligationsDeclared, obligations, pr =
+            match Map.tryFind refText mergedFactsByRef with
+            | Some(pr, declared, obligations) -> true, declared, obligations, Some pr
+            | None -> false, false, [], candidate.Item.ItemPr
+
+        let evidence =
+            match claimWorker, pr with
+            | Some worker, Some pr -> $"claim:worker=%s{worker};pr=%d{pr}"
+            | Some worker, None -> $"claim:worker=%s{worker}"
+            | None, Some pr -> $"pr:%d{pr}"
+            | None, None -> $"board-status:%A{candidate.Item.Status}"
+
+        { Ref = refText
+          ReadOk = not candidate.Item.ItemPrUnreadable
+          UnreadableReason =
+            if candidate.Item.ItemPrUnreadable then
+                Some "the markerless item-PR probe was unreadable"
+            else
+                None
+          BoardStatus = Some candidate.Item.Status
+          IssueState = Some candidate.Item.State
+          ClaimWorker = claimWorker
+          HumanBlock = candidate.Item.HumanBlock
+          Pr = pr
+          Review = review
+          Merged = merged
+          ObligationsDeclared = obligationsDeclared
+          Obligations = obligations
+          Evidence = evidence
+          ObservedAt = now
+          SourceSha = sourceSha }
+
+    /// Read the durable `driver --events` cursor (.github#2135). No `--cursor` and a `--cursor` path
+    /// that has never been written both read as an empty cursor — a legitimate first run. A path that
+    /// EXISTS but cannot be parsed is a DISTINCT, refused case
+    /// (fsgg:independent-review:v1 round 1, finding 2): "never observed" and "observed and corrupt"
+    /// must not collapse into the same silent `Map.empty`, or a cursor file truncated by a killed
+    /// process reads back exactly as though nothing had ever run — the same fail-open shape this
+    /// module refuses everywhere else (a failed read masquerading as a legitimate "no").
+    ///
+    /// A DIRECTORY at the cursor path is the SAME root cause wearing a different shape
+    /// (fsgg:independent-review:v1 round 2): `File.Exists` returns false for a directory exactly as
+    /// it does for a missing path, so without this check a directory silently read as "never
+    /// written" and fell through into `writeEventsCursorAtomic`, whose `File.Move` cannot rename onto
+    /// an existing directory and threw uncaught — a caller input error misreported as an internal
+    /// engine defect, plus a leaked temp file on the crash. Checked BEFORE `File.Exists` so it is
+    /// refused before either kind of "absent" reasoning is reached.
+    let readEventsCursor (path: string option) : Result<DriverEvents.Cursor, string> =
+        match path with
+        | None -> Ok Map.empty
+        | Some path when Directory.Exists path -> Error $"cursor path '%s{path}' is a directory, not a file"
+        | Some path when not (File.Exists path) -> Ok Map.empty
+        | Some path ->
+            try
+                use document = JsonDocument.Parse(File.ReadAllText path)
+
+                let decoded =
+                    document.RootElement.EnumerateObject()
+                    |> Seq.map (fun prop ->
+                        let raw = prop.Value.GetString()
+
+                        match DriverEvents.decodeState raw with
+                        | Some state -> Ok(prop.Name, state)
+                        | None -> Error $"entry '%s{prop.Name}' has an unrecognized state encoding '%s{raw}'")
+                    |> Seq.toList
+
+                match decoded |> List.tryPick (function Error e -> Some e | Ok _ -> None) with
+                | Some error -> Error $"cursor file '%s{path}' is corrupt: %s{error}"
+                | None -> decoded |> List.choose (function Ok pair -> Some pair | Error _ -> None) |> Map.ofList |> Ok
+            with ex ->
+                Error $"cursor file '%s{path}' could not be parsed: %s{ex.Message}"
+
+    /// Persist the cursor ATOMICALLY (.github#2135 repair round 1, finding 2's second half). A bare
+    /// `File.WriteAllText` truncates the target before writing the new bytes — a process killed
+    /// mid-write leaves a PARTIAL file, which is precisely the corrupt input `readEventsCursor` above
+    /// exists to refuse rather than silently treat as absent. Writing to a sibling temp file in the
+    /// SAME directory, then renaming it over the target, means a crash leaves either the complete OLD
+    /// file or nothing at that path — never a half-written one. `File.Move` with `overwrite: true` is
+    /// a single filesystem rename on the common case (temp and target on the same volume), which is
+    /// guaranteed by placing the temp file beside its target rather than under a system temp root.
+    let writeEventsCursorAtomic (path: string) (cursor: DriverEvents.Cursor) : unit =
+        let json =
+            cursor
+            |> Map.toList
+            |> List.map (fun (ref, state) -> ref, DriverEvents.encodeState state)
+            |> dict
+            |> JsonSerializer.Serialize
+
+        let directory =
+            match Path.GetDirectoryName path with
+            | null | "" -> "."
+            | value -> value
+
+        let tempPath = Path.Combine(directory, $".{Path.GetFileName path}.tmp-{Guid.NewGuid():N}")
+        File.WriteAllText(tempPath, json)
+        File.Move(tempPath, path, true)
+
+    /// The `fsgg.coord.driver-events/1` JSON projection (.github#2135) — named so it is directly
+    /// testable against a hand-built `DriverEvents.Projection` without a live board scan.
+    let renderEventsJson (sourceSha: string) (projection: DriverEvents.Projection) : string =
+        let transitions =
+            projection.Transitions
+            |> List.map (fun e ->
+                {| ref = e.Ref
+                   previous = e.Previous |> Option.map DriverEvents.encodeState |> Option.toObj
+                   state = DriverEvents.encodeState e.New
+                   reason = e.Reason
+                   evidence = e.Evidence
+                   observedAt = e.ObservedAt
+                   sourceSha = e.SourceSha |})
+
+        let activeItems =
+            projection.Active
+            |> List.map (fun c ->
+                {| ref = c.Ref
+                   state = DriverEvents.encodeState c.State
+                   reason = c.Reason
+                   evidence = c.Evidence |})
+
+        JsonSerializer.Serialize
+            {| schema = "fsgg.coord.driver-events/1"
+               sourceSha = sourceSha
+               renderedAt = projection.RenderedAt
+               transitions = transitions
+               active = activeItems |}
+
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
         /// EVERY receipt the chain carries, not the one it is allowed to carry.
@@ -1340,6 +1483,63 @@ module Client =
                           ReconcileFresh = receiptValid
                           TriageFresh = receiptValid
                           CurrencyScoped = receiptValid }
+                    if opts.Events then
+                        // The material-transition/active-inventory projection (.github#2135), layered
+                        // over the SAME live board scan and review evidence this command already reads —
+                        // no new REST surface for the review sub-states.
+                        let reviewByPr =
+                            reviewEvidence |> List.map (fun (pr, _, chain, _) -> pr, chain) |> Map.ofList
+
+                        // Obligation/merge facts (clarify DEC-002) are read on the SAME `ItemPr` boundary
+                        // `reviewEvidence` already uses — the markerless-duplicate probe. A claim still
+                        // held by a live marker has no board-recorded PR number to look up by, so a merge
+                        // that happens while the marker is still live classifies `Claimed` rather than
+                        // `MergedAwaitingObligations`/`Released` until the claim releases. That is an
+                        // honest reflection of what a board scan can discover today, not a shortcut this
+                        // projection invents — no other command in this CLI discovers an arbitrary claimed
+                        // item's PR number without the caller supplying it (`delivery --pr N`).
+                        let mergedFactsByRef =
+                            snapshot.Candidates
+                            |> List.choose (fun candidate ->
+                                match candidate.Item.ItemPr with
+                                | Some pr ->
+                                    let owner = candidate.Item.Ref.Owner
+                                    let repo = candidate.Item.Ref.Repo
+                                    match Reads.prLandable ctx.Transport owner repo pr, Reads.prHeadSha ctx.Transport owner repo pr, Reads.commentsWithIdentity ctx.Transport owner repo pr with
+                                    | PrMerged, Ok head, Ok comments ->
+                                        let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                                        match DeliveryApplication.obligationsFromComments head comments with
+                                        | Ok obligations -> Some(candidate.Item.Ref.Canonical, (pr, true, obligations))
+                                        | Error _ -> Some(candidate.Item.Ref.Canonical, (pr, false, []))
+                                    | _ -> None
+                                | None -> None)
+                            |> Map.ofList
+
+                        let facts =
+                            snapshot.Candidates
+                            |> List.map (candidateToItemFacts reviewByPr mergedFactsByRef now sourceSha)
+
+                        match readEventsCursor opts.CursorFile with
+                        | Error message ->
+                            // FAIL CLOSED (.github#2135 repair round 1): a cursor file that exists but
+                            // cannot be parsed is a corrupt read, never a silent "first run". Refusing
+                            // here — rather than falling back to an empty cursor — is what stops a
+                            // truncated file from being read back as though nothing had ever happened.
+                            eprint $"fsgg-coord-engine: driver --events: %s{message}"
+                            ExitError
+                        | Ok priorCursor ->
+                            let projection = DriverEvents.project priorCursor facts now
+
+                            opts.CursorFile
+                            |> Option.iter (fun path -> writeEventsCursorAtomic path projection.Cursor)
+
+                            match opts.Render with
+                            | Json -> printfn "%s" (renderEventsJson sourceSha projection)
+                            | Text -> printfn "%s" (DriverEvents.renderText projection)
+
+                            ExitGreen
+                    else
+
                     let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
                     let workerReturns =
                         snapshot.Candidates

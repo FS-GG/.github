@@ -152,6 +152,11 @@ module Options =
           /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
           RenderGiven: Set<Render>
           SnapshotFile: string option
+          /// `driver --events` (.github#2135) — derive the material-transition/active-inventory
+          /// projection instead of the single next planning `Action`.
+          Events: bool
+          /// `driver --events --cursor <path>` (.github#2135) — the durable per-item cursor file.
+          CursorFile: string option
           Repo: string option
           Fresh: bool
           AllowBacklog: bool

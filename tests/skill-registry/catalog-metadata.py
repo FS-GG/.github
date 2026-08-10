@@ -120,8 +120,10 @@ def assert_live_status_contract(skill_name: str) -> None:
     text = " ".join(bodies[0].decode().split())
     required = [
         "Report live item state immediately.",
-        "<item> — <new status>: <work in progress or gate being awaited>",
-        "listing every currently active item and its current activity or gate.",
+        # .github#2135: the host no longer composes the two-line update from memory — it forwards
+        # the engine's own material-transition/active-inventory projection.
+        "Do not detect transitions or reconstruct the active set from memory",
+        "driver --events --cursor <session-scoped-cursor-file> --text",
         "Do not defer either line to a wave summary or final response.",
         "Keep the driver turn alive while any item remains active",
     ]

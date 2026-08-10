@@ -98,6 +98,15 @@ module Options =
           /// rebuilt inside the guard against it. Every spelling that was typed is refusable.
           RenderGiven: Set<Render>
           SnapshotFile: string option
+          /// `driver --events` — derive the material-transition/active-inventory projection instead of
+          /// the single next planning `Action` (.github#2135). A separate flag rather than a separate
+          /// command: both read the same live board/claim/PR/review facts `driver` already gathers, and
+          /// the projection is layered over the SAME source, not a second one.
+          Events: bool
+          /// `driver --events --cursor <path>` — the durable per-item cursor file read before, and
+          /// written after, deriving the projection (.github#2135). Absent ⇒ an empty cursor (every
+          /// classified state reads as a transition) and no persistence — a stateless single-shot render.
+          CursorFile: string option
           Repo: string option
           Fresh: bool
           AllowBacklog: bool
@@ -277,6 +286,10 @@ DECISION (pure — no board, no network):
                                              freshness-bound action; --apply performs only guarded landing
   delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
+  driver --events [--cursor FILE] [--json|--text]
+                                             derive material transitions and the complete active-item
+                                             inventory from live board/claim/PR/review/delivery facts
+                                             (.github#2135); --cursor persists the idempotency cursor
   cycle <inspect|register|advance|update|complete> [--snapshot FILE] [--json|--text]
                                              inspect or advance one source-bound roadmap/workspace cycle ledger
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
@@ -643,6 +656,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// — but it is an answer somebody gives, not the silence a missing row used to be.
     type private Flag =
         | FSnapshot
+        /// `driver --events` (.github#2135) — see the `Events` field doc comment.
+        | FEvents
+        /// `driver --events --cursor <path>` (.github#2135) — see the `CursorFile` field doc comment.
+        | FCursor
         | FLease
         | FRepo
         | FWorker
@@ -715,6 +732,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FText -> Only textReaders
 
         | FSnapshot -> Only [ Decide; DeliveryCmd; DriverCmd; CycleCmd; LanesView ]
+
+        // `driver --events`/`--cursor` (.github#2135) — the projection mode of `driver`. `DriverCmd`
+        // only; every other command refuses them exactly as it refuses `--snapshot`.
+        | FEvents -> Only [ DriverCmd ]
+        | FCursor -> Only [ DriverCmd ]
+
         | FLease -> Only [ Scan; Claim; Take; Adopt ]
 
         // `--status`: #867's original row, now one of many rather than the only one.
@@ -813,6 +836,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     let private spellingsOf (f: Flag) : string * string list =
         match f with
         | FSnapshot -> "--snapshot", []
+        | FEvents -> "--events", []
+        | FCursor -> "--cursor", []
         | FLease -> "--lease", []
         | FRepo -> "--repo", []
         | FWorker -> "--worker", []
@@ -1053,6 +1078,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// turns an unguardable flag into a guarded one.
     let private flagsGiven (o: Options) : (Flag * string) list =
         [ if o.SnapshotFile.IsSome then FSnapshot
+          if o.Events then FEvents
+          if o.CursorFile.IsSome then FCursor
           if o.Repo.IsSome then FRepo
           if o.Worker.IsSome then FWorker
           if o.Evidence.IsSome then FEvidence
@@ -1468,6 +1495,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--snapshot" :: value :: t -> flags { acc with SnapshotFile = Some value } t
             | [ "--snapshot" ] -> Error "--snapshot needs a value"
 
+            | "--events" :: t -> flags { acc with Events = true } t
+
+            | "--cursor" :: value :: _ when value.StartsWith "-" -> Error $"--cursor needs a value (got flag '%s{value}')"
+            | "--cursor" :: value :: t -> flags { acc with CursorFile = Some value } t
+            | [ "--cursor" ] -> Error "--cursor needs a value"
+
             | "--repo" :: value :: _ when value.StartsWith "-" -> Error $"--repo needs a value (got flag '%s{value}')"
             // RESOLVED HERE (#962) — see `resolveRepo`. Every verb that takes `--repo` reaches this arm, and
             // there is no list to be left out of, which is the whole repair: the three instances of this bug
@@ -1702,6 +1735,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Fresh = false
               AllowBacklog = false
               Limit = None
+              Events = false
+              CursorFile = None
               LeaseMinutes = DefaultLeaseMinutes
               LeaseGiven = false
               Args = []

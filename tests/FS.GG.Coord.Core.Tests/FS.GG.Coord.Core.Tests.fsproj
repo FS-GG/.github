@@ -32,6 +32,7 @@
     <Compile Include="RankTests.fs" />
     <Compile Include="BatchTests.fs" />
     <Compile Include="DriverTests.fs" />
+    <Compile Include="DriverEventsTests.fs" />
     <Compile Include="CycleLedgerTests.fs" />
     <Compile Include="DeliveryTests.fs" />
     <Compile Include="ProtocolTests.fs" />

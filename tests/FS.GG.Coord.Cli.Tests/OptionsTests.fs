@@ -81,6 +81,37 @@ module OptionsTests =
         Assert.Equal(Some "/tmp/s.json", (parse [ "decide"; "--snapshot"; "/tmp/s.json" ] |> ok).SnapshotFile)
 
     [<Fact>]
+    let ``driver --events selects the material-transition projection`` () =
+        let parsed = parse [ "driver"; "--events" ] |> ok
+        Assert.Equal(DriverCmd, parsed.Command)
+        Assert.True(parsed.Events)
+
+    [<Fact>]
+    let ``driver --events --cursor carries the durable cursor file path`` () =
+        let parsed = parse [ "driver"; "--events"; "--cursor"; "/tmp/cursor.json" ] |> ok
+        Assert.Equal(Some "/tmp/cursor.json", parsed.CursorFile)
+
+    [<Fact>]
+    let ``--cursor without a value is refused, not silently unset`` () =
+        let e = parse [ "driver"; "--events"; "--cursor" ] |> rejected
+        Assert.Contains("--cursor", e)
+
+    [<Fact>]
+    let ``--cursor does not swallow the next flag as its own value (the residue rule)`` () =
+        let e = parse [ "driver"; "--events"; "--cursor"; "--json" ] |> rejected
+        Assert.Contains("--cursor", e)
+
+    [<Fact>]
+    let ``--events is refused on a command that does not read it (the residue rule)`` () =
+        let e = parse [ "decide"; "--events" ] |> rejected
+        Assert.Contains("--events", e)
+
+    [<Fact>]
+    let ``--cursor is refused on a command that does not read it (the residue rule)`` () =
+        let e = parse [ "decide"; "--cursor"; "/tmp/c.json" ] |> rejected
+        Assert.Contains("--cursor", e)
+
+    [<Fact>]
     let ``no arguments prints help rather than deciding over an empty board`` () =
         Assert.Equal(Help, (parse [] |> ok).Command)
 
