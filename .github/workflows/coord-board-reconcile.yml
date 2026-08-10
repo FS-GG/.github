@@ -47,15 +47,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
+
+      # ADR-0040 Phase C/D: `scripts/fsgg-coord` is the §4.4 shim, which EXECS a compiled
+      # `fsgg-coord-engine` rather than being the engine itself. `.github` never restores it from the
+      # feed (ADR-0034 §4.3), so a runner that only calls the shim without building first gets
+      # "no fsgg-coord engine found" (exit 69) — exactly the round-2 review repair on this workflow:
+      # the `on:` block fix alone got a job scheduled, and this is what the job then hit. Mirrors
+      # `touch-set-drift.yml`'s established build-then-run wiring, the one other workflow that
+      # executes the client on a runner rather than only referencing it in a comment or path filter.
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Build the engine (the shim execs it, ADR-0040 D.2)
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
       - name: Reconcile lifecycle projection
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
           FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
           FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
         run: |
