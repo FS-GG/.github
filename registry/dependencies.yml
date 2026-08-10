@@ -898,8 +898,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.22.0" # SOURCE SemVer: MINOR (#2315), released from coord-engine/v0.22.0 at 63f99ab9f98a278018df00d492ba5c5494c02659; the explicit delivery-route and intake transaction vocabulary is caller-observable.
-    package-version: "0.22.0" # Run 31363153349 packed once and dual-published; org SHA-256 0814761d8650fc296e860d6cdb4569b720409f78cca3d6afe80186c78de33e5d, public signed SHA-256 4096ef623d44a7267b3b3c0d2438b6080f0fd7c1437df209424626ec14049588. Public install and payload entry identity verified; delivery reached 7 receivers. PRIOR 0.21.1.
+    version: "0.22.1" # SOURCE SemVer: PATCH (#2319/#2308), released from coord-engine/v0.22.1 at d3c0fb414b5ab6d0011294ec51e8c499fcaf064b; the empty claim-marker read now fails closed without changing caller-visible CLI vocabulary.
+    package-version: "0.22.1" # Run 31370283775 packed once and dual-published; org SHA-256 dbd19b3828c80ce1606f1913f84888bea52d77273345aaafe9120432a3928bf3, public signed SHA-256 728198edac2ff53e973b4e33f5c414a6d176f3acdd8048fb407c24f622c73254. 33 shared payload entries are byte-identical; public-only .signature.p7s; public install reports 0.22.1.0; delivery reached 7 receivers. PRIOR 0.22.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.
