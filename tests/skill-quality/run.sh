@@ -240,6 +240,67 @@ else
   fail=$((fail+1))
 fi
 
+# `.github#2238`: manifests digest skill bodies that projections can rewrite. A manifest check
+# used to report current when it ran before its projection producer. Start from that stale input;
+# check must fail closed, and write must establish projection-before-manifest order.
+seed
+sed -i '/GENERATED: fsgg-versions/{n;s/^/STALE /;}' "$WORK/tree/docs/architecture.md"
+rc=0
+python3 "$WORK/tree/scripts/generate-driver-manifest" --check >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] \
+  && grep -Fq -- "STALE" "$WORK/out" \
+  && grep -Fq -- "refusing to digest" "$WORK/out"; then
+  echo "PASS  driver manifest refuses stale projection inputs before digesting them"
+  pass=$((pass+1))
+else
+  echo "FAIL  driver manifest accepted stale projection inputs (exit $rc)" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
+rc=0
+python3 "$WORK/tree/scripts/generate-driver-manifest" --write >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 0 ] \
+  && bash "$WORK/tree/scripts/generate-projections" --check >>"$WORK/out" 2>&1 \
+  && python3 "$WORK/tree/scripts/generate-driver-manifest" --check >>"$WORK/out" 2>&1; then
+  echo "PASS  driver manifest write projects before digesting"
+  pass=$((pass+1))
+else
+  echo "FAIL  driver manifest write did not establish projection-before-manifest order" >&2
+  sed 's/^/    | /' "$WORK/out" >&2
+  fail=$((fail+1))
+fi
+
+# `.github#2333`: nothing at the point of editing a skill distinguished FS.GG.Kit-tracked skills from
+# FS.GG.Drivers-tracked ones, so `.github#2135` misdiagnosed a drive-board/work-board change as a
+# FS.GG.Kit release and tagged a permanently empty `kit/v0.47.0` (the tag is immutable). `--which`
+# answers that question from the same two committed sources `--write` reads
+# (registry/repos.yml's `kit:` rows, this emitter's own `DRIVERS` list) — never a third, hand-copied
+# roster. Exercise a skill id known to be `kit:`-tracked, one known to be
+# `driver-skill-manifest.json`-tracked, and one in neither population: each must answer differently,
+# and the "neither" case must still print something rather than staying silent.
+expect_which() {
+  local label="$1" skill_id="$2" want_stdout="$3" want_rc="$4"
+  local rc=0
+  python3 "$WORK/tree/scripts/generate-driver-manifest" --which "$skill_id" \
+    --catalog-root "$WORK/tree" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq "$want_rc" ] && [ "$(cat "$WORK/out")" = "$want_stdout" ]; then
+    echo "PASS  $label"
+    pass=$((pass+1))
+  else
+    echo "FAIL  $label (wanted stdout '$want_stdout' exit $want_rc; got exit $rc)" >&2
+    sed 's/^/    | /' "$WORK/out" >&2
+    fail=$((fail+1))
+  fi
+}
+
+expect_which "a kit-tracked skill resolves to FS.GG.Kit" "check-board" "FS.GG.Kit" 0
+expect_which "a drivers-tracked skill resolves to FS.GG.Drivers" "drive-board" "FS.GG.Drivers" 0
+expect_which "publishing-and-deployment is itself drivers-tracked, not kit-tracked" \
+  "publishing-and-deployment" "FS.GG.Drivers" 0
+expect_which "a skill in neither population is reported, never silent" "spectre-console" "neither" 1
+expect_which "an unknown id is reported, never silent" "not-a-real-skill" "neither" 1
+
 # `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
 # today. Each registry mutation below must make that generated region stale without touching the skill.
 expect_projection_stale() {

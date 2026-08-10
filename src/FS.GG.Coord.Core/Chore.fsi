@@ -325,8 +325,15 @@ module Chore =
         /// `isRetired` answering "still owed" forever against a write that landed.
         ///
         /// Never on a RESERVED item, on the shared rule below — deference DEFERS, and the projection costs
-        /// nothing to derive one pass later. OPEN items only: a closed row is outside the burn-down's
-        /// scope, so classing it spends a write on the one population no stopping rule reads.
+        /// nothing to derive one pass later.
+        ///
+        /// OPEN **OR** CLOSED (.github#2254) — no longer OPEN-only. A row that reaches Done/CLOSED between
+        /// two reconcile passes was never OPEN at a moment this rule looked at it, so the old OPEN-only
+        /// gate left such a row's disagreement unexamined forever, invisible to both `reconcile` and
+        /// `lint`. The population this actually reaches for a closed row is narrower than "every closed
+        /// row" in practice, because `item.Class` for one is `None` unless `Scan.snapshot` paid the extra
+        /// body read — itself gated on an EMPTY `BoardClass`, the population #2254's AC1 names. A closed
+        /// row already carrying some `Class` value is never read and never reaches this rule at all.
         | ClassProjectionLag of declared: ItemClass
 
         /// The `/check-board` rule id — the anchor a report cites and a reader greps back to this code.

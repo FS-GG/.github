@@ -1,0 +1,208 @@
+schemaVersion: 1
+workId: 2137-delivery-route
+stage: evidence
+status: needsEvidenceCorrection
+sourceSpec: work/2137-delivery-route/spec.md
+sourceClarifications: work/2137-delivery-route/clarifications.md
+sourceChecklist: work/2137-delivery-route/checklist.md
+sourcePlan: work/2137-delivery-route/plan.md
+sourceTasks: work/2137-delivery-route/tasks.yml
+sourceAnalysis: readiness/2137-delivery-route/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2137-delivery-route/analysis.json
+    digest: da196488d2350fa107bc2176ef37618a66da6f1cb3b94e8e6afceb34b408a908
+    schemaVersion: 1
+  - label: checklist
+    path: work/2137-delivery-route/checklist.md
+    digest: 3ee1f53dff7c781822f33e75c61c9a907116eaa180e611b65062521823b3af26
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2137-delivery-route/clarifications.md
+    digest: b5f694b07b287d21f9458e256989e2637169d0367fc0534739d926a242c85419
+    schemaVersion: 1
+  - label: plan
+    path: work/2137-delivery-route/plan.md
+    digest: 059dd03ba0e0cfa4e438203d2c148ab8a0e8040d17d9f4a585d59f5b87d3b378
+    schemaVersion: 1
+  - label: spec
+    path: work/2137-delivery-route/spec.md
+    digest: 3db131124aef8ce0eee3ca78237f4c8715c5bab094061f68b7204edd55d05848
+    schemaVersion: 1
+  - label: tasks
+    path: work/2137-delivery-route/tasks.yml
+    digest: 78602064b639b3393de69c296840588e0b4d022cf075e43970eb2b36062273fc
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: missing
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV002
+    kind: missing
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV003
+    kind: missing
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV004
+    kind: missing
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV005
+    kind: missing
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV006
+    kind: missing
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV007
+    kind: missing
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV008
+    kind: missing
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV009
+    kind: missing
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+  - id: EV010
+    kind: missing
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs: []
+    result: missing
+    synthetic: false
+    notes: [Evidence required before verify.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

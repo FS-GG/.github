@@ -14,7 +14,10 @@
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="CrossRepoRankTests.fs" />
     <Compile Include="OptionsTests.fs" />
+    <Compile Include="IntakeCliTests.fs" />
+    <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverCommandTests.fs" />
+    <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
@@ -31,11 +34,14 @@
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
+    <Compile Include="WidenRefusalTests.fs" />
     <Compile Include="ForceStealTests.fs" />
+    <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />
     <Compile Include="AddStatusDefaultTests.fs" />
     <Compile Include="LandableNotOpenTests.fs" />
     <Compile Include="VerifyPathsClosingKeywordTests.fs" />
+    <Compile Include="SchedulingCostTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,6 +2,8 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Text.Json
 open Xunit
 open FS.GG.Coord
@@ -11,6 +13,46 @@ open FS.GG.Coord.GitHub.Transport
 open FS.GG.Coord.Cli
 
 module ApplicationServiceTests =
+
+    /// Scripted success worlds deliberately model the production route gate: a receipt binds the exact
+    /// issue body revision.  Callers that mean to exercise missing/stale/unreadable evidence override the
+    /// endpoint instead; they never inherit an implicit lightweight route from this helper.
+    let private currentRouteComment (subject: string) (body: string) =
+        let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let receipt =
+            $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-route","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+        "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+
+    [<Fact>]
+    let ``#2137 SDD delivery evidence accepts only the current implementationReady work package`` () =
+        let current : DeliveryRoute.Receipt =
+            { Schema = DeliveryRoute.Schema
+              Subject = "FS-GG/.github#2137"
+              SubjectRevision = "fixture"
+              Route = Some DeliveryRoute.SddRequired
+              Agent = "fixture-route"
+              Timestamp = "2026-01-01T00:00:00Z"
+              ReasonCodes = [ "fixture" ]
+              Rationale = "fixture route receipt"
+              DeclaredImpacts = [ "internal" ]
+              ObservedFacts = [ "localized" ]
+              SddWorkId = Some "2137-delivery-route"
+              SpecHome = Some "work/2137-delivery-route/spec.md"
+              RequiredGates = [ "implementationReady"; "analyze"; "verify"; "ship" ] }
+
+        Assert.Empty(Client.sddEvidenceErrors current)
+
+        let nonexistent =
+            { current with
+                SddWorkId = Some "does-not-exist"
+                SpecHome = Some "work/does-not-exist/spec.md" }
+
+        Assert.NotEmpty(Client.sddEvidenceErrors nonexistent)
+
+    [<Fact>]
+    let ``#2137 SDD readiness rejects a substituted work id and non-implementation-ready status`` () =
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"other-work","status":"implementationReady"}""")
+        Assert.NotEmpty(Client.sddReadinessEvidenceErrors "2137-delivery-route" """{"workId":"2137-delivery-route","status":"analyzing"}""")
 
     [<Fact>]
     let ``#1843 filing advisory finds a broad same-repo declaration and ignores reverse or other repos`` () =
@@ -42,7 +84,9 @@ module ApplicationServiceTests =
           BoardClass = None
           Severity = Unset
           Phase = None
-          CreatedAt = None }
+          CreatedAt = None
+          SweptBody = None
+          NodeId = None }
 
     [<Fact>]
     let ``ready application service preserves the exact JSON projection contract`` () =
@@ -166,6 +210,7 @@ module ApplicationServiceTests =
     /// that can only build the first cannot tell a scan that reads the lease from one that returns `Some`
     /// for any marker at all. 0 is NOW, which is what every pre-#1779 caller means.
     let private commentsAgedScoped
+        (bodies: Map<int, string>)
         (holders: Map<int, string>)
         (ageMinutes: Map<int, int>)
         (pathRepos: Map<int, string>)
@@ -174,27 +219,73 @@ module ApplicationServiceTests =
         let age = Map.tryFind number ageMinutes |> Option.defaultValue 0
         let ts = DateTime.UtcNow.AddMinutes(float -age).ToString "yyyy-MM-ddTHH:mm:ssZ"
 
-        match Map.tryFind number holders with
-        | None -> "[]"
-        | Some worker ->
-            let pathRepo =
-                Map.tryFind number pathRepos
-                |> Option.map (fun repo -> $" pathRepo=%s{repo}")
-                |> Option.defaultValue ""
+        let route =
+            Map.tryFind number bodies
+            |> Option.map (fun body ->
+                JsonSerializer.Serialize
+                    {| id = 7000 + number
+                       body = currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body
+                       user = {| login = "EHotwagner" |}
+                       created_at = ts
+                       updated_at = ts |})
+            |> Option.toList
 
-            $"""[{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}]"""
+        let claim =
+            match Map.tryFind number holders with
+            | None -> []
+            | Some worker ->
+                let pathRepo =
+                    Map.tryFind number pathRepos
+                    |> Option.map (fun repo -> $" pathRepo=%s{repo}")
+                    |> Option.defaultValue ""
 
-    let private commentsAged holders ageMinutes number =
-        commentsAgedScoped holders ageMinutes Map.empty number
+                [ $"""{{"id":%d{8000 + number},"body":"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld","user":{{"login":"EHotwagner"}},"created_at":"%s{ts}","updated_at":"%s{ts}"}}""" ]
 
-    let private commentsFor (holders: Map<int, string>) (number: int) = commentsAged holders Map.empty number
+        "[" + String.concat "," (route @ claim) + "]"
+
+    /// .github#2300 repair 2: the SAME route-marker-then-claim-marker thread `commentsAgedScoped` builds
+    /// for the REST `/comments` endpoint, as bare BODIES rather than full comment JSON — what the bounded
+    /// GraphQL `comments(last: N)` read now serves instead of `Reads.commentBodies`'s unbounded REST scan.
+    /// No fixture in this file ever builds a thread longer than two comments (a route marker and a claim
+    /// marker), so `last` truncation is a no-op in every existing test here; it is still applied for real
+    /// rather than ignored, so a future test that DOES build a deep thread gets correct behaviour for
+    /// free instead of a silent gap.
+    let private recentCommentBodiesScoped
+        (bodies: Map<int, string>)
+        (holders: Map<int, string>)
+        (pathRepos: Map<int, string>)
+        (number: int)
+        (last: int)
+        =
+        let route =
+            Map.tryFind number bodies
+            |> Option.map (fun body -> currentRouteComment $"FS-GG/FS.GG.SDD#%d{number}" body)
+            |> Option.toList
+
+        let claim =
+            match Map.tryFind number holders with
+            | None -> []
+            | Some worker ->
+                let pathRepo =
+                    Map.tryFind number pathRepos
+                    |> Option.map (fun repo -> $" pathRepo=%s{repo}")
+                    |> Option.defaultValue ""
+
+                [ $"<!-- fsgg:claim worker=%s{worker} lease=120%s{pathRepo} -->\nheld" ]
+
+        (route @ claim) |> List.rev |> List.truncate last |> List.rev
+
+    let private commentsAged bodies holders ageMinutes number =
+        commentsAgedScoped bodies holders ageMinutes Map.empty number
+
+    let private commentsFor bodies (holders: Map<int, string>) (number: int) = commentsAged bodies holders Map.empty number
 
     let private ok (body: string) : Errors.IoResult<Response> =
         Ok
             { Status = 200
               Body = body
               ETag = None
-              NextLink = None }
+              NextLink = None; Headers = Map.empty }
 
     /// A transport serving one repo AND one board. `bodies` is issue number → issue body (its `Paths:`
     /// declaration), `holders` is issue number → the worker whose claim marker sits on it, `markerAge` is
@@ -246,6 +337,41 @@ module ApplicationServiceTests =
                     None
 
             match req.Method, path with
+            // .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) —
+            // served from the SAME `bodies`/`holders`/`pathRepos` the REST `/comments` arm below reads,
+            // via `recentCommentBodiesScoped`.
+            | "POST", "graphql" when
+                (match req.Body with
+                 | Query(document, _) -> document.Contains "comments(last:"
+                 | _ -> false)
+                ->
+                match req.Body with
+                | Query(_, variables) ->
+                    let numberVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "number")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    let lastVar =
+                        variables
+                        |> List.tryFind (fun (k, _) -> k = "last")
+                        |> Option.bind (fun (_, v) -> match v with VNumber n -> Some(int n) | _ -> None)
+
+                    match numberVar, lastVar with
+                    | Some n, Some last ->
+                        let recent =
+                            recentCommentBodiesScoped bodies holders pathRepos n last
+                            |> List.map (fun body -> {| body = body |})
+                            |> JsonSerializer.Serialize
+
+                        let payload =
+                            "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                            + recent
+                            + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                        ok payload
+                    | _ -> Error(Errors.NotFound "the recent-comments query is missing owner/repo/number/last variables")
+                | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, _) ->
@@ -265,6 +391,10 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" ->
                 bodies
                 |> Map.toList
+                // A closed item remains on the board, but GitHub's open-issues endpoint must not smuggle it
+                // into `activeCollisions`.  #2250 needs the gate to reach that holder through the board
+                // scan, exactly as production does.
+                |> List.filter (fun (_, body) -> not (body.Contains("<!-- fixture:closed -->")))
                 |> List.map (fun (n, body) -> {| number = n; state = "open"; body = body |})
                 |> JsonSerializer.Serialize
                 |> ok
@@ -276,7 +406,7 @@ module ApplicationServiceTests =
                 Error(Errors.NotFound $"the #353 scan asked for another repo's issues: %s{p}")
             | "GET", _ when (issueNumber "/comments").IsSome ->
                 let n = (issueNumber "/comments").Value
-                let readable = commentsAgedScoped holders markerAge pathRepos n
+                let readable = commentsAgedScoped bodies holders markerAge pathRepos n
 
                 let body =
                     if incomplete.Contains n then
@@ -432,20 +562,32 @@ module ApplicationServiceTests =
 
                 $"""{{"data":{{"node":{{"fieldValueByName":%s{value}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
 
+            /// The bare bodies `comments` below serializes into full REST comment JSON — the single
+            /// source both that REST arm and the new bounded GraphQL route read (.github#2300 repair 2)
+            /// build their answer from, so an external claim posted mid-test (`externalMarker`) is visible
+            /// to both identically.
+            let bodies owner =
+                let source = "Paths: src/Rogue3/"
+                let subject = $"%s{owner}/rogue3#96"
+                let route = currentRouteComment subject source
+
+                let markers =
+                    match owner, externalMarker with
+                    | "EHotwagner", Some body -> [ body ]
+                    | _ -> []
+
+                [ route ] @ markers
+
             let comments owner =
-                if owner <> "EHotwagner" then
-                    "[]"
-                else
-                    match externalMarker with
-                    | None -> "[]"
-                    | Some body ->
-                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
-                        JsonSerializer.Serialize
-                            [ {| id = 9196
-                                 body = body
-                                 user = {| login = "EHotwagner" |}
-                                 created_at = timestamp
-                                 updated_at = timestamp |} ]
+                let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+                bodies owner
+                |> List.mapi (fun index body ->
+                    {| id = 9195 + index
+                       body = body
+                       user = {| login = "EHotwagner" |}
+                       created_at = timestamp
+                       updated_at = timestamp |})
+                |> JsonSerializer.Serialize
 
             let transport =
                 Fake.Recorder(fun (req: Request) ->
@@ -455,6 +597,35 @@ module ApplicationServiceTests =
                     | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
                     | "POST", "graphql" ->
                         match req.Body with
+                        // .github#2300 repair 2: the bounded route-marker search. `owner` distinguishes
+                        // the two same-numbered twins exactly as the REST arms below key on the URL's
+                        // owner segment.
+                        | Query(document, variables) when document.Contains "comments(last:" ->
+                            let ownerVar =
+                                variable "owner" variables |> Option.map asString
+                            let lastVar =
+                                variable "last" variables
+                                |> Option.map (function
+                                    | VNumber n -> int n
+                                    | value -> failwithf "expected numeric `last`, got %A" value)
+
+                            match ownerVar, lastVar with
+                            | Some owner, Some last ->
+                                let recent =
+                                    bodies owner
+                                    |> List.rev
+                                    |> List.truncate last
+                                    |> List.rev
+                                    |> List.map (fun body -> {| body = body |})
+                                    |> JsonSerializer.Serialize
+
+                                let payload =
+                                    "{\"data\":{\"repository\":{\"issue\":{\"comments\":{\"nodes\":"
+                                    + recent
+                                    + "}}}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}"
+
+                                ok payload
+                            | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/last: %A{variables}")
                         | Query(document, variables) when document.Contains "projectsV2" ->
                             ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}},"rateLimit":{"cost":1,"remaining":4977}}"""
                         | Query(document, _) when document.Contains "fields(first" ->
@@ -676,7 +847,21 @@ module ApplicationServiceTests =
                 | "GET", "repos/FS-GG/.github/issues" -> ok "[]"
                 | "GET", "repos/FS-GG/.github/issues/2127" -> ok """{"number":2127,"state":"open","body":"Paths: src/FS.GG.Coord.Core/Driver.fs"}"""
                 | "GET", "repos/FS-GG/.github/issues/2127/comments" ->
-                    if claimed then ok (commentsFor (Map.ofList [ 2127, "worker-2127" ]) 2127) else ok "[]"
+                    if claimed then
+                        let timestamp = DateTime.UtcNow.ToString "yyyy-MM-ddTHH:mm:ssZ"
+                        let payload =
+                            [ {| id = 7127
+                                 body = currentRouteComment "FS-GG/.github#2127" "Paths: src/FS.GG.Coord.Core/Driver.fs"
+                                 user = {| login = "fixture" |}
+                                 created_at = timestamp
+                                 updated_at = timestamp |}
+                              {| id = 8127
+                                 body = "<!-- fsgg:claim worker=worker-2127 lease=120 -->"
+                                 user = {| login = "fixture" |}
+                                 created_at = timestamp
+                                 updated_at = timestamp |} ]
+                        ok (JsonSerializer.Serialize payload)
+                    else ok "[]"
                 | "GET", "repos/FS-GG/.github/pulls" -> ok """[{"number":2140,"head":{"ref":"item/2127-driver-transition-state-machine"}}]"""
                 | "GET", "repos/FS-GG/.github/pulls/2140" -> ok $"""{{"number":2140,"state":"open","merged":false,"mergeable":true,"mergeable_state":"clean","head":{{"ref":"item/2127-driver-transition-state-machine","sha":"%s{head}"}},"base":{{"ref":"main"}}}}"""
                 | "GET", "repos/FS-GG/.github/pulls/2140/files" -> ok "[]"
@@ -1241,7 +1426,9 @@ module ApplicationServiceTests =
             for v, previous in previousIdentity do
                 Environment.SetEnvironmentVariable(v, previous)
 
-    let private run (transport: Fake.Recorder) (args: string list) : int * string =
+    /// `internal`, not `private` — #2306's `WidenRefusalTests.fs` drives the same fixture rather than
+    /// duplicating GraphQL board-bootstrap mocking that has nothing to do with what it tests.
+    let internal run (transport: Fake.Recorder) (args: string list) : int * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
 
         try
@@ -1327,17 +1514,20 @@ module ApplicationServiceTests =
         Assert.Contains("scripts/fsgg-coord", client)
         Assert.Contains("scripts/repos.sh relock", client)
 
-    let private disjointWorld () =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal disjointWorld () =
         world (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) (Map.ofList [ 74, "kite-469" ]) false
 
     /// #74 is ours; #75 is a live neighbour reserving the very path we are about to declare.
-    let private overlappingWorld (sayFails: bool) =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal overlappingWorld (sayFails: bool) =
         world
             (Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ])
             (Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ])
             sayFails
 
-    let private parsed (out: string) : JsonElement =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal parsed (out: string) : JsonElement =
         // A `--json` projection is a SINGLE object and nothing else on the stream. Parsing the WHOLE of
         // stdout — not a line grepped out of it — is what makes "and no prose" an assertion rather than a
         // hope: prose above or below the object is a parse failure here.
@@ -1346,9 +1536,12 @@ module ApplicationServiceTests =
         with e ->
             failwithf "stdout was not one JSON document — this is the #1517 defect.\nstdout was:\n%s\n(%s)" out e.Message
 
-    let private str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
 
-    let private strings (name: string) (el: JsonElement) =
+    /// `internal` — reused by #2323 round 1's repair legs in #2306's `WidenRefusalTests.fs` (see `run`,
+    /// above), which assert the JSON `paths` array on a refused update rather than merely its `verdict`.
+    let internal strings (name: string) (el: JsonElement) =
         el.GetProperty(name).EnumerateArray() |> Seq.map (fun e -> e.GetString()) |> List.ofSeq
 
     [<Theory>]
@@ -1487,7 +1680,9 @@ module ApplicationServiceTests =
 
         Assert.Equal(0, code)
         Assert.Equal("disjoint", str "verdict" (parsed out))
-        Assert.Equal(0, world.GraphQlCalls)
+        // #2250 adds the cached board scan so closed-but-unstamped holders participate.  Cold: bootstrap
+        // (two resolver queries) plus one page; no per-holder GraphQL fan-out.
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Fact>]
     let ``#1732 active claims with equal tokens in one marker path scope still collide`` () =
@@ -1507,7 +1702,7 @@ module ApplicationServiceTests =
 
         Assert.Equal(6, code)
         Assert.Equal("overlap", str "verdict" (parsed out))
-        Assert.Equal(0, world.GraphQlCalls)
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Theory>]
     [<InlineData "widen">]
@@ -1529,9 +1724,9 @@ module ApplicationServiceTests =
         Assert.Equal(6, code)
 
     [<Theory>]
-    [<InlineData("widen", "widened")>]
-    [<InlineData("set-paths", "set")>]
-    let ``the OVERLAP human projection is unchanged and puts nothing else on stdout`` (verb: string, past: string) =
+    [<InlineData("widen", "add paths to")>]
+    [<InlineData("set-paths", "replace")>]
+    let ``the OVERLAP human projection puts nothing else on stdout`` (verb: string, action: string) =
         let code, out =
             run (overlappingWorld false) [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
 
@@ -1539,15 +1734,22 @@ module ApplicationServiceTests =
         // stdout. That is the split #1517 fixes FOR MACHINES by putting the detail in the object — it does
         // not move a byte of the human form, which existing recipes read.
         //
-        // Pinned as an EQUALITY, like the DISJOINT leg above. A `DoesNotContain "OVERLAP"` would still pass
-        // if the Text branch also emitted the JSON object, whose verdict is the lowercase `"overlap"`.
-        let declared =
+        // #2306 — THE RECEIPT LINE ITSELF CHANGED, because the OLD line ("widened FS.GG.SDD#74 → Paths: …")
+        // claimed a completed write, and a refused widen no longer writes anything. Pinned as an EQUALITY,
+        // like the DISJOINT leg above: a `DoesNotContain "OVERLAP"` would still pass if the Text branch
+        // also emitted the JSON object, whose verdict is the lowercase `"overlap"`.
+        let would =
             if verb = "widen" then
                 "scripts/fsgg-coord, src/Shared.fs"
             else
                 "src/Shared.fs"
 
-        Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
+        Assert.Equal(
+            $"refused to %s{action} FS.GG.SDD#74's touch-set → Paths: unchanged (%s{would} would overlap a live claim)"
+            + Environment.NewLine,
+            out
+        )
+
         Assert.Equal(6, code)
 
     // ---- .github#1896 — CLIENT CALLERS REFUSE INCOMPLETE LOCK READS -------------------------------
@@ -1674,14 +1876,13 @@ module ApplicationServiceTests =
         Assert.Single(receipt.GetProperty("collisions").EnumerateArray() |> List.ofSeq)
 
     [<Fact>]
-    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and no board read decides it`` () =
+    let ``#1740 cause 1: a claim landing inside the scan-cache window collides, and the cached board scan preserves the result`` () =
         // THE NAME CHANGED WITH THE MECHANISM, AND IT HAD TO. As #1740 wrote it, this leg drove the column
         // through a stale cache window and asserted the cache tier fixed it. Since #1779 nothing on this
         // path reads a board, so the `column` ref below is a DEAD INPUT — the assertion would pass
-        // identically with it frozen. A test whose name promises a cache-tier check it can no longer make is
-        // the #266 shape in a test file, so it says what it now proves: this state collides, and it does so
-        // WITHOUT a board read (`world.GraphQlCalls = 0`, asserted at the end — which is the one thing here
-        // that a re-introduced board scan would break, and the reason to keep the leg rather than delete it).
+        // identically with it frozen. #2250 deliberately restores the scheduler's cached board scan so a
+        // closed-but-unstamped holder reaches this gate too; this leg pins that the second command reuses
+        // it rather than turning a cached scan into per-command GraphQL fan-out.
         let dir = cacheDir ()
 
         // The column is a `ref` the TEST moves, not something the transport counts — a fixture that flipped
@@ -1702,9 +1903,8 @@ module ApplicationServiceTests =
 
             // 3. ...but the cached scan is only seconds old. On `Cache.Scheduling` this second command was
             //    served that cached `Ready`, #75 never became a candidate, its marker was never read, and
-            //    the worker was told it may edit `src/Shared.fs`. THAT was the false DISJOINT. Since #1779
-            //    no board read decides this at all, so no cache tier can serve it a stale answer — this leg
-            //    now proves the replacement covers what the tier covered.
+            //    the worker was told it may edit `src/Shared.fs`. THAT was the false DISJOINT. The open
+            //    issue list still sees the marker regardless of the board cache, so this remains overlap.
             let code, out = runIn dir world (widenOnto "src/Shared.fs")
 
             let collision = soleCollision out
@@ -1713,10 +1913,9 @@ module ApplicationServiceTests =
             Assert.Equal<string list>([ "src/Shared.fs" ], strings "sharedTokens" collision)
             Assert.Equal(6, code)
 
-            // TWO commands ran against this world and NEITHER asked GraphQL anything. That is what makes
-            // the cache window irrelevant rather than merely survived, and it is the assertion that fails
-            // if a board read ever returns to this path — where the verdict assertions above would not.
-            Assert.Equal(0, world.GraphQlCalls)
+            // Two commands share one cached scan: two resolver calls plus one page, not six.  This is the
+            // bounded #2250 cost and fails if the cache is bypassed or a per-row query appears.
+            Assert.Equal(3, world.GraphQlCalls)
         finally
             try
                 Directory.Delete(dir, true)
@@ -2008,6 +2207,31 @@ module ApplicationServiceTests =
         Assert.Equal("disjoint", gateVerdict (contendedWorld "Blocked" (Map.ofList [ 74, "kite-469" ]) Map.empty))
 
     [<Fact>]
+    let ``#2250: a CLOSED unstamped holder reserves on BOTH scheduler and collision-gate surfaces`` () =
+        // #75 is the post-merge window: CLOSED on the board, not Done, with a live marker.  The REST
+        // open-issues answer deliberately omits it (the fixture's `fixture:closed` switch), so the gate can
+        // only find it by selecting the closed board row and reading its body.  #76 proves the scheduler
+        // refuses that same holder; #74 drives the real `widen` gate.  KILLS: removing the closed-row arm
+        // makes the gate DISJOINT while #76 remains refused, which is the exact production divergence.
+        let bodies =
+            Map.ofList
+                [ 74, "Paths: scripts/fsgg-coord"
+                  75, "Paths: src/Shared.fs\n<!-- fixture:closed -->"
+                  76, "Paths: src/Shared.fs" ]
+
+        let status n =
+            match n with
+            | 75 -> "In review"
+            | 76 -> "Ready"
+            | _ -> "In progress"
+
+        let holders = Map.ofList [ 74, "kite-469"; 75, "curlew-8afd" ]
+        let world = worldOf status bodies holders Map.empty Set.empty false
+
+        Assert.DoesNotContain("FS-GG/FS.GG.SDD#76", scheduled world)
+        Assert.Equal("overlap", gateVerdict (worldOf status bodies holders Map.empty Set.empty false))
+
+    [<Fact>]
     let ``#1792: agreeing with the scheduler costs the gate NOTHING`` () =
         // .github#1779 made this scan CHEAPER — 24/27/31 GraphQL points to ZERO, REST at one issue-list read
         // plus one marker read per COLLIDING row — and #1792 must not spend that back. It does not, and this
@@ -2031,15 +2255,17 @@ module ApplicationServiceTests =
             let _, out = runIn dir world (widenOnto "src/Shared.fs")
             Assert.Equal("overlap", str "verdict" (parsed out))
 
-            // THE BOARD IS NOT READ. #1779's zero, still zero — and the only way to reach the one case
-            // #1792 declined (`RUnowned`, which is column-derived) is to break this.
-            Assert.Equal(0, world.GraphQlCalls)
+            // #2250 reads the same cached board universe as the scheduler: bootstrap plus one page.
+            Assert.Equal(3, world.GraphQlCalls)
 
-            // REST: the issue-list read, one marker read for the ONE colliding row, and the writes `widen`
-            // makes on top (the body PATCH and the courtesy notice). The number is pinned rather than
-            // bounded so that a re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779
-            // measured and refused — cannot land quietly.
-            Assert.Equal(7, world.RestCalls)
+            // REST: the issue-list read and one marker read for the ONE colliding row, plus the ONE write
+            // `widen` still makes on an OVERLAP verdict — the courtesy notice to the colliding holder.
+            // #2306 removed the OTHER write this count used to include: the body PATCH on the SUBJECT
+            // item, which a refused widen must not issue (a refusal that mutates the declaration is
+            // exactly the defect #2306 fixes). The number is pinned rather than bounded so that a
+            // re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779 measured and
+            // refused — cannot land quietly, and so that the removed PATCH cannot quietly come back either.
+            Assert.Equal(6, world.RestCalls)
         finally
             try
                 Directory.Delete(dir, true)
@@ -2157,7 +2383,7 @@ module ApplicationServiceTests =
     // the engine makes, exactly, which is what these two legs read.
 
     [<Fact>]
-    let ``#1779 AC2: the collision scan spends ZERO GraphQL and ONE marker read per COLLIDING row`` () =
+    let ``#1779/#2250: the collision scan spends one cached board scan and ONE marker read per COLLIDING row`` () =
         // Six open issues, one of which collides. The old scan read a marker AND a body for every
         // `In progress` row whether or not its tokens could ever collide; this one reads the repo's issue
         // list once and then exactly one marker.
@@ -2190,9 +2416,9 @@ module ApplicationServiceTests =
         Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 76")
         Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 79")
 
-        // ZERO GraphQL. The board query and the `bootstrapCached` behind it are gone from this path — which
-        // is why the live measurement is 0 points on a COLD cache too, not merely on a warm one.
-        Assert.Equal(0, world.GraphQlCalls)
+        // #2250 pays the scheduler-aligned cached board universe once: two bootstrap resolver queries and
+        // one page.  It must not regress to GraphQL per colliding row.
+        Assert.Equal(3, world.GraphQlCalls)
 
     [<Fact>]
     let ``#1779 AC2: a DISJOINT verdict costs the issue list and NOT ONE marker read`` () =
@@ -2216,7 +2442,7 @@ module ApplicationServiceTests =
             Assert.Equal(1, world.Count "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
             Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 75")
             Assert.Equal(0, world.Count "comment-list FS-GG/FS.GG.SDD 76")
-            Assert.Equal(0, world.GraphQlCalls)
+            Assert.Equal(3, world.GraphQlCalls)
         finally
             try
                 Directory.Delete(dir, true)
@@ -2306,7 +2532,7 @@ module ApplicationServiceTests =
     /// still says In progress — a `CLOSED-ISSUE-NOT-DONE` chore, whose remedy is Status=Done. A number in
     /// `rateLimited` meets an exhausted GraphQL budget on its item-id lookup, which is what makes its board
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
-    let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
+    let private reconcileWorldWithQueries (closed: int list) (rateLimited: Set<int>) (queries: ResizeArray<string> option) =
         // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
         // fixture therefore models the projection separately: only a subsequent scan after an accepted
         // mutation observes Done.  The rate-limited item never reaches that transition.
@@ -2325,6 +2551,7 @@ module ApplicationServiceTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, variables) ->
+                    queries |> Option.iter (fun captured -> captured.Add document)
                     let number =
                         variables
                         |> List.tryPick (fun (k, v) ->
@@ -2345,6 +2572,26 @@ module ApplicationServiceTests =
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         | None -> Error(Errors.NotFound "an item-id lookup with no number")
+                    elif document.Contains "node(id: $itemId)" then
+                        let item =
+                            variables
+                            |> List.tryPick (fun (k, v) ->
+                                match k, v with
+                                | "itemId", VId id when id.StartsWith "PVTI_" ->
+                                    match Int32.TryParse(id.Substring "PVTI_".Length) with
+                                    | true, n -> Some n
+                                    | _ -> None
+                                | _ -> None)
+
+                        let field =
+                            variables
+                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                        match item, field with
+                        | Some n, Some "Status" when closed |> List.contains n ->
+                            let status = if written.Contains n then "Done" else "In progress"
+                            ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        | _ -> Error(Errors.NotFound "a targeted verification read addressed an unknown reconcile field")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         variables
                         |> List.tryPick (fun (_, v) ->
@@ -2377,6 +2624,9 @@ module ApplicationServiceTests =
                 ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
+        reconcileWorldWithQueries closed rateLimited None
+
     /// A BLOCKER-CLEARED apply whose accepted batch projects Status=Ready but leaves Blocked by stale.
     /// The second board scan is a real fresh transport response, not a renderer-only synthetic row.
     let private partialBlockerReconcileWorld () =
@@ -2395,9 +2645,17 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{if mutationAccepted then "Ready" else "Blocked"}"}}"""
+                            | Some "Blocked by" -> $"""{{"text":"%s{staleBlocker}"}}"""
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         mutationAccepted <- true
                         ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
@@ -2450,9 +2708,18 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                            | Some "Blocked by" when blockedBy <> "" -> $"""{{"text":"%s{blockedBy}"}}"""
+                            | Some "Blocked by" -> "null"
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         // The repair landed: the fresh verification read below now observes both fields.
                         status <- "Backlog"
@@ -2503,9 +2770,17 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Class" when classWritten -> "{\"name\":\"defect\"}"
+                            | Some "Class" -> "null"
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         classWritten <- true
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
@@ -2664,6 +2939,18 @@ module ApplicationServiceTests =
                 match req.Body with
                 | Query(document, _) when document.Contains "node(id: $projectId)" ->
                     ok lookupResponse
+                | Query(document, variables) when document.Contains "node(id: $itemId)" ->
+                    let item = variables |> List.tryPick (fun (k, v) -> match k, v with | "itemId", VId id -> Some id | _ -> None)
+                    let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                    match item, field with
+                    | Some "PVTI_external96", Some "Status" ->
+                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    | Some "PVTI_external96", Some "Blocked by" when blockedBy <> "" ->
+                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"text":"%s{blockedBy}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    | Some "PVTI_external96", Some "Blocked by" ->
+                        ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | _ -> Error(Errors.NotFound "the targeted verification read addressed the wrong external row or field")
                 | Query(document, _) when document.Contains "f0:" ->
                     status <- "Ready"
                     blockedBy <- ""
@@ -2856,6 +3143,23 @@ module ApplicationServiceTests =
 
         // Exit code UNCHANGED. A deferred write is not a failure — it is a promise the queue keeps.
         Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#2313 reconcile apply verifies N writes with N targeted reads and never repeats the board census`` () =
+        let queries = ResizeArray<string>()
+        let code, _, err = runApplyJson (reconcileWorldWithQueries [ 101; 102; 103 ] Set.empty (Some queries))
+
+        Assert.Equal(0, code)
+        Assert.True(String.IsNullOrWhiteSpace err, err)
+
+        let boardScans = queries |> Seq.filter (fun document -> document.Contains "items(first") |> Seq.length
+        let targeted = queries |> Seq.filter (fun document -> document.Contains "node(id: $itemId)") |> Seq.length
+
+        // One initial census derives all three chores. Each accepted one-field write is then observed by
+        // one resolver read; the old full-scan verifier would instead make this 1 + N board scans and 0
+        // targeted reads, so both counts are necessary to pin the cost boundary.
+        Assert.Equal(1, boardScans)
+        Assert.Equal(3, targeted)
 
     [<Fact>]
     let ``the queued-write remedy moves to stderr rather than into the document`` () =
@@ -3467,7 +3771,8 @@ module ApplicationServiceTests =
     /// whose `GET …/comments` answers `[]` (3, contended), `adopt` finds no expired claim to collect (3),
     /// `widen`/`set-paths` refuse a lock the worker does not hold (1, #706), and `predicate`'s oracle
     /// fails closed with no registry (4, no verdict). `take`'s 5 is EX_NONE, #585's "looked, found
-    /// nothing"; the remaining reads are a green empty answer.
+    /// nothing"; the remaining reads are a green empty answer.  `claim` now refuses one step earlier on
+    /// a missing source-bound route receipt (1): that is the required zero-write admission gate.
     let private sweptArms: (Options.Command * string list * int) list =
         [ Options.Take, [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 5
           Options.DriverCmd, [ "driver"; "--repo"; "FS.GG.SDD"; "--json" ], 1
@@ -3480,7 +3785,7 @@ module ApplicationServiceTests =
           Options.Inbox, [ "inbox"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ], 0
           Options.Budget, [ "budget"; "--json" ], 0
           Options.Predicate, [ "predicate"; "fsgg.kit"; "version"; "9.9.9"; "--json" ], 4
-          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
+          Options.Claim, [ "claim"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1
           Options.Adopt, [ "adopt"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 3
           Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ], 1
           Options.SetPaths,
@@ -3508,6 +3813,10 @@ module ApplicationServiceTests =
           "`Program.fs` dispatches `renderCommandContract ()` inline; `JsonOnly`, it reads nothing, and `CommandSurfaceTests` already parses the emitted document"
           Options.Issues,
           "`Client.issues` is private; audited by reading — stdout is the raw REST body (`[]` on a repo with no issues), and BOTH its refusal arms are stderr at a non-zero code: the missing-repo refusal and the read failure, the latter through `fail` so a rate limit keeps EX_RATE"
+          Options.IntakeCmd,
+          "`Client.intakeCmd` is private; audited by transaction tests. Its validate arm emits one typed zero-write receipt, while apply emits one receipt-bound issue/projection result; malformed drafts and unreadable receipts fail on stderr before a POST."
+          Options.RouteCmd,
+          "`Client.deliveryRouteCmd` is private; audited by reading pending its recording-transport fixture. Its show arm emits one typed current receipt only after reading both the body and append-only comment ledger; record validates the source-bound receipt before its sole comment POST, and malformed or unreadable evidence fails on stderr."
           Options.DiffAudit,
           "`SemanticDiffApplication.run` is a local git-object command; planted base/head, unresolved, resolved, stale, malformed, threshold and declaration arms are covered by SemanticDiffTests plus the executable engine fixture" ]
 

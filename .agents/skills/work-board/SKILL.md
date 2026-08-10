@@ -31,16 +31,38 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    fresh-read and inspect again. Multiple ready units require an explicit operator
    parallel authorization and recorded disjoint touch-sets; otherwise schedule one. Missing receipts,
    evidence paths, or a stale source/head fail closed.
-5. Report live item state immediately. Whenever the host changes or observes a material transition
-   (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
-   emit exactly two concise user-facing lines:
-   - `<item> — <new status>: <work in progress or gate being awaited>`
-   - `Active: <item> — <current activity/gate>; ...` listing every currently active item and its
-     current activity or gate.
+5. Report live item state immediately. Use the kit-provided `scripts/fsgg-coord-report`. Start one
+   explicit local session at driver entry. On every material transition — and on an unchanged
+   heartbeat — pass its stable receipt as the trigger plus the already-cached lane snapshot; do not
+   perform a compensating GitHub read merely to print. Emit the reporter's rich projection when the
+   terminal supports it, otherwise its byte-stable plain projection. Its JSON/JSONL ledger is the
+   session's source for cumulative totals, so never maintain parallel prose counters. The canonical
+   workflow here is inherited unchanged by `work-board-normal` and `work-board-best`.
+   The supplied snapshot always includes typed lane-capacity facts: configured implementation and
+   review capacity, active lanes, open slots, and ordered limiting reasons with source/freshness.
+   Account explicitly for slot/review caps, overlap, no schedulable item, REST reserve/backoff, claim
+   contention or an indeterminate receipt, and human/decision blockers; never print a low activity
+   count without its measured cause. Reuse the reporter's session-locked derived cache for unchanged
+   heartbeats; width and color are local projections and never justify another board read.
+   **Do not detect transitions or reconstruct the active set from memory** (`.github#2135`) — that is
+   exactly what went late, omitted externally claimed work, and reported a still-live claim as
+   terminal. After every fresh board read, run
+   `scripts/fsgg-coord driver --events --cursor <session-scoped-cursor-file> --text` (or `--json` for
+   the reporter) and forward its two-line projection: it is engine-derived from live board, claim, PR,
+   review, and delivery-obligation facts, is idempotent (an unchanged read emits no duplicate line), and
+   its active inventory is always the COMPLETE set — claimed, in review, newly dispatched, or merged
+   with unverified obligations — independent of whether anything transitioned this read, including work
+   claimed or advanced by a process other than this host. Emit the two lines it produces:
+   - line 1 — the material transition(s) since the cursor's last read (`no material transitions` when
+     none occurred; never fabricate one to fill this line).
+   - line 2 — the complete active inventory (`no active items` when the projection reports none).
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
-   item remains active, continue the host loop, and report each transition when it occurs. A `Done`
-   transition that landed via the repair phase names it explicitly — `<item> — Done (repair phase):
-   <PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one.
+   item remains active, continue the host loop, and report each transition when it occurs. A read that
+   fails renders as the projection's own `unreadable` state for that item, never as a silently emptied
+   active line — surface it exactly as reported, do not paper over it with the prior read's line. Each
+   transition names both its previous and new state (`<item>: <previous> -> <new> (<reason>)`), so a
+   `Done` that passed through `review-repair:N` is visible in the line itself — read the `previous`
+   state before describing a landing as an ordinary one; never paraphrase it away.
 6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
    After an exhausted third round, refuse a fourth round of that same chain and automatically dispatch
@@ -53,7 +75,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    invalid, unreadable, or wrong-cycle evidence fails closed; retain or explicitly transfer the repair
    owner until validation passes, then discard the worker and critic.
 7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
-   plan while the simple-versus-complex SDD lifecycle branch remains inside each item worker.
+   plan while each item worker consumes its current agent-authored delivery-route receipt. The fixed
+   checklist is evidence only: it never derives a simple/complex or lightweight/SDD route.
 8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work and
    every completed cycle is covered by a validated workspace feedback roll-up. Surface deliberately
    parked and human-blocked backlog without spinning; then update/land the workspace report.

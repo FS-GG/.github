@@ -22,6 +22,22 @@ module Delivery =
           HeadSha: string
           Verified: bool }
 
+    /// A decision-boundary touch-set fact, drawing the same three-way distinction
+    /// `Schedulability.NoTouchSet`/`DeliberatelyNoTouchSet` already draws for scheduling, so a
+    /// consumer of `Delivery`'s own output can tell the three apart without opening the issue body
+    /// (.github#2233 acceptance 4):
+    ///   - `Known` — tokens actually declared and read (includes the `any` chore sentinel).
+    ///   - `DeclaredNone` — an explicit, read `Paths: none`: a DELIBERATE empty reservation.
+    ///   - `Undeclared` — a read body with no `Paths:` line at all: nobody ever declared one.
+    ///   - `Unread reason` — the body was never read. This is UNKNOWN, not absent, and must never be
+    ///     supplied as any of the three read cases above: a caller that has not read the touch-set has
+    ///     to say so, or a decision boundary would treat a fact it never saw as a confident read.
+    type DeclaredPaths =
+        | Known of string list
+        | DeclaredNone
+        | Undeclared
+        | Unread of reason: string
+
     /// Facts which must stay identical between inspection and a following mutating transition.
     type Freshness =
         { ItemRef: string
@@ -32,7 +48,7 @@ module Delivery =
           /// None while the claimed work has not reached a reviewable pull request.
           PullRequest: int option
           HeadSha: string
-          DeclaredPaths: string list
+          DeclaredPaths: DeclaredPaths
           BoardState: string }
 
     /// The complete delivery fact set read by the application/GitHub boundary.
@@ -43,6 +59,8 @@ module Delivery =
           PathsVerified: bool
           InReview: bool
           Review: Driver.ReviewChain option
+          /// Parser failures are evidence that review was attempted but is malformed.
+          ReviewProblem: string option
           Landable: bool
           Merged: bool
           MergeReachable: bool

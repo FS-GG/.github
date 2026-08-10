@@ -204,7 +204,12 @@ module Protocol =
           EscalationMarker: string
           RepairPhaseMarker: string
           MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int }
+          RepairPhaseMaxRounds: int
+          /// The quoted-versus-competing marker rule (#2221, #2248): a quotation is inert, and a
+          /// canonical marker repeated in one comment's leading block is a competing marker. Stated
+          /// here so the `fsgg-protocol:review-policy` projection carries it FROM `Driver.fs`'s own
+          /// behaviour rather than as hand-written prose beside it.
+          QuotedMarkerRule: string }
 
     type LifecyclePolicyDoc =
         { RequiredHousekeeping: string list

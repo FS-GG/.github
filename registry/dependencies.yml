@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-08-05"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-08-10"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts" }
@@ -548,8 +548,11 @@ contracts:
                                # and the original 0.3.0 lockstep (epic #85).
       requires: "FS.GG.SDD Feature 049 (early-stage-guidance) + Feature 051 (seeded fs-gg-sdd-* process skills) + Feature 056 (3-root byte-identical skill union) + Feature 073 (seeded .gitignore for regenerable output)"
       adr: "docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md"
-      tracking: "https://github.com/FS-GG/FS.GG.Templates/issues/99 (provider re-mirror 0.4.0->0.6.0 — THIS advance); https://github.com/FS-GG/FS.GG.SDD/issues/49 (CLI stamps used+minimum in scaffold-provenance + warns)"
-      provider-descriptor: "FS.GG.Templates providers/rendering.providers.yml (FS.GG.Templates#99)"
+      tracking: "Live enforcement: FS.GG.Templates scripts/check-provider-floors.py (required composition check; FS.GG.Templates#383). Historic 0.4.0->0.6.0 re-mirror: FS.GG.Templates#99, closed via PR#100. FS.GG.SDD#49 records the CLI provenance/warning axis."
+      # This is deliberately an enumerable subject, not a YAML list: the typed registry validator
+      # does not consume this advisory string, while the Templates composition gate enumerates the
+      # descriptors directly. A list here would create a second, unchecked membership authority.
+      provider-descriptor: "FS.GG.Templates providers/*.providers.yml (all provider descriptors that mirror minimumFsggSdd; enforced by the required composition check)"
     # Feature 212 (FS.GG.Rendering#9), released as the coherent set 0.1.52-preview.1 (Feature 215):
     # the template now GUARANTEES a root-buildable generated product. Additive (no behavior break);
     # emitted for every profile × lifecycle, byte-neutral across designSystem. SDD composition-
@@ -895,8 +898,8 @@ contracts:
   # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
   # The org's package inventory was off by two. These rows close that.
   - id: coord-engine
-    version: "0.21.1" # SOURCE SemVer: PATCH (#2251). 4 commits since v0.21.0 — 3 from #2221's review-marker parser repair, 1 DEFECT-class from #2225. PATCH rather than the MINOR 0.21.0 took, and the difference is the point: this contract's declared `surface:` below names the CLI VERB SURFACE first and independently, 0.21.0 ADDED a verb (`diff-audit`), and this cut adds none. Both Protocol.fs|.fsi AND Options.fs|.fsi are untouched across all four commits (`git diff --name-only coord-engine/v0.21.0..b8f437cc -- <those four>` is empty). Released from coord-engine/v0.21.1 at b8f437ccf2f8f867290f18a4a863d0a3cce49f55.
-    package-version: "0.21.1" # Run 31013271481 packed ONCE and pushed that one archive to GitHub Packages then nuget.org. Both archives were DOWNLOADED after publication and compared ENTRY-WISE: 33 shared payload entries, ZERO content differences, nothing present only on the org feed, and exactly one entry only on the public feed — nuget.org's own .signature.p7s. Whole-file hashes differ, as they must (org SHA-256 46cb2ef31e7c03a7b4d690a46e7bd3654b330540e058bb9404b310e4d988aaf6, 2458853 B; public signed SHA-256 2be8f1c067a032c99384b7cbe5d1e1d711fda423cc2640d5c273a7350baf8962, 2471943 B). The GUID-named OPC part `1eb24aed960a4a12a98f59bccc419f85.psmdcp` is IDENTICAL in both, which is the positive evidence that nothing was re-packed between the two pushes (.github#2240: that name is regenerated per `dotnet pack` invocation, so a re-pack would show as one org-only plus one public-only entry). PATCH is measured on the two PUBLISHED binaries rather than argued from the diff, per the 0.20.1 precedent: 0.21.0 and 0.21.1 emit BYTE-IDENTICAL `command-contract --json` (8326 B) and `facts --json` (46378 B), while the binaries are genuinely different code — on one snapshot carrying a CLOSED, UNSTAMPED row with no body, published 0.21.0 exits 0 `"verdict":"green"` and published 0.21.1 exits 1 refusing `items[0].body: required field is missing`. Behaviour diverges; the declared surface does not. Delivery reached 7 receivers, 0 undetermined, 0 findings. PRIOR 0.21.0.
+    version: "0.22.1" # SOURCE SemVer: PATCH (#2319/#2308), released from coord-engine/v0.22.1 at d3c0fb414b5ab6d0011294ec51e8c499fcaf064b; the empty claim-marker read now fails closed without changing caller-visible CLI vocabulary.
+    package-version: "0.22.1" # Run 31370283775 packed once and dual-published; org SHA-256 dbd19b3828c80ce1606f1913f84888bea52d77273345aaafe9120432a3928bf3, public signed SHA-256 728198edac2ff53e973b4e33f5c414a6d176f3acdd8048fb407c24f622c73254. 33 shared payload entries are byte-identical; public-only .signature.p7s; public install reports 0.22.1.0; delivery reached 7 receivers. PRIOR 0.22.0.
     owner: github
     # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. THE ARGUMENT BELOW SURVIVED ITS OWN FLIP —
     # the numbers moved 0.3.0 → 0.4.0 → 0.5.0 (2026-07-17) → 0.6.0 (2026-07-18), and NOT ONE SENTENCE OF THE REASONING CHANGED.

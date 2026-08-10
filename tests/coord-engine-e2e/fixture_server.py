@@ -21,6 +21,7 @@ end, over HTTP, produces the right verdict without a token or a network.
 """
 
 import json
+import hashlib
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -46,12 +47,68 @@ BOARD_ITEMS = [
 ]
 
 ISSUE_BODIES = {42: "A schedulable item.\n\nPaths: src/Thing/**"}
-ISSUE_COMMENTS = {42: []}  # no claim markers → the item is free
+
+
+def delivery_route_comment(number: int, body: str):
+    """The ordinary success fixture includes the same source-bound agent decision production requires."""
+    receipt = {
+        "schema": "fsgg.coord.delivery-route/v1",
+        "subject": f"{OWNER}/{REPO}#{number}",
+        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
+        "route": "lightweight",
+        "agent": "fixture-route",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "reasonCodes": ["fixture"],
+        "rationale": "Hermetic current route receipt.",
+        "declaredImpacts": ["internal"],
+        "observedFacts": ["localized"],
+        "sddWorkId": None,
+        "specHome": None,
+        "requiredGates": [],
+    }
+    return {
+        "id": 7042,
+        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "user": {"login": "fixture"},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+ISSUE_COMMENTS = {42: [delivery_route_comment(42, ISSUE_BODIES[42])]}  # no claim marker → item is free
 
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
 
 
-def graphql(query: str):
+def recent_comments(number: int, last: int):
+    """.github#2300 repair 2: the bounded route-marker search — `Reads.recentCommentBodies`'s
+    `comments(last: N)` GraphQL query, served from the SAME `ISSUE_COMMENTS` the REST `/comments`
+    endpoint below answers from, truncated to the trailing `last` entries. This fixture never builds a
+    thread longer than one comment, so truncation is a no-op here; it is still applied for real (not
+    hard-coded to "return everything") so this fixture cannot silently drift from what the unit-level
+    `SchedulingCostTests.fs`/`DeliveryRouteCliTests.fs` fixtures already prove about the bound.
+    """
+    thread = ISSUE_COMMENTS.get(number, [])
+    windowed = thread[-last:] if last > 0 else []
+    return {
+        "data": {
+            "repository": {
+                "issue": {
+                    "comments": {"nodes": [{"body": c["body"]} for c in windowed]}
+                }
+            }
+        },
+        "rateLimit": RATE_LIMIT,
+    }
+
+
+def graphql(query: str, variables: dict):
+    if "comments(last:" in query:
+        number = variables.get("number")
+        last = variables.get("last")
+        if number is None or last is None:
+            return None
+        return recent_comments(int(number), int(last))
     if "projectsV2" in query:
         return {
             "data": {
@@ -131,10 +188,12 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length).decode()
         try:
-            query = json.loads(raw).get("query", "")
+            payload = json.loads(raw)
         except json.JSONDecodeError:
             return self._fail("POST body is not JSON")
-        answer = graphql(query)
+        query = payload.get("query", "")
+        variables = payload.get("variables", {}) or {}
+        answer = graphql(query, variables)
         if answer is None:
             return self._fail(f"GraphQL query not recognised: {query[:80]}")
         self._send(200, answer)

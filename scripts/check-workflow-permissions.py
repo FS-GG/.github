@@ -59,6 +59,7 @@ HOW A CALLEE IS RESOLVED (this decides what the gate protects)
 
 Usage:
   check-workflow-permissions.py [--root <dir>] [--registry <file>] [--repo <full> ...]
+      [--app-grants scope:level,...]
 Exit: 0 = every caller grants at least its callee; 1 = at least one caller cannot start; 2 = no
 verdict, RETRYABLE — a repo or workflow that could not be read (rate limit, auth, outage); 3 = no
 verdict, PERMANENT — an unreadable roster, an audit that examined nothing, a callee that is missing
@@ -341,6 +342,65 @@ def calls_in(doc: dict) -> list[tuple[str, str, str, object]]:
     return calls
 
 
+def parse_app_grants(spec: str) -> dict[str, int]:
+    """Parse the pinned installation grant inventory supplied by the workflow.
+
+    GitHub's installation API requires org administration, which the ordinary workflow token
+    cannot read.  PRs therefore compare against this explicit, reviewed inventory; the scheduled
+    credential check is responsible for noticing a changed installation grant.  A malformed
+    inventory is a no-verdict, never a green assumption.
+    """
+    grants: dict[str, int] = {}
+    for entry in (part.strip() for part in spec.split(",")):
+        if not entry or ":" not in entry:
+            raise GateError("--app-grants must be non-empty comma-separated scope:read|write entries")
+        scope, level = (part.strip() for part in entry.split(":", 1))
+        scope = scope.replace("-", "_")
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", scope) or level not in LEVELS:
+            raise GateError(f"--app-grants has invalid entry {entry!r}")
+        grants[scope] = LEVELS[level]
+    if not grants:
+        raise GateError("--app-grants must name at least one installation grant")
+    return grants
+
+
+def app_token_requests(doc: dict, where: str) -> list[tuple[str, dict[str, int]]]:
+    """Read static create-github-app-token requests in one workflow.
+
+    The action treats any ungranted requested scope as fatal.  Dynamic permission values cannot
+    be compared before merge, so they deliberately produce no verdict rather than a false green.
+    """
+    found: list[tuple[str, dict[str, int]]] = []
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return found
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict) or not isinstance(job.get("steps"), list):
+            continue
+        for index, step in enumerate(job["steps"], start=1):
+            if not isinstance(step, dict) or not isinstance(step.get("uses"), str):
+                continue
+            if not step["uses"].strip().startswith("actions/create-github-app-token@"):
+                continue
+            inputs = step.get("with", {})
+            if not isinstance(inputs, dict):
+                raise GateError(f"{where} [{job_id}] App-token step {index}: `with:` is not a mapping")
+            requested: dict[str, int] = {}
+            for key, value in inputs.items():
+                key = str(key)
+                if not key.startswith("permission-"):
+                    continue
+                scope = key.removeprefix("permission-").replace("-", "_")
+                if not isinstance(value, str) or "${{" in value or value not in LEVELS:
+                    raise GateError(
+                        f"{where} [{job_id}] App-token step {index}: {key} must be a static "
+                        "none, read, or write value so the grant can be checked before merge"
+                    )
+                requested[scope] = LEVELS[value]
+            found.append((f"{where} [{job_id}] App-token step {index}", requested))
+    return found
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
@@ -350,6 +410,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--registry", default=None, help="the roster (default: <root>/registry/repos.yml)")
     ap.add_argument("--repo", action="append", default=[],
                     help="audit only this repo (repeatable); default: every rostered repo")
+    ap.add_argument("--app-grants", default=None,
+                    help="pinned installation grants (scope:read|write,...) to compare against App-token requests")
     args = ap.parse_args(argv)
 
     registry = args.registry or os.path.join(args.root, "registry", "repos.yml")
@@ -357,6 +419,39 @@ def main(argv: list[str]) -> int:
 
     findings: list[str] = []
     pairs = 0
+
+    try:
+        app_grants = parse_app_grants(args.app_grants) if args.app_grants is not None else None
+    except GateError as e:
+        print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+        return NO_VERDICT_PERMANENT
+
+    if app_grants is not None:
+        workflow_dir = os.path.join(args.root, ".github", "workflows")
+        try:
+            filenames = sorted(name for name in os.listdir(workflow_dir) if name.endswith((".yml", ".yaml")))
+        except OSError as e:
+            print(f"::error::check-workflow-permissions: no verdict — cannot read {workflow_dir}: {e}", file=sys.stderr)
+            return NO_VERDICT_PERMANENT
+        for name in filenames:
+            path = os.path.join(workflow_dir, name)
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    requests = app_token_requests(load_yaml(fh.read(), path), path)
+            except (OSError, GateError) as e:
+                print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+                return NO_VERDICT_PERMANENT
+            for subject, requested in requests:
+                short = [
+                    f"{scope}: requests {level_name(want)}, installation grants {level_name(granted(app_grants, scope))}"
+                    for scope, want in sorted(requested.items())
+                    if granted(app_grants, scope) < want
+                ]
+                if short:
+                    findings.append(
+                        f"{subject}: App-token request is not granted by the pinned installation inventory: "
+                        f"{'; '.join(short)}. GitHub refuses the whole mint before later steps run."
+                    )
 
     try:
         repos = args.repo or rostered_repos(registry)

@@ -41,9 +41,9 @@ The digest is read from the canonical `.claude` root (the `supplied-by` path), w
 resolves to for `source:` too.
 
 Usage:
-  scripts/generate-driver-manifest --check    # regenerate in memory, diff vs the committed file;
-                                              #   exit 1 on drift (the CI regeneration gate)
-  scripts/generate-driver-manifest --write    # (re)write registry/driver-skill-manifest.json
+  scripts/generate-driver-manifest --check    # first refuse stale projection output, then regenerate
+                                              #   in memory and diff vs the committed file; exit 1 on drift
+  scripts/generate-driver-manifest --write    # first regenerate projections, then (re)write the manifests
   scripts/generate-driver-manifest --list     # print the repo-relative path(s) this emits, one per
                                               #   line — the scripts/generated-paths roster contract
                                               #   (ADR-0044), so verify-paths subtracts the artifact
@@ -56,6 +56,18 @@ Usage:
                                               #   `fsgg-skill-registry-check --digest`, so this
                                               #   PRODUCER is pinned to the same measured table as the
                                               #   two verifiers (.github#1585). Touches nothing.
+  scripts/generate-driver-manifest --which ID
+                                              # which release artifact ships skill ID: prints exactly
+                                              #   one of `FS.GG.Kit`, `FS.GG.Drivers`, or `neither` to
+                                              #   stdout and exits 0/0/1 respectively (.github#2333) —
+                                              #   the answer this repo's own release-inventory table
+                                              #   used to name neither artifact for, which misdiagnosed
+                                              #   drive-board/work-board as FS.GG.Kit content on
+                                              #   .github#2135 and tagged a permanently empty
+                                              #   kit/v0.47.0. DERIVED from the same two committed
+                                              #   sources `--write` reads (registry/repos.yml's `kit:`
+                                              #   rows, this file's own DRIVERS list) — never a second,
+                                              #   hand-copied roster to drift. Touches nothing.
   scripts/generate-driver-manifest            # default: --check
 
 Pure stdlib; no network, no tokens.
@@ -67,6 +79,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 # Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
@@ -577,8 +590,12 @@ def build_manifest(repo_root: str = REPO_ROOT) -> str:
     doc = {"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": skills}
     return json.dumps(doc, indent=2) + "\n"
 
-def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
-    """Render the coordination-kit directory index from repos.yml's skill rows."""
+def kit_skill_sources(repo_root: str = REPO_ROOT) -> list[str]:
+    """The repo-relative `source:` path of every `kind: skill` row under repos.yml's `kit:` roster.
+
+    The single read both `build_kit_manifest` (which also needs each row's bytes) and `which_artifact`
+    (which needs only the id) share, so the two never enumerate the roster by two different rules.
+    """
     roster = os.path.join(repo_root, KIT_ROSTER)
     try:
         roster_text = open(roster, encoding="utf-8").read()
@@ -593,8 +610,33 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
         r"(?m)^\s+- \{[^}\n]*\bkind:\s*skill\s*,[^}\n]*\bsource:\s*([^, }\n]+)",
         kit_text,
     )
+    return sorted(sources)
+
+
+def which_artifact(skill_id: str, repo_root: str = REPO_ROOT) -> str:
+    """Which release artifact ships `skill_id`: `FS.GG.Kit`, `FS.GG.Drivers`, or `neither`.
+
+    DERIVED from the same two committed sources `--write` reads — this file's own `DRIVERS` list and
+    `registry/repos.yml`'s `kit:` roster (ADR-0058: derive, don't restate) — never a third, hand-copied
+    mapping that can drift the moment a skill moves between populations or a new one is added. A skill
+    id present in both would be a roster defect (the two artifacts are meant to partition the tree,
+    #1531's closure check); this reports `FS.GG.Kit` first so that defect fails toward a wrong-but-
+    visible answer rather than a silent one, and never toward `neither`.
+    """
+    driver_ids = {str(driver["id"]) for driver in DRIVERS}
+    kit_ids = {os.path.basename(source) for source in kit_skill_sources(repo_root)}
+    if skill_id in kit_ids:
+        return "FS.GG.Kit"
+    if skill_id in driver_ids:
+        return "FS.GG.Drivers"
+    return "neither"
+
+
+def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
+    """Render the coordination-kit directory index from repos.yml's skill rows."""
+    sources = kit_skill_sources(repo_root)
     rows = []
-    for source in sorted(sources):
+    for source in sources:
         files, tree_sha = directory_manifest(os.path.join(repo_root, source))
         rows.append(
             {
@@ -610,10 +652,30 @@ def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
     return json.dumps({"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": rows}, indent=2) + "\n"
 
 
+def synchronize_projections(mode: str) -> int:
+    """Establish fresh projection bytes before digesting the skill tree.
+
+    Driver manifests digest skill bodies that `generate-projections` can rewrite.  Checking or
+    writing a manifest first cannot establish that its digest represents the required tree.
+    `--check` consequently fails closed; `--write` regenerates projections before its digest.
+    """
+    command = ["bash", os.path.join(REPO_ROOT, "scripts", "generate-projections")]
+    if mode == "check":
+        command.append("--check")
+    result = subprocess.run(command, cwd=REPO_ROOT, check=False)
+    if result.returncode:
+        sys.stderr.write(
+            "generate-driver-manifest: projection inputs are stale or could not be generated; "
+            "refusing to digest them.\n"
+        )
+    return result.returncode
+
+
 def main(argv: list[str]) -> int:
     mode = "check"
     catalog_root = REPO_ROOT
     digest_path: str | None = None
+    which_id: str | None = None
     index = 0
     while index < len(argv):
         arg = argv[index]
@@ -631,6 +693,12 @@ def main(argv: list[str]) -> int:
                 sys.stderr.write("generate-driver-manifest: --digest requires a path\n")
                 return 1
             digest_path = argv[index]
+        elif arg == "--which":
+            index += 1
+            if index >= len(argv):
+                sys.stderr.write("generate-driver-manifest: --which requires a skill id\n")
+                return 1
+            which_id = argv[index]
         elif arg in ("-h", "--help"):
             sys.stdout.write(__doc__ or "")
             return 0
@@ -659,6 +727,17 @@ def main(argv: list[str]) -> int:
         sys.stdout.write(canonical_digest(raw) + "\n")
         return 0
 
+    # --which is a second touch-nothing reference seam (.github#2333), answered before catalog
+    # validation for the same reason `--digest` is: a caller asking "which artifact ships this skill"
+    # must get an answer even from a tree that would otherwise fail `--check` (a mid-edit worktree,
+    # for instance — exactly when this question is asked). Exit 0 for a real mapping (kit or drivers),
+    # 1 for `neither`, so a caller can branch on the exit code without parsing stdout, while stdout
+    # still names the answer either way — never silent (acceptance criterion 3, .github#2333).
+    if which_id is not None:
+        artifact = which_artifact(which_id, catalog_root)
+        sys.stdout.write(artifact + "\n")
+        return 0 if artifact != "neither" else 1
+
     # --list is the generated-paths roster contract (ADR-0044): one `kind<TAB>path<TAB>marker` row per
     # emitted artifact, touch nothing, exit 0. The manifest is a WHOLE generated file (no embedded
     # region markers), so the marker field is EMPTY — the signal for "subtract the whole file", exactly
@@ -678,6 +757,12 @@ def main(argv: list[str]) -> int:
         return 1
     if mode == "catalog-report":
         return 0
+
+    # Manifest bytes digest documents projections can rewrite.  The producer must run first so a
+    # green manifest check means it digested the repository's current projection bytes.
+    projection_result = synchronize_projections(mode)
+    if projection_result:
+        return projection_result
 
     generated = build_manifest(catalog_root)
     kit_generated = build_kit_manifest(catalog_root)

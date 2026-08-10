@@ -13,6 +13,13 @@
 # here. A PR that edits a callee is caught here directly — the gate resolves an `@main` caller
 # against the WORKING TREE, so adding a scope to a callee red-lights the callers that do not grant
 # it before the merge strands them.
+#
+# App-token requests are a different relation: GitHub refuses the whole mint when *one* requested
+# permission is outside the installation's grant.  The normal PR job compares them to the pinned
+# inventory below, because GITHUB_TOKEN cannot read the organisation installation record.  The
+# scheduled `installation-grants-current` job mints the already-required organisation-admin read
+# token and compares that same inventory with GitHub's live record.  A read/mint failure is red;
+# it is never treated as a passing comparison.
 name: permission-coherence
 
 on:
@@ -67,9 +74,12 @@ jobs:
           # Env-passed, never interpolated into the run body — the org's uniform anti-injection
           # pattern (cf. feed-coherence.yml, contract-coherence.yml).
           GH_TOKEN: ${{ github.token }}
+          # Live 2026-08-08 from GET /orgs/FS-GG/installations for fs-gg-cross-repo-dispatch.
+          # Hyphens are action input spelling; underscores are GitHub's API spelling.
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,packages:read,pull_requests:write
         run: |
           rc=0
-          out="$(python scripts/check-workflow-permissions.py --root . 2>&1)" || rc=$?
+          out="$(python scripts/check-workflow-permissions.py --root . --app-grants "$FSGG_APP_GRANTS" 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
@@ -126,3 +136,38 @@ jobs:
         run: |
           echo "::error title=permission-coherence: inconclusive::check-workflow-permissions.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
           exit 1
+
+  installation-grants-current:
+    # The pinned inventory gives PRs an offline answer. This scheduled/live arm detects an owner
+    # changing the App installation after that pin was reviewed.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Mint App token to read its organisation installation grant
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-administration: read
+      - name: Assert the pinned App grant inventory is current
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,packages:read,pull_requests:write
+        run: |
+          live="$(gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug == "fs-gg-cross-repo-dispatch") | .permissions')"
+          [ -n "$live" ] || { echo '::error title=permission-coherence: no verdict::The App installation was not readable.'; exit 1; }
+          python3 - "$FSGG_APP_GRANTS" "$live" <<'PY'
+          import json, sys
+          expected = dict(part.split(":", 1) for part in sys.argv[1].split(","))
+          live = json.loads(sys.argv[2])
+          if expected != live:
+              print("::error title=permission-coherence: App grants drifted::The pinned inventory and live installation permissions differ.")
+              print("expected:", expected)
+              print("live:", live)
+              raise SystemExit(1)
+          print("permission-coherence: live App installation grants match the pinned inventory")
+          PY

@@ -1,5 +1,9 @@
 module FS.GG.Coord.Cli.Tests.ScanRoundTripTests
 
+open System
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -25,7 +29,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private aRow: Scan.Row =
     { Ref =
@@ -41,12 +45,34 @@ let private aRow: Scan.Row =
       BoardClass = None
       Severity = Unset
       Phase = None
-      CreatedAt = None }
+      CreatedAt = None
+      SweptBody = None
+      NodeId = None }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
 /// bare `/issues` list; these worlds have no off-board claim, so it answers empty — the honest scan result.
+let private currentRouteComment (subject: string) (body: string) =
+    let revision = SHA256.HashData(Encoding.UTF8.GetBytes body) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let receipt =
+        $"""{{"schema":"fsgg.coord.delivery-route/v1","subject":"%s{subject}","subjectRevision":"%s{revision}","route":"lightweight","agent":"fixture-42","timestamp":"2026-01-01T00:00:00Z","reasonCodes":["fixture"],"rationale":"fixture route receipt","declaredImpacts":["internal"],"observedFacts":["localized"],"sddWorkId":null,"specHome":null,"requiredGates":[]}}"""
+    "<!-- fsgg:delivery-route/v1 -->\n" + receipt
+
 let private routed (body: string) (comments: string) =
+    // Success fixtures must carry the same source-bound receipt production reads.  A missing receipt is
+    // now a deliberate refusal state, never the old implicit lightweight bypass.
+    let comments =
+        if comments = "[]" then
+            use document = JsonDocument.Parse body
+            let issueBody = document.RootElement.GetProperty("body").GetString()
+            JsonSerializer.Serialize
+                [ {| id = 7001
+                     body = currentRouteComment "FS-GG/FS.GG.SDD#42" issueBody
+                     user = {| login = "fixture" |}
+                     created_at = "2026-01-01T00:00:00Z"
+                     updated_at = "2026-01-01T00:00:00Z" |} ]
+        else comments
+
     Fake.Recorder(fun req ->
         if req.Path.EndsWith "/issues" then
             ok "[]"
@@ -58,6 +84,25 @@ let private routed (body: string) (comments: string) =
 let private issueBody (text: string) =
     let escaped = text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n")
     $"""{{"number":42,"body":"%s{escaped}"}}"""
+
+/// `Scan.snapshot` deliberately records only pure board/lock facts; the client reads route evidence at its
+/// live boundary.  These direct pure-scheduler fixtures state that already-observed current fact explicitly.
+let private withCurrentRoute item =
+    let receipt: DeliveryRoute.Receipt =
+        { Schema = DeliveryRoute.Schema
+          Subject = item.Ref.Canonical
+          SubjectRevision = "fixture"
+          Route = Some DeliveryRoute.Lightweight
+          Agent = "fixture-42"
+          Timestamp = "2026-01-01T00:00:00Z"
+          ReasonCodes = [ "fixture" ]
+          Rationale = "fixture route receipt"
+          DeclaredImpacts = [ "internal" ]
+          ObservedFacts = [ "localized" ]
+          SddWorkId = None
+          SpecHome = None
+          RequiredGates = [] }
+    { item with DeliveryRoute = DeliveryRoute.Current receipt }
 
 // ---- the round trip ---------------------------------------------------------------------------------
 
@@ -125,7 +170,7 @@ let ``a scanned item is SCHEDULABLE end to end - scan, parse, decide`` () =
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
-                    (request.Candidates |> List.map (fun c -> c.Item))
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
 
             match decision with
             | Green result ->
@@ -185,13 +230,14 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
             | Undeclared -> failwith "an unread body became a confident 'no touch-set declared' — that is #496"
             | other -> failwith $"expected Unreadable — got %A{other}"
 
-            // AND IT IS UNDETERMINED, NEVER SILENTLY SKIPPED.
+            // The unreadable source also makes its source-bound route evidence unreadable.  It must park
+            // at the mandatory route checkpoint, never become an implicit lightweight decision.
             let verdict =
                 Schedulability.schedulable false [] request.Candidates.[0].Item
 
             match verdict with
-            | Schedulability.Undetermined _ -> ()
-            | other -> failwith $"an item whose touch-set we could not read is UNDETERMINED — got %A{other}"
+            | Schedulability.AwaitingDeliveryRouteDecision _ -> ()
+            | other -> failwith $"an item whose source body could not be read must await a route decision — got %A{other}"
 
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"the scan must survive one unreadable body — got %A{e}"
@@ -213,7 +259,7 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
     // (never scheduled) with no WORDS, so a worker asking "why isn't #502 offered?" gets nothing for it,
     // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
     // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
-    // needs neither a body read nor a marker read, and the reason survives to `decide`.
+    // needs neither a body nor a marker read.
     //
     // THE FIXTURE IS `Done`, NOT `Ready`, SINCE .github#2225. This test used to drive `State = Closed;
     // Status = Ready` — a CLOSED, UNSTAMPED row, which is now precisely the post-merge window that MUST be
@@ -221,6 +267,13 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
     // the test agreed with the code, and both were describing a rule nobody had checked against `delivery`.
     // The sweep is real and worth keeping — it is just gated on the STAMP now, which is what `Done` says.
     // Its unstamped twin is the test immediately below.
+    //
+    // .github#2254 REPAIR 1: `Scan.snapshot` no longer decides whether to pay a body read for a swept row
+    // AT ALL — that decision, and the one REST call it can cost, now live entirely in `Scan.board`/
+    // `scanFresh` (`ScanBoardTests`), gated on `Cache.ReadIntent`. This function only ever RENDERS
+    // `Row.SweptBody`, which `aRow` (like every fixture that predates this repair) carries as `None` — so
+    // this test is now, additionally, proof that `Scan.snapshot` ITSELF performs no network I/O for a
+    // swept row on any `BoardClass`, having no `Cache.ReadIntent` to consult in the first place.
     let closed = { aRow with State = Closed; Status = Done }
 
     // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
@@ -252,6 +305,90 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
             match Schedulability.schedulable false [] item with
             | Schedulability.IssueClosed -> ()
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
+
+[<Fact>]
+let ``#2254 SweptBody, when carried, is RENDERED into the swept row's body — Scan.snapshot's half of the fix`` () =
+    // THE GAP THIS PINS. `CLASS-PROJECTION-LAG` (`Chore.fs`) is no longer `Open`-only, but it can only fire
+    // on a `Some declared` `Item.Class` — and a swept closed row's `Item.Class` was UNCONDITIONALLY `None`,
+    // because the sweep never sent a body to derive one from. A row that reached `Done` before any
+    // reconcile pass observed it `Open` therefore carried a genuinely EMPTY `Class` column forever: not
+    // examined, not reported, not repaired. `FS.GG.Templates#398` is the live instance — filed, classed
+    // `hardening` in its own text, merged and closed inside one gap window, and both `reconcile --json` and
+    // `lint` stayed clean about it.
+    //
+    // WHO DECIDES TO PAY THE READ IS NOT THIS FUNCTION (repair 1, `heron-fef6`): `Scan.board`/`scanFresh`
+    // does, gated on `Cache.ReadIntent` (`ScanBoardTests` pins that half). This function's whole job is
+    // downstream and NETWORK-FREE — render `Row.SweptBody` when the caller already carries one, which is
+    // why this fixture sets it directly rather than driving a transport at all.
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+            SweptBody = Some(Ok "Paths: src/Audio/**\n\nClass: hardening\n") }
+
+    // Every OTHER read stays unreachable: nothing about rendering an already-carried `SweptBody` may touch
+    // the network for BODY or MARKER purposes. `/issues` still answers — the off-board blocker sweep runs
+    // unconditionally, on `#520`'s own terms, and has nothing to do with the fact under test here.
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]"
+            else
+                Error(Errors.Transport "rendering SweptBody must never read the network"))
+
+    match Scan.snapshot transport [ closed ] None false None 120 with
+    | Error e -> failwith $"rendering a carried SweptBody must not fail the scan — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.Candidates)
+        Assert.Equal(0, receipt.BodiesUnreadable) // the read SUCCEEDED — this counts only FAILURES
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"a closed row carrying SweptBody must still round-trip: %s{detail}"
+        | Ok request ->
+            let item = request.Candidates.[0].Item
+            Assert.Equal(Closed, item.State)
+
+            // THE WHOLE POINT: the item's own declared Class now reaches `Item.Class`, exactly as it would
+            // for a genuinely open row — which is what lets `Chore.derive`'s `CLASS-PROJECTION-LAG` see the
+            // disagreement (`ChoreTests` pins the derivation itself; this pins the document that feeds it).
+            Assert.Equal(Some Hardening, item.Class)
+
+[<Fact>]
+let ``#2254 a carried SweptBody FAILURE is rendered as bodyUnreadable and counted, not silently dropped`` () =
+    // #266's rule, applied to the narrow read `Scan.board`/`scanFresh` may now perform: a body that read
+    // could not fetch must be COUNTED and named — `bodyUnreadable`, never a fact this row simply declares
+    // nothing, and never a failure that takes the whole scan down for one row #520 already established
+    // must not fail it. Network-free, on the SAME terms as the success leg above.
+    let closed =
+        { aRow with
+            State = Closed
+            Status = Done
+            SweptBody = Some(Error(Errors.Transport "rate limited")) }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]"
+            else
+                Error(Errors.Transport "rendering a carried SweptBody must never read the network"))
+
+    match Scan.snapshot transport [ closed ] None false None 120 with
+    | Error e -> failwith $"a carried SweptBody failure must not fail the whole scan — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.BodiesUnreadable)
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"a swept closed item with an unreadable SweptBody must still parse: %s{detail}"
+        | Ok request ->
+            Assert.Equal(None, request.Candidates.[0].Item.Class)
 
 [<Fact>]
 let ``#2225 a CLOSED but UNSTAMPED item is READ, and its live claim still RESERVES its touch-set`` () =
@@ -372,7 +509,7 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
             | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
             | Ok request ->
                 match
-                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
                 with
                 | Green result ->
                     // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
@@ -549,7 +686,7 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
-                    (request.Candidates |> List.map (fun c -> c.Item))
+                    (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
 
             match decision with
             | Green result -> Assert.Empty(result.Chosen)
@@ -595,7 +732,7 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED: a stale lock is not scheduled over, only reaped.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result -> Assert.Empty(result.Chosen)
             | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
@@ -757,7 +894,7 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
 
             // AND THE OVERLAPPING Ready CANDIDATE IS REFUSED, its collision naming the Unowned reserver.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result ->
                 Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
@@ -827,7 +964,7 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
             // THE FIX, ARM 2: the batch is RED. A reservation whose surface we never saw makes every later
             // comparison a lie, so #43 is refused rather than handed files #42's holder may be standing in.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Red reasons -> Assert.True(reasons |> List.exists (fun (m: string) -> m.Contains "vole-418"))
             | other ->

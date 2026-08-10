@@ -11,6 +11,13 @@ namespace FS.GG.Coord.GitHub
 /// every worker for the next ninety seconds, wearing the clothes of a fact. Both invariants below exist
 /// to stop exactly that.
 module Cache =
+    val getIntakeReceipt: draftId: string -> Result<FS.GG.Coord.IntakeReceipt.Receipt option, string>
+    val putIntakeReceipt: receipt: FS.GG.Coord.IntakeReceipt.Receipt -> Result<unit, string>
+    type IntakeIntent = { DraftId: string; Owner: string; Repository: string; DraftDigest: string }
+    val getIntakeIntent: draftId: string -> Result<IntakeIntent option, string>
+    val putIntakeIntent: intent: IntakeIntent -> Result<unit, string>
+    /// Serialize one draft's receipt/create boundary. The OS releases the lock on process death.
+    val withIntakeLock: draftId: string -> action: (unit -> 'a) -> Result<'a, string>
 
     open Errors
 

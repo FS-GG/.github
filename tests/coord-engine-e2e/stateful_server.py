@@ -16,6 +16,7 @@ binary's real writes across a process boundary and see the state change — not 
 """
 
 import json
+import hashlib
 import re
 import sys
 import threading
@@ -81,6 +82,46 @@ def repo_of(n):
 def owner_of(n):
     return ISSUES.get(n, {}).get("owner", "FS-GG")
 
+
+def route_receipt_comment(n):
+    """Model the mandatory current receipt for ordinary scripted-success paths.
+
+    The route is bound to the exact source body the fixture serves.  Negative route cases use their
+    own transports/unit fixtures; this stateful fixture must not accidentally model the old implicit
+    lightweight admission path.
+    """
+    issue = ISSUES[n]
+    body = issue["body"]
+    receipt = {
+        "schema": "fsgg.coord.delivery-route/v1",
+        "subject": f"{owner_of(n)}/{repo_of(n)}#{n}",
+        "subjectRevision": hashlib.sha256(body.encode()).hexdigest(),
+        "route": "lightweight",
+        "agent": "fixture-route",
+        "timestamp": "2026-01-01T00:00:00Z",
+        "reasonCodes": ["fixture"],
+        "rationale": "Stateful fixture route receipt.",
+        "declaredImpacts": ["internal"],
+        "observedFacts": ["localized"],
+        "sddWorkId": None,
+        "specHome": None,
+        "requiredGates": [],
+    }
+    return {
+        "id": 700000 + n,
+        "body": "<!-- fsgg:delivery-route/v1 -->\n" + json.dumps(receipt, separators=(",", ":")),
+        "user": {"login": "fixture"},
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-01T00:00:00Z",
+    }
+
+
+def comments_for(n):
+    # Chore locks deliberately have no issue/source body and therefore no delivery route receipt.
+    if n not in ISSUES:
+        return list(COMMENTS.get(n, []))
+    return [route_receipt_comment(n)] + list(COMMENTS.get(n, []))
+
 # 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
 # never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
 COMMENTS = {42: [], 43: [], 99: [], 44: [], 46: [], 50: [], 51: [], 96: [], 1033: []}
@@ -92,6 +133,12 @@ def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
+
+# REST budget state is deliberately selectable by the write harness.  The production admission gate
+# learns only from response headers, so these modes let the compiled CLI prove its refusal leaves a
+# live force-steal target completely untouched.  ``unknown`` omits the authoritative headers rather
+# than inventing a sentinel value: absence is the state the client must fail closed on.
+REST_BUDGET_MODE = ["healthy"]
 
 # BOARD READS, COUNTED — so a leg can assert what was NOT spent. #733's `AfterDone` offer costs `done` a
 # scan it otherwise never makes, and `Chores.offer`'s step 1 (`choreLockRef`) is a pure string match that
@@ -121,6 +168,7 @@ RECONCILE_45_PROJECTION = [0]
 # the next scan either sees only the Status half or no row at all.
 RECONCILE_47_PARTIAL = [0]
 RECONCILE_47_MISSING = [0]
+DROP_INTAKE_FIELDS = set()
 
 # .github#1779 AC2 — REST REQUESTS, COUNTED. The cost claim is "one issue-list read, plus one marker read
 # per COLLIDING row" and a number in prose rots silently. This is the same instrumentation `BOARD_READS`
@@ -165,6 +213,14 @@ def project_fields():
                                     {"id": "opt_backlog", "name": "Backlog"},
                                 ],
                             },
+                            {
+                                "id": "PVTSSF_class",
+                                "name": "Class",
+                                "dataType": "SINGLE_SELECT",
+                                "options": [{"id": "opt_hardening", "name": "hardening"}],
+                            },
+                            {"id": "PVTSSF_phase", "name": "Phase", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_execution", "name": "execution"}]},
+                            {"id": "PVTSSF_severity", "name": "Severity", "dataType": "SINGLE_SELECT", "options": [{"id": "opt_high", "name": "high"}]},
                             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"},
                         ]
                     }
@@ -183,6 +239,7 @@ def board_items():
         nodes.append(
             {
                 "status": {"name": issue["status"]} if issue["status"] else None,
+                "class": {"name": issue.get("class")} if issue.get("class") else None,
                 "blockedBy": {"text": issue["blocked_by"]} if issue.get("blocked_by") else None,
                 "content": {
                     "__typename": "Issue",
@@ -204,6 +261,23 @@ def board_items():
 
 
 def graphql(query: str, variables: dict):
+    if "comments(last:" in query:
+        # .github#2300 repair 2: the bounded route-marker search (`Reads.recentCommentBodies`) — served
+        # from the SAME `comments_for()` the REST `/comments` endpoint answers from (route receipt
+        # first, then any live claim/message markers, exactly as that endpoint already orders them),
+        # truncated to the trailing `last` entries.
+        n = variables.get("number")
+        last = variables.get("last")
+        if n is None or last is None:
+            return None
+        n, last = int(n), int(last)
+        with LOCK:
+            thread = comments_for(n)
+        recent = thread[-last:] if last > 0 else []
+        return {
+            "data": {"repository": {"issue": {"comments": {"nodes": [{"body": c["body"]} for c in recent]}}}},
+            "rateLimit": RATE_LIMIT,
+        }
     if "issue(number" in query and "projectItems" not in query:
         return {"data": {"repository": {"issue": {"id": "I_contract_probe"}}, "rateLimit": RATE_LIMIT}}
     if "projectsV2" in query:
@@ -235,8 +309,14 @@ def graphql(query: str, variables: dict):
             issue = ISSUES[n]
         except (KeyError, ValueError):
             return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
+        # A board-item id is stable only while its row exists. Once a reconcile mutation removes the row,
+        # the targeted verifier must observe that absence as `node: null`, never read the stale issue-side
+        # field values that survive after board removal.
+        if off_board(n):
+            return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
         field = variables.get("field")
-        value = issue.get("blocked_by") if field == "Blocked by" else issue.get("status")
+        values = {"Status": issue.get("status"), "Class": issue.get("class"), "Phase": issue.get("phase"), "Severity": issue.get("severity"), "Blocked by": issue.get("blocked_by")}
+        value = values.get(field)
         field_value = ({"text": value} if field == "Blocked by" else {"name": value}) if value else None
         return {"data": {"node": {"fieldValueByName": field_value}, "rateLimit": RATE_LIMIT}}
     if "items(first" in query:
@@ -283,7 +363,14 @@ def graphql(query: str, variables: dict):
             # visible, while the FS-GG organization board's row is absent.
             nodes = [{"id": f"PVTI_user_{n}", "project": {"number": 7}}]
         else:
-            nodes = [{"id": f"PVTI_{n}", "project": {"number": 12}}]
+            node = {"id": f"PVTI_{n}", "project": {"number": 12}}
+            if 'fieldValueByName(name: "Status")' in query:
+                status = ISSUES.get(n, {}).get("status")
+                node["fieldValueByName"] = {"name": status} if status else None
+            elif 'fieldValueByName(name: "Blocked by")' in query:
+                blocked_by = ISSUES.get(n, {}).get("blocked_by")
+                node["fieldValueByName"] = {"text": blocked_by} if blocked_by else None
+            nodes = [node]
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": nodes}}},
@@ -332,6 +419,8 @@ def graphql(query: str, variables: dict):
                     # like Status writes.
                     value = json.dumps(variables)
                     inline_options = re.findall(r'singleSelectOptionId:\s*"([^"]+)"', query)
+                    dropped = set(DROP_INTAKE_FIELDS)
+                    DROP_INTAKE_FIELDS.clear()
                     if n == 47 and RECONCILE_47_MISSING[0] > 0:
                         RECONCILE_47_MISSING[0] -= 1
                         ISSUES[n]["off_board"] = True
@@ -349,6 +438,17 @@ def graphql(query: str, variables: dict):
                         ISSUES[n]["status"] = "Ready"
                     elif "opt_backlog" in value or "opt_backlog" in inline_options:
                         ISSUES[n]["status"] = "Backlog"
+                    elif "opt_blocked" in value or "opt_blocked" in inline_options:
+                        ISSUES[n]["status"] = "Blocked"
+                    if "Class" not in dropped and ("opt_hardening" in value or "opt_hardening" in inline_options):
+                        ISSUES[n]["class"] = "hardening"
+                    if "Phase" not in dropped and ("opt_execution" in value or "opt_execution" in inline_options):
+                        ISSUES[n]["phase"] = "execution"
+                    if "Severity" not in dropped and ("opt_high" in value or "opt_high" in inline_options):
+                        ISSUES[n]["severity"] = "high"
+                    blocked = re.search(r'fieldId:\s*"PVTF_blocked"[^}]*value:\s*\{text:\s*"([^"]+)"', query)
+                    if blocked:
+                        ISSUES[n]["blocked_by"] = blocked.group(1)
                 except (ValueError, KeyError):
                     pass
             if RECONCILE_45_PROJECTION[0] > 0 and "opt_done" in json.dumps(variables):
@@ -358,7 +458,12 @@ def graphql(query: str, variables: dict):
     if "addProjectV2ItemById" in query:
         # GitHub's mutation is idempotent.  The issue-side lookup above misses the external row, but
         # adding it again returns the existing Coordination item, whose live Status must then be read.
-        return {"data": {"addProjectV2ItemById": {"item": {"id": "PVTI_96"}}}}
+        # Intake creates an issue before projecting it.  The newest issue is therefore the only
+        # newly-created board candidate in this hermetic fixture; return its real project-item id so
+        # the subsequent Status mutation and readback exercise the same public transaction.
+        created = max(ISSUES)
+        ISSUES[created]["off_board"] = False
+        return {"data": {"addProjectV2ItemById": {"item": {"id": f"PVTI_{created}"}}}}
     return None
 
 
@@ -395,6 +500,16 @@ class Handler(BaseHTTPRequestHandler):
         body = b"" if status in (204, 304) else json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        # The production client admits a first claim only after a real resource response has
+        # established capacity.  This fixture is that real HTTP route, so model GitHub's resource
+        # headers rather than leaving every command permanently UNKNOWN.
+        if self.path.split("?", 1)[0].rstrip("/") not in ("/graphql", "/rate_limit") and REST_BUDGET_MODE[0] != "unknown":
+            remaining = {"healthy": "4800", "constrained": "99", "exhausted": "0"}[REST_BUDGET_MODE[0]]
+            self.send_header("X-RateLimit-Resource", "core")
+            self.send_header("X-RateLimit-Limit", "5000")
+            self.send_header("X-RateLimit-Remaining", remaining)
+            self.send_header("X-RateLimit-Used", str(5000 - int(remaining)))
+            self.send_header("X-RateLimit-Reset", "1893456000")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if body:
@@ -432,7 +547,15 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 number = NEXT_ROOM_NUMBER[0]
                 NEXT_ROOM_NUMBER[0] += 1
-                ISSUES[number] = {"body": payload.get("body", ""), "state": "OPEN", "status": None, "repo": m.group(1), "off_board": True}
+                ISSUES[number] = {
+                    "title": payload.get("title", ""),
+                    "body": payload.get("body", ""),
+                    "state": "OPEN",
+                    "status": None,
+                    "class": None,
+                    "repo": m.group(1),
+                    "off_board": True,
+                }
                 COMMENTS[number] = []
             return self._send(201, {"number": number})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
@@ -550,6 +673,21 @@ class Handler(BaseHTTPRequestHandler):
                 MUTATIONS.clear()
                 return self._send(200, {"count": len(spent), "requests": spent})
 
+        m = re.match(r"^/_fixture/drop-intake-field/(Class|Phase|Severity)$", path)
+        if m:
+            with LOCK:
+                DROP_INTAKE_FIELDS.add(m.group(1))
+                return self._send(200, {"drop": m.group(1)})
+
+        # #2268: configure the headers seen by the *real* REST marker scan.  This is not a
+        # synthetic engine hook: the following command must derive admission entirely from these
+        # response headers, including the genuinely headerless Unknown case.
+        m = re.match(r"^/_fixture/rest-budget/(healthy|constrained|exhausted|unknown)$", path)
+        if m:
+            with LOCK:
+                REST_BUDGET_MODE[0] = m.group(1)
+                return self._send(200, {"mode": REST_BUDGET_MODE[0]})
+
         if path.rstrip("/") == "/_fixture/reset-reconcile-45":
             with LOCK:
                 ISSUES[45]["status"] = "Ready"
@@ -594,7 +732,7 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:
             with LOCK:
-                return self._send(200, list(COMMENTS.get(int(m.group(1)), [])))
+                return self._send(200, comments_for(int(m.group(1))))
 
         # THE OFF-BOARD OPEN-ISSUE SCAN (bash's `active_claims` arm B). `Scan.snapshot` asks each in-scope
         # repo for its open issues so it can reserve a live claim on an issue the BOARD never listed.
@@ -610,7 +748,8 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             r = m.group(1)
             with LOCK:
-                return self._send(200, [{"number": n, "state": i["state"].lower(), "body": i["body"]}
+                return self._send(200, [{"number": n, "state": i["state"].lower(),
+                                         "title": i.get("title", f"item {n}"), "body": i["body"]}
                                         for n, i in sorted(ISSUES.items())
                                         if repo_of(n) == r and i["state"] == "OPEN"])
 

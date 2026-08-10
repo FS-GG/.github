@@ -62,7 +62,14 @@ jobs:
   # Lives in this self-gate (not the reusable contract-coherence.yml the product repos call) for the
   # same reason `projection` does: both registries live HERE, so this is a .github-internal invariant.
   # It runs on every PR and every push to main, which is what makes "add a repo to dependencies.yml
-  # without rostering it" a red check. Pure-stdlib + PyYAML; one REST call.
+  # without rostering it" a red check. Pure-stdlib + PyYAML for directions A/B; direction C shells
+  # out to `gh api graphql` (already on every GitHub-hosted runner).
+  #
+  # THREE directions, one job, one step for the live half (`.github#2206`). A BOARD-present repo can
+  # go unrostered exactly the way an org-present one can (FS.GG.Audio's shape, one population over) —
+  # and worse, a repo the Coordination board names can be USER-owned, which direction B's org
+  # enumeration can never see at all (`EHotwagner/rogue3`, `EHotwagner/S.I.R.`). Direction C reads the
+  # board's own item set directly, so it is not subject to that blind spot.
   roster-closure:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -71,21 +78,35 @@ jobs:
       - uses: ./.github/actions/setup-policy-python
 
       # The fixture first: it proves the gate still FAILS on each fails-open trap (empty listing,
-      # narrow listing, unreachable listing, stale exemption). A gate whose own tests have gone
-      # vacuous is this epic's defect class, one level up — cf. SDD's C6 smoke, whose "malformed
-      # registry ⇒ exit 1" leg had stopped testing its own claim.
+      # narrow listing, unreachable listing, stale exemption, an unreadable/empty board). A gate whose
+      # own tests have gone vacuous is this epic's defect class, one level up — cf. SDD's C6 smoke,
+      # whose "malformed registry ⇒ exit 1" leg had stopped testing its own claim.
       - name: Run the roster-closure fixture
         run: bash tests/roster-closure/run.sh
 
-      # Then the real thing, against the live org. The run-scoped GITHUB_TOKEN resolves the PUBLIC
-      # listing (a fork PR's read-only token does too), which proves the public world closed — but it
-      # CANNOT read the org's private-repo count, so it cannot rule out an unrostered PRIVATE repo. The
-      # gate says so: exit 3 = NO VERDICT (couldn't look), which the epic's whole premise forbids
-      # collapsing into a vacuous exit 0. We treat it here as an advisory WARNING rather than a block —
-      # a "couldn't look" should not red the fleet's required check — while a real open-world finding
-      # (exit 1, e.g. a rostered repo missing, or a visible unrostered repo) still fails hard. Give
-      # this step a token with organization read to turn the no-verdict into a real verdict (#1154).
-      - name: Assert the org roster is closed (dependencies.yml + live org)
+      # Then the real thing, against the live org AND the live Coordination board — one invocation,
+      # because directions A/B/C share this script's one exit-code contract and this step's existing
+      # exit-3-is-a-warning / exit-1-fails treatment already covers all three without change.
+      #
+      # ORG (B): the run-scoped GITHUB_TOKEN resolves the PUBLIC listing (a fork PR's read-only token
+      # does too), which proves the public world closed — but it CANNOT read the org's private-repo
+      # count, so it cannot rule out an unrostered PRIVATE repo (#1154). Give this step a token with
+      # organization read to turn that no-verdict into a real verdict.
+      #
+      # BOARD (C): `gh api graphql` needs a credential with Projects (v2) read on the FS-GG org, which
+      # the default GITHUB_TOKEN does not carry (`project-field-options.yml`'s own comment records the
+      # same limit: "no Projects credential, so the live form cannot run"). Until this step is handed
+      # such a credential, direction C's live half reports exit 3 — NO VERDICT, "could not read the
+      # Coordination board" — which is the fail-closed answer AC-4 requires, not a silent skip: it is
+      # named on stdout, and it is warned rather than swallowed, exactly like org closure's own
+      # private-repo gap. `tests/roster-closure/run.sh` already proves direction C's violation and
+      # no-verdict paths offline via `--board-json`, so this step's only remaining job is to run the
+      # live read and report whichever of the three outcomes it reaches.
+      #
+      # Neither gap is new here: BOTH are the same "could not look" the #1154 gap already established
+      # for direction B, now also true of direction C for the same reason (a narrower credential than
+      # the claim being checked). A real open-world finding (exit 1) — org OR board — still fails hard.
+      - name: Assert the org and board roster is closed (dependencies.yml + live org + live board)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -94,7 +115,7 @@ jobs:
           rc=$?
           set -e
           if [ "$rc" -eq 3 ]; then
-            echo "::warning::roster-closure: NO VERDICT — the run-scoped token cannot enumerate the whole org (it cannot read the org's private-repo count), so org closure was neither confirmed nor refuted (#1154). A real open-world finding (exit 1) still fails this step."
+            echo "::warning::roster-closure: NO VERDICT on at least one direction — either the run-scoped token cannot enumerate the whole org (it cannot read the org's private-repo count, #1154), or it cannot read the live Coordination board (no Projects v2 read credential). See stdout above for which. A real open-world finding (exit 1) still fails this step."
             exit 0
           fi
           exit "$rc"

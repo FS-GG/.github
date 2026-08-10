@@ -30,7 +30,7 @@ Registry release inventory: 9 package-bearing contracts across 7 producers; 8 co
 | `game` | `game-scene-adapter` | `0.13.0` | `0.13.0` | `game:0.13.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
 | `audio` | `fs-gg-audio` | `0.5.0` | `0.5.0` | `audio:0.5.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge |
 | `net` | `fs-gg-net` | `0.5.0` | `0.5.0` | `net:0.5.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
-| `github` | `coord-engine` | `0.21.1` | `0.21.1` | `github:0.21.1` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `coord-engine` | `0.22.1` | `0.22.1` | `github:0.22.1` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
 | `github` | `new-sdd-workspace` | `0.9.0` | `0.9.0` | `github:0.9.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 
 <!-- END GENERATED: fsgg-release-inventory -->
@@ -55,6 +55,35 @@ Registry release inventory: 9 package-bearing contracts across 7 producers; 8 co
   resolve on the feed, `read:packages` auth works. (Older text in `default.json` /
   ADR-0007 that calls the feed "dormant/deferred" predates provisioning — trust the
   registry.)
+
+## `.github` ships two more release surfaces the table above never names
+
+`.github` also publishes **its own skills**, as two artifacts the generated inventory above cannot
+list — it's derived from `registry/dependencies.yml`'s package-bearing contracts, and neither surface
+is one:
+
+- **`FS.GG.Kit`** packs the skills `registry/repos.yml`'s `kit:` rows name, plus the `fsgg-coord` /
+  `fsgg-coord-report` client shims.
+- **`FS.GG.Drivers`** packs the skills `registry/driver-skill-manifest.json` tracks, released via
+  `.github/workflows/release-drivers.yml`.
+
+The two populations are disjoint and **already machine-derived** (ADR-0058: derive, don't restate) —
+do not hand-copy either roster here; a static list drifts the moment a skill moves or a new one ships.
+Before editing a skill under `.claude/skills/<id>`/`.agents/skills/<id>` and declaring a release owed,
+ask the generated source directly instead of guessing:
+
+    scripts/generate-driver-manifest --which <skill-id>
+
+prints exactly one of `FS.GG.Kit`, `FS.GG.Drivers`, or `neither` to stdout (exit 0/0/1), read live
+from the same two committed sources `--write` reads — `registry/repos.yml`'s `kit:` rows and this
+emitter's own `DRIVERS` list. **This skill you are reading is itself `FS.GG.Drivers`-tracked**
+(`scripts/generate-driver-manifest --which publishing-and-deployment` → `FS.GG.Drivers`): editing it
+obliges a Drivers release, never a Kit one.
+
+Get the artifact wrong and the tag is real and immutable regardless
+(`kit-release-tags-are-immutable`): `.github#2135` declared a `FS.GG.Kit` release for a
+`drive-board`/`work-board` change that was actually `FS.GG.Drivers` content, tagged `kit/v0.47.0`, and
+published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.github#2333`).
 
 ## How a package gets published
 

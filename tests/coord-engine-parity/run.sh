@@ -57,6 +57,11 @@ refute() {  # refute <label> <must-not-contain-ERE> <must-contain-ERE> [rc] [out
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
+# `sitecustomize.py` is the central receipt ledger for all standalone parity servers: intended-success
+# worlds receive current source-bound lightweight receipts, while explicit missing/stale/unreadable
+# worlds opt out through `FSGG_PARITY_ROUTE_MODE` or their existing malformed response.
+export PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}"
+
 SRV_OUT="$(mktemp)"; CACHE="$(mktemp -d)"
 python3 "$HERE/pw_server.py" >"$SRV_OUT" 2>/dev/null &
 SRV=$!
@@ -182,6 +187,31 @@ if [ "$tkrc" -eq 0 ] && printf '%s' "$tk" | grep -q 'claimed FS.GG.SDD#70 by wor
 else
   bad "take parity" "rc=$tkrc: $tk"
 fi
+
+# The central receipt fixture must not turn its own success data into a bypass.  These fresh worlds
+# deliberately omit or stale every route receipt while retaining the identical schedulable board.  `take`
+# may report no work, but it may not claim #70 or mutate its comment ledger — an unreadable/missing route
+# is a refusal fact, never the old implicit-lightweight fallback.
+route_refusal_case() {
+  local mode="$1" label="$2" out_file cache port before after output rc pid
+  out_file="$(mktemp)"; cache="$(mktemp -d)"
+  FSGG_PARITY_ROUTE_MODE="$mode" python3 "$HERE/pw_server.py" >"$out_file" 2>/dev/null & pid=$!
+  port=""; for _ in $(seq 1 50); do port="$(head -n1 "$out_file" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  if [ -z "$port" ]; then
+    unmeasured "#2137: $label delivery-route refusal fixture bound no port"
+  else
+    before="$(curl -fsS "http://127.0.0.1:$port/repos/FS-GG/FS.GG.SDD/issues/70/comments" | jq length)"
+    output="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$port" FSGG_COORD_CACHE="$cache" "$ENGINE" take --repo FS.GG.SDD --worker route-refusal 2>&1)"; rc=$?
+    after="$(curl -fsS "http://127.0.0.1:$port/repos/FS-GG/FS.GG.SDD/issues/70/comments" | jq length)"
+    [ "$rc" -ne 0 ] && ! printf '%s' "$output" | grep -q 'claimed FS.GG.SDD#70' && [ "$before" = "$after" ] \
+      && ok "#2137: $label route receipt refuses take with zero claim writes" \
+      || bad "#2137: $label route receipt must not claim or write" "rc=$rc comments=$before->$after output=$output"
+  fi
+  kill "$pid" 2>/dev/null
+  rm -f "$out_file"; rm -rf "$cache"
+}
+route_refusal_case missing "missing"
+route_refusal_case stale "stale"
 
 # ---- #1887: BLIND TAKE MUST NOT CIRCULATE A DECISION ROW -----------------------------------------
 #
@@ -1504,7 +1534,9 @@ rsrv() {  # rsrv <env-kv...> --  ; sets globals RS_PORT and RS_SRV for a FRESH r
 }
 rget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+sys.argv[2]).read().decode())' "$1" "$2" 2>/dev/null; }
 renv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
-rbodies() { rget "$RS_PORT" "/repos/FS-GG/FS.GG.SDD/issues/$1/comments" | jq -r '.[].body'; }
+# The central fixture's source-bound route receipt is evidence, not a lock.  These restore assertions
+# measure only claim markers, so remove the route row before asking whether `release` dropped its lease.
+rbodies() { rget "$RS_PORT" "/repos/FS-GG/FS.GG.SDD/issues/$1/comments" | jq -r '.[] | select(.body | contains("fsgg:delivery-route/v1") | not) | .body'; }
 rlastopt() { rget "$RS_PORT" /_writes | jq -r '.last.optionId'; }
 
 # (a) THE DEFECT. A claim over a Backlog item records `prev=Backlog`; release must put Backlog back, not Ready.
@@ -2471,7 +2503,7 @@ if [ -z "$TW_PORT" ]; then bad "twin fixture bound a port"; else
         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
         env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID CLAUDE_CODE_SESSION_ID="$s" FSGG_WORKER="$w" \
         "$ENGINE" claim "$@"; }
-  tmarkers() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/"+sys.argv[2]+"/comments").read().decode())' "$TW_PORT" "$1" 2>/dev/null; }
+  tmarkers() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/"+sys.argv[2]+"/comments").read().decode())' "$TW_PORT" "$1" 2>/dev/null | jq '[.[] | select(.body | contains("fsgg:delivery-route/v1") | not)]'; }
 
   twin_err="$(tclaim ed60050b heron-7c2 FS.GG.SDD#74 2>&1 >/dev/null)"; twin_rc=$?
   [ "$twin_rc" -ne 0 ] \
@@ -3309,11 +3341,14 @@ oip() {  # oip <env-assignments...> -- <engine args...>
   OUT="$(mktemp)"
   env "${envs[@]}" python3 "$HERE/openissuespage_server.py" >"$OUT" 2>&1 & SRV=$!
   PORT=""; for _ in $(seq 1 50); do PORT="$(head -n1 "$OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
-  if [ -z "$PORT" ]; then OIP_OUT="fixture bound no port: $(cat "$OUT")"; OIP_RC=99
+  if [ -z "$PORT" ]; then OIP_OUT="fixture bound no port: $(cat "$OUT")"; OIP_RC=99; OIP_GRAPHQL=not-measured
   else
+    OIP_GRAPHQL_BEFORE="$(curl -fsS "http://127.0.0.1:$PORT/_graphql-reads" | jq -r '.graphqlReads')"
     OIP_OUT="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
                  FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
                  "$ENGINE" "$@" 2>&1)"; OIP_RC=$?
+    OIP_GRAPHQL_AFTER="$(curl -fsS "http://127.0.0.1:$PORT/_graphql-reads" | jq -r '.graphqlReads')"
+    OIP_GRAPHQL=$((OIP_GRAPHQL_AFTER - OIP_GRAPHQL_BEFORE))
   fi
   kill "$SRV" 2>/dev/null; rm -f "$OUT"
 }
@@ -3392,13 +3427,14 @@ printf '%s' "$OIP_OUT" | grep -q 'DISJOINT' \
   && ok "#1794 CONTROL: withhold the Link header and the SAME command answers DISJOINT — the boundary is real, and crossing it is what the leg above proves" \
   || bad "#1794 CONTROL: without pagination this must go DISJOINT, or the test is not testing pagination" "rc=$OIP_RC: $OIP_OUT"
 
-# ---- COST: this route still reads ZERO GraphQL ------------------------------------------------------
-# .github#1779 measured this scan from 24/27/31 GraphQL points to 0. The fixture serves NO `/graphql`
-# handler at all — a POST there 500s — so the clean run above is itself the proof that the board query has
-# not crept back in. Asserted explicitly so a regression reads as a cost finding, not a mystery failure.
+# ---- COST: this route reads the one #2250 cold board page --------------------------------------------
+# #2250 makes the collision gate use the scheduler's board universe for CLOSED/non-Done holders.  With a
+# fresh cache that is three GraphQL requests: two bootstrap resolvers and one board page.  This is asserted
+# beside #1794's pagination/body subjects so every production-route fixture carries the changed cost model.
 oip -- overlap 'FS.GG.SDD#501' --active
-refute "#1794/#1779: the collision scan costs 0 GraphQL — the fixture serves no /graphql and the scan never asks" \
-       "unhandled POST" "FS\.GG\.SDD#501"
+[ "$OIP_GRAPHQL" = 3 ] \
+  && ok "#1794/#2250: the collision scan costs 3 cold GraphQL reads (bootstrap plus one board page)" \
+  || bad "#1794/#2250: the cold board cost must be exactly 3 GraphQL reads" "reads=$OIP_GRAPHQL rc=$OIP_RC: $OIP_OUT"
 
 # ---- THE UNREADABLE ELEMENT: fail CLOSED, and only where it matters --------------------------------
 # `TouchSet.parse ""` answers `Undeclared`; `TouchSet.conflicts` reads `Undeclared` as colliding with

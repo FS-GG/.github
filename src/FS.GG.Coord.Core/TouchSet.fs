@@ -287,3 +287,19 @@ module TouchSet =
             conflicts left right
         else
             []
+
+    /// Whether a proposed `Paths:` update — from `widen` or `set-paths` — may be committed.
+    type UpdateDecision =
+        /// No requested path collided with a live claim: write the proposed declaration.
+        | CommitUpdate
+        /// At least one requested path collided: write NOTHING.
+        | RefuseUpdate
+
+    /// THE ALL-OR-NOTHING RULE (#2306) for whichever collision `hasCollision` answers for — see the
+    /// `.fsi` for why that is the CALLER's requested-paths attribution, not "any collision at all". A
+    /// caller that gates its one PATCH on this function cannot drift into a partial commit, because
+    /// there is no partial `UpdateDecision` for it to return: mirrors `usability`'s ANY-not-every rule
+    /// one level up in this same file, for the same reason — a threshold left to each call site is a
+    /// threshold free to disagree with itself (#485).
+    let decideUpdate (hasCollision: bool) : UpdateDecision =
+        if hasCollision then RefuseUpdate else CommitUpdate

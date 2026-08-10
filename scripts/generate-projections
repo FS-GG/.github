@@ -431,6 +431,8 @@ render_review_policy() {
   echo ""
   jq -r '"| fact | value |\n|---|---|\n| initial marker | `fsgg:\(.reviewPolicy.initialMarker):v1` |\n| confirmation marker | `fsgg:\(.reviewPolicy.confirmationMarker):v1` |\n| host acceptance marker | `fsgg:\(.reviewPolicy.acceptanceMarker):v1` |\n| escalation marker | `fsgg:\(.reviewPolicy.escalationMarker):v1` |\n| repair-phase marker | `fsgg:\(.reviewPolicy.repairPhaseMarker):v1` |\n| ordinary repair ceiling | \(.reviewPolicy.maxAutomatedRepairRounds) |\n| repair-phase ceiling | \(.reviewPolicy.repairPhaseMaxRounds) |"' "$FACTS"
   echo ""
+  jq -r '"**Quoted vs. competing markers:** " + .reviewPolicy.quotedMarkerRule' "$FACTS"
+  echo ""
 }
 
 render_lifecycle_policy() {

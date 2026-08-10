@@ -25,11 +25,11 @@ module VerifyPathsClosingKeywordTests =
     let private serving (prBody: string) (issueBody: string) (files: string) =
         Fake.Recorder(fun (req: Request) ->
             if req.Path.EndsWith "pulls/900/files" then
-                Ok { Status = 200; Body = files; ETag = None; NextLink = None }
+                Ok { Status = 200; Body = files; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "pulls/900" then
-                Ok { Status = 200; Body = prBody; ETag = None; NextLink = None }
+                Ok { Status = 200; Body = prBody; ETag = None; NextLink = None; Headers = Map.empty }
             elif req.Path.EndsWith "issues/42" then
-                Ok { Status = 200; Body = issueBody; ETag = None; NextLink = None }
+                Ok { Status = 200; Body = issueBody; ETag = None; NextLink = None; Headers = Map.empty }
             else
                 Error(Errors.NotFound $"unexpected read for this fixture: %s{req.Path}"))
 

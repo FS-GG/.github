@@ -59,12 +59,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "ff1192fa639e78001ca8df2e8acb955c540160132d831fab589128df4589c36c",
-      "tree-sha256": "4c77e89ea5f2b6f4245be40e35cce20188e15871fcc12f79e57ad2c7a318f739",
+      "sha256": "0705e09258c2980ecb44dfe7509d09ff1a3d70abb5903d73c87155676171650c",
+      "tree-sha256": "e60317b751b8c567029017ff671cb7f22b85d7e5c1e59b8992c72f247622938d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "ff1192fa639e78001ca8df2e8acb955c540160132d831fab589128df4589c36c",
+          "sha256": "0705e09258c2980ecb44dfe7509d09ff1a3d70abb5903d73c87155676171650c",
           "executable": false
         },
         {
@@ -74,12 +74,12 @@
         },
         {
           "path": "references/backlog-triage.md",
-          "sha256": "363dc8381f4a459722f1cdae51bb6c39d35aef7346af077ea9d8211d8a47d7c8",
+          "sha256": "d390e2959fe1b0dc74fbbf681d27bb2e25ca650929199587d4ee96d18d06c1d3",
           "executable": false
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "1c00cd05dce0eaffc147efb31a2af9932b3e752e574705400e8d1c907504bd47",
+          "sha256": "9ac4921ca2f3ecca5872c9ee0429eb9ffe6b2d17b2e24f0124bdf556cb6b0d07",
           "executable": false
         },
         {
@@ -89,7 +89,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "c910f5e5b92fc7976209955162cabe259d36712c570cd7c4eb1c6a5a7829d9c6",
+          "sha256": "2dc408a9de0866fb60142c1efcd5d85b9a2fcdc03201b45d6e0becb40746bf8e",
           "executable": false
         },
         {
@@ -169,12 +169,12 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "c566279fbb4a4d32d6a369437f9027232c2fc14752d511eaf1c9310caf1a2cc6",
-      "tree-sha256": "11ac1fe21bf4a5343c927d3836afaa5e9b1e1ebbb600202485fb44b6a6c97e8a",
+      "sha256": "2acf5c2b4257e2a99f235fbdf13f5cea15c59d4c48c7eb82f685823002d67536",
+      "tree-sha256": "70a3934df53aef3cdbfe10e19178289477e9159511755b2c8399759393d5453a",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c566279fbb4a4d32d6a369437f9027232c2fc14752d511eaf1c9310caf1a2cc6",
+          "sha256": "2acf5c2b4257e2a99f235fbdf13f5cea15c59d4c48c7eb82f685823002d67536",
           "executable": false
         },
         {
@@ -194,7 +194,7 @@
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "f7f9fb146b20f17724790469ee2bcaccf272700816d01d9c3906a2d660ede14c",
+          "sha256": "bae75c97e9b6688bc66b1569520063af0b7856ec6554b69e18d89e0e7e3e15fc",
           "executable": false
         },
         {
@@ -249,12 +249,12 @@
     {
       "id": "p-add",
       "scope": "operator",
-      "sha256": "fd120ff7eafe56d93e2066c7130983eef606f74ebb63fe07daaf458d0a8ba12e",
-      "tree-sha256": "a4c3c21b5fc0dfe9e56242c602dce4b714baff10454e0fa715da0d7fe7eda013",
+      "sha256": "b602e278283aca71a4c219e38c4a2898a1827fb11b61092837c5bf89f9925764",
+      "tree-sha256": "a5a3a7e3b14ec22f2db6417f4aedb5d95d4890237fdd592fad6abd4f5f5c840a",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "fd120ff7eafe56d93e2066c7130983eef606f74ebb63fe07daaf458d0a8ba12e",
+          "sha256": "b602e278283aca71a4c219e38c4a2898a1827fb11b61092837c5bf89f9925764",
           "executable": false
         },
         {
@@ -309,12 +309,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "be4ca924662080e123debedbc8aaff169a1d8febb3a0dbe0eb3450ededd243fb",
-      "tree-sha256": "c21fcf0efbe66935ce81ba164783c80aced533a89a88efab1c7e06bf5705145a",
+      "sha256": "6db132a21ead19b91c2c18db8c03d9bafe5eb4955cab3b9336f6581ed099b36f",
+      "tree-sha256": "06d1cebcf134110ecb3d8dead1031dd3d4145a5d7708cd5101fc86bfdab7464e",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "be4ca924662080e123debedbc8aaff169a1d8febb3a0dbe0eb3450ededd243fb",
+          "sha256": "6db132a21ead19b91c2c18db8c03d9bafe5eb4955cab3b9336f6581ed099b36f",
           "executable": false
         },
         {

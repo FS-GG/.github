@@ -1,0 +1,176 @@
+schemaVersion: 1
+work:
+  id: 2206-board-roster-closure
+  title: "Board Roster Closure"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2206-board-roster-closure/spec.md
+  sourceClarifications: work/2206-board-roster-closure/clarifications.md
+  sourceChecklist: work/2206-board-roster-closure/checklist.md
+  sourcePlan: work/2206-board-roster-closure/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2206-board-roster-closure/spec.md
+    digest: a84777951917aa195c25ecbeac4fb0ce657de9bb67f80753beee922834afffdc
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2206-board-roster-closure/clarifications.md
+    digest: 6c0e08c45acb6274acdd4e0eccf64b59370bcc3822935403f3969599ba5b18a4
+    schemaVersion: 1
+  - label: checklist
+    path: work/2206-board-roster-closure/checklist.md
+    digest: 05bb4b7ba6e9f0e7094e06b5873eac083b1eb4b0388a0f28d8637554d42e7f9f
+    schemaVersion: 1
+  - label: plan
+    path: work/2206-board-roster-closure/plan.md
+    digest: e537d3162eacc265839277cd660ba5ca8a85b2a2146a09bb81acf25a37ef7dd0
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement requirement FR-006
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-006]
+    decisions: []
+    sourceIds: [AC-006, FR-006, PD-006]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, PD-004]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Update contract surface PC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-003]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Update contract surface PC-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-003, PD-005]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-001, PD-002, PD-004, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-001, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-006, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PC-002, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV014]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2206-board-roster-closure."

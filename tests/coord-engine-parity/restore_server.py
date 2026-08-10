@@ -190,6 +190,10 @@ class H(BaseHTTPRequestHandler):
             return
         b = json.dumps(payload).encode()
         self.send_response(code)
+        if code < 400:
+            self.send_header("X-RateLimit-Resource", "core")
+            self.send_header("X-RateLimit-Limit", "5000")
+            self.send_header("X-RateLimit-Remaining", "4800")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()

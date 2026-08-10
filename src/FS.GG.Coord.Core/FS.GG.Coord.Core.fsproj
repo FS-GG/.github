@@ -35,6 +35,12 @@
          pure `Chore.derive` reads it (.github#1203). -->
     <Compile Include="RegistryPredicate.fsi" />
     <Compile Include="RegistryPredicate.fs" />
+    <Compile Include="Intake.fsi" />
+    <Compile Include="Intake.fs" />
+    <Compile Include="IntakeReceipt.fsi" />
+    <Compile Include="IntakeReceipt.fs" />
+    <Compile Include="DeliveryRoute.fsi" />
+    <Compile Include="DeliveryRoute.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="Markdown.fsi" />
@@ -71,6 +77,10 @@
     <Compile Include="CycleLedger.fs" />
     <Compile Include="Delivery.fsi" />
     <Compile Include="Delivery.fs" />
+    <!-- DriverEvents (.github#2135) layers a material-transition/active-inventory projection over
+         Types/Driver/Delivery's existing vocabulary, so it compiles after all three. -->
+    <Compile Include="DriverEvents.fsi" />
+    <Compile Include="DriverEvents.fs" />
     <Compile Include="LifecycleProjection.fsi" />
     <Compile Include="LifecycleProjection.fs" />
     <Compile Include="Lanes.fsi" />

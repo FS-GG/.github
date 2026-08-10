@@ -184,23 +184,17 @@ Never let the host "just finish one quickly" itself — the whole value is that 
 worker that runs the full pnext-item loop, and a host that starts editing has no worktree, no claim, and
 no touch-set reservation, in the one tree every worker shares.
 
-## 3. The worker: a pnext-item envelope, SDD-lifecycle escalation *by complexity* (ADR-0064 §4.3)
+## 3. The worker: a pnext-item envelope with explicit delivery-route receipt
 
 The invariant per-item harness is **`pnext-item`** (already materialized): mint a
 distinct worker id, `take` (gate on exit code 0), read the item's comments, worktree from `origin/main`,
 implement within the declared `Paths:`, open a PR, obtain independent critique, merge on green,
 `done --flip`. Inside that one
-claim/merge/done-stamp envelope, **the depth of the implementation scales with the item's complexity** —
-this is the decision ADR-0064 records:
-
-- **Simple item** (Effort `S`/`M`, no `needs-sdd` signal): implement directly inside pnext-item — a
-  focused change, PR, merge. No lifecycle overhead.
-- **Complex item** (Effort `L`/`XL`, or a `needs-sdd` label / a `Blocked by`-a-charter signal): the worker
-  runs the full **`fs-gg-sdd-*` lifecycle** (charter/specify → clarify → plan → tasks → implement →
-  verify/validate → ship) for the implementation phase, **still inside** pnext-item's one claim/merge
-  envelope. Both skill sets are present in a wired workspace, so this is a **documented branch, not new
-  machinery** — one claim/merge/done-stamp discipline whether the item is a one-line fix or a heavyweight
-  feature that deserves the lifecycle.
+claim/merge/done-stamp envelope, the worker consumes a **current, explicit agent-authored delivery-route
+receipt**. The fixed checklist records multi-repo, public-contract, migration/release/security/recovery,
+coordinated-provider, and independent-evidence facts, but it never infers the route. A `lightweight`
+receipt permits focused delivery; an `sdd-required` receipt binds the governing `fsgg-sdd` work, canonical
+spec home, and current SDD receipts. Both remain inside one claim/merge/done-stamp envelope.
 
 ### The per-worker subagent brief
 
@@ -224,9 +218,9 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    confirms the current head, and `done --flip` to earn the stamp. If round three still fails, never
 >    start round four: close that PR without merging and automatically enter one fresh repair phase.
 >    Park for human action and release the claim only if the repair phase exhausts or its route is unavailable.
-> 3. **Scale the implementation to the item.** A simple item (Effort `S`/`M`) you implement directly. A
->    **complex** one (Effort `L`/`XL`, or a `needs-sdd` signal) you take through the full `fs-gg-sdd-*`
->    lifecycle — still inside this one claim → PR → merge → done-stamp envelope. Both skill sets are here.
+> 3. **Consume the route receipt.** Do not infer from effort, size, labels, or prose. A current
+>    `lightweight` receipt permits direct implementation; an `sdd-required` receipt requires its named
+>    `fsgg-sdd` work/spec/readiness bindings before implementation — still inside this one envelope.
 > 4. **Checkpoint and finalize development feedback before opening the PR.** Use one stable cycle id
 >    based on the item number and slug. Checkpoint only material observations at: onboarding/first
 >    build; lifecycle authoring when used; first implementation/test/evidence loop; and

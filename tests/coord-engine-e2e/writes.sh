@@ -43,10 +43,11 @@ mark_mode() { CONDITIONAL_MODES["$1:$2"]=1; }
 
 [ -x "$ENGINE" ] || { echo "FAIL  build the engine first: dotnet build src/FS.GG.Coord.Cli -c Release" >&2; exit 1; }
 
-SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"
+SRV_OUT="$(mktemp)"; CACHE_DIR="$(mktemp -d)"; PREDICATE_FIX="$(mktemp -d)"; CYCLE_SNAPSHOT="$(mktemp)"; CYCLE_FIX="$(mktemp -d)"; INTAKE_DRAFT="$(mktemp)"; INTAKE_BLOCKED_DRAFT="$(mktemp)"; INTAKE_REPOS="$(mktemp -d)"; ROUTE_RECEIPT="$(mktemp)"; SDD_ROOT="$(mktemp -d)"
+FORCE_BUDGET_CACHE="$(mktemp -d)"
 python3 "$HERE/stateful_server.py" >"$SRV_OUT" 2>&1 &
 SRV_PID=$!
-trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX"' EXIT
+trap 'kill "$SRV_PID" 2>/dev/null; rm -f "$SRV_OUT" "$CYCLE_SNAPSHOT" "$INTAKE_DRAFT" "$INTAKE_BLOCKED_DRAFT" "$ROUTE_RECEIPT"; rm -rf "$CACHE_DIR" "$PREDICATE_FIX" "$CYCLE_FIX" "$FORCE_BUDGET_CACHE" "$INTAKE_REPOS" "$SDD_ROOT"' EXIT
 
 PORT=""
 for _ in $(seq 1 50); do PORT="$(head -n1 "$SRV_OUT" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.1; done
@@ -56,6 +57,10 @@ export FSGG_GITHUB_API_BASE="http://127.0.0.1:$PORT"
 export GITHUB_TOKEN="fixture-token"
 export FSGG_COORD_OWNER="FS-GG" FSGG_COORD_PROJECT="Coordination"
 export FSGG_COORD_CACHE="$CACHE_DIR" FSGG_COORD_SCAN_TTL_SEC=0
+mkdir -p "$INTAKE_REPOS/FS.GG.SDD/src/Valid"
+git -C "$INTAKE_REPOS/FS.GG.SDD" init -q
+git -C "$INTAKE_REPOS/FS.GG.SDD" remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+export FSGG_REPOS_ROOT="$INTAKE_REPOS"
 export FSGG_CYCLE_JOURNAL="$CYCLE_FIX/journal.json"
 # A clean identity, so the derivation never depends on the CI runner's env.
 #
@@ -74,6 +79,88 @@ export FSGG_WORKER=""
 
 run() { "$ENGINE" "$@" --worker vole-418; }
 
+# ---- #2137: delivery-route record is the declared, source-bound comment write ----------------------
+#
+# This is one COMMAND contract driver, not a helper-level codec check: the real executable reads the
+# issue body, validates the exact receipt, then makes its one append-only POST.  The inversion pins the
+# security property the command exists for — stale source evidence must fail before the ledger changes.
+#
+# An `sdd-required` route whose SDD package does not exist yet (or is not yet `implementationReady`) is
+# DIFFERENT (#2298): it records — the coordinator's decision is honest and explicit even before the
+# package exists, because the CLAIMED WORKER is the actor who produces that package, and could never be
+# claimed to do so if recording it required the package first. Each case below asserts the receipt
+# posts and reports `sddPackageReady` truthfully, never that it refuses.
+route_body='A schedulable item.
+
+Paths: src/Thing/**'
+route_revision="$(printf '%s' "$route_body" | sha256sum | awk '{print $1}')"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stateful source-bound route receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$ROUTE_RECEIPT"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" 2>&1)"; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+if [ "$route_rc" -eq 0 ] && printf '%s' "$route_out" | jq -e '.kind == "recorded"' >/dev/null \
+   && [ "$route_after" -eq $((route_before + 1)) ]; then
+  ok "#2137: delivery-route record posts exactly one current source-bound receipt"
+else
+  bad "#2137: delivery-route record must post its current receipt once" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
+fi
+mark_contract "delivery-route" "source-bound-record-and-zero-write-inversions"
+
+route_stale="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"stale\",\"route\":\"lightweight\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"Stale source receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":null,\"specHome\":null,\"requiredGates\":[]}" >"$route_stale"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+"$ENGINE" delivery-route record FS.GG.SDD#42 "$route_stale" >/dev/null 2>&1; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+rm -f "$route_stale"
+[ "$route_rc" -ne 0 ] && [ "$route_before" = "$route_after" ] \
+  && ok "#2137: stale delivery-route receipt is refused with zero writes" \
+  || bad "#2137: stale delivery-route receipt must not post" "rc=$route_rc comments=$route_before->$route_after"
+
+route_missing_sdd="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"No SDD package yet.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"does-not-exist\",\"specHome\":\"work/does-not-exist/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_missing_sdd"
+route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+route_out="$("$ENGINE" delivery-route record FS.GG.SDD#42 "$route_missing_sdd" 2>/dev/null)"; route_rc=$?
+route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+rm -f "$route_missing_sdd"
+if [ "$route_rc" -eq 0 ] && printf '%s' "$route_out" | jq -e '.kind == "recorded" and .sddPackageReady == false' >/dev/null \
+   && [ "$route_after" -eq $((route_before + 1)) ]; then
+  ok "#2298: an sdd-required receipt with no SDD package on disk yet still records, honestly not-ready"
+else
+  bad "#2298: an sdd-required receipt with no SDD package must still record" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
+fi
+
+# A present directory is not enough on its own: the route's named analysis must be for that work and
+# must already be `implementationReady` for `sddPackageReady` to report true. None of these run through
+# `delivery-route record`'s REFUSAL path any more (#2298) — the SDD package's readiness is now reported
+# on the posted receipt, never a precondition for posting it.
+mkdir -p "$SDD_ROOT/work/fixture-sdd" "$SDD_ROOT/readiness/fixture-sdd"
+printf '%s\n' '# fixture' >"$SDD_ROOT/work/fixture-sdd/spec.md"
+route_sdd="$(mktemp)"
+printf '%s' "{\"schema\":\"fsgg.coord.delivery-route/v1\",\"subject\":\"FS-GG/FS.GG.SDD#42\",\"subjectRevision\":\"$route_revision\",\"route\":\"sdd-required\",\"agent\":\"fixture-route-record\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"reasonCodes\":[\"fixture\"],\"rationale\":\"SDD readiness receipt.\",\"declaredImpacts\":[\"internal\"],\"observedFacts\":[\"localized\"],\"sddWorkId\":\"fixture-sdd\",\"specHome\":\"work/fixture-sdd/spec.md\",\"requiredGates\":[\"implementationReady\",\"analyze\",\"verify\",\"ship\"]}" >"$route_sdd"
+route_sdd_case() {
+  local label="$1" analysis="$2" expected_ready="$3" route_before route_after route_rc route_out
+  printf '%s' "$analysis" >"$SDD_ROOT/readiness/fixture-sdd/analysis.json"
+  route_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+  route_out="$(FSGG_COORD_SDD_ROOT="$SDD_ROOT" "$ENGINE" delivery-route record FS.GG.SDD#42 "$route_sdd" 2>/dev/null)"; route_rc=$?
+  route_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments" | jq length)"
+  if [ "$route_rc" -eq 0 ] \
+     && printf '%s' "$route_out" | jq -e ".kind == \"recorded\" and .sddPackageReady == $expected_ready" >/dev/null \
+     && [ "$route_after" -eq $((route_before + 1)) ]; then
+    ok "#2298: $label SDD readiness records, reporting sddPackageReady=$expected_ready"
+  else
+    bad "#2298: $label SDD readiness must record with sddPackageReady=$expected_ready" "rc=$route_rc comments=$route_before->$route_after output=$route_out"
+  fi
+}
+route_sdd_case "mismatched workId" '{"workId":"other-work","status":"implementationReady"}' false
+route_sdd_case "unready status" '{"workId":"fixture-sdd","status":"analyzing"}' false
+route_sdd_case "current implementationReady" '{"workId":"fixture-sdd","status":"implementationReady"}' true
+# The later lock-contract legs intentionally run in the fixture's ordinary lightweight world.  Restore
+# that route through the same command rather than reaching into server state, so their precondition is
+# explicit and the SDD success probe cannot leak a checkout-local evidence dependency into another test.
+"$ENGINE" delivery-route record FS.GG.SDD#42 "$ROUTE_RECEIPT" >/dev/null 2>&1 \
+  || bad "#2137: restore the fixture's ordinary current route after SDD driver"
+rm -f "$route_sdd"
+
 # ---- the claim CAS: post, re-read, WIN -------------------------------------------------------------
 out="$(run claim FS.GG.SDD#42 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'claimed FS.GG.SDD#42 by worker vole-418'; then
@@ -89,6 +176,47 @@ if [ "$lrc" -ne 0 ] && printf '%s' "$lost" | grep -qi 'already held by vole-418'
 else
   bad "a second worker loses to the live lock" "rc=$lrc: $lost"
 fi
+
+# #2268: force is a NEW claim, so capacity admission happens before force can evict the live
+# holder.  Drive this through the compiled CLI and the stateful HTTP server: each refusal must leave
+# the exact marker body, board Status, and mutation ledger unchanged.  A new cache per mode is
+# essential: it proves exhausted/unknown from the response being exercised rather than from a prior
+# healthy observation.
+force_budget_case() {
+  local mode="$1" before_marker before_status after_marker after_status out rc ledger
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-budget/$mode" >/dev/null
+  before_marker="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+  before_status="$(run ready --repo FS.GG.SDD --status any 2>/dev/null | jq -r '.[] | select(.number == 42) | .status')"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+  rm -rf "$FORCE_BUDGET_CACHE"; FORCE_BUDGET_CACHE="$(mktemp -d)"
+  out="$(FSGG_COORD_CACHE="$FORCE_BUDGET_CACHE" "$ENGINE" claim FS.GG.SDD#42 --force --worker kite-461 2>&1)"; rc=$?
+  ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+  after_marker="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+  after_status="$(run ready --repo FS.GG.SDD --status any 2>/dev/null | jq -r '.[] | select(.number == 42) | .status')"
+  if [ "$rc" -ne 0 ] && [ "$before_marker" = "$after_marker" ] && [ "$before_status" = "$after_status" ] \
+       && [ "$(printf '%s' "$ledger" | jq -r .count)" = "0" ]; then
+    ok "#2268: $mode force admission refuses before marker/status mutation"
+  else
+    bad "#2268: $mode force admission must not evict or write" "rc=$rc status=$before_status->$after_status ledger=$ledger output=$out"
+  fi
+}
+
+force_budget_case constrained
+force_budget_case exhausted
+force_budget_case unknown
+
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-budget/healthy" >/dev/null
+rm -rf "$FORCE_BUDGET_CACHE"; FORCE_BUDGET_CACHE="$(mktemp -d)"
+healthy_force="$(FSGG_COORD_CACHE="$FORCE_BUDGET_CACHE" "$ENGINE" claim FS.GG.SDD#42 --force --worker kite-461 2>&1)"; healthy_force_rc=$?
+if [ "$healthy_force_rc" -eq 0 ] && printf '%s' "$healthy_force" | grep -q 'STOLE FS.GG.SDD#42'; then
+  ok "#2268: healthy force admission still steals the live claim"
+else
+  bad "#2268: healthy force admission must preserve force success" "rc=$healthy_force_rc: $healthy_force"
+fi
+
+# Hand it back before the longstanding adopt composition proof below.
+"$ENGINE" release FS.GG.SDD#42 --worker kite-461 >/dev/null 2>&1
+run claim FS.GG.SDD#42 >/dev/null 2>&1
 
 # ---- heartbeat renews the held lease ---------------------------------------------------------------
 hb="$(run heartbeat FS.GG.SDD#42 2>&1)"; hrc=$?
@@ -708,11 +836,13 @@ ovn2="$("$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 2>&1)"; ovn2rc
 #
 # `.github#1086` got this same trade wrong by an order of magnitude by ESTIMATING it, and the first draft
 # of #1779 declined the whole design over an estimate of "~74 REST marker reads per widen". So the fixture
-# counts. `/_fixture/rest-reads` reports and resets; `/_fixture/board-reads` is the GraphQL board query,
-# which this path must no longer make at all.
+# counts. `/_fixture/rest-reads` reports and resets; `/_fixture/board-reads` is the GraphQL board query.
+# #2250 deliberately makes ONE cached-board scan so CLOSED, unstamped holders use the same candidate
+# universe as the scheduler. Disable its 90-second scan cache for this one invocation: the assertion is a
+# stable cold measurement (one page), not an accident of whatever an earlier e2e leg happened to cache.
 curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads" >/dev/null   # reset the meter
 br_before="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
-"$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 >/dev/null 2>&1
+FSGG_COORD_SCAN_TTL_SEC=0 "$ENGINE" overlap FS.GG.SDD#44 --active --worker vole-418 >/dev/null 2>&1
 meter="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/rest-reads")"
 br_after="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | jq -r '.boardReads')"
 rest_n="$(printf '%s' "$meter" | jq -r '.count')"
@@ -727,10 +857,11 @@ noise="$(printf '%s' "$meter" | jq -r '[.paths[] | select(test("/(42|99)/comment
 # The repo has FIVE open issues. Two of them declare `src/Verify/**` — #43 (whose marker was released
 # above, so it reserves nothing) and #46 (held by heron-822) — and #44 is the subject. So: ONE issue list,
 # THREE marker reads: the target verification plus one per shortlisted row rather than one per open row or
-# ZERO GraphQL board reads. The old scan read a marker AND a body for every `In progress` row whether or
-# not its tokens could ever collide, and paid a board query on top.
-[ "$lists" = "1" ] && [ "$markers" = "3" ] && [ "$noise" = "0" ] && [ "$br_before" = "$br_after" ] \
-  && ok "#1779 AC2: overlap --active spent $rest_n REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 0 GraphQL board reads" \
+# ONE GraphQL board page. #2250 adds it to include the post-merge window; it must stay ONE page, while
+# the REST shape remains token-first: the target verification, one open-issue list, then markers only for
+# shortlisted rows. The old scan read a marker AND a body for every `In progress` row.
+[ "$lists" = "1" ] && [ "$markers" = "3" ] && [ "$noise" = "0" ] && [ "$br_after" -eq "$((br_before + 1))" ] \
+  && ok "#1779/#2250 AC2: overlap --active spent $rest_n REST calls (target verification, 1 issue list, and 1 marker per shortlisted row) and 1 GraphQL board read for closed-unstamped holders" \
   || bad "#1779 AC2: the measured cost is not the claimed cost" "rest=$rest_n lists=$lists markers=$markers noise=$noise boardReads $br_before -> $br_after: $meter"
 
 "$ENGINE" release FS.GG.SDD#46 --worker heron-822 >/dev/null 2>&1
@@ -826,6 +957,77 @@ no_mutation "verify-paths" run verify-paths --pr 500 --repo FS.GG.SDD
 no_mutation "item-id" run item-id FS.GG.SDD#42
 no_mutation "lint" run lint --repo .github
 no_mutation "whoami" run whoami
+
+# `intake apply` is the public receipt-bound create/projection transaction.  The fixture's mutation
+# ledger classifies its REST issue POST separately from the two GraphQL board mutations, so this is a
+# real executable driver rather than a parser-only mark in the command-contract inventory.
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-wrong-repo-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"wrong checkout path","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/FS.GG.Coord.Core/**"],"class":"hardening","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+wrong_path_out="$(run intake validate "$INTAKE_DRAFT" 2>&1)"; wrong_path_rc=$?
+if [ "$wrong_path_rc" -ne 0 ] && printf '%s' "$wrong_path_out" | grep -q 'target repository FS-GG/FS.GG.SDD'; then
+  ok "#2134: intake paths are validated in the draft target repository"
+else
+  bad "#2134: a path from the coordinator checkout must not validate for the target repository" "rc=$wrong_path_rc output=$wrong_path_out"
+fi
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","phase":"execution","severity":"high","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+mark_contract "intake" "public-create-and-projection"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+intake_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; intake_rc=$?
+intake_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+intake_pending="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
+if [ "$intake_rc" -eq 0 ] \
+  && printf '%s' "$intake_out" | jq -e --argjson pending "$intake_pending" '.kind == "applied" and .status == "Backlog" and .pendingWrites == $pending and (.fields | index("Class")) and (.fields | index("Phase")) and (.fields | index("Severity")) and .issueUrl == "https://github.com/FS-GG/FS.GG.SDD/issues/700" and .board.owner == "FS-GG" and .board.title == "Coordination" and .board.number == 12 and .board.id == "PVT_coord"' >/dev/null 2>&1 \
+  && printf '%s' "$intake_ledger" | jq -e '
+      .count == 3 and
+      ([.requests[] | select(.kind == "rest-mutation" and .method == "POST" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length == 1) and
+      ([.requests[] | select(.kind == "graphql-mutation")] | length == 2)' >/dev/null 2>&1; then
+  ok "#2134: intake applies one public create and converged board projection"
+else
+  bad "#2134: intake public transaction must create and project" "rc=$intake_rc output=$intake_out ledger=$intake_ledger"
+fi
+
+for projected_field in Class Phase Severity; do
+  field_id="$(printf '%s' "$projected_field" | tr '[:upper:]' '[:lower:]')"
+  printf '%s\n' "{\"schema\":\"fsgg.coord.intake/v1\",\"id\":\"e2e-intake-missing-$field_id-2134\",\"owner\":\"FS-GG\",\"repository\":\"FS.GG.SDD\",\"title\":\"missing $projected_field projection\",\"observed\":\"o\",\"rootCause\":\"r\",\"acceptance\":\"a\",\"verification\":\"v\",\"paths\":[\"src/Valid/**\"],\"class\":\"hardening\",\"phase\":\"execution\",\"severity\":\"high\",\"status\":\"Backlog\",\"backlogReason\":\"not-yet-actionable\",\"disposition\":\"create\"}" >"$INTAKE_DRAFT"
+  curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/drop-intake-field/$projected_field" >/dev/null
+  missing_field_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; missing_field_rc=$?
+  if [ "$missing_field_rc" -ne 0 ] && printf '%s' "$missing_field_out" | grep -q "fresh $projected_field readback"; then
+    ok "#2134: missing $projected_field persistence fails the intake transaction"
+  else
+    bad "#2134: projectionFresh requires live $projected_field readback" "rc=$missing_field_rc output=$missing_field_out"
+  fi
+done
+
+# Restore the canonical draft for the receipt-first queued retry below.
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e intake transaction","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","phase":"execution","severity":"high","status":"Backlog","backlogReason":"not-yet-actionable","disposition":"create"}' >"$INTAKE_DRAFT"
+
+printf '%s\n' '{"schema":"fsgg.coord.intake/v1","id":"e2e-intake-blocked-2134","owner":"FS-GG","repository":"FS.GG.SDD","title":"e2e blocked intake","observed":"o","rootCause":"r","acceptance":"a","verification":"v","paths":["src/Valid/**"],"class":"hardening","status":"Blocked","blockedBy":"FS-GG/FS.GG.SDD#42","disposition":"create"}' >"$INTAKE_BLOCKED_DRAFT"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+blocked_out="$(run intake apply "$INTAKE_BLOCKED_DRAFT" 2>&1)"; blocked_rc=$?
+blocked_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+if [ "$blocked_rc" -eq 0 ] && printf '%s' "$blocked_out" | jq -e '.status == "Blocked" and (.fields | index("Blocked by"))' >/dev/null 2>&1 \
+  && [ "$(printf '%s' "$blocked_ledger" | jq -r .count)" = "3" ]; then
+  ok "#2134: Blocked intake creates and projects Status plus dependency coherently"
+else
+  bad "#2134: Blocked intake must project a coherent dependency" "rc=$blocked_rc output=$blocked_out ledger=$blocked_ledger"
+fi
+
+# A queued projection retry is receipt-first too: the first batch is refused and queued, the retry
+# converges without a second issue POST, retires its queued pairs, and reports zero pending writes.
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+queued_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; queued_rc=$?
+run flush >/dev/null 2>&1
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+retry_out="$(run intake apply "$INTAKE_DRAFT" 2>&1)"; retry_rc=$?
+queued_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+pending_after_retry="$(run budget --json 2>/dev/null | jq -r .pendingBoardWrites)"
+if [ "$queued_rc" -eq 75 ] && [ "$retry_rc" -eq 0 ] && [ "$pending_after_retry" = "0" ] \
+  && printf '%s' "$retry_out" | jq -e '.kind == "applied" and .pendingWrites == 0' >/dev/null 2>&1 \
+  && [ "$(printf '%s' "$queued_ledger" | jq '[.requests[] | select(.kind == "rest-mutation" and .path == "/repos/FS-GG/FS.GG.SDD/issues")] | length')" = "0" ]; then
+  ok "#2134: queued intake projection retries to zero pending without a second create"
+else
+  bad "#2134: queued intake retry must converge receipt-first" "first=$queued_rc:$queued_out retry=$retry_rc:$retry_out pending=$pending_after_retry ledger=$queued_ledger"
+fi
 
 # `cycle` is another pure snapshot boundary.  Feed it a valid one-unit ledger, rather than a
 # parser refusal, so command-contract coverage proves the command reaches its actual decision
@@ -1041,6 +1243,17 @@ for delivery_mode in bare apply; do
     bad "#2131: delivery --snapshot $delivery_mode must execute without a wire mutation" "rc=$delivery_rc output=$delivery_out ledger=$delivery_ledger"
   fi
 done
+
+# #2207 adds an optional delivery diagnostic.  The established snapshot producer above predates it,
+# so omission must retain the guarded-land decision.  Invert the subject by supplying an empty value:
+# it must refuse rather than silently treating an invalid observed diagnostic as absent.
+delivery_empty_problem="${delivery_snapshot/\"landable\"/\"reviewProblem\":\"\",\"landable\"}"
+delivery_problem_out="$(printf '%s' "$delivery_empty_problem" | run delivery --snapshot /dev/stdin --json 2>&1)"; delivery_problem_rc=$?
+if [ "$delivery_problem_rc" -ne 0 ] && printf '%s' "$delivery_problem_out" | grep -F 'reviewProblem' >/dev/null; then
+  ok "#2207: an omitted legacy reviewProblem defaults to none, while an empty supplied diagnostic refuses"
+else
+  bad "#2207: an empty supplied reviewProblem must not masquerade as an omitted legacy field" "rc=$delivery_problem_rc output=$delivery_problem_out"
+fi
 
 # `predicate` is local too, but its successful arm needs a registry and its owning manifest.
 # The dedicated predicate suite owns the broader truth table; this small fixture merely makes the

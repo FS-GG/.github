@@ -63,6 +63,10 @@ module Scan =
           /// exactly this collapse WAS the bug (#496) — there the board was the only source, so "absent"
           /// and "unreadable" had to be told apart or a gate would report an omission about an item nobody
           /// looked at. Here the source is the body, and `lint` reads it directly.
+          ///
+          /// WHETHER THIS FIELD IS `None` ON A CLOSED-AND-`Done` ROW IS PART OF WHAT DECIDES `SweptBody`
+          /// BELOW (.github#2254) — see that field's doc for the full mechanism. `BoardClass` itself is
+          /// unchanged by that: it remains purely the OBSERVED column, never a place this repair writes.
           BoardClass: ItemClass option
 
           /// The observed `Severity` column. Missing/unrecognised values are `Unset`.
@@ -89,7 +93,35 @@ module Scan =
           ///
           /// `None` when the field was absent or did not parse — never a zero age, which would be the
           /// YOUNGEST possible answer and the one that can never trigger starvation escalation.
-          CreatedAt: System.DateTimeOffset option }
+          CreatedAt: System.DateTimeOffset option
+
+          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT, read ONLY for a closed-and-
+          /// `Done` candidate whose `BoardClass` was EMPTY at the moment `scanFresh` ran with
+          /// `Cache.Reconciling` — never for `Scheduling`/`Offering`, and never merely to double-check a
+          /// column that already carries a value.
+          ///
+          /// `None` is "not applicable, or this scan's intent never asked" — true of the overwhelming
+          /// majority of rows on every scan, including every `Scheduling` scan regardless of population.
+          /// `Some(Ok text)` is the body carried by the reconciling board query; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
+          /// naming, so a failed census read is COUNTED, never silently dropped (#266).
+          ///
+          /// `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself, which is
+          /// the whole mechanism that keeps the extra read off every caller but `reconcile`: `board`
+          /// already receives `Cache.ReadIntent` from an UNCHANGED `Client.fs` call site, so gating the
+          /// read HERE — inside `scanFresh`, upstream of `snapshot` entirely — needed no new parameter on
+          /// `snapshot` and no edit to `Client.fs` at all.
+          ///
+          /// DELIBERATELY UNCACHED: `renderRows`/`parseRows` never round-trip it. `Cache.getScan` already
+          /// refuses to serve a hit for `Reconciling`/`Offering`, so every scan that could populate this
+          /// reaches `scanFresh` fresh regardless — nothing is lost by excluding it from the cache file,
+          /// and excluding it is what stops a `Scheduling` read that happens to share a cache file from
+          /// ever inheriting a census read it never asked for and never paid for.
+          SweptBody: IoResult<string> option
+
+          /// The stable GraphQL node identity.  A cache may retain this address, but never the mutable
+          /// body or comment facts it identifies: `snapshot` re-reads those facts fresh before deciding
+          /// a reservation.
+          NodeId: string option }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///
@@ -185,7 +217,13 @@ module Scan =
           /// be offered AND cannot be passed over with a reason.
           BodiesUnreadable: int }
 
-    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`.
+    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Cost is IDENTICAL for every
+    /// caller regardless of `Cache.ReadIntent` (.github#2254 repair 1, `heron-fef6`) — this function never
+    /// sees that type and never calls `Reads.issueBody` itself; it only ever renders `Row.SweptBody`,
+    /// which `board`/`scanFresh` populate BEFORE this runs, gated on `Cache.Reconciling` alone. So
+    /// `next`/`batch`/`take`/`scan` and `reconcile` share this one signature and this one cost model, and
+    /// a future caller cannot reintroduce the read the critic measured by forgetting to opt in here — the
+    /// opt-in already happened, upstream, or it did not happen at all.
     ///
     /// For every candidate this reads the issue BODY (the touch-set) and its claim MARKERS — both REST,
     /// both on the budget that survives, and the markers UNCONDITIONALLY, because a lock may never be read
@@ -194,6 +232,11 @@ module Scan =
     /// A body it cannot read becomes `bodyUnreadable`, NOT an empty body. `TouchSet.parse ""` answers
     /// `Undeclared` — a confident OMISSION about an item nobody looked at — and the engine would then
     /// schedule every other item against a surface it cannot see.
+    ///
+    /// A closed-and-`Done` row is SWEPT: no body, no markers — `Schedulability` answers `Closed ->
+    /// IssueClosed` on `state` alone, so neither is ever consulted for it. The ONE exception is
+    /// `Row.SweptBody`, rendered into `body`/`bodyUnreadable` exactly as an open row's would be when it
+    /// carries a value — see that field's own doc for who populates it and when.
     val snapshot:
         transport: IGitHubTransport ->
         rows: Row list ->

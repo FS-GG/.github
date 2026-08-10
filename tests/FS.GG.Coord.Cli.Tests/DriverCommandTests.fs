@@ -15,3 +15,13 @@ module DriverCommandTests =
         match parse [ "driver"; "--json" ] with
         | Ok opts -> Assert.Equal(DriverCmd, opts.Command)
         | Error message -> failwith message
+
+    [<Fact>]
+    let ``#2135 driver --events is an additive JSON/text projection over the same command`` () =
+        match parse [ "driver"; "--events"; "--cursor"; "/tmp/cursor.json"; "--text" ] with
+        | Ok opts ->
+            Assert.Equal(DriverCmd, opts.Command)
+            Assert.True(opts.Events)
+            Assert.Equal(Some "/tmp/cursor.json", opts.CursorFile)
+            Assert.Equal(Text, opts.Render)
+        | Error message -> failwith message

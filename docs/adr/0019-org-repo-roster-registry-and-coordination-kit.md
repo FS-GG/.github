@@ -69,11 +69,30 @@ participant-side analog of what `skills.yml` is for skills.
    >
    > **The cost of getting that one wrong is fail-OPEN, and it does not look like it.** An owner-blind
    > roster leg returns a no-verdict on every run; `main()` then never reaches the findings pass, and
-   > `coherence.yml:96-100` maps exit 3 to `::warning::` + `exit 0`. The result is a permanently
-   > **green** required check with the whole of direction B switched off — the FS.GG.Audio shape, the
-   > one thing no other gate can report, stops being reported and nothing says so. Recorded here
-   > because "permanent no-verdict" reads as a standing red, and a future reader acting on that
+   > `coherence.yml`'s `roster-closure` job maps exit 3 to `::warning::` + `exit 0`. The result is a
+   > permanently **green** required check with the whole of direction B switched off — the FS.GG.Audio
+   > shape, the one thing no other gate can report, stops being reported and nothing says so. Recorded
+   > here because "permanent no-verdict" reads as a standing red, and a future reader acting on that
    > reading would rank this consequence far below what it is.
+   >
+   > **Amendment (2026-08-10). A third population names repositories, and neither existing direction
+   > can see into it** ([#2206](https://github.com/FS-GG/.github/issues/2206)). `check-roster-closure.py`
+   > gains a **BOARD closure direction (C)**: every repository holding a non-`Done` row on the FS-GG
+   > Coordination Projects v2 board must have a `repos.yml` row or an `outside-fabric:` entry, checked
+   > by reading the board's own item set (`gh api graphql`, never `GET /orgs/{org}/repos`) — so, unlike
+   > direction B, a **user-owned** board row is graded exactly like an org-owned one instead of being
+   > structurally invisible. This is the direction that actually found the defect the item was filed
+   > for: `EHotwagner/rogue3` and `EHotwagner/S.I.R.` both held live board rows while absent from both
+   > `repos.yml` and `outside-fabric:`, undetected by directions A or B. The disposition vocabulary is
+   > unchanged — a rostered row (including `role: non-participant` + its mandatory `reason:`) or an
+   > `outside-fabric:` entry closes a board row exactly as it closes an org row; no third opt-out schema
+   > was introduced. A `Done`-status row costs nothing to leave unrostered (its history is a non-event),
+   > so `EHotwagner/rogue3` needed no roster change — only `EHotwagner/S.I.R.`, already rostered by the
+   > amendment above, was required. Direction C shares directions A/B's one exit-code contract (0
+   > closed / 1 violation / 3 no-verdict) and runs in the same `roster-closure` job; its live read can
+   > itself return a no-verdict in CI (the default `GITHUB_TOKEN` carries no Projects v2 read credential
+   > — the same class of gap §1's #1154 amendment already accepted for the org's private-repo count),
+   > handled the identical way: named on stdout, warned rather than swallowed, never silently green.
 2. **`.github` is the authority/producer.** It holds the canonical fabrics and the coordination kit
    and mirrors them out — the analog of `fsgg-sdd` for product skills. The authority repo is the
    SOURCE of the coordination kit, never a receiver of it.

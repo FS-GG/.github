@@ -45,7 +45,34 @@ module Scan =
           /// Carried as the INSTANT, not as a day count, precisely because it is cached: a `Row` written
           /// to disk today and read tomorrow must not report yesterday's age. The count is derived where
           /// the clock is read (`Client.enrichBoardFacts`), so the cached fact never goes stale.
-          CreatedAt: DateTimeOffset option }
+          CreatedAt: DateTimeOffset option
+
+          /// .github#2254 REPAIR 1 (`heron-fef6`). The row's own body TEXT — read ONLY for a
+          /// closed-and-`Done` candidate whose `BoardClass` was EMPTY at the moment of a `scanFresh` call
+          /// made with `Cache.Reconciling` (see `scanFresh`) — never for `Scheduling`/`Offering`, and
+          /// never merely to double-check a column that already carries a value.
+          ///
+          /// `None` is "not applicable, or this scan's intent never asked" — the overwhelming majority of
+          /// rows, on every scan. `Some(Ok text)` is the body; `Some(Error e)` mirrors `Scan.snapshot`'s
+          /// own `bodyUnreadable` naming, so a failed census read is COUNTED there, never silently dropped
+          /// (#266) — `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself,
+          /// which is what keeps the extra read off every caller but `reconcile`: `Client.fs`'s
+          /// `scanAndDecide` already forwards its own `Cache.ReadIntent` into `Scan.board` UNCHANGED
+          /// (`Scan.board ctx.Transport intent ...`), so gating the read HERE, inside `scanFresh`, needs no
+          /// new parameter on `snapshot` and no edit to `Client.fs` at all — the two calls already agree
+          /// on intent, they simply never shared this one narrow fact before.
+          ///
+          /// DELIBERATELY UNCACHED. `renderRows`/`parseRows` never round-trip it: `Cache.getScan` already
+          /// refuses to serve a cache hit for `Reconciling`/`Offering` (`Cache.fs`'s own `| Reconciling |
+          /// Offering -> None`), so every `Reconciling` scan reaches `scanFresh` fresh regardless — nothing
+          /// is lost by leaving this out of the cache file, and leaving it OUT is what stops a `Scheduling`
+          /// read that happens to share a cache file from ever being able to inherit a census read it never
+          /// asked for and never paid for.
+          SweptBody: IoResult<string> option
+
+          /// Stable GraphQL node identity, retained only to make a fresh node-facts query.  It is not a
+          /// cached body or lock fact: every snapshot re-reads body and comment totalCount through this id.
+          NodeId: string option }
 
     [<Literal>]
     let OffBoardCap = 60
@@ -135,8 +162,36 @@ module Scan =
                  repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
                  content { \
                    __typename \
-                   ... on Issue { number title state createdAt repository { nameWithOwner } } \
-                   ... on PullRequest { number title state createdAt repository { nameWithOwner } } \
+                   ... on Issue { id number title state createdAt repository { nameWithOwner } } \
+                   ... on PullRequest { id number title state createdAt repository { nameWithOwner } } \
+                 } \
+               } \
+             } \
+           } \
+         } rateLimit { cost remaining } }"
+
+    // Reconciliation alone needs a closed-and-Done item's declaration to project its `Class` column.
+    // Ask for that scalar in the same board page instead of turning the swept census into one REST issue
+    // read per row. Scheduling and offering deliberately retain `BoardDoc`: an issue body is neither an
+    // input to their board-row scan nor a free thing to carry around.
+    [<Literal>]
+    let private ReconcilingBoardDoc =
+        "query($owner: String!, $number: Int!, $cursor: String) { \
+         organization(login: $owner) { \
+           projectV2(number: $number) { \
+             items(first: 100, after: $cursor) { \
+               pageInfo { hasNextPage endCursor } \
+               nodes { \
+                 status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
+                 class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 content { \
+                   __typename \
+                   ... on Issue { id number title state createdAt body repository { nameWithOwner } } \
+                   ... on PullRequest { id number title state createdAt body repository { nameWithOwner } } \
                  } \
                } \
              } \
@@ -184,7 +239,7 @@ module Scan =
             | true, v -> Some v
             | _ -> None
 
-    let private parseRow (node: JsonElement) : Row option =
+    let private parseRow (carrySweptBody: bool) (node: JsonElement) : Row option =
         match node.TryGetProperty "content" with
         | true, content when content.ValueKind = JsonValueKind.Object ->
             let number =
@@ -214,7 +269,7 @@ module Scan =
                     | Some s when s.ToUpperInvariant() <> "OPEN" -> Closed
                     | _ -> Open
 
-                Some
+                let row =
                     { Ref =
                         { Owner = parts.[0]
                           Repo = parts.[1]
@@ -243,7 +298,24 @@ module Scan =
                       // field (every parity fixture, and any board but the live one) reads `None` rather
                       // than failing the scan.
                       Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
-                      CreatedAt = str content "createdAt" |> instant }
+                      CreatedAt = str content "createdAt" |> instant
+                      // Filled only by the reconciling variant of the board document below.
+                      SweptBody = None
+                      NodeId = str content "id" }
+
+                if carrySweptBody && row.State = Closed && row.Status = Done && row.BoardClass.IsNone then
+                    // Match `Reads.issueBody`: null is a successfully observed empty description. A
+                    // missing or malformed scalar is different: it is an unreadable declaration and must
+                    // reach the snapshot as such rather than suppressing the class projection.
+                    let swept =
+                        match content.TryGetProperty "body" with
+                        | true, body when body.ValueKind = JsonValueKind.String -> Ok(body.GetString())
+                        | true, body when body.ValueKind = JsonValueKind.Null -> Ok ""
+                        | _ -> Error(Malformed(row.Ref.Short, "the reconciling board response has no readable issue body"))
+
+                    Some { row with SweptBody = Some swept }
+                else
+                    Some row
 
             | _ -> None
 
@@ -267,6 +339,9 @@ module Scan =
             w.WriteString("repo", r.Ref.Repo)
             w.WriteNumber("number", r.Ref.Number)
             w.WriteString("title", r.Title)
+            match r.NodeId with
+            | Some id -> w.WriteString("nodeId", id)
+            | None -> ()
 
             // The FIFTH copy, and the one #983's measurement could not see: it had no name, so a grep for
             // `let private statusName` — which is how the other four were found and counted — walked
@@ -365,7 +440,15 @@ module Scan =
                               // cache therefore under-prioritises for at most one cache lifetime; the
                               // opposite default would let an unread entry outrank the whole board.
                               Phase = s "phase" |> Option.bind phaseOfWireName
-                              CreatedAt = s "createdAt" |> instant }
+                              CreatedAt = s "createdAt" |> instant
+                              // NEVER ROUND-TRIPPED (.github#2254 repair 1) — `renderRows` above never
+                              // writes it, and `Cache.getScan` already refuses to SERVE a hit for
+                              // `Reconciling`/`Offering`, so every scan that could use it reaches
+                              // `scanFresh` fresh regardless. Carrying a cached census read forward here
+                              // would be the one way a `Scheduling` read could inherit a fact it never
+                              // paid for.
+                              SweptBody = None
+                              NodeId = s "nodeId" }
                     | _ -> None)
                 |> List.ofSeq
                 |> Some
@@ -375,6 +458,7 @@ module Scan =
 
     let private scanFresh
         (transport: IGitHubTransport)
+        (intent: Cache.ReadIntent)
         (owner: string)
         (title: string)
         (projectNumber: int)
@@ -389,7 +473,9 @@ module Scan =
         // Viewer, in lockstep with the document `forOwner` produces.
         let kind = OwnerKind.fromEnv ()
         let ownerField = OwnerKind.ownerField kind
-        let boardDoc = OwnerKind.forOwner kind BoardDoc
+        let carrySweptBody = intent = Cache.Reconciling
+        let boardDocument = if carrySweptBody then ReconcilingBoardDoc else BoardDoc
+        let boardDoc = OwnerKind.forOwner kind boardDocument
         let ownerVars = OwnerKind.ownerVars kind owner
 
         let rec page (cursor: string option) (acc: Row list) (guard: int) : IoResult<Row list> =
@@ -444,7 +530,7 @@ module Scan =
 
                 let rows =
                     items.GetProperty("nodes").EnumerateArray()
-                    |> Seq.choose parseRow
+                    |> Seq.choose (parseRow carrySweptBody)
                     |> List.ofSeq
 
                 let pageInfo = items.GetProperty("pageInfo")
@@ -468,9 +554,27 @@ module Scan =
         match page None [] 100 with
         | Error e -> Error e
         | Ok rows ->
+            // A server that accepted the reconciling document but omitted its selected `body` scalar is
+            // malformed. Keep the old REST read as a narrow compatibility/fail-closed fallback for that
+            // impossible-to-trust response shape; ordinary rows (including null bodies) never take it.
+            // If the fallback fails, its error remains `SweptBody` and the snapshot refuses to pretend the
+            // declaration was empty.
+            let rows =
+                if carrySweptBody then
+                    rows
+                    |> List.map (fun row ->
+                        match row.SweptBody with
+                        | Some(Error _) ->
+                            { row with SweptBody = Some(Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number) }
+                        | _ -> row)
+                else
+                    rows
+
             // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it — an empty document is
             // refused there, at the write, because this is the last moment "the board is empty" and "I could
-            // not read the board" are still distinguishable.
+            // not read the board" are still distinguishable. `renderRows` never serialises `SweptBody`
+            // (see its own field doc), so this cache entry carries none of the read above regardless of
+            // which branch produced `rows`.
             Cache.putScan owner title (renderRows rows) |> ignore
             Ok rows
 
@@ -491,9 +595,9 @@ module Scan =
             // A CACHE WE CANNOT PARSE IS A MISS, NEVER A FAILURE. Falling through to a real scan is always
             // safe; failing the caller because our own optimisation rotted would make the cache strictly
             // worse than not having one.
-            | None -> scanFresh transport owner title projectNumber
+            | None -> scanFresh transport cache owner title projectNumber
 
-        | None -> scanFresh transport owner title projectNumber
+        | None -> scanFresh transport cache owner title projectNumber
 
     // ---- blockers ------------------------------------------------------------------------------------
 
@@ -635,6 +739,131 @@ module Scan =
         | RvNames of string list
         | RvUnreadable of reason: string
 
+    type private FreshNodeFacts =
+        { Body: string
+          CommentCount: int }
+
+    [<Literal>]
+    let private NodeFactsChunkSize = 100
+
+    /// Fetch current bodies and exact comment cardinalities in bounded GraphQL chunks.  A zero cardinality
+    /// is an exact proof that the complete marker set is empty at this observation, so only that case may
+    /// skip the REST marker scan.  A positive count is deliberately not a marker projection: it still
+    /// takes the complete, uncached paginated scan below, preserving the lowest-id stale reservation rule.
+    let private freshNodeFacts (transport: IGitHubTransport) (rows: Row list) : IoResult<Map<string, FreshNodeFacts>> =
+        // A pre-#2308 cache has no node id.  It is not a lock answer, merely an old cache shape, so those
+        // rows take the former fresh REST body + complete marker path below.  A PRESENT id's fresh facts,
+        // in contrast, are mandatory and fail closed on any missing or malformed response.
+        let ids =
+            rows
+            |> List.choose (fun row ->
+                match row.NodeId with
+                | Some id when not (String.IsNullOrWhiteSpace id) -> Some(id, row.Ref.Short)
+                | _ -> None)
+
+        let readChunk (chunk: (string * string) list) : IoResult<(string * FreshNodeFacts) list> =
+            let declarations =
+                chunk
+                |> List.mapi (fun i _ -> $"$id%d{i}: ID!")
+                |> String.concat ", "
+
+            let selections =
+                chunk
+                |> List.mapi (fun i _ ->
+                    $"n%d{i}: node(id: $id%d{i}) {{ ... on Issue {{ id body comments(first: 1) {{ totalCount }} }} }}")
+                |> String.concat " "
+
+            let document = $"query(%s{declarations}) {{ %s{selections} }}"
+            let variables = chunk |> List.mapi (fun i (id, _) -> $"id%d{i}", VId id)
+
+            let request =
+                { Method = "POST"
+                  Path = "graphql"
+                  Query = []
+                  Body = Query(document, variables)
+                  Budget = GraphQl
+                  IfNoneMatch = None
+                  Subject = "fresh issue body and comment-count facts" }
+
+            match transport.Send request with
+            | Error e -> Error e
+            | Ok response ->
+                try
+                    use doc = JsonDocument.Parse response.Body
+
+                    match doc.RootElement.TryGetProperty "errors" with
+                    | true, errors when errors.ValueKind = JsonValueKind.Array && errors.GetArrayLength() > 0 ->
+                        let messages =
+                            errors.EnumerateArray()
+                            |> Seq.map (fun error -> str error "message" |> Option.defaultValue "(no message)")
+                            |> String.concat "; "
+
+                        Error(GraphQlErrors [ messages ])
+                    | _ ->
+                        let data = doc.RootElement.GetProperty "data"
+
+                        chunk
+                        |> List.mapi (fun i (expectedId, subject) ->
+                            let alias = $"n%d{i}"
+                            let node = data.GetProperty alias
+
+                            if node.ValueKind <> JsonValueKind.Object then
+                                Error(Malformed(subject, $"fresh node facts omitted %s{alias}"))
+                            else
+                                match str node "id", node.TryGetProperty "body", node.TryGetProperty "comments" with
+                                | Some actualId, (true, body), (true, comments) when actualId = expectedId && comments.ValueKind = JsonValueKind.Object ->
+                                    let text =
+                                        match body.ValueKind with
+                                        | JsonValueKind.String -> Ok(body.GetString())
+                                        | JsonValueKind.Null -> Ok ""
+                                        | _ -> Error(Malformed(subject, "fresh node facts have no readable issue body"))
+
+                                    let count =
+                                        match comments.TryGetProperty "totalCount" with
+                                        | true, total when total.ValueKind = JsonValueKind.Number ->
+                                            let parsed, value = total.TryGetInt32()
+                                            if parsed && value >= 0 then Ok value
+                                            else Error(Malformed(subject, "fresh comment totalCount is invalid"))
+                                        | _ -> Error(Malformed(subject, "fresh node facts have no readable comment totalCount"))
+
+                                    match text, count with
+                                    | Ok body, Ok commentCount -> Ok(expectedId, { Body = body; CommentCount = commentCount })
+                                    | Error e, _
+                                    | _, Error e -> Error e
+                                | Some _, _, _ -> Error(Malformed(subject, "fresh node facts do not match the requested node id"))
+                                | None, _, _ -> Error(Malformed(subject, "fresh node facts have no readable node id")))
+                        |> List.fold
+                            (fun state next ->
+                                match state, next with
+                                | Error e, _
+                                | _, Error e -> Error e
+                                | Ok values, Ok value -> Ok(value :: values))
+                            (Ok [])
+                        |> Result.map List.rev
+                with
+                | :? JsonException -> Error(Malformed(request.Subject, "fresh node facts response is not JSON"))
+                | :? Collections.Generic.KeyNotFoundException ->
+                    Error(Malformed(request.Subject, "fresh node facts response is missing data or an aliased node"))
+
+        ids
+        |> List.chunkBySize NodeFactsChunkSize
+        |> List.fold
+            (fun state chunk ->
+                match state, readChunk chunk with
+                | Error e, _
+                | _, Error e -> Error e
+                | Ok values, Ok next -> Ok(values @ next))
+            (Ok [])
+        |> Result.map Map.ofList
+
+    /// Assemble the snapshot `decide` consumes: `fsgg.coord.snapshot/1`. Every caller's cost is IDENTICAL
+    /// regardless of intent (.github#2254 repair 1, `heron-fef6`): the one extra body read a closed-and-
+    /// `Done` row with an empty `Class` column needs for `reconcile`'s census is paid, if at all, inside
+    /// `scanFresh` — gated on `Cache.Reconciling`, which `board` already receives from an UNCHANGED
+    /// `Client.fs` call site — and simply carried here on `Row.SweptBody`. This function reads that field;
+    /// it never calls `Reads.issueBody` itself and never sees `Cache.ReadIntent` at all, which is what
+    /// keeps `next`/`batch`/`take`/`scan` byte-identical to their pre-#2254 cost with no signature change
+    /// of their own to make.
     let snapshot
         (transport: IGitHubTransport)
         (rows: Row list)
@@ -660,6 +889,18 @@ module Scan =
             rows |> List.filter (fun r -> not r.IsPullRequest) |> scope repo
 
         let candidates = scoped.Rows
+
+        // The body and exact zero-comment proof are freshly re-read even when the board rows themselves
+        // came from cache.  `NodeId` is only an address; accepting cached body/count would turn either into
+        // the lower-bound lock decision this scan must never make.
+        let activeRows =
+            candidates
+            |> List.filter (fun row -> row.State = Open || row.Status <> Done)
+
+        let initialFailure, nodeFacts =
+            match freshNodeFacts transport activeRows with
+            | Ok facts -> None, Some facts
+            | Error e -> Some e, None
 
         // THE BOARD IS ITS OWN BLOCKER INDEX, AND IT IS FREE. The scan already carries every board item's
         // state, so a `Blocked by` edge pointing at another board item costs ZERO additional reads.
@@ -770,7 +1011,7 @@ module Scan =
         // run, forever, while looking (to a reader of either half alone) perfectly correct.
         w.WriteStartArray("items")
 
-        let mutable failure: IoError option = None
+        let mutable failure: IoError option = initialFailure
 
         for row in candidates do
             if failure.IsNone then
@@ -778,9 +1019,10 @@ module Scan =
                 // A CLOSED AND STAMPED ITEM IS SWEPT, NOT READ (#520, and case 51's "the issue is closed").
                 // It stays a candidate so `decide` can name it — `Schedulability` answers
                 // `Closed -> IssueClosed` as its FIRST question, before column, blockers, touch-set or lock
-                // — but it needs none of those reads to do so. Fetching its body/markers would pay the
-                // budget that dies first (#418) for a verdict `state` alone already settles, and bash never
-                // fetches them either.
+                // — but it needs none of those reads to do so. Fetching its markers would pay the budget
+                // that dies first (#418) for a verdict `state` alone already settles, and bash never
+                // fetches them either. The body is likewise never fetched EXCEPT for the narrow,
+                // already-free-to-detect population .github#2254 names — see the arm below.
                 //
                 // THE GUARD IS THE DONE STAMP, NOT `Closed` (.github#2225). This arm swept on `Closed`
                 // alone, and the sentence licensing that — "its touch-set is never consulted" — was TRUE
@@ -805,6 +1047,30 @@ module Scan =
                     w.WriteString("state", "CLOSED")
                     w.WriteStartArray("blockers")
                     w.WriteEndArray()
+
+                    // .github#2254: `CLASS-PROJECTION-LAG`'s own gate is `Open` (`Chore.fs`), so a row that
+                    // reaches Done/CLOSED before any reconcile pass ever observes it while still Open keeps
+                    // its disagreement — an EMPTY board `Class` column beside a body that DOES declare one
+                    // — examined by nothing, forever. This sweep is exactly why: it never sends the body
+                    // that disagreement would be read from.
+                    //
+                    // REPAIR 1 (`heron-fef6`): this function no longer decides whether to pay that read.
+                    // `row.SweptBody` already carries the answer — `Some` only when `scanFresh` populated it
+                    // for a `Cache.Reconciling` scan of exactly this row (empty `BoardClass`), `None` on
+                    // every `Scheduling`/`Offering` scan and on every row that already carried a `Class`
+                    // value. A naive gate HERE on `BoardClass` alone once paid this read for `next`, `batch`
+                    // and `take` too — measured, `+1 GET .../issues/398` on `batch --json` — even though
+                    // `Schedulability.schedulable` decides a closed row on `state` alone and never reaches
+                    // `Item.Class`. Reading `SweptBody` instead of `Reads.issueBody` directly is what keeps
+                    // this function itself blind to `Cache.ReadIntent`, so it cannot re-introduce that
+                    // regression by acquiring a new caller that forgets to gate.
+                    match row.SweptBody with
+                    | None -> ()
+                    | Some(Ok text) -> w.WriteString("body", text)
+                    | Some(Error e) ->
+                        bodiesUnreadable <- bodiesUnreadable + 1
+                        w.WriteString("bodyUnreadable", explain e)
+
                     w.WriteEndObject()
                 // A CLOSED, UNSTAMPED ROW READS EXACTLY LIKE AN OPEN ONE, and deliberately shares this path
                 // rather than getting a third arm of its own: it is the post-merge window, where the claim is
@@ -820,17 +1086,30 @@ module Scan =
                 | Error e -> failure <- Some e
                 | Ok blockers ->
 
-                // THE BODY. An unreadable one is `bodyUnreadable`, NOT an empty body — `TouchSet.parse ""`
-                // answers `Undeclared`, a confident OMISSION about an item nobody looked at, and the engine
-                // would then schedule every other item against a surface it cannot see.
-                let body = Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                // THE FRESH FACTS.  The GraphQL body scalar replaces the per-row REST issue read.  Its
+                // current `totalCount = 0` is the one cheap exact signal: no comment exists, therefore no
+                // claim marker exists.  Positive count never becomes a lower-bound marker decision; it
+                // takes the existing complete, uncached REST pagination, where an old stale-but-unreaped
+                // lowest-id marker remains a reservation until `reap` removes it.
+                let body, markers =
+                    match nodeFacts, row.NodeId with
+                    | Some facts, Some id ->
+                        match Map.tryFind id facts with
+                        | Some fact ->
+                            let markers =
+                                if fact.CommentCount = 0 then
+                                    Ok []
+                                else
+                                    Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
 
-                // THE MARKERS. Unconditional, uncached, and COMPLETE: a lock may never be read from a cache
-                // or decided from a lower bound. One unclassifiable comment may be the real winner, so the
-                // scheduler refuses the scan rather than reserving only the markers it happened to parse.
-                let markers =
-                    Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
-                    |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short)
+                            Ok fact.Body, markers
+                        | None ->
+                            Error(Malformed(row.Ref.Short, "fresh node facts omitted the board row")), Ok []
+                    | _ ->
+                        Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number,
+                        (Reads.markerScan transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                         |> Result.bind (Reads.requireCompleteMarkerScan row.Ref.Short))
 
                 match markers with
                 // A FAILED MARKER READ IS FATAL, and it is the one read that must be. Guessing the lock

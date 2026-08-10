@@ -180,7 +180,7 @@
 # One space between, spaces added once around the whole, and no pattern for an empty verb can match.
 
 # WRITES, UNCONDITIONALLY — every invocation of these can mutate state the whole fleet shares.
-BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-field set-paths take widen"
+BOARD_WRITES="add adopt child claim done flush heartbeat intake release room say set-field set-paths take widen"
 
 # WRITES ONLY UNDER A CONDITION — and the flat list above CANNOT say that, which is how it got wrong.
 # These are refused all the same, verb-level and fail-closed, and they are held in a set of their own so
@@ -190,6 +190,9 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 #   reconcile   — the same shape: `--apply` writes board columns via `Board.boardWrite`, bare is a dry run.
 #   delivery    — the bare lifecycle inspection is read-only; `--apply` may issue its guarded merge
 #                 (`Client.delivery` → `Writes.mergeAtHead`) after consuming a fresh receipt.
+#   delivery-route — `validate` and `show` only read evidence; `record` appends the receipt ledger.
+#                     The shim refuses the whole verb on stale code because missing the record arm would
+#                     let a stale engine write an authoritative route decision.
 #   next        — writes under no flag at all. AFTER printing its answer it makes the #733 chore OFFER
 #                 (`offerChoreAtNext` → `Chores.offer` → `Writes.claim`), which POSTs a claim marker to take
 #                 the repo's chore lock. `.github`'s lock is #1033, so this fires in the repo that owns this
@@ -226,7 +229,7 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 # that reasoning, and `next` cannot be argument-aware at all — its write is gated on board state, not on a
 # flag. Take the refusal. If a permitted stale dry run is ever wanted, the honest way is for the engine to
 # declare per-invocation write-ness, not for this shim to re-implement the parser.
-BOARD_WRITES_CONDITIONAL="delivery next reap reconcile"
+BOARD_WRITES_CONDITIONAL="delivery delivery-route next reap reconcile"
 
 # READS — permitted (with a warning) on a stale engine, because a stale read misinforms ONE worker where a
 # stale write corrupts what the fleet shares. This set exists so the partition is total: it is the half that
@@ -381,7 +384,7 @@ upstream_drift() {
 # who is told only the nearer one goes and rebuilds a checkout that is still behind. So `$detail`
 # ACCUMULATES: whichever fired is reported, and if both fired the reader sees both, in the order a fix
 # would be applied.
-stale_guard() {
+stale_guard() { # $1 = top, $2 = engine .dll, $3 = verb, $4 = the verb's first argument
   local top="$1" dll="$2" verb="$3" newer built changed drift kind a b detail=""
   [ -f "$dll" ] || return 0   # no IL to measure against; the exec below fails honestly on its own
 
@@ -457,6 +460,16 @@ stale_guard() {
   esac
 
   [ -n "$detail" ] || return 0                                       # the engine is current — say nothing
+
+  # `delivery-route` has both evidence reads and a receipt-ledger write.  Its verb remains in the
+  # conditional-write partition, but these two grammar-anchored read arms may diagnose on stale code;
+  # `record` and every unknown subcommand remain fail-closed below.
+  if [ "$verb" = "delivery-route" ] && { [ "${4:-}" = "validate" ] || [ "${4:-}" = "show" ]; }; then
+    echo "fsgg-coord: WARNING — the engine is STALE, so it need not behave as the code you are reading does." >&2
+    printf '%s\n' "$detail" >&2
+    echo "            Board writes are refused until you do." >&2
+    return 0
+  fi
 
   # ONE SPACE BETWEEN THE SETS, spaces added once around the whole — see the note above the sets. A padded
   # concatenation would put a DOUBLE space here and refuse the empty verb of a bare invocation.

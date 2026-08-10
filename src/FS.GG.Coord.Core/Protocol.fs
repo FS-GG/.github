@@ -80,7 +80,12 @@ module Protocol =
           EscalationMarker: string
           RepairPhaseMarker: string
           MaxAutomatedRepairRounds: int
-          RepairPhaseMaxRounds: int }
+          RepairPhaseMaxRounds: int
+          /// The quoted-versus-competing marker rule (#2221, #2248): a quotation is inert, and a
+          /// canonical marker repeated in one comment's leading block is a competing marker. Stated
+          /// here so the `fsgg-protocol:review-policy` projection carries it FROM `Driver.fs`'s own
+          /// behaviour rather than as hand-written prose beside it.
+          QuotedMarkerRule: string }
 
     /// Facts that determine whether an item can move between lifecycle stages.
     type LifecyclePolicyDoc =
@@ -168,6 +173,7 @@ module Protocol =
           Schedulability.WrongStatus Backlog
           Schedulability.BlockedBy []
           Schedulability.AwaitingHuman AwaitingHumanDecision
+          Schedulability.AwaitingDeliveryRouteDecision []
           Schedulability.NoTouchSet
           Schedulability.DeliberatelyNoTouchSet
           Schedulability.UnusableTouchSet []
@@ -190,6 +196,8 @@ module Protocol =
             "A `Blocked by` entry is unresolved. CLOSED and MERGED resolve; OPEN, unverifiable and unparseable all BLOCK."
         | Schedulability.AwaitingHuman _ ->
             "`Blocked on: human/...` — a HUMAN must act first, whatever the `Paths:` line records, so an agent cannot make the call the item exists to escalate (#918). `human/decision` is unschedulable until a human CHOOSES; `human/action` becomes startable the moment a human action (e.g. a scope grant) lands, but not before. Which one rides on the verdict's `humanBlock` detail."
+        | Schedulability.AwaitingDeliveryRouteDecision _ ->
+            "The mandatory agent-authored delivery-route receipt is missing, stale, malformed, or unreadable. Re-evaluate the item; the engine never infers a route from checklist facts."
         | Schedulability.NoTouchSet ->
             "No `Paths:` line at all — an OMISSION. The item is real work and it is invisible to every worker who asks for work. Declare one, or `Paths: none` if it truly has no touch-set."
         | Schedulability.DeliberatelyNoTouchSet ->
@@ -671,7 +679,18 @@ module Protocol =
           EscalationMarker = "independent-review-escalation"
           RepairPhaseMarker = "independent-review-repair-phase"
           MaxAutomatedRepairRounds = 3
-          RepairPhaseMaxRounds = 10 }
+          RepairPhaseMaxRounds = 10
+          // #2221's own rule, stated once so the projection can carry it FROM here rather than
+          // restate it beside `Driver.parseReviewCommentsCore`'s `competingMarker`/`leadingMarkerBlock`
+          // (#2248). Keep this the plain-language mirror of that code, not a second design decision.
+          QuotedMarkerRule =
+            "A marker counts only as a canonical whole line inside a comment's own leading marker \
+             block — the run of lines from byte 0 that are each exactly one known marker's text. A \
+             marker occurring elsewhere as a quotation (inside a fence, an indented code block, or \
+             prose that only mentions it) is inert: it carries no evidence and raises no error by \
+             itself. The same marker kind occurring more than once within one comment's leading block \
+             is a competing marker and is refused — a marker kind has exactly one meaning, so no \
+             comment may carry it twice." }
 
     let lifecyclePolicy =
         { RequiredHousekeeping =

@@ -210,6 +210,16 @@ module Board =
         number: int ->
             IoResult<string option>
 
+    /// Fresh resolver read for one projected single-select or text field.
+    val itemFieldValue:
+        transport: Transport.IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+        field: string ->
+            IoResult<string option>
+
     /// Write ONE field. Routes by the field's declared type; an empty `Set` is refused.
     ///
     /// A value that does not fit its field — an unknown single-select option, a NUMBER that is not a number

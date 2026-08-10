@@ -32,6 +32,49 @@ module ProtocolTests =
     let ``the grammar rule IS the enforcing constant — not a copy of it`` () =
         Assert.Equal(Schedulability.TouchSetGrammar, Protocol.touchSetGrammar.Statement)
 
+    /// THE PROJECTED RULE MUST MATCH WHAT THE ENGINE ENFORCES (#2248), not merely read plausibly beside
+    /// it. `Protocol.reviewPolicy.QuotedMarkerRule` is the prose the `fsgg-protocol:review-policy` region
+    /// states; this pins its vocabulary against `Driver.parseReviewComments`' OWN behaviour for the two
+    /// cases the rule names — a quotation, and a competing canonical repeat — so a change to one that is
+    /// not also a change to the other reds here, rather than the projection drifting from #2221 silently
+    /// the way the hand-written prose it replaces would have.
+    [<Fact>]
+    let ``the quoted-marker rule text matches what Driver.parseReviewComments actually enforces`` () =
+        let rule = Protocol.reviewPolicy.QuotedMarkerRule
+        Assert.False(System.String.IsNullOrWhiteSpace rule, "reviewPolicy states no quoted-marker rule")
+        Assert.Contains("inert", rule)
+        Assert.Contains("competing", rule)
+        Assert.Contains("leading marker block", rule)
+
+        let bystander id body : Driver.ReviewComment =
+            { Id = id; Url = $"https://reviews/bystander-%d{id}"; Body = body }
+
+        // A marker quoted inside a fence is inert — not evidence, and never an error by itself.
+        let quoted =
+            bystander 1L "Post this:\n\n```\n<!-- fsgg:independent-review-repair-phase:v1 -->\n```\n"
+
+        match Driver.parseReviewComments [ quoted ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "independent-review-repair-phase"),
+                $"a fenced quotation was read as a live marker, contradicting the projected rule: %A{errors}"
+            )
+
+        // The SAME marker kind, canonical, twice in one comment's leading block: competing, refused.
+        let repeated =
+            bystander
+                2L
+                "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review-repair-phase:v1 -->\n"
+
+        match Driver.parseReviewComments [ repeated ] with
+        | Ok _ -> failwith "a repeated canonical leading marker must fail closed"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "repeated in the leading marker block"),
+                $"a competing marker was not refused as the projected rule promises: %A{errors}"
+            )
+
     /// EVERY VERDICT THE SCHEDULER CAN RETURN MUST BE DOCUMENTED, AND NOTHING ELSE MAY BE.
     ///
     /// Fourteen of the scheduler family's issues were a MISSING CASE in this union. A worker handed a
@@ -98,6 +141,7 @@ module ProtocolTests =
               Schedulability.WrongStatus Backlog, "wrong-status"
               Schedulability.BlockedBy [], "blocked-by"
               Schedulability.AwaitingHuman AwaitingHumanDecision, "awaiting-human"
+              Schedulability.AwaitingDeliveryRouteDecision [], "awaiting-delivery-route-decision"
               Schedulability.NoTouchSet, "no-touch-set"
               Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
               Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
@@ -576,6 +620,7 @@ module ProtocolTests =
           Predicate = None
           Class = None
           BoardClass = None
+          DeliveryRoute = DeliveryRoute.Current { Schema = DeliveryRoute.Schema; Subject = "test"; SubjectRevision = "test"; Route = Some DeliveryRoute.Lightweight; Agent = "test"; Timestamp = "2026-01-01T00:00:00Z"; ReasonCodes = [ "test" ]; Rationale = "test"; DeclaredImpacts = [ "test" ]; ObservedFacts = [ "test" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
           Severity = Unset
           Phase = None
           AgeDays = None }

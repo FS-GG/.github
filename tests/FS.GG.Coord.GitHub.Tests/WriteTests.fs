@@ -62,7 +62,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 [<Fact>]
 let ``#2131 guarded merge binds GitHub's write to the inspected head SHA`` () =
@@ -185,11 +185,31 @@ let ``#1732 a scoped claim records its path repository in the marker`` () =
             aRef
             (fun () -> None)
             (fun () -> Some "FS.GG.Rendering")
+            (fun () -> Ok())
     with
     | Ok(Won(held, _)) ->
         Assert.Equal(Some "FS.GG.Rendering", held.PathRepo)
         Assert.Contains("pathRepo=FS.GG.Rendering", Seq.last bodies)
     | other -> failwith $"the scoped claim must win and carry its path repository — got %A{other}"
+
+[<Fact>]
+let ``a rejected new force admission evicts nothing and posts no marker`` () =
+    let mutable admissions = 0
+    let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
+
+    let rejected () =
+        admissions <- admissions + 1
+        Error(RateLimited(UnknownBudget, None))
+
+    match
+        claimScoped transport 120 StealLiveHolder ignore me itsMe None aRef (fun () -> None) (fun () -> None) rejected
+    with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"a rejected force admission must stop before eviction — got %A{other}"
+
+    Assert.Equal(1, admissions)
+    Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 901")
+    Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
 
 [<Fact>]
 let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` () =
@@ -916,6 +936,68 @@ let ``#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS`` 
     match heartbeat transport 120 held with
     | Ok _ -> Assert.Contains("session=S1", Seq.last bodies) // the beaten body still carries the session
     | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
+
+[<Fact>]
+let ``#2217 heartbeat changes the marker body so GitHub advances the server lease clock`` () =
+    // A PATCH carrying the exact marker body GitHub already has is a no-op: `updated_at` stays at the
+    // original claim time and the lease expires while heartbeat reports green.  The renewal token is the
+    // deliberately unparsed changing field that turns this into a real server-side update.
+    let transport, bodies =
+        capturing
+            [ ok (comments [ marker 901 "vole-418" " session=S1" ])
+              ok "" ]
+
+    let held = holdAs "S1" transport
+
+    match heartbeat transport 120 held with
+    | Ok _ -> Assert.Contains("renewed=", Seq.last bodies)
+    | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
+
+[<Fact>]
+let ``#2217 two heartbeats renew a lapsed server lease only when each PATCH changes its stored body`` () =
+    // This is a small GitHub comment model, including the fact the live API matters for: an identical
+    // PATCH is a no-op and leaves `updated_at` untouched.  Start with a capability acquired while live,
+    // advance that stored server clock beyond the 120-minute window, then beat twice.  The final scan is
+    // the lease fact the operator depends on, not merely a request-shape assertion.
+    let mutable stored = "<!-- fsgg:claim worker=vole-418 lease=120 renewed=constant session=S1 -->"
+    let mutable updatedAt = System.DateTimeOffset.UtcNow
+    let patches = System.Collections.Generic.List<string>()
+
+    let comments () =
+        System.Text.Json.JsonSerializer.Serialize [ {| id = 901; body = stored; updated_at = updatedAt.ToString("o") |} ]
+
+    let transport =
+        Fake.Recorder(fun request ->
+            match request.Method, request.Path with
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues/42/comments" -> ok (comments ())
+            | "PATCH", "repos/FS-GG/FS.GG.SDD/issues/comments/901" ->
+                match request.Body with
+                | Json payload ->
+                    use doc = System.Text.Json.JsonDocument.Parse payload
+                    let body = doc.RootElement.GetProperty("body").GetString()
+                    patches.Add body
+
+                    // The controlled server behavior: a byte-identical PATCH does not advance the clock.
+                    if body <> stored then
+                        stored <- body
+                        updatedAt <- System.DateTimeOffset.UtcNow
+
+                    ok ""
+                | _ -> failwith "heartbeat must PATCH a JSON comment body"
+            | method', path -> failwith $"unexpected #2217 fixture request: %s{method'} %s{path}")
+
+    let held = holdAs "S1" transport
+    updatedAt <- System.DateTimeOffset.UtcNow.AddHours(-3.0) // the lease is now past its 120-minute window
+
+    match heartbeat transport 120 held, heartbeat transport 120 held with
+    | Ok _, Ok _ ->
+        Assert.Equal(2, patches.Count)
+        Assert.NotEqual<string>(patches.[0], patches.[1])
+
+        match verifyHeld transport 120 me itsMe (Some(SessionId "S1")) aRef with
+        | Ok(Holds _) -> () // changed bodies advanced `updated_at`, so the lapsed lease is live again
+        | other -> failwith $"two real renewal PATCHes must revive the server lease — got %A{other}"
+    | first, second -> failwith $"both heartbeats must land — got %A{first}, %A{second}"
 
 [<Fact>]
 let ``#1732 heartbeat re-emits marker path scope`` () =
@@ -1821,6 +1903,15 @@ let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` (
         Assert.Equal({ Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 220 }, r)
         Assert.True(transport.Logged "issue-list FS-GG/FS.GG.SDD", "createRoom did not hit the repo's issues endpoint")
     | Error e -> failwith $"createRoom must return the new room's ref — got %A{e}"
+
+[<Fact>]
+let ``#2134 createIntake refuses an invalid draft before any issue POST`` () =
+    let transport = scripted []
+    let draft: FS.GG.Coord.Intake.Draft =
+        { Schema = FS.GG.Coord.Intake.Schema; Id = "intake-42"; Owner = "FS-GG"; Repository = "FS.GG.SDD"; Title = "t"; Observed = "o"; RootCause = "r"; Acceptance = "a"; Verification = "v"; Paths = []; Class = "hardening"; Status = "Backlog"; Disposition = Some FS.GG.Coord.Intake.Create; Phase = None; Severity = None; BlockedBy = None; BlockedOn = None; BacklogReason = Some "not-yet-actionable"; JudgementQuestion = None }
+    match createIntake transport draft with
+    | Error _ -> Assert.False(transport.Logged "issue-list FS-GG/FS.GG.SDD")
+    | Ok _ -> failwith "invalid intake must refuse"
 
 [<Fact>]
 let ``createRoom fails LOUDLY when the response carries no number`` () =

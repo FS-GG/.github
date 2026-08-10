@@ -28,10 +28,11 @@ module BlockerLintTests =
                 | _ -> false)
 
         Assert.Equal<string list>(
-            [ "add --status Blocked"
-              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
-              "release --status Blocked"
-              "set-field --batch Status=Blocked"
+          [ "add --status Blocked";
+              "intake apply Status=Blocked";
+              "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked";
+              "release --status Blocked";
+              "set-field --batch Status=Blocked";
               "set-field Status Blocked" ],
             deliberate |> List.map (function Client.DeliberatePark name -> name | _ -> failwith "unreachable") |> List.sort
         )
@@ -58,7 +59,7 @@ module BlockerLintTests =
         let directStatusWrites = Regex.Matches(source, "Board\\.boardWrite[\\s\\S]{0,300}?\\\"Status\\\"").Count
         Assert.Equal(4, directStatusWrites)
         Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
-        Assert.Equal(2, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
+        Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
         Assert.Equal(6, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("StatusNotBlocked", chore)
@@ -190,7 +191,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         let subject: Ref =
             { Owner = "FS-GG"
@@ -427,7 +428,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// Serves ONLY the REST body read `requireSentinelIfBlockedByCleared` makes. Any GraphQL call —
         /// in particular the live `Blocked by` resolver read (`fieldValueByName`) — is a hard refusal, so
@@ -487,7 +488,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// A full board fixture for `Client.setField --batch`: discovery (`projectsV2`, `fields(first`),
         /// the item-id lookup (`projectItems`), the aliased mutation itself
@@ -647,7 +648,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// Both owners have `rogue3#96` on the same board. The item lookup returns the owner-specific
         /// project item id, so the CLI fixture checks the mutation target and the receipt from one argv.
@@ -735,7 +736,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         let private itemJson (n: int) (status: string) (blockedBy: string option) (state: string) =
             // `Scan.parseRow` reads `nested node "blockedBy" "text"` — the TEXT field's value is a
@@ -863,7 +864,7 @@ module BlockerLintTests =
                 { Status = 200
                   Body = body
                   ETag = None
-                  NextLink = None }
+                  NextLink = None; Headers = Map.empty }
 
         /// A live claim marker, or none — `Writes.verifyHeld`'s subject, `ForceStealTests.Thread` scaled
         /// down to what this fixture needs (no POST, since `release` never adds a comment).

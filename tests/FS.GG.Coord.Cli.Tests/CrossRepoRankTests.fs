@@ -29,7 +29,7 @@ let private ok (body: string) =
         { Status = 200
           Body = body
           ETag = None
-          NextLink = None }
+          NextLink = None; Headers = Map.empty }
 
 let private ref' repo n : Ref =
     { Owner = "FS-GG"
@@ -47,7 +47,9 @@ let private row repo n blockedBy state isPr : Scan.Row =
       BoardClass = None
       Severity = Unset
       Phase = None
-      CreatedAt = None }
+      CreatedAt = None
+      SweptBody = None
+      NodeId = None }
 
 /// The hub — one `.github` item — and its three OPEN dependents, all in the OTHER repo. Nothing else on
 /// the board names it, so under a `--repo .github` scope every one of those edges used to vanish.

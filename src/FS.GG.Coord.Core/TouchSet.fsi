@@ -192,3 +192,36 @@ module TouchSet =
         left: TouchSet ->
         right: TouchSet ->
             (string * string) list
+
+    /// Whether a proposed `Paths:` update — from `widen` or `set-paths` — may be COMMITTED.
+    type UpdateDecision =
+        /// The update may be written as one whole: either no collision was found, or a real one, but not
+        /// one this update's own requested paths are answerable for. See `decideUpdate`.
+        | CommitUpdate
+        /// The update must write NOTHING: at least one path THIS UPDATE REQUESTED collides with a live
+        /// claim.
+        | RefuseUpdate
+
+    /// THE ALL-OR-NOTHING RULE FOR A `Paths:` UPDATE (#2306), and it is a DECISION stated HERE, not an
+    /// inevitability discovered at a call site.
+    ///
+    /// A `widen`/`set-paths` call whose OWN REQUESTED paths collide with a live claim must leave the
+    /// item's declared `Paths:` BYTE-IDENTICAL to what it was before the call. Not "byte-identical for the
+    /// colliding path, updated for the rest": if the request names several paths and even one of them
+    /// collides, the WHOLE update refuses and commits ZERO of them — there is no `UpdateDecision` case for
+    /// "commit the disjoint remainder", so a caller that gates its one write on this function's verdict
+    /// cannot drift into a partial commit by construction. This mirrors `usability`'s own ANY-not-every
+    /// rule one level up in this module (a threshold left to each call site to re-derive is a threshold
+    /// free to disagree with itself — #485/#864/#945 are what that already cost here once).
+    ///
+    /// `hasCollision` is deliberately the CALLER's determination of which collision this decision answers
+    /// for, not merely "did the live scan find any collision anywhere". A same-repo scan run over the
+    /// WHOLE proposed declaration can report a collision on a token the update carries forward UNCHANGED —
+    /// pre-existing, and provably not introduced by this call (a narrowing is the standing example: a
+    /// token subset can only ever name fewer files, so whatever the scan still finds predates it). Passing
+    /// THAT as `hasCollision` would block the very narrowing this protocol recommends as the remedy for an
+    /// overlap. So the caller (`FS.GG.Coord.Cli`'s `widen`/`set-paths`) passes whether a collision involves
+    /// a path the request itself is newly introducing — never whether the pre-existing declaration still
+    /// shows one — and this function does not run the scan itself, because the scan needs a transport and
+    /// this module is pure.
+    val decideUpdate: hasCollision: bool -> UpdateDecision

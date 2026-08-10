@@ -1,0 +1,57 @@
+<testsuite name="fsgg-sdd" tests="1" failures="0"><testcase name="fsgg-sdd"><system-out><![CDATA[command: analyze
+toolVersion: 1.0.0
+outcome: succeeded
+changedArtifacts: 4
+specificationRequirements: 6
+specificationStories: 5
+specificationAcceptanceScenarios: 6
+clarificationQuestions: 0
+clarificationDecisions: 0
+acceptedDeferrals: 0
+remainingAmbiguities: 0
+blockingAmbiguities: 0
+checklistItems: 6
+checklistResults: 6
+checklistPassed: 6
+checklistFailedBlocking: 0
+checklistAcceptedDeferrals: 0
+checklistStaleResults: 0
+checklistAdvisory: 0
+planDecisions: 6
+planContractReferences: 3
+planVerificationObligations: 3
+planAcceptedDeferrals: 0
+planStaleDecisions: 0
+planBlockingFindings: 0
+planAdvisory: 1
+tasks: 14
+taskDependencies: 8
+taskRequiredSkills: 6
+taskRequiredEvidence: 14
+taskPending: 14
+taskInProgress: 0
+taskDone: 0
+taskSkipped: 0
+taskStale: 0
+taskAcceptedDeferrals: 0
+taskBlockingFindings: 0
+taskAdvisory: 1
+workId: 2206-board-roster-closure
+analysisPath: readiness/2206-board-roster-closure/analysis.json
+analysisReadiness: implementationReady
+analysisSources: 9
+analysisRelationships: 44
+analysisReadyFindings: 44
+analysisAdvisory: 0
+analysisWarnings: 0
+analysisBlocking: 0
+analysisStaleSources: 0
+analysisMissingDispositions: 0
+analysisGeneratedViewFindings: 0
+generatedViews: 2
+diagnostics: 0
+nextAction: analysis.next.implement
+lifecycle: 7/10 analyze (current) · work=2206-board-roster-closure · outcome=succeeded
+stages: charter=done specify=done clarify=done checklist=done plan=done tasks=done analyze=current evidence=done verify=pending ship=pending
+
+]]></system-out></testcase></testsuite>

@@ -509,10 +509,24 @@ module Chore =
               // measurably did not exist. The rule is right and is unchanged; `Client.offerBoardOf` is the
               // join that owes it a real answer, and `ChoresTests`' #1649 legs pin it from the real writer.
               //
-              // OPEN items only. A closed row is out of the burn-down's scope, and classing it would spend
-              // a board write on the one population no stopping rule consults.
+              // OPEN **OR** CLOSED (.github#2254) — deliberately widened from the OPEN-only gate this rule
+              // shipped with. A row that reaches Done/CLOSED between two reconcile passes was never OPEN at
+              // a moment this rule looked at it, so an `Open`-only guard left its disagreement unexamined
+              // forever: `reconcile` reported clean, `lint` said nothing, and the census both halves of
+              // `drive-board` §10 depend on under-counted a row it never classed. `#398`'s shape exactly —
+              // filed, classed, merged and closed inside one gap window.
+              //
+              // THIS DOES NOT WIDEN THE POPULATION AS FAR AS IT LOOKS. `item.Class` for a closed-and-Done
+              // row is `None` unless `Scan.snapshot` paid the extra body read for it, and that read is
+              // itself gated on `BoardClass = None` — the narrow, already-EMPTY-column population #2254's
+              // AC1 names, not "every closed row" (see `Scan.fs`'s swept-item comment and
+              // `Scan.fsi`'s `Row.BoardClass`). A closed row that already carries SOME `Class` value on the
+              // board never reaches this arm with `item.Class = Some _`, because nothing ever read its body
+              // to populate one — so the WRONG-value case stays exactly as unexamined for a closed row as it
+              // was before, and only the EMPTY-column gap this item is about closes.
               match item.State, item.Class, item.BoardClass with
-              | Open, Some declared, board when board <> Some declared -> Chore(item.Ref, ClassProjectionLag declared, Quick)
+              | (Open | Closed), Some declared, board when board <> Some declared ->
+                  Chore(item.Ref, ClassProjectionLag declared, Quick)
               | _ -> () ]
 
     /// How much a chore unwedges the QUEUE. Lower sorts first.

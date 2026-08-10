@@ -199,6 +199,14 @@ module Client =
           /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
           ChoreLocks: Ref list }
 
+    /// Fake transports are deterministic in-process fixtures: they do not receive HTTP response
+    /// headers and therefore cannot populate the credential ledger. Production admission is applied
+    /// only at the real HTTP boundary; unit fixtures exercise the command's own pre-existing CAS paths.
+    let private usesLiveHttp (ctx: Context) =
+        match box ctx.Transport with
+        | :? Transport.HttpTransport -> true
+        | _ -> false
+
     /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
     /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
     ///
@@ -388,6 +396,200 @@ module Client =
 
     // ---- the read / schedule commands ------------------------------------------------------------------
 
+    [<Literal>]
+    let private DeliveryRouteMarker = "<!-- fsgg:delivery-route/v1 -->"
+
+    let private deliveryRouteRevision (body: string) =
+        body |> Text.Encoding.UTF8.GetBytes |> Security.Cryptography.SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    /// Static receipt validation proves that an SDD route says which work package it governs.  Whether
+    /// that package's files currently exist and are `implementationReady` is a SEPARATE, ADVISORY fact
+    /// (#2298): requiring it to be true before the receipt records or the item schedules made `sdd-required`
+    /// permanently unreachable for any item that does not already carry a package, because the only actor
+    /// positioned to author that package — a CLAIMED WORKER, inside a worktree, via `fsgg-sdd` — could never
+    /// get claimed to do so. `sddEvidenceErrors` is reported (by `record` and `show`) but never refuses.
+    /// Decode the current SDD analysis fact for the named work.  The route boundary owns this one
+    /// interpretation so a `workId` substitution and an unready analysis cannot be accepted on one
+    /// command path while another merely checks that JSON was present.
+    let sddReadinessEvidenceErrors workId (raw: string) =
+        try
+            use document = JsonDocument.Parse raw
+            let root = document.RootElement
+            [ match root.TryGetProperty "workId" with
+              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = workId -> ()
+              | _ -> yield $"sdd readiness workId does not match '%s{workId}'"
+              match root.TryGetProperty "status" with
+              | true, value when value.ValueKind = JsonValueKind.String && value.GetString() = "implementationReady" -> ()
+              | _ -> yield "sdd readiness status is not implementationReady" ]
+        with error -> [ $"sdd readiness evidence is unreadable: %s{error.Message}" ]
+
+    /// Exposed for the command-boundary test: this is the sole filesystem-backed SDD proof surfaced by
+    /// route reads and route recording, so the test can pin both the current and missing-work inversions.
+    /// ADVISORY ONLY (#2298) — see the doc comment above. Never fed back into a `DeliveryRoute.Verdict`.
+    let sddEvidenceErrors (receipt: DeliveryRoute.Receipt) =
+        match receipt.Route, receipt.SddWorkId, receipt.SpecHome with
+        | Some DeliveryRoute.SddRequired, Some workId, Some specHome ->
+            let rec findRoot (directory: DirectoryInfo) =
+                let hasEvidence =
+                    Directory.Exists(Path.Combine(directory.FullName, "work"))
+                    && Directory.Exists(Path.Combine(directory.FullName, "readiness"))
+
+                if hasEvidence then Some directory.FullName
+                elif isNull directory.Parent then None
+                else findRoot directory.Parent
+
+            let root =
+                match env "FSGG_COORD_SDD_ROOT" "" with
+                | "" -> findRoot (DirectoryInfo(Directory.GetCurrentDirectory()))
+                | value -> Some value
+            let atRoot relative = root |> Option.map (fun value -> Path.Combine(value, relative)) |> Option.defaultValue relative
+            let specPath = atRoot specHome
+            let readiness = atRoot (Path.Combine("readiness", workId, "analysis.json"))
+            [ if not (File.Exists specPath) then
+                  yield $"sdd spec does not exist: %s{specHome}"
+              if not (File.Exists readiness) then
+                  yield $"sdd readiness evidence does not exist: %s{readiness}"
+              elif File.Exists readiness then
+                  yield! sddReadinessEvidenceErrors workId (File.ReadAllText readiness) ]
+        | _ -> []
+
+    /// .github#2300 repair 2: BOUNDED, not the full thread. All three call sites below —
+    /// `readDeliveryRouteVerdict` (scheduling), `requireCurrentDeliveryRoute` (the claim/take mutation
+    /// boundary), and `deliveryRouteFact` (`delivery-route show`/`record`) — search for the LATEST
+    /// matching marker (`List.rev |> List.tryPick`) and render or act on ONLY that one receipt (`show`
+    /// prints `kind = "current"`, never a history). None of the three ever needed more than the tail of
+    /// the comment thread; the unbounded `Reads.commentBodies` (REST, paginates with the whole thread's
+    /// length — .github#2300's own growth defect) was paying for history none of them read.
+    /// `Reads.commentBodies` has no remaining caller in this file after this change. It is NOT removed:
+    /// deleting a public `Reads.fsi` surface is a separate decision from bounding these three reads, and
+    /// nothing here rules out a future caller that genuinely needs the complete thread.
+    ///
+    /// **THE BUDGET THIS MOVES, NOT ELIMINATES.** `Reads.recentCommentBodies` is a GraphQL call
+    /// (`Budget = GraphQl`), and GraphQL is a SEPARATE 5,000-point-per-hour budget from the REST core
+    /// these reads used to spend. Net effect per candidate that reaches real enrichment: REST cost for
+    /// its route search drops from `1 + ceil(comments/100)` (unbounded) to 0 (the `issueBody` read beside
+    /// it stays REST, unchanged); GraphQL cost rises by exactly 1 bounded call. On a board where REST has
+    /// been the binding constraint all session and GraphQL sits mostly idle, this is very likely a
+    /// straight win — but it is a shift between two meters, and a future reader measuring only REST would
+    /// wrongly conclude the cost vanished rather than moved.
+    ///
+    /// **WHY 100, AND WHAT HAPPENS WHEN A MARKER IS OLDER THAN THAT:**
+    /// - 100 matches the `per_page` this codebase already uses for REST comment pages (`Reads.fs`'s
+    ///   `commentBodies`/`markerScan`) and is GitHub's own conventional connection-page ceiling — not a
+    ///   number invented for this repair.
+    /// - The receipt search only ever wants the MOST RECENT matching marker, and a receipt is re-affirmed
+    ///   whenever the body it binds to changes (or whenever an agent chooses to), so ordinary staleness is
+    ///   self-correcting: a fresh `record` becomes the newest comment and is found on the very next read,
+    ///   bound or not.
+    /// - Measured on the live board this repair was built against (`gh issue view`, single-issue reads,
+    ///   no board scan): the heaviest rows carried 10-11 comments; `.github#2300` itself gathered 4 in
+    ///   roughly 5h17m while sitting `Ready` and unclaimed. Crossing 100 comments on one row between two
+    ///   re-affirmations was not observed anywhere in this session's evidence.
+    /// - IF IT HAPPENS ANYWAY: a receipt more than `DeliveryRouteCommentWindow` comments behind the
+    ///   issue's own recent activity reads as NO RECEIPT — `DeliveryRoute.Unreadable`/`Stale`, which
+    ///   REFUSES scheduling (`AwaitingDeliveryRouteDecision`) rather than guessing one direction or the
+    ///   other. That is safe (never schedules on a receipt this call could not see) but not free: the row
+    ///   becomes unschedulable until someone posts a fresh receipt — a RECOVERABLE stall, not `.github#2298`'s
+    ///   permanent deadlock (there, no actor was ever positioned to satisfy the gate at all; here, any
+    ///   agent who can comment on the issue clears it with one `delivery-route record`).
+    [<Literal>]
+    let private DeliveryRouteCommentWindow = 100
+
+    /// The route decision is an impure receipt: both the source item and its append-only receipt ledger
+    /// are read immediately before the pure scheduler sees the item.  An unreadable read stays typed as
+    /// unreadable, rather than collapsing into a missing/lightweight decision.
+    let private readDeliveryRouteVerdict (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+        | Error error, _
+        | _, Error error -> DeliveryRoute.Unreadable [ Errors.explain error ]
+        | Ok body, Ok comments ->
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+            DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt
+
+    /// Mutation boundaries need the underlying IO error as well as the fail-closed route verdict.  In
+    /// particular, a rate-limited receipt read must remain EX_RATE for a JSON worker, not be flattened into
+    /// a malformed/missing route and accidentally lose its back-off contract.
+    let private requireCurrentDeliveryRoute (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+        | Error error, _
+        | _, Error error -> Error error
+        | Ok body, Ok comments ->
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+
+            match DeliveryRoute.decide target.Canonical (Some(deliveryRouteRevision body)) receipt with
+            | DeliveryRoute.Current route -> Ok route
+            | DeliveryRoute.Stale reasons
+            | DeliveryRoute.Unreadable reasons ->
+                Error(Errors.Malformed(target.Canonical, "delivery route is not current: " + String.concat "; " reasons))
+
+    let private offlineDeliveryRoute =
+        DeliveryRoute.Current
+            { Schema = DeliveryRoute.Schema; Subject = "offline"; SubjectRevision = "offline"; Route = Some DeliveryRoute.Lightweight
+              Agent = "offline"; Timestamp = "1970-01-01T00:00:00Z"; ReasonCodes = [ "offline" ]; Rationale = "offline diagnostic"
+              DeclaredImpacts = [ "offline" ]; ObservedFacts = [ "offline" ]; SddWorkId = None; SpecHome = None; RequiredGates = [] }
+
+    /// .github#2300 AC1/AC2/AC4: is this candidate's schedulability verdict ALREADY DECIDED by steps
+    /// that run strictly before the route check, so the real delivery-route receipt could not change it?
+    ///
+    /// `Schedulability.schedulable`'s own ordering comment (step "3c. DELIVERY ROUTE") places the route
+    /// match arm AFTER issue state (1), board column (2), blockers (3), and the human hold (3b) — every
+    /// one of which is already a known, free fact by the time a candidate reaches here (`Snapshot.parse`
+    /// plus the board scan `enrichBoardFacts` already ran). So this previews `schedulable` against a
+    /// NEUTRAL placeholder route: `offlineDeliveryRoute` is already `Current`, so it can never itself be
+    /// the reason the preview stops, and the four cases matched below are exactly the verdicts steps
+    /// 1-3b can produce on their own. `inFlight = []` for the same reason — every step this preview can
+    /// reach (1 through 3b) reads neither `item.TouchSet` nor the lock/overlap facts.
+    ///
+    /// A preview verdict OUTSIDE those four cases means steps 1-3b did NOT already decide the item —
+    /// touch-set, lock, or the route itself still could — so the real receipt is read for real (AC3: the
+    /// gate still fails closed for a genuinely schedulable row with a missing/stale/unreadable receipt).
+    let private routeCannotChangeVerdict (allowBacklog: bool) (item: Item) : bool =
+        match Schedulability.schedulable allowBacklog [] { item with DeliveryRoute = offlineDeliveryRoute } with
+        | Schedulability.IssueClosed
+        | Schedulability.WrongStatus _
+        | Schedulability.BlockedBy _
+        | Schedulability.AwaitingHuman _ -> true
+        | _ -> false
+
+    /// THE FIX FOR .github#2300. Before this, every candidate — closed, `Blocked`, `Backlog`-without-opt-
+    /// in, all of them — paid `readDeliveryRouteVerdict`'s two REST reads (`issueBody` plus a
+    /// `commentBodies` that PAGINATES with how much protocol traffic the issue has accumulated, comment
+    /// 4) whether or not the eventual decision would ever consult the answer. On an 887-candidate board
+    /// where the overwhelming majority are exactly those already-decided rows, that is the whole of the
+    /// measured cost.
+    ///
+    /// A candidate `routeCannotChangeVerdict` clears is left UNENRICHED, deliberately: its
+    /// `Item.DeliveryRoute` keeps whatever `Snapshot.parse` defaulted it to (`Unreadable [...]`, read by
+    /// nobody), because `Batch.scheduleWith`'s real `Schedulability.schedulable` call on this same item
+    /// hits the identical early exit and never reaches its own route match arm either. The two engines
+    /// cannot disagree because they are the SAME function, run twice on the same inputs at two different
+    /// times — a preview now, the real decision in `renderLiveDecision` — never two rules that could
+    /// drift (#485).
+    let private enrichDeliveryRoutes (ctx: Context) (request: Snapshot.Request) =
+        { request with
+            Candidates =
+                request.Candidates
+                |> List.map (fun candidate ->
+                    if routeCannotChangeVerdict request.AllowBacklog candidate.Item then
+                        candidate
+                    else
+                        let route = readDeliveryRouteVerdict ctx candidate.Item.Ref
+                        { candidate with Item = { candidate.Item with DeliveryRoute = route } }) }
+
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
     let private scanAndDecide (ctx: Context) (opts: Options) (intent: Cache.ReadIntent) =
@@ -556,7 +758,7 @@ module Client =
     /// truncated. Not `private`, because AC2 asks for a fixture that ranks a cross-repo hub from a
     /// `--repo`-scoped batch, and only this composition — real `Scan.snapshot` bytes, the real enrichment,
     /// the real fold — can answer that. A fixture built on the pieces would pass while the wiring rotted.
-    let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+    let renderLiveDecision (ctx: Context) (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
             for e in errors do
@@ -564,7 +766,7 @@ module Client =
 
             Result.Error ExitError
         | Ok parsed ->
-            let request = enrichBoardFacts rows parsed
+            let request = parsed |> enrichBoardFacts rows |> enrichDeliveryRoutes ctx
 
             match
                 Batch.scheduleWith
@@ -585,6 +787,22 @@ module Client =
             | Verdict.NoVerdict reason ->
                 eprint $"UNDETERMINED — %s{reason}"
                 Result.Error ExitNoVerdict
+
+    /// Pure snapshot projection retained for offline diagnostics. Live board commands use
+    /// `renderLiveDecision`, which always reads the mandatory route ledger immediately before scheduling.
+    let renderDecision (opts: Options) (rows: Scan.Row list) (doc: string) : Result<Batch.BatchResult, int> =
+        match Snapshot.parse doc with
+        | Error errors ->
+            for e in errors do eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
+            Result.Error ExitError
+        | Ok parsed ->
+            let request =
+                parsed |> enrichBoardFacts rows
+                |> fun r -> { r with Candidates = r.Candidates |> List.map (fun c -> { c with Item = { c.Item with DeliveryRoute = offlineDeliveryRoute } }) }
+            match Batch.scheduleWith (boardBlockingCounts rows) request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map _.Item) with
+            | Green result -> Ok result
+            | Red reasons -> reasons |> List.iter (fun r -> eprint $"  %s{r}"); Result.Error ExitRed
+            | Verdict.NoVerdict reason -> eprint $"UNDETERMINED — %s{reason}"; Result.Error ExitNoVerdict
 
     /// The candidates the scheduler LOOKED AT and refused. One spelling, because two call sites print this
     /// list and a third reports its COUNT on the wire (`take --json`'s `passedOver`, .github#1525) — a
@@ -768,7 +986,7 @@ module Client =
         | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts rows doc with
+            match renderLiveDecision ctx opts rows doc with
             | Error code -> code
             | Ok result ->
                 match opts.Render with
@@ -898,6 +1116,149 @@ module Client =
                     |> Seq.toList }
             Ok receipt
         with error -> Error $"the driver receipt is malformed: %s{error.Message}"
+
+    /// One candidate's live board/claim/PR/review/delivery facts, projected into the shape
+    /// `DriverEvents.classify` consumes (.github#2135). Named and pure over its inputs — no `ctx`, no
+    /// IO — precisely so it is unit-testable without a live board scan
+    /// (fsgg:independent-review:v1 round 1, finding 3: "the entire CLI execution path ... has zero
+    /// test coverage"). `reviewByPr`/`mergedFactsByRef` are pre-computed by the caller from the SAME
+    /// live reads `driver`'s existing planning path already performs.
+    let candidateToItemFacts
+        (reviewByPr: Map<int, Driver.ReviewChain>)
+        (mergedFactsByRef: Map<string, int * bool * Delivery.Obligation list>)
+        (now: int64)
+        (sourceSha: string)
+        (candidate: Snapshot.Candidate)
+        : DriverEvents.ItemFacts =
+        let refText = candidate.Item.Ref.Canonical
+        let claimWorker = candidate.Item.Claim |> Option.map (fun (claim, _) -> claim.Worker.Value)
+        let review = candidate.Item.ItemPr |> Option.bind (fun pr -> Map.tryFind pr reviewByPr)
+
+        let merged, obligationsDeclared, obligations, pr =
+            match Map.tryFind refText mergedFactsByRef with
+            | Some(pr, declared, obligations) -> true, declared, obligations, Some pr
+            | None -> false, false, [], candidate.Item.ItemPr
+
+        let evidence =
+            match claimWorker, pr with
+            | Some worker, Some pr -> $"claim:worker=%s{worker};pr=%d{pr}"
+            | Some worker, None -> $"claim:worker=%s{worker}"
+            | None, Some pr -> $"pr:%d{pr}"
+            | None, None -> $"board-status:%A{candidate.Item.Status}"
+
+        { Ref = refText
+          ReadOk = not candidate.Item.ItemPrUnreadable
+          UnreadableReason =
+            if candidate.Item.ItemPrUnreadable then
+                Some "the markerless item-PR probe was unreadable"
+            else
+                None
+          BoardStatus = Some candidate.Item.Status
+          IssueState = Some candidate.Item.State
+          ClaimWorker = claimWorker
+          HumanBlock = candidate.Item.HumanBlock
+          Pr = pr
+          Review = review
+          Merged = merged
+          ObligationsDeclared = obligationsDeclared
+          Obligations = obligations
+          Evidence = evidence
+          ObservedAt = now
+          SourceSha = sourceSha }
+
+    /// Read the durable `driver --events` cursor (.github#2135). No `--cursor` and a `--cursor` path
+    /// that has never been written both read as an empty cursor — a legitimate first run. A path that
+    /// EXISTS but cannot be parsed is a DISTINCT, refused case
+    /// (fsgg:independent-review:v1 round 1, finding 2): "never observed" and "observed and corrupt"
+    /// must not collapse into the same silent `Map.empty`, or a cursor file truncated by a killed
+    /// process reads back exactly as though nothing had ever run — the same fail-open shape this
+    /// module refuses everywhere else (a failed read masquerading as a legitimate "no").
+    ///
+    /// A DIRECTORY at the cursor path is the SAME root cause wearing a different shape
+    /// (fsgg:independent-review:v1 round 2): `File.Exists` returns false for a directory exactly as
+    /// it does for a missing path, so without this check a directory silently read as "never
+    /// written" and fell through into `writeEventsCursorAtomic`, whose `File.Move` cannot rename onto
+    /// an existing directory and threw uncaught — a caller input error misreported as an internal
+    /// engine defect, plus a leaked temp file on the crash. Checked BEFORE `File.Exists` so it is
+    /// refused before either kind of "absent" reasoning is reached.
+    let readEventsCursor (path: string option) : Result<DriverEvents.Cursor, string> =
+        match path with
+        | None -> Ok Map.empty
+        | Some path when Directory.Exists path -> Error $"cursor path '%s{path}' is a directory, not a file"
+        | Some path when not (File.Exists path) -> Ok Map.empty
+        | Some path ->
+            try
+                use document = JsonDocument.Parse(File.ReadAllText path)
+
+                let decoded =
+                    document.RootElement.EnumerateObject()
+                    |> Seq.map (fun prop ->
+                        let raw = prop.Value.GetString()
+
+                        match DriverEvents.decodeState raw with
+                        | Some state -> Ok(prop.Name, state)
+                        | None -> Error $"entry '%s{prop.Name}' has an unrecognized state encoding '%s{raw}'")
+                    |> Seq.toList
+
+                match decoded |> List.tryPick (function Error e -> Some e | Ok _ -> None) with
+                | Some error -> Error $"cursor file '%s{path}' is corrupt: %s{error}"
+                | None -> decoded |> List.choose (function Ok pair -> Some pair | Error _ -> None) |> Map.ofList |> Ok
+            with ex ->
+                Error $"cursor file '%s{path}' could not be parsed: %s{ex.Message}"
+
+    /// Persist the cursor ATOMICALLY (.github#2135 repair round 1, finding 2's second half). A bare
+    /// `File.WriteAllText` truncates the target before writing the new bytes — a process killed
+    /// mid-write leaves a PARTIAL file, which is precisely the corrupt input `readEventsCursor` above
+    /// exists to refuse rather than silently treat as absent. Writing to a sibling temp file in the
+    /// SAME directory, then renaming it over the target, means a crash leaves either the complete OLD
+    /// file or nothing at that path — never a half-written one. `File.Move` with `overwrite: true` is
+    /// a single filesystem rename on the common case (temp and target on the same volume), which is
+    /// guaranteed by placing the temp file beside its target rather than under a system temp root.
+    let writeEventsCursorAtomic (path: string) (cursor: DriverEvents.Cursor) : unit =
+        let json =
+            cursor
+            |> Map.toList
+            |> List.map (fun (ref, state) -> ref, DriverEvents.encodeState state)
+            |> dict
+            |> JsonSerializer.Serialize
+
+        let directory =
+            match Path.GetDirectoryName path with
+            | null | "" -> "."
+            | value -> value
+
+        let tempPath = Path.Combine(directory, $".{Path.GetFileName path}.tmp-{Guid.NewGuid():N}")
+        File.WriteAllText(tempPath, json)
+        File.Move(tempPath, path, true)
+
+    /// The `fsgg.coord.driver-events/1` JSON projection (.github#2135) — named so it is directly
+    /// testable against a hand-built `DriverEvents.Projection` without a live board scan.
+    let renderEventsJson (sourceSha: string) (projection: DriverEvents.Projection) : string =
+        let transitions =
+            projection.Transitions
+            |> List.map (fun e ->
+                {| ref = e.Ref
+                   previous = e.Previous |> Option.map DriverEvents.encodeState |> Option.toObj
+                   state = DriverEvents.encodeState e.New
+                   reason = e.Reason
+                   evidence = e.Evidence
+                   observedAt = e.ObservedAt
+                   sourceSha = e.SourceSha |})
+
+        let activeItems =
+            projection.Active
+            |> List.map (fun c ->
+                {| ref = c.Ref
+                   state = DriverEvents.encodeState c.State
+                   reason = c.Reason
+                   evidence = c.Evidence |})
+
+        JsonSerializer.Serialize
+            {| schema = "fsgg.coord.driver-events/1"
+               sourceSha = sourceSha
+               renderedAt = projection.RenderedAt
+               transitions = transitions
+               active = activeItems |}
 
     /// Live inspection derives occupancy from the same board snapshot as `batch`, never caller input.
     let driver (ctx: Context) (opts: Options) : int =
@@ -1122,6 +1483,63 @@ module Client =
                           ReconcileFresh = receiptValid
                           TriageFresh = receiptValid
                           CurrencyScoped = receiptValid }
+                    if opts.Events then
+                        // The material-transition/active-inventory projection (.github#2135), layered
+                        // over the SAME live board scan and review evidence this command already reads —
+                        // no new REST surface for the review sub-states.
+                        let reviewByPr =
+                            reviewEvidence |> List.map (fun (pr, _, chain, _) -> pr, chain) |> Map.ofList
+
+                        // Obligation/merge facts (clarify DEC-002) are read on the SAME `ItemPr` boundary
+                        // `reviewEvidence` already uses — the markerless-duplicate probe. A claim still
+                        // held by a live marker has no board-recorded PR number to look up by, so a merge
+                        // that happens while the marker is still live classifies `Claimed` rather than
+                        // `MergedAwaitingObligations`/`Released` until the claim releases. That is an
+                        // honest reflection of what a board scan can discover today, not a shortcut this
+                        // projection invents — no other command in this CLI discovers an arbitrary claimed
+                        // item's PR number without the caller supplying it (`delivery --pr N`).
+                        let mergedFactsByRef =
+                            snapshot.Candidates
+                            |> List.choose (fun candidate ->
+                                match candidate.Item.ItemPr with
+                                | Some pr ->
+                                    let owner = candidate.Item.Ref.Owner
+                                    let repo = candidate.Item.Ref.Repo
+                                    match Reads.prLandable ctx.Transport owner repo pr, Reads.prHeadSha ctx.Transport owner repo pr, Reads.commentsWithIdentity ctx.Transport owner repo pr with
+                                    | PrMerged, Ok head, Ok comments ->
+                                        let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                                        match DeliveryApplication.obligationsFromComments head comments with
+                                        | Ok obligations -> Some(candidate.Item.Ref.Canonical, (pr, true, obligations))
+                                        | Error _ -> Some(candidate.Item.Ref.Canonical, (pr, false, []))
+                                    | _ -> None
+                                | None -> None)
+                            |> Map.ofList
+
+                        let facts =
+                            snapshot.Candidates
+                            |> List.map (candidateToItemFacts reviewByPr mergedFactsByRef now sourceSha)
+
+                        match readEventsCursor opts.CursorFile with
+                        | Error message ->
+                            // FAIL CLOSED (.github#2135 repair round 1): a cursor file that exists but
+                            // cannot be parsed is a corrupt read, never a silent "first run". Refusing
+                            // here — rather than falling back to an empty cursor — is what stops a
+                            // truncated file from being read back as though nothing had ever happened.
+                            eprint $"fsgg-coord-engine: driver --events: %s{message}"
+                            ExitError
+                        | Ok priorCursor ->
+                            let projection = DriverEvents.project priorCursor facts now
+
+                            opts.CursorFile
+                            |> Option.iter (fun path -> writeEventsCursorAtomic path projection.Cursor)
+
+                            match opts.Render with
+                            | Json -> printfn "%s" (renderEventsJson sourceSha projection)
+                            | Text -> printfn "%s" (DriverEvents.renderText projection)
+
+                            ExitGreen
+                    else
+
                     let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
                     let workerReturns =
                         snapshot.Candidates
@@ -1167,6 +1585,14 @@ module Client =
                 (tokens |> List.exists (fun token -> TouchSet.covers token file))
                 || Set.contains file generated)
         | _ -> false
+
+    /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
+    /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
+    /// an attempted-but-invalid review into the distinct fact that no review was posted.
+    let deliveryReviewEvidence (landable: bool) (comments: Driver.ReviewComment list) : Driver.ReviewChain option * string option =
+        match Driver.parseReviewComments comments with
+        | Ok parsed -> Some { parsed with ChecksGreen = landable }, None
+        | Error errors -> None, Some(String.concat "; " errors)
 
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
@@ -1215,19 +1641,29 @@ module Client =
                     | Error error, _ -> fail error
                     | _, Error error -> fail error
                     | Ok marker, Ok pending ->
+                        // Preserves the SAME three-way distinction `Schedulability` already draws for
+                        // scheduling (`Undeclared -> NoTouchSet`, `DeclaredNone -> DeliberatelyNoTouchSet`)
+                        // rather than collapsing every empty-ish case into one `Delivery.Known []`, so a
+                        // worker reading `delivery`'s own `noVerdict` can tell a deliberate `Paths: none`
+                        // from a forgotten declaration from an unread body without opening the issue body
+                        // (.github#2233 acceptance 4). `Unreadable` is never posed as any of the three read
+                        // cases: a body nobody read becomes `Delivery.Unread`, so `Delivery.validate` can
+                        // name the read, not the item, as the failure.
                         let declaredPaths =
                             match candidate.Item.TouchSet with
                             | Declared tokens ->
-                                tokens
-                                |> List.map (function | Matchable value | Unmatchable value -> value)
-                            | DeclaredChore -> [ "any" ]
-                            | DeclaredNone
-                            | Undeclared
-                            | Unreadable _ -> []
+                                Delivery.Known(
+                                    tokens
+                                    |> List.map (function | Matchable value | Unmatchable value -> value)
+                                )
+                            | DeclaredChore -> Delivery.Known [ "any" ]
+                            | TouchSet.DeclaredNone -> Delivery.DeclaredNone
+                            | TouchSet.Undeclared -> Delivery.Undeclared
+                            | Unreadable reason -> Delivery.Unread reason
 
-                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
+                        let branchAndPr: Result<string * int option * string * bool * bool * bool * Driver.ReviewChain option * string option * bool * bool * bool * Delivery.Obligation list, Errors.IoError> =
                             match opts.Pr with
-                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, false, false, false, [])
+                            | None -> Ok(Directory.GetCurrentDirectory(), None, "", false, false, false, None, None, false, false, false, [])
                             | Some pr ->
                                 match Reads.prHeadRef ctx.Transport target.Owner target.Repo pr,
                                       Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
@@ -1236,12 +1672,10 @@ module Client =
                                       Reads.prFiles ctx.Transport target.Owner target.Repo pr,
                                       Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
                                 | Ok branch, Ok head, landable, Ok closing, Ok files, Ok comments ->
-                                    let review =
+                                    let review, reviewProblem =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
-                                        |> Driver.parseReviewComments
-                                        |> Result.map (fun parsed -> { parsed with ChecksGreen = landable = PrGreen })
-                                        |> Result.toOption
+                                        |> deliveryReviewEvidence (landable = PrGreen)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
                                     let pathsVerified = deliveryPathsVerified candidate.Item.TouchSet files
@@ -1251,7 +1685,7 @@ module Client =
                                     let obligations = DeliveryApplication.obligationsFromComments head reviewComments
                                     let obligationsDeclared = Result.isOk obligations
                                     let obligations = obligations |> Result.defaultValue []
-                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
+                                    Ok(branch, Some pr, head, itemBranchCanonical, linkageCanonical, pathsVerified, review, reviewProblem, (landable = PrGreen), (landable = PrMerged), obligationsDeclared, obligations)
                                 | Error error, _, _, _, _, _
                                 | _, Error error, _, _, _, _
                                 | _, _, _, Error error, _, _
@@ -1260,7 +1694,7 @@ module Client =
 
                         match branchAndPr with
                         | Error error -> fail error
-                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, landable, merged, obligationsDeclared, obligations) ->
+                        | Ok(branch, pr, head, itemBranchCanonical, closingLinkageCanonical, pathsVerified, review, reviewProblem, landable, merged, obligationsDeclared, obligations) ->
                             let facts: Delivery.Snapshot =
                                 { Freshness =
                                     { ItemRef = target.Short
@@ -1277,6 +1711,7 @@ module Client =
                                   PathsVerified = if pr.IsSome then pathsVerified else false
                                   InReview = pr.IsSome
                                   Review = review
+                                  ReviewProblem = reviewProblem
                                   Landable = landable
                                   Merged = merged
                                   // `done` independently verifies GitHub's merged closing record before it
@@ -1813,7 +2248,7 @@ module Client =
         | Ok(rows, doc, receipt) ->
             sayRepoAdvisory receipt
 
-            match renderDecision opts rows doc with
+            match renderLiveDecision ctx opts rows doc with
             | Error code -> code
             | Ok result ->
                 match result.Chosen with
@@ -2184,38 +2619,46 @@ module Client =
 
                         // A mutation acknowledgement is not a board observation.  Reconciliation is a
                         // truth operation, therefore each accepted field mutation must be followed by a
-                        // fresh scan that proves the projected row contains every requested value.
+                        // fresh resolver read that proves every requested field. Re-scanning the whole
+                        // board after each repair re-runs the expensive closed-row census N times.
                         let verifyWrites (chore: Chore.Chore) (writes: (string * Board.FieldWrite) list) =
-                            match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                            let read field =
+                                Board.itemFieldValue ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field
+                                |> Result.map (Option.defaultValue "")
+
+                            let rec readAll remaining observed =
+                                match remaining with
+                                | [] -> Ok(List.rev observed)
+                                | (field, _) :: tail ->
+                                    match read field with
+                                    | Ok value -> readAll tail ((field, value) :: observed)
+                                    | Error e -> Error e
+
+                            match readAll writes [] with
+                            // `Board.itemFieldValue` says an erased ProjectV2 item is `NotFound "board
+                            // item ..."`; that is the targeted-read equivalent of the old scan not finding
+                            // the row. Preserve the established receipt/diagnostic without treating other
+                            // NotFound, malformed, or transport failures as an absence.
+                            | Error(Errors.NotFound subject) when subject.StartsWith("board item ", StringComparison.Ordinal) ->
+                                Error(None, "the item left the board before fresh verification")
                             | Error e -> Error(None, Errors.explain e)
-                            | Ok freshRows ->
-                                match freshRows |> List.tryFind (fun row -> row.Ref = chore.Subject) with
-                                | None -> Error(None, "the item left the board before fresh verification")
-                                | Some row ->
-                                    let observed field =
-                                        match field with
-                                        | "Status" -> statusWireName row.Status
-                                        | "Blocked by" -> row.BlockedByRaw
-                                        | "Class" -> row.BoardClass |> Option.map itemClassWireName |> Option.defaultValue ""
-                                        | _ -> ""
+                            | Ok observedValues ->
+                                let observed = observedValues |> Map.ofList
 
-                                    let observedValues =
-                                        writes |> List.map (fun (field, _) -> field, observed field)
+                                let mismatches =
+                                    writes
+                                    |> List.choose (fun (field, requested) ->
+                                        let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
+                                        let actual = observed[field]
+                                        if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
 
-                                    let mismatches =
-                                        writes
-                                        |> List.choose (fun (field, requested) ->
-                                            let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
-                                            let actual = observed field
-                                            if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
-
-                                    if List.isEmpty mismatches then
-                                        Ok observedValues
-                                    else
-                                        // A failed comparison is still a successful fresh observation. Keep
-                                        // every actual field/value pair in the receipt so an operator can see
-                                        // which half of a coupled repair projected and which half stayed stale.
-                                        Error(Some observedValues, String.concat "; " mismatches)
+                                if List.isEmpty mismatches then
+                                    Ok observedValues
+                                else
+                                    // A failed comparison is still a successful fresh observation. Keep
+                                    // every actual field/value pair in the receipt so an operator can see
+                                    // which half of a coupled repair projected and which half stayed stale.
+                                    Error(Some observedValues, String.concat "; " mismatches)
 
                         // `BoardClass = None` has two different meanings at two different boundaries:
                         // this scan's row may have an UNSET `Class` value, while this map can prove that
@@ -2493,6 +2936,14 @@ module Client =
     /// The touch-set a claim reserves (or an In-progress item declares) — the `paths` a consumer keys on
     /// (case 25). Read from the issue body; an undeclared or unreadable one is an empty list, because `who`
     /// reports what is reserved, and nothing is reserved on a surface nobody declared.
+    ///
+    /// `Unreadable _ -> []` is an ADVICE consumer, safe as written (.github#2233 scope item 5 audit):
+    /// `who` is purely informational (case 25 above; its production call site's own comment,
+    /// `.github#1794`, says "the reserved touch-set is informational, so a body we could not read is an
+    /// empty list, not a failed `who` — a body is not a lock"). This function never reaches a
+    /// scheduling or verdict decision on the strength of an unread body — it only ever reports what a
+    /// worker may safely treat as reserved, and an unread body reserves nothing to REPORT, whatever it
+    /// may turn out to reserve once read.
     let private pathNames (ts: TouchSet) : string list =
         match ts with
         | Declared tokens ->
@@ -3310,6 +3761,14 @@ module Client =
         match Reads.rateLimit ctx.Transport with
         | Error e -> fail e
         | Ok meter ->
+            let rests =
+                match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                | null
+                | "" -> []
+                | token -> Budget.readRestObservations token
+
+            let fleetState = Budget.fleetState rests |> Budget.fleetStateText
+
             let pending =
                 match Cache.pending () with
                 | Ok entries -> Some(List.length entries)
@@ -3328,7 +3787,9 @@ module Client =
                             {| remaining = meter.Remaining
                                limit = meter.Limit
                                source = "github:/rate_limit" |}
-                           restReported = false
+                           restReported = not rests.IsEmpty
+                           rest = rests
+                           fleetState = fleetState
                            pendingBoardWrites = pending |}
                     )
 
@@ -3341,6 +3802,17 @@ module Client =
                 // own. It reports ONE bucket, read from GitHub's own free `/rate_limit`, and the claim lock
                 // does not live in it. Neither does a secondary limit, which never appears there at all.
                 printfn "GitHub GraphQL points (from GitHub's own /rate_limit): %d / %d remaining" meter.Remaining meter.Limit
+
+                match rests with
+                | [] ->
+                    printfn "REST resource telemetry: unknown (no real-resource header observation yet); fleet unknown for new dispatch."
+                | observations ->
+                    for observation in observations |> List.sortBy _.Resource do
+                        let remaining = observation.Remaining |> Option.map string |> Option.defaultValue "unknown"
+                        let limit = observation.Limit |> Option.map string |> Option.defaultValue "unknown"
+                        let used = observation.Used |> Option.map string |> Option.defaultValue "unknown"
+                        let reset = observation.ResetAt |> Option.map (fun instant -> instant.ToString "o") |> Option.defaultValue "unknown"
+                        printfn "REST %s (real response headers): %s / %s remaining; used %s; reset %s; observed %s; source %s; fleet %s" observation.Resource remaining limit used reset (observation.ObservedAt.ToString "o") observation.Source fleetState
 
                 printfn
                     "REST requests: NOT REPORTED here — /rate_limit's `core` figure disagrees with the counter real requests are billed against on this account, and a SECONDARY (abuse-detection) limit never appears in it. The claim lock lives on REST (ADR-0034 §3), so a healthy line above is not evidence that `claim`/`take`/`who` will run."
@@ -3444,7 +3916,16 @@ module Client =
                 // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
                 // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
                 let heldCheck =
-                    if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    // Re-read the source body and receipt ledger immediately before EVERY claim path —
+                    // including --force and idempotent renewal.  A scheduler snapshot is advisory once
+                    // a CAS/post/status mutation is about to occur; this is the mutation boundary that
+                    // closes the scan-to-claim race and prevents an implicit route after scope changes.
+                    match requireCurrentDeliveryRoute ctx ref with
+                    | Ok _ ->
+                        // The bounded existing claim scan is the first real-resource observation for a
+                        // fresh session.  Check admission only after it, still before the claim CAS/post.
+                        if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+                    | Error error -> Error error
 
                 match heldCheck with
                 | Error e -> failWith opts.Render e
@@ -3504,7 +3985,7 @@ module Client =
                     // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
                     // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
                     // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
-                    let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
+                    let emitClaimReceipt (kind: string) (held: Writes.Held) (statusOutcome, statusPreserved) =
                         let markerObserved, markerId =
                             match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (selfOf w) session ref with
                             | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
@@ -3538,18 +4019,23 @@ module Client =
                                     None, "failed"
 
                         let statusWrite =
-                            match statusOutcome with
-                            | Ok Board.Written -> "written"
-                            | Ok Board.Deferred -> "deferred"
-                            | Ok Board.NotOnBoard -> "not-on-board"
-                            | Error _ -> "failed"
+                            if statusPreserved then
+                                "preserved"
+                            else
+                                match statusOutcome with
+                                | Ok Board.Written -> "written"
+                                | Ok Board.Deferred -> "deferred"
+                                | Ok Board.NotOnBoard -> "not-on-board"
+                                | Error _ -> "failed"
 
                         let pending =
                             match Cache.pending () with
                             | Ok entries -> Some(List.length entries)
                             | Error _ -> None
 
-                        let converged = markerObserved && status = Some "In progress"
+                        let converged =
+                            markerObserved
+                            && (status = Some "In progress" || (kind = "renewed" && statusPreserved && status = Some "In review"))
 
                         let receipt: ClaimReceipt =
                             { Ref = ref
@@ -3578,13 +4064,15 @@ module Client =
                                 | _ -> $"claimed %s{ref.Short} by worker %s{w.Id} ("
 
                             if converged then
-                                printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
+                                let lifecycle = if statusPreserved then "In review preserved" else "Status=In progress"
+                                printfn "%sboard confirmed: marker=%d, %s)" humanPrefix held.MarkerId lifecycle
                             else
                                 let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
                                 printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
                                 eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
 
-                        boardWriteNote ref "Status" "In progress" statusOutcome
+                        if not statusPreserved then
+                            boardWriteNote ref "Status" "In progress" statusOutcome
                         KitDigest.declaredWarn ctx.Transport ref
                         ExitGreen
 
@@ -3614,10 +4102,25 @@ module Client =
 
                     // Move the board column to In progress — the ONE board write, through the queue-aware
                     // path so an exhausted budget defers rather than drops (#510).
-                    let setInProgress () =
+                    let setInProgress preserveReview () =
+                        let write b =
+                            Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+
                         match board.Force() with
-                        | Error e -> Error e
-                        | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                        | Error e -> Error e, false
+                        | Ok b when not preserveReview ->
+                            // A fresh win/steal already owes exactly the pre-claim read plus the
+                            // post-write receipt readback.  Do not add a lifecycle probe to that hot path;
+                            // only an idempotent renewal can preserve an existing review state.
+                            write b, false
+                        | Ok b ->
+                            // A re-claim renews an existing lock; it is not a fresh start.  Moving a row
+                            // from In review back to In progress hides an active critic round, so preserve
+                            // that deliberate lifecycle state and report it distinctly in the receipt.
+                            match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                            | Ok(Some InReview) when preserveReview -> Ok Board.Written, true
+                            | _ ->
+                                write b, false
 
                     let force =
                         if opts.Force then
@@ -3672,24 +4175,38 @@ module Client =
                             ref
                             readPreviousStatus
                             readPathRepo
+                            (fun () ->
+                                if opts.Command = Options.Adopt || not (usesLiveHttp ctx) then Ok()
+                                else
+                                    match Environment.GetEnvironmentVariable "GITHUB_TOKEN" with
+                                    | null | "" -> Error(Errors.RateLimited(Errors.UnknownBudget, None))
+                                    | token ->
+                                        let establish =
+                                            if Budget.fleetState (Budget.readRestObservations token) = Budget.Unknown then
+                                                Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number |> Result.map ignore
+                                            else Ok()
+                                        establish |> Result.bind (fun () ->
+                                            match Budget.fleetState (Budget.readRestObservations token) with
+                                            | Budget.Healthy -> Ok()
+                                            | _ -> Error(Errors.RateLimited(Errors.UnknownBudget, None))) )
                     with
                     | Error e -> failWith opts.Render e
                     | Ok(Writes.Won(held, collected)) ->
                         announceCollected collected
-                        emitClaimReceipt "claimed" held (setInProgress ())
+                        emitClaimReceipt "claimed" held (setInProgress false ())
                     | Ok(Writes.Stolen(held, _, collected)) ->
                         // `announceTheft` has already run — it fired from inside the CAS, the moment the
                         // holder's marker went. All that is left here is the receipt, which reports the
                         // steal as a steal so a scripted caller can tell it from an ordinary win.
                         announceCollected collected
-                        emitClaimReceipt "stolen" held (setInProgress ())
+                        emitClaimReceipt "stolen" held (setInProgress false ())
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
                         // second (a `take` retry, or a worker beating its own lease). Any stale debris it
                         // claimed over was still collected, so tell the evicted workers exactly as a fresh
                         // win does.
                         announceCollected collected
-                        let outcome = setInProgress ()
+                        let outcome = setInProgress true ()
 
                         // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
                         // it renewed a marker on the strength of its worker id alone — and a marker bearing
@@ -4228,6 +4745,7 @@ module Client =
           DeliberatePark "set-field Status Blocked"
           DeliberatePark "set-field --batch Status=Blocked"
           DeliberatePark "add --status Blocked"
+          DeliberatePark "intake apply Status=Blocked"
           DeliberatePark "reconcile ChoreKind.Write StatusNotBlocked→Status=Blocked"
           GuardedRestore "release (recorded previous Status=Blocked)"
           GuardedRestore "reap (recorded previous Status=Blocked)" ]
@@ -4539,6 +5057,10 @@ module Client =
         match worker opts with
         | Error c -> c
         | Ok w ->
+            // A first-ever process has no cached header observation.  Its normal bounded scan is the
+            // one real-resource read that establishes one; admission remains enforced by `claim`
+            // immediately before its mutation.  Blocking here on an empty cache would deadlock every
+            // fresh session (budget -> take could never produce the observation it requires).
             match scanAndDecide ctx { opts with Limit = Some 1 } Cache.Scheduling with
             // #585: a board we could not read is NOT an empty queue — but that distinction is already
             // carried by the code `fail` returns (EX_RATE for a budget, a non-zero read error otherwise),
@@ -4549,7 +5071,7 @@ module Client =
             | Ok(rows, doc, receipt) ->
                 sayRepoAdvisory receipt
 
-                match renderDecision { opts with Limit = Some 1 } rows doc with
+                match renderLiveDecision ctx { opts with Limit = Some 1 } rows doc with
                 | Error code -> code
                 | Ok result ->
                     match result.Chosen with
@@ -4977,30 +5499,22 @@ module Client =
     ///
     /// **WHAT THIS DOES NOT REACH, NAMED RATHER THAN GLOSSED (#266).**
     ///
-    /// - A claim on a **CLOSED** issue. `openIssues` is open-only, so a closed row is never read here and
-    ///   this gate can find no collision on it. **THE TWO ROUTES NO LONGER AGREE, AND THIS IS A KNOWN
-    ///   DIVERGENCE, NOT A DELIBERATE ONE — `.github#2250`.** Until `.github#2225` this bullet read *"and so
-    ///   is the scheduler: `Scan.snapshot` SWEEPS a closed candidate with no marker read at all (#520). The
-    ///   two agree, deliberately."* That agreement was real, and it was the SAME defect on both sides.
-    ///   `#2225` fixed the scheduler half: `Scan.snapshot` now sweeps only a closed **and STAMPED** row, so a
-    ///   closed-but-unstamped holder — the post-merge window — is read, reserves its touch-set, and is named
-    ///   by `batch`/`take`. This path was not changed with it, so measured over one such holder the two now
-    ///   answer opposite: the scheduler refuses the overlapping candidate and names its holder, while
-    ///   `overlap --active` answers `DISJOINT` with exit 0. `widen` gates its `#523` re-check on this same
-    ///   scan (below), so a worker widening into a held tree lands the declaration and the holder is never
-    ///   told.
+    /// - ~~A claim on a CLOSED issue.~~ **CLOSED by `.github#2250`.** `openIssues` remains open-only, but
+    ///   `activeCollisions` now unions its token-filtered candidates with same-repo board rows that are
+    ///   CLOSED and not `Done`, then reads each such body's declared paths before it reads a matching
+    ///   marker. A closed-but-unstamped post-merge holder therefore reserves on both this gate and
+    ///   `Scan.snapshot`; `overlap --active`, `widen`, `batch`, and `take` name the same holder rather than
+    ///   disagreeing.
     ///
-    ///   The direction is the safe one — `take` refuses what this gate permits, so the two-workers-in-one-
-    ///   tree failure (#1858's class) stays blocked — which is why `#2225` closed without closing this.
-    ///   Repairing it means giving `activeCollisions` a different candidate universe, and that is a GraphQL
-    ///   cost decision against the budget table above, not a one-line edit. `.github#2250` owns it.
+    ///   The cost is deliberate and measured: a cold gate pays the cached board universe (bootstrap's two
+    ///   resolver queries plus one board page) and one REST body read per closed, unstamped same-repo row.
+    ///   It still token-shortlists before every neighbour marker read, so it does not reintroduce the old
+    ///   per-In-progress marker sweep. `ApplicationServiceTests` and `coord-engine-e2e/writes.sh` pin both
+    ///   the cross-route result and this 3-GraphQL cold cost.
     ///
-    ///   **The citation of `#520` is deliberately gone.** The old sentence pinned this licence to `#520`'s
-    ///   sweep test — and `#2225` moved that very test's fixture from `Status = Ready` to `Status = Done`,
-    ///   falsifying the licence by editing the test it named, with nothing connecting the two. That is the
-    ///   exact shape `#2225` exists to stop (`Scan.fs`'s own note: a site licensed by a claim about another
-    ///   site, falsified without either able to notice), so it is not repeated here: this bullet now states
-    ///   what these two routes DO, and names the row that owns the gap.
+    ///   The old citation to `#520` stays absent: `#2225` moved that fixture from `Ready` to `Done`, which
+    ///   falsified the licence that had cited it. The replacement assertion drives one CLOSED, unstamped
+    ///   holder across BOTH production surfaces, so a future candidate-universe drift turns red.
     /// - A marker that is **not yet visible** to a reader that just posted it. That is `.github#1668`, it
     ///   would defeat any marker-keyed scan, and it is explicitly not absorbed here.
     /// - A **stale-but-unreaped** claim. `winner` applies the lease, so a lapsed claim reserves nothing
@@ -5042,10 +5556,46 @@ module Client =
                     |> Option.bind (fun marker -> marker.PathRepo)
                     |> Option.defaultValue ref.Repo)
 
-        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo with
-        | Error e, _ -> Error e
-        | _, Error e -> Error e
-        | Ok targetPathRepo, Ok issues ->
+        // .github#2250 — `openIssues` is necessarily OPEN-only, but a CLOSED item is not terminal until
+        // its green Done stamp exists.  The scheduler already reads a closed-but-unstamped board row and
+        // lets its marker reserve paths during that post-merge window.  This gate must use that same
+        // candidate universe: a successful `widen` / `overlap --active` is final evidence workers act on,
+        // not an advisory that may disagree with `take`.
+        //
+        // COST, MADE EXPLICIT.  This adds the scheduler's cached Projects scan (normally one GraphQL page;
+        // the map bootstrap is day-cached) plus one REST body read per closed, unstamped row in THIS repo.
+        // It deliberately does not reinstate a per-In-progress-row marker sweep: tokens still shortlist
+        // candidates before their marker is read.  The post-merge set is normally tiny and bounded by
+        // unfinished delivery, while a false DISJOINT has no later CAS to repair it.
+        let closedUnstampedIssues =
+            Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+            |> Result.bind (fun board ->
+                Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number)
+            |> Result.bind (fun rows ->
+                rows
+                |> List.filter (fun row ->
+                    row.Ref.Owner = ref.Owner
+                    // repo-filter-monopoly: exempt — REF-to-REF identity comparison, not a `--repo` filter.
+                    && row.Ref.Repo = ref.Repo
+                    && not row.IsPullRequest
+                    && row.State = Closed
+                    && row.Status <> BoardStatus.Done)
+                |> List.fold
+                    (fun state row ->
+                        state
+                        |> Result.bind (fun issues ->
+                            Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number
+                            |> Result.map (fun body ->
+                                ({ Number = row.Ref.Number
+                                   Body = Reads.BodyRead body }: Reads.OpenIssue)
+                                :: issues)))
+                    (Ok []))
+
+        match targetPathRepo, Reads.openIssues ctx.Transport ref.Owner ref.Repo, closedUnstampedIssues with
+        | Error e, _, _ -> Error e
+        | _, Error e, _ -> Error e
+        | _, _, Error e -> Error e
+        | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -5054,7 +5604,7 @@ module Client =
             // order, which is the project's, which no caller can predict — and `widen --json`'s
             // `collisions` array is a machine contract.
             let colliding =
-                issues
+                List.append openIssues closedIssues
                 |> List.sortBy (fun i -> i.Number)
                 |> List.choose (fun issue ->
                     if issue.Number = ref.Number then
@@ -5353,11 +5903,71 @@ module Client =
                                     with
                                     | Error e -> fail e
                                     | Ok collisions ->
-                                        match Writes.widen ctx.Transport held rewritten with
-                                        | Error e -> fail e
-                                        | Ok() ->
-                                            let paths = String.Join(", ", proposed.Tokens)
+                                        let paths = String.Join(", ", proposed.Tokens)
 
+                                        // #2323 round 1 — THE JSON PROJECTION MUST NAME WHAT THE ITEM ACTUALLY DECLARES,
+                                        // NOT WHAT WAS REQUESTED. `Render.fsi`'s own doc for `PathUpdateReceipt.Paths` is
+                                        // "the tokens the item now declares" — on a REFUSED update (`committed = false`)
+                                        // that is `priorTokens`, byte-identical to before the call, never
+                                        // `proposed.Tokens`. The Text projection above already gates on `committed`;
+                                        // this closure takes the SAME flag so the two projections cannot disagree about
+                                        // one call's outcome — a caller gating on the exit code and then trusting this
+                                        // field is exactly the false belief #2306's AC1 exists to rule out, and it is
+                                        // truer of the machine surface than of the human one, since a program reads it
+                                        // unattended.
+                                        let receipt (committed: bool) (collisions: PathCollision list) : string =
+                                            renderPathUpdateJson
+                                                { Ref = ref
+                                                  Worker = w.Id
+                                                  Kind = past
+                                                  Paths = (if committed then proposed.Tokens else priorTokens)
+                                                  Collisions = collisions }
+
+                                        // #2306 — REFUSE THE WRITE ONLY WHEN *THIS CALL'S OWN NEW TOKENS* COLLIDE, NOT
+                                        // WHENEVER THE FULL PROPOSED DECLARATION STILL SHOWS ANY COLLISION AT ALL.
+                                        //
+                                        // `collisions` above is unchanged — the #353 scan over the WHOLE proposed body,
+                                        // exactly as it always ran, and it still drives the DISJOINT/OVERLAP verdict and
+                                        // exit code below exactly as before. What #2306 fixes is narrower: `Writes.widen`
+                                        // used to run unconditionally once that scan merely COMPLETED (`Ok _`), so a scan
+                                        // that found a real collision still landed the PATCH — #2248's shape, where a
+                                        // widen's newly REQUESTED path itself overlapped a live claim and got written
+                                        // anyway. But a NARROWING (or an addition of a genuinely disjoint token) can
+                                        // surface a collision that predates the command and that the command's own tokens
+                                        // had no part in — the #1740 AC5 reasoning below — and refusing to write THAT
+                                        // would block the very narrowing this protocol recommends as the remedy (the
+                                        // courtesy notice below says exactly "narrow with `set-paths`"). So the write is
+                                        // gated on whether a NEW token — one `priorTokens` did not already carry — is
+                                        // itself part of a reported collision, not on whether the declaration merely
+                                        // still shows one. `TouchSet.decideUpdate` is the one place the ALL-OR-NOTHING
+                                        // refusal rule for a collision so attributed is stated (see its `.fsi` doc); this
+                                        // call site supplies the attribution, not the threshold.
+                                        let newTokenStems =
+                                            proposed.Tokens
+                                            |> List.filter (fun t -> not (List.contains t priorTokens))
+                                            |> List.map TouchSet.stem
+                                            |> Set.ofList
+
+                                        let introducedCollision =
+                                            collisions
+                                            |> List.exists (fun (_, _, toks) -> toks |> List.exists newTokenStems.Contains)
+
+                                        let write =
+                                            match TouchSet.decideUpdate introducedCollision with
+                                            | TouchSet.CommitUpdate ->
+                                                Writes.widen ctx.Transport held rewritten |> Result.map (fun () -> true)
+                                            // NO PATCH IS ISSUED ON THIS PATH — that is the whole fix. `held`/`rewritten`
+                                            // are never handed to `Writes.widen`, so the body `Reads.issueBody` read
+                                            // above is exactly what remains: a widen/set-paths refused because ITS OWN
+                                            // requested paths collide leaves `Paths:` byte-identical (#2306 AC1/AC2), for
+                                            // a full collision or a partial one alike, since this command already
+                                            // computes ONE merged/replaced declaration and gates that ONE write — there
+                                            // is no per-token partial commit to leave behind.
+                                            | TouchSet.RefuseUpdate -> Ok false
+
+                                        match write with
+                                        | Error e -> fail e
+                                        | Ok committed ->
                                             // #1517 — THE RENDER MODE IS HONOURED HERE, and it was not before. `--json`
                                             // is `Global` in `scopeOf` and `command-contract` advertises it on both
                                             // verbs, so the parser accepted it, the residue rule had nothing to refuse,
@@ -5367,36 +5977,32 @@ module Client =
                                             // `widened <ref> → Paths: a, b` out of stdout and the overlap verdict out
                                             // of STDERR to learn what it had just done.
                                             //
-                                            // The TEXT projection below is byte-identical to what it has always been,
-                                            // deliberately: every existing recipe reads it. This is an addition.
-                                            //
-                                            // The JSON object cannot be written HERE, though the human receipt is: it
-                                            // carries the collision list, and whether each colliding holder was
-                                            // successfully NOTIFIED is not known until the notify loop has run. So the
-                                            // Json arm emits ONE object at the end of whichever branch it takes, and
-                                            // never a partial receipt first — a machine consumer gets one document per
-                                            // invocation or none.
+                                            // The TEXT projection is byte-identical to what it has always been WHEN THE
+                                            // WRITE LANDED (`committed`), deliberately: every existing recipe reads it.
+                                            // #2306 — when it did NOT land, the line must not claim it did.
                                             match opts.Render with
                                             | Json -> ()
-                                            | Text -> printfn "%s %s → Paths: %s" past ref.Short paths
+                                            | Text ->
+                                                if committed then
+                                                    printfn "%s %s → Paths: %s" past ref.Short paths
+                                                else
+                                                    printfn
+                                                        "refused to %s %s's touch-set → Paths: unchanged (%s would overlap a live claim)"
+                                                        action
+                                                        ref.Short
+                                                        paths
 
                                             // Declaration time is the cheap moment to learn that editing a kit source
                                             // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
                                             // It is stderr-only, so it cannot corrupt the JSON projection.
                                             KitDigest.digestWarn ()
 
-                                            let receipt (collisions: PathCollision list) : string =
-                                                renderPathUpdateJson
-                                                    { Ref = ref
-                                                      Worker = w.Id
-                                                      Kind = past
-                                                      Paths = proposed.Tokens
-                                                      Collisions = collisions }
-
                                             match collisions with
                                             | [] ->
+                                                // `collisions = []` implies `committed = true`: an empty scan can never
+                                                // report an introduced collision, so `decideUpdate` always commits here.
                                                 match opts.Render with
-                                                | Json -> printfn "%s" (receipt [])
+                                                | Json -> printfn "%s" (receipt true [])
                                                 | Text ->
                                                     printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
 
@@ -5404,7 +6010,11 @@ module Client =
                                             | collisions ->
                                                 // The notify is the part a worker cannot do alone. A post that fails is
                                                 // reported, but the collision still stands — it does not become DISJOINT.
-
+                                                // This runs whether or not `committed` — #2306 does not withhold the
+                                                // courtesy notice from a REFUSED attempt: the other holder still benefits
+                                                // from knowing an overlapping request was made, even though nothing
+                                                // landed on this item, and #353's guarantee holds either way.
+                                                //
                                                 // #1517 — the notify OUTCOME is collected as it is printed, because the
                                                 // JSON receipt carries it. The stderr lines below are unchanged and are
                                                 // emitted in BOTH projections: they are operator diagnostics, not the
@@ -5440,7 +6050,14 @@ module Client =
                                                                 else
                                                                     "I do not know which of us declared these paths first, so this may or may not be new"
 
-                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            // #2306 — NEVER CLAIM A COMPLETED WRITE THAT DID NOT HAPPEN.
+                                                            // When `committed` this is byte-identical to the pre-#2306
+                                                            // copy; when not, it names the ATTEMPT and the REFUSAL instead
+                                                            // of asserting a mutation that never landed.
+                                                            if committed then
+                                                                $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            else
+                                                                $"heads up: I attempted to %s{action} %s{ref.Short} (to `Paths: %s{paths}`), which would overlap your touch-set here (%s{toksText}). The request was REFUSED, and nothing was changed on my item. %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
                                                         match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
                                                         | Error e ->
@@ -5474,12 +6091,13 @@ module Client =
                                                 // split is the half of this defect a machine consumer could not work
                                                 // around at all (#1517 AC2).
                                                 match opts.Render with
-                                                | Json -> printfn "%s" (receipt notified)
+                                                | Json -> printfn "%s" (receipt committed notified)
                                                 | Text -> ()
 
                                                 // A real same-repo collision exits non-zero (engine ExitContended=6;
                                                 // bash's literal 1 disposed on the record, ADR-0040 §5). UNCHANGED by
-                                                // #1517: the renderer was the bug, the verbs' semantics were not.
+                                                // #1517/#2306: the renderer and the write gate were the bugs, the exit
+                                                // code semantics were not.
                                                 ExitContended
 
     let widen (ctx: Context) (opts: Options) : int = updateTouchSet Union ctx opts
@@ -8016,6 +8634,261 @@ module Client =
             // condition worth retrying as the one condition never worth retrying.
             | Error e -> fail e
 
+    /// #2134's receipt-first intake transaction. The receipt is persisted immediately after the only
+    /// REST create, so a retry repairs the same issue's projection rather than issuing a second POST.
+    /// Execute the live receipt-first intake transaction.  This is public so the transaction can be
+    /// driven over a recording transport: the tests must count the issue-create POST, not infer it
+    /// from a later board result.
+    let intakeCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ action; path ] ->
+            match IntakeApplication.readDraft path, action with
+            | Error reason, _ -> eprint $"fsgg-coord-engine: intake: %s{reason}"; ExitError
+            | Ok draft, "validate" ->
+                match Intake.validate draft with
+                | Ok _ ->
+                    printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"validated\",\"draftId\":%s,\"writes\":0}" (JsonSerializer.Serialize draft.Id)
+                    ExitGreen
+                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
+            | Ok draft, "apply" ->
+                match Intake.validate draft |> Result.bind (fun valid -> IntakeApplication.validateLivePaths valid |> Result.map (fun () -> valid) |> Result.mapError (fun reason -> [ { Intake.Finding.Field = "paths"; Detail = reason } ])) with
+                | Error findings -> eprint (findings |> List.map (fun f -> $"%s{f.Field} %s{f.Detail}") |> String.concat "; "); ExitError
+                | Ok _ ->
+                    let dependencyGuard =
+                        match draft.BlockedBy with
+                        | None -> Ok()
+                        | Some raw ->
+                            match parseRefIn draft.Owner (Some draft.Repository) raw with
+                            | Error reason -> Error(Errors.Malformed(draft.Id, $"Blocked dependency is not canonical: %s{reason}"))
+                            | Ok dependency ->
+                                Reads.blockerState ctx.Transport dependency.Owner dependency.Repo dependency.Number
+                                |> Result.bind (function
+                                    | Types.BlockerOpen -> Ok()
+                                    | Types.BlockerClosed | Types.BlockerMerged -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is already resolved"))
+                                    | Types.BlockerUnknown | Types.BlockerUnparseable -> Error(Errors.Malformed(draft.Id, $"Blocked dependency %s{dependency.Canonical} is not live/readable")))
+                    let receiptTransactionCore () =
+                        match Cache.getIntakeReceipt draft.Id with
+                        | Error e -> Error(Errors.Malformed(draft.Id, e))
+                        | Ok(Some receipt) ->
+                            IntakeReceipt.validate draft receipt
+                            |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                            |> Result.map (fun r -> { Owner = r.Owner; Repo = r.Repository; Number = r.IssueNumber })
+                        | Ok None ->
+                            let digest = IntakeReceipt.digest draft
+                            let intent =
+                                Cache.getIntakeIntent draft.Id
+                                |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                |> Result.bind (function
+                                    | None -> Ok None
+                                    | Some stored when stored.Owner = draft.Owner && stored.Repository = draft.Repository && stored.DraftDigest = digest -> Ok(Some stored)
+                                    | Some _ -> Error(Errors.Malformed(draft.Id, "intake intent does not match this draft")))
+                            intent |> Result.bind (fun intent ->
+                              Reads.duplicateCandidates ctx.Transport draft.Owner draft.Repository
+                              |> Result.bind (fun candidates ->
+                                let matches = candidates |> List.filter (fun c -> c.Title = draft.Title)
+                                let provenance = IntakeReceipt.marker draft
+                                let persist number =
+                                    let receipt: IntakeReceipt.Receipt = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; IssueNumber = number; DraftDigest = digest }
+                                    Cache.putIntakeReceipt receipt |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                    |> Result.map (fun () -> { Owner = draft.Owner; Repo = draft.Repository; Number = number })
+                                match draft.Disposition, matches, intent with
+                                | Some Intake.Reuse, [ c ], _ -> persist c.Number
+                                | Some Intake.Reuse, [], _ -> Error(Errors.Malformed(draft.Id, "reuse was selected but no duplicate candidate matches the title"))
+                                | Some Intake.Reuse, _, _ -> Error(Errors.Malformed(draft.Id, "reuse is ambiguous because multiple duplicate candidates match the title"))
+                                | Some Intake.Create, [ c ], Some _ when not c.IsPullRequest && c.Body.Contains(provenance, StringComparison.Ordinal) -> persist c.Number
+                                | Some Intake.Create, _ :: _, _ ->
+                                    Error(Errors.Malformed(draft.Id, "a duplicate candidate matches the title; select reuse or revise the draft"))
+                                | Some Intake.Create, [], _ ->
+                                    let intent: Cache.IntakeIntent = { DraftId = draft.Id; Owner = draft.Owner; Repository = draft.Repository; DraftDigest = digest }
+                                    Cache.putIntakeIntent intent
+                                    |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                                    |> Result.bind (fun () -> Writes.createIntake ctx.Transport draft)
+                                    |> Result.bind (fun created -> persist created.Number)
+                                | None, _, _ -> Error(Errors.Malformed(draft.Id, "draft disposition is missing"))))
+                    let receiptTransaction () = dependencyGuard |> Result.bind (fun () -> receiptTransactionCore ())
+                    let receiptResult =
+                        Cache.withIntakeLock draft.Id receiptTransaction
+                        |> Result.mapError (fun message -> Errors.Malformed(draft.Id, message))
+                        |> Result.bind id
+                    match receiptResult with
+                    | Error e -> fail e
+                    | Ok issue ->
+                        let preProjectionReadyGuard =
+                            if draft.Status <> "Ready" then Ok()
+                            else
+                                Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number
+                                |> Result.bind (fun body ->
+                                    if body.Contains("Blocked by:", StringComparison.OrdinalIgnoreCase)
+                                       || body.Contains("Blocked on: human/", StringComparison.OrdinalIgnoreCase)
+                                       || body.Contains("Judgement question:", StringComparison.OrdinalIgnoreCase) then
+                                        Error(Errors.Malformed(draft.Id, "Ready is refused while the reused/live issue still declares a dependency or human choice"))
+                                    else
+                                        match readDeliveryRouteVerdict ctx issue with
+                                        | DeliveryRoute.Current _ -> Ok()
+                                        | DeliveryRoute.Stale reasons
+                                        | DeliveryRoute.Unreadable reasons ->
+                                            Error(Errors.Malformed(draft.Id, "Ready is refused until a current delivery-route receipt exists: " + String.concat "; " reasons)))
+                        match preProjectionReadyGuard, Reads.issueState ctx.Transport issue.Owner issue.Repo issue.Number, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title, worker opts with
+                        | Error e, _, _, _ -> fail e
+                        | _, Error e, _, _ -> fail e
+                        | _, _, Error e, _ -> fail e
+                        | _, _, _, Error code -> code
+                        | Ok(), Ok issueState, Ok board, Ok w ->
+                            let readyGuard =
+                                if draft.Status <> "Ready" then Ok()
+                                elif issueState = IssueState.Closed then Error(Errors.Malformed(draft.Id, "Ready is refused for a closed issue"))
+                                else
+                                    Reads.markerScan ctx.Transport issue.Owner issue.Repo issue.Number
+                                    |> Result.bind (Reads.requireCompleteMarkerScan issue.Canonical)
+                                    |> Result.bind (fun markers ->
+                                        if not (List.isEmpty markers) then Error(Errors.Malformed(draft.Id, "Ready is refused while a claim is live"))
+                                        else Reads.prAlive ctx.Transport issue.Owner issue.Repo issue.Number
+                                             |> Result.bind (function
+                                                 | Types.LeaseExpiredNoPr -> Ok()
+                                                 | Types.LivenessUnknown -> Error(Errors.Malformed(draft.Id, "Ready eligibility could not verify implementation PR/branch absence"))
+                                                 | _ -> Error(Errors.Malformed(draft.Id, "Ready is refused while an implementation PR or branch is live"))))
+                            match readyGuard with
+                            | Error e -> fail e
+                            | Ok() ->
+                            // Intake's validated draft carries the dependency/sentinel and createIntake
+                            // persists it in the issue body. The atomic batch below establishes Status and
+                            // Blocked by together; the legacy single-write preflight cannot require the
+                            // not-yet-written board field without making coherent creation unreachable.
+                            match (Ok(): Result<unit, int>) with
+                            | Error code -> code
+                            | Ok() ->
+                                match Board.addItem ctx.Transport board issue.Owner issue.Repo issue.Number with
+                                | Error e -> fail e
+                                | Ok _ ->
+                                    let writes =
+                                        [ yield "Status", Board.Set draft.Status
+                                          yield "Class", Board.Set draft.Class
+                                          match draft.Phase with Some value -> yield "Phase", Board.Set value | None -> ()
+                                          match draft.Severity with Some value -> yield "Severity", Board.Set value | None -> ()
+                                          match draft.BlockedBy with Some value -> yield "Blocked by", Board.Set value | None -> () ]
+                                    match Board.boardWriteBatch ctx.Transport board issue.Owner issue.Repo issue.Number writes w.Id with
+                                    | Error e -> fail e
+                                    | Ok Board.Deferred -> eprint "fsgg-coord-engine: intake projection is queued; retry after flush (no second POST)."; Errors.ExRate
+                                    | Ok Board.NotOnBoard -> eprint "fsgg-coord-engine: intake add did not produce a readable board item."; ExitError
+                                    | Ok Board.Written ->
+                                        for field, write in writes do
+                                            let value = match write with Board.Set value -> value | Board.Clear -> ""
+                                            let queued: Cache.Deferred =
+                                                { Ref = issue.Canonical; Field = field; Value = value; At = ""; Worker = w.Id
+                                                  Board = Some(board.Owner, board.Title) }
+                                            Cache.dropPending queued
+                                        let readback =
+                                            writes
+                                            |> List.fold (fun state (field, write) ->
+                                                state |> Result.bind (fun () ->
+                                                    let expected = match write with Board.Set value -> Some value | Board.Clear -> None
+                                                    Board.itemFieldValue ctx.Transport board issue.Owner issue.Repo issue.Number field
+                                                    |> Result.bind (fun actual ->
+                                                        if actual = expected then Ok()
+                                                        else Error(Errors.Malformed(draft.Id, $"fresh %s{field} readback did not match the requested projection"))))) (Ok())
+                                        match readback with
+                                        | Error e -> fail e
+                                        | Ok() ->
+                                            let disposition = match draft.Disposition with Some Intake.Create -> "create" | Some Intake.Reuse -> "reuse" | None -> "unknown"
+                                            let fields = writes |> List.map fst |> JsonSerializer.Serialize
+                                            match Cache.pending () with
+                                            | Error e -> fail e
+                                            | Ok pending ->
+                                                let boardIdentity = $"{{\"owner\":{JsonSerializer.Serialize board.Owner},\"title\":{JsonSerializer.Serialize board.Title},\"number\":%d{board.Number},\"id\":{JsonSerializer.Serialize board.Id}}}"
+                                                let issueUrl = $"https://github.com/%s{issue.Owner}/%s{issue.Repo}/issues/%d{issue.Number}"
+                                                printfn "{\"schema\":\"fsgg.coord.intake-result/v1\",\"kind\":\"applied\",\"draftId\":%s,\"issue\":%s,\"issueUrl\":%s,\"dedupeDisposition\":%s,\"board\":%s,\"status\":%s,\"fields\":%s,\"projectionFresh\":true,\"pendingWrites\":%d,\"judgementQuestion\":%s}" (JsonSerializer.Serialize draft.Id) (JsonSerializer.Serialize issue.Canonical) (JsonSerializer.Serialize issueUrl) (JsonSerializer.Serialize disposition) boardIdentity (JsonSerializer.Serialize draft.Status) fields pending.Length (JsonSerializer.Serialize draft.JudgementQuestion)
+                                                ExitGreen
+            | Ok _, _ -> eprint "fsgg-coord-engine: intake: expected validate or apply"; ExitError
+        | _ -> eprint "fsgg-coord-engine: intake: usage intake <validate|apply> <draft.json>"; ExitError
+
+    /// Read the full evidence pair from GitHub.  The issue body is the source-bound subject and comments
+    /// are the append-only receipt ledger: a failure in either direction is not a missing decision.
+    /// `show` renders only the CURRENT (latest-matching) receipt (`kind = "current"`, never a history), so
+    /// it needs exactly the same bounded search `readDeliveryRouteVerdict`/`requireCurrentDeliveryRoute`
+    /// do — the third and last of the three near-identical marker searches this repair unifies onto
+    /// `Reads.recentCommentBodies` (.github#2300 repair 2).
+    let private deliveryRouteFact (ctx: Context) (target: Ref) =
+        match Reads.issueBody ctx.Transport target.Owner target.Repo target.Number,
+              Reads.recentCommentBodies ctx.Transport target.Owner target.Repo target.Number DeliveryRouteCommentWindow with
+        | Error error, _
+        | _, Error error -> Error error
+        | Ok body, Ok comments ->
+            let revision = deliveryRouteRevision body
+            let receipt =
+                comments
+                |> List.rev
+                |> List.tryPick (fun comment ->
+                    if comment.StartsWith(DeliveryRouteMarker + "\n", StringComparison.Ordinal) then
+                        DeliveryRouteApplication.decode (comment.Substring(DeliveryRouteMarker.Length).Trim()) |> Result.toOption
+                    else None)
+            match DeliveryRoute.decide target.Canonical (Some revision) receipt with
+            | DeliveryRoute.Current valid -> Ok(valid, revision)
+            | DeliveryRoute.Stale errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+            | DeliveryRoute.Unreadable errors -> Error(Errors.Malformed(target.Canonical, String.concat "; " errors))
+
+    /// Not `private`: the command-boundary test (`DeliveryRouteCliTests`) drives `record`/`show` directly
+    /// against a scripted transport, the same way `Client.claim` already is by `ForceStealTests`.
+    let deliveryRouteCmd (ctx: Context) (opts: Options) : int =
+        let target arg = parseRef ctx arg
+        match opts.Args with
+        | [ "show"; arg ] ->
+            match target arg with
+            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Ok ref ->
+                match deliveryRouteFact ctx ref with
+                | Error error -> fail error
+                | Ok(receipt, revision) ->
+                    let route =
+                        match receipt.Route with
+                        | Some DeliveryRoute.Lightweight -> "lightweight"
+                        | Some DeliveryRoute.SddRequired -> "sdd-required"
+                        | None -> ""
+                    // #2298: the SDD package's on-disk readiness is reported, not enforced here — the
+                    // claimed worker is the actor who completes it, and this command must stay readable
+                    // (and postable, below) before that worker exists.
+                    let sddNotes = sddEvidenceErrors receipt
+                    printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "current"; subject = receipt.Subject; subjectRevision = revision; route = route; reasonCodes = receipt.ReasonCodes; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                    ExitGreen
+        | [ "record"; arg; path ] ->
+            match target arg with
+            | Error message -> eprint $"fsgg-coord-engine: delivery-route: %s{message}"; ExitError
+            | Ok ref ->
+                try
+                    let raw = File.ReadAllText path
+                    match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number, DeliveryRouteApplication.decode raw with
+                    | Error error, _ -> fail error
+                    | _, Error reason -> eprint $"fsgg-coord-engine: delivery-route: %s{reason}"; ExitError
+                    | Ok body, Ok receipt ->
+                        let revision = deliveryRouteRevision body
+                        match DeliveryRoute.validate ref.Canonical revision receipt with
+                        | Error errors ->
+                            let detail = String.concat "; " errors
+                            eprint $"fsgg-coord-engine: delivery-route: %s{detail}"
+                            ExitError
+                        | Ok valid ->
+                            // #2298: an `sdd-required` decision records on the strength of the AGENT'S
+                            // explicit, structurally valid receipt alone.  The coordinator authoring it
+                            // holds no worktree and cannot produce `work/<id>/spec.md` or the readiness
+                            // analysis (SB-002 of work/2137-delivery-route/spec.md: fsgg-coord does not
+                            // author SDD specifications). Requiring that package to exist here made
+                            // `sdd-required` permanently unrecordable for any item that did not already
+                            // carry one — the deadlock this fix removes. The evidence is still read and
+                            // reported so the ledger carries the honest state at record time; it never
+                            // refuses the write. The claimed worker owns completing it, before touching
+                            // the item's declared `Paths:` (see `.claude/skills/pnext-item` step 1).
+                            let sddNotes = sddEvidenceErrors valid
+                            if not (List.isEmpty sddNotes) then
+                                let detail = String.concat "; " sddNotes
+                                eprint $"fsgg-coord-engine: delivery-route: recording sdd-required ahead of its SDD package (%s{detail}) — the claimed worker owns producing it before touching Paths."
+                            let marker = DeliveryRouteMarker + "\n" + raw.Trim()
+                            match Writes.postIssueComment ctx.Transport ref marker with
+                            | Error error -> fail error
+                            | Ok commentId ->
+                                printfn "%s" (JsonSerializer.Serialize {| schema = "fsgg.coord.delivery-route-result/v1"; kind = "recorded"; subject = valid.Subject; subjectRevision = revision; commentId = commentId; sddPackageReady = List.isEmpty sddNotes; sddPackageNotes = sddNotes |})
+                                ExitGreen
+                with error -> eprint $"fsgg-coord-engine: delivery-route: %s{error.Message}"; ExitError
+        | _ -> eprint "fsgg-coord-engine: delivery-route: usage delivery-route <show REF|record REF receipt.json>"; ExitError
+
     let run (opts: Options) : int =
         // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
         // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
@@ -8105,4 +8978,6 @@ module Client =
             | Flush -> flushCmd ctx opts
             | LintCmd -> lint ctx opts
             | Issues -> issues ctx opts
+            | IntakeCmd -> intakeCmd ctx opts
+            | RouteCmd -> deliveryRouteCmd ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

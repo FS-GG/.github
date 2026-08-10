@@ -26,6 +26,10 @@ module Options =
         | Facts
         /// Emit the parser's command/flag surface as JSON for documentation and tooling gates.
         | CommandContractCmd
+        /// Validate an intake draft, or report that its live transaction is not yet available.
+        | IntakeCmd
+        /// Record, inspect, or validate an explicit delivery-route receipt.
+        | RouteCmd
 
         // ---- the client command surface (ADR-0040 Phase D — wired to the IO layer) --------------------
 
@@ -148,6 +152,11 @@ module Options =
           /// let `done --json --text` slip the `--json` it cannot honour past the residue rule unnamed.
           RenderGiven: Set<Render>
           SnapshotFile: string option
+          /// `driver --events` (.github#2135) — derive the material-transition/active-inventory
+          /// projection instead of the single next planning `Action`.
+          Events: bool
+          /// `driver --events --cursor <path>` (.github#2135) — the durable per-item cursor file.
+          CursorFile: string option
           Repo: string option
           Fresh: bool
           AllowBacklog: bool

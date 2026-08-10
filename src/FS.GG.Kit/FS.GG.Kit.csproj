@@ -431,7 +431,40 @@
          now permits version-bearing obligation IDs (for example, `new-sdd-workspace-0.9.0`) and
          publishes the exact id/kind grammar beside the declaration workers must author. This changes
          receiver-visible release behavior while preserving the packed member set and destinations. -->
-    <Version>0.41.0</Version>
+    <!-- 0.41.0 -> 0.42.0, a MINOR (.github#2285): the kit gains the network-free
+         fsgg-coord-report client. Receivers obtain a new executable/session-ledger contract, so
+         a patch would make a declared coordination capability appear without the minor boundary. -->
+    <!-- 0.43.0 -> 0.44.0 (.github#2137): receivers materialize the mandatory delivery-route
+         checkpoint, changing dispatch and claim admission behaviour. MINOR on stable 0.x. -->
+    <!-- 0.44.0 -> 0.45.0, a MINOR (.github#2298): the packed pnext-item `sdd-required` guidance now
+         names the CLAIMED WORKER as the actor who authors or completes the governing SDD package (via
+         `fsgg-sdd`, inside the worktree) before touching the item's declared `Paths:`, and states that
+         `fsgg-coord`'s `record`/`show`/scheduling reads report that package's on-disk readiness as
+         advisory (`sddPackageReady`/`sddPackageNotes`) rather than block on it. A receiver materializing
+         this kit version picks up new REQUIRED authoring behaviour for every `sdd-required` item it
+         claims — who does the SDD work and when — not a prose tidy of already-true guidance: before
+         this, no packed text named an owner for that work at all (#2298's root cause). Packed member
+         set and destinations unchanged. -->
+    <!-- 0.45.0 -> 0.46.0, a MINOR (.github#2248): the packed pnext-item review guidance now states,
+         for the FIRST TIME, the quoted-versus-competing marker rule through the generated
+         `fsgg-protocol:review-policy` region — a quotation (fenced, indented, or bare prose mention)
+         is inert, and a canonical marker repeated in one comment's own leading marker block is a
+         competing marker and is refused. Before this kit version, no packed text stated the rule at
+         all (`independent-review.md` at 0.45.0 carries zero mentions of it), so this is NEW guidance,
+         not a correction of already-stated prose — the 0.19.1/0.21.1 patch shape does not apply; those
+         corrected text that was already there and wrong. This is the same shape as #2298's
+         0.44.0 -> 0.45.0: a rule previously invisible to the packed guidance now names it for the
+         first time, which is a change in what a receiver's critic can act on, not a prose tidy of
+         already-true guidance — before this, no packed text named the rule at all (#2248's root
+         cause). Packed member set and destinations unchanged. -->
+    <!-- 0.46.0 -> 0.47.0, a MINOR (.github#2135): the packed drive-board/work-board guidance no
+         longer directs the host to DETECT material transitions and RECONSTRUCT the active-item
+         inventory from memory — it now runs the coordination driver's events mode against a cursor
+         file and forwards its two-line text projection verbatim. A receiver materializing this kit
+         version picks up a new REQUIRED reporting behaviour: the host stops composing status prose
+         itself. Before this, no packed text named that command mode at all — this is new guidance,
+         not a prose tidy of already-true text. Packed member set and destinations unchanged. -->
+    <Version>0.47.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

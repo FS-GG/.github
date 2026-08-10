@@ -112,7 +112,13 @@ module Writes =
 
         let pathRepoPart = pathRepo |> Option.map (fun p -> $" pathRepo=%s{p}") |> Option.defaultValue ""
 
-        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
+        // GitHub only advances an issue comment's `updated_at` when its body actually changes.  Lease age
+        // is measured from that server timestamp, so re-sending the byte-identical marker made a green
+        // heartbeat leave the lease clock counting down.  This opaque renewal token makes every successful
+        // PATCH a real server-side update; readers deliberately do not need to interpret it.
+        let renewalToken = DateTimeOffset.UtcNow.Ticks
+
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes} renewed=%d{renewalToken}%s{sessionPart}%s{prevPart}%s{pathRepoPart} -->"
 
     /// IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
     ///
@@ -198,6 +204,10 @@ module Writes =
             with :? JsonException as e ->
                 Error(Malformed(ref.Short, $"the comment-post response is not JSON: %s{e.Message}"))
 
+    /// A deliberately narrow public route for durable protocol evidence.  Claim mutation still owns its
+    /// private CAS primitive; callers here have no capability to edit or remove another protocol marker.
+    let postIssueComment transport ref body = postComment transport ref body
+
     /// Delete a comment. **A 404 IS SUCCESS.**
     ///
     /// "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the
@@ -255,6 +265,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         (readPathRepo: unit -> string option)
+        (admitNew: unit -> IoResult<unit>)
         : IoResult<ClaimOutcome> =
 
         // 0. ARE WE THE WORKER WE SAY WE ARE? (#1646) — BEFORE THE READ, AND BEFORE ANY ARM.
@@ -442,6 +453,10 @@ module Writes =
             match force with
             | RefuseLiveHolder -> Ok(Lost m.Worker)
             | StealLiveHolder ->
+                // A forced claim is still NEW dispatch.  Capacity admission must happen before
+                // `evictLive`: a constrained/unknown fleet may preserve accepted work, never delete
+                // somebody else's live marker and then discover it cannot continue.
+                admitNew () |> Result.bind (fun () ->
                 // THE REFUSALS BEHIND THE HOLDER. The arms above catch an unparseable or same-id marker
                 // when it is the CAS WINNER; a steal has to look PAST the winner too, because it is about
                 // to delete the winner and promote whatever was queued behind it.
@@ -498,7 +513,7 @@ module Writes =
                             // has been told. A destroyed lock nobody knows about is not recoverable, which
                             // is why the notice, not the marker, is what this guarantees.
                             onEvict evicted
-                            postAndResolve evicted
+                            postAndResolve evicted)
 
         // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
         // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
@@ -549,7 +564,7 @@ module Writes =
                 Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus, m.PathRepo), collected))
 
         // Nobody holds it. Post and race, evicting nothing.
-        | None -> postAndResolve []
+        | None -> admitNew () |> Result.bind (fun () -> postAndResolve [])
 
     /// Compatibility entry point for callers that do not have a board path scope (notably chore
     /// locks and focused CAS tests). Its marker is intentionally legacy-shaped.
@@ -564,7 +579,7 @@ module Writes =
         (ref: Ref)
         (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
-        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None)
+        claimScoped transport leaseMinutes force onEvict worker self session ref readPreviousStatus (fun () -> None) (fun () -> Ok())
 
     let mergeAtHead (transport: IGitHubTransport) (ref: Ref) (pr: int) (headSha: string) : IoResult<bool> =
         let payload =
@@ -1016,6 +1031,25 @@ module Writes =
                     )
             with :? JsonException as e ->
                 Error(Malformed($"%s{owner}/%s{repo}", $"the issue-create response is not JSON: %s{e.Message}"))
+
+    /// The first write boundary of #2134: a malformed draft cannot reach issue creation.
+    let createIntake (transport: IGitHubTransport) (draft: Intake.Draft) : IoResult<Ref> =
+        match Intake.validate draft with
+        | Error findings ->
+            let detail = findings |> List.map (fun finding -> $"%s{finding.Field} %s{finding.Detail}") |> String.concat "; "
+            Error(Malformed(draft.Id, $"invalid intake draft: %s{detail}"))
+        | Ok valid ->
+            let paths = String.concat " " valid.Paths
+            let optionalLines =
+                [ valid.Phase |> Option.map (sprintf "Phase: %s")
+                  valid.Severity |> Option.map (sprintf "Severity: %s")
+                  valid.BlockedBy |> Option.map (sprintf "Blocked by: %s")
+                  valid.BlockedOn |> Option.map (sprintf "Blocked on: %s")
+                  valid.BacklogReason |> Option.map (sprintf "Backlog reason: %s") ]
+                |> List.choose id
+                |> String.concat "\n"
+            let body = $"%s{IntakeReceipt.marker valid}\n\n## Observed behavior\n\n%s{valid.Observed}\n\n## Root cause\n\n%s{valid.RootCause}\n\n## Acceptance\n\n%s{valid.Acceptance}\n\n## Verification\n\n%s{valid.Verification}\n\nClass: %s{valid.Class}\n%s{optionalLines}\n\nPaths: %s{paths}"
+            createRoom transport valid.Owner valid.Repository valid.Title body
 
     /// Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
     /// currently references it is done, and the caller (`done --flip`'s roll-up) has already established

@@ -17,8 +17,10 @@ The world is ONE repo (FS.GG.SDD). Each issue carries the marker state its leg n
              so the forged marker does not hold the item and #88 is still CLAIMABLE
     (f) #89  a MALFORMED marker, `worker=` absent (id 815, fresh)  claim: fails CLOSED — a half-written
                                                                     lock BLOCKS the item, never vanishes
-    (g) #90  EMPTY; the CAS RE-READ FAULTS (502 on every read after the first) — claim withdraws its own
-             just-posted marker (a failed re-read is a LOSS, never an orphan)
+    (g) #90  EMPTY; the CAS RE-READ FAULTS (502 after the CAS's own honest initial look — .github#2300
+             repair 2 moved the delivery-route search off REST onto a bounded GraphQL call, so it no
+             longer shares this REST read counter) — claim withdraws its own just-posted marker (a
+             failed re-read is a LOSS, never an orphan)
     (i) #92  EMPTY; the CAS RE-READ returns [] (our marker VANISHED) — claim treats "we cannot tell" as a
              LOSS and does not announce a lock it cannot show
     (a) #84  ghost-111 STALE (id 810)   claim COLLECTS the stale marker it claims over (DELETEs it), TELLS
@@ -174,6 +176,10 @@ class H(BaseHTTPRequestHandler):
     def _send(self, code, payload):
         b = json.dumps(payload).encode()
         self.send_response(code)
+        if code < 400:
+            self.send_header("X-RateLimit-Resource", "core")
+            self.send_header("X-RateLimit-Limit", "5000")
+            self.send_header("X-RateLimit-Remaining", "4800")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
@@ -255,9 +261,12 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 seen = _COMMENT_READS.get(n, 0)
                 _COMMENT_READS[n] = seen + 1
-                # (g) #90: the CAS RE-READ FAULTS. The first read (the CAS's initial look) is honest — []
-                # — and EVERY read after it is a 502, so a retrying transport still fails and `claim`
-                # withdraws the marker it posted rather than orphaning it.
+                # (g) #90: the CAS gets ONE honest initial look at this REST endpoint. EVERY read after
+                # that is a 502, so the CAS re-read still fails and `claim` withdraws the marker it
+                # posted rather than orphaning it. (.github#2300 repair 2: delivery-route search no
+                # longer reads this REST endpoint at all — it is a bounded GraphQL call, served by
+                # `sitecustomize.py`'s `do_POST` hook, and does not touch `_COMMENT_READS` — so this
+                # counter now counts ONLY what its name says: reads of THIS issue's REST comments.)
                 if n == 90 and seen >= 1:
                     return self._send(502, {"message": "upstream read failed (leg g)"})
                 # (i) #92: the marker VANISHES — the re-read never serves what was POSTed, so `winner` is
