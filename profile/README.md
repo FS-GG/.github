@@ -116,18 +116,21 @@ inside the Skia/Elmish template.
 
 | Shape | Generated workspace | Availability |
 |---|---|---|
-| [`rendering`](https://github.com/FS-GG/FS.GG.Templates/blob/main/providers/rendering.providers.yml) | SkiaSharp/OpenGL desktop UI with Elmish/MVU | Published; compatibility default |
-| [`console`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-console) | Production-shaped F# executable with no browser or npm lane | Authored on `main`; coherent release pending |
-| [`web`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-web) | F# ASP.NET Core server plus a neutral TypeScript/Vite site | Authored on `main`; coherent release pending |
-| [`fable-game`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-game) | Server-authoritative F# game with a Fable/Elmish browser client | Authored on `main`; coherent release pending |
-| [`fable-bindings`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-bindings) | Package-producing Fable interop library over an exactly pinned JS/TS dependency | Authored on `main`; coherent release pending |
+| [`rendering`](https://github.com/FS-GG/FS.GG.Templates/blob/main/providers/rendering.providers.yml) | SkiaSharp/OpenGL desktop UI with Elmish/MVU | Published; compatibility default; `new-sdd-workspace` selectable today |
+| [`console`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-console) | Production-shaped F# executable with no browser or npm lane | Published (`FS.GG.Workspace.Template`, see below); registry-active; `new-sdd-workspace --template` selection pending release |
+| [`web`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-web) | F# ASP.NET Core server plus a neutral TypeScript/Vite site | Published (`FS.GG.Workspace.Template`, see below); registry-active; `new-sdd-workspace --template` selection pending release |
+| [`fable-game`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-game) | Server-authoritative F# game with a Fable/Elmish browser client | Published (`FS.GG.Workspace.Template`, see below); registry-active; `new-sdd-workspace --template` selection pending release |
+| [`fable-bindings`](https://github.com/FS-GG/FS.GG.Templates/tree/main/templates/fs-gg-fable-bindings) | Package-producing Fable interop library over an exactly pinned JS/TS dependency | Published (`FS.GG.Workspace.Template`, see below); registry-active; `new-sdd-workspace --template` selection pending release |
 
-The four non-rendering shapes target the unreleased
-`FS.GG.Workspace.Template` 0.8.0 package. They become consumer-ready only after the
-[coherent publish-and-activation sequence](https://github.com/FS-GG/FS.GG.Templates/issues/349)
-proves the exact package and the released `new-sdd-workspace --template` selector.
-Until then, the public one-command path below remains `rendering`; source presence
-is not being presented as a published release.
+The four non-rendering shapes ship in the published `FS.GG.Workspace.Template` package (see the
+component table below for its current pin) and are registry-active
+([.github#2070](https://github.com/FS-GG/.github/issues/2070), the
+[coherent publish-and-activation sequence](https://github.com/FS-GG/FS.GG.Templates/issues/349)'s
+completion). What remains is packing and releasing a `new-sdd-workspace` build whose already-merged
+`--template` selector ([.github#2069](https://github.com/FS-GG/.github/issues/2069)) can reach
+them — a maintainer-reserved publish decision. Until that release, the public one-command path
+below remains `rendering`; the other four shapes are installable directly via `dotnet new install
+FS.GG.Workspace.Template` but not yet through this org's own scaffolder.
 
 ---
 

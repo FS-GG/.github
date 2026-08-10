@@ -126,8 +126,21 @@ wizard knowing the registry states only proven, live facts — never a predicted
   at the earlier commit `1c817c4e`, predating PR#2074). Registering any newer version here would
   advertise a future artifact; this item records the merged-but-unreleased state in a comment instead
   and stops at the phase 6 boundary.
-
-## Non-Goals
+- DEC-007 (repair round 3, critic finding on PR#2344 head `0c4aaf62`, review
+  https://github.com/FS-GG/.github/pull/2344#issuecomment-5244659382): DEC-001-ADDENDUM/DEC-002-ADDENDUM
+  corrected `registry/dependencies.yml`'s two new rows to `0.8.1`/`0.8.0`, but the commit that made
+  that correction (`0c4aaf62`) never touched the hand-authored prose in `docs/architecture.md`
+  (lines 100, 388, 404, 413, 546-547) or `profile/README.md` (110-133) — both still asserted the
+  pre-correction `0.8.0`/`0.7.0`/"unreleased" facts, producing a self-contradiction three lines from
+  `docs/architecture.md`'s own correctly-regenerated versions table. Fixed all six sites, and where a
+  site was purely restating a version the generated table already carries (the §5 contract-summary
+  table's `fs-gg-workspace-template`/`game-skills` rows), replaced the literal with a pointer to that
+  table instead of a second copy — the same fix class `.github#913` named when it built the generated
+  table specifically because "a bump is a multi-site hand-edit and any missed site is a silent
+  self-contradiction." Left `docs/architecture.md:417` (S.I.R.'s actually-consumed `0.8.0`) and
+  `profile/README.md`'s per-shape one-word availability column alone — genuinely different facts
+  (a consumer's historical pin, not the registry's newest-tracking pin), now with an explicit note
+  distinguishing the two so a reader does not mistake one for a stale copy of the other.
 - SB-002: Do not implement or edit `scripts/NewSddWorkspace/Program.fs`; do not run `dotnet pack`,
   tag, or publish any package; do not run `.github/workflows/release-new-sdd-workspace.yml`.
 
