@@ -5,10 +5,6 @@
   "stage": "ship",
   "status": "shipReady",
   "generator": "FS.GG.SDD.Artifacts/1.0.0",
-  "sourcesDigest": {
-    "algorithm": "sha256",
-    "value": "11e354f22cdae78dc6565c61aa572e4f2c9178b4a52821c6ce22aba9e7b7f3e2"
-  },
   "verificationReadiness": {
     "status": "verificationReady",
     "evidenceSupportedCount": 14,
