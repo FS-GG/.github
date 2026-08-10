@@ -251,7 +251,7 @@ skills:
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 0705e09258c2980ecb44dfe7509d09ff1a3d70abb5903d73c87155676171650c, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 9caebe34b35027cba3645003d9e48fd2cb761aa8e9d7845bd19ab7b34c0cb082, materializes-when: always }
   # padd-item — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
@@ -276,7 +276,7 @@ skills:
   # justified downstream omission` — no gate change. The scope value's job is the CATALOG; the
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
-  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 2acf5c2b4257e2a99f235fbdf13f5cea15c59d4c48c7eb82f685823002d67536, materializes-when: "false" }
+  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 4341449e50b5762cb2806b6b2b8f050f5e2bb1f260e6309f31c147417c372b0c, materializes-when: "false" }
   - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 642e1c67ebc2bc0112dffb4a46a01406af00f8823b8a95ca9a287412f886857c, materializes-when: "false" }
   # p-add — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
