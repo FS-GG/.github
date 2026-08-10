@@ -52,7 +52,15 @@
     <!-- 0.16.0 -> 0.16.1, a PATCH (.github#2180): materialized board variants retain the same
          automatic repair-phase policy but no longer link across the package boundary to withheld
          operator-only bytes; package and consumer closure are now verified. -->
-    <Version>0.16.1</Version>
+    <!-- 0.16.1 -> 0.17.0, a MINOR (.github#2135): the packed drive-board/work-board guidance no
+         longer directs the host to detect material transitions and reconstruct the active-item
+         inventory from memory — it now runs the coordination driver's events mode against a cursor
+         file and forwards its two-line text projection verbatim. A receiver materializing this
+         driver version picks up a new required reporting behaviour: the host stops composing status
+         prose itself. Before this, no packed text named that command mode at all — this is new
+         guidance, not a prose tidy of already-true text. Packed member set and destinations
+         unchanged. -->
+    <Version>0.17.0</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>
