@@ -41,6 +41,22 @@ concurrency:
 
 jobs:
   reconcile:
+    # .github#2352 AC-1: the protocol's OWN comments are the dominant source of `issue_comment` volume —
+    # delivery-route receipts, obligation declarations/receipts, independent-review markers, host
+    # acceptance markers, and (heaviest of all) the claim marker, which is EDITED on every lease
+    # heartbeat/renewal rather than posted once. A single item moving through review posts a dozen or
+    # more of these, and every one used to schedule a full ~2000-item board scan. Every machine comment
+    # this protocol posts carries a leading `<!-- fsgg:...` marker line (SKILL.md's own vocabulary for
+    # them), so that prefix is the exact, already-load-bearing signal to filter on — not a heuristic
+    # invented for this fix. A genuine HUMAN issue/PR comment (no marker) still schedules a reconcile;
+    # only the trigger is filtered, never the `issues`/`pull_request`/`pull_request_review`/`schedule`/
+    # `workflow_dispatch` paths below, which this condition does not touch.
+    #
+    # GitHub evaluates `issue_comment.deleted` with the deleted comment's own `comment.body` still
+    # present in the payload, so the same prefix check covers created/edited/deleted uniformly.
+    if: >-
+      github.event_name != 'issue_comment' ||
+      !startsWith(github.event.comment.body, '<!-- fsgg:')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -115,7 +131,78 @@ jobs:
       # individual, and `concurrency: cancel-in-progress: false` above already serialises every run of
       # this workflow onto one queue — so unlike a human/agent worker there is no fan-out for a shared id
       # to double-claim across.
+      # .github#2352 AC-3: read a REST budget reserve and DEFER rather than compete for what is left.
+      # `/rate_limit` is documented by GitHub to cost nothing against `core` itself, so this check is
+      # free even on every run where the reserve turns out fine. A full reconcile of this repo's
+      # ~2000-item board is the single most expensive read this fleet's automation makes; refusing to
+      # START one below a comfortable floor is cheaper than starting one and running the budget to zero
+      # mid-scan, which is the exact shape .github#2352 observed (`gh run view 31429893232 --log-failed`
+      # → `budget EXHAUSTED … core`, exit 75). RESERVE is a floor, not a precisely tuned constant — it
+      # only has to be comfortably above what a single `claim`/`take` needs so a worker never finds the
+      # tank empty because this job ran first.
+      - name: Check REST budget before scanning
+        id: budget
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set +e
+          remaining="$(curl -sS --max-time 10 --retry 2 -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" https://api.github.com/rate_limit | jq -r '.resources.core.remaining // empty')"
+          reserve=750
+          {
+            echo "remaining=${remaining}"
+            echo "reserve=${reserve}"
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "$remaining" ]; then
+            echo "defer_reason=could not read the REST budget reserve before scanning (rate_limit read failed or returned no core.remaining)" >> "$GITHUB_OUTPUT"
+            echo "defer=true" >> "$GITHUB_OUTPUT"
+          elif [ "$remaining" -lt "$reserve" ]; then
+            echo "defer_reason=REST core budget is low (${remaining} remaining, reserve is ${reserve}) before this run's own scan would even start" >> "$GITHUB_OUTPUT"
+            echo "defer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "defer=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Defer — REST budget reserve not met
+        if: steps.budget.outputs.defer == 'true'
+        env:
+          FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
+        run: |
+          observed_at="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+          printf '### Coordination lifecycle reconciliation\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf -- '- trigger: `%s`\n- observed-at: `%s`\n- result: DEFERRED — %s\n' \
+            "$FSGG_LIFECYCLE_EVENT" "$observed_at" "${{ steps.budget.outputs.defer_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::coord-board-reconcile: NO VERDICT, not a pass — ${{ steps.budget.outputs.defer_reason }}. Deferring rather than competing for what is left; the hourly schedule and the next admitted trigger will retry. This is not the same as reaching the board and finding it correct, and it is not the same as a genuine finding. See .github#2352."
+
+      # ExitNoVerdict (4) mapped to ::warning:: + exit 0 (round-2 review repair, .github#2264 PR #2271),
+      # in the style `coherence.yml`'s roster-closure step already established for the identical shape.
+      # KEPT even though the mint above now supplies a working credential in normal operation: a token
+      # can be revoked, rotated, or fail transiently, and "could not reach the board" must never render
+      # as "reached it, nothing to do" (.github#1611/#1582 — an unattended gate that is always red trains
+      # a reader to ignore red as effectively as one that silently never runs; #266's converse applies to
+      # a vacuous green too). `Client.boardUnreachable` (`.github#2264` round 2) is what makes `reconcile`
+      # emit 4 — a distinguishing, tested classification, not a blanket "any error is soft" — SPECIFICALLY
+      # for "the board itself could not be resolved", never for "reached the board, nothing to reconcile"
+      # (still exit 0, a real success) and never for a genuine finding (still exit 1/3, still fails the
+      # step).
+      #
+      # EX_RATE (75) mapped the same way (.github#2352, AC-2): this repo's own round-2 decision on #2264
+      # was "make the board-credential gap a distinguishable no-verdict, not a permanent red", and a
+      # budget exhaustion is the identical shape — transient, environmental, self-inflicted, and it means
+      # the reconcile DID NOT RUN, which is never the same claim as "ran, and the board is wrong"
+      # (.github#1611/#1582). The pre-flight check above already defers most of these before they start;
+      # this is the residual case where the budget was fine at the check and ran out mid-scan anyway.
+      #
+      # `--worker coord-board-reconcile`: `--apply` attributes every board write it makes (ADR-0027), and
+      # with a real Projects v2 credential now reachable this run genuinely reached that code path for the
+      # first time and refused for want of one (`could not derive a worker id: no --worker, no
+      # $FSGG_WORKER, and no agent session`). A FIXED id is the right answer here, not a minted per-run
+      # one: this job is a mechanical, rule-derived projection with no judgement calls to attribute to an
+      # individual, and `concurrency: cancel-in-progress: false` above already serialises every run of
+      # this workflow onto one queue — so unlike a human/agent worker there is no fan-out for a shared id
+      # to double-claim across.
       - name: Reconcile lifecycle projection
+        if: steps.budget.outputs.defer != 'true'
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
@@ -132,6 +219,10 @@ jobs:
           printf '%s\n' "$result"
           if [ "$rc" -eq 4 ]; then
             echo "::warning::coord-board-reconcile: NO VERDICT, not a pass — the Coordination Projects v2 board itself could not be resolved. The mint step above requests Projects v2 access from the fs-gg-cross-repo-dispatch App and normally supplies a working credential (the grant landed, .github#2332); this path firing anyway means that credential could not reach the board right now — revoked, rotated, or a transient failure — not a structural gap. Distinct from a real success (reached the board, nothing to reconcile, which stays exit 0) and from a real finding (which still fails this step). See the engine's own diagnostic on stdout above, and .github#2332 for the credential's history."
+            exit 0
+          fi
+          if [ "$rc" -eq 75 ]; then
+            echo "::warning::coord-board-reconcile: NO VERDICT, not a pass — this run's own REST budget (core) was exhausted DURING the scan, after the pre-flight reserve check passed. A budget exhaustion means the reconcile did not run to completion, which is not the same as the board being wrong — .github#2264's round-2 principle applies identically to a budget gap. Distinct from a real success (exit 0) and from a genuine finding (still exit 1/3, which still fails this step). See .github#2352."
             exit 0
           fi
           exit "$rc"
