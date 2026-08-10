@@ -31,21 +31,143 @@ module Driver =
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
 
+    // ---- HOISTED MARKER PRIMITIVES (.github#2175) ----------------------------------------------------
+    //
+    // These carry NO dependency on `parseReviewCommentsCore`'s parameters (`trustedFacts`, `comments`) —
+    // they are pure text/marker-name utilities — so they are lifted to module scope rather than living
+    // inside that function's closure. This is a pure extraction: `parseReviewCommentsCore` below calls
+    // the SAME functions it always did, byte-for-byte, and every existing `DriverTests.fs` case pins
+    // that. The reason to hoist them is `classifyMarkers`, immediately below: the new typed review
+    // protocol (`Review.fs`) needs the SAME leading-marker-block/quoting-aware classification this
+    // parser already computes, and #2175 acceptance 11 forbids a second marker parser. Hoisting is the
+    // whole of how `reviewPhaseFacts` avoids writing one.
+    let private markerText name = $"<!-- fsgg:%s{name}:v1 -->"
+
+    let private markerNames =
+        [ Protocol.reviewPolicy.InitialMarker
+          Protocol.reviewPolicy.ConfirmationMarker
+          Protocol.reviewPolicy.AcceptanceMarker
+          Protocol.reviewPolicy.EscalationMarker
+          Protocol.reviewPolicy.RepairPhaseMarker ]
+
+    let private knownMarkerTexts = markerNames |> List.map markerText
+
+    let private commentLines (text: string) =
+        text.Replace("\r\n", "\n").Split '\n' |> Array.toList
+
+    let private leadingMarkerBlock (text: string) =
+        commentLines text |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
+
+    let private canonicalOccurrences name (text: string) =
+        let expected = markerText name
+        leadingMarkerBlock text |> List.filter (fun line -> line = expected) |> List.length
+
+    let private marker name (text: string) = canonicalOccurrences name text = 1
+
+    let private competingMarker name (text: string) = canonicalOccurrences name text > 1
+
+    let private fieldValues key (text: string) =
+        text.Split '\n'
+        |> Array.choose (fun line ->
+            let line = line.Trim()
+            let prefix = key + ":"
+
+            if line.StartsWith prefix then
+                Some(line.Substring(prefix.Length).Trim())
+            else
+                None)
+        |> Array.toList
+
+    let private field key text =
+        fieldValues key text
+        |> function
+            | [ value ] when not (System.String.IsNullOrWhiteSpace value) -> Ok value
+            | _ -> Error $"missing or duplicate %s{key}"
+
+    let private hasField key text =
+        fieldValues key text |> List.isEmpty |> not
+
+    /// One comment sorted into every marker group it canonically carries — the SAME classification
+    /// `parseReviewCommentsCore` has always computed (`ordered`/`initial`/`confirmations`/`escalations`/
+    /// `repairPhases`/`acceptances`), now named and shared so a second caller (`reviewPhaseFacts`) reads
+    /// it rather than re-scanning comment bodies.
+    type private MarkerGroups =
+        { Ordered: ReviewComment list
+          Initial: ReviewComment list
+          Confirmations: ReviewComment list
+          Escalations: ReviewComment list
+          RepairPhases: ReviewComment list
+          Acceptances: ReviewComment list }
+
+    let private classifyMarkers (comments: ReviewComment list) : MarkerGroups =
+        let ordered = comments |> List.sortBy _.Id
+        { Ordered = ordered
+          Initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
+          Confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
+          Escalations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.EscalationMarker c.Body)
+          RepairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
+          Acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body) }
+
+    /// The structural facts `Review.fs` classifies its typed protocol states from — reused, not
+    /// re-derived: every field here is read off `classifyMarkers`' groups and the same `field`/
+    /// `fieldValues` readers `parseReviewCommentsCore` uses, so this is additive to the public surface
+    /// rather than a second parser (#2175 acceptance 11).
+    type ReviewPhaseFacts =
+        { InitialCount: int
+          InitialPresent: bool
+          InitialHeadSha: string option
+          InitialVerdict: string option
+          CriticIdentity: string option
+          ConfirmationCount: int
+          LatestVerdict: string option
+          LatestReviewedHeadSha: string option
+          EscalationPresent: bool
+          RepairPhasePresent: bool
+          AcceptanceCount: int
+          AcceptancePresent: bool }
+
+    let reviewPhaseFacts (comments: ReviewComment list) : ReviewPhaseFacts =
+        let groups = classifyMarkers comments
+
+        // `List.tryHead` reads the FIRST initial-marker comment when there is exactly one — the only
+        // shape a caller should trust. Two or more is a distinct, duplicate-marker fact
+        // (`InitialCount > 1`) that `Review.fs` must classify as malformed rather than silently picking
+        // one and discarding the ambiguity (.github#2175 acceptance 8; mirrors `Driver.parseReviewComments`'s
+        // own `requireOne` refusal of a competing marker, reused here as a count rather than re-derived).
+        let initial = groups.Initial |> List.tryHead
+        let criticIdentity = initial |> Option.bind (fun c -> field "critic" c.Body |> Result.toOption)
+        let initialHeadSha = initial |> Option.bind (fun c -> field "reviewed-head" c.Body |> Result.toOption)
+        let initialVerdict = initial |> Option.bind (fun c -> field "verdict" c.Body |> Result.toOption)
+
+        let latestConfirmation = groups.Confirmations |> List.tryLast
+
+        let latestVerdict =
+            match latestConfirmation with
+            | Some c -> field "verdict" c.Body |> Result.toOption
+            | None -> initialVerdict
+
+        let latestReviewedHeadSha =
+            match latestConfirmation with
+            | Some c -> field "reviewed-head" c.Body |> Result.toOption
+            | None -> initialHeadSha
+
+        { InitialCount = List.length groups.Initial
+          InitialPresent = not (List.isEmpty groups.Initial)
+          InitialHeadSha = initialHeadSha
+          InitialVerdict = initialVerdict
+          CriticIdentity = criticIdentity
+          ConfirmationCount = List.length groups.Confirmations
+          LatestVerdict = latestVerdict
+          LatestReviewedHeadSha = latestReviewedHeadSha
+          EscalationPresent = not (List.isEmpty groups.Escalations)
+          RepairPhasePresent = not (List.isEmpty groups.RepairPhases)
+          AcceptanceCount = List.length groups.Acceptances
+          AcceptancePresent = not (List.isEmpty groups.Acceptances) }
+
     let private parseReviewCommentsCore
         (trustedFacts: (bool * SemanticDiff.TrustedAudit option) option)
         (comments: ReviewComment list)
         =
-        let markerText name = $"<!-- fsgg:%s{name}:v1 -->"
-
-        let markerNames =
-            [ Protocol.reviewPolicy.InitialMarker
-              Protocol.reviewPolicy.ConfirmationMarker
-              Protocol.reviewPolicy.AcceptanceMarker
-              Protocol.reviewPolicy.EscalationMarker
-              Protocol.reviewPolicy.RepairPhaseMarker ]
-
-        let knownMarkerTexts = markerNames |> List.map markerText
-
         // THE PLACEMENT RULE (.github#2221).  A marker is evidence only as a WHOLE LINE inside the
         // comment's LEADING MARKER BLOCK — the run of lines, from byte 0, each of which is exactly one
         // known marker's text.  The block ends at the first line that is anything else.
@@ -71,41 +193,10 @@ module Driver =
         // What stays refused is a COMPETING marker — the same kind twice in one comment's block, which
         // has one meaning and cannot be given two.  A quotation is inert — never evidence.  A MISPLACED
         // marker is neither: see `misplacedMarkerKinds` below, which is the half that must still refuse.
-        let commentLines (text: string) =
-            text.Replace("\r\n", "\n").Split '\n' |> Array.toList
-
-        let leadingMarkerBlock (text: string) =
-            commentLines text |> List.takeWhile (fun line -> List.contains line knownMarkerTexts)
-
-        let canonicalOccurrences name (text: string) =
-            let expected = markerText name
-            leadingMarkerBlock text |> List.filter (fun line -> line = expected) |> List.length
-
-        let marker name (text: string) = canonicalOccurrences name text = 1
-
-        let competingMarker name (text: string) = canonicalOccurrences name text > 1
-
-        let fieldValues key (text: string) =
-            text.Split '\n'
-            |> Array.choose (fun line ->
-                let line = line.Trim()
-                let prefix = key + ":"
-
-                if line.StartsWith prefix then
-                    Some(line.Substring(prefix.Length).Trim())
-                else
-                    None)
-            |> Array.toList
-
-        let field key text =
-            fieldValues key text
-            |> function
-                | [ value ] when not (System.String.IsNullOrWhiteSpace value) -> Ok value
-                | _ -> Error $"missing or duplicate %s{key}"
-
-        let hasField key text =
-            fieldValues key text |> List.isEmpty |> not
-
+        //
+        // `commentLines`/`leadingMarkerBlock`/`canonicalOccurrences`/`marker`/`competingMarker`/
+        // `fieldValues`/`field`/`hasField` are the module-level hoisted primitives above — reused here
+        // unchanged, not redefined (.github#2175 pure extraction).
         let meaningfulFields =
             [ "built-artifact"; "executed-command"; "compared-routes"; "observed-result" ]
 
@@ -245,12 +336,11 @@ module Driver =
             | Ok value -> Error $"unknown route-applicability '%s{value}'"
             | Error _ -> Error "a passing review marker requires one route-applicability field"
 
-        let ordered = comments |> List.sortBy _.Id
-        let initial = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.InitialMarker c.Body)
-        let confirmations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.ConfirmationMarker c.Body)
-        let escalations = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.EscalationMarker c.Body)
-        let repairPhases = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.RepairPhaseMarker c.Body)
-        let acceptances = ordered |> List.filter (fun c -> marker Protocol.reviewPolicy.AcceptanceMarker c.Body)
+        // Reuses `classifyMarkers` — the SAME classification `reviewPhaseFacts` reads (.github#2175
+        // acceptance 11); this is a call, not a second computation of it.
+        let groups = classifyMarkers comments
+        let ordered, initial, confirmations, escalations, repairPhases, acceptances =
+            groups.Ordered, groups.Initial, groups.Confirmations, groups.Escalations, groups.RepairPhases, groups.Acceptances
         let errors = ResizeArray<string>()
 
         // EVERY marker error names the comment that caused it (#2221 acceptance criterion 3).  The

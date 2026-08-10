@@ -1799,6 +1799,81 @@ module Client =
                                 ExitNoVerdict
                             | _ -> DeliveryApplication.render opts facts
 
+    /// The live `review <ref> --pr N` adapter (.github#2175) — matches `delivery <ref> [--pr N]`'s shape
+    /// rather than inventing a parallel spelling, and reuses the SAME live reads that function already
+    /// makes (`Reads.markerScan`, `Reads.commentsWithIdentity`, `Reads.prLandable`) rather than a second
+    /// derivation of "what is the current PR/claim state". `--pr` is REQUIRED here, unlike `delivery`:
+    /// there is no review protocol before a PR exists, so a bare `review <ref>` would either fabricate
+    /// meaningless facts or silently answer a question nobody asked.
+    ///
+    /// TWO FACTS THIS READ CANNOT ESTABLISH LIVE, DELIBERATELY DEFAULTED RATHER THAN LEFT UNHANDLED:
+    ///   - `RepairPhaseGranted` is always `None`. A granted repair phase binds a NEW claim/branch/PR/
+    ///     critic that lives on a DIFFERENT item than the one this command reads, and resolving that
+    ///     binding live is future work, not a silent wrong answer today — a caller mid-repair-phase-setup
+    ///     sees `RepairPhaseSetup`/`Park` guidance directing it to the host, which is honest.
+    ///   - `RepairRouteAvailable` defaults to `true`. Whether a fresh worker/critic slot exists is a
+    ///     scheduler fact, not something one PR read can observe. Both outcomes of this default route to
+    ///     `Park` (human/host action) in `Review.classify` either way — the default only changes the
+    ///     STATE label (`OrdinaryExhaustion` vs `TerminalHumanPark`), never whether the action is safe.
+    let review (ctx: Context) (opts: Options) : int =
+        match oneArg opts "review: an item ref", worker opts with
+        | Error code, _ -> code
+        | _, Error code -> code
+        | Ok raw, Ok w ->
+            match parseRef ctx raw with
+            | Error message ->
+                eprint $"fsgg-coord-engine: review: %s{message}"
+                ExitError
+            | Ok target ->
+                match opts.Pr with
+                | None ->
+                    eprint "fsgg-coord-engine: review: --pr is required (there is no review protocol before a PR exists)."
+                    ExitError
+                | Some pr ->
+                    let liveClaim =
+                        Reads.markerScan ctx.Transport target.Owner target.Repo target.Number
+                        |> Result.bind (Reads.requireCompleteMarkerScan target.Short)
+                        |> Result.bind (fun markers ->
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | Some marker -> Ok marker
+                            | None -> Error(Errors.Malformed(target.Short, "no live claim marker can authorize a review inspection")))
+
+                    match liveClaim with
+                    | Error error -> fail error
+                    | Ok marker ->
+                        match Reads.prHeadSha ctx.Transport target.Owner target.Repo pr,
+                              Reads.prLandable ctx.Transport target.Owner target.Repo pr,
+                              Reads.commentsWithIdentity ctx.Transport target.Owner target.Repo pr with
+                        | Ok head, checks, Ok comments ->
+                            let reviewComments =
+                                comments
+                                |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
+
+                            // Derived, not asserted: a live `repair-phase` marker in the comment thread is
+                            // the same structural fact `Driver.reviewPhaseFacts` already exposes, so the
+                            // caller does not have to pass `--repair` by hand for the common case.
+                            let phaseFacts = Driver.reviewPhaseFacts reviewComments
+
+                            let binding: Review.Binding =
+                                { ItemRef = target.Short
+                                  Pr = pr
+                                  HeadSha = head
+                                  ClaimGeneration = string marker.Id
+                                  ImplementerIdentity = marker.Worker.Value
+                                  Phase = if phaseFacts.RepairPhasePresent then Review.Repair else Review.Ordinary
+                                  Round = 1 }
+
+                            let facts: Review.Facts =
+                                { Comments = reviewComments
+                                  Checks = checks
+                                  RepairPhaseGranted = None
+                                  RepairRouteAvailable = true
+                                  DiffAuditTrusted = None }
+
+                            ReviewApplication.render opts binding facts
+                        | Error error, _, _
+                        | _, _, Error error -> fail error
+
     /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
     /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
     /// already dropped, #533).
@@ -9021,6 +9096,7 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | BatchCmd -> batch ctx opts
             | DriverCmd -> driver ctx opts
             | DeliveryCmd -> delivery ctx opts
+            | ReviewCmd -> review ctx opts
             | Ready -> ready ctx opts
             | Reconcile -> reconcile ctx opts
             | Who -> who ctx opts

@@ -192,6 +192,22 @@ module Delivery =
             | [] -> None
             | errors -> Some(String.concat "; " errors)
 
+    /// See `Delivery.fsi` — folds a `Review.AcceptedReceipt` into the `Driver.ReviewChain` shape this
+    /// module has always consumed, so `inspect`/`reviewProblem` need no changes to read it.
+    let fromReviewAcceptance (receipt: Review.AcceptedReceipt) (snapshot: Snapshot) : Snapshot =
+        let chain: Driver.ReviewChain =
+            { MarkerValid = true
+              CriticIdentity = Some receipt.CriticIdentity
+              HeadSha = Some receipt.HeadSha
+              Rounds = receipt.Rounds
+              RepairPhase = receipt.RepairPhase
+              ChecksGreen = receipt.ChecksGreen
+              HostAccepted = true
+              RuntimeRouteEvidence = receipt.RuntimeRouteEvidence
+              DiffAuditRequired = receipt.DiffAuditRequired
+              DiffAuditHead = receipt.DiffAuditHead }
+        { snapshot with Review = Some chain; ReviewProblem = None }
+
     let inspect snapshot =
         match validate snapshot with
         | missingFacts when not (List.isEmpty missingFacts) ->

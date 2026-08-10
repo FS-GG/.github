@@ -830,6 +830,7 @@ module OptionsTests =
           // Both projections — the handler branches. NONE of these values moved in #1523.
           "decide", Json
           "delivery", Json
+          "review", Json
           "driver", Json
           "cycle", Json
           "lanes", Json

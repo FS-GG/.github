@@ -1,0 +1,247 @@
+namespace FS.GG.Coord.Cli
+
+/// JSON snapshot boundary for the pure resumable review/repair protocol (.github#2175).
+module ReviewApplication =
+    open System
+    open System.IO
+    open System.Text.Json
+    open FS.GG.Coord
+    open FS.GG.Coord.Cli.Options
+
+    let private eprint (message: string) = Console.Error.WriteLine(message)
+
+    let private input opts =
+        match opts.SnapshotFile with
+        | Some path -> File.ReadAllText path
+        | None -> Console.In.ReadToEnd()
+
+    let private required (name: string) (element: JsonElement) : JsonElement =
+        match element.TryGetProperty name with
+        | true, value -> value
+        | _ -> invalidArg name "required field is missing"
+
+    let private readString (name: string) (element: JsonElement) : string =
+        let value = required name element
+        if value.ValueKind <> JsonValueKind.String then invalidArg name "must be a string"
+        let parsed = value.GetString()
+        if String.IsNullOrWhiteSpace parsed then invalidArg name "must not be empty"
+        parsed
+
+    let private readInteger (name: string) (element: JsonElement) : int =
+        let value = required name element
+        match value.TryGetInt32() with
+        | true, parsed -> parsed
+        | _ -> invalidArg name "must be a 32-bit integer"
+
+    let private readInt64 (name: string) (element: JsonElement) : int64 =
+        let value = required name element
+        match value.TryGetInt64() with
+        | true, parsed -> parsed
+        | _ -> invalidArg name "must be a 64-bit integer"
+
+    let private readBoolean (name: string) (element: JsonElement) : bool =
+        let value = required name element
+        match value.ValueKind with
+        | JsonValueKind.True -> true
+        | JsonValueKind.False -> false
+        | _ -> invalidArg name "must be a boolean"
+
+    /// The seven-word `PrState` wire vocabulary `Landable.name` renders — read here in reverse. Not a
+    /// second authority: `Landable.name` is forward-only (`PrState -> string`), so the reverse parser is
+    /// this boundary's own job, exactly as `DeliveryApplication`'s `stage`/`action` readers are.
+    let private checks (name: string) (element: JsonElement) : Types.PrState =
+        match readString name element with
+        | "green" -> Types.PrGreen
+        | "conflicted" -> Types.PrConflicted
+        | "pending" -> Types.PrPending
+        | "red" -> Types.PrRed
+        | "unknown" -> Types.PrUnknown
+        | "merged" -> Types.PrMerged
+        | "closed" -> Types.PrClosed
+        | other -> invalidArg name $"must be one of green/conflicted/pending/red/unknown/merged/closed, got '%s{other}'"
+
+    let private phase (name: string) (element: JsonElement) : Review.Phase =
+        match readString name element with
+        | "ordinary" -> Review.Ordinary
+        | "repair" -> Review.Repair
+        | other -> invalidArg name $"must be 'ordinary' or 'repair', got '%s{other}'"
+
+    let private binding (element: JsonElement) : Review.Binding =
+        { ItemRef = readString "itemRef" element
+          Pr = readInteger "pr" element
+          HeadSha = readString "headSha" element
+          ClaimGeneration = readString "claimGeneration" element
+          ImplementerIdentity = readString "implementerIdentity" element
+          Phase = phase "phase" element
+          Round = readInteger "round" element }
+
+    let private comments (element: JsonElement) : Driver.ReviewComment list =
+        let value = required "comments" element
+        if value.ValueKind <> JsonValueKind.Array then invalidArg "comments" "must be an array"
+        value.EnumerateArray()
+        |> Seq.map (fun comment ->
+            if comment.ValueKind <> JsonValueKind.Object then invalidArg "comments" "must contain objects"
+            ({ Id = readInt64 "id" comment
+               Url = readString "url" comment
+               Body = readString "body" comment }: Driver.ReviewComment))
+        |> List.ofSeq
+
+    let private repairPhaseReceipt (element: JsonElement) : Review.RepairPhaseReceipt =
+        { ExhaustedPr = readInteger "exhaustedPr" element
+          EscalationCommentId = readInt64 "escalationCommentId" element
+          NewClaimGeneration = readString "newClaimGeneration" element
+          NewBranchOrPr = readString "newBranchOrPr" element
+          NewImplementerIdentity = readString "newImplementerIdentity" element
+          NewCriticIdentity = readString "newCriticIdentity" element
+          CandidateHeadSha = readString "candidateHeadSha" element }
+
+    let private repairPhaseGranted (element: JsonElement) : Review.RepairPhaseReceipt option =
+        let value = required "repairPhaseGranted" element
+        match value.ValueKind with
+        | JsonValueKind.Null -> None
+        | JsonValueKind.Object -> Some(repairPhaseReceipt value)
+        | _ -> invalidArg "repairPhaseGranted" "must be an object or null"
+
+    /// `DiffAuditTrusted` is not yet on this wire contract — the pure snapshot path this command serves
+    /// (a worker or the #2135 event projection asking "what next") does not need the live, engine-
+    /// recomputed diff-audit inventory `Driver.parseReviewCommentsWithFacts` optionally consumes; a
+    /// caller that mechanically requires the diff-audit gate goes through `Driver.parseReviewCommentsWithAudit`
+    /// directly, as the existing live `delivery` path already does. Always `None` here; a future cut can
+    /// add the field additively without breaking this one.
+    let private facts (element: JsonElement) : Review.Facts =
+        { Comments = comments element
+          Checks = checks "checks" element
+          RepairPhaseGranted = repairPhaseGranted element
+          RepairRouteAvailable = readBoolean "repairRouteAvailable" element
+          DiffAuditTrusted = None }
+
+    let private snapshot (raw: string) : Result<Review.Binding * Review.Facts, string> =
+        try
+            use document = JsonDocument.Parse raw
+            let root = document.RootElement
+            if root.ValueKind <> JsonValueKind.Object then invalidArg "snapshot" "must be an object"
+            let bindingElement = required "binding" root
+            if bindingElement.ValueKind <> JsonValueKind.Object then invalidArg "binding" "must be an object"
+            let factsElement = required "facts" root
+            if factsElement.ValueKind <> JsonValueKind.Object then invalidArg "facts" "must be an object"
+            Ok(binding bindingElement, facts factsElement)
+        with error -> Error error.Message
+
+    let private stateName (value: Review.State) =
+        match value with
+        | Review.AwaitingInitialReview -> "awaitingInitialReview"
+        | Review.ChangesRequiringRepair _ -> "changesRequiringRepair"
+        | Review.AwaitingImplementerRepair _ -> "awaitingImplementerRepair"
+        | Review.AwaitingSameCriticConfirmation _ -> "awaitingSameCriticConfirmation"
+        | Review.PassedAwaitingChecks -> "passedAwaitingChecks"
+        | Review.AwaitingHostAcceptance -> "awaitingHostAcceptance"
+        | Review.OrdinaryExhaustion -> "ordinaryExhaustion"
+        | Review.RepairPhaseSetup -> "repairPhaseSetup"
+        | Review.RepairPhaseActive _ -> "repairPhaseActive"
+        | Review.Accepted -> "accepted"
+        | Review.TerminalHumanPark _ -> "terminalHumanPark"
+        | Review.MalformedEvidence _ -> "malformedEvidence"
+        | Review.GuardViolation _ -> "guardViolation"
+
+    let private stateRound (value: Review.State) : int option =
+        match value with
+        | Review.ChangesRequiringRepair round
+        | Review.AwaitingImplementerRepair round
+        | Review.AwaitingSameCriticConfirmation round
+        | Review.RepairPhaseActive round -> Some round
+        | _ -> None
+
+    let private stateReason (value: Review.State) : string option =
+        match value with
+        | Review.TerminalHumanPark reason
+        | Review.GuardViolation reason -> Some reason
+        | _ -> None
+
+    let private stateErrors (value: Review.State) : string list option =
+        match value with
+        | Review.MalformedEvidence errors -> Some errors
+        | _ -> None
+
+    let private actionName (value: Review.NextAction) =
+        match value with
+        | Review.DispatchCritic -> "dispatchCritic"
+        | Review.ResumeImplementer _ -> "resumeImplementer"
+        | Review.ResumeSameCritic _ -> "resumeSameCritic"
+        | Review.AwaitChecks -> "awaitChecks"
+        | Review.RequestHostAcceptance -> "requestHostAcceptance"
+        | Review.EnterRepairPhase _ -> "enterRepairPhase"
+        | Review.Accept _ -> "accept"
+        | Review.Park _ -> "park"
+
+    let private actionReason (value: Review.NextAction) : string option =
+        match value with
+        | Review.ResumeImplementer reason
+        | Review.ResumeSameCritic reason
+        | Review.Park reason -> Some reason
+        | _ -> None
+
+    let private receiptJson (receipt: Review.RepairPhaseReceipt) =
+        {| exhaustedPr = receipt.ExhaustedPr
+           escalationCommentId = receipt.EscalationCommentId
+           newClaimGeneration = receipt.NewClaimGeneration
+           newBranchOrPr = receipt.NewBranchOrPr
+           newImplementerIdentity = receipt.NewImplementerIdentity
+           newCriticIdentity = receipt.NewCriticIdentity
+           candidateHeadSha = receipt.CandidateHeadSha |}
+
+    let private acceptedJson (receipt: Review.AcceptedReceipt) =
+        {| headSha = receipt.HeadSha
+           criticIdentity = receipt.CriticIdentity
+           rounds = receipt.Rounds
+           repairPhase = receipt.RepairPhase
+           checksGreen = receipt.ChecksGreen
+           diffAuditRequired = receipt.DiffAuditRequired
+           diffAuditHead = receipt.DiffAuditHead |}
+
+    let render (opts: Options) (binding: Review.Binding) (facts: Review.Facts) : int =
+        match Review.inspect binding facts with
+        | Error reasons ->
+            match opts.Render with
+            | Json ->
+                printfn
+                    "%s"
+                    (JsonSerializer.Serialize {| schema = "fsgg.coord.review/1"; verdict = "noVerdict"; reasons = reasons |})
+            | Text -> reasons |> List.iter (fun reason -> eprint $"UNDETERMINED — %s{reason}")
+            ExitCode.toInt ExitCode.NoVerdict
+        | Ok verdict ->
+            match opts.Render with
+            | Json ->
+                let payload =
+                    {| schema = "fsgg.coord.review/1"
+                       verdict = "next"
+                       state = stateName verdict.State
+                       stateRound = stateRound verdict.State
+                       stateReason = stateReason verdict.State
+                       stateErrors = stateErrors verdict.State
+                       action = actionName verdict.NextAction
+                       actionReason = actionReason verdict.NextAction
+                       repairPhaseReceipt =
+                        match verdict.NextAction with
+                        | Review.EnterRepairPhase receipt -> Some(receiptJson receipt)
+                        | _ -> None
+                       acceptedReceipt =
+                        match verdict.NextAction with
+                        | Review.Accept receipt -> Some(acceptedJson receipt)
+                        | _ -> None
+                       freshnessToken = verdict.FreshnessToken
+                       actionKey = verdict.ActionKey |}
+                printfn "%s" (JsonSerializer.Serialize payload)
+            | Text -> printfn "%s — %s" (stateName verdict.State) (actionName verdict.NextAction)
+            ExitCode.toInt ExitCode.Green
+
+    let run (opts: Options) : int =
+        let raw = input opts
+        if String.IsNullOrWhiteSpace raw then
+            eprint "fsgg-coord-engine: review snapshot is empty; refusing to infer protocol state."
+            ExitCode.toInt ExitCode.Error
+        else
+            match snapshot raw with
+            | Error error ->
+                eprint $"fsgg-coord-engine: review snapshot is malformed: %s{error}"
+                ExitCode.toInt ExitCode.Error
+            | Ok(binding, facts) -> render opts binding facts

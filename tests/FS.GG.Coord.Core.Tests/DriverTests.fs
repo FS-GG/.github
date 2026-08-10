@@ -1030,3 +1030,90 @@ module DriverTests =
         let callerCanDisable = Result.isOk(parseReviewCommentsWithFacts true (Some trustedAudit) [ optedOut; valid ])
         Assert.False(callerCanDisable)
         Assert.True(Result.isError(parseReviewCommentsWithFacts true None [ optedOut; acceptance "" ]))
+
+    [<Fact>]
+    let ``#2175 reviewPhaseFacts reads the same marker classification parseReviewComments reads, additively`` () =
+        // Empty: nothing present, everything default/None.
+        let empty = reviewPhaseFacts []
+        Assert.Equal(0, empty.InitialCount)
+        Assert.False(empty.InitialPresent)
+        Assert.Equal(None, empty.CriticIdentity)
+        Assert.Equal(0, empty.ConfirmationCount)
+        Assert.False(empty.EscalationPresent)
+        Assert.False(empty.RepairPhasePresent)
+        Assert.Equal(0, empty.AcceptanceCount)
+        Assert.False(empty.AcceptancePresent)
+
+        let initial =
+            comment
+                1L
+                "https://reviews/1"
+                "<!-- fsgg:independent-review:v1 -->\ncritic: shrike\nreviewed-head: abc\nverdict: changes-required"
+
+        let single = reviewPhaseFacts [ initial ]
+        Assert.Equal(1, single.InitialCount)
+        Assert.True(single.InitialPresent)
+        Assert.Equal(Some "shrike", single.CriticIdentity)
+        Assert.Equal(Some "abc", single.InitialHeadSha)
+        Assert.Equal(Some "changes-required", single.InitialVerdict)
+        Assert.Equal(Some "changes-required", single.LatestVerdict)
+        Assert.Equal(Some "abc", single.LatestReviewedHeadSha)
+
+        // A duplicate initial marker across two comments is a distinct, counted fact — not silently
+        // collapsed to "the first one" (.github#2175 acceptance 8; the gap `Review.fs`'s guard closes).
+        let duplicateInitial =
+            comment
+                2L
+                "https://reviews/2"
+                "<!-- fsgg:independent-review:v1 -->\ncritic: heron\nreviewed-head: def\nverdict: pass"
+
+        let duplicated = reviewPhaseFacts [ initial; duplicateInitial ]
+        Assert.Equal(2, duplicated.InitialCount)
+        Assert.True(duplicated.InitialPresent)
+
+        let confirmed =
+            comment
+                2L
+                "https://reviews/2"
+                "<!-- fsgg:independent-review-confirmation:v1 -->\ninitial-review: https://reviews/1\ncritic: shrike\nround: 1\npreceding-review: https://reviews/1\nreviewed-head: xyz\nverdict: pass"
+
+        let afterConfirmation = reviewPhaseFacts [ initial; confirmed ]
+        Assert.Equal(1, afterConfirmation.ConfirmationCount)
+        Assert.Equal(Some "pass", afterConfirmation.LatestVerdict)
+        Assert.Equal(Some "xyz", afterConfirmation.LatestReviewedHeadSha)
+        // The INITIAL fields stay bound to the initial comment, not the latest confirmation.
+        Assert.Equal(Some "abc", afterConfirmation.InitialHeadSha)
+        Assert.Equal(Some "changes-required", afterConfirmation.InitialVerdict)
+
+        let repairPhase =
+            comment 3L "https://reviews/repair" "<!-- fsgg:independent-review-repair-phase:v1 -->"
+
+        let escalation =
+            comment 4L "https://reviews/escalation" "<!-- fsgg:independent-review-escalation:v1 -->"
+
+        let withPhaseMarkers = reviewPhaseFacts [ initial; repairPhase; escalation ]
+        Assert.True(withPhaseMarkers.RepairPhasePresent)
+        Assert.True(withPhaseMarkers.EscalationPresent)
+
+        let acceptance =
+            comment
+                5L
+                "https://reviews/accepted"
+                "<!-- fsgg:review-accepted:v1 -->\naccepted-head: abc\ninitial-review: https://reviews/1\nlatest-confirmation: https://reviews/1"
+
+        let withAcceptance = reviewPhaseFacts [ initial; acceptance ]
+        Assert.Equal(1, withAcceptance.AcceptanceCount)
+        Assert.True(withAcceptance.AcceptancePresent)
+
+        // A quoted mention inside a fence is not canonical — `reviewPhaseFacts` reuses the SAME
+        // leading-marker-block/quoting detection `parseReviewComments` uses, so a quotation is inert
+        // here too (.github#2221/#2175 acceptance 11: no second, less careful marker parser).
+        let quoted =
+            comment
+                6L
+                "https://reviews/quoted"
+                "Example:\n\n```\n<!-- fsgg:independent-review:v1 -->\ncritic: x\nreviewed-head: y\nverdict: pass\n```\n"
+
+        let withQuote = reviewPhaseFacts [ quoted ]
+        Assert.Equal(0, withQuote.InitialCount)
+        Assert.False(withQuote.InitialPresent)

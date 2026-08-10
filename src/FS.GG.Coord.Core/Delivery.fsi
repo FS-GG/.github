@@ -106,6 +106,14 @@ module Delivery =
     /// Hash the complete mutation subject. Callers must present this token when advancing it.
     val freshnessToken: Freshness -> string
 
+    /// Fold one `FS.GG.Coord.Review.AcceptedReceipt` (.github#2175) into a snapshot's `Review`/
+    /// `ReviewProblem` facts. `Review` owns the alternating critic/implementer state graph inside
+    /// `ReviewActive`; this is the one place that graph's OUTPUT — the accepted-current-head receipt —
+    /// reaches `Delivery`, and it reaches it as the SAME `Driver.ReviewChain` shape `Delivery` has always
+    /// consumed. Additive and non-breaking: no existing `Stage`, `Action`, or `Snapshot` field changes,
+    /// and no existing caller is required to route through this function.
+    val fromReviewAcceptance: receipt: FS.GG.Coord.Review.AcceptedReceipt -> snapshot: Snapshot -> Snapshot
+
     /// Derive the sole legal next action from a complete snapshot; unreadable or contradictory facts
     /// never become a permissive lifecycle state.
     val inspect: Snapshot -> Verdict

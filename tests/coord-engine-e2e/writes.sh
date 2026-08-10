@@ -1244,6 +1244,26 @@ for delivery_mode in bare apply; do
   fi
 done
 
+# `review --snapshot` (.github#2175) is the hermetic no-IO boundary for the resumable review/repair
+# protocol, unconditionally `writes: never` (unlike `delivery`, it has no `--apply` arm at all), so one
+# invocation against a real snapshot, checked against the wire ledger exactly as `no_mutation` checks
+# any other never-write verb, is the whole of its contract driver.
+mark_contract "review" "never-or-dry-run"
+review_snapshot='{"binding":{"itemRef":"FS-GG/.github#2175","pr":42,"headSha":"fixture-head","claimGeneration":"fixture-claim","implementerIdentity":"vole-418","phase":"ordinary","round":1},"facts":{"comments":[],"checks":"pending","repairPhaseGranted":null,"repairRouteAvailable":true}}'
+review_snapshot_file="$(mktemp)"
+printf '%s' "$review_snapshot" >"$review_snapshot_file"
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations" >/dev/null
+review_out="$(run review --snapshot "$review_snapshot_file" --json 2>&1)"; review_rc=$?
+review_ledger="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/mutations")"
+rm -f "$review_snapshot_file"
+if [ "$review_rc" -eq 0 ] \
+   && printf '%s' "$review_out" | jq -e '.verdict == "next" and .state == "awaitingInitialReview" and .action == "dispatchCritic"' >/dev/null \
+   && [ "$(printf '%s' "$review_ledger" | jq -r .count)" = 0 ]; then
+  ok "#2175: review --snapshot reaches its typed state/action without a wire mutation"
+else
+  bad "#2175: review --snapshot must execute without mutating" "rc=$review_rc output=$review_out ledger=$review_ledger"
+fi
+
 # #2207 adds an optional delivery diagnostic.  The established snapshot producer above predates it,
 # so omission must retain the guarded-land decision.  Invert the subject by supplying an empty value:
 # it must refuse rather than silently treating an invalid observed diagnostic as absent.
