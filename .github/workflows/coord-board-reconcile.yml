@@ -34,9 +34,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: read
-  repository-projects: write
 
 concurrency:
   group: coord-board-reconcile-${{ github.repository }}
@@ -70,20 +67,48 @@ jobs:
           dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
           dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
+      # THE HAPPY PATH (round 2, second repair): the maintainer granted `fs-gg-cross-repo-dispatch`
+      # (provisioned .github#21, secrets FSGG_DISPATCH_APP_ID/FSGG_DISPATCH_APP_PRIVATE_KEY) Organization
+      # permissions -> Projects: Read and write. The default GITHUB_TOKEN still cannot see an org-owned
+      # Projects v2 board (that limit is GitHub's, not this installation's) — an App installation token
+      # can, so this mints one rather than trying to reconfigure GITHUB_TOKEN, matching the shape
+      # `release-coord-engine.yml`/`kit-auto-publish.yml`/`skill-registry-autofix.yml`/
+      # `permission-coherence.yml`/`dashboard-tick-selftest.yml` already use for this same App elsewhere
+      # in this repo, rather than inventing a sixth pattern.
+      #
+      # `permission-organization-projects: write` is also the VERIFICATION, not just the request:
+      # `actions/create-github-app-token` refuses to mint when the installation lacks a requested scope
+      # (.github#1930), so a green mint step IS proof the grant landed — no separate assertion needed.
+      # `permission-issues`/`permission-pull-requests` are requested explicitly alongside it because this
+      # action grants ONLY the permissions named, never the installation's full grant by default omission
+      # (unlike the no-`permission-*` mints elsewhere in this repo that push commits as the App and want
+      # everything) — reconcile posts issue comments (the watermark/done-receipt markers) and reads PR
+      # facts (landable, head sha), so both are real, not defensive over-asks.
+      - name: Mint an installation token with Projects v2 access
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          permission-organization-projects: write
+          permission-issues: write
+          permission-pull-requests: read
+
       # ExitNoVerdict (4) mapped to ::warning:: + exit 0 (round-2 review repair, .github#2264 PR #2271),
-      # in the style `coherence.yml`'s roster-closure step already established for the identical shape:
-      # a Projects v2 credential gap this repo does not have the org-level access to close (.github#2332
-      # tracks the remedy). `Client.boardUnreachable` (`.github#2264` round 2) is what makes `reconcile`
+      # in the style `coherence.yml`'s roster-closure step already established for the identical shape.
+      # KEPT even though the mint above now supplies a working credential in normal operation: a token
+      # can be revoked, rotated, or fail transiently, and "could not reach the board" must never render
+      # as "reached it, nothing to do" (.github#1611/#1582 — an unattended gate that is always red trains
+      # a reader to ignore red as effectively as one that silently never runs; #266's converse applies to
+      # a vacuous green too). `Client.boardUnreachable` (`.github#2264` round 2) is what makes `reconcile`
       # emit 4 — a distinguishing, tested classification, not a blanket "any error is soft" — SPECIFICALLY
       # for "the board itself could not be resolved", never for "reached the board, nothing to reconcile"
-      # (still exit 0, a real success — .github#1611/#1582: collapsing the two would make this an
-      # unattended gate that is always green regardless of whether it ever actually looked, which is the
-      # exact failure #266 names) and never for a genuine finding (still exit 1/3, still fails the step).
-      # An hourly gate that is ALWAYS red until an org admin acts trains a reader to ignore red as
-      # effectively as a gate that silently never runs at all — the shape this whole round started from.
+      # (still exit 0, a real success) and never for a genuine finding (still exit 1/3, still fails the
+      # step).
       - name: Reconcile lifecycle projection
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
           FSGG_LIFECYCLE_EVENT: ${{ github.event_name }}
           FSGG_LIFECYCLE_EVENT_AT: ${{ github.event.repository.updated_at || github.run_started_at }}
@@ -97,7 +122,7 @@ jobs:
           printf -- '- trigger: `%s`\n- observed-at: `%s`\n- exit: `%s`\n- result: `%s`\n' "$FSGG_LIFECYCLE_EVENT" "$observed_at" "$rc" "$result" >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' "$result"
           if [ "$rc" -eq 4 ]; then
-            echo "::warning::coord-board-reconcile: NO VERDICT, not a pass — the Coordination Projects v2 board itself could not be resolved (a credential/visibility gap: this workflow's GITHUB_TOKEN cannot see org-owned Projects v2 boards). Distinct from a real success (reached the board, nothing to reconcile, which stays exit 0) and from a real finding (which still fails this step). The remedy is org-level and is tracked at .github#2332, not fixable from this repo's tree. See the engine's own diagnostic on stdout above."
+            echo "::warning::coord-board-reconcile: NO VERDICT, not a pass — the Coordination Projects v2 board itself could not be resolved. The mint step above requests Projects v2 access from the fs-gg-cross-repo-dispatch App and normally supplies a working credential (the grant landed, .github#2332); this path firing anyway means that credential could not reach the board right now — revoked, rotated, or a transient failure — not a structural gap. Distinct from a real success (reached the board, nothing to reconcile, which stays exit 0) and from a real finding (which still fails this step). See the engine's own diagnostic on stdout above, and .github#2332 for the credential's history."
             exit 0
           fi
           exit "$rc"
