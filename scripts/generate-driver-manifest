@@ -59,7 +59,7 @@ Usage:
   scripts/generate-driver-manifest --which ID
                                               # which release artifact ships skill ID: prints exactly
                                               #   one of `FS.GG.Kit`, `FS.GG.Drivers`, `operator-scope`,
-                                              #   or `neither` to stdout and exits 0/0/2/1 respectively
+                                              #   or `neither` to stdout and exits 0/0/1/1 respectively
                                               #   (.github#2333, corrected by .github#2339) — the
                                               #   answer this repo's own release-inventory table used
                                               #   to name neither artifact for, which misdiagnosed
@@ -75,9 +75,14 @@ Usage:
                                               #   manifest is necessary but not sufficient for being
                                               #   packed. A `scope: operator` id (ADR-0057) is a real,
                                               #   recognized skill that ships in no package by design —
-                                              #   `operator-scope`/exit 2 says so distinctly, so a
+                                              #   `operator-scope` says so distinctly in STDOUT, so a
                                               #   caller can tell that apart from an unrecognized id
-                                              #   (`neither`/exit 1, usually a typo). Touches nothing.
+                                              #   (`neither`, usually a typo). Exit code deliberately
+                                              #   does NOT carry that distinction (see `main()`): only
+                                              #   exit 0 means "a package ships this, a release may be
+                                              #   owed"; every other answer is exit 1, so no caller can
+                                              #   mistake `operator-scope` for permission to publish.
+                                              #   Touches nothing.
   scripts/generate-driver-manifest            # default: --check
 
 Pure stdlib; no network, no tokens.
@@ -639,11 +644,13 @@ def which_artifact(skill_id: str, repo_root: str = REPO_ROOT) -> str:
     defect) told a worker to cut a release that would ship none of what they changed. So this reads
     each `DRIVERS` row's `scope` and only ever answers `FS.GG.Drivers` for `scope: driver`.
 
-    `operator-scope` is deliberately distinct from `neither`: both are "not packed", but one names a
-    real, recognized skill that ships nowhere by design (no release is ever owed for it), while the
-    other means the id was not recognized at all (frequently a typo). Collapsing them would stop a
-    wrong release but leave a caller unable to tell "ships nowhere, by design" from "I don't know that
-    id" — see `main()`'s exit-code split, which keeps them distinguishable without parsing stdout.
+    `operator-scope` is deliberately distinct STDOUT from `neither`: both are "not packed", but one
+    names a real, recognized skill that ships nowhere by design (no release is ever owed for it), while
+    the other means the id was not recognized at all (frequently a typo). Collapsing the printed word
+    into `neither` would stop a wrong release but leave a caller unable to tell "ships nowhere, by
+    design" from "I don't know that id" — that distinction lives in stdout, not the exit code; see
+    `main()`'s exit-code comment for why `operator-scope` intentionally shares exit 1 with `neither`
+    rather than getting a third code of its own.
 
     A skill id present in more than one of {kit rows, `scope: driver`, `scope: operator`} would be a
     roster defect (the populations are meant to partition the tree, #1531's closure check); this
@@ -760,22 +767,34 @@ def main(argv: list[str]) -> int:
     # --which is a second touch-nothing reference seam (.github#2333), answered before catalog
     # validation for the same reason `--digest` is: a caller asking "which artifact ships this skill"
     # must get an answer even from a tree that would otherwise fail `--check` (a mid-edit worktree,
-    # for instance — exactly when this question is asked). Three distinguishable exit codes, so a
-    # caller can branch without parsing stdout, while stdout still names the answer either way — never
-    # silent (acceptance criterion 3, .github#2333):
-    #   0  a real package mapping (`FS.GG.Kit` or `FS.GG.Drivers`) — a release IS owed for this id.
-    #   2  `operator-scope` (.github#2339) — a real, recognized id that ships in NO package by design
-    #      (ADR-0057); no release is ever owed for it. Distinct from 1 on purpose: an operator-scope id
-    #      is not an error, so it must not share the exit code an unrecognized id gets.
-    #   1  `neither` — the id was not recognized at all, usually a typo.
+    # for instance — exactly when this question is asked). Stdout names the answer either way — never
+    # silent (acceptance criterion 3, .github#2333) — and AC-2 (.github#2339) requires that vocabulary,
+    # not the exit code, to distinguish `operator-scope` from `neither`; the two-value exit split below
+    # satisfies both without a third exit code.
+    #
+    # EXIT 0 IS THE ONLY "GO" SIGNAL, AND IT MEANS EXACTLY ONE THING: a real package ships this id —
+    # `FS.GG.Kit` or `FS.GG.Drivers` — so a release MAY be owed (read stdout for which). Every other
+    # answer, including `operator-scope`, is exit 1. This was deliberately NOT given its own exit code
+    # (.github#2339 round 1): this repo's dominant exit-code idiom treats every small integer above 1 as
+    # loaded with an "abstain / no verdict / could not look" meaning that `operator-scope` does not
+    # have (it is a confident, complete answer) — `ExitCode.Defect = 2`
+    # (`src/FS.GG.Coord.Cli/Program.fs`, `src/FS.GG.Coord.Core/ExitCode.fs`); a dozen `scripts/check-*.py`
+    # gates use exit 2 for "the gate cannot reach a verdict"; MORE of them — `check-paths-coherence.py`,
+    # `check-roster-closure.py`, `check-required-contexts.py`, `check-sparse-checkout-closure.py`,
+    # `check-workflow-permissions.py`, `check-workflow-timeouts.py`, `check-reusable-job-ids.py`,
+    # `check-ignored-author-coherence.py`, `check-engine-flag-narrative.py`,
+    # `check-worker-id-attractor.py` — use exit 3 the SAME way, even more of them than exit 2; and this
+    # very file's own `--digest` branch above already returns 2 for "could not read the bytes." Reusing
+    # ANY of that space for `operator-scope` risks a reader trained on this repo's own idiom treating a
+    # complete, correct answer as a request to retry or escalate. Extending the pre-existing two-value
+    # split (0/1) adds no new number for anything to collide with, and keeps the one exit code that
+    # means "go" — 0 — exclusively true: a naive `if generate-driver-manifest --which ID; then
+    # cut_release; fi` cannot mistake `operator-scope` for permission to publish, which a fresh exit 0
+    # for it could (the failure mode #2135/#2333 exist to prevent, one level up).
     if which_id is not None:
         artifact = which_artifact(which_id, catalog_root)
         sys.stdout.write(artifact + "\n")
-        if artifact in ("FS.GG.Kit", "FS.GG.Drivers"):
-            return 0
-        if artifact == "operator-scope":
-            return 2
-        return 1
+        return 0 if artifact in ("FS.GG.Kit", "FS.GG.Drivers") else 1
 
     # --list is the generated-paths roster contract (ADR-0044): one `kind<TAB>path<TAB>marker` row per
     # emitted artifact, touch nothing, exit 0. The manifest is a WHOLE generated file (no embedded

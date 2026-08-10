@@ -323,12 +323,19 @@ else
   fail=$((fail+1))
 fi
 
+# Exit code: 0 means "a package ships this, a release may be owed" and ONLY `FS.GG.Kit`/`FS.GG.Drivers`
+# get it. `operator-scope` shares exit 1 with `neither` DELIBERATELY (.github#2339 round 1) — this
+# repo's dominant idiom loads every small integer above 1 with an "abstain / no verdict" meaning
+# `operator-scope` does not have, so it gets no exit code of its own; stdout alone carries the
+# distinction AC-2 requires. These exact-equality checks (stdout AND exit code) also guard the
+# regression the round-1 critique named: if `operator-scope` ever again returns exit 2, these two
+# cases redden on the exit code even though stdout still reads correctly.
 expect_which "kit-tracked (packed in FS.GG.Kit)" "check-board" "FS.GG.Kit" 0
 expect_which "scope: driver, packed in FS.GG.Drivers per the packing rule" "work-board" "FS.GG.Drivers" 0
-expect_which "scope: operator ships in NO package (ADR-0057) — distinct answer, distinct exit code" \
-  "drive-board" "operator-scope" 2
+expect_which "scope: operator ships in NO package (ADR-0057) — distinct stdout, exit 1 (not a fresh code)" \
+  "drive-board" "operator-scope" 1
 expect_which "publishing-and-deployment is itself scope: operator, not scope: driver — no release owed" \
-  "publishing-and-deployment" "operator-scope" 2
+  "publishing-and-deployment" "operator-scope" 1
 expect_which "an id in no population at all is reported, never silent" "spectre-console" "neither" 1
 expect_which "an unknown id is reported, never silent, and never confused with operator-scope" \
   "not-a-real-skill" "neither" 1
@@ -375,7 +382,7 @@ if needle not in text:
 path.write_text(text.replace(needle, needle.replace('"scope": "driver"', '"scope": "operator"'), 1))
 PY
 expect_which "flipping work-board's scope driver->operator moves the answer off FS.GG.Drivers" \
-  "work-board" "operator-scope" 2
+  "work-board" "operator-scope" 1
 
 # `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
 # today. Each registry mutation below must make that generated region stale without touching the skill.
