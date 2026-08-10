@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2070-workspace-provider-activation/spec.md sha256:e4b7fbd4c083b91d2b645e9f7757624e4d0f7bc2867306c232c4a036472b138e schemaVersion:1
+- spec: work/2070-workspace-provider-activation/spec.md sha256:293767836afcf8f4f6f32cbc884011a82533760fed8fae986312b333522cc893 schemaVersion:1
 - clarifications: work/2070-workspace-provider-activation/clarifications.md sha256:fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd schemaVersion:1
-- checklist: work/2070-workspace-provider-activation/checklist.md sha256:98cf65d772005e0c47ae8d48ec946bc1d36ea442c5c758b550a6d0998ae9b03f schemaVersion:1
+- checklist: work/2070-workspace-provider-activation/checklist.md sha256:91a57e93011e7f02dd4616829b2762c3725f3551536488ca16454ae00c88c182 schemaVersion:1
 
 ## Plan Scope
 - Work item 2070-workspace-provider-activation is planned from the current specification, clarification, and checklist facts.

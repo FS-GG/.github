@@ -21,8 +21,8 @@ Prose status: checklistReady
 - work/2070-workspace-provider-activation/clarifications.md
 
 ## Source Snapshot
-- spec: work/2070-workspace-provider-activation/spec.md sha256:101d28c38ba63593b031601b3b18515c8073db8985f94841f9a104d9c6c2a1e1 schemaVersion:1
-- clarifications: work/2070-workspace-provider-activation/clarifications.md sha256:be465a89126dce8592c8399463a09e326edcb9417169a266273826290f2c565c schemaVersion:1
+- spec: work/2070-workspace-provider-activation/spec.md sha256:293767836afcf8f4f6f32cbc884011a82533760fed8fae986312b333522cc893 schemaVersion:1
+- clarifications: work/2070-workspace-provider-activation/clarifications.md sha256:fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

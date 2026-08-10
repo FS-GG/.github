@@ -49,31 +49,53 @@ wizard knowing the registry states only proven, live facts — never a predicted
   released `0.9.0` because phase 6 has not run).
 
 ## Coherent-Set Decisions (settled here, before any registry edit)
-- DEC-001: The template package is `FS.GG.Workspace.Template` (renamed from the frozen
-  `FS.GG.Templates`/`fs.gg.templates` line, which topped out at 0.7.1 per FS-GG/FS.GG.Templates#349).
-  Register package-version **0.8.0**, not the newer 0.8.1 live on nuget.org. Rationale: 0.8.0 is the
-  version independently byte-verified against issue #349's own handoff evidence (nupkg SHA-256
-  `11b57ac61e2c3eadaefae0d20ae427e4ca6f7593585cf79e5f6e89565b93c473`, matching the closing issue's
-  own reported hash), the version every one of the four `providers/*.providers.yml` descriptors in
-  FS-GG/FS.GG.Templates pins (`source: FS.GG.Workspace.Template::0.8.0`), and the exact version
-  EHotwagner/S.I.R.#138 (merge `b17ac33bd6e4765c53d9ecccc7939204a3671fa8`) consumed and proved
-  (`.fsgg/scaffold-provenance.json` records `templateRef: "FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game"`).
-  0.8.1 is a real, live, independently-verified artifact (nupkg SHA-256
-  `102c72364ce0018b34950774b86ee12d0f6da43e0de36d609f14bfbdae5c5d21`) but ships from an unrelated
-  hardening cut (FS.GG.Templates PRs #397/#399/#401/#403) that no provider descriptor or consumer
-  has re-pinned to yet. Advancing the org registry to 0.8.1 ahead of Templates' own descriptors
-  would repeat the "registry-says-what-it-wishes-were-true" failure `registry/dependencies.yml`'s
-  own culture repeatedly names (publish-before-flip, FR-007 in that file's convention) — the coherent
-  set records what is actually consumed, not merely what is newest on the feed.
-- DEC-002: Register a new contract row for `FS.GG.Game.Skills`, owner `game`, version/package-version
-  **0.7.0**, tag `skills/v0.7.0`, consumer `[sdd]`. Rationale: FS-GG/FS.GG.Game#552 (closed via PR
-  #554, merge `7fa79f29023468a6bcd4ef7ef5b696abeba508ec`) published it; FS-GG/FS.GG.SDD#817 (closed
-  via PR #819, merge `aa1d6d4c1d105a0dba87a39230cfea1fb90dafc9`) proved SDD's production scaffold
-  materializer adopts exactly that version and emits the `fs-gg-game-fable` skill with digest
-  `443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50` — independently re-derived from
-  the downloaded `fs.gg.game.skills.0.7.0.nupkg` and matching the digest already recorded at
-  `registry/skills.yml:207`. nuget.org also now serves 0.8.0, but nothing in this coherent set (the
-  SDD materializer, the registry) has adopted it, so 0.7.0 is the version this activation names.
+- DEC-001 (CORRECTED — see addendum below): The template package is `FS.GG.Workspace.Template`
+  (renamed from the frozen `FS.GG.Templates`/`fs.gg.templates` line, which topped out at 0.7.1 per
+  FS-GG/FS.GG.Templates#349). Register package-version **0.8.1** (the live newest; corrected from an
+  initial, wrong 0.8.0 — see DEC-001-ADDENDUM). Tag `fs-gg-templates/v0.8.1` → `286c2a43250edb1f60a72d10fc53e645a397556c`
+  (PRs #397/#399/#401/#403, FS.GG.Templates#386 — a real fix closing a `**/.nuget/**` leak into
+  generated products). Independently downloaded and byte-verified: nupkg SHA-256
+  `102c72364ce0018b34950774b86ee12d0f6da43e0de36d609f14bfbdae5c5d21`; byte-diffed against 0.8.0
+  (nupkg SHA-256 `11b57ac61e2c3eadaefae0d20ae427e4ca6f7593585cf79e5f6e89565b93c473`) confirms only
+  the five `.template.config/template.json` files changed and no template identity was added or
+  removed. FS-GG/FS.GG.Templates' four `providers/*.providers.yml` descriptors and the real first
+  consumer (EHotwagner/S.I.R.#138, merge `b17ac33bd6e4765c53d9ecccc7939204a3671fa8`) still name
+  `0.8.0` — that is a `dependencies:`-edge fact (what a consumer actually pins), independent of this
+  row's `package-version`, which is a feed-mirroring fact (see addendum).
+  - **DEC-001-ADDENDUM (repair round, CI red on PR#2344 head `824c4c2f`)**: the original DEC-001
+    reasoning — "don't pin ahead of what a consumer/descriptor has adopted" — is correct in spirit
+    but was applied to the wrong field. `scripts/check-feed-coherence.py` (`.github/workflows/feed-coherence.yml`)
+    asserts, unconditionally, that a contract row's `package-version` equals the literal newest
+    version live on the feed; it has no "known-lag" escape and none is wanted — that discipline
+    (`FR-007`/publish-before-flip) exists specifically so `package-version` never silently drifts
+    behind a real publish. The field that legitimately encodes "what a consumer actually pins,
+    which may lag" is a `dependencies:` edge (e.g. the pre-existing `templates -> rendering` edge,
+    which lags Rendering's newest publish for exactly this reason). Registering `package-version:
+    0.8.0` therefore reddened `feed-coherence`'s `feed` job (`BEHIND the feed`) on the first push.
+    Corrected to 0.8.1, the literal newest, independently re-verified live at repair time
+    (`curl https://api.nuget.org/v3-flatcontainer/fs.gg.workspace.template/index.json` →
+    `["0.8.0","0.8.1"]`) and confirmed clean end-to-end with a real token:
+    `python scripts/check-feed-coherence.py registry/dependencies.yml` → `ok`.
+- DEC-002 (CORRECTED — see addendum below): Register a new contract row for `FS.GG.Game.Skills`,
+  owner `game`, version/package-version **0.8.0** (corrected from an initial, wrong 0.7.0 — see
+  DEC-002-ADDENDUM), tag `skills/v0.8.0` → `7b8d24479a83b64a68645f47dd943f9b615e7064`, consumer
+  `[sdd]`. FS-GG/FS.GG.Game#552 (closed via PR#554, merge `7fa79f29023468a6bcd4ef7ef5b696abeba508ec`)
+  published 0.7.0; Game published 0.8.0 afterward (`gh api compare/skills/v0.7.0...skills/v0.8.0` =
+  two unrelated docs-only commits, #557/#558). FS-GG/FS.GG.SDD#817 (closed via PR#819, merge
+  `aa1d6d4c1d105a0dba87a39230cfea1fb90dafc9`) proved SDD's production scaffold materializer adopts
+  0.7.0 and emits the `fs-gg-game-fable` skill with digest
+  `443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50` — but independently
+  re-downloading `fs.gg.game.skills.0.8.0.nupkg` (SHA-256
+  `e058642649510e730da168d97610fe96d12805870112127227a64b15e9b1b9f0`) and re-extracting that same
+  skill file shows the digest is IDENTICAL at 0.8.0, so SDD's proof still holds against the version
+  this row now names. The `sdd -> game` dependency edge stays at `game-skills@0.7.0` — SDD's own
+  `src/FS.GG.SDD.Commands/packages.lock.json` still pins `FS.GG.Game.Skills` `[0.7.0, )`, which is a
+  genuine "what the consumer pins" fact, distinct from this row's feed-mirroring `package-version`.
+  - **DEC-002-ADDENDUM (repair round, same cause as DEC-001-ADDENDUM)**: pinning 0.7.0 by
+    consumer-adoption reasoning reddened `feed-coherence`'s `feed` job the same way
+    (`BEHIND the feed`, declares 0.7.0 but newest is 0.8.0). Corrected to 0.8.0 for the same reason:
+    `package-version` mirrors the feed unconditionally; "what SDD actually consumes" is the separate
+    `sdd -> game` dependency edge, left at 0.7.0 since that is what SDD's source genuinely pins.
 - DEC-003: `game-sim-core` (FS.GG.Game.Core) stays pinned at the already-registered **0.13.0**
   (`registry/dependencies.yml` line 831-833) — independently re-confirmed live on nuget.org and as
   the exact `[0.13.0]` pin in S.I.R.'s `Directory.Packages.props`. Its `consumers:` list gains
