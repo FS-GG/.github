@@ -1340,6 +1340,138 @@ module Client =
                           ReconcileFresh = receiptValid
                           TriageFresh = receiptValid
                           CurrencyScoped = receiptValid }
+                    if opts.Events then
+                        // The material-transition/active-inventory projection (.github#2135), layered
+                        // over the SAME live board scan and review evidence this command already reads —
+                        // no new REST surface for the review sub-states.
+                        let reviewByPr =
+                            reviewEvidence |> List.map (fun (pr, _, chain, _) -> pr, chain) |> Map.ofList
+
+                        // Obligation/merge facts (clarify DEC-002) are read on the SAME `ItemPr` boundary
+                        // `reviewEvidence` already uses — the markerless-duplicate probe. A claim still
+                        // held by a live marker has no board-recorded PR number to look up by, so a merge
+                        // that happens while the marker is still live classifies `Claimed` rather than
+                        // `MergedAwaitingObligations`/`Released` until the claim releases. That is an
+                        // honest reflection of what a board scan can discover today, not a shortcut this
+                        // projection invents — no other command in this CLI discovers an arbitrary claimed
+                        // item's PR number without the caller supplying it (`delivery --pr N`).
+                        let mergedFactsByRef =
+                            snapshot.Candidates
+                            |> List.choose (fun candidate ->
+                                match candidate.Item.ItemPr with
+                                | Some pr ->
+                                    let owner = candidate.Item.Ref.Owner
+                                    let repo = candidate.Item.Ref.Repo
+                                    match Reads.prLandable ctx.Transport owner repo pr, Reads.prHeadSha ctx.Transport owner repo pr, Reads.commentsWithIdentity ctx.Transport owner repo pr with
+                                    | PrMerged, Ok head, Ok comments ->
+                                        let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+                                        match DeliveryApplication.obligationsFromComments head comments with
+                                        | Ok obligations -> Some(candidate.Item.Ref.Canonical, (pr, true, obligations))
+                                        | Error _ -> Some(candidate.Item.Ref.Canonical, (pr, false, []))
+                                    | _ -> None
+                                | None -> None)
+                            |> Map.ofList
+
+                        let facts =
+                            snapshot.Candidates
+                            |> List.map (fun candidate ->
+                                let refText = candidate.Item.Ref.Canonical
+                                let claimWorker = candidate.Item.Claim |> Option.map (fun (claim, _) -> claim.Worker.Value)
+                                let review = candidate.Item.ItemPr |> Option.bind (fun pr -> Map.tryFind pr reviewByPr)
+                                let merged, obligationsDeclared, obligations, pr =
+                                    match Map.tryFind refText mergedFactsByRef with
+                                    | Some(pr, declared, obligations) -> true, declared, obligations, Some pr
+                                    | None -> false, false, [], candidate.Item.ItemPr
+
+                                let evidence =
+                                    match claimWorker, pr with
+                                    | Some worker, Some pr -> $"claim:worker=%s{worker};pr=%d{pr}"
+                                    | Some worker, None -> $"claim:worker=%s{worker}"
+                                    | None, Some pr -> $"pr:%d{pr}"
+                                    | None, None -> $"board-status:%A{candidate.Item.Status}"
+
+                                ({ Ref = refText
+                                   ReadOk = not candidate.Item.ItemPrUnreadable
+                                   UnreadableReason =
+                                    if candidate.Item.ItemPrUnreadable then
+                                        Some "the markerless item-PR probe was unreadable"
+                                    else
+                                        None
+                                   BoardStatus = Some candidate.Item.Status
+                                   IssueState = Some candidate.Item.State
+                                   ClaimWorker = claimWorker
+                                   HumanBlock = candidate.Item.HumanBlock
+                                   Pr = pr
+                                   Review = review
+                                   Merged = merged
+                                   ObligationsDeclared = obligationsDeclared
+                                   Obligations = obligations
+                                   Evidence = evidence
+                                   ObservedAt = now
+                                   SourceSha = sourceSha }: DriverEvents.ItemFacts))
+
+                        let priorCursor =
+                            match opts.CursorFile with
+                            | Some path when File.Exists path ->
+                                try
+                                    use document = JsonDocument.Parse(File.ReadAllText path)
+
+                                    document.RootElement.EnumerateObject()
+                                    |> Seq.choose (fun prop ->
+                                        DriverEvents.decodeState (prop.Value.GetString())
+                                        |> Option.map (fun state -> prop.Name, state))
+                                    |> Map.ofSeq
+                                with _ ->
+                                    Map.empty
+                            | _ -> Map.empty
+
+                        let projection = DriverEvents.project priorCursor facts now
+
+                        match opts.CursorFile with
+                        | Some path ->
+                            let encoded =
+                                projection.Cursor
+                                |> Map.toList
+                                |> List.map (fun (ref, state) -> ref, DriverEvents.encodeState state)
+                                |> dict
+
+                            File.WriteAllText(path, JsonSerializer.Serialize encoded)
+                        | None -> ()
+
+                        match opts.Render with
+                        | Json ->
+                            let transitions =
+                                projection.Transitions
+                                |> List.map (fun e ->
+                                    {| ref = e.Ref
+                                       previous = e.Previous |> Option.map DriverEvents.encodeState |> Option.toObj
+                                       state = DriverEvents.encodeState e.New
+                                       reason = e.Reason
+                                       evidence = e.Evidence
+                                       observedAt = e.ObservedAt
+                                       sourceSha = e.SourceSha |})
+
+                            let activeItems =
+                                projection.Active
+                                |> List.map (fun c ->
+                                    {| ref = c.Ref
+                                       state = DriverEvents.encodeState c.State
+                                       reason = c.Reason
+                                       evidence = c.Evidence |})
+
+                            printfn
+                                "%s"
+                                (JsonSerializer.Serialize
+                                    {| schema = "fsgg.coord.driver-events/1"
+                                       sourceSha = sourceSha
+                                       renderedAt = projection.RenderedAt
+                                       transitions = transitions
+                                       active = activeItems |})
+                        | Text -> printfn "%s" (DriverEvents.renderText projection)
+
+                        ExitGreen
+                    else
+
                     let reviewedPrs = reviewEvidence |> List.map (fun (pr, _, _, _) -> pr) |> Set.ofList
                     let workerReturns =
                         snapshot.Candidates

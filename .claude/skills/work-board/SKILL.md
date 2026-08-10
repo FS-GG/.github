@@ -44,16 +44,25 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    contention or an indeterminate receipt, and human/decision blockers; never print a low activity
    count without its measured cause. Reuse the reporter's session-locked derived cache for unchanged
    heartbeats; width and color are local projections and never justify another board read.
-   Whenever the host changes or observes a material transition
-   (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
-   emit exactly two concise user-facing lines:
-   - `<item> — <new status>: <work in progress or gate being awaited>`
-   - `Active: <item> — <current activity/gate>; ...` listing every currently active item and its
-     current activity or gate.
+   **Do not detect transitions or reconstruct the active set from memory** (`.github#2135`) — that is
+   exactly what went late, omitted externally claimed work, and reported a still-live claim as
+   terminal. After every fresh board read, run
+   `scripts/fsgg-coord driver --events --cursor <session-scoped-cursor-file> --text` (or `--json` for
+   the reporter) and forward its two-line projection: it is engine-derived from live board, claim, PR,
+   review, and delivery-obligation facts, is idempotent (an unchanged read emits no duplicate line), and
+   its active inventory is always the COMPLETE set — claimed, in review, newly dispatched, or merged
+   with unverified obligations — independent of whether anything transitioned this read, including work
+   claimed or advanced by a process other than this host. Emit the two lines it produces:
+   - line 1 — the material transition(s) since the cursor's last read (`no material transitions` when
+     none occurred; never fabricate one to fill this line).
+   - line 2 — the complete active inventory (`no active items` when the projection reports none).
    Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
-   item remains active, continue the host loop, and report each transition when it occurs. A `Done`
-   transition that landed via the repair phase names it explicitly — `<item> — Done (repair phase):
-   <PR>` — so a completion report cannot describe a repair-phase landing as an ordinary one.
+   item remains active, continue the host loop, and report each transition when it occurs. A read that
+   fails renders as the projection's own `unreadable` state for that item, never as a silently emptied
+   active line — surface it exactly as reported, do not paper over it with the prior read's line. Each
+   transition names both its previous and new state (`<item>: <previous> -> <new> (<reason>)`), so a
+   `Done` that passed through `review-repair:N` is visible in the line itself — read the `previous`
+   state before describing a landing as an ordinary one; never paraphrase it away.
 6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
    After an exhausted third round, refuse a fourth round of that same chain and automatically dispatch
