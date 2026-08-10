@@ -1426,7 +1426,9 @@ module ApplicationServiceTests =
             for v, previous in previousIdentity do
                 Environment.SetEnvironmentVariable(v, previous)
 
-    let private run (transport: Fake.Recorder) (args: string list) : int * string =
+    /// `internal`, not `private` — #2306's `WidenRefusalTests.fs` drives the same fixture rather than
+    /// duplicating GraphQL board-bootstrap mocking that has nothing to do with what it tests.
+    let internal run (transport: Fake.Recorder) (args: string list) : int * string =
         let dir = Path.Combine(Path.GetTempPath(), "fsgg-1517-" + Guid.NewGuid().ToString "n")
 
         try
@@ -1512,17 +1514,20 @@ module ApplicationServiceTests =
         Assert.Contains("scripts/fsgg-coord", client)
         Assert.Contains("scripts/repos.sh relock", client)
 
-    let private disjointWorld () =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal disjointWorld () =
         world (Map.ofList [ 74, "Paths: scripts/fsgg-coord" ]) (Map.ofList [ 74, "kite-469" ]) false
 
     /// #74 is ours; #75 is a live neighbour reserving the very path we are about to declare.
-    let private overlappingWorld (sayFails: bool) =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal overlappingWorld (sayFails: bool) =
         world
             (Map.ofList [ 74, "Paths: scripts/fsgg-coord"; 75, "Paths: src/Shared.fs" ])
             (Map.ofList [ 74, "kite-469"; 75, "otter-9c21" ])
             sayFails
 
-    let private parsed (out: string) : JsonElement =
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal parsed (out: string) : JsonElement =
         // A `--json` projection is a SINGLE object and nothing else on the stream. Parsing the WHOLE of
         // stdout — not a line grepped out of it — is what makes "and no prose" an assertion rather than a
         // hope: prose above or below the object is a parse failure here.
@@ -1531,9 +1536,12 @@ module ApplicationServiceTests =
         with e ->
             failwithf "stdout was not one JSON document — this is the #1517 defect.\nstdout was:\n%s\n(%s)" out e.Message
 
-    let private str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
+    /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
+    let internal str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
 
-    let private strings (name: string) (el: JsonElement) =
+    /// `internal` — reused by #2323 round 1's repair legs in #2306's `WidenRefusalTests.fs` (see `run`,
+    /// above), which assert the JSON `paths` array on a refused update rather than merely its `verdict`.
+    let internal strings (name: string) (el: JsonElement) =
         el.GetProperty(name).EnumerateArray() |> Seq.map (fun e -> e.GetString()) |> List.ofSeq
 
     [<Theory>]
@@ -1716,9 +1724,9 @@ module ApplicationServiceTests =
         Assert.Equal(6, code)
 
     [<Theory>]
-    [<InlineData("widen", "widened")>]
-    [<InlineData("set-paths", "set")>]
-    let ``the OVERLAP human projection is unchanged and puts nothing else on stdout`` (verb: string, past: string) =
+    [<InlineData("widen", "add paths to")>]
+    [<InlineData("set-paths", "replace")>]
+    let ``the OVERLAP human projection puts nothing else on stdout`` (verb: string, action: string) =
         let code, out =
             run (overlappingWorld false) [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--paths"; "src/Shared.fs" ]
 
@@ -1726,15 +1734,22 @@ module ApplicationServiceTests =
         // stdout. That is the split #1517 fixes FOR MACHINES by putting the detail in the object — it does
         // not move a byte of the human form, which existing recipes read.
         //
-        // Pinned as an EQUALITY, like the DISJOINT leg above. A `DoesNotContain "OVERLAP"` would still pass
-        // if the Text branch also emitted the JSON object, whose verdict is the lowercase `"overlap"`.
-        let declared =
+        // #2306 — THE RECEIPT LINE ITSELF CHANGED, because the OLD line ("widened FS.GG.SDD#74 → Paths: …")
+        // claimed a completed write, and a refused widen no longer writes anything. Pinned as an EQUALITY,
+        // like the DISJOINT leg above: a `DoesNotContain "OVERLAP"` would still pass if the Text branch
+        // also emitted the JSON object, whose verdict is the lowercase `"overlap"`.
+        let would =
             if verb = "widen" then
                 "scripts/fsgg-coord, src/Shared.fs"
             else
                 "src/Shared.fs"
 
-        Assert.Equal($"%s{past} FS.GG.SDD#74 → Paths: %s{declared}" + Environment.NewLine, out)
+        Assert.Equal(
+            $"refused to %s{action} FS.GG.SDD#74's touch-set → Paths: unchanged (%s{would} would overlap a live claim)"
+            + Environment.NewLine,
+            out
+        )
+
         Assert.Equal(6, code)
 
     // ---- .github#1896 — CLIENT CALLERS REFUSE INCOMPLETE LOCK READS -------------------------------
@@ -2243,11 +2258,14 @@ module ApplicationServiceTests =
             // #2250 reads the same cached board universe as the scheduler: bootstrap plus one page.
             Assert.Equal(3, world.GraphQlCalls)
 
-            // REST: the issue-list read, one marker read for the ONE colliding row, and the writes `widen`
-            // makes on top (the body PATCH and the courtesy notice). The number is pinned rather than
-            // bounded so that a re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779
-            // measured and refused — cannot land quietly.
-            Assert.Equal(7, world.RestCalls)
+            // REST: the issue-list read and one marker read for the ONE colliding row, plus the ONE write
+            // `widen` still makes on an OVERLAP verdict — the courtesy notice to the colliding holder.
+            // #2306 removed the OTHER write this count used to include: the body PATCH on the SUBJECT
+            // item, which a refused widen must not issue (a refusal that mutates the declaration is
+            // exactly the defect #2306 fixes). The number is pinned rather than bounded so that a
+            // re-introduced per-row marker sweep — the ~74-reads-per-widen shape #1779 measured and
+            // refused — cannot land quietly, and so that the removed PATCH cannot quietly come back either.
+            Assert.Equal(6, world.RestCalls)
         finally
             try
                 Directory.Delete(dir, true)
