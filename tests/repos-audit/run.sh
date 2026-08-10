@@ -2282,7 +2282,7 @@ chmod +x "$MUTATED_AUDIT"
 AUDIT_SAVED="$AUDIT"; AUDIT="$MUTATED_AUDIT"
 wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering cone-foreign-file
 out="$(run 2>&1)" && rc=0 || rc=$?
-AUDIT="$AUDIT_SAVED"
+AUDIT="$AUDIT_SAVED"; rm -f "$MUTATED_AUDIT"; MUTATED_AUDIT=""
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'roster was not available when its git tree was needed' \
     && ! printf '%s' "$out" | grep -q 'not on this audit' ; } \
   && ok "sparse: an empty internal roster is a no-verdict, never an off-roster boundary (#1610)" \
