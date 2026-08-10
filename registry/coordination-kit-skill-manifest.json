@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "118ea6362ef32a444527439a81505fe9417bbee870e195837b93802f079445c0",
+      "tree-sha256": "dda9cbebb37c66e919272ae084ec77b5280f0d4614d7a32d89a99ea40148675e",
       "files": [
         {
           "path": "SKILL.md",
@@ -18,7 +18,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "d9ccfb4ca0dacbc37be4d1167749cd4bf00c1bacb9620d3d3cfa273535e52d40",
+          "sha256": "260a2270f5954a5f54b7d8cf5369b880e6cca024c0fb777e5d8f83fd8b90603f",
           "executable": false
         },
         {
@@ -28,7 +28,7 @@
         },
         {
           "path": "references/mechanical-reconciliation.md",
-          "sha256": "190fa49d9978abb1a9cfaf617876cb1eeeccdd380e6dca10ff7e12e2ac43ef71",
+          "sha256": "455f2b3d81e54baaa08bcad80eeaa615104ed29e699d7020efdfdc25369b77f5",
           "executable": false
         },
         {
