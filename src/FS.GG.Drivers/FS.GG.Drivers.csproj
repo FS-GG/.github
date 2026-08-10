@@ -60,7 +60,14 @@
          prose itself. Before this, no packed text named that command mode at all — this is new
          guidance, not a prose tidy of already-true text. Packed member set and destinations
          unchanged. -->
-    <Version>0.17.0</Version>
+    <!-- 0.17.0 -> 0.18.0, a MINOR (.github#2175): the packed work-board guidance now instructs the
+         host to cross-check the independent-review marker chain against the engine's typed
+         review/repair protocol (`scripts/fsgg-coord review`) during verification, alongside the
+         existing qualitative reading of the chain and materiality. A receiver materializing this
+         driver version picks up new, receiver-visible host behaviour — not a rewording of an
+         already-true description. drive-board is unaffected (operator scope; not packed here).
+         Packed member set and destinations unchanged. -->
+    <Version>0.18.0</Version>
 
     <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>
