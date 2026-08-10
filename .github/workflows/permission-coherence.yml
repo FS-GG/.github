@@ -74,9 +74,14 @@ jobs:
           # Env-passed, never interpolated into the run body — the org's uniform anti-injection
           # pattern (cf. feed-coherence.yml, contract-coherence.yml).
           GH_TOKEN: ${{ github.token }}
-          # Live 2026-08-08 from GET /orgs/FS-GG/installations for fs-gg-cross-repo-dispatch.
+          # Live 2026-08-10 from GET /orgs/FS-GG/installations for fs-gg-cross-repo-dispatch (.github#2264
+          # PR #2271, round 2): `organization_projects: write` added, an org-admin action taken the same
+          # day to let coord-board-reconcile.yml mint a token that can write the Coordination Projects v2
+          # board — verified live via `gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug
+          # == "fs-gg-cross-repo-dispatch") | .permissions'`, which returned `organization_projects:"write"`
+          # alongside every grant already listed below. Every other value here is unchanged from 2026-08-08.
           # Hyphens are action input spelling; underscores are GitHub's API spelling.
-          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,packages:read,pull_requests:write
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write
         run: |
           rc=0
           out="$(python scripts/check-workflow-permissions.py --root . --app-grants "$FSGG_APP_GRANTS" 2>&1)" || rc=$?
@@ -156,7 +161,7 @@ jobs:
       - name: Assert the pinned App grant inventory is current
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,packages:read,pull_requests:write
+          FSGG_APP_GRANTS: administration:write,contents:write,issues:write,metadata:read,organization_administration:read,organization_projects:write,packages:read,pull_requests:write
         run: |
           live="$(gh api orgs/FS-GG/installations --jq '.installations[] | select(.app_slug == "fs-gg-cross-repo-dispatch") | .permissions')"
           [ -n "$live" ] || { echo '::error title=permission-coherence: no verdict::The App installation was not readable.'; exit 1; }
