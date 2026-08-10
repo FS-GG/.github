@@ -60,6 +60,10 @@ contracts:
   # FS.GG.Net's six-package coherent set (ADR-0052). Same ORPHAN-check reason: every CONTRACT_PACKAGES
   # mapping must have a contract in the registry under test.
   - { id: fs-gg-net,                     version: "0.1.0",           package-version: "0.1.0" }
+  # .github#2070: FS.GG.Templates' renamed package (FS.GG.Workspace.Template) and FS.GG.Game's skill
+  # delivery package. Same ORPHAN-check reason as coord-engine/new-sdd-workspace/fs-gg-net above.
+  - { id: fs-gg-workspace-template,      version: "0.8.0",           package-version: "0.8.0" }
+  - { id: game-skills,                   version: "0.7.0",           package-version: "0.7.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
 
@@ -84,7 +88,9 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Net.WebSocket.Server":        ["0.1.0"],
   "FS.GG.Net.Protobuf":                ["0.1.0"],
   "FS.GG.Net.Grpc":                    ["0.1.0"],
-  "FS.GG.Net.Elmish":                  ["0.1.0"]
+  "FS.GG.Net.Elmish":                  ["0.1.0"],
+  "FS.GG.Workspace.Template":          ["0.8.0"],
+  "FS.GG.Game.Skills":                 ["0.7.0"]
 }
 JSON
 

@@ -77,6 +77,15 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
         "FS.GG.Net.Grpc",
         "FS.GG.Net.Elmish",
     ],
+    # .github#2070 (epic #2067 terminal activation): the contract id is `fs-gg-workspace-template`
+    # (matching this registry's other kebab-case ids), but the PUBLISHED package is
+    # `FS.GG.Workspace.Template` — renamed from the planned `FS.GG.Templates` package (ADR-0072 §1)
+    # before its first publish. Map the id that actually exists on the feed, not the contract id;
+    # this is exactly the kind of rename this map exists to make explicit rather than silently miss.
+    "fs-gg-workspace-template": ["FS.GG.Workspace.Template"],
+    # .github#2070: FS.GG.Game's independently-versioned skill-delivery package (owner-sourced
+    # fs-gg-game-fable skill, materialized by SDD's production scaffold materializer).
+    "game-skills": ["FS.GG.Game.Skills"],
 }
 
 # The ONE row whose `version` is feed-derived and whose reconcile is bespoke (framework/template-only
