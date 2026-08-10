@@ -48,7 +48,8 @@ let private row repo n blockedBy state isPr : Scan.Row =
       Severity = Unset
       Phase = None
       CreatedAt = None
-      SweptBody = None }
+      SweptBody = None
+      NodeId = None }
 
 /// The hub — one `.github` item — and its three OPEN dependents, all in the OTHER repo. Nothing else on
 /// the board names it, so under a `--repo .github` scope every one of those edges used to vanish.

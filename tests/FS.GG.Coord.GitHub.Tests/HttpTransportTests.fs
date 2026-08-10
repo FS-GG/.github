@@ -6,6 +6,7 @@ open System.Net
 open System.Text
 open System.Threading
 open Xunit
+open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
@@ -153,6 +154,29 @@ let ``the adapter FOLLOWS Link rel=next and CONCATENATES the pages`` () =
         Assert.Equal(2, List.length server.Requests)
 
     | Error e -> failwith $"pagination must succeed — got %A{e}"
+
+[<Fact>]
+let ``#2308 markerScan keeps a stale claim found only on REST page two`` () =
+    use server = new Server()
+    let old = DateTimeOffset.UtcNow.AddHours(-3).ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    server.On(fun req res ->
+        if req.Url.PathAndQuery.Contains "page=2" then
+            server.Json res 200 $"""[{{"id":7,"body":"<!-- fsgg:claim worker=page-two-holder lease=120 -->","updated_at":"%s{old}"}}]""" []
+        else
+            server.Json
+                res
+                200
+                "[]"
+                [ "Link", $"<%s{server.Base}/repos/FS-GG/FS.GG.SDD/issues/42/comments?page=2>; rel=\"next\"" ])
+
+    use transport = new HttpTransport(server.Base, "t")
+
+    match Reads.markerScan (transport :> IGitHubTransport) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok scan ->
+        Assert.Contains(scan.Markers, fun marker -> marker.Worker = WorkerId "page-two-holder")
+        Assert.Equal(2, List.length server.Requests)
+    | Error e -> failwith $"page-two marker must remain visible to the complete scan — got %A{e}"
 
 [<Fact>]
 let ``a MERGED response carries NO ETag - page one's validator dies at the merge`` () =

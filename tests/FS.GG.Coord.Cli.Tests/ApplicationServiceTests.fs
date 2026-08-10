@@ -85,7 +85,8 @@ module ApplicationServiceTests =
           Severity = Unset
           Phase = None
           CreatedAt = None
-          SweptBody = None }
+          SweptBody = None
+          NodeId = None }
 
     [<Fact>]
     let ``ready application service preserves the exact JSON projection contract`` () =

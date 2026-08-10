@@ -46,7 +46,8 @@ let private aRow: Scan.Row =
       Severity = Unset
       Phase = None
       CreatedAt = None
-      SweptBody = None }
+      SweptBody = None
+      NodeId = None }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
 /// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the

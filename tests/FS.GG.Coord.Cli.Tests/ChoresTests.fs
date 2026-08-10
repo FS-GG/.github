@@ -306,7 +306,8 @@ let private classRow (boardClass: ItemClass option) : Scan.Row =
       Severity = Unset
       Phase = None
       CreatedAt = None
-      SweptBody = None }
+      SweptBody = None
+      NodeId = None }
 
 /// The scan's OWN document for those rows, written by the engine's writer rather than by this test.
 let private snapshotOf (rows: Scan.Row list) =

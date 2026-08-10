@@ -116,7 +116,12 @@ module Scan =
           /// reaches `scanFresh` fresh regardless — nothing is lost by excluding it from the cache file,
           /// and excluding it is what stops a `Scheduling` read that happens to share a cache file from
           /// ever inheriting a census read it never asked for and never paid for.
-          SweptBody: IoResult<string> option }
+          SweptBody: IoResult<string> option
+
+          /// The stable GraphQL node identity.  A cache may retain this address, but never the mutable
+          /// body or comment facts it identifies: `snapshot` re-reads those facts fresh before deciding
+          /// a reservation.
+          NodeId: string option }
 
     /// Scan the whole board. Paginated, cursor-based, and CACHED (90s, both invariants — `Cache`).
     ///

@@ -419,7 +419,8 @@ let private scopeRow (repo: string) (n: int) : Scan.Row =
       Severity = Unset
       Phase = None
       CreatedAt = None
-      SweptBody = None }
+      SweptBody = None
+      NodeId = Some $"I_scope_%d{n}" }
 
 let private scopeBoard =
     [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
@@ -625,7 +626,23 @@ let private offBoardRoutes (list: string) (comments: int -> string) (body: strin
     Fake.Recorder(fun (req: Request) ->
         let path = req.Path
 
-        if path.EndsWith "/comments" then
+        if path = "graphql" && req.Subject = "fresh issue body and comment-count facts" then
+            let aliases =
+                match req.Body with
+                | Query(_, variables) ->
+                    variables
+                    |> List.mapi (fun i (_, value) ->
+                        let id =
+                            match value with
+                            | VId value -> value
+                            | _ -> failwith "node-facts ids must use the GraphQL ID type"
+
+                        $"\"n%d{i}\":{{\"id\":\"%s{id}\",\"body\":%s{System.Text.Json.JsonSerializer.Serialize body},\"comments\":{{\"totalCount\":1}}}}")
+                    |> String.concat ","
+                | _ -> failwith "node facts must be GraphQL"
+
+            ok $"{{\"data\":{{%s{aliases}}}}}"
+        elif path.EndsWith "/comments" then
             let n =
                 path.Split('/') |> Array.filter (fun s -> s <> "") |> Array.item 4 |> int
 
@@ -651,6 +668,95 @@ let private incompleteLiveMarker (worker: string) (n: int) =
 
     $"""[{{"id":%d{7000 + n},"body":"<!-- fsgg:claim worker=%s{worker} lease=120 -->\nheld","updated_at":"%s{now}"}},
          {{"id":%d{8000 + n},"body":null,"updated_at":"%s{now}"}}]"""
+
+let private nodeFactsResponse (id: string) (body: string) (commentCount: int) =
+    let encodedBody = System.Text.Json.JsonSerializer.Serialize body
+    $"""{{"data":{{"n0":{{"id":"%s{id}","body":%s{encodedBody},"comments":{{"totalCount":%d{commentCount}}}}}}}}}"""
+
+[<Fact>]
+let ``#2308 exact fresh zero-comment facts eliminate both per-row REST reads`` () =
+    use _sandbox = new Sandbox()
+
+    let row = scopeRow "FS.GG.SDD" 99
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Path, req.Subject with
+            | "graphql", "fresh issue body and comment-count facts" ->
+                ok (nodeFactsResponse row.NodeId.Value "Paths: src/Board/**" 0)
+            | path, _ when path.EndsWith "/issues" -> ok "[]"
+            | path, _ when path.EndsWith "/comments" -> Error(Http(500, "zero comments must not start a marker scan"))
+            | path, _ when path.Contains "/issues/" -> Error(Http(500, "fresh body facts must replace issue-get"))
+            | _, _ -> Error(Http(500, "unexpected request")))
+
+    match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"an exact zero comment fact must be enough to assemble the snapshot — got %A{e}"
+    | Ok(document, _) ->
+        Assert.Contains("src/Board/**", document)
+        Assert.Equal(0, transport.Count "issue-get")
+        Assert.Equal(0, transport.Count "comment-list")
+        Assert.Equal(2, transport.RestCalls) // the separate off-board reservation sweep; no candidate REST reads
+
+[<Fact>]
+let ``#2308 positive count still sees an old marker beyond a 100-comment bound`` () =
+    use _sandbox = new Sandbox()
+
+    let row = scopeRow "FS.GG.SDD" 99
+    let old = DateTimeOffset.UtcNow.AddHours(-3).ToString("yyyy-MM-ddTHH:mm:ssZ")
+    let noise =
+        [ 1 .. 100 ]
+        |> List.map (fun id -> $"{{\"id\":%d{9000 + id},\"body\":\"ordinary comment\",\"updated_at\":\"%s{old}\"}}")
+
+    let oldClaim =
+        $"{{\"id\":7,\"body\":\"<!-- fsgg:claim worker=old-holder lease=120 -->\\nheld\",\"updated_at\":\"%s{old}\"}}"
+
+    let comments = "[" + String.concat "," (noise @ [ oldClaim ]) + "]"
+
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Path, req.Subject with
+            | "graphql", "fresh issue body and comment-count facts" ->
+                ok (nodeFactsResponse row.NodeId.Value "Paths: src/Board/**" 101)
+            | path, _ when path.EndsWith "/comments" -> ok comments
+            | path, _ when path.EndsWith "/issues" -> ok "[]"
+            | path, _ when path.Contains "/issues/" -> Error(Http(500, "fresh body facts must replace issue-get"))
+            | _, _ -> Error(Http(500, "unexpected request")))
+
+    match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"a complete positive-count marker scan must keep an old unreaped claim — got %A{e}"
+    | Ok(document, _) ->
+        Assert.Contains("old-holder", document)
+        Assert.Equal(0, transport.Count "issue-get")
+        Assert.Equal(1, transport.Count "comment-list")
+
+[<Fact>]
+let ``#2308 a missing or mismatched fresh node fact refuses rather than deciding a cached lock`` () =
+    use _sandbox = new Sandbox()
+
+    let row = scopeRow "FS.GG.SDD" 99
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Path, req.Subject with
+            | "graphql", "fresh issue body and comment-count facts" ->
+                ok (nodeFactsResponse "I_wrong_node" "Paths: src/Board/**" 0)
+            | _, _ -> Error(Http(500, "facts must fail before any fallback lock read")))
+
+    match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
+    | Error(Malformed(_, detail)) -> Assert.Contains("do not match", detail)
+    | other -> failwith $"a mismatched fresh node fact must fail closed — got %A{other}"
+
+[<Fact>]
+let ``#2308 a legacy cache row without a node id takes the former fresh REST lock path`` () =
+    use _sandbox = new Sandbox()
+
+    let row = { scopeRow "FS.GG.SDD" 99 with NodeId = None }
+    let transport = offBoardRoutes "[]" (fun _ -> "[]") """{"number":99,"body":"Paths: src/Board/**"}"""
+
+    match Scan.snapshot transport [ row ] (Some "FS.GG.SDD") false None 120 with
+    | Error e -> failwith $"a legacy cache row must remain safely schedulable through REST — got %A{e}"
+    | Ok(document, _) ->
+        Assert.Contains("src/Board/**", document)
+        Assert.Equal(1, transport.Count "issue-get")
+        Assert.Equal(1, transport.Count "comment-list")
 
 [<Fact>]
 let ``#1896 a board candidate with an incomplete marker scan refuses the scheduler snapshot`` () =
