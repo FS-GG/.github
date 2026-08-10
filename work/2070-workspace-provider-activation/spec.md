@@ -141,6 +141,42 @@ wizard knowing the registry states only proven, live facts — never a predicted
   `profile/README.md`'s per-shape one-word availability column alone — genuinely different facts
   (a consumer's historical pin, not the registry's newest-tracking pin), now with an explicit note
   distinguishing the two so a reader does not mistake one for a stale copy of the other.
+- DEC-008 (repair round 4, critic finding on PR#2344 head `d4134f3e`, review
+  https://github.com/FS-GG/.github/pull/2344#issuecomment-5244832877): round 3's handoff claimed
+  "Added EV017 to the SDD evidence set … registered via a genuine JUnit report." **That claim was
+  false.** `EV017` was only ever a `<testcase>` name inside a throwaway `verify-suite.sh` run's JUnit
+  output — a label in a report file, never an entry in `work/2070-workspace-provider-activation/evidence.yml`,
+  never traced to a task/obligation, and never committed anywhere. `git diff --name-status
+  0c4aaf62..d4134f3e` shows zero files added. This is corrected, not merely acknowledged: `plan.md`
+  gained `VO-003` (a real verification obligation), `fsgg-sdd tasks` generated the real `T013` from
+  it, and `work/2070-workspace-provider-activation/evidence.yml` now carries a real `EV013` — with an
+  invertibility proof actually run before being registered (green on the corrected tree → mutated the
+  six sites back to the pre-repair stale literals → red, 3/8 sub-checks correctly failed → restored
+  from backup, confirmed byte-identical via `git status` → green again), and a genuine `observedRun`
+  receipt from that final green run.
+  - **Evidence-count history, explained rather than left to be asked about a second time.** The
+    observed-run `passed` count attached to every `kind: verification` entry moved 12 (round 3,
+    `0c4aaf62`) → 6 (round 4, `d4134f3e` — the claimed-but-undelivered EV017 round) → 4 (round 5, this
+    correction). Each shrink has a stated reason, not a silent loss: round 3's 12-check suite
+    re-verified every fact from scratch (nuget.org downloads/hashes for both packages, the S.I.R. PR
+    state, the filed finding, schema-unchanged, both fixtures, the live feed-coherence run) because
+    that round changed the registry's version pins themselves. Round 4 touched only prose, not any
+    previously-verified fact, so it re-ran only the checks whose subject that round's diff could have
+    broken (registry/projection validity, both fixtures, the live feed check, and the — falsely
+    claimed — prose check) and treated the untouched facts (package hashes, S.I.R. state, the filed
+    issue) as already-proven and unchanged rather than re-downloading multi-megabyte packages to
+    re-establish facts nothing in that diff could have altered. This round (5) is the same judgement,
+    narrower still: it re-runs only what round 4 touched plus the one thing round 4 got wrong (the
+    prose check, now real) — registry/projection validity, the driver manifest, the live feed check,
+    and the genuine `EV013`. It does **not** re-run the two fixture scripts
+    (`tests/feed-coherence/run.sh`, `tests/skill-registry/run.sh`), because nothing in this round's
+    diff touches their subjects (`scripts/registry_packages.py`, the driver-manifest inputs) either —
+    consistent with the same "only re-verify what could have broken" discipline, stated explicitly
+    here rather than left for a reader to infer from a shrinking number. The mechanism itself
+    (one aggregate report's pass/fail count stamped onto every `kind: verification` entry, regardless
+    of which entry's specific fact a given report's checks individually cover) is unchanged from round
+    1 and was not introduced by this correction; only the honest bookkeeping of what actually exists
+    in `evidence.yml` is new.
 - SB-002: Do not implement or edit `scripts/NewSddWorkspace/Program.fs`; do not run `dotnet pack`,
   tag, or publish any package; do not run `.github/workflows/release-new-sdd-workspace.yml`.
 

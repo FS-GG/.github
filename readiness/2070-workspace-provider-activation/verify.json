@@ -41,7 +41,7 @@
       "kind": "analysis",
       "digest": {
         "algorithm": "sha256",
-        "value": "2142a355ffd263870f8b80b280e379992b1beae6c1e24952760d69921ab3cb7f"
+        "value": "dd119e3d249c848727750c4f7b6fbc9dec7514f444125a5772795cd5be255492"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -51,7 +51,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "32e4ee85688013a1e9a3bfbd551273e8e62183f8978be46dfc4a7f334581acd9"
+        "value": "20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "evidence",
       "digest": {
         "algorithm": "sha256",
-        "value": "caf91ea01ab72d71d4d7a89e915a5a168096932da6f0ef3ac6a2453d56e10600"
+        "value": "640cfcb4094ca4cb48a537862cb1929e7edb932fdee219a4e7643cf02dfc602a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "9afaed3f8f03bffcb9b21041623a59271a3106d693e390ffce58d9a42d1e64c3"
+        "value": "e7f994930120c5be128811f41cbdb9f6b5edff5dcf5b3e4376ddf0366d2d3c7a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -91,7 +91,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541"
+        "value": "0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -101,7 +101,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "2fb9cfffc829fed25e0f1321ceee8ec30e8133a50986e2337da7c8e8783d8d49"
+        "value": "05e83592fe43d7a26fbd94fa1cd4d5193414ff1e9917c7a14a1f90401950f00e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -141,8 +141,8 @@
     ]
   },
   "taskGraph": {
-    "taskCount": 12,
-    "dependencyCount": 7,
+    "taskCount": 13,
+    "dependencyCount": 8,
     "dependenciesValid": true,
     "statusesValid": true,
     "findingIds": []
@@ -407,6 +407,28 @@
       "severity": "advisory",
       "diagnosticIds": [],
       "correction": "Resolve evidence obligation EV012."
+    },
+    {
+      "id": "ED-EV013",
+      "obligationId": "EV013",
+      "state": "supported",
+      "observed": true,
+      "classifiedRequirement": false,
+      "journeyRequirement": false,
+      "evidenceIds": [
+        "EV013"
+      ],
+      "affectedTaskIds": [
+        "T013"
+      ],
+      "affectedSourceIds": [
+        "PC-002",
+        "PD-004",
+        "VO-003"
+      ],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "testDispositions": [
@@ -611,6 +633,22 @@
       "severity": "advisory",
       "diagnosticIds": [],
       "correction": "Record a verifying test for EV012."
+    },
+    {
+      "id": "TD-EV013",
+      "obligationId": "EV013",
+      "state": "satisfied",
+      "observed": true,
+      "evidenceIds": [
+        "EV013"
+      ],
+      "affectedTaskIds": [
+        "T013"
+      ],
+      "affectedRequirementIds": [],
+      "severity": "ready",
+      "diagnosticIds": [],
+      "correction": ""
     }
   ],
   "skillVisibility": [
@@ -618,7 +656,8 @@
       "skill": "automated-tests",
       "requiringTaskIds": [
         "T009",
-        "T010"
+        "T010",
+        "T013"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2070-workspace-provider-activation/tasks.yml",
@@ -675,7 +714,8 @@
       "skill": "readiness-evidence",
       "requiringTaskIds": [
         "T009",
-        "T010"
+        "T010",
+        "T013"
       ],
       "visibility": "visible",
       "sourceArtifactPath": "work/2070-workspace-provider-activation/tasks.yml",

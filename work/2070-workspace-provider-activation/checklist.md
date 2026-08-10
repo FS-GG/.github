@@ -21,7 +21,7 @@ Prose status: checklistReady
 - work/2070-workspace-provider-activation/clarifications.md
 
 ## Source Snapshot
-- spec: work/2070-workspace-provider-activation/spec.md sha256:6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541 schemaVersion:1
+- spec: work/2070-workspace-provider-activation/spec.md sha256:0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964 schemaVersion:1
 - clarifications: work/2070-workspace-provider-activation/clarifications.md sha256:fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd schemaVersion:1
 
 ## Checklist Items

@@ -11,11 +11,11 @@ sourceAnalysis: readiness/2070-workspace-provider-activation/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/2070-workspace-provider-activation/analysis.json
-    digest: 2142a355ffd263870f8b80b280e379992b1beae6c1e24952760d69921ab3cb7f
+    digest: dd119e3d249c848727750c4f7b6fbc9dec7514f444125a5772795cd5be255492
     schemaVersion: 1
   - label: checklist
     path: work/2070-workspace-provider-activation/checklist.md
-    digest: 32e4ee85688013a1e9a3bfbd551273e8e62183f8978be46dfc4a7f334581acd9
+    digest: 20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73
     schemaVersion: 1
   - label: clarifications
     path: work/2070-workspace-provider-activation/clarifications.md
@@ -23,15 +23,15 @@ sourceSnapshots:
     schemaVersion: 1
   - label: plan
     path: work/2070-workspace-provider-activation/plan.md
-    digest: 9afaed3f8f03bffcb9b21041623a59271a3106d693e390ffce58d9a42d1e64c3
+    digest: e7f994930120c5be128811f41cbdb9f6b5edff5dcf5b3e4376ddf0366d2d3c7a
     schemaVersion: 1
   - label: spec
     path: work/2070-workspace-provider-activation/spec.md
-    digest: 6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541
+    digest: 0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964
     schemaVersion: 1
   - label: tasks
     path: work/2070-workspace-provider-activation/tasks.yml
-    digest: 2fb9cfffc829fed25e0f1321ceee8ec30e8133a50986e2337da7c8e8783d8d49
+    digest: 05e83592fe43d7a26fbd94fa1cd4d5193414ff1e9917c7a14a1f90401950f00e
     schemaVersion: 1
 evidence:
   - id: EV001
@@ -52,10 +52,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-001 (AC-001): Game Skills publication and SDD production materializer adoption confirmed against nuget.org and merge commits, not just issue claims."]
@@ -77,10 +77,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-002 (AC-002): FS.GG.Workspace.Template's published artifact downloaded and byte-verified rather than trusted from the closing comment alone."]
@@ -102,10 +102,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-003 (AC-003): S.I.R.#138 and the Babylon bindings reference confirmed to use only public, versioned feed artifacts with zero sibling-checkout edges."]
@@ -127,10 +127,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["FR-004 (AC-004): every added/edited row names only a version independently verified under EV001-EV003."]
@@ -152,10 +152,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["FR-005 (AC-005): projections regenerated and the shipped validator reports clean."]
@@ -177,10 +177,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["DEC-001: registered the descriptor's stated (understated) floor rather than silently correcting another repo's file; filed FS-GG/FS.GG.Templates#407 as the root-cause finding."]
@@ -202,10 +202,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["PC-001 satisfied by EV001-EV004's citations."]
@@ -227,10 +227,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["PC-002 satisfied — see DEC-001/DEC-002/DEC-004 in spec.md for the explicit non-advancement rationale."]
@@ -252,10 +252,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: [VO-001 satisfied.]
@@ -277,10 +277,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: [VO-002 satisfied.]
@@ -302,10 +302,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:6362fa4308f4cc74abc71f87cbb8970df7b20c799cdb81c95885e19120ab4b88"
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 6
+      passed: 4
       failed: 0
       skipped: 0
     notes: ["PM-001: no migration owed; schemaVersion unchanged."]
@@ -330,5 +330,30 @@ evidence:
     scope: "docs/registry/compatibility.md's generated regions staying current with registry/dependencies.yml"
     laterLifecycleVisibility: "Re-checked by scripts/generate-projections --check on every future registry edit (CI-equivalent gate); no further action owed by this item."
     notes: ["GV-001's currency claim is carried by EV005/EV010's observed-run receipt, not by this obligation directly."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: [docs/architecture.md, profile/README.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 4
+      failed: 0
+      skipped: 0
+    notes: ["VO-003/T013: prose-consistency check for docs/architecture.md and profile/README.md against the corrected registry pins (fs-gg-workspace-template 0.8.1, game-skills 0.8.0), while confirming the one genuinely distinct fact (S.I.R.'s actually-consumed 0.8.0) stays present with its disambiguating note rather than being wrongly 'corrected' into a false statement. The checker script is not committed to the tree (same durability model as EV005/EV013-EV016 in prior rounds) -- durability is this observed-run receipt, not the script file."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

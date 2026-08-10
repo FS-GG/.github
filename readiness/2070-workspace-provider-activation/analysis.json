@@ -41,7 +41,7 @@
       "kind": "checklist",
       "digest": {
         "algorithm": "sha256",
-        "value": "32e4ee85688013a1e9a3bfbd551273e8e62183f8978be46dfc4a7f334581acd9"
+        "value": "20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -61,7 +61,7 @@
       "kind": "plan",
       "digest": {
         "algorithm": "sha256",
-        "value": "9afaed3f8f03bffcb9b21041623a59271a3106d693e390ffce58d9a42d1e64c3"
+        "value": "e7f994930120c5be128811f41cbdb9f6b5edff5dcf5b3e4376ddf0366d2d3c7a"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -71,7 +71,7 @@
       "kind": "specification",
       "digest": {
         "algorithm": "sha256",
-        "value": "6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541"
+        "value": "0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -81,7 +81,7 @@
       "kind": "tasks",
       "digest": {
         "algorithm": "sha256",
-        "value": "2fb9cfffc829fed25e0f1321ceee8ec30e8133a50986e2337da7c8e8783d8d49"
+        "value": "05e83592fe43d7a26fbd94fa1cd4d5193414ff1e9917c7a14a1f90401950f00e"
       },
       "schemaVersion": 1,
       "schemaStatus": "current"
@@ -270,6 +270,16 @@
     },
     {
       "id": "AR019",
+      "sourcePath": "work/2070-workspace-provider-activation/plan.md",
+      "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "AC-001",
@@ -279,7 +289,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR020",
+      "id": "AR021",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "AC-002",
@@ -289,7 +299,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR021",
+      "id": "AR022",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "AC-003",
@@ -299,7 +309,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR022",
+      "id": "AR023",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "AC-004",
@@ -309,7 +319,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR023",
+      "id": "AR024",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "AC-005",
@@ -319,7 +329,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR024",
+      "id": "AR025",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/checklist.md",
       "sourceId": null,
@@ -329,7 +339,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR025",
+      "id": "AR026",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/plan.md",
       "sourceId": null,
@@ -339,7 +349,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR026",
+      "id": "AR027",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "FR-001",
@@ -349,7 +359,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR027",
+      "id": "AR028",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "FR-002",
@@ -359,7 +369,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR028",
+      "id": "AR029",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "FR-003",
@@ -369,7 +379,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR029",
+      "id": "AR030",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "FR-004",
@@ -379,7 +389,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR030",
+      "id": "AR031",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "FR-005",
@@ -389,7 +399,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR031",
+      "id": "AR032",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/clarifications.md",
       "sourceId": null,
@@ -399,7 +409,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR032",
+      "id": "AR033",
       "sourcePath": "work/2070-workspace-provider-activation/spec.md",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": null,
@@ -409,7 +419,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR033",
+      "id": "AR034",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T006",
@@ -419,7 +429,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR034",
+      "id": "AR035",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T007",
@@ -429,7 +439,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR035",
+      "id": "AR036",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T008",
@@ -439,7 +449,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR036",
+      "id": "AR037",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T009",
@@ -449,7 +459,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR037",
+      "id": "AR038",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T010",
@@ -459,7 +469,7 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR038",
+      "id": "AR039",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T011",
@@ -469,10 +479,20 @@
       "diagnosticIds": []
     },
     {
-      "id": "AR039",
+      "id": "AR040",
       "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
       "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
       "sourceId": "T012",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR041",
+      "sourcePath": "work/2070-workspace-provider-activation/tasks.yml",
+      "targetPath": "work/2070-workspace-provider-activation/tasks.yml",
+      "sourceId": "T013",
       "targetId": "T001",
       "relationship": "taskDependency",
       "state": "current",
@@ -481,7 +501,7 @@
   ],
   "readiness": {
     "status": "implementationReady",
-    "readyCount": 39,
+    "readyCount": 41,
     "advisoryCount": 0,
     "warningCount": 1,
     "blockingCount": 0,

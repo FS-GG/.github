@@ -13,7 +13,7 @@ work:
 sources:
   - label: spec
     path: work/2070-workspace-provider-activation/spec.md
-    digest: 6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541
+    digest: 0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964
     schemaVersion: 1
   - label: clarifications
     path: work/2070-workspace-provider-activation/clarifications.md
@@ -21,11 +21,11 @@ sources:
     schemaVersion: 1
   - label: checklist
     path: work/2070-workspace-provider-activation/checklist.md
-    digest: 32e4ee85688013a1e9a3bfbd551273e8e62183f8978be46dfc4a7f334581acd9
+    digest: 20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73
     schemaVersion: 1
   - label: plan
     path: work/2070-workspace-provider-activation/plan.md
-    digest: 9afaed3f8f03bffcb9b21041623a59271a3106d693e390ffce58d9a42d1e64c3
+    digest: e7f994930120c5be128811f41cbdb9f6b5edff5dcf5b3e4376ddf0366d2d3c7a
     schemaVersion: 1
 tasks:
   - id: T001
@@ -148,6 +148,16 @@ tasks:
     sourceIds: [GV-001, PD-001, PD-005]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV012]
+  - id: T013
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV013]
 acceptedDeferrals: []
 findings: []
 advisoryNotes:

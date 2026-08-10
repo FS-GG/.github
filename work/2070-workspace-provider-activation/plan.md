@@ -16,9 +16,9 @@ publicOrToolFacingImpact: true
 Prose status: planned
 
 ## Source Snapshot
-- spec: work/2070-workspace-provider-activation/spec.md sha256:6c99446038a59eaf8d742da5f20272da38e274a3b71b17f62f027d353a5f3541 schemaVersion:1
+- spec: work/2070-workspace-provider-activation/spec.md sha256:0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964 schemaVersion:1
 - clarifications: work/2070-workspace-provider-activation/clarifications.md sha256:fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd schemaVersion:1
-- checklist: work/2070-workspace-provider-activation/checklist.md sha256:32e4ee85688013a1e9a3bfbd551273e8e62183f8978be46dfc4a7f334581acd9 schemaVersion:1
+- checklist: work/2070-workspace-provider-activation/checklist.md sha256:20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73 schemaVersion:1
 
 ## Plan Scope
 - Work item 2070-workspace-provider-activation is planned from the current specification, clarification, and checklist facts.
@@ -40,6 +40,7 @@ Prose status: planned
 ## Verification Obligations
 - VO-001 [PD-001] [PC-001] semanticTest: Each of FR-001/FR-002/FR-003's independent re-derivations (nuget.org version/hash checks, PR merge-commit ancestry via `gh api .../compare`, S.I.R./Templates dependency-file inspection) was run and its output recorded verbatim in spec.md's Coherent-Set Decisions before any registry row was written — evidence precedes assertion, never the reverse.
 - VO-002 [PD-004] [PC-002] semanticTest: `scripts/generate-projections --check` exits clean and the registry's shipped validator (`scripts/check-projection.py` / `fsgg-sdd registry`) reports no schema violation over the edited `registry/dependencies.yml`/`registry/skills.yml`/`docs/registry/compatibility.md`.
+- VO-003 [PD-004] [PC-002] semanticTest: repair round (critic finding, review comment 5244832877): a hand-run, invertible grep-based check confirms `docs/architecture.md`'s and `profile/README.md`'s hand-authored prose names only `fs-gg-workspace-template` 0.8.1 / `game-skills` 0.8.0 (never the superseded 0.8.0/0.7.0, except the one deliberately-distinct S.I.R.-consumed-version mention at `docs/architecture.md` line ~417, which the check asserts is present with its disambiguating "its consumed version" note). Proven invertible before being registered: run once against the corrected tree (pass), run again after temporarily reintroducing the stale `0.8.0`/`0.7.0` literals at the six sites (fail, observed red), then restored and re-run (pass again). The check script is not committed (same as every other round's throwaway `verify-suite.sh`); its durability is the `evidence.yml` `observedRun` receipt this VO's task registers, not the script file.
 
 ## Performance Intent
 No performance intent is declared for this work item.
