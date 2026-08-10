@@ -56,6 +56,35 @@ Registry release inventory: 9 package-bearing contracts across 7 producers; 8 co
   ADR-0007 that calls the feed "dormant/deferred" predates provisioning — trust the
   registry.)
 
+## `.github` ships two more release surfaces the table above never names
+
+`.github` also publishes **its own skills**, as two artifacts the generated inventory above cannot
+list — it's derived from `registry/dependencies.yml`'s package-bearing contracts, and neither surface
+is one:
+
+- **`FS.GG.Kit`** packs the skills `registry/repos.yml`'s `kit:` rows name, plus the `fsgg-coord` /
+  `fsgg-coord-report` client shims.
+- **`FS.GG.Drivers`** packs the skills `registry/driver-skill-manifest.json` tracks, released via
+  `.github/workflows/release-drivers.yml`.
+
+The two populations are disjoint and **already machine-derived** (ADR-0058: derive, don't restate) —
+do not hand-copy either roster here; a static list drifts the moment a skill moves or a new one ships.
+Before editing a skill under `.claude/skills/<id>`/`.agents/skills/<id>` and declaring a release owed,
+ask the generated source directly instead of guessing:
+
+    scripts/generate-driver-manifest --which <skill-id>
+
+prints exactly one of `FS.GG.Kit`, `FS.GG.Drivers`, or `neither` to stdout (exit 0/0/1), read live
+from the same two committed sources `--write` reads — `registry/repos.yml`'s `kit:` rows and this
+emitter's own `DRIVERS` list. **This skill you are reading is itself `FS.GG.Drivers`-tracked**
+(`scripts/generate-driver-manifest --which publishing-and-deployment` → `FS.GG.Drivers`): editing it
+obliges a Drivers release, never a Kit one.
+
+Get the artifact wrong and the tag is real and immutable regardless
+(`kit-release-tags-are-immutable`): `.github#2135` declared a `FS.GG.Kit` release for a
+`drive-board`/`work-board` change that was actually `FS.GG.Drivers` content, tagged `kit/v0.47.0`, and
+published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.github#2333`).
+
 ## How a package gets published
 
 Each **producer owns its release workflow**, including `.github` for its two org-level tools
