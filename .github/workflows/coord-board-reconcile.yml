@@ -9,10 +9,25 @@ on:
     types: [opened, reopened, edited, synchronize, closed]
   pull_request_review:
     types: [submitted, edited, dismissed]
-  check_suite:
-    types: [completed]
-  workflow_run:
-    types: [completed]
+  # NEITHER check_suite NOR workflow_run IS HERE (round-2 review repair, .github#2264 PR #2271).
+  #
+  # check_suite: types: [completed] was REMOVED, not fixed — GitHub's docs are explicit: "this event
+  # does not trigger workflows if the check suite was created by GitHub Actions." This repo's CI is
+  # entirely GitHub Actions, so every check_suite on every commit here is Actions-authored, and this
+  # trigger could never once have fired. It was dead on arrival, silently, alongside the workflow_run
+  # defect below — the same "mechanism present, nothing executing it" shape `rook-b01d` found in the
+  # code layer, one layer up in the workflow layer.
+  #
+  # workflow_run: types: [completed] was REMOVED, not repaired with a `workflows:` list. It requires
+  # one (its absence is what made this whole file fail to parse and start — GitHub scheduled ZERO jobs
+  # for it, invisible to `check-runs`, only visible via `gh run list`/the runs API). Naming this repo's
+  # CI workflows just to make the parse succeed would need updating on every future CI workflow
+  # add/rename — a maintenance burden with no compensating value: `pull_request: [synchronize]` already
+  # fires a reconcile pass on every push (CI may still be running then; `PullRequest.ReviewOrCiActive`
+  # reads the live PR/CI state at THAT reconcile pass, not the triggering payload), and the hourly
+  # `schedule` below is exactly the "scheduled reconciliation fallback" AC-2 asks for — it closes the
+  # gap between a push-triggered pass and CI's actual completion within the hour, which is the same
+  # bound the item accepts everywhere else it is not itself the live event.
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
