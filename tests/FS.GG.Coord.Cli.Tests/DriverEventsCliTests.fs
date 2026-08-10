@@ -74,6 +74,40 @@ module DriverEventsCliTests =
         finally
             File.Delete path
 
+    [<Fact>]
+    let ``readEventsCursor: a DIRECTORY at the cursor path is a REFUSED read, never a silent empty cursor (repair round 2)`` () =
+        // fsgg:independent-review:v1 round 2 (wrenlet-9f2c): `File.Exists` returns FALSE for a
+        // directory as well as for a genuinely missing path, so the round-1 fix's existence check
+        // silently classified a directory as "never written" — the exact absent-vs-corrupt confusion
+        // repair round 1 closed everywhere else, surviving in the one case that does not look like a
+        // file. This is the gate-inversion evidence: this assertion fails against the pre-fix
+        // `not (File.Exists path)` shape (reproduced below, then reverted) and passes against the fix.
+        let path = tempCursorPath ()
+        Directory.CreateDirectory path |> ignore
+        try
+            match Client.readEventsCursor (Some path) with
+            | Error message -> Assert.Contains(path, message)
+            | Ok cursor -> Assert.Fail $"expected a directory at the cursor path to be REFUSED, got a silent Ok {cursor}"
+        finally
+            Directory.Delete path
+
+    [<Fact>]
+    let ``readEventsCursor: a directory at the cursor path never reaches writeEventsCursorAtomic, so no temp file is left behind (repair round 2)`` () =
+        // The critic's second, more serious consequence: control used to fall through past the
+        // silent `Ok Map.empty` into `writeEventsCursorAtomic`, whose `File.Move` cannot rename onto
+        // an existing directory and threw uncaught — leaking a `.tmp-<guid>` sibling on the crash.
+        // Confirming the fix means confirming BOTH halves: the read is refused (above), AND the write
+        // path is consequently never reached, so the directory's contents stay exactly empty.
+        let path = tempCursorPath ()
+        Directory.CreateDirectory path |> ignore
+        try
+            match Client.readEventsCursor (Some path) with
+            | Error _ -> ()
+            | Ok cursor -> Client.writeEventsCursorAtomic path cursor
+            Assert.Empty(Directory.GetFileSystemEntries path)
+        finally
+            Directory.Delete path
+
     // ---- writeEventsCursorAtomic — repair round 1, finding 2's second half ------------------------
 
     [<Fact>]

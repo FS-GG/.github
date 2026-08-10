@@ -1173,9 +1173,18 @@ module Client =
     /// must not collapse into the same silent `Map.empty`, or a cursor file truncated by a killed
     /// process reads back exactly as though nothing had ever run — the same fail-open shape this
     /// module refuses everywhere else (a failed read masquerading as a legitimate "no").
+    ///
+    /// A DIRECTORY at the cursor path is the SAME root cause wearing a different shape
+    /// (fsgg:independent-review:v1 round 2): `File.Exists` returns false for a directory exactly as
+    /// it does for a missing path, so without this check a directory silently read as "never
+    /// written" and fell through into `writeEventsCursorAtomic`, whose `File.Move` cannot rename onto
+    /// an existing directory and threw uncaught — a caller input error misreported as an internal
+    /// engine defect, plus a leaked temp file on the crash. Checked BEFORE `File.Exists` so it is
+    /// refused before either kind of "absent" reasoning is reached.
     let readEventsCursor (path: string option) : Result<DriverEvents.Cursor, string> =
         match path with
         | None -> Ok Map.empty
+        | Some path when Directory.Exists path -> Error $"cursor path '%s{path}' is a directory, not a file"
         | Some path when not (File.Exists path) -> Ok Map.empty
         | Some path ->
             try
