@@ -2368,8 +2368,34 @@ module Client =
                     | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
                     | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
 
+    /// True only for the one shape `Board.bootstrap` emits when the configured Projects v2 board itself
+    /// could not be resolved — a credential/visibility gap, not a real reconcile finding (round-2 review
+    /// repair, .github#2264 PR #2271; the org-level remedy is tracked at .github#2332, not here).
+    ///
+    /// SCOPED TO `reconcile` ALONE, deliberately not a change to `Errors.exitCode` — that shared table
+    /// already explains, in its own comment, why `NotFound` stays a real exit-1 finding for every other
+    /// caller (a mistyped `--repo`, a renamed board a human is debugging locally, ...): downgrading it
+    /// there would blunt the diagnostic for the callers who NEED it to stay loud. What is different here
+    /// is the CALLER — `coord-board-reconcile.yml` runs unattended, on a schedule, forever, against a
+    /// board this repo's default `GITHUB_TOKEN` cannot see at all today, and `.github#1611`/`#1582`
+    /// already established the org's position on an always-red unattended gate: it trains a reader to
+    /// ignore red as effectively as a gate that silently never runs. The message text this matches is
+    /// constructed in exactly one place (`Board.fs`'s `bootstrap`), not user input, so matching its
+    /// prefix is a real structural distinction, not a fragile string sniff of an incidental error.
+    let boardUnreachable (error: Errors.IoError) : bool =
+        match error with
+        | Errors.NotFound subject -> subject.StartsWith("no Projects v2 board titled ", StringComparison.Ordinal)
+        | _ -> false
+
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
+        | Error e when boardUnreachable e ->
+            eprint
+                $"fsgg-coord-engine: reconcile: %s{Errors.explain e} — NO VERDICT, not a pass: the board \
+itself could not be resolved (a credential/visibility gap), never mistake this for \"reached the board, \
+nothing to reconcile\". The remedy is org-level (grant this token Projects v2 read/write, or provision a \
+scoped credential) and is tracked at .github#2332, not fixable from this repo's tree."
+            ExitNoVerdict
         | Error e -> fail e
         // The scan ROWS, no longer discarded: `enrichBoardFacts` joins the board's `Class` column and each
         // item's title onto the parsed candidates (.github#1588). Both are scan facts that the snapshot
