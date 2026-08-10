@@ -33,6 +33,7 @@
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
     <Compile Include="ApplicationServiceTests.fs" />
+    <Compile Include="WidenRefusalTests.fs" />
     <Compile Include="ForceStealTests.fs" />
     <Compile Include="DeliveryRouteCliTests.fs" />
     <Compile Include="WhoLivenessTests.fs" />

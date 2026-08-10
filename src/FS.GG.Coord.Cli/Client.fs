@@ -5585,11 +5585,61 @@ module Client =
                                     with
                                     | Error e -> fail e
                                     | Ok collisions ->
-                                        match Writes.widen ctx.Transport held rewritten with
-                                        | Error e -> fail e
-                                        | Ok() ->
-                                            let paths = String.Join(", ", proposed.Tokens)
+                                        let paths = String.Join(", ", proposed.Tokens)
 
+                                        let receipt (collisions: PathCollision list) : string =
+                                            renderPathUpdateJson
+                                                { Ref = ref
+                                                  Worker = w.Id
+                                                  Kind = past
+                                                  Paths = proposed.Tokens
+                                                  Collisions = collisions }
+
+                                        // #2306 — REFUSE THE WRITE ONLY WHEN *THIS CALL'S OWN NEW TOKENS* COLLIDE, NOT
+                                        // WHENEVER THE FULL PROPOSED DECLARATION STILL SHOWS ANY COLLISION AT ALL.
+                                        //
+                                        // `collisions` above is unchanged — the #353 scan over the WHOLE proposed body,
+                                        // exactly as it always ran, and it still drives the DISJOINT/OVERLAP verdict and
+                                        // exit code below exactly as before. What #2306 fixes is narrower: `Writes.widen`
+                                        // used to run unconditionally once that scan merely COMPLETED (`Ok _`), so a scan
+                                        // that found a real collision still landed the PATCH — #2248's shape, where a
+                                        // widen's newly REQUESTED path itself overlapped a live claim and got written
+                                        // anyway. But a NARROWING (or an addition of a genuinely disjoint token) can
+                                        // surface a collision that predates the command and that the command's own tokens
+                                        // had no part in — the #1740 AC5 reasoning below — and refusing to write THAT
+                                        // would block the very narrowing this protocol recommends as the remedy (the
+                                        // courtesy notice below says exactly "narrow with `set-paths`"). So the write is
+                                        // gated on whether a NEW token — one `priorTokens` did not already carry — is
+                                        // itself part of a reported collision, not on whether the declaration merely
+                                        // still shows one. `TouchSet.decideUpdate` is the one place the ALL-OR-NOTHING
+                                        // refusal rule for a collision so attributed is stated (see its `.fsi` doc); this
+                                        // call site supplies the attribution, not the threshold.
+                                        let newTokenStems =
+                                            proposed.Tokens
+                                            |> List.filter (fun t -> not (List.contains t priorTokens))
+                                            |> List.map TouchSet.stem
+                                            |> Set.ofList
+
+                                        let introducedCollision =
+                                            collisions
+                                            |> List.exists (fun (_, _, toks) -> toks |> List.exists newTokenStems.Contains)
+
+                                        let write =
+                                            match TouchSet.decideUpdate introducedCollision with
+                                            | TouchSet.CommitUpdate ->
+                                                Writes.widen ctx.Transport held rewritten |> Result.map (fun () -> true)
+                                            // NO PATCH IS ISSUED ON THIS PATH — that is the whole fix. `held`/`rewritten`
+                                            // are never handed to `Writes.widen`, so the body `Reads.issueBody` read
+                                            // above is exactly what remains: a widen/set-paths refused because ITS OWN
+                                            // requested paths collide leaves `Paths:` byte-identical (#2306 AC1/AC2), for
+                                            // a full collision or a partial one alike, since this command already
+                                            // computes ONE merged/replaced declaration and gates that ONE write — there
+                                            // is no per-token partial commit to leave behind.
+                                            | TouchSet.RefuseUpdate -> Ok false
+
+                                        match write with
+                                        | Error e -> fail e
+                                        | Ok committed ->
                                             // #1517 — THE RENDER MODE IS HONOURED HERE, and it was not before. `--json`
                                             // is `Global` in `scopeOf` and `command-contract` advertises it on both
                                             // verbs, so the parser accepted it, the residue rule had nothing to refuse,
@@ -5599,34 +5649,30 @@ module Client =
                                             // `widened <ref> → Paths: a, b` out of stdout and the overlap verdict out
                                             // of STDERR to learn what it had just done.
                                             //
-                                            // The TEXT projection below is byte-identical to what it has always been,
-                                            // deliberately: every existing recipe reads it. This is an addition.
-                                            //
-                                            // The JSON object cannot be written HERE, though the human receipt is: it
-                                            // carries the collision list, and whether each colliding holder was
-                                            // successfully NOTIFIED is not known until the notify loop has run. So the
-                                            // Json arm emits ONE object at the end of whichever branch it takes, and
-                                            // never a partial receipt first — a machine consumer gets one document per
-                                            // invocation or none.
+                                            // The TEXT projection is byte-identical to what it has always been WHEN THE
+                                            // WRITE LANDED (`committed`), deliberately: every existing recipe reads it.
+                                            // #2306 — when it did NOT land, the line must not claim it did.
                                             match opts.Render with
                                             | Json -> ()
-                                            | Text -> printfn "%s %s → Paths: %s" past ref.Short paths
+                                            | Text ->
+                                                if committed then
+                                                    printfn "%s %s → Paths: %s" past ref.Short paths
+                                                else
+                                                    printfn
+                                                        "refused to %s %s's touch-set → Paths: unchanged (%s would overlap a live claim)"
+                                                        action
+                                                        ref.Short
+                                                        paths
 
                                             // Declaration time is the cheap moment to learn that editing a kit source
                                             // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
                                             // It is stderr-only, so it cannot corrupt the JSON projection.
                                             KitDigest.digestWarn ()
 
-                                            let receipt (collisions: PathCollision list) : string =
-                                                renderPathUpdateJson
-                                                    { Ref = ref
-                                                      Worker = w.Id
-                                                      Kind = past
-                                                      Paths = proposed.Tokens
-                                                      Collisions = collisions }
-
                                             match collisions with
                                             | [] ->
+                                                // `collisions = []` implies `committed = true`: an empty scan can never
+                                                // report an introduced collision, so `decideUpdate` always commits here.
                                                 match opts.Render with
                                                 | Json -> printfn "%s" (receipt [])
                                                 | Text ->
@@ -5636,7 +5682,11 @@ module Client =
                                             | collisions ->
                                                 // The notify is the part a worker cannot do alone. A post that fails is
                                                 // reported, but the collision still stands — it does not become DISJOINT.
-
+                                                // This runs whether or not `committed` — #2306 does not withhold the
+                                                // courtesy notice from a REFUSED attempt: the other holder still benefits
+                                                // from knowing an overlapping request was made, even though nothing
+                                                // landed on this item, and #353's guarantee holds either way.
+                                                //
                                                 // #1517 — the notify OUTCOME is collected as it is printed, because the
                                                 // JSON receipt carries it. The stderr lines below are unchanged and are
                                                 // emitted in BOTH projections: they are operator diagnostics, not the
@@ -5672,7 +5722,14 @@ module Client =
                                                                 else
                                                                     "I do not know which of us declared these paths first, so this may or may not be new"
 
-                                                            $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            // #2306 — NEVER CLAIM A COMPLETED WRITE THAT DID NOT HAPPEN.
+                                                            // When `committed` this is byte-identical to the pre-#2306
+                                                            // copy; when not, it names the ATTEMPT and the REFUSAL instead
+                                                            // of asserting a mutation that never landed.
+                                                            if committed then
+                                                                $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which overlaps your touch-set here (%s{toksText}). %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                            else
+                                                                $"heads up: I attempted to %s{action} %s{ref.Short} (to `Paths: %s{paths}`), which would overlap your touch-set here (%s{toksText}). The request was REFUSED, and nothing was changed on my item. %s{origin}. This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
                                                         match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
                                                         | Error e ->
@@ -5711,7 +5768,8 @@ module Client =
 
                                                 // A real same-repo collision exits non-zero (engine ExitContended=6;
                                                 // bash's literal 1 disposed on the record, ADR-0040 §5). UNCHANGED by
-                                                // #1517: the renderer was the bug, the verbs' semantics were not.
+                                                // #1517/#2306: the renderer and the write gate were the bugs, the exit
+                                                // code semantics were not.
                                                 ExitContended
 
     let widen (ctx: Context) (opts: Options) : int = updateTouchSet Union ctx opts
