@@ -74,11 +74,18 @@ ask the generated source directly instead of guessing:
 
     scripts/generate-driver-manifest --which <skill-id>
 
-prints exactly one of `FS.GG.Kit`, `FS.GG.Drivers`, or `neither` to stdout (exit 0/0/1), read live
-from the same two committed sources `--write` reads — `registry/repos.yml`'s `kit:` rows and this
-emitter's own `DRIVERS` list. **This skill you are reading is itself `FS.GG.Drivers`-tracked**
-(`scripts/generate-driver-manifest --which publishing-and-deployment` → `FS.GG.Drivers`): editing it
-obliges a Drivers release, never a Kit one.
+prints exactly one of `FS.GG.Kit`, `FS.GG.Drivers`, `operator-scope`, or `neither` to stdout (exit
+0/0/1/1), read live from the same two committed sources `--write` reads — `registry/repos.yml`'s
+`kit:` rows and this emitter's own `DRIVERS` list — discriminated by each `DRIVERS` row's `scope`
+field against the actual packing rule (`src/FS.GG.Drivers/stage-drivers.py`'s
+`DELIVERED_SCOPES = {"driver"}`): membership in the driver manifest is necessary but not sufficient
+for being packed. A `scope: operator` id (ADR-0057) is a real, recognized skill that ships in **no
+package at all**; `operator-scope` says so distinctly in stdout, so it can't be confused with
+`neither` (an unrecognized id, usually a typo) — the exit code stays 1 for both on purpose, so only
+exit 0 ever means "a release may be owed; read stdout for which." **This skill you are reading is
+itself `scope: operator`**
+(`scripts/generate-driver-manifest --which publishing-and-deployment` → `operator-scope`): it
+materializes nowhere and editing it never obliges a release, Drivers or Kit.
 
 Get the artifact wrong and the tag is real and immutable regardless
 (`kit-release-tags-are-immutable`): `.github#2135` declared a `FS.GG.Kit` release for a
