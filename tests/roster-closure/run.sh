@@ -163,6 +163,118 @@ rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --org FS-GG --ski
 { [ "$rc" -eq 3 ] && grep -qF "could not read the repo list" <<<"$out"; } \
   && ok "an unreadable org listing is no verdict (exit 3)" || bad "unreadable listing (want exit 3)" "$out"
 
+# REGRESSION (.github#2330, same defect class independent review found for direction C in
+# .github#2206/#2328): the --org-repos-json path used to build `live` with `str(r["full_name"])` on
+# EVERY element with no shape check first, so a top-level ARRAY containing a non-dict element (or a
+# dict missing `full_name`) reached that subscript and crashed with an uncaught TypeError — Python's
+# own default exit-1 traceback, colliding with this script's OWN "exit 1 = definite violation"
+# meaning. That is the worst possible collision: "could not read this" rendered as "read it, and it
+# is broken", exactly the inversion #266 exists to prevent. `_fetch_org_repos` (the LIVE path that
+# runs on every real `roster-closure` CI invocation, not just under a fixture flag) shared the same
+# unguarded `r["full_name"]` subscript. `_validate_org_repos` now rejects every one of these shapes,
+# in BOTH consumers, before the listing is trusted. Each case here asserts BOTH exit 3 AND that the
+# message names the actual shape problem AND that no traceback appears — a test that only checked
+# non-zero would not have caught the original defect, since Python's uncaught-exception exit code is
+# also non-zero.
+expect_org_shape_noverdict() {
+  local name="$1" needle="$2" json="$3" out rc=0 file
+  file="$WORK/org-shape-$$-$RANDOM.json"
+  printf '%s\n' "$json" > "$file"
+  out="$(run "$ROSTER" "$DEPS" "$file")" && rc=0 || rc=$?
+  if [ "$rc" -ne 3 ]; then
+    bad "$name (want exit 3, got $rc)" "$out"
+  elif grep -qi "Traceback (most recent call last)" <<<"$out"; then
+    bad "$name (a Python traceback leaked instead of a no-verdict)" "$out"
+  elif ! grep -qF "could not read the repo list" <<<"$out"; then
+    bad "$name (exit 3 but not the org no-verdict message)" "$out"
+  elif ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit 3, but not for the stated reason: want '$needle')" "$out"
+  else
+    ok "$name"
+  fi
+}
+expect_org_shape_noverdict "an org listing of PLAIN NUMBERS is a no-verdict, not a crash" \
+  "expected a string full name or an object" '[1,2,3]'
+expect_org_shape_noverdict "an org listing of STRINGS mixed with a non-dict is a no-verdict" \
+  "expected a string full name or an object" '["FS-GG/.github", 7]'
+expect_org_shape_noverdict "an org listing of NULLS is a no-verdict, not a crash" \
+  "expected a string full name or an object" '[null,null]'
+expect_org_shape_noverdict "an org listing item missing full_name is a no-verdict" \
+  "missing/non-string/blank \`full_name\`" '[{"name":"foo"}]'
+expect_org_shape_noverdict "an org listing item with a non-string full_name is a no-verdict" \
+  "missing/non-string/blank \`full_name\`" '[{"full_name":123}]'
+expect_org_shape_noverdict "an org listing with a blank string element is a no-verdict" \
+  "blank string" '[""]'
+expect_org_shape_noverdict "a top-level OBJECT instead of an array is a no-verdict" \
+  "expected a JSON array" '{"not":"a list"}'
+touch "$WORK/org-empty-file.json"
+rc=0; out="$(run "$ROSTER" "$DEPS" "$WORK/org-empty-file.json")" || rc=$?
+{ [ "$rc" -eq 3 ] && ! grep -qi "Traceback" <<<"$out" && grep -qF "could not read the repo list" <<<"$out"; } \
+  && ok "a completely empty org-repos-json FILE is a no-verdict, not a crash" \
+  || bad "empty org file (want exit 3)" "$out"
+printf 'not json at all {{{' > "$WORK/org-invalid-json.json"
+rc=0; out="$(run "$ROSTER" "$DEPS" "$WORK/org-invalid-json.json")" || rc=$?
+{ [ "$rc" -eq 3 ] && ! grep -qi "Traceback" <<<"$out" && grep -qF "could not read the repo list" <<<"$out"; } \
+  && ok "INVALID JSON (org listing, not parseable at all) is a no-verdict, not a crash" \
+  || bad "invalid org JSON (want exit 3)" "$out"
+
+# The LIVE path (`_fetch_org_repos`, GET /orgs/{org}/repos) shares `_validate_org_repos` with the
+# --org-repos-json fixture path above, but it is exercised directly here too — it is the one that
+# runs on every real `roster-closure` CI invocation, not just under a fixture flag, and the fixture
+# tests above cannot prove `_fetch_org_repos` actually calls the shared validator rather than, say,
+# some other unguarded extraction. `urllib.request.urlopen` is monkeypatched in-process so this stays
+# fully offline — no network, matching the rest of this suite.
+run_fetch_org_repos_offline() {
+  # $1: raw response body (bytes as a Python string literal source), $2: python assertion body
+  python3 - "$REPO_ROOT/scripts/check-roster-closure.py" "$1" <<'PY'
+import importlib.util, sys
+
+tool_path, body = sys.argv[1], sys.argv[2]
+spec = importlib.util.spec_from_file_location("check_roster_closure", tool_path)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+class FakeResp:
+    def __init__(self, raw: bytes):
+        self._raw = raw
+        self.headers = {}
+    def read(self):
+        return self._raw
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+
+def fake_urlopen(req, timeout=30):
+    return FakeResp(body.encode("utf-8"))
+
+mod.urllib.request.urlopen = fake_urlopen
+try:
+    mod._fetch_org_repos("FS-GG")
+except ValueError as exc:
+    print(f"VALUEERROR: {exc}")
+    sys.exit(0)
+except Exception as exc:
+    print(f"WRONG-EXCEPTION: {type(exc).__name__}: {exc}")
+    sys.exit(1)
+else:
+    print("NO-EXCEPTION")
+    sys.exit(1)
+PY
+}
+out="$(run_fetch_org_repos_offline '[1,2,3]')" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && grep -qF "VALUEERROR" <<<"$out" \
+    && grep -qF "expected a string full name or an object" <<<"$out"; } \
+  && ok "the LIVE _fetch_org_repos path rejects a malformed page as ValueError, not a crash" \
+  || bad "_fetch_org_repos malformed page (want a distinguishable ValueError)" "$out"
+
+# A real GitHub API error body — {"message": "Not Found", ...} — is exactly the "transient API error
+# object surfaced inline" the issue names as a plausible live-path trigger: a non-list top level.
+out="$(run_fetch_org_repos_offline '{"message": "Not Found", "documentation_url": "https://docs.github.com/rest"}')" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && grep -qF "VALUEERROR" <<<"$out" && grep -qF "expected a JSON array" <<<"$out"; } \
+  && ok "the LIVE _fetch_org_repos path rejects a non-list API error body as ValueError, not a crash" \
+  || bad "_fetch_org_repos error body (want a distinguishable ValueError)" "$out"
+
 # A dependencies.yml with no repos: block would make check (A) vacuously true. This is a definite
 # offline violation (exit 1), not a no-verdict.
 DEPS_NOREPOS="$WORK/deps-norepos.yml"; printf 'schemaVersion: 1\ncontracts: []\n' > "$DEPS_NOREPOS"
