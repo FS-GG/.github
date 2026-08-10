@@ -96,6 +96,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/workflow-permissions/run.sh",
       "workflow": ".github/workflows/permission-coherence.yml"
+    },
+    {
+      "source": "scripts/check-roster-closure.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/roster-closure/run.sh",
+      "workflow": ".github/workflows/coherence.yml"
     }
   ]
 }

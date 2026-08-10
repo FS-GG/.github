@@ -1,0 +1,1095 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "2206-board-roster-closure",
+  "project": {
+    "id": ".github-2127",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "05bb4b7ba6e9f0e7094e06b5873eac083b1eb4b0388a0f28d8637554d42e7f9f"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "6c0e08c45acb6274acdd4e0eccf64b59370bcc3822935403f3969599ba5b18a4"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "76c038bc767a8dd0a77189cfb9f73345029db74b8da6ca6c51c6768f1856277f"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "e537d3162eacc265839277cd660ba5ca8a85b2a2146a09bb81acf25a37ef7dd0"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "a84777951917aa195c25ecbeac4fb0ce657de9bb67f80753beee922834afffdc"
+      }
+    },
+    {
+      "path": "work/2206-board-roster-closure/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fa9e83a872325af2cab457d16762d5facd57b2bad13aaf086169a706fd7b1931"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "2206-board-roster-closure",
+    "title": "Board Roster Closure",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "specified"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "\u0060check-roster-closure.py\u0060 gains a BOARD closure direction (C) that reports exit 1 for every non-Done board row naming a repository absent from both \u0060registry/repos.yml\u0060 and \u0060outside-fabric:\u0060, named with the repository and an example row. (covers AC-001)",
+      "text": "\u0060check-roster-closure.py\u0060 gains a BOARD closure direction (C) that reports exit 1 for every non-Done board row naming a repository absent from both \u0060registry/repos.yml\u0060 and \u0060outside-fabric:\u0060, named with the repository and an example row. (covers AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 86,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "A schedulable board row\u0027s repository is closed by either an existing \u0060repos.yml\u0060 row (any \u0060role:\u0060, including \u0060non-participant\u0060 \u002B mandatory \u0060reason:\u0060, \u0060.github#2245\u0060) or an existing \u0060outside-fabric:\u0060 entry; no new opt-out field, list, or schema is added. (covers AC-002)",
+      "text": "A schedulable board row\u0027s repository is closed by either an existing \u0060repos.yml\u0060 row (any \u0060role:\u0060, including \u0060non-participant\u0060 \u002B mandatory \u0060reason:\u0060, \u0060.github#2245\u0060) or an existing \u0060outside-fabric:\u0060 entry; no new opt-out field, list, or schema is added. (covers AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 87,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Direction C resolves each board row\u0027s repository from the board item\u0027s own \u0060owner\u0060 and \u0060repo\u0060 fields and never calls, requires, or depends on \u0060GET /orgs/{org}/repos\u0060 or any other org-membership enumeration. (covers AC-003)",
+      "text": "Direction C resolves each board row\u0027s repository from the board item\u0027s own \u0060owner\u0060 and \u0060repo\u0060 fields and never calls, requires, or depends on \u0060GET /orgs/{org}/repos\u0060 or any other org-membership enumeration. (covers AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 88,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "A board that cannot be read \u2014 the read fails, returns unparseable data, or returns zero items \u2014 is reported as a no-verdict (exit 3) with a message distinct from the exit-0 closed-world message and from every exit-1 violation message. (covers AC-004)",
+      "text": "A board that cannot be read \u2014 the read fails, returns unparseable data, or returns zero items \u2014 is reported as a no-verdict (exit 3) with a message distinct from the exit-0 closed-world message and from every exit-1 violation message. (covers AC-004)",
+      "acceptanceCriteria": [
+        "AC-004"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 89,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "\u0060.github/workflows/coherence.yml\u0060\u0027s \u0060roster-closure\u0060 job runs direction C\u0027s offline fixture (\u0060tests/roster-closure/run.sh\u0060) unconditionally and its live board read as an explicitly named step, with the same exit-3-is-a-warning / exit-1-is-a-failure treatment directions A and B already receive there. (covers AC-005)",
+      "text": "\u0060.github/workflows/coherence.yml\u0060\u0027s \u0060roster-closure\u0060 job runs direction C\u0027s offline fixture (\u0060tests/roster-closure/run.sh\u0060) unconditionally and its live board read as an explicitly named step, with the same exit-3-is-a-warning / exit-1-is-a-failure treatment directions A and B already receive there. (covers AC-005)",
+      "acceptanceCriteria": [
+        "AC-005"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 90,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T005"
+      ],
+      "linkedEvidenceIds": [
+        "EV005"
+      ]
+    },
+    {
+      "id": "FR-006",
+      "title": "Run against the live Coordination board, direction C reports \u0060EHotwagner/rogue3\u0060 and \u0060EHotwagner/S.I.R.\u0060 each with a legible, explicit disposition (rostered, opted out with a reason, or outside the graded population because every board row it holds is \u0060Done\u0060), without this item authoring a registry change for \u0060rogue3\u0060. (covers AC-006)",
+      "text": "Run against the live Coordination board, direction C reports \u0060EHotwagner/rogue3\u0060 and \u0060EHotwagner/S.I.R.\u0060 each with a legible, explicit disposition (rostered, opted out with a reason, or outside the graded population because every board row it holds is \u0060Done\u0060), without this item authoring a registry change for \u0060rogue3\u0060. (covers AC-006)",
+      "acceptanceCriteria": [
+        "AC-006"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/2206-board-roster-closure/spec.md",
+      "sourceLocation": {
+        "line": 91,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T006"
+      ],
+      "linkedEvidenceIds": [
+        "EV006"
+      ]
+    }
+  ],
+  "decisions": [],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement requirement FR-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-001"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "FR-001",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Implement requirement FR-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-002",
+        "FR-002",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Implement requirement FR-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-003"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-003",
+        "FR-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Implement requirement FR-004",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-004",
+        "FR-004",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "T005",
+      "title": "Implement requirement FR-005",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-005"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-005",
+        "FR-005",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV005"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "T006",
+      "title": "Implement requirement FR-006",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [],
+      "requirements": [
+        "FR-006"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-006",
+        "FR-006",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV006"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "T007",
+      "title": "Update contract surface PC-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PD-001",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV007"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "T008",
+      "title": "Update contract surface PC-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-002",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV008"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "T009",
+      "title": "Update contract surface PC-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-003",
+        "PD-005"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV009"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "T010",
+      "title": "Record verification evidence VO-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-001",
+        "PD-002",
+        "PD-004",
+        "VO-001"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV010"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "T011",
+      "title": "Record verification evidence VO-002",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-001",
+        "VO-002"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV011"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "T012",
+      "title": "Record verification evidence VO-003",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PD-006",
+        "VO-003"
+      ],
+      "requiredSkills": [
+        "automated-tests",
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV012"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "T013",
+      "title": "Handle migration posture PM-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "PC-001",
+        "PC-002",
+        "PM-001"
+      ],
+      "requiredSkills": [
+        "schema-versioning"
+      ],
+      "requiredEvidence": [
+        "EV013"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "T014",
+      "title": "Refresh generated view impact GV-001",
+      "status": "pending",
+      "owner": "sdd",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [],
+      "decisions": [],
+      "sourceIds": [
+        "GV-001",
+        "PD-001",
+        "PD-002",
+        "PD-003",
+        "PD-004",
+        "PD-005",
+        "PD-006"
+      ],
+      "requiredSkills": [
+        "deterministic-json"
+      ],
+      "requiredEvidence": [
+        "EV014"
+      ],
+      "source": "work/2206-board-roster-closure/tasks.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py",
+        "tests/roster-closure/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py",
+        "tests/roster-closure/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py",
+        "tests/roster-closure/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV005",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T005",
+      "taskRefs": [
+        "T005"
+      ],
+      "requirementRefs": [
+        "FR-005"
+      ],
+      "artifactRefs": [
+        ".github/workflows/coherence.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 5,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV006",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T006",
+      "taskRefs": [
+        "T006"
+      ],
+      "requirementRefs": [
+        "FR-006"
+      ],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 6,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV007",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T007",
+      "taskRefs": [
+        "T007"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV008",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T008",
+      "taskRefs": [
+        "T008"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 8,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV009",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T009",
+      "taskRefs": [
+        "T009"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        ".github/workflows/coherence.yml"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV010",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T010",
+      "taskRefs": [
+        "T010"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "tests/roster-closure/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 10,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV011",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T011",
+      "taskRefs": [
+        "T011"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py",
+        "tests/roster-closure/run.sh"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 11,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV012",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T012",
+      "taskRefs": [
+        "T012"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 12,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV013",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T013",
+      "taskRefs": [
+        "T013"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "registry/repos.yml",
+        "scripts/check-roster-closure.py"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV014",
+      "kind": "verification",
+      "subjectType": "task",
+      "subjectId": "T014",
+      "taskRefs": [
+        "T014"
+      ],
+      "requirementRefs": [],
+      "artifactRefs": [
+        "readiness/2206-board-roster-closure/analysis.json",
+        "readiness/2206-board-roster-closure/work-model.json"
+      ],
+      "result": "pass",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/2206-board-roster-closure/evidence.yml",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2206-board-roster-closure/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "1.0.0"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "05bb4b7ba6e9f0e7094e06b5873eac083b1eb4b0388a0f28d8637554d42e7f9f"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "6c0e08c45acb6274acdd4e0eccf64b59370bcc3822935403f3969599ba5b18a4"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "76c038bc767a8dd0a77189cfb9f73345029db74b8da6ca6c51c6768f1856277f"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "e537d3162eacc265839277cd660ba5ca8a85b2a2146a09bb81acf25a37ef7dd0"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "a84777951917aa195c25ecbeac4fb0ce657de9bb67f80753beee922834afffdc"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/2206-board-roster-closure/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fa9e83a872325af2cab457d16762d5facd57b2bad13aaf086169a706fd7b1931"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "fc73279d9ddffa26620a56aac35d8d37cbed47c681d0ae573e78893fb2dc4e57"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
