@@ -5587,12 +5587,22 @@ module Client =
                                     | Ok collisions ->
                                         let paths = String.Join(", ", proposed.Tokens)
 
-                                        let receipt (collisions: PathCollision list) : string =
+                                        // #2323 round 1 — THE JSON PROJECTION MUST NAME WHAT THE ITEM ACTUALLY DECLARES,
+                                        // NOT WHAT WAS REQUESTED. `Render.fsi`'s own doc for `PathUpdateReceipt.Paths` is
+                                        // "the tokens the item now declares" — on a REFUSED update (`committed = false`)
+                                        // that is `priorTokens`, byte-identical to before the call, never
+                                        // `proposed.Tokens`. The Text projection above already gates on `committed`;
+                                        // this closure takes the SAME flag so the two projections cannot disagree about
+                                        // one call's outcome — a caller gating on the exit code and then trusting this
+                                        // field is exactly the false belief #2306's AC1 exists to rule out, and it is
+                                        // truer of the machine surface than of the human one, since a program reads it
+                                        // unattended.
+                                        let receipt (committed: bool) (collisions: PathCollision list) : string =
                                             renderPathUpdateJson
                                                 { Ref = ref
                                                   Worker = w.Id
                                                   Kind = past
-                                                  Paths = proposed.Tokens
+                                                  Paths = (if committed then proposed.Tokens else priorTokens)
                                                   Collisions = collisions }
 
                                         // #2306 — REFUSE THE WRITE ONLY WHEN *THIS CALL'S OWN NEW TOKENS* COLLIDE, NOT
@@ -5674,7 +5684,7 @@ module Client =
                                                 // `collisions = []` implies `committed = true`: an empty scan can never
                                                 // report an introduced collision, so `decideUpdate` always commits here.
                                                 match opts.Render with
-                                                | Json -> printfn "%s" (receipt [])
+                                                | Json -> printfn "%s" (receipt true [])
                                                 | Text ->
                                                     printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
 
@@ -5763,7 +5773,7 @@ module Client =
                                                 // split is the half of this defect a machine consumer could not work
                                                 // around at all (#1517 AC2).
                                                 match opts.Render with
-                                                | Json -> printfn "%s" (receipt notified)
+                                                | Json -> printfn "%s" (receipt committed notified)
                                                 | Text -> ()
 
                                                 // A real same-repo collision exits non-zero (engine ExitContended=6;

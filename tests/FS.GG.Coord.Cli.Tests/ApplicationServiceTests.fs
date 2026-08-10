@@ -1539,7 +1539,9 @@ module ApplicationServiceTests =
     /// `internal` — reused by #2306's `WidenRefusalTests.fs` (see `run`, above).
     let internal str (name: string) (el: JsonElement) = el.GetProperty(name).GetString()
 
-    let private strings (name: string) (el: JsonElement) =
+    /// `internal` — reused by #2323 round 1's repair legs in #2306's `WidenRefusalTests.fs` (see `run`,
+    /// above), which assert the JSON `paths` array on a refused update rather than merely its `verdict`.
+    let internal strings (name: string) (el: JsonElement) =
         el.GetProperty(name).EnumerateArray() |> Seq.map (fun e -> e.GetString()) |> List.ofSeq
 
     [<Theory>]

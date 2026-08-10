@@ -35,6 +35,13 @@ open FS.GG.Coord.Cli.Tests.ApplicationServiceTests
 /// same technique against a real HTTP log, via `patches_on`) — zero occurrences is the fixture's honest
 /// equivalent of "the body PATCH never happened", which is what "byte-identical to before the call" means
 /// for a caller that can only observe this transport's own record of what it sent.
+///
+/// #2323 ROUND 1 REPAIR. The critic reproduced a second half of the same defect: the Text projection's
+/// "Paths: unchanged" line was fixed, but `--json`'s `paths` field (`Render.fsi`'s "the tokens the item
+/// now declares") still unconditionally reported the REQUESTED tokens, even on a refusal that committed
+/// none of them — a caller that reads JSON rather than greps text got a coherent-looking lie. The `AC1`/
+/// `AC2` legs below, across both verbs, are the regression coverage for that repair: they assert the JSON
+/// `paths` array itself, not merely `verdict`, on both a full and a partial collision.
 module WidenRefusalTests =
 
     // ---- TouchSet.decideUpdate — the published all-or-nothing decision, in isolation (AC2) -------------
@@ -92,6 +99,55 @@ module WidenRefusalTests =
         // ALL-OR-NOTHING, not "the colliding token alone was withheld": `docs/unrelated.md` — which does
         // NOT collide with anything — is not committed either, because this call refuses as one unit.
         Assert.Equal(0, world.Count "issue-patch FS-GG/FS.GG.SDD 74")
+
+    // ---- #2323 round 1 repair: the JSON `paths` field must also report the UNCHANGED declaration --------
+
+    [<Theory>]
+    [<InlineData "widen">]
+    [<InlineData "set-paths">]
+    let ``AC1: a fully-colliding update's JSON paths reports the PRIOR declaration, not the request`` (verb: string) =
+        // Before the repair, `receipt`'s `Paths` field was `proposed.Tokens` unconditionally — so a
+        // refused widen's JSON still showed `["scripts/fsgg-coord"; "src/Shared.fs"]` (the rejected token
+        // included) and a refused set-paths showed `["src/Shared.fs"]` (falsely implying a replacement),
+        // even though `AC1/AC3` above already proves zero PATCH landed. A program that gates on the exit
+        // code and then reads `paths` — the documented "tokens the item now declares" — got a
+        // coherent-looking lie. #74's ONLY legitimate declaration in `overlappingWorld` is
+        // `scripts/fsgg-coord`; that is what the JSON must report on refusal, for both verbs.
+        let world = overlappingWorld false
+
+        let code, out =
+            run world [ verb; "FS.GG.SDD#74"; "--worker"; "kite-469"; "--json"; "--paths"; "src/Shared.fs" ]
+
+        Assert.Equal(6, code)
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+        Assert.Equal<string list>([ "scripts/fsgg-coord" ], strings "paths" receipt)
+
+    [<Theory>]
+    [<InlineData "widen">]
+    [<InlineData "set-paths">]
+    let ``AC2: a partial-collision update's JSON paths ALSO reports the PRIOR declaration`` (verb: string) =
+        // Same repair, over the multi-path request AC2 is about: naming one clear path and one colliding
+        // path must not leak the clear one into the JSON `paths` either — the whole call committed
+        // nothing, so the JSON must say exactly what was true before the call, same as the Text form.
+        let world = overlappingWorld false
+
+        let code, out =
+            run
+                world
+                [ verb
+                  "FS.GG.SDD#74"
+                  "--worker"
+                  "kite-469"
+                  "--json"
+                  "--paths"
+                  "docs/unrelated.md"
+                  "src/Shared.fs" ]
+
+        Assert.Equal(6, code)
+        let receipt = parsed out
+        Assert.Equal("overlap", str "verdict" receipt)
+        Assert.Equal<string list>([ "scripts/fsgg-coord" ], strings "paths" receipt)
 
     // ---- AC5: the negative control — a genuinely disjoint update still succeeds AND still writes --------
 
