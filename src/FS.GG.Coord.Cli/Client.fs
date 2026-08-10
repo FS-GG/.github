@@ -1562,6 +1562,30 @@ module Client =
     // transaction in this file, while F# binds values top-to-bottom.
     let mutable private completeDelivery: Context -> Options -> int = fun _ _ -> failwith "delivery completion is not initialized"
 
+    // `verifyPaths` and `delivery` ask the same question: which changed paths are generated and therefore
+    // intentionally absent from an item's authored touch-set?  The collector is initialized below, beside
+    // its bounded process implementation, before this module can serve a command.  Keeping the indirection
+    // here lets the earlier delivery adapter reuse that one fail-closed collector instead of acquiring a
+    // second, weaker list of generated paths.
+    let mutable private generatedPathCollector: string -> Set<string> = fun _ -> Set.empty
+
+    /// The delivery receipt and `verify-paths` both exclude generated, CI-gated artifacts from the
+    /// authored touch-set boundary.  The collector fails closed, so an unreadable generator can only
+    /// make this false (and block landing); it cannot turn an undeclared authored file into a pass.
+    let deliveryPathsVerified (touchSet: TouchSet) (files: string list) =
+        let generated =
+            match KitDigest.kitRoot () with
+            | Some root -> generatedPathCollector root
+            | None -> Set.empty
+
+        match touchSet with
+        | Declared tokens ->
+            files
+            |> List.forall (fun file ->
+                (tokens |> List.exists (fun token -> TouchSet.covers token file))
+                || Set.contains file generated)
+        | _ -> false
+
     /// Preserve the parser's exact malformed-chain diagnostic at the live delivery boundary.  Keeping
     /// this small adapter named and directly testable prevents a future `Result.toOption` from turning
     /// an attempted-but-invalid review into the distinct fact that no review was posted.
@@ -1569,6 +1593,29 @@ module Client =
         match Driver.parseReviewComments comments with
         | Ok parsed -> Some { parsed with ChecksGreen = landable }, None
         | Error errors -> None, Some(String.concat "; " errors)
+
+    /// True when a claimed PR has at least one declared, unverified delivery obligation — the sole
+    /// signal `LifecycleProjection.project` needs to keep a row `In review` rather than advance it
+    /// (round-1 review repair, .github#2264 PR #2271). Pure over already-read facts, precisely so this
+    /// is testable directly rather than only through `reconcile`'s live GitHub wiring — the gap the
+    /// critic named: the prior inline `.Contains` scan lived only inside that IO fold, and NO test drove
+    /// it. REUSES `DeliveryApplication.obligationsFromComments` rather than a second parser: its ANCHORED,
+    /// whole-line match means a comment that merely QUOTES an obligation or receipt marker in prose — the
+    /// org's ordinary review-comment style — can never satisfy it, so it cannot be mistaken for a real
+    /// declaration or a real receipt the way unanchored `.Contains` could.
+    ///
+    /// An unreadable head or comment thread, or a declaration the parser refuses (malformed, stale,
+    /// undeclared), withholds trust rather than granting it: `true`, the same "stay in review" answer a
+    /// genuinely outstanding obligation gives. Only a HEAD that reads AND parses AND is fully verified
+    /// clears it.
+    let outstandingObligations (headFact: Errors.IoResult<string>) (commentsFact: Errors.IoResult<Reads.CommentBody list>) : bool =
+        match headFact, commentsFact with
+        | Ok head, Ok comments ->
+            let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+            match DeliveryApplication.obligationsFromComments head comments with
+            | Ok obligations -> obligations |> List.exists (fun o -> not o.Verified)
+            | Error _ -> true
+        | _ -> true
 
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
@@ -1654,10 +1701,7 @@ module Client =
                                         |> deliveryReviewEvidence (landable = PrGreen)
                                     let itemBranchCanonical = branch.StartsWith($"item/%d{target.Number}-", StringComparison.Ordinal)
                                     let linkageCanonical = closing |> Option.exists ((=) target)
-                                    let pathsVerified =
-                                        match candidate.Item.TouchSet with
-                                        | Declared tokens -> files |> List.forall (fun file -> tokens |> List.exists (fun token -> TouchSet.covers token file))
-                                        | _ -> false
+                                    let pathsVerified = deliveryPathsVerified candidate.Item.TouchSet files
                                     let reviewComments =
                                         comments
                                         |> List.map (fun comment -> ({ Id = comment.Id; Url = comment.Url; Body = comment.Body }: Driver.ReviewComment))
@@ -2324,8 +2368,34 @@ module Client =
                     | Ok _ -> eprint "fsgg-coord-engine: Status=Blocked refuses an incoherent park (.github#2079)."; Error ExitError
                     | Error e -> eprint $"fsgg-coord-engine: Status=Blocked: body unreadable ({Errors.explain e})"; Error ExitError
 
+    /// True only for the one shape `Board.bootstrap` emits when the configured Projects v2 board itself
+    /// could not be resolved — a credential/visibility gap, not a real reconcile finding (round-2 review
+    /// repair, .github#2264 PR #2271; the org-level remedy is tracked at .github#2332, not here).
+    ///
+    /// SCOPED TO `reconcile` ALONE, deliberately not a change to `Errors.exitCode` — that shared table
+    /// already explains, in its own comment, why `NotFound` stays a real exit-1 finding for every other
+    /// caller (a mistyped `--repo`, a renamed board a human is debugging locally, ...): downgrading it
+    /// there would blunt the diagnostic for the callers who NEED it to stay loud. What is different here
+    /// is the CALLER — `coord-board-reconcile.yml` runs unattended, on a schedule, forever, against a
+    /// board this repo's default `GITHUB_TOKEN` cannot see at all today, and `.github#1611`/`#1582`
+    /// already established the org's position on an always-red unattended gate: it trains a reader to
+    /// ignore red as effectively as a gate that silently never runs. The message text this matches is
+    /// constructed in exactly one place (`Board.fs`'s `bootstrap`), not user input, so matching its
+    /// prefix is a real structural distinction, not a fragile string sniff of an incidental error.
+    let boardUnreachable (error: Errors.IoError) : bool =
+        match error with
+        | Errors.NotFound subject -> subject.StartsWith("no Projects v2 board titled ", StringComparison.Ordinal)
+        | _ -> false
+
     let reconcile (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
+        | Error e when boardUnreachable e ->
+            eprint
+                $"fsgg-coord-engine: reconcile: %s{Errors.explain e} — NO VERDICT, not a pass: the board \
+itself could not be resolved (a credential/visibility gap), never mistake this for \"reached the board, \
+nothing to reconcile\". The remedy is org-level (grant this token Projects v2 read/write, or provision a \
+scoped credential) and is tracked at .github#2332, not fixable from this repo's tree."
+            ExitNoVerdict
         | Error e -> fail e
         // The scan ROWS, no longer discarded: `enrichBoardFacts` joins the board's `Class` column and each
         // item's title onto the parsed candidates (.github#1588). Both are scan facts that the snapshot
@@ -2347,7 +2417,112 @@ module Client =
                     |> fun r -> r.Candidates
                     |> List.map (fun c -> c.Item)
 
-                let chores = Chore.derive items
+                // `CLOSED-ISSUE-NOT-DONE` predates the auditable done receipt and used closure as a
+                // terminal proxy.  Keep its established mechanical writer, but feed it only the terminal
+                // fact it is entitled to project: a freshly read immutable receipt.  An unreadable comment
+                // collection is deliberately equivalent to no receipt here, so a transient REST failure
+                // can withhold a repair but can never manufacture Done.
+                let lifecycleItems =
+                    items
+                    |> List.map (fun item ->
+                        if item.State = Closed && item.Status <> Done then
+                            match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
+                            | Ok comments when Done.hasReceipt comments -> item
+                            | Ok _
+                            | Error _ -> { item with State = Open }
+                        else
+                            item)
+
+                // #2264: the board column is a projection, not the source of lifecycle truth.  Gather the
+                // facts again at the reconciliation boundary and send every coherent observation through
+                // the typed projector before handing its one repair to the existing verified write path.
+                // Comments are read for the terminal/review-shaped rows.  Besides delivery evidence they
+                // carry the verified projection watermark.  A Ready row has no prior lifecycle write to
+                // regress, so not reading it keeps the scheduled fallback bounded rather than turning it
+                // into a REST request per dormant board item.
+                //
+                // TWO comment threads, not one (round-1 review repair). The watermark and the done receipt
+                // are ISSUE facts — `Writes.lifecycleWatermark`/`Writes.doneReceipt` both post to `ref`,
+                // the item itself — so `item.Ref.Number`'s thread is the right and only place to read them.
+                // A delivery obligation/receipt is a PR fact: every other caller of
+                // `DeliveryApplication.obligationsFromComments` in this file (`driver --events`'s
+                // `mergedFactsByRef` above) reads it from `item.ItemPr`'s thread via `commentsWithIdentity`,
+                // never the issue's. Reading obligations from `item.Ref.Number` — the prior shape here —
+                // read a thread the worker's `<!-- fsgg:delivery-obligation -->` declaration is never
+                // actually posted to, so `Outstanding` measured an always-empty set and stayed `false`
+                // regardless of what was truly owed: silently reproducing the exact `.github#2135`/
+                // `.github#2333` failure this projector exists to prevent, parsing precision aside.
+                let lifecycleChores, lifecycleWatermarks =
+                    lifecycleItems
+                    |> List.fold (fun (chores, watermarks) item ->
+                        let needsDeliveryRead = item.State = Closed || item.Status = InReview
+                        let delivery =
+                            if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
+                            else
+                                match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
+                                | Error _ -> None
+                                | Ok issueComments ->
+                                    // No PR yet ⇒ nothing has been merged to owe a release obligation, so
+                                    // `Outstanding = false` — the same "nothing to check" reading
+                                    // `needsDeliveryRead` already gives a row with no PR at all.
+                                    // `outstandingObligations` above is the ANCHORED, ID-MATCHED, REUSED
+                                    // check for every other case — see its doc comment for why a quoted
+                                    // marker can never pass it the way the prior bulk `.Contains` scan let
+                                    // one through.
+                                    let outstanding =
+                                        match item.ItemPr with
+                                        | None -> false
+                                        | Some pr ->
+                                            outstandingObligations
+                                                (Reads.prHeadSha ctx.Transport item.Ref.Owner item.Ref.Repo pr)
+                                                (Reads.commentsWithIdentity ctx.Transport item.Ref.Owner item.Ref.Repo pr)
+                                    Some
+                                        (({ Outstanding = outstanding
+                                            DoneStamped = Done.hasReceipt issueComments }: LifecycleProjection.Delivery),
+                                         LifecycleProjection.tryWatermark issueComments)
+
+                        match delivery with
+                        | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
+                        | Some(delivery, watermark) ->
+                            let observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                            let pullRequest =
+                                item.ItemPr
+                                |> Option.map (fun number -> ({ Number = number; Open = true; ReviewOrCiActive = true }: LifecycleProjection.PullRequest))
+                            let observation : LifecycleProjection.Observation =
+                                { Claim = { ObservedAt = observedAt; Value = item.Claim }
+                                  PullRequest = { ObservedAt = observedAt; Value = pullRequest }
+                                  Blockers = { ObservedAt = observedAt; Value = item.Blockers }
+                                  Delivery = { ObservedAt = observedAt; Value = delivery }
+                                  Issue = { ObservedAt = observedAt; Value = item.State } }
+                            match LifecycleProjection.advance watermark observation with
+                            | LifecycleProjection.Project(destination, timestamp) ->
+                                match Chore.lifecycleProjection item destination with
+                                | Some chore ->
+                                    chore :: chores,
+                                    Map.add item.Ref ({ ObservedAt = timestamp; Status = destination }: LifecycleProjection.Watermark) watermarks
+                                | None -> chores, watermarks
+                            | LifecycleProjection.Withheld _ -> chores, watermarks) ([], Map.empty)
+
+                let legacyChores = Chore.derive lifecycleItems
+
+                // A reconcile pass is allowed one Status decision per item.  The long-standing Chore
+                // rules carry facts the lifecycle projector intentionally does not (for example the
+                // `Paths: none` destination and the coupled `Blocked by` clear), so they are the
+                // authority whenever they have already derived a Status remedy.  The lifecycle projector
+                // fills the remaining gaps (PR/review/CI, delivery and verified terminal evidence); it is
+                // never appended as a second competing writer.  This is precedence, not a de-dup after
+                // the fact: the losing observation produces no receipt and no mutation.
+                let legacyStatusSubjects =
+                    legacyChores
+                    |> List.choose (fun chore ->
+                        match chore.Kind.Write with
+                        | Some("Status", _) -> Some chore.Subject
+                        | _ -> None)
+                    |> Set.ofList
+
+                let chores =
+                    legacyChores
+                    @ (lifecycleChores |> List.filter (fun chore -> not (legacyStatusSubjects.Contains chore.Subject)))
 
                 // .github#2079: BLOCKER-CLEARED must not promote a row whose BODY's `Blocked by:` line
                 // names ref(s) the FIELD does not carry — the `FS.GG.Templates#348` shape, where the
@@ -2739,11 +2914,27 @@ module Client =
                                       | Ok Board.Written ->
                                           match verifyWrites chore writes with
                                           | Ok observed ->
-                                              match opts.Render with
-                                              | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
-                                              | Json -> ()
-
-                                              { reconcileRow chore (Some Written) with Observed = Some observed }
+                                              // The write acknowledgement is not the ordering receipt.  Store
+                                              // the watermark only after the fresh scan above proved the row
+                                              // contains the projected status; otherwise a late event could
+                                              // be suppressed by a receipt for a mutation that never landed.
+                                              match chore.Kind, Map.tryFind chore.Subject lifecycleWatermarks with
+                                              | Chore.LifecycleProjectionLag _, Some watermark ->
+                                                  match Writes.lifecycleWatermark ctx.Transport chore.Subject (LifecycleProjection.watermarkMarker watermark) with
+                                                  | Error e ->
+                                                      failed <- true
+                                                      eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} was verified but its lifecycle watermark could not be persisted: %s{Errors.explain e}"
+                                                      { reconcileRow chore (Some(Failed "verified status has no durable lifecycle watermark")) with Observed = Some observed }
+                                                  | Ok () ->
+                                                      match opts.Render with
+                                                      | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                      | Json -> ()
+                                                      { reconcileRow chore (Some Written) with Observed = Some observed }
+                                              | _ ->
+                                                  match opts.Render with
+                                                  | Text -> printfn "applied  %s  %s=%s" chore.Subject.Short field value
+                                                  | Json -> ()
+                                                  { reconcileRow chore (Some Written) with Observed = Some observed }
                                           | Error(observed, reason) ->
                                               eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} mutation was accepted but fresh verification failed: %s{reason}"
                                               failed <- true
@@ -6408,6 +6599,13 @@ module Client =
                         | Verdict.NoVerdict _ -> ExitNoVerdict
                         | Red _ -> ExitRed
                         | Green _ ->
+                            // Write durable evidence before the mutable Project projection.  If the latter
+                            // is deferred, the scheduled lifecycle reconciler can later prove that this was
+                            // a verified terminal transition rather than guessing from issue closure.
+                            match Writes.doneReceipt ctx.Transport ref (Done.render ref verdict) with
+                            | Error e ->
+                                eprint $"fsgg-coord-engine: verified done but could not record its lifecycle receipt: %s{Errors.explain e}"
+                            | Ok() -> ()
                             // Stamp the board Done. A board-write failure leaves the stamp GREEN (the work
                             // IS done) and reports the note — the same rule as the bash client. #1151: the
                             // outcome was `|> ignore`d directly under the "reports the note" comment, so a
@@ -6803,6 +7001,8 @@ module Client =
                     $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
 
                 Set.empty
+
+    do generatedPathCollector <- generatedPaths
 
     // ---- verify-paths ----------------------------------------------------------------------------------
 

@@ -28,6 +28,9 @@ module Chore =
     type ChoreKind =
         | StaleClaim of holder: WorkerId
         | ClaimStatusLag of column: BoardStatus
+        | ClaimReviewLag
+        /// A fresh lifecycle fact-set disagrees with the mutable Project Status column.
+        | LifecycleProjectionLag of destination: BoardStatus
         | ClosedIssueNotDone of column: BoardStatus
         | BlockerCleared of resolved: string list * destination: ClearedDestination
         | StatusNotBlocked of blockers: string list
@@ -37,6 +40,8 @@ module Chore =
             match this with
             | StaleClaim _ -> "STALE-CLAIM"
             | ClaimStatusLag _ -> "CLAIM-STATUS-LAG"
+            | ClaimReviewLag -> "CLAIM-REVIEW-LAG"
+            | LifecycleProjectionLag _ -> "LIFECYCLE-PROJECTION-LAG"
             | ClosedIssueNotDone _ -> "CLOSED-ISSUE-NOT-DONE"
             | BlockerCleared _ -> "BLOCKER-CLEARED"
             | StatusNotBlocked _ -> "STATUS-NOT-BLOCKED"
@@ -50,6 +55,8 @@ module Chore =
             // never "we could not work one out".
             | StaleClaim _ -> None
             | ClaimStatusLag _ -> Some("Status", statusWireName InProgress)
+            | ClaimReviewLag -> Some("Status", statusWireName InReview)
+            | LifecycleProjectionLag destination -> Some("Status", statusWireName destination)
             | ClosedIssueNotDone _ -> Some("Status", statusWireName Done)
             // .github#2220: the column comes from the DESTINATION the derivation chose off the row's
             // touch-set, never from a literal `Ready` spelled here. `Ready` for a row that can hold it,
@@ -234,6 +241,10 @@ module Chore =
                 $"%s{subject.Short}: %s{holder.Value}'s lease has lapsed and the item has no open `item/` PR — collect the marker and restore the column it overwrote."
             | ClaimStatusLag column ->
                 $"%s{subject.Short}: a live claim holds it, but the board says %s{columnLabel column} — set Status to In progress."
+            | ClaimReviewLag ->
+                $"%s{subject.Short}: live lifecycle facts include an open item PR — set Status to In review."
+            | LifecycleProjectionLag destination ->
+                $"%s{subject.Short}: fresh lifecycle facts project Status=%s{statusWireName destination}; repair the stale board projection."
             | ClosedIssueNotDone column ->
                 $"%s{subject.Short}: the issue is CLOSED but the board says %s{columnLabel column} — set Status to Done."
             // .github#2220 — three sentences, because there are three different things to tell a worker.
@@ -345,6 +356,31 @@ module Chore =
               // CLAIM-STATUS-LAG. Only a LIVE lease, and only over the columns a claim should have
               // overwritten. `Blocked`/`In review` during a lease are the HOLDER's decisions and they still
               // win (#331) — reconciling those would overwrite somebody's judgement with a default.
+              | LeaseHeld when
+                  item.State = Open
+                  && item.ItemPr.IsSome
+                  && item.Status <> InReview
+                  ->
+                  // Reconciliation is now routed through the typed lifecycle projector.  The scan
+                  // supplied this PR fact; no missing PR/review fact is fabricated here.  This is the
+                  // instant at which this reconciler observed the complete tuple, not a sentinel/default:
+                  // a fabricated zero would make a delayed observation indistinguishable from a fresh one.
+                  let at = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                  let pullRequest : LifecycleProjection.PullRequest =
+                      { Number = item.ItemPr.Value; Open = true; ReviewOrCiActive = true }
+                  let delivery : LifecycleProjection.Delivery =
+                      { Outstanding = false; DoneStamped = false }
+                  let observation : LifecycleProjection.Observation =
+                      { Claim = { ObservedAt = at; Value = Some(claim, liveness) }
+                        PullRequest = { ObservedAt = at; Value = Some pullRequest }
+                        Blockers = { ObservedAt = at; Value = item.Blockers }
+                        Delivery = { ObservedAt = at; Value = delivery }
+                        Issue = { ObservedAt = at; Value = item.State } }
+
+                  match LifecycleProjection.project observation with
+                  | LifecycleProjection.Project(InReview, _) -> Chore(item.Ref, ClaimReviewLag, Quick)
+                  | _ -> ()
+
               | LeaseHeld when
                   item.State = Open
                   && (match item.Status with
@@ -506,6 +542,8 @@ module Chore =
         | StatusNotBlocked _ -> 2
         | ClosedIssueNotDone _ -> 3
         | ClaimStatusLag _ -> 4
+        | ClaimReviewLag -> 4
+        | LifecycleProjectionLag _ -> 4
         // LAST, and it is the one kind that unwedges nothing: every rule above changes the board's answer
         // to "what can I start?", where this one changes the board's answer to "how bad is it". A worker
         // offered a chore at a safe point should be handed the queue-freeing one first — and #1588's own
@@ -514,6 +552,13 @@ module Chore =
         | ClassProjectionLag _ -> 5
 
     let derive (items: Item list) : Chore list = items |> List.collect choresFor
+
+    /// Make the one bounded Status write for a lifecycle projection.  The impure caller owns collecting
+    /// facts and declines to call this on an unreadable/withheld observation; this constructor makes the
+    /// resulting board mutation use the same verified reconcile dispatcher as every other chore.
+    let lifecycleProjection (item: Item) (destination: BoardStatus) : Chore option =
+        if item.Status = destination || destination = NoStatus then None
+        else Chore(item.Ref, LifecycleProjectionLag destination, Quick) |> Some
 
     let offer (at: SafePoint) : Chore option =
         // The board comes from the capability, never from a second argument: a `SafePoint` minted from one

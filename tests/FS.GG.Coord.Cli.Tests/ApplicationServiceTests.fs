@@ -2620,7 +2620,8 @@ module ApplicationServiceTests =
             | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             // A CLOSED candidate is swept with no body, marker, or blocker read (`Scan.snapshot`), so this
             // exists only to keep an unexpected REST call loud rather than silently empty.
-            | "GET", path when path.EndsWith "/comments" -> ok "[]"
+            | "GET", path when path.EndsWith "/comments" ->
+                ok "[{\"body\":\"<!-- fsgg:done-receipt v=1 -->\\nverified\"}]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
     let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
@@ -4067,3 +4068,29 @@ module ApplicationServiceTests =
         Assert.Equal("none", str "kind" receipt)
         Assert.DoesNotContain("nothing schedulable", out)
         Assert.Equal(5, code)
+
+    // Round-2 review repair (.github#2264 PR #2271): `coord-board-reconcile.yml` runs `reconcile --apply`
+    // unattended, on a schedule, forever — against a Projects v2 board this repo's default `GITHUB_TOKEN`
+    // cannot see (.github#2332, org-level, not fixable from this tree). Before this repair, that
+    // condition hard-errored (exit 1) indistinguishably from any other reconcile failure, which is an
+    // always-red unattended gate — `.github#1611`/`#1582`'s "trains a reader to ignore red" shape. These
+    // tests pin `Client.boardUnreachable`'s classification, the seam the workflow step's `set +e` / rc
+    // check (mapping ExitNoVerdict to `::warning::` + exit 0) depends on to stay a real distinction.
+    [<Fact>]
+    let ``#2264 round 2: a board-not-found error classifies as unreachable, not a generic finding`` () =
+        let boardGap = Errors.NotFound "no Projects v2 board titled 'Coordination' in FS-GG"
+        Assert.True(Client.boardUnreachable boardGap)
+
+    [<Fact>]
+    let ``#2264 round 2: an unrelated NotFound is a real finding, not a credential gap`` () =
+        // The distinction is READING THE SUBJECT, not "any NotFound is soft" — an issue that genuinely
+        // does not exist must stay a real, loud exit-1 finding for every OTHER reconcile caller
+        // (Errors.exitCode's own comment: collapsing this would let a mistyped repo masquerade as an
+        // un-boarded item). Only `Board.bootstrap`'s own exact message shape is a credential gap.
+        Assert.False(Client.boardUnreachable (Errors.NotFound "issue FS-GG/.github#999999 not found"))
+
+    [<Fact>]
+    let ``#2264 round 2: rate limits and other IO error shapes are not board-unreachable`` () =
+        Assert.False(Client.boardUnreachable (Errors.RateLimited(Errors.GraphQlBudget, None)))
+        Assert.False(Client.boardUnreachable (Errors.Transport "connection reset"))
+        Assert.False(Client.boardUnreachable (Errors.Unauthorized "no Projects v2 board titled 'Coordination' in FS-GG"))

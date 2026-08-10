@@ -578,6 +578,13 @@ module Writes =
     /// evidence for a driver that later audits an abandoned queue.
     val followupDisposition: transport: IGitHubTransport -> ref: Ref -> worker: WorkerId -> text: string -> IoResult<unit>
 
+    /// Posts the immutable receipt that says a `done` precondition check succeeded.  The status column is
+    /// deliberately not used as that evidence: reconciliation may repair or defer that projection later.
+    val doneReceipt: transport: IGitHubTransport -> ref: Ref -> receipt: string -> IoResult<unit>
+
+    /// Appends a verified lifecycle ordering receipt to an item.
+    val lifecycleWatermark: transport: IGitHubTransport -> ref: Ref -> marker: string -> IoResult<unit>
+
     /// Attach a child issue to a parent (`sub_issues`).
     ///
     /// The child's REST INTEGER ID, never its number — two repos can each have an issue #7, and posting a

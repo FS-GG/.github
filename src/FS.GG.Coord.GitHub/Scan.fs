@@ -1281,6 +1281,17 @@ module Scan =
                 // the mechanism safe to run unattended. Closing it needs a receipt this wire fact cannot
                 // carry, so it is filed rather than bodged: see .github#1924.
                 match holder with
+                | Some _ when row.State = Open && row.Status = InProgress ->
+                    // A live claim can already have crossed the implementation/review boundary.
+                    // This is deliberately bounded to the one column whose next lifecycle projection is
+                    // `In review`; probing every held row would turn a scheduled reconciliation into an
+                    // unbounded REST sweep.  `prAlive` supplies either the actual item PR or an explicit
+                    // unreadable receipt, never a fabricated negative.
+                    match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                    | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
+                    | Ok LivenessUnknown
+                    | Error _ -> w.WriteBoolean("itemPrUnreadable", true)
+                    | _ -> ()
                 | Some _ -> ()
                 | None ->
                     let probe () =

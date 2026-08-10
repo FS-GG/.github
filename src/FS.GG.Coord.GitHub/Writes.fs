@@ -918,6 +918,21 @@ module Writes =
 
         postComment transport ref body |> Result.map ignore
 
+    /// The durable terminal fact for lifecycle reconciliation.  A Project field is a projection which can
+    /// be queued or repaired; the receipt is the evidence that the guarded `done` transaction actually
+    /// reached its green preconditions.
+    let doneReceipt (transport: IGitHubTransport) (ref: Ref) (receipt: string) : IoResult<unit> =
+        let body =
+            "<!-- fsgg:done-receipt v=1 -->\n"
+            + "**Verified done receipt**\n\n"
+            + receipt
+
+        postComment transport ref body |> Result.map ignore
+
+    /// Persist the ordering receipt only after the caller has freshly verified its board mutation.
+    let lifecycleWatermark (transport: IGitHubTransport) (ref: Ref) (marker: string) : IoResult<unit> =
+        postComment transport ref marker |> Result.map ignore
+
     let child (transport: IGitHubTransport) (parent: Ref) (childId: int64) : IoResult<unit> =
         // A JSON NUMBER, NOT A STRING. `gh api -f sub_issue_id=1047` sent it as a quoted string and
         // collected a 422; `-F` sent it as a number. `JsonValue.Create` on an int64 emits a number, and the

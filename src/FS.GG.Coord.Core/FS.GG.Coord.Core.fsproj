@@ -81,6 +81,8 @@
          Types/Driver/Delivery's existing vocabulary, so it compiles after all three. -->
     <Compile Include="DriverEvents.fsi" />
     <Compile Include="DriverEvents.fs" />
+    <Compile Include="LifecycleProjection.fsi" />
+    <Compile Include="LifecycleProjection.fs" />
     <Compile Include="Lanes.fsi" />
     <Compile Include="Lanes.fs" />
     <Compile Include="Landable.fsi" />

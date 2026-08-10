@@ -135,6 +135,10 @@ module Done =
     /// Read the facts. The only IO in the decision.
     val facts: transport: IGitHubTransport -> board: Board.BoardMap -> ref: Ref -> IoResult<Facts>
 
+    /// Recognises the immutable receipt written only by a successful `done` precondition transaction.
+    /// Absence is deliberately not inferred from a closed issue or a Project Status value.
+    val hasReceipt: comments: string list -> bool
+
     /// **THE PRECONDITIONS, AS A TOTAL FUNCTION.** No IO. It cannot fail open, because it cannot fail.
     ///
     /// `resolvedWithoutPr` is the operator's `--evidence` — `Some reason` asserts *"there is no PR, and here

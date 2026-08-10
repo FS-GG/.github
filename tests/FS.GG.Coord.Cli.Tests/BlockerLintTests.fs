@@ -61,7 +61,7 @@ module BlockerLintTests =
         Assert.Equal(10, Regex.Matches(source, "Board\\.boardWrite\\b").Count)
         Assert.Equal(3, Regex.Matches(source, "Board\\.boardWriteBatch\\b").Count)
         Assert.Equal(2, Regex.Matches(source, "requireCoherentBlockedWrite ctx").Count)
-        Assert.Equal(4, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
+        Assert.Equal(6, Regex.Matches(chore, "Some\\(\\\"Status\\\"").Count)
         Assert.Contains("StatusNotBlocked", chore)
         // `ChoreKind.Write` owns the indirect reconcile write.  It deliberately renders the
         // discriminated union through `statusWireName`, so pin the actual production mapping rather

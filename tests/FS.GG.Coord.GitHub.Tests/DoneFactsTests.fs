@@ -56,6 +56,12 @@ let private response
 
 let private noSubs = """{"totalCount":0,"nodes":[]}"""
 
+[<Fact>]
+let ``#2264 only the immutable done receipt is terminal lifecycle evidence`` () =
+    Assert.False(hasReceipt [])
+    Assert.False(hasReceipt [ "issue closed"; "<!-- fsgg:done-receipt v=2 -->" ])
+    Assert.True(hasReceipt [ "<!-- fsgg:done-receipt v=1 -->\nverified" ])
+
 // ---- the closing act ----------------------------------------------------------------------------------
 
 /// A `closedByPullRequestsReferences` node whose BODY names THIS issue (#350) — a true closer.
