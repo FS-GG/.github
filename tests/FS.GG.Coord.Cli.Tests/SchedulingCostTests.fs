@@ -69,6 +69,7 @@ module SchedulingCostTests =
           Status: string
           State: string
           Body: string
+          IsPullRequest: bool
           BlockedBy: string option
           WithRoute: bool
           ForbidComments: bool
@@ -82,6 +83,7 @@ module SchedulingCostTests =
           Status = status
           State = state
           Body = $"Paths: src/item-%d{number}.fs"
+          IsPullRequest = false
           BlockedBy = None
           WithRoute = false
           ForbidComments = false
@@ -107,22 +109,26 @@ module SchedulingCostTests =
         else
             None
 
-    let private boardItemIn (status: string) (number: int) (blockedBy: string option) (state: string) =
+    let private boardItemIn (status: string) (number: int) (blockedBy: string option) (state: string) (body: string) (isPullRequest: bool) =
         let blocked =
             blockedBy |> Option.map (fun v -> $"{{\"text\":\"%s{v}\"}}") |> Option.defaultValue "null"
 
-        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}","state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
+        let encodedBody = JsonSerializer.Serialize body
+
+        let typename = if isPullRequest then "PullRequest" else "Issue"
+
+        $"""{{"status":{{"name":"%s{status}"}},"blockedBy":%s{blocked},"content":{{"__typename":"%s{typename}","number":%d{number},"title":"item %d{number}","state":"%s{state}","body":%s{encodedBody},"repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
     /// A transport serving one repo and one board built from `rows`. Deliberately close to
     /// `ApplicationServiceTests`' own board fixture (same endpoint surface, same `describe` log
     /// vocabulary from `Fake.fs`) so the counting below reads off the SAME request classification the
     /// rest of the corpus already relies on: `issue-get`, `comment-list`, `issue-list`, `pulls-list`.
-    let private world (rows: Row list) =
+    let private worldWithQueries (rows: Row list) (queries: ResizeArray<string> option) =
         let byNumber = rows |> List.map (fun r -> r.Number, r) |> Map.ofList
 
         let itemsDoc =
             rows
-            |> List.map (fun r -> boardItemIn r.Status r.Number r.BlockedBy r.State)
+            |> List.map (fun r -> boardItemIn r.Status r.Number r.BlockedBy r.State r.Body r.IsPullRequest)
             |> String.concat ","
 
         Fake.Recorder(fun (req: Request) ->
@@ -157,6 +163,7 @@ module SchedulingCostTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, variables) when document.Contains "comments(last:" ->
+                    queries |> Option.iter (fun captured -> captured.Add document)
                     // `Reads.recentCommentBodies` — .github#2300 repair 2. Honour `last` for real (a
                     // fixture that ignored it and always returned everything would validate nothing about
                     // the fail-closed-beyond-the-bound case), and match the exact "tail of the list"
@@ -185,6 +192,7 @@ module SchedulingCostTests =
                         | None -> Error(Errors.NotFound $"no thread fixture for #%d{n}")
                     | _ -> Error(Errors.NotFound $"the recent-comments query is missing owner/repo/number/last variables: %A{variables}")
                 | Query(document, _) ->
+                    queries |> Option.iter (fun captured -> captured.Add document)
                     match graphqlAnswer itemsDoc document with
                     | Some answer -> ok answer
                     | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
@@ -225,6 +233,8 @@ module SchedulingCostTests =
                     ok (JsonSerializer.Serialize {| number = n; state = (if r.State = "OPEN" then "open" else "closed"); body = r.Body |})
                 | None -> Error(Errors.NotFound $"no issue #%d{n}")
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
+
+    let private world (rows: Row list) = worldWithQueries rows None
 
     let private context (transport: Fake.Recorder) : Client.Context =
         { Transport = transport
@@ -315,6 +325,53 @@ module SchedulingCostTests =
     /// names the issue and the window.
     let private routeGraphQlCalls (transport: Fake.Recorder) (n: int) =
         countExact transport $"graphql FS-GG/FS.GG.SDD#%d{n} recent comments (last 100)"
+
+    [<Fact>]
+    let ``#2313 reconciling carries swept bodies in its board pages, without per-row REST reads or scheduling leakage`` () =
+        let closed =
+            [ 1..3 ]
+            |> List.map (fun n ->
+                { candidate n "Done" "CLOSED" with
+                    Body = $"Class: maintenance\nPaths: src/closed-%d{n}.fs" })
+
+        let closed =
+            { candidate 4 "Done" "CLOSED" with
+                IsPullRequest = true
+                Body = "Class: maintenance\nPaths: src/closed-pr.fs" }
+            :: closed
+
+        let fixtureTitle = "Coordination-2313-" + Guid.NewGuid().ToString "n"
+
+        let schedulingQueries = ResizeArray<string>()
+        let scheduling = worldWithQueries closed (Some schedulingQueries)
+
+        match Scan.board scheduling Cache.Scheduling "FS-GG" fixtureTitle 12 with
+        | Error e -> failwithf "scheduling board scan failed: %A" e
+        | Ok rows ->
+            Assert.All(rows, fun row -> Assert.Equal(None, row.SweptBody))
+
+        Assert.Single(schedulingQueries) |> ignore
+        Assert.DoesNotContain("... on Issue { number title state createdAt body", schedulingQueries.[0])
+
+        for row in closed do
+            Assert.Equal(0, countExact scheduling $"issue-get FS-GG/FS.GG.SDD %d{row.Number}")
+
+        let reconcilingQueries = ResizeArray<string>()
+        let reconciling = worldWithQueries closed (Some reconcilingQueries)
+
+        match Scan.board reconciling Cache.Reconciling "FS-GG" fixtureTitle 12 with
+        | Error e -> failwithf "reconciling board scan failed: %A" e
+        | Ok rows ->
+            Assert.Equal(4, rows.Length)
+
+            for row in rows do
+                let expected = closed |> List.find (fun candidate -> candidate.Number = row.Ref.Number)
+                Assert.Equal(Some(Ok expected.Body), row.SweptBody)
+                Assert.Equal(0, countExact reconciling $"issue-get FS-GG/FS.GG.SDD %d{row.Ref.Number}")
+
+        Assert.Single(reconcilingQueries) |> ignore
+        Assert.Contains("body", reconcilingQueries.[0])
+        Assert.Contains("... on PullRequest { number title state createdAt body", reconcilingQueries.[0])
 
     // ---- AC1/AC2 — bounded by the SCHEDULABLE set, not the candidate set --------------------------------
 

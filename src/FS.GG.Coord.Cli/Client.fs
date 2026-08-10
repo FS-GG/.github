@@ -2317,38 +2317,46 @@ module Client =
 
                         // A mutation acknowledgement is not a board observation.  Reconciliation is a
                         // truth operation, therefore each accepted field mutation must be followed by a
-                        // fresh scan that proves the projected row contains every requested value.
+                        // fresh resolver read that proves every requested field. Re-scanning the whole
+                        // board after each repair re-runs the expensive closed-row census N times.
                         let verifyWrites (chore: Chore.Chore) (writes: (string * Board.FieldWrite) list) =
-                            match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                            let read field =
+                                Board.itemFieldValue ctx.Transport board chore.Subject.Owner chore.Subject.Repo chore.Subject.Number field
+                                |> Result.map (Option.defaultValue "")
+
+                            let rec readAll remaining observed =
+                                match remaining with
+                                | [] -> Ok(List.rev observed)
+                                | (field, _) :: tail ->
+                                    match read field with
+                                    | Ok value -> readAll tail ((field, value) :: observed)
+                                    | Error e -> Error e
+
+                            match readAll writes [] with
+                            // `Board.itemFieldValue` says an erased ProjectV2 item is `NotFound "board
+                            // item ..."`; that is the targeted-read equivalent of the old scan not finding
+                            // the row. Preserve the established receipt/diagnostic without treating other
+                            // NotFound, malformed, or transport failures as an absence.
+                            | Error(Errors.NotFound subject) when subject.StartsWith("board item ", StringComparison.Ordinal) ->
+                                Error(None, "the item left the board before fresh verification")
                             | Error e -> Error(None, Errors.explain e)
-                            | Ok freshRows ->
-                                match freshRows |> List.tryFind (fun row -> row.Ref = chore.Subject) with
-                                | None -> Error(None, "the item left the board before fresh verification")
-                                | Some row ->
-                                    let observed field =
-                                        match field with
-                                        | "Status" -> statusWireName row.Status
-                                        | "Blocked by" -> row.BlockedByRaw
-                                        | "Class" -> row.BoardClass |> Option.map itemClassWireName |> Option.defaultValue ""
-                                        | _ -> ""
+                            | Ok observedValues ->
+                                let observed = observedValues |> Map.ofList
 
-                                    let observedValues =
-                                        writes |> List.map (fun (field, _) -> field, observed field)
+                                let mismatches =
+                                    writes
+                                    |> List.choose (fun (field, requested) ->
+                                        let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
+                                        let actual = observed[field]
+                                        if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
 
-                                    let mismatches =
-                                        writes
-                                        |> List.choose (fun (field, requested) ->
-                                            let intended = match requested with | Board.Set value -> value | Board.Clear -> ""
-                                            let actual = observed field
-                                            if actual = intended then None else Some $"%s{field}: intended '%s{intended}', observed '%s{actual}'")
-
-                                    if List.isEmpty mismatches then
-                                        Ok observedValues
-                                    else
-                                        // A failed comparison is still a successful fresh observation. Keep
-                                        // every actual field/value pair in the receipt so an operator can see
-                                        // which half of a coupled repair projected and which half stayed stale.
-                                        Error(Some observedValues, String.concat "; " mismatches)
+                                if List.isEmpty mismatches then
+                                    Ok observedValues
+                                else
+                                    // A failed comparison is still a successful fresh observation. Keep
+                                    // every actual field/value pair in the receipt so an operator can see
+                                    // which half of a coupled repair projected and which half stayed stale.
+                                    Error(Some observedValues, String.concat "; " mismatches)
 
                         // `BoardClass = None` has two different meanings at two different boundaries:
                         // this scan's row may have an UNSET `Class` value, while this map can prove that

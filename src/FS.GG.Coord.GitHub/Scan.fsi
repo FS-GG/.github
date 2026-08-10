@@ -102,7 +102,7 @@ module Scan =
           ///
           /// `None` is "not applicable, or this scan's intent never asked" — true of the overwhelming
           /// majority of rows on every scan, including every `Scheduling` scan regardless of population.
-          /// `Some(Ok text)` is the body; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
+          /// `Some(Ok text)` is the body carried by the reconciling board query; `Some(Error e)` mirrors `snapshot`'s own `bodyUnreadable`
           /// naming, so a failed census read is COUNTED, never silently dropped (#266).
           ///
           /// `snapshot`'s swept branch reads THIS rather than calling `Reads.issueBody` itself, which is

@@ -309,6 +309,11 @@ def graphql(query: str, variables: dict):
             issue = ISSUES[n]
         except (KeyError, ValueError):
             return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
+        # A board-item id is stable only while its row exists. Once a reconcile mutation removes the row,
+        # the targeted verifier must observe that absence as `node: null`, never read the stale issue-side
+        # field values that survive after board removal.
+        if off_board(n):
+            return {"data": {"node": None, "rateLimit": RATE_LIMIT}}
         field = variables.get("field")
         values = {"Status": issue.get("status"), "Class": issue.get("class"), "Phase": issue.get("phase"), "Severity": issue.get("severity"), "Blocked by": issue.get("blocked_by")}
         value = values.get(field)
