@@ -2513,7 +2513,7 @@ module ApplicationServiceTests =
     /// still says In progress — a `CLOSED-ISSUE-NOT-DONE` chore, whose remedy is Status=Done. A number in
     /// `rateLimited` meets an exhausted GraphQL budget on its item-id lookup, which is what makes its board
     /// write QUEUE instead of land (`Errors.isQueueable`: a rate limit, and nothing else, may be deferred).
-    let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
+    let private reconcileWorldWithQueries (closed: int list) (rateLimited: Set<int>) (queries: ResizeArray<string> option) =
         // A successful GraphQL mutation is not itself evidence that the board projection changed.  This
         // fixture therefore models the projection separately: only a subsequent scan after an accepted
         // mutation observes Done.  The rate-limited item never reaches that transition.
@@ -2532,6 +2532,7 @@ module ApplicationServiceTests =
             | "POST", "graphql" ->
                 match req.Body with
                 | Query(document, variables) ->
+                    queries |> Option.iter (fun captured -> captured.Add document)
                     let number =
                         variables
                         |> List.tryPick (fun (k, v) ->
@@ -2552,6 +2553,26 @@ module ApplicationServiceTests =
                             ok
                                 $"""{{"data":{{"repository":{{"issue":{{"projectItems":{{"nodes":[{{"id":"PVTI_%d{n}","project":{{"number":12}}}}]}}}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
                         | None -> Error(Errors.NotFound "an item-id lookup with no number")
+                    elif document.Contains "node(id: $itemId)" then
+                        let item =
+                            variables
+                            |> List.tryPick (fun (k, v) ->
+                                match k, v with
+                                | "itemId", VId id when id.StartsWith "PVTI_" ->
+                                    match Int32.TryParse(id.Substring "PVTI_".Length) with
+                                    | true, n -> Some n
+                                    | _ -> None
+                                | _ -> None)
+
+                        let field =
+                            variables
+                            |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                        match item, field with
+                        | Some n, Some "Status" when closed |> List.contains n ->
+                            let status = if written.Contains n then "Done" else "In progress"
+                            ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                        | _ -> Error(Errors.NotFound "a targeted verification read addressed an unknown reconcile field")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         variables
                         |> List.tryPick (fun (_, v) ->
@@ -2583,6 +2604,9 @@ module ApplicationServiceTests =
             | "GET", path when path.EndsWith "/comments" -> ok "[]"
             | m, p -> Error(Errors.NotFound $"the fixture serves no %s{m} %s{p}"))
 
+    let private reconcileWorld (closed: int list) (rateLimited: Set<int>) =
+        reconcileWorldWithQueries closed rateLimited None
+
     /// A BLOCKER-CLEARED apply whose accepted batch projects Status=Ready but leaves Blocked by stale.
     /// The second board scan is a real fresh transport response, not a renderer-only synthetic row.
     let private partialBlockerReconcileWorld () =
@@ -2601,9 +2625,17 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{if mutationAccepted then "Ready" else "Blocked"}"}}"""
+                            | Some "Blocked by" -> $"""{{"text":"%s{staleBlocker}"}}"""
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         mutationAccepted <- true
                         ok """{"data":{"f0":{"clientMutationId":null},"f1":{"clientMutationId":null}}}"""
@@ -2656,9 +2688,18 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_47","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Status" -> $"""{{"name":"%s{status}"}}"""
+                            | Some "Blocked by" when blockedBy <> "" -> $"""{{"text":"%s{blockedBy}"}}"""
+                            | Some "Blocked by" -> "null"
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         // The repair landed: the fresh verification read below now observes both fields.
                         status <- "Backlog"
@@ -2709,9 +2750,17 @@ module ApplicationServiceTests =
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
             | "POST", "graphql" ->
                 match req.Body with
-                | Query(document, _) ->
+                | Query(document, variables) ->
                     if document.Contains "projectItems" then
                         ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_301","project":{"number":12}}]}}}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    elif document.Contains "node(id: $itemId)" then
+                        let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+                        let value =
+                            match field with
+                            | Some "Class" when classWritten -> "{\"name\":\"defect\"}"
+                            | Some "Class" -> "null"
+                            | _ -> "null"
+                        ok ("{\"data\":{\"node\":{\"fieldValueByName\":" + value + "}},\"rateLimit\":{\"cost\":1,\"remaining\":4977}}")
                     elif document.Contains "updateProjectV2ItemFieldValue" then
                         classWritten <- true
                         ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
@@ -2870,6 +2919,18 @@ module ApplicationServiceTests =
                 match req.Body with
                 | Query(document, _) when document.Contains "node(id: $projectId)" ->
                     ok lookupResponse
+                | Query(document, variables) when document.Contains "node(id: $itemId)" ->
+                    let item = variables |> List.tryPick (fun (k, v) -> match k, v with | "itemId", VId id -> Some id | _ -> None)
+                    let field = variables |> List.tryPick (fun (k, v) -> match k, v with | "field", VString name -> Some name | _ -> None)
+
+                    match item, field with
+                    | Some "PVTI_external96", Some "Status" ->
+                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"name":"%s{status}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    | Some "PVTI_external96", Some "Blocked by" when blockedBy <> "" ->
+                        ok $"""{{"data":{{"node":{{"fieldValueByName":{{"text":"%s{blockedBy}"}}}}}},"rateLimit":{{"cost":1,"remaining":4977}}}}"""
+                    | Some "PVTI_external96", Some "Blocked by" ->
+                        ok """{"data":{"node":{"fieldValueByName":null}},"rateLimit":{"cost":1,"remaining":4977}}"""
+                    | _ -> Error(Errors.NotFound "the targeted verification read addressed the wrong external row or field")
                 | Query(document, _) when document.Contains "f0:" ->
                     status <- "Ready"
                     blockedBy <- ""
@@ -3062,6 +3123,23 @@ module ApplicationServiceTests =
 
         // Exit code UNCHANGED. A deferred write is not a failure — it is a promise the queue keeps.
         Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#2313 reconcile apply verifies N writes with N targeted reads and never repeats the board census`` () =
+        let queries = ResizeArray<string>()
+        let code, _, err = runApplyJson (reconcileWorldWithQueries [ 101; 102; 103 ] Set.empty (Some queries))
+
+        Assert.Equal(0, code)
+        Assert.True(String.IsNullOrWhiteSpace err, err)
+
+        let boardScans = queries |> Seq.filter (fun document -> document.Contains "items(first") |> Seq.length
+        let targeted = queries |> Seq.filter (fun document -> document.Contains "node(id: $itemId)") |> Seq.length
+
+        // One initial census derives all three chores. Each accepted one-field write is then observed by
+        // one resolver read; the old full-scan verifier would instead make this 1 + N board scans and 0
+        // targeted reads, so both counts are necessary to pin the cost boundary.
+        Assert.Equal(1, boardScans)
+        Assert.Equal(3, targeted)
 
     [<Fact>]
     let ``the queued-write remedy moves to stderr rather than into the document`` () =

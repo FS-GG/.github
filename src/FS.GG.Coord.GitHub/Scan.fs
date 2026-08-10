@@ -166,6 +166,34 @@ module Scan =
            } \
          } rateLimit { cost remaining } }"
 
+    // Reconciliation alone needs a closed-and-Done item's declaration to project its `Class` column.
+    // Ask for that scalar in the same board page instead of turning the swept census into one REST issue
+    // read per row. Scheduling and offering deliberately retain `BoardDoc`: an issue body is neither an
+    // input to their board-row scan nor a free thing to carry around.
+    [<Literal>]
+    let private ReconcilingBoardDoc =
+        "query($owner: String!, $number: Int!, $cursor: String) { \
+         organization(login: $owner) { \
+           projectV2(number: $number) { \
+             items(first: 100, after: $cursor) { \
+               pageInfo { hasNextPage endCursor } \
+               nodes { \
+                 status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 blockedBy: fieldValueByName(name: \"Blocked by\") { ... on ProjectV2ItemFieldTextValue { text } } \
+                 class: fieldValueByName(name: \"Class\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 severity: fieldValueByName(name: \"Severity\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 phase: fieldValueByName(name: \"Phase\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 repoScope: fieldValueByName(name: \"Repo Scope\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } \
+                 content { \
+                   __typename \
+                   ... on Issue { number title state createdAt body repository { nameWithOwner } } \
+                   ... on PullRequest { number title state createdAt body repository { nameWithOwner } } \
+                 } \
+               } \
+             } \
+           } \
+         } rateLimit { cost remaining } }"
+
     let private boardStatusOf (s: string) =
         match s.Trim().ToLowerInvariant() with
         | "" -> NoStatus
@@ -207,7 +235,7 @@ module Scan =
             | true, v -> Some v
             | _ -> None
 
-    let private parseRow (node: JsonElement) : Row option =
+    let private parseRow (carrySweptBody: bool) (node: JsonElement) : Row option =
         match node.TryGetProperty "content" with
         | true, content when content.ValueKind = JsonValueKind.Object ->
             let number =
@@ -237,7 +265,7 @@ module Scan =
                     | Some s when s.ToUpperInvariant() <> "OPEN" -> Closed
                     | _ -> Open
 
-                Some
+                let row =
                     { Ref =
                         { Owner = parts.[0]
                           Repo = parts.[1]
@@ -267,9 +295,22 @@ module Scan =
                       // than failing the scan.
                       Phase = nested node "phase" "name" |> Option.bind phaseOfWireName
                       CreatedAt = str content "createdAt" |> instant
-                      // The board scan proper never reads a body — `SweptBody` is `scanFresh`'s own,
-                      // strictly-later, `Cache.Reconciling`-gated enrichment (.github#2254 repair 1).
+                      // Filled only by the reconciling variant of the board document below.
                       SweptBody = None }
+
+                if carrySweptBody && row.State = Closed && row.Status = Done && row.BoardClass.IsNone then
+                    // Match `Reads.issueBody`: null is a successfully observed empty description. A
+                    // missing or malformed scalar is different: it is an unreadable declaration and must
+                    // reach the snapshot as such rather than suppressing the class projection.
+                    let swept =
+                        match content.TryGetProperty "body" with
+                        | true, body when body.ValueKind = JsonValueKind.String -> Ok(body.GetString())
+                        | true, body when body.ValueKind = JsonValueKind.Null -> Ok ""
+                        | _ -> Error(Malformed(row.Ref.Short, "the reconciling board response has no readable issue body"))
+
+                    Some { row with SweptBody = Some swept }
+                else
+                    Some row
 
             | _ -> None
 
@@ -423,7 +464,9 @@ module Scan =
         // Viewer, in lockstep with the document `forOwner` produces.
         let kind = OwnerKind.fromEnv ()
         let ownerField = OwnerKind.ownerField kind
-        let boardDoc = OwnerKind.forOwner kind BoardDoc
+        let carrySweptBody = intent = Cache.Reconciling
+        let boardDocument = if carrySweptBody then ReconcilingBoardDoc else BoardDoc
+        let boardDoc = OwnerKind.forOwner kind boardDocument
         let ownerVars = OwnerKind.ownerVars kind owner
 
         let rec page (cursor: string option) (acc: Row list) (guard: int) : IoResult<Row list> =
@@ -478,7 +521,7 @@ module Scan =
 
                 let rows =
                     items.GetProperty("nodes").EnumerateArray()
-                    |> Seq.choose parseRow
+                    |> Seq.choose (parseRow carrySweptBody)
                     |> List.ofSeq
 
                 let pageInfo = items.GetProperty("pageInfo")
@@ -502,23 +545,21 @@ module Scan =
         match page None [] 100 with
         | Error e -> Error e
         | Ok rows ->
-            // .github#2254 REPAIR 1. `Cache.Reconciling` ALONE may enrich a swept closed-and-`Done` row
-            // with its own body TEXT — and only the narrow population AC1 names: `BoardClass = None`. This
-            // is the ONE extra REST read `scanFresh` ever performs beyond the GraphQL page loop above, and
-            // it exists so `Scan.snapshot`'s swept branch (see there) can see the item's own declared
-            // `Class:` without EVERY caller of `scanFresh` paying for it — `Cache.Scheduling`/`Offering`
-            // leave `SweptBody = None` on every row, exactly as `parseRow` already does above.
+            // A server that accepted the reconciling document but omitted its selected `body` scalar is
+            // malformed. Keep the old REST read as a narrow compatibility/fail-closed fallback for that
+            // impossible-to-trust response shape; ordinary rows (including null bodies) never take it.
+            // If the fallback fails, its error remains `SweptBody` and the snapshot refuses to pretend the
+            // declaration was empty.
             let rows =
-                match intent with
-                | Cache.Reconciling ->
+                if carrySweptBody then
                     rows
                     |> List.map (fun row ->
-                        if row.State = Closed && row.Status = Done && row.BoardClass.IsNone then
+                        match row.SweptBody with
+                        | Some(Error _) ->
                             { row with SweptBody = Some(Reads.issueBody transport row.Ref.Owner row.Ref.Repo row.Ref.Number) }
-                        else
-                            row)
-                | Cache.Scheduling
-                | Cache.Offering -> rows
+                        | _ -> row)
+                else
+                    rows
 
             // A FAILED SCAN IS NEVER CACHED (#344), and `putScan` is what enforces it — an empty document is
             // refused there, at the write, because this is the last moment "the board is empty" and "I could
