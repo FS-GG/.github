@@ -189,7 +189,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-08-05
+updated: 2026-08-10
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -214,27 +214,23 @@ repos:
   - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below.
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }
   - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: unrequired }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
-  # THE ROW THIS FILE CAN NOW HOLD, AND DELIBERATELY DOES NOT HOLD YET (.github#2245 acceptance 6).
-  # `.github#2206`'s maintainer decision (comment 5178235203, revised 2026-08-04) rosters
-  # `EHotwagner/S.I.R.`, and the schema above can express it exactly:
-  #
-  #   - { id: sir, full: EHotwagner/S.I.R., role: non-participant, receives: [],
-  #       reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and
-  #                an open blocker on the .github#2070 release epic; it takes no org fabric" }
-  #
-  # What is still owed is NOT a registry edit. The collaborator-only intake boundary applies to every
-  # rostered repository (.github#2178 acceptance 14; #2206: rostering it "brings it under the fleet
-  # IssueCreationPolicy.COLLABORATORS_ONLY audit"), `EHotwagner/S.I.R.` is measured at `ALL`, and the
-  # remedy is an administrative action by its OWNER — no edit here can perform it. Committing the row
-  # first would leave the daily `repos-audit` standing red on a finding this organization cannot clear,
-  # which is the failure mode #1611/#1582 are about: a gate that is always red is indistinguishable
-  # from a gate that never runs. The row lands with the policy, not before it.
-  #
-  # Do NOT give it a `receives:` word when it lands, to make it look like the rows above: it takes none
-  # of these fabrics, and a false one would be a permanent unfixable gap in whichever sweep owns that
-  # capability. `EHotwagner/rogue3` is deliberately absent from BOTH this block and `outside-fabric:` —
-  # see #2206's decision for why an exemption there would be the wrong shape.
   - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package, absence-cover: required }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
+  # THE ROW #2245 ACCEPTANCE 6 WITHHELD, NOW LANDED. `.github#2206`'s maintainer decision (comment
+  # 5178235203, revised 2026-08-04) rosters `EHotwagner/S.I.R.`. It was parked `Blocked` on
+  # EHotwagner/S.I.R.#139 rather than committed here, because the collaborator-only intake boundary
+  # applies to every rostered repository (.github#2178 acceptance 14; #2206: rostering it "brings it
+  # under the fleet IssueCreationPolicy.COLLABORATORS_ONLY audit") and the repo measured
+  # `issueCreationPolicy: ALL` — committing the row first would have left the daily `repos-audit`
+  # standing red on a finding this organization cannot clear, the #1611/#1582 failure mode. The owner
+  # applied COLLABORATORS_ONLY and EHotwagner/S.I.R.#139 is closed as completed with an independent
+  # re-read confirming it; the row lands now, with the policy, not before it.
+  #
+  # No `receives:` word: it takes none of these fabrics, and a false one would be a permanent unfixable
+  # gap in whichever sweep owns that capability. `EHotwagner/rogue3` stays deliberately absent from
+  # BOTH this block and `outside-fabric:` — see #2206's decision for why an exemption there would be
+  # the wrong shape.
+  - { id: sir,         full: EHotwagner/S.I.R.,      role: non-participant, receives: [],
+      reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and an open blocker on the .github#2070 release epic; it takes no org fabric" }
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
