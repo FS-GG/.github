@@ -52,10 +52,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-001 (AC-001): Game Skills publication and SDD production materializer adoption confirmed against nuget.org and merge commits, not just issue claims."]
@@ -77,10 +77,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-002 (AC-002): FS.GG.Workspace.Template's published artifact downloaded and byte-verified rather than trusted from the closing comment alone."]
@@ -102,10 +102,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["Independently re-derived FR-003 (AC-003): S.I.R.#138 and the Babylon bindings reference confirmed to use only public, versioned feed artifacts with zero sibling-checkout edges."]
@@ -127,10 +127,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["FR-004 (AC-004): every added/edited row names only a version independently verified under EV001-EV003."]
@@ -152,10 +152,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["FR-005 (AC-005): projections regenerated and the shipped validator reports clean."]
@@ -177,10 +177,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["DEC-001: registered the descriptor's stated (understated) floor rather than silently correcting another repo's file; filed FS-GG/FS.GG.Templates#407 as the root-cause finding."]
@@ -202,10 +202,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["PC-001 satisfied by EV001-EV004's citations."]
@@ -227,10 +227,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["PC-002 satisfied — see DEC-001/DEC-002/DEC-004 in spec.md for the explicit non-advancement rationale."]
@@ -252,10 +252,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: [VO-001 satisfied.]
@@ -277,10 +277,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: [VO-002 satisfied.]
@@ -302,10 +302,10 @@ evidence:
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
     notes: ["PM-001: no migration owed; schemaVersion unchanged."]
@@ -342,18 +342,18 @@ evidence:
     checklistResultRefs: []
     planDecisionRefs: [PD-004]
     obligationRefs: [EV013]
-    artifacts: [docs/architecture.md, profile/README.md]
+    artifacts: [docs/architecture.md, profile/README.md, tests/feed-coherence/run.sh]
     sourceRefs: []
     result: pass
     synthetic: false
     observedRun:
       source: verify-report.junit.xml
-      digest: "sha256:3f207fde3e3e3e0ec56d0326452f2c0cb939082a537f2efb9034bda4853669d5"
+      digest: "sha256:a97eabd0ebe5e84363be1ba2837088d7fd401132aefeaffcf16dbd7af0c9773a"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 4
+      passed: 22
       failed: 0
       skipped: 0
-    notes: ["VO-003/T013: prose-consistency check for docs/architecture.md and profile/README.md against the corrected registry pins (fs-gg-workspace-template 0.8.1, game-skills 0.8.0), while confirming the one genuinely distinct fact (S.I.R.'s actually-consumed 0.8.0) stays present with its disambiguating note rather than being wrongly 'corrected' into a false statement. The checker script is not committed to the tree (same durability model as EV005/EV013-EV016 in prior rounds) -- durability is this observed-run receipt, not the script file."]
+    notes: ["Repair round 3 (critic finding, review comment 5245105175): round 2's EV013 was a real, non-self-attested, one-time run, but its checker was never committed, so nothing re-ran it and the critic could not invert it -- an unproven gate by the gate-inversion contract. Its note also cited 'EV005/EV013-EV016' as a shared precedent; EV014/EV015/EV016 never existed anywhere and EV005 (which does cite a committed script) is the opposite of what the note claimed it supported. Both are corrected here, not just retracted: the check is now a new leg inside the already-committed, already-declared-Paths tests/feed-coherence/run.sh (same file EV005 itself cites), checking the real docs/architecture.md and profile/README.md rather than a synthetic fixture. Invertibility is anyone-repeatable, not just self-reported: `git checkout 0c4aaf62 -- docs/architecture.md profile/README.md && bash tests/feed-coherence/run.sh` reds with `FAIL docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins` (21 passed, 1 failed, exit 1); `git checkout HEAD -- docs/architecture.md profile/README.md && bash tests/feed-coherence/run.sh` is green again (22 passed, 0 failed, exit 0). The observedRun above is from that final green run against the committed script on the current head."]
 lifecycleNotes:
   - "Next lifecycle action: verify."
