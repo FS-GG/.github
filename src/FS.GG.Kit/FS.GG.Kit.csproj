@@ -457,7 +457,14 @@
          first time, which is a change in what a receiver's critic can act on, not a prose tidy of
          already-true guidance — before this, no packed text named the rule at all (#2248's root
          cause). Packed member set and destinations unchanged. -->
-    <Version>0.46.0</Version>
+    <!-- 0.46.0 -> 0.47.0, a MINOR (.github#2135): the packed drive-board/work-board guidance no
+         longer directs the host to DETECT material transitions and RECONSTRUCT the active-item
+         inventory from memory — it now runs the coordination driver's events mode against a cursor
+         file and forwards its two-line text projection verbatim. A receiver materializing this kit
+         version picks up a new REQUIRED reporting behaviour: the host stops composing status prose
+         itself. Before this, no packed text named that command mode at all — this is new guidance,
+         not a prose tidy of already-true text. Packed member set and destinations unchanged. -->
+    <Version>0.47.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills and the fsgg-coord/skill-view client shims, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>
