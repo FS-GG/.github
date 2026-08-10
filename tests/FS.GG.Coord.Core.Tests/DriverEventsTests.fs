@@ -258,6 +258,61 @@ module DriverEventsTests =
         Assert.Empty(secondRead.Transitions)
         Assert.Single(secondRead.Active) |> ignore
 
+    // ---- repair round 1 (fsgg:independent-review:v1, wrenlet-9f2c): a PERSISTENT Unreadable must ----
+    // ---- never go silent — idempotency is an exception for this one state, not the default rule ----
+
+    [<Fact>]
+    let ``repair-1: a persistent Unreadable re-emits a transition on every unchanged read, never falling silent`` () =
+        let unreadable =
+            { baseFacts with
+                Ref = ".github#3"
+                ReadOk = false
+                UnreadableReason = Some "board scan timed out" }
+
+        let firstEvents, cursor1 = deriveEvents Map.empty [ classify unreadable ]
+        Assert.Single(firstEvents) |> ignore
+
+        // Second read: IDENTICAL facts, IDENTICAL cursor entry. For every other state this is exactly
+        // the idempotent-no-duplicate-event case (`deriveEvents: idempotent re-read`). For Unreadable
+        // it must NOT be: a driver that only sees "no material transitions" after cycle one has no way
+        // to tell "this item recovered" from "this item is still broken", which is worse than silence
+        // — it reads as an all-clear over a rotting item (fsgg:independent-review:v1 round 1, finding 1).
+        let secondEvents, cursor2 = deriveEvents cursor1 [ classify unreadable ]
+        Assert.Single(secondEvents) |> ignore
+        Assert.Equal(Some(Unreadable "board scan timed out"), secondEvents.[0].Previous)
+        Assert.Equal(Unreadable "board scan timed out", secondEvents.[0].New)
+
+        // A third read proves it is not a one-time "announce twice" grace period — it repeats for as
+        // long as the failure persists.
+        let thirdEvents, _ = deriveEvents cursor2 [ classify unreadable ]
+        Assert.Single(thirdEvents) |> ignore
+
+    [<Fact>]
+    let ``repair-1: idempotency is UNCHANGED for every state other than Unreadable`` () =
+        // The fix must be narrowly scoped to Unreadable. Re-asserting the existing idempotency
+        // guarantee here pins that a stable Claimed/Ready/etc. state still goes quiet on an unchanged
+        // re-read — repair 1 must not regress issue acceptance #5 while fixing acceptance #7.
+        for facts in
+            [ baseFacts
+              { baseFacts with ClaimWorker = Some "w" }
+              { baseFacts with IssueState = Some Closed; Merged = true } ] do
+            let classified = classify facts
+            let _, cursor = deriveEvents Map.empty [ classified ]
+            let events, _ = deriveEvents cursor [ classify facts ]
+            Assert.Empty(events)
+
+    [<Fact>]
+    let ``repair-1: project's rendered output keeps naming a persistent Unreadable item on every read`` () =
+        // The end-to-end shape the host loop actually consumes: two successive `project` calls over an
+        // unchanged Unreadable fact must both carry a transition line naming it, not just `deriveEvents`
+        // in isolation.
+        let unreadable = { baseFacts with Ref = ".github#4"; ReadOk = false; UnreadableReason = Some "PR read timed out" }
+        let first = project Map.empty [ unreadable ] 100L
+        Assert.Single(first.Transitions) |> ignore
+        let second = project first.Cursor [ unreadable ] 200L
+        Assert.Single(second.Transitions) |> ignore
+        Assert.Contains(".github#4", (renderText second).Split('\n').[0])
+
     // ---- failed-read — issue acceptance #7 ---------------------------------------------------------
 
     [<Fact>]

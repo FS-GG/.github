@@ -97,7 +97,13 @@ module DriverEvents =
     /// Diff a fresh classification against the cursor, emitting one `TransitionEvent` per ref whose
     /// state differs from `Map.tryFind ref cursor`, and returning the updated cursor. Re-deriving over
     /// an UNCHANGED classification is idempotent: applying the returned cursor as the next call's input
-    /// over the same facts yields zero events (issue acceptance #5).
+    /// over the same facts yields zero events (issue acceptance #5) — with ONE deliberate exception:
+    /// `Unreadable` re-emits on EVERY read for as long as it persists, even against an unchanged
+    /// cursor entry (fsgg:independent-review:v1 round 1). A stable `Unreadable` is not "no news" the
+    /// way a stable `Claimed` is — it is a standing failure, and idempotency-by-default would let a
+    /// broken item go completely silent after its first announcement, which is indistinguishable from
+    /// "recovered" or "never broken" to anything reading only the transition line (issue acceptance #7:
+    /// a failed read must never become an empty or successful result).
     val deriveEvents: cursor: Cursor -> classified: Classified list -> TransitionEvent list * Cursor
 
     /// Classify every item's facts, diff against the cursor, and render the complete projection.

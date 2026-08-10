@@ -17,6 +17,7 @@
     <Compile Include="IntakeCliTests.fs" />
     <Compile Include="IntakeTransactionTests.fs" />
     <Compile Include="DriverCommandTests.fs" />
+    <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />

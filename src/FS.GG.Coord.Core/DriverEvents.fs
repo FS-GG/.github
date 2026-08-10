@@ -125,13 +125,33 @@ module DriverEvents =
         | Done
         | Unreadable _ -> false
 
+    /// Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
+    /// changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
+    /// reasoning inverts (fsgg:independent-review:v1 round 1, finding 1, .github#2135 repair round 1):
+    /// a PERSISTENT failure is itself the news, every read, for as long as it persists. Suppressing it
+    /// after cycle one makes a rotting item indistinguishable from a healthy one — a failed read must
+    /// never become an empty or successful result (issue acceptance #7), and "quiet because nothing
+    /// changed" is exactly that outcome for an item stuck broken.
+    let private alwaysReports (state: MaterialState) : bool =
+        match state with
+        | Unreadable _ -> true
+        | Ready
+        | Claimed _
+        | ReviewHandoff _
+        | ReviewRepair _
+        | CiLandable
+        | MergedAwaitingObligations _
+        | Released
+        | HumanBlocked _
+        | Done -> false
+
     let deriveEvents (cursor: Cursor) (classified: Classified list) : TransitionEvent list * Cursor =
         let events =
             classified
             |> List.choose (fun c ->
                 let previous = Map.tryFind c.Ref cursor
 
-                if previous = Some c.State then
+                if previous = Some c.State && not (alwaysReports c.State) then
                     None
                 else
                     Some
