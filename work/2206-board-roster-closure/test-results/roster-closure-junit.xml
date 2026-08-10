@@ -44,9 +44,28 @@ PASS  multiple schedulable rows on one unrostered repo collapse into ONE violati
 PASS  the wrapped {items: [...]} board-json shape is accepted
 PASS  an unreadable board-json path is a no-verdict (exit 3), not a vacuous green
 PASS  a malformed board-json (no items array) is a no-verdict, not a traceback
+PASS  a board array of PLAIN NUMBERS is a no-verdict, not a crash
+PASS  a board array of STRINGS is a no-verdict, not a crash
+PASS  a board array of NULLS is a no-verdict, not a crash
+PASS  a board item missing owner/repo keys is a no-verdict
+PASS  a board item with a non-string status is a no-verdict
+PASS  a completely empty board-json FILE is a no-verdict, not a crash
+PASS  INVALID JSON (not parseable at all) is a no-verdict, not a crash
 PASS  an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)
 PASS  a definite BOARD violation outranks a simultaneous org no-verdict
+PASS  gh transport failure (network unreachable / non-zero exit) is a no-verdict
+PASS  gh returning non-JSON is a no-verdict, not a traceback
+PASS  a GraphQL errors[] reply (e.g. a token without Projects read) is a no-verdict
+PASS  a GraphQL reply with neither data nor errors is a no-verdict
+PASS  the board title resolving to ZERO projects is a no-verdict
+PASS  the board title resolving to MULTIPLE projects is a no-verdict (ambiguous, not a guess)
+PASS  the project going unreadable mid-page is a no-verdict
+PASS  totalCount disagreeing between pages (board mutated mid-read) is a no-verdict
+PASS  hasNextPage=true with an empty endCursor is a no-verdict, not an infinite/truncated read
+PASS  a PARTIALLY RESOLVED Issue/PR node (repository missing from a non-nullable field) is a no-verdict, not a silent drop
+PASS  a genuine DraftIssue is skipped silently and does not stop a real row from closing
+PASS  two-page pagination through the live (faked) gh path resolves the same as --board-json
 PASS  --skip-board announces the unanswered question
-roster-closure fixture — 49 assertion(s): 49 passed, 0 failed
+roster-closure fixture — 68 assertion(s): 68 passed, 0 failed
 roster-closure fixture — OK
 ]]></system-out></testcase></testsuite>

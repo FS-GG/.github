@@ -131,6 +131,7 @@ query RosterClosureBoardItems($owner:String!,$number:Int!,$after:String){
       totalCount
       pageInfo{hasNextPage endCursor}
       nodes{
+        id
         status: fieldValueByName(name:"Status"){
           ... on ProjectV2ItemFieldSingleSelectValue{name}
         }
@@ -337,7 +338,23 @@ def _fetch_board_items(owner: str, title: str) -> list[dict]:
             content = (raw or {}).get("content") or {}
             repo = content.get("repository")
             if not repo:
-                continue  # a DraftIssue, or content this schema cannot classify: no repo to close
+                # LEGITIMATE skip only for content this direction's subject genuinely excludes: a
+                # DraftIssue (no repository field exists at all) or a node GraphQL returned nothing
+                # for at all (no `content`, no `__typename`) — both name no repository to close over.
+                # An Issue/PullRequest with a MISSING `repository` is different: GitHub's schema makes
+                # that field non-nullable for those two types, so seeing it absent means this specific
+                # node came back only PARTIALLY resolved (a per-item GraphQL error, not a whole-request
+                # failure `_gh_graphql`'s error/transport checks already catch). Treating that the same
+                # as a draft would silently drop a row that might be exactly the `.github#2206`
+                # violation this direction exists to catch — so it is a no-verdict instead, the same
+                # "could not read" answer a whole-response failure already gets.
+                if content.get("__typename") in ("Issue", "PullRequest"):
+                    raise RuntimeError(
+                        f"board item #{raw.get('id') if isinstance(raw, dict) else '?'} is an "
+                        f"{content.get('__typename')} with no `repository` in the reply — a partially "
+                        f"resolved node, not a legitimate no-repository row. Cannot trust this page as "
+                        f"complete.")
+                continue
             status = ((raw.get("status") or {}).get("name")) or ""
             out.append({
                 "owner": str(((repo.get("owner") or {}).get("login")) or ""),
@@ -351,6 +368,40 @@ def _fetch_board_items(owner: str, title: str) -> list[dict]:
         after = info.get("endCursor")
         if not after:
             raise RuntimeError("board reported hasNextPage=true but no endCursor to page with")
+    return out
+
+
+def _validate_board_items(raw: object) -> list[dict]:
+    """Coerce `raw` into a validated `list[{owner, repo, number, status}]`, or raise `ValueError`.
+
+    A row this reader cannot parse might be exactly the `.github#2206` violation direction C exists
+    to catch — silently skipping it (or crashing past it) would let a malformed board masquerade as
+    a closed one. So EVERY shape problem — a non-list top level, a non-object element, a missing or
+    non-string `owner`/`repo`, a non-string `status` — is a `ValueError` the caller turns into the
+    same distinguishable no-verdict AC-4 requires for "could not read the board", never a silent skip
+    and never an uncaught exception. `_fetch_board_items`'s own output is re-validated here too (cheap,
+    and it means a future defect in that function fails closed here rather than reaching
+    `board_closure_findings` unchecked).
+    """
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"expected a JSON array (or an object with an `items` array), got {type(raw).__name__}")
+    out: list[dict] = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(
+                f"item[{index}] is a {type(entry).__name__}, expected an object with owner/repo/status")
+        owner = entry.get("owner")
+        repo = entry.get("repo")
+        if not isinstance(owner, str) or not owner.strip():
+            raise ValueError(f"item[{index}] has a missing/non-string/blank `owner`")
+        if not isinstance(repo, str) or not repo.strip():
+            raise ValueError(f"item[{index}] has a missing/non-string/blank `repo`")
+        status = entry.get("status", "")
+        if status is not None and not isinstance(status, str):
+            raise ValueError(
+                f"item[{index}].status is a {type(status).__name__}, expected a string or null")
+        out.append({"owner": owner, "repo": repo, "number": entry.get("number"), "status": status or ""})
     return out
 
 
@@ -641,21 +692,35 @@ def main(argv: list[str]) -> int:
               f"verified; a repo holding a schedulable Coordination board row but absent from the "
               f"roster would go unreported.", file=sys.stderr)
     else:
+        # EVERY step that can fail on a malformed/unreadable board — the JSON parse, the top-level
+        # shape check, the per-item shape check, AND the closure computation itself — lives inside
+        # this one try/except. `board_closure_findings` used to sit OUTSIDE it: a `--board-json` list
+        # whose elements were not objects (`[1,2,3]`, a list of strings, a list of nulls) reached
+        # `item.get("status")` and raised an uncaught `AttributeError`, propagating a Python traceback
+        # instead of AC-4's mandated exit-3 no-verdict — the exact "vacuous failure" shape #266 exists
+        # to prevent, arriving through the criterion this item is judged on (found in independent
+        # review, `.github#2206`). `_validate_board_items` now rejects every such shape BEFORE
+        # `board_closure_findings` ever sees it, and the call itself stays inside the guard as a
+        # second line of defense against a residual defect in either function.
         board_items: list[dict] | None = None
         try:
             if args.board_json:
                 raw = json.load(open(args.board_json, encoding="utf-8"))
-                board_items = raw.get("items") if isinstance(raw, dict) else raw
-                if not isinstance(board_items, list):
-                    raise ValueError(
-                        f"expected a JSON array (or an object with an `items` array), got "
-                        f"{type(raw).__name__}")
+                candidate = raw.get("items") if isinstance(raw, dict) else raw
+                board_items = _validate_board_items(candidate)
             else:
-                board_items = _fetch_board_items(args.board_owner, args.board_title)
-        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
+                board_items = _validate_board_items(_fetch_board_items(args.board_owner, args.board_title))
+            if board_items:
+                # Computed here too, inside the guard: a defect in board_closure_findings itself must
+                # no-verdict, not crash, on validated-but-still-unanticipated data.
+                board_findings = board_closure_findings(roster, board_items)
+            else:
+                board_findings = []
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             noverdicts.append(f"could not read the Coordination board ({args.board_owner}/"
                               f"{args.board_title!r}): {exc}. 'Could not look' is not 'looked, and "
                               f"the board is closed'.")
+            board_items = None
 
         if board_items is not None and not board_items:
             noverdicts.append(f"the Coordination board ({args.board_owner}/{args.board_title!r}) "
@@ -663,7 +728,7 @@ def main(argv: list[str]) -> int:
                               f"empty' from 'this read saw nothing'.")
         elif board_items is not None:
             nboard = len(board_items)
-            findings += board_closure_findings(roster, board_items)
+            findings += board_findings
 
     if findings:
         for e in findings:

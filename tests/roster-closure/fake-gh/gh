@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# A stand-in for the `gh` CLI, used ONLY by tests/roster-closure/run.sh's direction-C transport
+# fixtures. `scripts/check-roster-closure.py` shells out to `gh api graphql --input -` for
+# _resolve_board_project_number / _fetch_board_items, and none of those failure modes are reachable
+# through --board-json (which bypasses `gh` entirely) — so this is how the offline suite exercises
+# the transport/pagination path itself: put this file's directory first on PATH and set
+# FAKE_GH_SCENARIO to pick a canned reply. No network, no real `gh` binary required.
+set -euo pipefail
+
+[ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] || { echo "fake-gh: unsupported args: $*" >&2; exit 64; }
+payload="$(cat)"
+scenario="${FAKE_GH_SCENARIO:-}"
+
+is_lookup() { grep -qF "RosterClosureBoardProject" <<<"$payload"; }
+is_first_page() { grep -qE '"after":[[:space:]]*null' <<<"$payload"; }
+
+lookup_ok() { echo '{"data":{"organization":{"projectsV2":{"nodes":[{"number":1,"title":"Coordination"}]}}}}'; }
+
+case "$scenario" in
+  transport-fail)
+    echo "fake-gh: simulated transport failure (network unreachable)" >&2
+    exit 1
+    ;;
+  bad-json)
+    echo "not json at all {{{"
+    ;;
+  graphql-errors)
+    echo '{"errors":[{"message":"simulated: token cannot read this project (FORBIDDEN)"}]}'
+    ;;
+  no-data-key)
+    echo '{"nothing":"here"}'
+    ;;
+  project-lookup-zero)
+    echo '{"data":{"organization":{"projectsV2":{"nodes":[]}}}}'
+    ;;
+  project-lookup-multi)
+    echo '{"data":{"organization":{"projectsV2":{"nodes":[{"number":1,"title":"Coordination"},{"number":9,"title":"Coordination"}]}}}}'
+    ;;
+  items-not-readable)
+    if is_lookup; then lookup_ok
+    else echo '{"data":{"organization":{"projectV2":null}}}'
+    fi
+    ;;
+  count-mismatch)
+    if is_lookup; then lookup_ok
+    elif is_first_page; then
+      echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":2,"pageInfo":{"hasNextPage":true,"endCursor":"CURSOR1"},"nodes":[{"id":"n1","status":{"name":"Ready"},"content":{"__typename":"Issue","number":1,"repository":{"owner":{"login":"FS-GG"},"name":"A"}}}]}}}}}'
+    else
+      echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":5,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}}'
+    fi
+    ;;
+  bad-cursor)
+    if is_lookup; then lookup_ok
+    else echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":1,"pageInfo":{"hasNextPage":true,"endCursor":null},"nodes":[]}}}}}'
+    fi
+    ;;
+  partial-node)
+    if is_lookup; then lookup_ok
+    else echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"n1","status":{"name":"Ready"},"content":{"__typename":"Issue","number":42}}]}}}}}'
+    fi
+    ;;
+  draft-issue-skip)
+    # A draft (no repository, ever) alongside a real, already-rostered item — proves the draft is
+    # silently skipped WITHOUT the read itself going empty/no-verdict and without polluting the
+    # closure verdict for the real row.
+    if is_lookup; then lookup_ok
+    else echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":2,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"n1","status":{"name":"Ready"},"content":{"__typename":"DraftIssue"}},{"id":"n2","status":{"name":"Ready"},"content":{"__typename":"Issue","number":1,"repository":{"owner":{"login":"FS-GG"},"name":".github"}}}]}}}}}'
+    fi
+    ;;
+  two-pages-ok)
+    if is_lookup; then lookup_ok
+    elif is_first_page; then
+      echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":2,"pageInfo":{"hasNextPage":true,"endCursor":"CURSOR1"},"nodes":[{"id":"n1","status":{"name":"Ready"},"content":{"__typename":"Issue","number":1,"repository":{"owner":{"login":"FS-GG"},"name":"A"}}}]}}}}}'
+    else
+      echo '{"data":{"organization":{"projectV2":{"items":{"totalCount":2,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"n2","status":{"name":"Done"},"content":{"__typename":"Issue","number":2,"repository":{"owner":{"login":"FS-GG"},"name":"B"}}}]}}}}}'
+    fi
+    ;;
+  *)
+    echo "fake-gh: unknown FAKE_GH_SCENARIO='$scenario'" >&2
+    exit 64
+    ;;
+esac

@@ -52,13 +52,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: ["bash tests/roster-closure/run.sh -> 49 assertion(s): 49 passed, 0 failed.", "board_closure_findings() implemented in scripts/check-roster-closure.py, wired into main()'s findings bucket.", "tests/roster-closure/run.sh section 10, case \"a schedulable row on an unrostered, unexempt repo is a BOARD closure violation\": exit 1, message names FS-GG/Unrostered.Repo and the roster-closure-2206 shape."]
+    notes: ["bash tests/roster-closure/run.sh -> 68 assertion(s): 68 passed, 0 failed.", "board_closure_findings() implemented in scripts/check-roster-closure.py, wired into main()'s findings bucket.", "tests/roster-closure/run.sh section 10, case \"a schedulable row on an unrostered, unexempt repo is a BOARD closure violation\": exit 1, message names FS-GG/Unrostered.Repo and the roster-closure-2206 shape."]
   - id: EV002
     kind: verification
     subject:
@@ -77,7 +77,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -102,7 +102,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -127,13 +127,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: [Mutation/gate-inversion evidence for the same claim recorded under EV011., "tests/roster-closure/run.sh: \"an unreadable board-json path is a no-verdict (exit 3), not a vacuous green\", \"a malformed board-json (no items array) is a no-verdict, not a traceback\", \"an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)\", \"a definite BOARD violation outranks a simultaneous org no-verdict\" — all PASS, each asserting exit 3 with text distinct from both the exit-0 and exit-1 messages."]
+    notes: [Mutation/gate-inversion evidence for the same claim recorded under EV011., "REPAIR (found in independent review of PR #2328): the original AC-4 guard validated only that --board-json's top level was a list; board_closure_findings() ran OUTSIDE that try/except, so a list containing a non-object element ([1,2,3], a list of strings, a list of nulls, a dict missing owner/repo, a non-string status) reached item.get(...) and raised an uncaught AttributeError -- a Python traceback, not the mandated exit-3. Added _validate_board_items() to reject every such shape before board_closure_findings ever runs, and moved the board_closure_findings call inside the guarded try/except as a second line of defense. Also closed a related AC-4 gap in the read path itself (_fetch_board_items): a GraphQL node whose content.__typename is Issue/PullRequest but whose non-nullable `repository` field is missing (a partially-resolved node, distinct from a legitimate DraftIssue) now raises -> no-verdict, instead of being silently skipped like a draft. tests/roster-closure/run.sh sections 10-11 gained 12 new cases (5 malformed-shape, 1 empty-file, 1 invalid-JSON, plus 5 gh-transport/pagination cases specifically exercising this repair) all asserting exit 3, the exact board no-verdict message substring, AND the absence of a Python traceback -- not merely non-zero. bash tests/roster-closure/run.sh -> 68/68 passed.", "tests/roster-closure/run.sh: \"an unreadable board-json path is a no-verdict (exit 3), not a vacuous green\", \"a malformed board-json (no items array) is a no-verdict, not a traceback\", \"an EMPTY board read is a no-verdict (exit 3), not a vacuous green (AC-4)\", \"a definite BOARD violation outranks a simultaneous org no-verdict\" — all PASS, each asserting exit 3 with text distinct from both the exit-0 and exit-1 messages."]
   - id: EV005
     kind: verification
     subject:
@@ -152,7 +152,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -179,7 +179,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -204,7 +204,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -229,7 +229,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -254,7 +254,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -279,13 +279,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: ["bash tests/roster-closure/run.sh -> \"roster-closure fixture — 49 assertion(s): 49 passed, 0 failed\" (33 pre-existing A/B cases + 16 new direction-C cases added in section 10)."]
+    notes: ["bash tests/roster-closure/run.sh -> \"roster-closure fixture — 68 assertion(s): 68 passed, 0 failed\" (33 pre-existing A/B cases + 16 direction-C board_closure_findings/--board-json cases in section 10 + 12 malformed-shape/no-traceback regression cases (F1 repair) + 12 gh-transport/pagination cases in section 11, using a fake `gh` stub on PATH, tests/roster-closure/fake-gh/gh, since none of _gh_graphql/_resolve_board_project_number/_fetch_board_items are reachable through --board-json)."]
   - id: EV011
     kind: verification
     subject:
@@ -304,13 +304,13 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
       failed: 0
       skipped: 0
-    notes: ["Gate-inversion mutation: board_closure_findings()'s `if full in rostered or full in exempt: continue` was temporarily replaced with `if True: continue` (neutering the closure check).", "Mutation reverted (verified via diff against pre-mutation copy); bash tests/roster-closure/run.sh -> 49/49 passed again, confirming the fix and its tests are the cause of the observed red, not a coincidence.", "Re-ran bash tests/roster-closure/run.sh under the mutation: exactly the 5 tests that assert a BOARD violation is DETECTED went RED (\"board violation\", \"empty status should be schedulable\", \"user-owned schedulable violation\", \"multi-row collapse\", \"violation outranks no-verdict\"); the other 44 (including the no-verdict/closed-world/A/B cases) stayed green, as expected since the mutation only disables violation detection. roster-closure fixture — 49 assertion(s): 44 passed, 5 failed."]
+    notes: ["Gate-inversion mutation: board_closure_findings()'s `if full in rostered or full in exempt: continue` was temporarily replaced with `if True: continue` (neutering the closure check). Re-ran bash tests/roster-closure/run.sh under the mutation: exactly the 5 tests that assert a BOARD violation is DETECTED went RED (\"board violation\", \"empty status should be schedulable\", \"user-owned schedulable violation\", \"multi-row collapse\", \"violation outranks no-verdict\"); the other 44 stayed green. Mutation reverted; 49/49 passed again at that point.", "SECOND gate-inversion pass, added during independent-review repair (F1: an uncaught AttributeError instead of exit 3 on a malformed --board-json array; F2: the gh-subprocess/pagination path had zero coverage): reverted scripts/check-roster-closure.py to its pre-repair commit (45140bd4, before _validate_board_items and the partial-node __typename check existed) via `git stash push -- scripts/check-roster-closure.py`, then re-ran bash tests/roster-closure/run.sh. Exactly 6 of the newly-added tests went RED: the 5 malformed---board-json-shape cases (`[1,2,3]`, `[\"a\",\"b\"]`, `[null,null]`, a dict missing owner/repo, a non-string status — each failing with \"want exit 3, got 1\", Python's own uncaught-exception exit code, confirming the AttributeError crash reproduced end-to-end) and the fake-gh \"PARTIALLY RESOLVED Issue/PR node\" case (wrong no-verdict message, since that check did not exist pre-repair and the node was silently skipped instead). All other 62 assertions, including every other new gh-transport/pagination case, stayed green under this second mutation — they test paths the repair did not touch. Mutation reverted (`git stash pop`); 68/68 passed again."]
   - id: EV012
     kind: verification
     subject:
@@ -329,7 +329,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1
@@ -354,7 +354,7 @@ evidence:
     synthetic: false
     observedRun:
       source: work/2206-board-roster-closure/test-results/roster-closure-junit.xml
-      digest: "sha256:dc29e454983f4b5ae7ec9fca7477f72067923d0694eecc183e8b88ca82e08197"
+      digest: "sha256:d2369aa0e1cd9d7821dfbcecb0dd65a47f6efa4c85425984447d4bd9616124f7"
       digestContract: exact-bytes-v1
       outcome: passed
       passed: 1

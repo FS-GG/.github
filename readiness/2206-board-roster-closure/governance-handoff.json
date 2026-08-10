@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/2206-board-roster-closure/ship.json",
-      "digest": "sha256:14a761ff100f3023cede70aa22433d37f2e13b826e8ba41047ab9326ca609089",
+      "digest": "sha256:48846947deecf268bc013498a89cf212efab5dddc98ccb4fd64295991eac3518",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2206-board-roster-closure/verify.json",
-      "digest": "sha256:d36cb1fb823889c7b5de91fd19cbffdc3f388dbbd6e3126b7726e583456c7d17",
+      "digest": "sha256:58ef57ccb806c4229b9daf5b278122e2d81134fb5d468ea3bd0f7475ba3303e6",
       "schemaVersion": 1
     },
     {
       "path": "readiness/2206-board-roster-closure/work-model.json",
-      "digest": "sha256:1a0457c9b12b4b50692c5a49c96f4ec80ff12b75cb47666a222c4026714b32f7",
+      "digest": "sha256:1de752724ec29d8248f70cdbf42f6e8e561a412bc17efd9acacbebd822fe3ef6",
       "schemaVersion": 1
     }
   ],

@@ -497,6 +497,52 @@ rc=0; out="$(run_board "$ROSTER" "$BOARD_MALFORMED")" || rc=$?
   && ok "a malformed board-json (no items array) is a no-verdict, not a traceback" \
   || bad "malformed board (want exit 3)" "$out"
 
+# REGRESSION (found in independent review of PR #2328, .github#2206): board_closure_findings() used
+# to sit OUTSIDE the try/except that guards --board-json, so a top-level ARRAY containing a non-object
+# element reached `item.get("status")` and crashed with an uncaught AttributeError — a Python
+# traceback on stdout, not the AC-4-mandated distinguishable exit-3 no-verdict. `_validate_board_items`
+# now rejects every one of these shapes before `board_closure_findings` ever runs. Each case here
+# asserts BOTH exit 3 AND that the message names the actual shape problem (not merely non-zero) AND
+# that no traceback appears — a test that only checked non-zero would not have caught the original
+# defect, since Python's own uncaught-exception exit code is also non-zero.
+expect_board_shape_noverdict() {
+  local name="$1" needle="$2" json="$3" out rc=0 file
+  file="$WORK/board-shape-$$-$RANDOM.json"
+  printf '%s\n' "$json" > "$file"
+  out="$(run_board "$ROSTER" "$file")" && rc=0 || rc=$?
+  if [ "$rc" -ne 3 ]; then
+    bad "$name (want exit 3, got $rc)" "$out"
+  elif grep -qi "Traceback (most recent call last)" <<<"$out"; then
+    bad "$name (a Python traceback leaked instead of a no-verdict)" "$out"
+  elif ! grep -qF "could not read the Coordination board" <<<"$out"; then
+    bad "$name (exit 3 but not the board no-verdict message)" "$out"
+  elif ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit 3, but not for the stated reason: want '$needle')" "$out"
+  else
+    ok "$name"
+  fi
+}
+expect_board_shape_noverdict "a board array of PLAIN NUMBERS is a no-verdict, not a crash" \
+  "expected an object with owner/repo/status" '[1,2,3]'
+expect_board_shape_noverdict "a board array of STRINGS is a no-verdict, not a crash" \
+  "expected an object with owner/repo/status" '["a","b"]'
+expect_board_shape_noverdict "a board array of NULLS is a no-verdict, not a crash" \
+  "expected an object with owner/repo/status" '[null,null]'
+expect_board_shape_noverdict "a board item missing owner/repo keys is a no-verdict" \
+  "missing/non-string/blank \`owner\`" '[{"foo":"bar"}]'
+expect_board_shape_noverdict "a board item with a non-string status is a no-verdict" \
+  "expected a string or null" '[{"owner":"FS-GG","repo":"x","status":5}]'
+touch "$WORK/board-empty-file.json"
+rc=0; out="$(run_board "$ROSTER" "$WORK/board-empty-file.json")" || rc=$?
+{ [ "$rc" -eq 3 ] && ! grep -qi "Traceback" <<<"$out" && grep -qF "could not read the Coordination board" <<<"$out"; } \
+  && ok "a completely empty board-json FILE is a no-verdict, not a crash" \
+  || bad "empty file (want exit 3)" "$out"
+printf 'not json at all {{{' > "$WORK/board-invalid-json.json"
+rc=0; out="$(run_board "$ROSTER" "$WORK/board-invalid-json.json")" || rc=$?
+{ [ "$rc" -eq 3 ] && ! grep -qi "Traceback" <<<"$out" && grep -qF "could not read the Coordination board" <<<"$out"; } \
+  && ok "INVALID JSON (not parseable at all) is a no-verdict, not a crash" \
+  || bad "invalid JSON (want exit 3)" "$out"
+
 BOARD_EMPTY="$WORK/board-empty.json"; printf '[]\n' > "$BOARD_EMPTY"
 rc=0; out="$(run_board "$ROSTER" "$BOARD_EMPTY")" || rc=$?
 { [ "$rc" -eq 3 ] && grep -qF "reported ZERO items" <<<"$out"; } \
@@ -509,6 +555,76 @@ rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" \
 { [ "$rc" -eq 1 ] && grep -qF "FS-GG/Unrostered.Repo" <<<"$out"; } \
   && ok "a definite BOARD violation outranks a simultaneous org no-verdict" \
   || bad "violation outranks no-verdict" "$out"
+
+# --- 11. the TRANSPORT/PAGINATION path (_gh_graphql / _resolve_board_project_number /
+# _fetch_board_items) — none of this is reachable through --board-json, which bypasses `gh`
+# entirely, so section 10 above proves nothing about it. A fake `gh` on PATH (tests/roster-closure/
+# fake-gh/gh) stands in for the real CLI so these run offline. Each case answers ONE question from
+# independent review of PR #2328 (.github#2206): can a network failure, a non-zero `gh` exit, a
+# malformed/truncated GraphQL reply, an ambiguous project lookup, a mid-page mutation, a bad cursor,
+# or a partially-resolved item produce anything OTHER than the same distinguishable exit-3 no-verdict
+# --board-json's fixtures already prove for a malformed FILE? If any of these silently produced exit
+# 0 (a vacuous green hiding a real gap) or crashed (a traceback, this item's own F1 shape), that
+# would be the same AC-4 violation arriving through the read path instead of the parse path.
+FAKE_GH="$HERE/fake-gh"
+run_board_live() {
+  local scenario="$1"
+  FAKE_GH_SCENARIO="$scenario" PATH="$FAKE_GH:$PATH" \
+    python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org 2>&1
+}
+expect_live_noverdict() {
+  local name="$1" needle="$2" scenario="$3" out rc=0
+  out="$(run_board_live "$scenario")" && rc=0 || rc=$?
+  if [ "$rc" -ne 3 ]; then
+    bad "$name (want exit 3, got $rc)" "$out"
+  elif grep -qi "Traceback (most recent call last)" <<<"$out"; then
+    bad "$name (a Python traceback leaked instead of a no-verdict)" "$out"
+  elif ! grep -qF "could not read the Coordination board" <<<"$out"; then
+    bad "$name (exit 3 but not the board no-verdict message)" "$out"
+  elif ! grep -qF "$needle" <<<"$out"; then
+    bad "$name (exit 3, but not for the stated reason: want '$needle')" "$out"
+  else
+    ok "$name"
+  fi
+}
+expect_live_noverdict "gh transport failure (network unreachable / non-zero exit) is a no-verdict" \
+  "simulated transport failure" transport-fail
+expect_live_noverdict "gh returning non-JSON is a no-verdict, not a traceback" \
+  "returned invalid JSON" bad-json
+expect_live_noverdict "a GraphQL errors[] reply (e.g. a token without Projects read) is a no-verdict" \
+  "GraphQL refused the query" graphql-errors
+expect_live_noverdict "a GraphQL reply with neither data nor errors is a no-verdict" \
+  "carried neither" no-data-key
+expect_live_noverdict "the board title resolving to ZERO projects is a no-verdict" \
+  "found 0" project-lookup-zero
+expect_live_noverdict "the board title resolving to MULTIPLE projects is a no-verdict (ambiguous, not a guess)" \
+  "found 2" project-lookup-multi
+expect_live_noverdict "the project going unreadable mid-page is a no-verdict" \
+  "was not readable while paging" items-not-readable
+expect_live_noverdict "totalCount disagreeing between pages (board mutated mid-read) is a no-verdict" \
+  "board item count changed while paging" count-mismatch
+expect_live_noverdict "hasNextPage=true with an empty endCursor is a no-verdict, not an infinite/truncated read" \
+  "no endCursor to page with" bad-cursor
+expect_live_noverdict "a PARTIALLY RESOLVED Issue/PR node (repository missing from a non-nullable field) is a no-verdict, not a silent drop" \
+  "partially resolved node" partial-node
+
+# The one case that IS a legitimate silent skip, for contrast: a genuine DraftIssue names no
+# repository at all (no __typename mismatch, nothing partially resolved), alongside a real,
+# already-rostered item — proves the draft is dropped silently and correctly, without the read
+# itself going empty/no-verdict (a lone draft WOULD legitimately no-verdict via "reported ZERO
+# items", since a fetch that returns nothing closeable is indistinguishable from one that saw
+# nothing at all — this case is deliberately not that).
+out="$(run_board_live draft-issue-skip)" \
+  && ok "a genuine DraftIssue is skipped silently and does not stop a real row from closing" \
+  || bad "DraftIssue alongside a real row should still close" "$out"
+
+# End-to-end pagination sanity: two real pages, a violation on page 1 and a Done row on page 2,
+# reached only through the live fetch path (no --board-json), still resolves correctly.
+rc=0; out="$(FAKE_GH_SCENARIO=two-pages-ok PATH="$FAKE_GH:$PATH" \
+        python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org 2>&1)" || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qF "FS-GG/A" <<<"$out"; } \
+  && ok "two-page pagination through the live (faked) gh path resolves the same as --board-json" \
+  || bad "live two-page pagination" "$out"
 
 # --skip-board is loud, offline, and leaves the board question unanswered — mirrors --skip-org.
 rc=0; out="$(python3 "$TOOL" --roster "$ROSTER" --deps "$DEPS" --skip-org --skip-board 2>&1)" || rc=$?

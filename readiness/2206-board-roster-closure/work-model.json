@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "5d4aa26d3650e713ffde13a687ff969be4345df15ac1dfc3eebf3c223da007eb"
+        "value": "76c038bc767a8dd0a77189cfb9f73345029db74b8da6ca6c51c6768f1856277f"
       }
     },
     {
@@ -1054,7 +1054,7 @@
           "path": "work/2206-board-roster-closure/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "5d4aa26d3650e713ffde13a687ff969be4345df15ac1dfc3eebf3c223da007eb"
+            "value": "76c038bc767a8dd0a77189cfb9f73345029db74b8da6ca6c51c6768f1856277f"
           },
           "schemaVersion": 1
         },
@@ -1085,7 +1085,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "dcc45838491d6b327fe9508b9be78761d49aeb2847d4102ff72da11d59698bbe"
+        "value": "fc73279d9ddffa26620a56aac35d8d37cbed47c681d0ae573e78893fb2dc4e57"
       },
       "currency": "current"
     }
