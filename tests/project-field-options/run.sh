@@ -84,6 +84,42 @@ else
   fail "net phase projection" "board schema and coordination skill must both map net to P8 Net"
 fi
 
+# --- Repo Scope: the roster/schema/resolver TRIPLE required to onboard one repo (.github#2245) ---
+# `check_repo_scope` runs `compare_roster` THEN `compare_resolver` in the same pass. A repo id whose
+# id differs from the repo-name half of its `full:` (e.g. `sir` / `EHotwagner/S.I.R.`) needs BOTH
+# the documented board-schema.md table row AND a RepoScope.resolve case, and the check only reaches
+# the resolver comparison once the table comparison already passes — so a fixture proving only the
+# first state would let the second regress silently. These legs run against the REAL
+# registry/repos.yml, docs/coordination/board-schema.md, and RepoScope.fs (the same files CI's
+# `check --schema docs/coordination/board-schema.md` reads, with `--roster`/`--resolver` defaulting
+# to the real paths too), and mutate temp copies to exercise each of the three states.
+
+if run_tool check --schema "$SCHEMA" >/dev/null; then
+  pass "the real roster, board-schema table, and RepoScope resolver agree (sir's doc row and resolver case both present)"
+else
+  fail "real Repo Scope triple" "$(run_tool check --schema "$SCHEMA" 2>&1 || true)"
+fi
+
+# State 1: the documented table row is absent (the resolver case still present). The FIRST failure a
+# roster addition without its doc row produces.
+grep -v '^| `sir` | roster |$' "$SCHEMA" >"$WORK/schema-no-sir.md"
+out="$(run_tool check --schema "$WORK/schema-no-sir.md" 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "missing roster ids=['sir']"; then
+  pass "Repo Scope check refuses when sir's documented table row is absent"
+else
+  fail "Repo Scope missing doc row" "rc=$rc out=$out"
+fi
+
+# State 2: the documented table row is present but the RepoScope.resolve case is absent. The SECOND
+# failure — the one that caught this item out, reachable only once state 1's comparison passes.
+grep -v '| "sir" -> "S.I.R."' "$ROOT/src/FS.GG.Coord.Core/RepoScope.fs" >"$WORK/no-resolver-case.fs"
+out="$(run_tool check --schema "$SCHEMA" --resolver "$WORK/no-resolver-case.fs" 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF "embedded --repo resolver drift: missing=['sir']"; then
+  pass "Repo Scope check refuses when the RepoScope.resolve case for sir is absent"
+else
+  fail "Repo Scope missing resolver case" "rc=$rc out=$out"
+fi
+
 reset_state
 if PROJECT_FIELD_OPTIONS_FAKE_BAD_TOTAL=1 run_tool snapshot --output "$WORK/partial.json" >/dev/null 2>&1; then
   fail "partial snapshot refusal" "mismatched totalCount was accepted"

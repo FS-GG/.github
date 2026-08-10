@@ -22,6 +22,7 @@ Every `repos:` row in `registry/repos.yml` must have a same-named option. The
 | `game` | roster |
 | `audio` | roster |
 | `net` | roster |
+| `sir` | roster |
 | `cross-repo` | board-only aggregate |
 <!-- repo-scope-options:end -->
 

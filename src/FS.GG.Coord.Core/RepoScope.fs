@@ -11,6 +11,7 @@ module RepoScope =
         | "game" -> "FS.GG.Game"
         | "audio" -> "FS.GG.Audio"
         | "net" -> "FS.GG.Net"
+        | "sir" -> "S.I.R."
         | _ ->
             match raw.IndexOf('/') with
             | -1 -> raw
