@@ -48,6 +48,11 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
+    <!-- 0.22.0 is a MINOR on the 0.x line: three wire-surface commits since the 0.21.1 release
+         add the explicit delivery-route receipt boundary and typed intake transaction surface, while
+         #2300 and #2313 repair scheduler/reconcile read amplification. Receivers gain new command and
+         result vocabulary, so a patch would understate the caller-observable change. The remainder of
+         this historical note records the earlier 0.16.0 rationale. -->
     <!-- 0.15.0 to 0.16.0 is a MINOR, and under the repository's 0.x SemVer policy that is also the
          caller-observable-change signal: there is no 1.x major available to take. Eight merged engine
          commits ship (.github#1951); #1900's squash commit consolidates four reviewed input commits.
@@ -73,7 +78,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.21.1</Version>
+    <Version>0.22.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -96,7 +101,15 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.21.1 — PATCH: a CLOSED but UNSTAMPED item is still in flight, and review-marker
+    <PackageReleaseNotes>0.22.0 — MINOR on the 0.x line: explicit source-bound delivery-route receipts and
+typed intake transactions add caller-visible command, result, and refusal vocabulary. This cut also ships
+the #2300 scheduling and #2313 reconcile read-amplification defect fixes. The release is intentionally
+minor because Protocol.fs changes make the new delivery-route gate and transaction surface observable to
+every receiver; it remains stable (no prerelease suffix).
+
+PREVIOUS RELEASE NOTES (0.21.1):
+
+0.21.1 — PATCH: a CLOSED but UNSTAMPED item is still in flight, and review-marker
 recognition stops discarding the markers it cannot place (.github#2225, .github#2221).
 
 FOUR merged engine commits since 0.21.0. The wire surface `src/FS.GG.Coord.Core/Protocol.fs` is
