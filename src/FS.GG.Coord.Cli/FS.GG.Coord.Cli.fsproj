@@ -48,6 +48,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
+    <!-- 0.22.1 is a PATCH on the 0.x line: #2308 bounds empty claim-marker reads so an
+         empty response is refused rather than treated as a known-unclaimed item. No command,
+         flag, result, or exit-code vocabulary changes; the fix is internal fail-closed behavior.
+         The 0.22.0 MINOR rationale follows as historical context. -->
     <!-- 0.22.0 is a MINOR on the 0.x line: three wire-surface commits since the 0.21.1 release
          add the explicit delivery-route receipt boundary and typed intake transaction surface, while
          #2300 and #2313 repair scheduler/reconcile read amplification. Receivers gain new command and
@@ -78,7 +82,7 @@
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
          disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.22.0</Version>
+    <Version>0.22.1</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -101,7 +105,13 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.22.0 — MINOR on the 0.x line: explicit source-bound delivery-route receipts and
+    <PackageReleaseNotes>0.22.1 — PATCH: #2308 fixes empty claim-marker reads so an unreadable or empty
+response refuses instead of inventing a safe-looking unclaimed state. The CLI verb, flag, result, and
+exit-code vocabulary is unchanged; this is stable (no prerelease suffix).
+
+PREVIOUS RELEASE NOTES (0.22.0):
+
+0.22.0 — MINOR on the 0.x line: explicit source-bound delivery-route receipts and
 typed intake transactions add caller-visible command, result, and refusal vocabulary. This cut also ships
 the #2300 scheduling and #2313 reconcile read-amplification defect fixes. The release is intentionally
 minor because Protocol.fs changes make the new delivery-route gate and transaction surface observable to
