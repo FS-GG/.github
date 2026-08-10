@@ -838,7 +838,7 @@ contracts:
     # FS.GG.UI.Scene (P0 Option D, reimplemented over Game.Core's own BCL-only Point/Rect). Builds +
     # tests headless (zero Skia / zero Scene). Public surface baseline committed (11 types).
     surface: "FS.GG.Game.Core package — BCL-only deterministic simulation primitives plus the packaged fs-gg-game-core-fable-lockstep-v1 bounded Fable source/profile and canonical oracle"
-    consumers: [rendering]   # Rendering's template game/sample-pack profiles + Canvas.Tests re-homed to it (ADR-0022 P5, Rendering#155)
+    consumers: [rendering, templates]   # Rendering's template game/sample-pack profiles + Canvas.Tests re-homed to it (ADR-0022 P5, Rendering#155). templates ADDED .github#2070 (2026-08-10): fs-gg-fable-game consumes the published fs-gg-game-core-fable-lockstep-v1 profile at this exact pin (ADR-0069/ADR-0071 §4); EHotwagner/S.I.R.#138's Directory.Packages.props independently confirms the exact [0.13.0] pin.
     profiles:
       fable-lockstep:
         identity: "fs-gg-game-core-fable-lockstep-v1"
@@ -956,6 +956,70 @@ contracts:
     # here to make a gate happy — the empty list IS the recorded decision.
     surface: "the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool"
     consumers: []             # DELIBERATELY EMPTY — see the block above. A `dotnet new` tool humans install; nothing in the graph restores it, so it has no consumer edge. schemaVersion 2 (.github#1114) makes this a legal, honest value distinct from an OMITTED `consumers`.
+    # .github#2070 (epic #2067 terminal activation), 2026-08-10: --template <rendering|console|web|
+    # fable-game|fable-bindings> merged via .github#2069/PR#2074 (commit 31c4700f, 2026-08-01) and is
+    # ALREADY ON MAIN, but this row's version/package-version stay at the RELEASED 0.9.0 — the release
+    # tag new-sdd-workspace/v0.9.0 points at 1c817c4e, which PREDATES PR#2074. Packing and releasing a
+    # build that actually carries --template is epic .github#2067 rollout phase 6, deliberately NOT
+    # done by this activation: the maintainer reserves the publish decision (this org shipped an
+    # empty-diff immutable tag once already from a misdiagnosed obligation, and a second one was
+    # narrowly avoided the same day — see .github#2070 discussion). Advancing version/package-version
+    # here before that release ships would be exactly the "future artifact advertised" failure this
+    # registry's own culture forbids. Re-flip this row's version/package-version/package-tag ONLY after
+    # the wizard is actually packed, tagged, and independently verified live on both feeds.
+  - id: fs-gg-workspace-template
+    version: "0.8.1"   # SOURCE: FS.GG.Templates renamed its planned package `FS.GG.Templates` (frozen at 0.7.1, .github#2070/DEC-001) to `FS.GG.Workspace.Template` per ADR-0072 §1 and published it at 0.8.0 (FS-GG/FS.GG.Templates#349, tag fs-gg-templates/v0.8.0 -> fef78f5b), then 0.8.1 (tag fs-gg-templates/v0.8.1 -> 286c2a43250edb1f60a72d10fc53e645a397556c; PRs #397/#399/#401/#403; FS.GG.Templates#386, a real fix — the four templates' generated-content `exclude` list gained `**/.nuget/**`, closing a leak where the template's own `RestorePackagesPath` cache could reach a generated product). Four independent identities land together; see `surface` below.
+    package-version: "0.8.1"   # FEED: independently re-downloaded from nuget.org — fs.gg.workspace.template.0.8.1.nupkg SHA-256 102c72364ce0018b34950774b86ee12d0f6da43e0de36d609f14bfbdae5c5d21, the newest version live (`curl https://api.nuget.org/v3-flatcontainer/fs.gg.workspace.template/index.json` -> ["0.8.0","0.8.1"]). check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest on the feed for EVERY package-bearing contract — it is not a "what a consumer has adopted" field (that is what `dependencies:` edges below record, e.g. `templates -> rendering` intentionally lags Rendering's newest until Templates re-pins). .github#2070's first cut wrongly pinned 0.8.0 by that consumer-adoption reasoning and the gate correctly reddened (BEHIND the feed) on PR#2344 head 824c4c2f; this is the repair. `fs.gg.workspace.template.0.8.0.nupkg` SHA-256 was 11b57ac61e2c3eadaefae0d20ae427e4ca6f7593585cf79e5f6e89565b93c473 (superseded). Byte-diffed 0.8.0 vs 0.8.1: only the five `.template.config/template.json` files and the nuget signature changed (154 files each side, same set) — confirmed no template identity was added or removed (`content/templates/{fs-gg-console,fs-gg-web,fs-gg-fable-game,fs-gg-fable-bindings,fs-gg-governance}/.template.config/template.json` all present in both).
+    package-tag: "fs-gg-templates/v0.8.1"
+    owner: templates
+    # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
+    # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
+    # HTTP with explicit DTOs replaces Fable.Remoting for fable-game's typed request/response half,
+    # because the upstream Fable.Remoting.MsgPack defect blocking the pinned Fable compiler — FS.GG.Templates#370 — is
+    # unfixed). One packable dotnet-template package, FOUR independent identities; a generated
+    # workspace selects exactly one. Registry activation of these four rows is epic .github#2067
+    # rollout phase 4/5 (.github#2070) — the WIZARD release that lets `new-sdd-workspace --template`
+    # actually select them is phase 6, deliberately not done here (see the `new-sdd-workspace` row's
+    # comment above).
+    surface: >
+      FS.GG.Workspace.Template package, four `dotnet new` identities: `fs-gg-console` (provider
+      `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F#
+      ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider
+      `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented
+      real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response
+      per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069);
+      `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned
+      npm package/declaration closure, ADR-0072 §3, first proved by the unreleased
+      EHotwagner/babylonjsBindings reference). All four also carry `fs-gg-governance` (the pre-existing
+      governance overlay template, folded into this package at the same rename).
+    consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active now, wizard-selectable only after phase 6 (see new-sdd-workspace row).
+    minimum-fsgg-sdd:
+      version: "0.6.0"   # MIRRORS FS.GG.Templates' own providers/*.providers.yml (all four identities currently declare minimumFsggSdd.version: "0.6.0"; the registry mirrors the descriptor, it does not lead it — same discipline as the fs-gg-ui-template row above).
+      requires: "SDD lifecycle and scaffold provenance support (FS.GG.Templates providers/*.providers.yml, all four identities)"
+      adr: "docs/adr/0071-two-web-workspace-providers-one-template-package.md; docs/adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md"
+      provider-descriptor: "FS.GG.Templates providers/console.providers.yml, providers/web.providers.yml, providers/fable-game.providers.yml, providers/fable-bindings.providers.yml"
+      # KNOWN GAP, NOT SILENTLY RAISED HERE (.github#2070 DEC-004 / clarifications.md DEC-001): the
+      # `fable-game` identity's owner-sourced Game skill (FS.GG.Game.Skills, see the `game-skills`
+      # contract row below) is only correctly materialized by an FS.GG.SDD.Cli build containing SDD
+      # PR#819's merge commit aa1d6d4c — first published at 1.0.0 (`git compare v0.32.0...aa1d6d4c` =
+      # ahead_by 2 behind_by 0; `git compare aa1d6d4c...v1.0.0` = ahead_by 12 behind_by 0; nuget.org's
+      # newest fs.gg.sdd.cli is 1.0.0). FS.GG.Templates' fable-game.providers.yml still declares 0.6.0.
+      # This row mirrors that descriptor rather than silently correcting it; the fix belongs to
+      # FS.GG.Templates and is filed as a distinct cross-repo finding, not applied here:
+      # FS-GG/FS.GG.Templates#407.
+  - id: game-skills
+    version: "0.8.0"   # SOURCE: FS-GG/FS.GG.Game#552 published 0.7.0 (closed via PR#554, merge 7fa79f29023468a6bcd4ef7ef5b696abeba508ec, tag skills/v0.7.0), then 0.8.0 (tag skills/v0.8.0 -> 7b8d24479a83b64a68645f47dd943f9b615e7064; `gh api compare/skills/v0.7.0...skills/v0.8.0` = two unrelated docs-only commits, #557/#558 — no fs-gg-game-fable change).
+    package-version: "0.8.0"   # FEED: check-feed-coherence.py (feed-coherence.yml) asserts registry.package-version == literal newest live on the feed for every package-bearing contract, unconditionally — it is NOT a "what a consumer has adopted" field. .github#2070's first cut pinned 0.7.0 (the version FS.GG.SDD#817/PR#819 explicitly proved materializes) reasoning by consumer-adoption, and the gate correctly reddened (BEHIND the feed) on PR#2344 head 824c4c2f; this is the repair. Independently re-downloaded fs.gg.game.skills.0.8.0.nupkg (SHA-256 e058642649510e730da168d97610fe96d12805870112127227a64b15e9b1b9f0) and re-extracted game-skills/skills/fs-gg-game-fable/SKILL.md: sha256sum 443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50 — IDENTICAL to 0.7.0's, so SDD#817/PR#819's materializer proof (against that exact digest) still holds at 0.8.0; nothing about the proven skill body changed between the two versions. Also matches the digest already recorded at registry/skills.yml:207.
+    owner: game
+    # ADR-0071 §1 / ADR-0063: FS.GG.Game owns the skill that teaches use of its published Fable
+    # lockstep profile and ships it through this independently-versioned package; SDD's scaffold
+    # materializer obtains the skill bytes from here at scaffold time (owner-sourced, never copied by
+    # Templates or the generated workspace). First cross-repo consumer edge: FS-GG/FS.GG.SDD#817
+    # (closed via PR#819, merge aa1d6d4c1d105a0dba87a39230cfea1fb90dafc9) pins this exact version and
+    # proves the production materializer emits `fs-gg-game-fable` with its published digest under
+    # locked restore from the public read path.
+    surface: "FS.GG.Game.Skills package — the fs-gg-game-fable owner-sourced product skill (Fable lockstep guidance), materialized by SDD's production scaffold materializer for fable-game workspaces (materializes-when: profile in [game, sample-pack] per registry/skills.yml:207)"
+    consumers: [sdd]
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -1014,6 +1078,15 @@ dependencies:
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
   - { from: sdd,       to: governance, via: "governance-handoff@1 (OPTIONAL; SDD runs fully without Governance)" }
+  # .github#2070 (epic #2067 terminal activation, 2026-08-10): fs-gg-fable-game's authoritative Game
+  # logic may use only surfaces graded for the published fs-gg-game-core-fable-lockstep-v1 profile
+  # (ADR-0069/ADR-0071 §4) — a second, direct templates -> game edge alongside the existing
+  # templates -> rendering -> game transitive path (rendering's edge is unrelated: template
+  # game/sample-pack profiles, not the fable-game provider).
+  - { from: templates, to: game,       via: "game-sim-core@0.13.0 (fs-gg-fable-game consumes the published fs-gg-game-core-fable-lockstep-v1 profile; independently confirmed as EHotwagner/S.I.R.#138's exact Directory.Packages.props pin)" }
+  # .github#2070: SDD's production scaffold materializer obtains the fable-game provider's
+  # owner-sourced skill from Game's independently-versioned delivery package (ADR-0071 §1/ADR-0063).
+  - { from: sdd,       to: game,       via: "game-skills@0.7.0 (FS.GG.Game.Skills — fs-gg-game-fable Fable lockstep skill; SDD#817/PR#819 proves the production materializer emits it under locked restore)" }
   # .github#135: the contract-coherence gate validates THIS registry with SDD's typed Fsgg.Registry validator.
   - { from: github,    to: sdd,        via: "registry-schema@1 (Fsgg.Registry / fsgg-sdd validates registry/dependencies.yml; gate pins FS.GG.SDD.Cli — ADR-0015)" }
   # ADR-0017 (.github#163/#168): registry/skills.yml is reconciled FROM the producer skill-manifests.

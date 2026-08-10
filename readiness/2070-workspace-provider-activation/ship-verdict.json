@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2070-workspace-provider-activation",
+  "stage": "ship",
+  "status": "shipReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "verificationReadiness": {
+    "status": "verificationReady",
+    "evidenceSupportedCount": 12,
+    "evidenceSelfAttestedCount": 0,
+    "evidenceObservedCount": 12
+  },
+  "disposition": {
+    "state": "advisory",
+    "blockingFindingIds": []
+  },
+  "readiness": "shipReady"
+}

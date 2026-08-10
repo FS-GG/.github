@@ -1,0 +1,166 @@
+schemaVersion: 1
+work:
+  id: 2070-workspace-provider-activation
+  title: "Workspace Provider Activation"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/2070-workspace-provider-activation/spec.md
+  sourceClarifications: work/2070-workspace-provider-activation/clarifications.md
+  sourceChecklist: work/2070-workspace-provider-activation/checklist.md
+  sourcePlan: work/2070-workspace-provider-activation/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/2070-workspace-provider-activation/spec.md
+    digest: 0af0787ad5b5bc40dcc702d4554a3240885c1835c74ce1a91465551abbaf5964
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2070-workspace-provider-activation/clarifications.md
+    digest: fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd
+    schemaVersion: 1
+  - label: checklist
+    path: work/2070-workspace-provider-activation/checklist.md
+    digest: 20f9328b15b2ce6b69521ed22a740a529f1e28b5c8332d43e1658b87af3e9e73
+    schemaVersion: 1
+  - label: plan
+    path: work/2070-workspace-provider-activation/plan.md
+    digest: e7f994930120c5be128811f41cbdb9f6b5edff5dcf5b3e4376ddf0366d2d3c7a
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement requirement FR-005
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-005]
+    decisions: []
+    sourceIds: [AC-005, FR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Update contract surface PC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-001, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PC-002, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001, PD-005]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Record verification evidence VO-003
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-002, PD-004, VO-003]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV013]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 2070-workspace-provider-activation."

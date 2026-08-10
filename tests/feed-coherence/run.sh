@@ -60,6 +60,10 @@ contracts:
   # FS.GG.Net's six-package coherent set (ADR-0052). Same ORPHAN-check reason: every CONTRACT_PACKAGES
   # mapping must have a contract in the registry under test.
   - { id: fs-gg-net,                     version: "0.1.0",           package-version: "0.1.0" }
+  # .github#2070: FS.GG.Templates' renamed package (FS.GG.Workspace.Template) and FS.GG.Game's skill
+  # delivery package. Same ORPHAN-check reason as coord-engine/new-sdd-workspace/fs-gg-net above.
+  - { id: fs-gg-workspace-template,      version: "0.8.0",           package-version: "0.8.0" }
+  - { id: game-skills,                   version: "0.7.0",           package-version: "0.7.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
 
@@ -84,7 +88,9 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Net.WebSocket.Server":        ["0.1.0"],
   "FS.GG.Net.Protobuf":                ["0.1.0"],
   "FS.GG.Net.Grpc":                    ["0.1.0"],
-  "FS.GG.Net.Elmish":                  ["0.1.0"]
+  "FS.GG.Net.Elmish":                  ["0.1.0"],
+  "FS.GG.Workspace.Template":          ["0.8.0"],
+  "FS.GG.Game.Skills":                 ["0.7.0"]
 }
 JSON
 
@@ -322,6 +328,33 @@ for c in contracts:
 PY
 then ok "registry/dependencies.yml: every package-bearing contract is mapped and parses"
 else bad "registry/dependencies.yml: every package-bearing contract is mapped and parses"
+fi
+
+echo
+echo "--- CI guard on hand-authored prose (.github#2070 repair round 3): does the prose that names"
+echo "    fs-gg-workspace-template/game-skills versions still agree with the registry's corrected"
+echo "    pins, rather than the pre-repair 0.8.0/0.7.0 this item shipped for two commits? ---"
+# Round 1 of #2070 pinned fs-gg-workspace-template/game-skills at the wrong field's discipline
+# (consumer-adopted, not feed-newest); round 3 corrected the registry rows to 0.8.1/0.8.0 but left
+# docs/architecture.md and profile/README.md asserting the superseded 0.8.0/0.7.0 for two more
+# commits — a silent self-contradiction three lines from architecture.md's own generated versions
+# table, exactly the failure class closed issue .github#913 predicted for this kind of hand-authored
+# site. Checks the REAL committed files, not a synthetic fixture (same shape as the mapping-
+# completeness leg immediately above), so a future version bump that forgets the prose sites reds
+# here rather than only in a human reviewer's eye.
+ARCH="$REPO_ROOT/docs/architecture.md"
+PROFILE_README="$REPO_ROOT/profile/README.md"
+if grep -qF 'FS.GG.Workspace.Template` 0.8.1' "$ARCH" \
+  && grep -qF 'package-version` **0.8.1**' "$ARCH" \
+  && grep -qF 'package-version` **0.8.0**' "$ARCH" \
+  && ! grep -qF 'FS.GG.Workspace.Template` 0.8.0 package' "$ARCH" \
+  && ! grep -qF 'FS.GG.Game.Skills` 0.7.0 owner package' "$ARCH" \
+  && ! grep -qF 'coherent release pending' "$PROFILE_README" \
+  && [ "$(grep -c registry-active "$PROFILE_README")" -ge 4 ] \
+  && grep -qF 'pinning `FS.GG.Workspace.Template` 0.8.0' "$ARCH" \
+  && grep -qF 'its consumed version' "$ARCH"
+then ok "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
+else bad "docs/architecture.md and profile/README.md name the corrected fs-gg-workspace-template/game-skills pins"
 fi
 
 echo
