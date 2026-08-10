@@ -294,12 +294,88 @@ expect_which() {
   fi
 }
 
-expect_which "a kit-tracked skill resolves to FS.GG.Kit" "check-board" "FS.GG.Kit" 0
-expect_which "a drivers-tracked skill resolves to FS.GG.Drivers" "drive-board" "FS.GG.Drivers" 0
-expect_which "publishing-and-deployment is itself drivers-tracked, not kit-tracked" \
-  "publishing-and-deployment" "FS.GG.Drivers" 0
-expect_which "a skill in neither population is reported, never silent" "spectre-console" "neither" 1
-expect_which "an unknown id is reported, never silent" "not-a-real-skill" "neither" 1
+# `.github#2339`: `--which` used to answer `FS.GG.Drivers` for EVERY id in `DRIVERS` — driver-manifest
+# MEMBERSHIP — when the real question is package membership, which `FS.GG.Drivers.csproj`/
+# `stage-drivers.py` answer by staging only `scope: driver` rows. `drive-board` and
+# `publishing-and-deployment` are both `scope: operator` (ADR-0057, "materialized NOWHERE") and ship in
+# no package at all; asserting they resolve to `FS.GG.Drivers` (the pre-fix expectation below) is the
+# exact defect this item exists to remove — a test asserting manifest membership passes today and
+# proves nothing. `work-board` is the `scope: driver` sibling used as the one true packed-and-answered
+# case, so this block now asserts against the packing rule instead: one id per scope class.
+#
+# The packing rule itself — never restated here, only read — is `stage-drivers.py`'s own literal.
+# Confirm it is what the assertions below assume before relying on it, so a future change to WHICH
+# scope gets packed fails this line first, loudly, rather than leaving `--which`'s test coverage
+# silently checking the wrong thing.
+packed_scope="$(python3 - "$ROOT/src/FS.GG.Drivers/stage-drivers.py" <<'PY'
+import re
+import sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'DELIVERED_SCOPES\s*=\s*\{\s*"([a-z]+)"\s*\}', text)
+print(m.group(1) if m else "")
+PY
+)"
+if [ "$packed_scope" = "driver" ]; then
+  echo "PASS  packing rule (stage-drivers.py DELIVERED_SCOPES) stages scope: driver, as --which assumes"
+  pass=$((pass+1))
+else
+  echo "FAIL  packing rule scope literal is '$packed_scope', not 'driver' — the assertions below assume it" >&2
+  fail=$((fail+1))
+fi
+
+expect_which "kit-tracked (packed in FS.GG.Kit)" "check-board" "FS.GG.Kit" 0
+expect_which "scope: driver, packed in FS.GG.Drivers per the packing rule" "work-board" "FS.GG.Drivers" 0
+expect_which "scope: operator ships in NO package (ADR-0057) — distinct answer, distinct exit code" \
+  "drive-board" "operator-scope" 2
+expect_which "publishing-and-deployment is itself scope: operator, not scope: driver — no release owed" \
+  "publishing-and-deployment" "operator-scope" 2
+expect_which "an id in no population at all is reported, never silent" "spectre-console" "neither" 1
+expect_which "an unknown id is reported, never silent, and never confused with operator-scope" \
+  "not-a-real-skill" "neither" 1
+
+# Prove the fix by breaking the subject (.github#2339 acceptance criterion 5): flip a fixture row's
+# `scope` in the copied emitter and confirm `--which`'s answer MOVES with it. This is the inversion the
+# previous review (`.github#2333`) never ran — it proved `--which` follows its sources, never that
+# reading `scope` (rather than mere id membership) is what makes the answer correct.
+seed
+python3 - "$WORK/tree/scripts/generate-driver-manifest" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = '''    {
+        "id": "drive-board",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/drive-board",
+        "materializes-when": "false",
+    },'''
+if needle not in text:
+    raise SystemExit("fixture DRIVERS row for drive-board missing or reformatted")
+path.write_text(text.replace(needle, needle.replace('"scope": "operator"', '"scope": "driver"'), 1))
+PY
+expect_which "flipping drive-board's scope operator->driver moves the answer to FS.GG.Drivers" \
+  "drive-board" "FS.GG.Drivers" 0
+
+seed
+python3 - "$WORK/tree/scripts/generate-driver-manifest" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = '''    {
+        "id": "work-board",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/work-board",
+        "materializes-when": "always",
+    },'''
+if needle not in text:
+    raise SystemExit("fixture DRIVERS row for work-board missing or reformatted")
+path.write_text(text.replace(needle, needle.replace('"scope": "driver"', '"scope": "operator"'), 1))
+PY
+expect_which "flipping work-board's scope driver->operator moves the answer off FS.GG.Drivers" \
+  "work-board" "operator-scope" 2
 
 # `.github#2136`: release inventory is a registry projection, not a sentence that happens to be true
 # today. Each registry mutation below must make that generated region stale without touching the skill.
