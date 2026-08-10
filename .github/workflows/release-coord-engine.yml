@@ -171,12 +171,12 @@ jobs:
 
           out="$(/tmp/toolhome/fsgg-coord-engine decide < /tmp/snap.json)"
           printf '%s\n' "$out"
-          chosen="$(printf '%s' "$out" | jq -r '[.chosen[].short] | join(",")')"
-          if [ "$chosen" != ".github#1" ]; then
-            echo "::error title=the packaged tool does not decide::expected the greedy fold to choose .github#1 and reserve src/A.fs against #2; got '$chosen'. The package installs but the engine inside it does not work."
+          route_verdict="$(printf '%s' "$out" | jq -r '.decisions[0].verdict')"
+          if [ "$route_verdict" != "awaiting-delivery-route-decision" ]; then
+            echo "::error title=the packaged tool does not enforce delivery routing::expected the source-free snapshot to refuse scheduling without an explicit current delivery-route receipt; got '$route_verdict'."
             exit 1
           fi
-          echo "packaged engine: decided correctly (chose $chosen, reserved its touch-set against #2)" >> "$GITHUB_STEP_SUMMARY"
+          echo "packaged engine: installed and fail-closed on the mandatory delivery-route boundary" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push to org GitHub Packages feed
         if: steps.v.outputs.push == 'true'
