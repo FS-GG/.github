@@ -292,3 +292,52 @@ module DeliveryTests =
             let terminalSnapshot =
                 terminal { snapshot "head-a" with Freshness = { freshness "head-a" with DeclaredPaths = declaredPaths } }
             transition Delivery.Done Delivery.CleanupWorktree (Delivery.inspect terminalSnapshot)
+
+    /// .github#2175 acceptance 10: `Review.AcceptedReceipt` folds into `Snapshot` as exactly the
+    /// `Driver.ReviewChain` shape `Delivery` has always consumed — no `Stage`/`Action`/`Snapshot` type
+    /// changed to carry it, so this receipt is landable through the SAME `Delivery.inspect` this file's
+    /// other tests exercise unmodified.
+    [<Fact>]
+    let ``#2175 fromReviewAcceptance folds a Review receipt into the same Driver.ReviewChain shape Delivery already reads`` () =
+        let receipt: Review.AcceptedReceipt =
+            { HeadSha = "head-a"
+              CriticIdentity = "kite"
+              Rounds = [ 1 ]
+              RepairPhase = false
+              ChecksGreen = true
+              RuntimeRouteEvidence = Some(Driver.NotMeaningful "pure lifecycle test")
+              DiffAuditRequired = false
+              DiffAuditHead = None }
+
+        // Start from a snapshot whose `Review`/`ReviewProblem` are UNKNOWN (as they would be before a
+        // caller has consulted `Review.inspect`), so folding the receipt in is what makes it landable.
+        let unfolded =
+            { snapshot "head-a" with
+                Review = None
+                ReviewProblem = Some "independent review evidence is absent" }
+
+        let folded = Delivery.fromReviewAcceptance receipt unfolded
+
+        Assert.Equal((None: string option), folded.ReviewProblem)
+        match folded.Review with
+        | Some chain ->
+            Assert.Equal(Some "head-a", chain.HeadSha)
+            Assert.Equal(Some "kite", chain.CriticIdentity)
+            Assert.True(chain.MarkerValid)
+            Assert.True(chain.HostAccepted)
+            Assert.True(chain.ChecksGreen)
+        | None -> failwith "fromReviewAcceptance must populate Review"
+
+        // Landable through the EXACT SAME `Delivery.inspect` path every other snapshot in this file
+        // uses — `fromReviewAcceptance` is additive, not a second lifecycle.
+        transition Delivery.Landable Delivery.AwaitLandability (Delivery.inspect { folded with Landable = false })
+        transition Delivery.Accepted Delivery.GuardedLand (Delivery.inspect folded)
+
+        // A receipt for a DIFFERENT head than the snapshot's current head does not silently authorize
+        // landing at the wrong commit — `reviewProblem`'s existing head-match check applies unchanged.
+        let staleFolded = Delivery.fromReviewAcceptance receipt { unfolded with Freshness = { unfolded.Freshness with HeadSha = "head-b" } }
+        match Delivery.inspect staleFolded with
+        | Delivery.Next transition when transition.Action = Delivery.GuardedLand ->
+            failwith "GATE INVERSION: a receipt for a stale head was landable"
+        | Delivery.Next transition -> Assert.Equal(Delivery.ReviewActive, transition.Stage)
+        | Delivery.NoVerdict _ -> ()

@@ -1,0 +1,726 @@
+schemaVersion: 1
+workId: 2175-review-repair-protocol
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2175-review-repair-protocol/spec.md
+sourceClarifications: work/2175-review-repair-protocol/clarifications.md
+sourceChecklist: work/2175-review-repair-protocol/checklist.md
+sourcePlan: work/2175-review-repair-protocol/plan.md
+sourceTasks: work/2175-review-repair-protocol/tasks.yml
+sourceAnalysis: readiness/2175-review-repair-protocol/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2175-review-repair-protocol/analysis.json
+    digest: 16121691411f286bebe6904d16a757f62e28051a04768c82a0f732b308b75338
+    schemaVersion: 1
+  - label: checklist
+    path: work/2175-review-repair-protocol/checklist.md
+    digest: d3b82585b89f7c4b906df90cbdd7d9650ccbd9ba0633c8e9c50e3d1575c62a01
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2175-review-repair-protocol/clarifications.md
+    digest: f59e75c84af16a22719ac9675aff745e027c2a97203db1cc5d410465eeb502b9
+    schemaVersion: 1
+  - label: plan
+    path: work/2175-review-repair-protocol/plan.md
+    digest: 70b3c0fcf1f3b018a2a86a35905401e57328815074f458e5b5e386dd52939773
+    schemaVersion: 1
+  - label: spec
+    path: work/2175-review-repair-protocol/spec.md
+    digest: b1ff10e45210062317a87c40b411dc0a0a53ef97ee57264f01914004e67e8c39
+    schemaVersion: 1
+  - label: tasks
+    path: work/2175-review-repair-protocol/tasks.yml
+    digest: fcb366eec759f8b3e3b4fe4f4b6646806ab0a00e09d29711376348444b16cb54
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Closed State DU (11 named cases plus MalformedEvidence/GuardViolation) covering the enumerated states; every case exercised in ReviewTests.fs."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["inspect fails closed on an incomplete binding before classification, and returns exactly one typed state/action per fixture; covered by ReviewTests.fs's full matrix."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Closed NextAction DU, one constructor per named action; each reachable action asserted by name in ReviewTests.fs."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Binding/freshnessToken tested directly (\"a changed head changes the freshness token\") and via every state test's bound verdict."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Critic-independence guard. Gate-inversion evidence recorded live in-session 2026-08-10: disabling the guard reddened the GATE INVERSION test; restoring returned 25/25 green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["One-fresh-repair-phase idempotent reuse. Gate-inversion evidence recorded live in-session 2026-08-10: forcing RepairPhaseGranted to be ignored reddened both the idempotent-reuse test and the GATE INVERSION test; restoring returned 25/25 green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Unavailable repair route and repair-phase exhaustion both emit TerminalHumanPark with full provenance; covered by two dedicated ReviewTests.fs cases."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["MalformedEvidence carries underlying errors rather than discarding them; DEC-001's unreadable-reviewed-head case and the duplicate-marker cases are covered."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["advance's freshness-token/action-key staleness refusal. Gate-inversion evidence recorded live in-session 2026-08-10: forcing the equality check to always pass reddened the stale-replay test; restoring returned 25/25 green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV010]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["fromReviewAcceptance folds an AcceptedReceipt into the exact Driver.ReviewChain shape Delivery already consumes, landable through the unmodified Delivery.inspect; covered by DeliveryTests.fs."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-011]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-011]
+    obligationRefs: [EV011]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["reviewPhaseFacts reuses the same marker-block/quoting primitives parseReviewComments has always used (hoisted, not re-derived); covered by DriverTests.fs including the quoted-marker-is-inert case."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-012]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-012]
+    obligationRefs: [EV012]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["`review` CLI verb (snapshot and live) exposes the typed surface; ReviewApplicationTests.fs covers the JSON contract end to end through the real Options.parse boundary."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-013]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-013]
+    obligationRefs: [EV013]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs, tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Full matrix: clean first-pass acceptance, multiple repair rounds, changed head, malformed/duplicate marker, wrong critic, missing predecessor, ordinary exhaustion into one repair phase, restart during repair, duplicate advance, unavailable repair route, repair-phase exhaustion, final accepted receipt consumed by Delivery."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001: an unreadable changes-required reviewed-head field surfaces as MalformedEvidence carrying the parser errors rather than defaulting to AwaitingImplementerRepair."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002: RepairPhaseGranted/RepairRouteAvailable are external facts on Review.Facts, supplied by the caller; exercised by the repair-phase-setup and unavailable-route tests."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006, PD-007, PD-008, PD-009]
+    obligationRefs: [EV016]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: FS.GG.Coord.Core's public surface gains the Review module additively; the full pre-existing Core suite (722 cases) stays green unmodified, proving no existing signature changed."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010, PD-011]
+    obligationRefs: [EV017]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["PC-002: Driver.reviewPhaseFacts and Delivery.fromReviewAcceptance are additive; full pre-existing DriverTests.fs/DeliveryTests.fs suites stay green unmodified."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-012]
+    obligationRefs: [EV018]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/CommandSurfaceTests.fs, tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["PC-003: `fsgg-coord review` is compatibility-preserving; CommandSurfaceTests.fs's verb-inventory/DU-cross-check and OptionsTests.fs's bare-render-mode pin (#1523) both pass with `review` registered."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV019]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: [Every State/NextAction branch and the fail-closed no-verdict path is unit-tested.]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006, PD-007]
+    obligationRefs: [EV020]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Gate-inversion evidence for the critic-independence guard, the one-fresh-repair-phase rule, and terminal-park routing: each mutated, observed red, restored, observed green, in-session 2026-08-10."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV021]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Restart/duplicate-advance idempotency covered (advance called twice against unchanged and against changed facts), with gate-inversion evidence."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010, PD-011]
+    obligationRefs: [EV022]
+    artifacts: [tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["reviewPhaseFacts and fromReviewAcceptance additive cases pass; full pre-existing suites stay green unmodified."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-012]
+    obligationRefs: [EV023]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ApplicationServiceTests.fs, tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["ReviewApplicationTests.fs covers the JSON contract; the .github#1688 AC4 completeness gate drives ReviewCmd's refusal arm through runJsonArm (Client.review made public, matching Client.driver) rather than exempting it."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-013]
+    obligationRefs: [EV024]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs, tests/FS.GG.Coord.Core.Tests/DeliveryTests.fs, tests/FS.GG.Coord.Core.Tests/DriverTests.fs, tests/FS.GG.Coord.Core.Tests/ReviewTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["Full suite green in the real worktree, 2026-08-10: Core 722/722, Cli 709/709, GitHub 477/477 (GitHub unmodified, confirming no regression)."]
+  - id: EV025
+    kind: generated-view
+    subject:
+      type: task
+      id: T025
+    taskRefs: [T025]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV025]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "Driver.reviewPhaseFacts and Delivery.fromReviewAcceptance are purely additive (no removed or renamed existing public member), so caller migration currency is established by the full pre-existing test suites staying green, not by a discrete test run over a migration itself. docs/api-surface .fsi baselines are absent for this entire repository (55/55 .fsi files, a pre-existing repo-wide condition) so there is no baseline for this item's files to drift from."
+    owner: dunlin-70f6
+    scope: "docs/api-surface baseline establishment for this repository (51 unrelated .fsi files plus this item's 4 new/changed ones)"
+    laterLifecycleVisibility: "Track repo-wide docs/api-surface bootstrap as a separate follow-up item if the org adopts the surface-drift gate; not owed by this item."
+    notes: []
+  - id: EV026
+    kind: generated-view
+    subject:
+      type: task
+      id: T026
+    taskRefs: [T026]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-013]
+    obligationRefs: [EV026]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "GV-001: readiness/2175-review-repair-protocol/work-model.json is regenerated by fsgg-sdd from current spec/clarifications/checklist/plan/tasks sources after every authoring edit; its currency is established by the generator, not by a test run."
+    owner: dunlin-70f6
+    scope: work-model.json generated-view currency
+    laterLifecycleVisibility: "Re-verified automatically by fsgg-sdd analyze on every future edit to this work package; no follow-up owed."
+    notes: []
+  - id: EV027
+    kind: verification
+    subject:
+      type: task
+      id: T027
+    taskRefs: [T027]
+    requirementRefs: [FR-012]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-012]
+    obligationRefs: [EV027]
+    artifacts: [tests/FS.GG.Coord.Cli.Tests/ReviewApplicationTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: core.trx
+      digest: "sha256:4711c33eedde8ca231e65d609dee4cbfa73ca3e0c91b2c0807fdaa336b30c875"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 722
+      failed: 0
+      skipped: 0
+    notes: ["PD-012 live adapter: `review <ref> --pr N` reuses the same live reads the existing `delivery` path already makes; matches `delivery <ref> [--pr N]`'s shape. Its refusal arm is driven by ApplicationServiceTests.fs's #1688 AC4 sweep."]
+  - id: EV028
+    kind: generated-view
+    subject:
+      type: task
+      id: T028
+    taskRefs: [T028]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-012]
+    obligationRefs: [EV028]
+    artifacts: []
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "GV-002: docs/api-surface has no baseline for any of this repository's 55 .fsi files (fsgg-sdd surface --check, run 2026-08-10) — a pre-existing, repo-wide absence this item did not introduce. There is no baseline for this item's changed .fsi files to drift from."
+    owner: dunlin-70f6
+    scope: docs/api-surface baseline for Review.fsi/ReviewApplication.fsi and the other 53 unrelated .fsi files repo-wide
+    laterLifecycleVisibility: "Bootstrapping docs/api-surface repo-wide is a separate, out-of-scope item; not owed by .github#2175."
+    notes: []
+lifecycleNotes:
+  - "Next lifecycle action: verify."

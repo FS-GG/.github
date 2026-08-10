@@ -33,6 +33,32 @@ module Driver =
     type ReviewComment =
         { Id: int64; Url: string; Body: string }
 
+    /// Structural facts a caller reads off the SAME marker classification `parseReviewComments` already
+    /// computes, without waiting for the whole chain to validate — additive to the public surface, not a
+    /// second marker parser (.github#2175 acceptance 11; `FS.GG.Coord.Core.Review` is the consumer).
+    type ReviewPhaseFacts =
+        { /// How many comments canonically carry the initial-review marker. `InitialPresent` is
+          /// `InitialCount > 0`; a caller that needs to distinguish "absent" from "duplicate/competing"
+          /// (.github#2175 acceptance 8) reads this field rather than re-deriving it.
+          InitialCount: int
+          InitialPresent: bool
+          InitialHeadSha: string option
+          InitialVerdict: string option
+          CriticIdentity: string option
+          ConfirmationCount: int
+          LatestVerdict: string option
+          LatestReviewedHeadSha: string option
+          EscalationPresent: bool
+          RepairPhasePresent: bool
+          /// How many comments canonically carry the host-acceptance marker; see `InitialCount`.
+          AcceptanceCount: int
+          AcceptancePresent: bool }
+
+    /// Classify a PR's review comments into the structural facts `Review.inspect` needs to select a
+    /// typed review-protocol state — reusing the same leading-marker-block/quoting-aware detection
+    /// `parseReviewComments` uses, never re-scanning comment bodies with a second grammar.
+    val reviewPhaseFacts: comments: ReviewComment list -> ReviewPhaseFacts
+
     val parseReviewComments: comments: ReviewComment list -> Result<ReviewChain, string list>
 
     /// Parse review evidence while binding any mandatory diff audit to an independently recomputed

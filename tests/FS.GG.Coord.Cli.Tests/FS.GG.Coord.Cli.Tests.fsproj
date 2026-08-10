@@ -19,6 +19,7 @@
     <Compile Include="DriverCommandTests.fs" />
     <Compile Include="DriverEventsCliTests.fs" />
     <Compile Include="DeliveryApplicationTests.fs" />
+    <Compile Include="ReviewApplicationTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="SkillProgressiveDisclosureTests.fs" />

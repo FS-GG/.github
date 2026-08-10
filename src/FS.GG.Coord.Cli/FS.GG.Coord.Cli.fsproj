@@ -360,6 +360,8 @@ the worker's own heartbeat/release/done operations. Neither behavior is claimed 
     <Compile Include="Options.fs" />
     <Compile Include="DeliveryApplication.fsi" />
     <Compile Include="DeliveryApplication.fs" />
+    <Compile Include="ReviewApplication.fsi" />
+    <Compile Include="ReviewApplication.fs" />
     <Compile Include="CycleLedgerApplication.fsi" />
     <Compile Include="CycleLedgerApplication.fs" />
     <Compile Include="Identity.fsi" />

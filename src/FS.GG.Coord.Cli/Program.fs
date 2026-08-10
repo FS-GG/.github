@@ -322,6 +322,11 @@ let main argv =
             | DeliveryCmd when opts.SnapshotFile.IsSome -> DeliveryApplication.run opts
             | DeliveryCmd -> Client.run opts
 
+            // .github#2175: the typed review/repair protocol, mirroring `delivery`'s exact split — the
+            // pure snapshot-JSON contract with `--snapshot`, the live `Client.review` adapter otherwise.
+            | ReviewCmd when opts.SnapshotFile.IsSome -> ReviewApplication.run opts
+            | ReviewCmd -> Client.run opts
+
             | LanesView -> lanes opts
 
             | Facts -> facts opts

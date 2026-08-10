@@ -19,6 +19,10 @@ module Options =
     type Command =
         | Decide
         | DeliveryCmd
+        /// .github#2175: inspect the resumable review/repair protocol (`FS.GG.Coord.Review`) —
+        /// live against `<ref> --pr N`, or from a supplied `--snapshot`; the typed surface `pnext-item`
+        /// and the #2135 event projection consume.
+        | ReviewCmd
         | DriverCmd
         | CycleCmd
         | Scan

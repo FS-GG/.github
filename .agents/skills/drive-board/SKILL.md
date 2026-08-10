@@ -73,7 +73,10 @@ cross-repo allocation, not item implementation.
    state before describing a landing as an ordinary one; never paraphrase it away.
 6. Verify each worker's PR, independent-review marker and ordered round/URL/SHA chain, critic
    independence, material finding dispositions, merge, publication/registry obligations, exact done
-   stamp, released claim, and newly filed items against GitHub—not its narrative. Reject any new item
+   stamp, released claim, and newly filed items against GitHub—not its narrative. Where the typed
+   review/repair protocol surface (`scripts/fsgg-coord review --snapshot ...`) is available, its one
+   current state/action is a mechanical cross-check on the same chain — never a substitute for reading
+   the marker chain and materiality yourself. Reject any new item
    whose review evidence does not establish materiality. After an exhausted third round, refuse a
    fourth round of that same chain and automatically dispatch the repair phase under
    [host-loop](references/host-loop.md)'s validated-exhaustion and escalated-route rules. Verify its own

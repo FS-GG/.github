@@ -5,6 +5,10 @@ module Options =
     type Command =
         | Decide
         | DeliveryCmd
+        /// .github#2175: inspect the resumable review/repair protocol (`FS.GG.Coord.Review`) —
+        /// live against `<ref> --pr N`, or from a supplied `--snapshot`; the typed surface `pnext-item`
+        /// and the #2135 event projection consume.
+        | ReviewCmd
         | DriverCmd
         | CycleCmd
         | Scan
@@ -285,6 +289,13 @@ DECISION (pure — no board, no network):
                                              re-read one claimed item's delivery facts and emit its sole
                                              freshness-bound action; --apply performs only guarded landing
   delivery --snapshot FILE [--json|--text]   inspect a supplied lifecycle snapshot without IO
+  review <ref> --pr N [--json|--text]        inspect the resumable review/repair protocol (.github#2175):
+                                             one typed state and next action — dispatch critic, resume
+                                             implementer, resume the same critic, await checks, request
+                                             host acceptance, enter the one fresh repair phase, accept, or
+                                             park for human action — bound to a freshness token a changed
+                                             head invalidates, or a fail-closed no-verdict
+  review --snapshot FILE [--json|--text]     inspect a supplied review-protocol snapshot without IO
   driver [--snapshot FILE] [--json|--text]   plan from the live board plus a source-bound receipt
   driver --events [--cursor FILE] [--json|--text]
                                              derive material transitions and the complete active-item
@@ -501,6 +512,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // ---- BOTH projections: the handler branches on `opts.Render` -----------------------------------
         | Decide -> Both Json // Program.fs `decide`
         | DeliveryCmd -> Both Json // Program.fs `delivery`
+        | ReviewCmd -> Both Json // Program.fs `review` (ReviewApplication)
         | DriverCmd -> Both Json // Program.fs `driver`
         | CycleCmd -> Both Json // Program.fs `CycleLedgerApplication`
         | LanesView -> Both Json // Program.fs `lanes`
@@ -731,7 +743,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FJson -> Only jsonReaders
         | FText -> Only textReaders
 
-        | FSnapshot -> Only [ Decide; DeliveryCmd; DriverCmd; CycleCmd; LanesView ]
+        | FSnapshot -> Only [ Decide; DeliveryCmd; ReviewCmd; DriverCmd; CycleCmd; LanesView ]
 
         // `driver --events`/`--cursor` (.github#2135) — the projection mode of `driver`. `DriverCmd`
         // only; every other command refuses them exactly as it refuses `--snapshot`.
@@ -769,7 +781,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FEvidence -> Only [ DoneCmd ]
         | FFlip -> Only [ DoneCmd ]
         | FPartial -> Only [ DoneCmd ]
-        | FPr -> Only [ DeliveryCmd; DoneCmd; VerifyPaths ]
+        | FPr -> Only [ DeliveryCmd; ReviewCmd; DoneCmd; VerifyPaths ]
         | FIssue -> Only [ VerifyPaths ]
         | FWarn -> Only [ VerifyPaths ]
         | FWait -> Only [ Landable ]
@@ -996,6 +1008,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // ---- PURE DECISION — no board, no network at all (ADR-0034) ------------------------------------
         | Decide -> Reads
         | DeliveryCmd -> WritesIf(OnlyWhenGiven FApply)
+        // .github#2175: `review` (snapshot or live) only ever inspects — unlike `delivery` it has no
+        // `--apply`/mutating arm at all, so it is unconditionally `Reads`, beside `DriverCmd`/`CycleCmd`.
+        | ReviewCmd -> Reads
         | DriverCmd -> Reads
         | CycleCmd -> Reads
         | LanesView -> Reads
@@ -1135,6 +1150,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         match c with
         | Decide -> "decide"
         | DeliveryCmd -> "delivery"
+        | ReviewCmd -> "review"
         | DriverCmd -> "driver"
         | CycleCmd -> "cycle"
         | Scan -> "scan"
@@ -1844,6 +1860,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
         | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
         | "delivery" :: rest -> flags (start { defaults with Command = DeliveryCmd }) rest
+        | "review" :: rest -> flags (start { defaults with Command = ReviewCmd }) rest
         | "driver" :: rest -> flags (start { defaults with Command = DriverCmd }) rest
         | "cycle" :: rest -> flags (start { defaults with Command = CycleCmd }) rest
         | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest

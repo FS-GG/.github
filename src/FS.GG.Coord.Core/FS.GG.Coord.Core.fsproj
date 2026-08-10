@@ -75,6 +75,11 @@
     <Compile Include="Driver.fs" />
     <Compile Include="CycleLedger.fsi" />
     <Compile Include="CycleLedger.fs" />
+    <!-- Review (.github#2175) layers the typed, resumable review/repair protocol over Driver's existing
+         marker-chain validator, and Delivery.fromReviewAcceptance folds its accepted-current-head
+         receipt into Delivery's Snapshot — so it compiles after Driver and before Delivery. -->
+    <Compile Include="Review.fsi" />
+    <Compile Include="Review.fs" />
     <Compile Include="Delivery.fsi" />
     <Compile Include="Delivery.fs" />
     <!-- DriverEvents (.github#2135) layers a material-transition/active-inventory projection over

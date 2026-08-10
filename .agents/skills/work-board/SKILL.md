@@ -65,6 +65,9 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    state before describing a landing as an ordinary one; never paraphrase it away.
 6. Verify the independent-review marker, ordered round/URL/SHA chain, critic independence, and every
    material finding disposition; reject any critic-filed item without evidence-backed materiality.
+   Where the typed review/repair protocol surface (`scripts/fsgg-coord review --snapshot ...`) is
+   available, its one current state/action is a mechanical cross-check on the same chain — never a
+   substitute for reading the marker chain and materiality yourself.
    After an exhausted third round, refuse a fourth round of that same chain and automatically dispatch
    the repair phase under [host-loop](references/host-loop.md)'s validated-exhaustion and
    escalated-route rules. Verify its own chain, fresh critic, and repair-phase marker exactly as

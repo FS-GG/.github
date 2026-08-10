@@ -1,0 +1,952 @@
+{
+  "schemaVersion": 1,
+  "viewVersion": "1.0",
+  "workId": "2175-review-repair-protocol",
+  "stage": "analyze",
+  "status": "implementationReady",
+  "generator": "FS.GG.SDD.Artifacts/1.0.0",
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "ef78f002b33ce22f738bac2c0dbf716db729a7d3ae3e4a68a4ce4b93810ced66"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2175-review-repair-protocol/checklist.md",
+      "kind": "checklist",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "d3b82585b89f7c4b906df90cbdd7d9650ccbd9ba0633c8e9c50e3d1575c62a01"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2175-review-repair-protocol/clarifications.md",
+      "kind": "clarification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "f59e75c84af16a22719ac9675aff745e027c2a97203db1cc5d410465eeb502b9"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2175-review-repair-protocol/plan.md",
+      "kind": "plan",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "0f4050192d2f88d8242b49af46e31875089f173ffdcef36dd1ccf75a5cb4ce1f"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2175-review-repair-protocol/spec.md",
+      "kind": "specification",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "b1ff10e45210062317a87c40b411dc0a0a53ef97ee57264f01914004e67e8c39"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    },
+    {
+      "path": "work/2175-review-repair-protocol/tasks.yml",
+      "kind": "tasks",
+      "digest": {
+        "algorithm": "sha256",
+        "value": "fcb366eec759f8b3e3b4fe4f4b6646806ab0a00e09d29711376348444b16cb54"
+      },
+      "schemaVersion": 1,
+      "schemaStatus": "current"
+    }
+  ],
+  "sourceRelationships": [
+    {
+      "id": "AR001",
+      "sourcePath": "work/2175-review-repair-protocol/checklist.md",
+      "targetPath": "work/2175-review-repair-protocol/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR002",
+      "sourcePath": "work/2175-review-repair-protocol/checklist.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceChecklist",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR003",
+      "sourcePath": "work/2175-review-repair-protocol/clarifications.md",
+      "targetPath": "work/2175-review-repair-protocol/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR004",
+      "sourcePath": "work/2175-review-repair-protocol/clarifications.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "DEC-001",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR005",
+      "sourcePath": "work/2175-review-repair-protocol/clarifications.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "DEC-002",
+      "targetId": null,
+      "relationship": "clarificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR006",
+      "sourcePath": "work/2175-review-repair-protocol/clarifications.md",
+      "targetPath": "work/2175-review-repair-protocol/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR007",
+      "sourcePath": "work/2175-review-repair-protocol/clarifications.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceClarifications",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR008",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PC-001",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR009",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PC-002",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR010",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PC-003",
+      "targetId": null,
+      "relationship": "contractDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR011",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "GV-001",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR012",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "GV-002",
+      "targetId": null,
+      "relationship": "generatedViewDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR013",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PM-001",
+      "targetId": null,
+      "relationship": "migrationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR014",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-001",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR015",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-002",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR016",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-003",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR017",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-004",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR018",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-005",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR019",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-006",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR020",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-007",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR021",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-008",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR022",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-009",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR023",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-010",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR024",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-011",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR025",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-012",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR026",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "PD-013",
+      "targetId": null,
+      "relationship": "planDecisionDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR027",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourcePlan",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR028",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-001",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR029",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-002",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR030",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-003",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR031",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-004",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR032",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-005",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR033",
+      "sourcePath": "work/2175-review-repair-protocol/plan.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "VO-006",
+      "targetId": null,
+      "relationship": "verificationDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR034",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-001",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR035",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-002",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR036",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-003",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR037",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-004",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR038",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-005",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR039",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-006",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR040",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-007",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR041",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-008",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR042",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-009",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR043",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-010",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR044",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-011",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR045",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-012",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR046",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "AC-013",
+      "targetId": null,
+      "relationship": "acceptanceDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR047",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/checklist.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "checklistSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR048",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/plan.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "planSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR049",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-001",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR050",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-002",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR051",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-003",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR052",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-004",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR053",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-005",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR054",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-006",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR055",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-007",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR056",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-008",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR057",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-009",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR058",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-010",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR059",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-011",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR060",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-012",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR061",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "FR-013",
+      "targetId": null,
+      "relationship": "requirementDisposition",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR062",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/clarifications.md",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "sourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR063",
+      "sourcePath": "work/2175-review-repair-protocol/spec.md",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": null,
+      "targetId": null,
+      "relationship": "taskSourceSpec",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR064",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T014",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR065",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T015",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR066",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T016",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR067",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T017",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR068",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T018",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR069",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T019",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR070",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T020",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR071",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T021",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR072",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T022",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR073",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T023",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR074",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T024",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR075",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T025",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR076",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T026",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR077",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T027",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    },
+    {
+      "id": "AR078",
+      "sourcePath": "work/2175-review-repair-protocol/tasks.yml",
+      "targetPath": "work/2175-review-repair-protocol/tasks.yml",
+      "sourceId": "T028",
+      "targetId": "T001",
+      "relationship": "taskDependency",
+      "state": "current",
+      "diagnosticIds": []
+    }
+  ],
+  "readiness": {
+    "status": "implementationReady",
+    "readyCount": 78,
+    "advisoryCount": 0,
+    "warningCount": 1,
+    "blockingCount": 0,
+    "staleSourceCount": 0,
+    "missingDispositionCount": 0,
+    "malformedSourceCount": 0,
+    "generatedViewFindingCount": 0,
+    "acceptedDeferralCount": 0
+  },
+  "findings": [
+    {
+      "id": "AF001",
+      "category": "warning",
+      "severity": "warning",
+      "state": "open",
+      "path": "readiness/2175-review-repair-protocol/work-model.json",
+      "relatedIds": [
+        "readiness/2175-review-repair-protocol/work-model.json",
+        "unknownReference",
+        "workModelInconsistent"
+      ],
+      "message": "Generated view \u0027readiness/2175-review-repair-protocol/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view."
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/2175-review-repair-protocol/work-model.json",
+      "kind": "workModel",
+      "currency": "missing",
+      "diagnosticIds": [
+        "workModelNotGenerated"
+      ]
+    }
+  ],
+  "optionalBoundaryFacts": [
+    {
+      "path": ".fsgg/policy.yml",
+      "relationship": "optionalGovernancePolicy",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/capabilities.yml",
+      "relationship": "optionalGovernanceCapabilities",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    },
+    {
+      "path": ".fsgg/tooling.yml",
+      "relationship": "optionalGovernanceTooling",
+      "requiredBySdd": false,
+      "state": "notEvaluated",
+      "diagnosticIds": []
+    }
+  ],
+  "diagnostics": [
+    {
+      "id": "workModelNotGenerated",
+      "severity": "warning",
+      "artifact": "readiness/2175-review-repair-protocol/work-model.json",
+      "message": "Generated view \u0027readiness/2175-review-repair-protocol/work-model.json\u0027 was not written: the derived work model has blocking diagnostics.",
+      "correction": "Resolve the named lifecycle diagnostics, then re-run to generate the work model view.",
+      "relatedIds": [
+        "readiness/2175-review-repair-protocol/work-model.json",
+        "unknownReference",
+        "workModelInconsistent"
+      ]
+    }
+  ],
+  "nextAction": {
+    "actionId": "analysis.next.implement",
+    "command": null,
+    "reason": "Lifecycle sources are current and ready for implementation."
+  }
+}

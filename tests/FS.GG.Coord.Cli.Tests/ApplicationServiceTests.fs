@@ -3790,7 +3790,11 @@ module ApplicationServiceTests =
           Options.Widen, [ "widen"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ], 1
           Options.SetPaths,
           [ "set-paths"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json"; "--paths"; "src/X.fs" ],
-          1 ]
+          1
+          // `review` refuses before any board/GitHub read: `--pr` is required (.github#2175 — there is
+          // no review protocol before a PR exists), so this lands on that refusal deterministically,
+          // the same way the four lock verbs above land on theirs.
+          Options.ReviewCmd, [ "review"; "FS.GG.SDD#999"; "--worker"; "otter-9c21"; "--json" ], 1 ]
 
     /// The `Json`-admitting verbs this fixture cannot reach, each with the reason and what reading their
     /// arms found. The reason lives HERE rather than in a PR body because that is the whole argument of
@@ -3879,6 +3883,7 @@ module ApplicationServiceTests =
                 | Options.Adopt -> Client.adopt ctx opts
                 | Options.Widen -> Client.widen ctx opts
                 | Options.SetPaths -> Client.setPaths ctx opts
+                | Options.ReviewCmd -> Client.review ctx opts
                 | other ->
                     failwithf
                         "the .github#1688 sweep has no dispatch for %A — add one to `runJsonArm`, or give the verb a reason in `notDriven`"
