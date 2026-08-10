@@ -1,6 +1,7 @@
 namespace FS.GG.Coord
 
 open System
+open System.Text.RegularExpressions
 open FS.GG.Coord.Types
 
 /// One pure status projection shared by webhook and scheduled-reconciliation callers.
@@ -30,6 +31,26 @@ module LifecycleProjection =
     let watermarkMarker watermark =
         $"<!-- fsgg:lifecycle-watermark v=1 observedAt=%d{watermark.ObservedAt} status=%s{statusWireName watermark.Status} -->"
 
+    // ANCHORED, NOT SUBSTRING (round-1 review repair, .github#2264 PR #2271). `body.IndexOf(marker)`
+    // found the sentinel wherever it sat in a comment — including a documentation-style comment that
+    // merely QUOTES an illustrative marker in prose. A quoted marker carrying a large `observedAt` then
+    // silently outranked the real persisted watermark under the `List.sortByDescending` below, corrupting
+    // AC-4's guarantee that an older event can never overwrite a newer observed state. This is the same
+    // class of defect `.github#2221` fixed for review markers: a marker is evidence only when it is the
+    // comment's ENTIRE (trimmed) body, matching `DeliveryApplication.obligationsFromComments`'s own
+    // anchored, whole-line semantics exactly (`^<!-- ... -->$` against `Trim()`). It cannot be reused
+    // directly — it lives in FS.GG.Coord.Cli, which depends on this project, not the other way around,
+    // and its grammar is the unrelated `id=/kind=/head=` obligation shape rather than this marker's
+    // `observedAt=/status=` — so this is a parallel implementation of that one rule, not a fork of its
+    // logic. `Writes.lifecycleWatermark` posts nothing but this bare line (`watermarkMarker` above), so a
+    // genuine receipt always satisfies a whole-body match; only a quotation can fail it, and a quotation
+    // is exactly what must fail it.
+    let private watermarkLine =
+        Regex(
+            @"^<!-- fsgg:lifecycle-watermark v=1 observedAt=(?<observedAt>-?[0-9]+) status=(?<status>[A-Za-z ]+) -->$",
+            RegexOptions.Compiled
+        )
+
     let tryWatermark (comments: string list) =
         let status = function
             | "Backlog" -> Some Backlog
@@ -42,18 +63,12 @@ module LifecycleProjection =
 
         comments
         |> List.choose (fun body ->
-            let marker = "<!-- fsgg:lifecycle-watermark v=1 observedAt="
-            let start = body.IndexOf(marker, StringComparison.Ordinal)
-            if start < 0 then None
+            let matched = watermarkLine.Match(body.Trim())
+            if not matched.Success then None
             else
-                let tail = body.Substring(start + marker.Length)
-                let split = tail.IndexOf(" status=", StringComparison.Ordinal)
-                let close = tail.IndexOf(" -->", StringComparison.Ordinal)
-                if split < 1 || close < split then None
-                else
-                    match Int64.TryParse(tail.Substring(0, split)), status (tail.Substring(split + 8, close - split - 8)) with
-                    | (true, observedAt), Some value -> Some { ObservedAt = observedAt; Status = value }
-                    | _ -> None)
+                match Int64.TryParse(matched.Groups.["observedAt"].Value), status matched.Groups.["status"].Value with
+                | (true, observedAt), Some value -> Some { ObservedAt = observedAt; Status = value }
+                | _ -> None)
         |> List.sortByDescending (fun receipt -> receipt.ObservedAt)
         |> List.tryHead
 

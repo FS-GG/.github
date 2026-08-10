@@ -86,6 +86,21 @@ module LifecycleProjectionTests =
         Assert.Equal(Some latest, LifecycleProjection.tryWatermark comments)
 
     [<Fact>]
+    let ``#2264 round 1: a watermark quoted in prose cannot outrank the real persisted receipt`` () =
+        // Round-1 review repair. The prior `body.IndexOf(marker)` found the sentinel wherever it sat in a
+        // comment, including a documentation-style comment that merely QUOTES an illustrative marker —
+        // exactly the org's normal writing style (disqualifications, acceptance markers, repair records
+        // all quote prior markers in prose). A quoted marker carrying a large `observedAt` then outranked
+        // the real receipt under `List.sortByDescending`, corrupting AC-4's guarantee that an older event
+        // can never overwrite a newer observed state.
+        let real : LifecycleProjection.Watermark = { ObservedAt = 9L; Status = InReview }
+        let quotedMarker = LifecycleProjection.watermarkMarker { ObservedAt = 9999999999999L; Status = Done }
+        let quoting =
+            $"Repair note: for context, an earlier draft of this comment carried\n`{quotedMarker}`\nbefore it was corrected — ignore it, it was never real."
+        let comments = [ "ordinary comment"; LifecycleProjection.watermarkMarker real; quoting ]
+        Assert.Equal(Some real, LifecycleProjection.tryWatermark comments)
+
+    [<Fact>]
     let ``#2264 unresolved blocker wins over an implementation claim`` () =
         let blocker = { Ref = None; Raw = "human action"; State = BlockerUnparseable }
         let value = { observation with Blockers = fact [ blocker ] }

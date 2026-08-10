@@ -5,6 +5,7 @@ open System.IO
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Cli
+open FS.GG.Coord.GitHub
 
 module DeliveryApplicationTests =
     let commentWithId id body : Driver.ReviewComment = { Id = id; Url = $"https://example.test/{id}"; Body = body }
@@ -123,6 +124,42 @@ module DeliveryApplicationTests =
         match DeliveryApplication.obligationsFromComments "head-a" [] with
         | Error reason -> Assert.Contains("undeclared", reason)
         | other -> failwithf "expected undeclared refusal, got %A" other
+
+    // Round-1 review repair (.github#2264 PR #2271): `Client.outstandingObligations` is the extracted,
+    // directly-testable core of `reconcile`'s lifecycle fold, which previously scanned live PR comments
+    // with bulk, unanchored `.Contains` — a comment quoting ANOTHER obligation's receipt marker in prose
+    // made `Outstanding` compute `false` while a genuine obligation was still open. These tests reproduce
+    // the critic's exact scenario over the REAL production parser it now reuses.
+    let private commentBody id url body : Reads.CommentBody = { Id = id; Url = url; Body = body }
+
+    [<Fact>]
+    let ``#2264 round 1: a receipt quoted in prose cannot clear a different obligation`` () =
+        let comments : Reads.CommentBody list =
+            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
+              commentBody 2L "https://example.test/2" "<!-- fsgg:delivery-obligation id=b kind=publication head=head-a -->"
+              commentBody 3L "https://example.test/3" "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->"
+              // Quotes `b`'s receipt shape in prose, in the org's ordinary reviewer-comment style — never
+              // its own comment's entire body, so the anchored parser cannot mistake it for a real receipt.
+              commentBody 4L "https://example.test/4" "For context, `b`'s receipt will look like:\n`<!-- fsgg:delivery-receipt id=b head=head-a evidence=https://example.test/b -->`\nonce it lands." ]
+        Assert.True(Client.outstandingObligations (Ok "head-a") (Ok comments))
+
+    [<Fact>]
+    let ``#2264 round 1: every obligation genuinely receipted clears Outstanding`` () =
+        let comments : Reads.CommentBody list =
+            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=head-a -->"
+              commentBody 2L "https://example.test/2" "<!-- fsgg:delivery-receipt id=a head=head-a evidence=https://example.test/a -->" ]
+        Assert.False(Client.outstandingObligations (Ok "head-a") (Ok comments))
+
+    [<Fact>]
+    let ``#2264 round 1: an unreadable head or comment thread fails closed as Outstanding`` () =
+        Assert.True(Client.outstandingObligations (Error(Errors.NotFound "no head")) (Ok []))
+        Assert.True(Client.outstandingObligations (Ok "head-a") (Error(Errors.NotFound "no comments")))
+
+    [<Fact>]
+    let ``#2264 round 1: a malformed or stale declaration fails closed as Outstanding`` () =
+        let staleHead : Reads.CommentBody list =
+            [ commentBody 1L "https://example.test/1" "<!-- fsgg:delivery-obligation id=a kind=publication head=old-head -->" ]
+        Assert.True(Client.outstandingObligations (Ok "head-a") (Ok staleHead))
 
     [<Fact>]
     let ``#2131 delivery adapter refuses a stale claim generation before issuing a merge`` () =

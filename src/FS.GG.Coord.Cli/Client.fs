@@ -1594,6 +1594,29 @@ module Client =
         | Ok parsed -> Some { parsed with ChecksGreen = landable }, None
         | Error errors -> None, Some(String.concat "; " errors)
 
+    /// True when a claimed PR has at least one declared, unverified delivery obligation — the sole
+    /// signal `LifecycleProjection.project` needs to keep a row `In review` rather than advance it
+    /// (round-1 review repair, .github#2264 PR #2271). Pure over already-read facts, precisely so this
+    /// is testable directly rather than only through `reconcile`'s live GitHub wiring — the gap the
+    /// critic named: the prior inline `.Contains` scan lived only inside that IO fold, and NO test drove
+    /// it. REUSES `DeliveryApplication.obligationsFromComments` rather than a second parser: its ANCHORED,
+    /// whole-line match means a comment that merely QUOTES an obligation or receipt marker in prose — the
+    /// org's ordinary review-comment style — can never satisfy it, so it cannot be mistaken for a real
+    /// declaration or a real receipt the way unanchored `.Contains` could.
+    ///
+    /// An unreadable head or comment thread, or a declaration the parser refuses (malformed, stale,
+    /// undeclared), withholds trust rather than granting it: `true`, the same "stay in review" answer a
+    /// genuinely outstanding obligation gives. Only a HEAD that reads AND parses AND is fully verified
+    /// clears it.
+    let outstandingObligations (headFact: Errors.IoResult<string>) (commentsFact: Errors.IoResult<Reads.CommentBody list>) : bool =
+        match headFact, commentsFact with
+        | Ok head, Ok comments ->
+            let comments = comments |> List.map (fun c -> ({ Id = c.Id; Url = c.Url; Body = c.Body }: Driver.ReviewComment))
+            match DeliveryApplication.obligationsFromComments head comments with
+            | Ok obligations -> obligations |> List.exists (fun o -> not o.Verified)
+            | Error _ -> true
+        | _ -> true
+
     /// Read a claimed item's delivery facts again immediately before producing the next lifecycle action.
     /// The board scan gives the status/touch-set projection; the marker scan is deliberately repeated over
     /// REST because a cached or earlier scheduler observation cannot authorize a claim-bound transition.
@@ -2391,6 +2414,18 @@ module Client =
                 // carry the verified projection watermark.  A Ready row has no prior lifecycle write to
                 // regress, so not reading it keeps the scheduled fallback bounded rather than turning it
                 // into a REST request per dormant board item.
+                //
+                // TWO comment threads, not one (round-1 review repair). The watermark and the done receipt
+                // are ISSUE facts — `Writes.lifecycleWatermark`/`Writes.doneReceipt` both post to `ref`,
+                // the item itself — so `item.Ref.Number`'s thread is the right and only place to read them.
+                // A delivery obligation/receipt is a PR fact: every other caller of
+                // `DeliveryApplication.obligationsFromComments` in this file (`driver --events`'s
+                // `mergedFactsByRef` above) reads it from `item.ItemPr`'s thread via `commentsWithIdentity`,
+                // never the issue's. Reading obligations from `item.Ref.Number` — the prior shape here —
+                // read a thread the worker's `<!-- fsgg:delivery-obligation -->` declaration is never
+                // actually posted to, so `Outstanding` measured an always-empty set and stayed `false`
+                // regardless of what was truly owed: silently reproducing the exact `.github#2135`/
+                // `.github#2333` failure this projector exists to prevent, parsing precision aside.
                 let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
                     |> List.fold (fun (chores, watermarks) item ->
@@ -2400,13 +2435,25 @@ module Client =
                             else
                                 match Reads.commentBodies ctx.Transport item.Ref.Owner item.Ref.Repo item.Ref.Number with
                                 | Error _ -> None
-                                | Ok comments ->
-                                    let obligations = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-obligation "))
-                                    let receipts = comments |> List.filter (fun body -> body.Contains("<!-- fsgg:delivery-receipt "))
+                                | Ok issueComments ->
+                                    // No PR yet ⇒ nothing has been merged to owe a release obligation, so
+                                    // `Outstanding = false` — the same "nothing to check" reading
+                                    // `needsDeliveryRead` already gives a row with no PR at all.
+                                    // `outstandingObligations` above is the ANCHORED, ID-MATCHED, REUSED
+                                    // check for every other case — see its doc comment for why a quoted
+                                    // marker can never pass it the way the prior bulk `.Contains` scan let
+                                    // one through.
+                                    let outstanding =
+                                        match item.ItemPr with
+                                        | None -> false
+                                        | Some pr ->
+                                            outstandingObligations
+                                                (Reads.prHeadSha ctx.Transport item.Ref.Owner item.Ref.Repo pr)
+                                                (Reads.commentsWithIdentity ctx.Transport item.Ref.Owner item.Ref.Repo pr)
                                     Some
-                                        (({ Outstanding = not (List.isEmpty obligations) && List.isEmpty receipts
-                                            DoneStamped = Done.hasReceipt comments }: LifecycleProjection.Delivery),
-                                         LifecycleProjection.tryWatermark comments)
+                                        (({ Outstanding = outstanding
+                                            DoneStamped = Done.hasReceipt issueComments }: LifecycleProjection.Delivery),
+                                         LifecycleProjection.tryWatermark issueComments)
 
                         match delivery with
                         | None -> chores, watermarks // an unreadable fact withholds its write; scheduled reconciliation retries.
