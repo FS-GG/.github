@@ -1,0 +1,161 @@
+---
+schemaVersion: 1
+workId: 2070-workspace-provider-activation
+title: Workspace Provider Activation
+stage: specify
+changeTier: tier1
+status: specified
+publicOrToolFacingImpact: true
+---
+
+# Workspace Provider Activation Specification
+
+Prose status: specified
+
+## User Value
+The org registry (`registry/dependencies.yml`, `registry/skills.yml`, their changelogs, and
+`docs/architecture.md`/`docs/registry/compatibility.md`) names the actual published
+`console`/`web`/`fable-game`/`fable-bindings` workspace providers and one coherent-set version for
+each, so the maintainer can sign off on packing and releasing the compatible `new-sdd-workspace`
+wizard knowing the registry states only proven, live facts — never a predicted or future artifact.
+
+## Scope
+- SB-001: Registry activation only (epic .github#2067 rollout phases 1-5): verify Game Skills
+  publication and SDD materializer adoption; verify the Templates release handoff by independently
+  downloading its artifacts; verify the Babylon bindings reference and S.I.R.#138 consume only
+  public scaffold/package inputs with no sibling-checkout edges; update
+  `registry/dependencies.yml`, `registry/skills.yml`, both changelogs, `docs/architecture.md`, and
+  the generated `docs/registry/compatibility.md` projection; regenerate projections and validate
+  with the shipped validator (`scripts/generate-projections --check`, `fsgg-sdd registry`).
+- SB-002: Files touched: `registry/dependencies.yml`, `registry/skills.yml`,
+  `registry/CHANGELOG.md`, `registry/skills.CHANGELOG.md`, `docs/architecture.md`,
+  `docs/registry/compatibility.md` (widened — generated projection of the registry rows this item
+  edits), `scripts/NewSddWorkspace/NewSddWorkspace.fsproj`, `scripts/NewSddWorkspace/README.md`,
+  `.github/workflows/release-new-sdd-workspace.yml`, plus this work item's own
+  `work/2070-workspace-provider-activation/**` and `readiness/2070-workspace-provider-activation/**`
+  (widened per known defect .github#2324).
+
+## Non-Goals
+- SB-003: Rollout phase 6 (packing and releasing the `new-sdd-workspace` wizard with `--template`
+  support live) is explicitly OUT OF SCOPE. The maintainer reserves the publish decision; this item
+  stops at a coherent, validated, unreleased registry state and reports it for sign-off.
+- SB-004: Rollout phases 7-9 (installing the *public* wizard and scaffolding all four identities,
+  running restore/build/test/pack/browser-smoke/governance/SDD-evidence/doctor, and the final
+  registry/feed/provenance re-read) depend on the phase 6 release and are out of scope here.
+- SB-005: No edit to `scripts/NewSddWorkspace/Program.fs` or any other wizard source — the
+  `--template` selector already merged via .github#2069/PR#2074 (commit `31c4700f`) and is
+  unreleased; this item does not touch its implementation, only its packaging metadata bystander
+  facts if any are needed (in practice: none — the fsproj `<Version>` stays at the currently
+  released `0.9.0` because phase 6 has not run).
+
+## Coherent-Set Decisions (settled here, before any registry edit)
+- DEC-001: The template package is `FS.GG.Workspace.Template` (renamed from the frozen
+  `FS.GG.Templates`/`fs.gg.templates` line, which topped out at 0.7.1 per FS-GG/FS.GG.Templates#349).
+  Register package-version **0.8.0**, not the newer 0.8.1 live on nuget.org. Rationale: 0.8.0 is the
+  version independently byte-verified against issue #349's own handoff evidence (nupkg SHA-256
+  `11b57ac61e2c3eadaefae0d20ae427e4ca6f7593585cf79e5f6e89565b93c473`, matching the closing issue's
+  own reported hash), the version every one of the four `providers/*.providers.yml` descriptors in
+  FS-GG/FS.GG.Templates pins (`source: FS.GG.Workspace.Template::0.8.0`), and the exact version
+  EHotwagner/S.I.R.#138 (merge `b17ac33bd6e4765c53d9ecccc7939204a3671fa8`) consumed and proved
+  (`.fsgg/scaffold-provenance.json` records `templateRef: "FS.GG.Workspace.Template::0.8.0#fs-gg-fable-game"`).
+  0.8.1 is a real, live, independently-verified artifact (nupkg SHA-256
+  `102c72364ce0018b34950774b86ee12d0f6da43e0de36d609f14bfbdae5c5d21`) but ships from an unrelated
+  hardening cut (FS.GG.Templates PRs #397/#399/#401/#403) that no provider descriptor or consumer
+  has re-pinned to yet. Advancing the org registry to 0.8.1 ahead of Templates' own descriptors
+  would repeat the "registry-says-what-it-wishes-were-true" failure `registry/dependencies.yml`'s
+  own culture repeatedly names (publish-before-flip, FR-007 in that file's convention) — the coherent
+  set records what is actually consumed, not merely what is newest on the feed.
+- DEC-002: Register a new contract row for `FS.GG.Game.Skills`, owner `game`, version/package-version
+  **0.7.0**, tag `skills/v0.7.0`, consumer `[sdd]`. Rationale: FS-GG/FS.GG.Game#552 (closed via PR
+  #554, merge `7fa79f29023468a6bcd4ef7ef5b696abeba508ec`) published it; FS-GG/FS.GG.SDD#817 (closed
+  via PR #819, merge `aa1d6d4c1d105a0dba87a39230cfea1fb90dafc9`) proved SDD's production scaffold
+  materializer adopts exactly that version and emits the `fs-gg-game-fable` skill with digest
+  `443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50` — independently re-derived from
+  the downloaded `fs.gg.game.skills.0.7.0.nupkg` and matching the digest already recorded at
+  `registry/skills.yml:207`. nuget.org also now serves 0.8.0, but nothing in this coherent set (the
+  SDD materializer, the registry) has adopted it, so 0.7.0 is the version this activation names.
+- DEC-003: `game-sim-core` (FS.GG.Game.Core) stays pinned at the already-registered **0.13.0**
+  (`registry/dependencies.yml` line 831-833) — independently re-confirmed live on nuget.org and as
+  the exact `[0.13.0]` pin in S.I.R.'s `Directory.Packages.props`. Its `consumers:` list gains
+  `templates` (fable-game consumes the published `fs-gg-game-core-fable-lockstep-v1` profile per
+  ADR-0069/ADR-0071 §4) alongside the existing `rendering` consumer — no version change.
+- DEC-004: `minimum-fsgg-sdd` for the four new provider identities is registered as **0.6.0**,
+  mirroring what every one of FS.GG.Templates' four `providers/*.providers.yml` descriptors
+  currently declares (registry mirrors the descriptor; it does not lead it — same discipline as the
+  existing `fs-gg-ui-template` row). This is knowingly understated for `fable-game` specifically:
+  the owner-sourced Game skill is only correctly materialized by an `FS.GG.SDD.Cli` build containing
+  SDD PR #819's merge commit `aa1d6d4c`, first published at **1.0.0** (confirmed by GitHub compare:
+  `v0.32.0...aa1d6d4c` is `ahead_by=2 behind_by=0`, i.e. v0.32.0 predates the fix; `aa1d6d4c...v1.0.0`
+  is `ahead_by=12 behind_by=0`, i.e. v1.0.0 contains it; nuget.org's newest published `fs.gg.sdd.cli`
+  is 1.0.0). This is a real coherence gap in FS.GG.Templates' own descriptor, not something this
+  item's `Paths:` can fix (`providers/*.providers.yml` lives in FS.GG.Templates). It is filed as a
+  distinct cross-repo finding (FS-GG/FS.GG.Templates#407) rather than silently corrected here, and the
+  registry row for the new contract carries an explicit comment naming the gap so no reader mistakes
+  0.6.0 as sufficient for `fable-game` specifically.
+- DEC-005: The Babylon bindings reference (`EHotwagner/babylonjsBindings`, `Fable.Babylon` package)
+  is unreleased (no nuget package, no tags/releases) and is not itself registered — ADR-0072 treats
+  it only as a proving reference for the generic `fable-bindings` template contract, not as a
+  registry-tracked dependency. Its dependency files (`Fable.Core`, `Fable.Browser.Dom`,
+  `@babylonjs/core`) are confirmed public-only with zero FS-GG or sibling-checkout references, which
+  is what rollout phase 3 asks this item to verify — no registry row follows from that verification.
+- DEC-006: `new-sdd-workspace` (`FS.GG.NewSddWorkspace`) stays registered at the currently released
+  **0.9.0** — its `--template` selector code merged via .github#2069/PR#2074 (commit `31c4700f`,
+  2026-08-01) but has not been packed or released (the release tag `new-sdd-workspace/v0.9.0` points
+  at the earlier commit `1c817c4e`, predating PR#2074). Registering any newer version here would
+  advertise a future artifact; this item records the merged-but-unreleased state in a comment instead
+  and stops at the phase 6 boundary.
+
+## Non-Goals
+- SB-002: Do not implement or edit `scripts/NewSddWorkspace/Program.fs`; do not run `dotnet pack`,
+  tag, or publish any package; do not run `.github/workflows/release-new-sdd-workspace.yml`.
+
+## User Stories
+- US-001 (P1): As the FS-GG maintainer, I can read `registry/dependencies.yml` and
+  `registry/skills.yml` and see the four new workspace-provider identities named with actual
+  published, hash-verified versions, so I can sign off on releasing the wizard with confidence
+  nothing advertised is aspirational.
+- US-002 (P2): As a future SDD worker running rollout phase 6+, I can read this item's spec/plan to
+  see exactly which coherent-set versions were verified and why, without re-deriving the research.
+
+## Acceptance Scenarios
+- AC-001 [US-001] [FR-001]: Given FS-GG/FS.GG.Game#552 and FS-GG/FS.GG.SDD#816/#817 are closed, when
+  their claimed published artifacts are independently re-derived from nuget.org, then
+  `FS.GG.Game.Skills` 0.7.0 and its `fs-gg-game-fable` skill digest match `registry/skills.yml:207`
+  exactly, and SDD's production materializer path is confirmed (PR SDD#819).
+- AC-002 [US-001] [FR-002]: Given FS-GG/FS.GG.Templates#349, when its published artifact is
+  independently downloaded from nuget.org (not merely trusted from the issue), then the nupkg's
+  SHA-256 matches the closing comment's recorded hash and the package contains all four template
+  identities (`fs-gg-console`, `fs-gg-web`, `fs-gg-fable-game`, `fs-gg-fable-bindings`).
+- AC-003 [US-001] [FR-003]: Given EHotwagner/S.I.R.#138 (merge `b17ac33b`), when its `.fsproj`,
+  `package.json`, and provenance files are inspected, then every FS-GG dependency is a versioned
+  public feed reference and zero sibling-checkout (`../../FS.GG.*`) edges exist.
+- AC-004 [US-002] [FR-004]: Given the coherent-set decisions above, when
+  `registry/dependencies.yml`/`registry/skills.yml`/their changelogs/`docs/architecture.md` are
+  edited, then every new/changed row names only a version independently verified in AC-001..AC-003
+  (never 0.8.1, never a new `new-sdd-workspace` version).
+- AC-005 [US-002] [FR-005]: Given the edited registry documents, when
+  `scripts/generate-projections --check` and `fsgg-sdd registry`/`scripts/check-projection.py` are
+  run, then both report clean (no drift, no schema violation).
+
+## Functional Requirements
+- FR-001: Independently re-verify Game Skills publication (FS.GG.Game#552) and SDD production materializer adoption (FS.GG.SDD#816/#817) against nuget.org and the closing PRs' merge commits, not merely against the issues' own claims. (covers AC-001)
+- FR-002: Independently download FS.GG.Workspace.Template's published artifact (not trust FS.GG.Templates#349's comment alone) and verify its byte hash and the four template identities it contains. (covers AC-002)
+- FR-003: Independently verify EHotwagner/S.I.R.#138 and the Babylon bindings reference consume only public, versioned feed artifacts with zero sibling-checkout edges to any FS-GG source repository. (covers AC-003)
+- FR-004: Update `registry/dependencies.yml` (new `FS.GG.Workspace.Template` contract row with four identities, new `FS.GG.Game.Skills` contract row, `game-sim-core` consumer list, new dependency edges), `registry/skills.yml` (confirm/reconcile the already-present `fs-gg-game-fable` row), `registry/CHANGELOG.md`, `registry/skills.CHANGELOG.md`, and `docs/architecture.md` (retire the "not-yet-published"/"planned" language at lines 100/388/542) so every row/prose statement matches only what FR-001..FR-003 independently verified. (covers AC-004)
+- FR-005: Regenerate `docs/registry/compatibility.md`'s generated regions with `scripts/generate-projections` and confirm `--check` is clean; run the registry's shipped validator (`fsgg-sdd registry` / `scripts/check-projection.py`) clean over the edited documents. (covers AC-005)
+
+## Ambiguities
+- [AMB:AMB-001] FS.GG.Templates' `providers/fable-game.providers.yml` declares
+  `minimumFsggSdd.version: "0.6.0"`, but the owner-sourced Game skill it depends on (via SDD's
+  production materializer) is only correctly emitted by an `FS.GG.SDD.Cli` build containing SDD
+  PR#819 (first published at 1.0.0). Is this item responsible for correcting that descriptor (out of
+  `Paths:`, would require a widen into a live-claimed area or a cross-repo PR), or for filing a
+  finding on FS.GG.Templates and registering the coherent set with the descriptor's stated (lower)
+  floor, flagged as known-understated?
+
+## Public Or Tool-Facing Impact
+- Registry rows and `docs/architecture.md`/`docs/registry/compatibility.md` are consumer-facing
+  documentation of what a maintainer can publicly install and instantiate.
+
+## Lifecycle Notes
+- Next lifecycle action: `fsgg-sdd clarify --work 2070-workspace-provider-activation`.

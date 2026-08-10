@@ -166,8 +166,11 @@ It orchestrates the commands that already exist, and reports each step's outcome
 
 ### Governance overlay & feeds
 
-`FS.GG.Templates` (which carries the `fs-gg-governance` template) is published anonymously on
-[nuget.org](https://www.nuget.org/packages/FS.GG.Templates), so the overlay needs **no token** —
+`FS.GG.Workspace.Template` (the `FS.GG.Templates` repo's package — renamed from the frozen
+`FS.GG.Templates` package line at 0.7.1, ADR-0072 §1; it carries the `fs-gg-governance` template
+alongside `fs-gg-console`/`fs-gg-web`/`fs-gg-fable-game`/`fs-gg-fable-bindings`) is published
+anonymously on [nuget.org](https://www.nuget.org/packages/FS.GG.Workspace.Template), so the
+overlay needs **no token** —
 the install runs from an isolated `nuget.config` exposing only nuget.org, so an
 anonymous-401-on-read org feed in your global config can't poison the restore. If
 `FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` (a `read:packages` token) is set, the org feed

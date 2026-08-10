@@ -1,0 +1,334 @@
+schemaVersion: 1
+workId: 2070-workspace-provider-activation
+stage: evidence
+status: evidenceReady
+sourceSpec: work/2070-workspace-provider-activation/spec.md
+sourceClarifications: work/2070-workspace-provider-activation/clarifications.md
+sourceChecklist: work/2070-workspace-provider-activation/checklist.md
+sourcePlan: work/2070-workspace-provider-activation/plan.md
+sourceTasks: work/2070-workspace-provider-activation/tasks.yml
+sourceAnalysis: readiness/2070-workspace-provider-activation/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/2070-workspace-provider-activation/analysis.json
+    digest: 48cec9f47a09a2b7c744c2bf596121fc1b97fbb8184a4abbc9294f4b5c38ef8c
+    schemaVersion: 1
+  - label: checklist
+    path: work/2070-workspace-provider-activation/checklist.md
+    digest: 98cf65d772005e0c47ae8d48ec946bc1d36ea442c5c758b550a6d0998ae9b03f
+    schemaVersion: 1
+  - label: clarifications
+    path: work/2070-workspace-provider-activation/clarifications.md
+    digest: fdd8ee77284bc40bf4bdb0f1b68ca6bdc5e41fd8eede2c387e4976ecb78e59fd
+    schemaVersion: 1
+  - label: plan
+    path: work/2070-workspace-provider-activation/plan.md
+    digest: 9b14d906e2dbd1511326f1ff956e727a1a11f56430605ad1a9388d6d3baea800
+    schemaVersion: 1
+  - label: spec
+    path: work/2070-workspace-provider-activation/spec.md
+    digest: e4b7fbd4c083b91d2b645e9f7757624e4d0f7bc2867306c232c4a036472b138e
+    schemaVersion: 1
+  - label: tasks
+    path: work/2070-workspace-provider-activation/tasks.yml
+    digest: 1e907d0e29f68ec024755d7f705489221714de23a6b92fdbd8dc0921f1ee9eca
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["Independently re-derived FR-001 (AC-001): Game Skills publication and SDD production materializer adoption confirmed against nuget.org and merge commits, not just issue claims."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["Independently re-derived FR-002 (AC-002): FS.GG.Workspace.Template's published artifact downloaded and byte-verified rather than trusted from the closing comment alone."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/architecture.md, registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["Independently re-derived FR-003 (AC-003): S.I.R.#138 and the Babylon bindings reference confirmed to use only public, versioned feed artifacts with zero sibling-checkout edges."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [docs/architecture.md, registry/CHANGELOG.md, registry/dependencies.yml, registry/skills.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 (AC-004): every added/edited row names only a version independently verified under EV001-EV003."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [docs/registry/compatibility.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 (AC-005): projections regenerated and the shipped validator reports clean."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [registry/dependencies.yml, work/2070-workspace-provider-activation/clarifications.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001: registered the descriptor's stated (understated) floor rather than silently correcting another repo's file; filed FS-GG/FS.GG.Templates#407 as the root-cause finding."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 satisfied by EV001-EV004's citations."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV008]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 satisfied — see DEC-001/DEC-002/DEC-004 in spec.md for the explicit non-advancement rationale."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [VO-001 satisfied.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV010]
+    artifacts: [docs/registry/compatibility.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: [VO-002 satisfied.]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [registry/dependencies.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: verify-report.junit.xml
+      digest: "sha256:1b56e586b8f85cc596cfc30a28382f32a1cc9815439ed6a27593931af62f2172"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 8
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: no migration owed; schemaVersion unchanged."]
+  - id: EV012
+    kind: deferral
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV012]
+    artifacts: [docs/registry/compatibility.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "A generated view's currency is established by its generator (scripts/generate-projections), not by a test run, so a bare pass here would be unobserved forever per the evidence grammar. The real currency proof already lives in EV005/EV010's observed-run receipt, which includes a passing \"generate-projections --check\" assertion."
+    owner: github
+    scope: "docs/registry/compatibility.md's generated regions staying current with registry/dependencies.yml"
+    laterLifecycleVisibility: "Re-checked by scripts/generate-projections --check on every future registry edit (CI-equivalent gate); no further action owed by this item."
+    notes: ["GV-001's currency claim is carried by EV005/EV010's observed-run receipt", not by this obligation directly.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
