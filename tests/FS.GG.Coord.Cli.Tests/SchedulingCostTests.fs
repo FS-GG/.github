@@ -371,7 +371,7 @@ module SchedulingCostTests =
 
         Assert.Single(reconcilingQueries) |> ignore
         Assert.Contains("body", reconcilingQueries.[0])
-        Assert.Contains("... on PullRequest { number title state createdAt body", reconcilingQueries.[0])
+        Assert.Contains("... on PullRequest { id number title state createdAt body", reconcilingQueries.[0])
 
     // ---- AC1/AC2 — bounded by the SCHEDULABLE set, not the candidate set --------------------------------
 
