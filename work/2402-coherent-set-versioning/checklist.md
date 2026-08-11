@@ -22,7 +22,7 @@ Prose status: checklistReady
 
 ## Source Snapshot
 - spec: work/2402-coherent-set-versioning/spec.md sha256:ac69db5b7e169126290348ef659815b0d67d773f71ac1497af4ed52da7d58ddd schemaVersion:1
-- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:d7157739546673f578f35bafc9e31fbf8b0dea416790f243235f27f360b8e168 schemaVersion:1
+- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7 schemaVersion:1
 
 ## Checklist Items
 - CHK-001 [FR-001] [AC-001] blocking: Requirement FR-001 is testable and linked to acceptance coverage.

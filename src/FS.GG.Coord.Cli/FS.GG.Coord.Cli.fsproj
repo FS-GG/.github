@@ -120,20 +120,23 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.49.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
+    <PackageReleaseNotes>0.50.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
 FS.GG.Coord.Cli's `&lt;Version&gt;` is no longer this project's own independent literal. FS.GG.Kit,
 FS.GG.Drivers and this engine are now released from one shared MSBuild property
 ($(FsggCoherentSetVersion), Directory.Build.props), so a bump to any one of the three moves all
 three together and the three cannot diverge from each other the way FS.GG.Kit 0.49.0 and
 FS.GG.Drivers 0.18.0 diverged from this engine's 0.23.0 twenty minutes apart on 2026-08-10
-(commits f26da6ed/d48e1ec2). 0.49.0 is FS.GG.Kit's version at the time the set was declared — the
-highest of the three prior independent versions, so adopting the shared scalar cannot make any
-member appear to downgrade (see docs/registry/compatibility.md for the full migration note).
+(commits f26da6ed/d48e1ec2). The set starts one MINOR above 0.49.0 — FS.GG.Kit's version at the
+time the set was declared, the highest of the three prior independent versions — rather than at
+0.49.0 itself, because 0.49.0 was already the newest FS.GG.Kit published on nuget.org and any PR
+editing FS.GG.Kit.csproj (which adopting this property does) must declare a version strictly
+greater than what is already published. Either way no member appears to downgrade (see
+docs/registry/compatibility.md for the full migration note).
 
 THIS IS NOT THE USUAL PATCH/MINOR CLASSIFICATION. `git diff coord-engine/v0.23.0..HEAD --
 src/FS.GG.Coord.Core/Protocol.fs src/FS.GG.Coord.Cli/Options.fs` is empty: no verb, flag, help
 entry, render name, result name or exit code is added, removed or re-spelled by this cut, which
-under this repository's usual 0.x rule would make it a PATCH. The jump from 0.23.0 to 0.49.0 is
+under this repository's usual 0.x rule would make it a PATCH. The jump from 0.23.0 to 0.50.0 is
 instead dictated entirely by the coherent-set adoption above, stated here rather than left to look
 like an unexplained large PATCH-shaped bump.
 

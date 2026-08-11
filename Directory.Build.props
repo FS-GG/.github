@@ -60,13 +60,19 @@
        and publishes through its own existing workflow, at whatever cadence that workflow runs, at
        this one shared version.
 
-       STARTING VALUE. `0.49.0` is `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0, FS.GG.Coord.Cli
-       0.23.0)` as of 2026-08-11 — the highest of the three prior independent versions, so adopting
-       the shared scalar cannot make any member appear to downgrade. See
-       docs/registry/compatibility.md for the migration note. Advancing this property is now the
-       ONLY way to bump any of the three packages' <Version>; do not reintroduce an independent
-       <Version> literal in any of their project files — scripts/check-coherent-set-version.py gates
-       exactly that, with gate-inversion evidence in tests/coherent-set-version/.
+       STARTING VALUE. `0.50.0` — one MINOR above `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
+       FS.GG.Coord.Cli 0.23.0)` = `0.49.0` as of 2026-08-11, the highest of the three prior
+       independent versions, so adopting the shared scalar cannot make any member appear to
+       downgrade. It is NOT `0.49.0` itself: `0.49.0` was already the newest FS.GG.Kit published on
+       nuget.org at declaration time, and `check-kit-published-coherence.py`'s PR arm requires any PR
+       that edits `src/FS.GG.Kit/FS.GG.Kit.csproj` — which adopting this property necessarily does —
+       to declare a version STRICTLY GREATER than what is already published (verified live: the PR
+       that first tried `0.49.0` reproduced exactly this red). `0.50.0` satisfies both constraints at
+       once. See docs/registry/compatibility.md for the full migration note. Advancing this property
+       is now the ONLY way to bump any of the three packages' <Version>; do not reintroduce an
+       independent <Version> literal in any of their project files —
+       scripts/check-coherent-set-version.py gates exactly that, with gate-inversion evidence in
+       tests/coherent-set-version/.
 
        WHY THIS LIVES BELOW THE ORG IMPORT, NOT IN IT. The imported dist/dotnet/Directory.Build.props
        is byte-identical across every receiver (sync-build-config.sh's subject); it carries no
@@ -76,7 +82,7 @@
        hatch the comment above already describes, used for the first time.
        ════════════════════════════════════════════════════════════════════════════ -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.49.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.50.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

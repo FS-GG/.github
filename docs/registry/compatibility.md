@@ -152,12 +152,16 @@ moves the property, which moves all three together — the three cannot diverge 
 by construction, and `scripts/check-coherent-set-version.py` (`coherent-set-version.yml`) gates both
 that no project reintroduces an independent literal and that all three actually evaluate equal.
 
-**Starting version: `0.49.0`.** Derived as `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
-FS.GG.Coord.Cli 0.23.0)` — the highest of the three prior independent versions at the time the set
-was declared, so adopting the shared scalar does not make any member appear to downgrade. This is a
+**Starting version: `0.50.0`.** One MINOR above `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
+FS.GG.Coord.Cli 0.23.0)` = `0.49.0` — the highest of the three prior independent versions at the
+time the set was declared, so adopting the shared scalar does not make any member appear to
+downgrade. It is deliberately not `0.49.0` itself: that was already the newest FS.GG.Kit published
+on nuget.org, and `check-kit-published-coherence.py`'s PR arm requires any PR that edits
+`FS.GG.Kit.csproj` — which adopting this property necessarily does — to declare a version strictly
+greater than what is already published; `0.50.0` satisfies both constraints. This is a
 **source-tree-only** migration: no release workflow ran as part of it, so as of this note no package
-has actually been *published* at `0.49.0` — `coord-engine` above still correctly reads `0.23.0` on
-both axes until a real coherent-set release is cut (tracked as a follow-up; see below). Consequently
+has actually been *published* at `0.50.0` — `coord-engine` above still correctly reads `0.23.0` on
+both axes until a real coherent-set release is cut (tracked as FS-GG/.github#2409). Consequently
 this repo's own freshness gates correctly report a release owed for `coord-engine` from the moment
 this migration merges (the version-scalar bump is itself an unreleased commit) — that is the accurate
 signal, not a regression.
@@ -176,7 +180,8 @@ packages together, and the real receiver-restore verification that would then be
 **not** part of this migration. Those three workflows collectively implement the sole distribution
 path the entire fleet depends on to run `fsgg-coord` at all; redesigning that mechanism, and
 performing a real multi-package publish, is a maintainer sequencing decision this migration
-deliberately leaves to a follow-up rather than making unilaterally under time pressure. Direct
+deliberately leaves to a follow-up (FS-GG/.github#2409) rather than making unilaterally under time
+pressure. Direct
 inspection of every coherence gate this migration's originating issue named as evidence of
 gate-per-pair sprawl (`check-source-coherence.py`, `check-feed-coherence.py`, `check-pin-coherence.py`,
 `check-engine-pin.py`, `check-kit-published-coherence.py`, `check-lock-ranges.py`, and

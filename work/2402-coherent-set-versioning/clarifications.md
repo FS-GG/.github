@@ -72,13 +72,13 @@ No clarification answers recorded.
   That is a maintainer sequencing decision (which package publishes first in dependency order, what
   the new shared release trigger looks like, and a live rehearsal before the only path the fleet has
   is rewritten), not a call one bounded worker session should make unilaterally under time pressure.
-  It is filed as a follow-up item so the maintainer can decide deliberately, per the same "state it
-  explicitly rather than letting it land implicitly" instruction this item's own Evidence section
-  gives for the #2396 split.
+  It is filed as follow-up FS-GG/.github#2409 so the maintainer can decide deliberately, per the
+  same "state it explicitly rather than letting it land implicitly" instruction this item's own
+  Evidence section gives for the #2396 split.
 
 ## Accepted Deferrals
 - The workflow-consolidation and real dual-feed release (SB-005 / .github#2402's AC2 and AC7) are
-  accepted deferrals to a follow-up item, per DEC-003.
+  accepted deferrals to follow-up FS-GG/.github#2409, per DEC-003.
 
 ## Accepted Deferrals
 No accepted deferrals recorded.

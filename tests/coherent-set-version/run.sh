@@ -68,24 +68,24 @@ expect() { # wanted rc, label, output pattern
 echo "== coherent-set-version =="
 
 # --- The correct shape: all three reference the shared property, and it resolves. ---
-fixture coherent 0.49.0 '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)'
+fixture coherent 9.9.9 '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)'
 run "$WORK/coherent/Directory.Build.props" "$WORK/coherent/kit/Test.csproj" "$WORK/coherent/drivers/Test.csproj" "$WORK/coherent/cli/Test.csproj"
-expect 0 "all three referencing the shared property, evaluating equal, is green" "evaluate to '0.49.0'"
+expect 0 "all three referencing the shared property, evaluating equal, is green" "evaluate to '9.9.9'"
 
 # --- GATE-INVERSION: reintroduce ONE independent literal (the exact defect .github#2402 fixes). ---
-fixture mutated-drivers 0.49.0 '$(FsggCoherentSetVersion)' '0.18.1' '$(FsggCoherentSetVersion)'
+fixture mutated-drivers 9.9.9 '$(FsggCoherentSetVersion)' '0.18.1' '$(FsggCoherentSetVersion)'
 run "$WORK/mutated-drivers/Directory.Build.props" "$WORK/mutated-drivers/kit/Test.csproj" "$WORK/mutated-drivers/drivers/Test.csproj" "$WORK/mutated-drivers/cli/Test.csproj"
 expect 1 "MUTATION: one project reverted to an independent literal is red" "declares <Version>0.18.1</Version>, not"
 
 # ...and reverting the mutation (same fixture as the first leg) is green again — proves the leg above
 # is a real gate-inversion pair, not a fixture that is always red.
 run "$WORK/coherent/Directory.Build.props" "$WORK/coherent/kit/Test.csproj" "$WORK/coherent/drivers/Test.csproj" "$WORK/coherent/cli/Test.csproj"
-expect 0 "...restoring the property reference is green again" "evaluate to '0.49.0'"
+expect 0 "...restoring the property reference is green again" "evaluate to '9.9.9'"
 
 # --- A DIFFERENT independent literal, on the FIRST project checked, is caught the same way. ---
-fixture mutated-kit 0.49.0 '0.50.0' '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)'
+fixture mutated-kit 9.9.9 '1.2.3' '$(FsggCoherentSetVersion)' '$(FsggCoherentSetVersion)'
 run "$WORK/mutated-kit/Directory.Build.props" "$WORK/mutated-kit/kit/Test.csproj" "$WORK/mutated-kit/drivers/Test.csproj" "$WORK/mutated-kit/cli/Test.csproj"
-expect 1 "MUTATION: the FIRST-checked project reverted to a literal is red" "declares <Version>0.50.0</Version>, not"
+expect 1 "MUTATION: the FIRST-checked project reverted to a literal is red" "declares <Version>1.2.3</Version>, not"
 
 # --- Fail-closed reads. Each is a NO-VERDICT, and a no-verdict is RED (epic #266). ---
 

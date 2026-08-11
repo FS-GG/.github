@@ -17,8 +17,8 @@ Prose status: planned
 
 ## Source Snapshot
 - spec: work/2402-coherent-set-versioning/spec.md sha256:ac69db5b7e169126290348ef659815b0d67d773f71ac1497af4ed52da7d58ddd schemaVersion:1
-- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:d7157739546673f578f35bafc9e31fbf8b0dea416790f243235f27f360b8e168 schemaVersion:1
-- checklist: work/2402-coherent-set-versioning/checklist.md sha256:5a4b1bceee56362392b21d1a986654fa34b1ef07fb4aeef331e58cb8996f04b3 schemaVersion:1
+- clarifications: work/2402-coherent-set-versioning/clarifications.md sha256:a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7 schemaVersion:1
+- checklist: work/2402-coherent-set-versioning/checklist.md sha256:df71f699fb74b9270722205caaae2a181105f1eee4f5132a8825ba09744746d3 schemaVersion:1
 
 ## Plan Scope
 - Work item 2402-coherent-set-versioning is planned from the current specification, clarification, and checklist facts.
@@ -28,8 +28,14 @@ Prose status: planned
 
 ## Plan Decisions
 - PD-001 [AC-001] [FR-001] complete: Add one MSBuild property `<FsggCoherentSetVersion>` to
-  `Directory.Build.props`, set to `0.49.0` — `max(FS.GG.Kit 0.49.0, FS.GG.Drivers 0.18.0,
-  FS.GG.Coord.Cli 0.23.0)`, so no member appears to downgrade (spec SB-003/FR-003). Replace the
+  `Directory.Build.props`, set to `0.50.0` — one MINOR above `max(FS.GG.Kit 0.49.0, FS.GG.Drivers
+  0.18.0, FS.GG.Coord.Cli 0.23.0)` = `0.49.0`, so no member appears to downgrade (spec SB-003/FR-003).
+  Not `0.49.0` itself: live CI on this PR's first push proved `0.49.0` was already the newest
+  FS.GG.Kit published on nuget.org, and `check-kit-published-coherence.py`'s PR arm refuses any PR
+  that edits `FS.GG.Kit.csproj` — which adopting this property necessarily does — unless the
+  declared version is STRICTLY GREATER than what is already published
+  (`kit-published-coherence` / `pr-arm`, run 31523042887, job 93884745952). `0.50.0` satisfies both
+  constraints. Replace the
   `<Version>` element in `src/FS.GG.Kit/FS.GG.Kit.csproj:481`, `src/FS.GG.Drivers/FS.GG.Drivers.csproj:70`
   and `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj:92` with `<Version>$(FsggCoherentSetVersion)</Version>`.
   `Directory.Build.props` already imports the org-shared `dist/dotnet/Directory.Build.props`
@@ -54,7 +60,7 @@ Prose status: planned
   green. This is new evidence, not reused from an existing suite — no existing test exercises this
   mechanism.
 - PD-003 [AC-001] [FR-003] complete: Add a migration note to `docs/registry/compatibility.md` recording:
-  the set's starting version (`0.49.0`), the `max()` derivation, and the DEC-001 reconciliation with
+  the set's starting version (`0.50.0`), the `max()` derivation, and the DEC-001 reconciliation with
   `.github#2396` verbatim (receiver-pin lag vs. within-set lag), so a future reader does not have to
   re-derive either fact.
 - PD-004 [AC-001] [FR-004] complete: Per DEC-002, the PR body states the evaluated subject of each of the
@@ -67,20 +73,21 @@ Prose status: planned
   and deleted", and the record shows the evaluation happened.
 - PD-005 [AC-001] deferred (SB-005 / DEC-003): Release-workflow consolidation (one workflow cutting all
   three packages together) and the real dual-feed publish + receiver-restore verification (AC2, AC7 of
-  the parent issue) are explicitly OUT of this plan, filed as a follow-up item per DEC-003. This plan's
-  `Paths:` therefore touches none of `release-kit.yml`, `release-drivers.yml`, `release-coord-engine.yml`,
-  or the feed.
+  the parent issue) are explicitly OUT of this plan, filed as follow-up FS-GG/.github#2409 per DEC-003.
+  This plan's `Paths:` therefore touches none of `release-kit.yml`, `release-drivers.yml`,
+  `release-coord-engine.yml`, or the feed.
 
 ## Contract Impact
 - PC-001 [PD-001] [PD-002] production code: `Directory.Build.props` gains one new MSBuild property;
   three project files change how `<Version>` resolves (same evaluated value, different source) — no
   package's NEXT published version is held back, and Kit/Drivers/CoordCli's *source* `<Version>` all
-  become `0.49.0` the moment this merges (a real, visible jump for Drivers 0.18.0→0.49.0 and
-  Coord.Cli 0.23.0→0.49.0). This is source-tree-only: no release workflow runs as part of this change,
-  so no package is actually published at 0.49.0 by this PR — that remains PD-005's deferred follow-up.
-  A new CI workflow (`coherent-set-version.yml`) and script are added; no existing workflow or script is
-  modified or deleted.
-- PC-002 [PD-001] known consequence: Once this merges, `coord-engine`'s SOURCE `<Version>` (0.49.0) will
+  become `0.50.0` the moment this merges (a real, visible jump for Drivers 0.18.0→0.50.0 and
+  Coord.Cli 0.23.0→0.50.0; Kit 0.49.0→0.50.0, one MINOR, because `0.49.0` was already the newest
+  FS.GG.Kit published on nuget.org and this PR edits FS.GG.Kit.csproj). This is source-tree-only: no
+  release workflow runs as part of this change, so no package is actually published at `0.50.0` by
+  this PR — that remains PD-005's deferred follow-up. A new CI workflow (`coherent-set-version.yml`)
+  and script are added; no existing workflow or script is modified or deleted.
+- PC-002 [PD-001] known consequence: Once this merges, `coord-engine`'s SOURCE `<Version>` (0.50.0) will
   disagree with its registry `package-version`/feed (still 0.23.0, unpublished) until the deferred
   follow-up cuts a real release. `scripts/check-engine-freshness.py` will correctly begin reporting a
   release owed (1+ commit — this very bump — since the `coord-engine/v0.23.0` tag), which is accurate,
@@ -90,7 +97,7 @@ Prose status: planned
 
 ## Verification Obligations
 - VO-001 [PD-001] [PD-002] semanticTest: `dotnet msbuild src/FS.GG.Kit/FS.GG.Kit.csproj -getProperty:Version`,
-  same for FS.GG.Drivers.csproj and FS.GG.Coord.Cli.fsproj, each evaluates to `0.49.0`.
+  same for FS.GG.Drivers.csproj and FS.GG.Coord.Cli.fsproj, each evaluates to `0.50.0`.
 - VO-002 [PD-002] semanticTest: `bash tests/coherent-set-version/run.sh` green on the unmodified tree;
   gate-inversion mutation leg reds when a project file is mutated back to an independent `<Version>`,
   green again once restored (MUTATION-PROVEN evidence, recorded with command + observed output in the
@@ -106,9 +113,9 @@ No performance intent is declared for this work item.
 
 ## Migration Posture
 - PM-001 [PC-001] [PC-002] real migration: the version-scalar migration is recorded in the
-  `docs/registry/compatibility.md` note this plan adds — starting version `0.49.0`, the
-  `max(0.49.0, 0.18.0, 0.23.0)` derivation, and the explicit statement that no member's *published*
-  version, registry row, or feed moves as part of this migration: only the three projects' SOURCE
+  `docs/registry/compatibility.md` note this plan adds — starting version `0.50.0`, the
+  `max(0.49.0, 0.18.0, 0.23.0)` + one-MINOR derivation, and the explicit statement that no member's
+  *published* version, registry row, or feed moves as part of this migration: only the three projects' SOURCE
   `<Version>` moves, together, in one commit. Cutting an actual coherent-set release is the deferred
   follow-up's scope, not this plan's.
 

@@ -17,15 +17,15 @@ sources:
     schemaVersion: 1
   - label: clarifications
     path: work/2402-coherent-set-versioning/clarifications.md
-    digest: d7157739546673f578f35bafc9e31fbf8b0dea416790f243235f27f360b8e168
+    digest: a29ea750302b37735fbb3c0e4f8da929dafae0b38ed518b9f852da5ebb5481f7
     schemaVersion: 1
   - label: checklist
     path: work/2402-coherent-set-versioning/checklist.md
-    digest: 5a4b1bceee56362392b21d1a986654fa34b1ef07fb4aeef331e58cb8996f04b3
+    digest: df71f699fb74b9270722205caaae2a181105f1eee4f5132a8825ba09744746d3
     schemaVersion: 1
   - label: plan
     path: work/2402-coherent-set-versioning/plan.md
-    digest: 8e3dc4bc03ae279357f2d4e38d7e2de0193f457095882e8e5a4b84333d726b3c
+    digest: 183e52191152ba891ac09cd386490a1987b6d498ee52aeaa865cefaf2a4d69f1
     schemaVersion: 1
 tasks:
   - id: T001
