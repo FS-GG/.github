@@ -28,6 +28,8 @@ permissions:
   contents: read
   packages: read   # the reusable gate restores the typed fsgg-sdd validator from the org feed;
                    # a called workflow's GITHUB_TOKEN scopes are capped by the caller, so grant it here.
+  issues: read     # claim-generation (below) reads fsgg:claim marker comments on the item the PR's
+                   # branch names — a valid GITHUB_TOKEN scope, unlike `administration` (.github#2342).
 
 jobs:
   contract-coherence:
@@ -119,3 +121,100 @@ jobs:
             exit 0
           fi
           exit "$rc"
+
+  # Merge fence, slice 1 (.github#2342 — slice 1 of .github#1858's replacement-plan step 2, "fence
+  # merges"; design gate .github#2210,
+  # docs/reports/2026-08-04-github-native-executor-fencing-design.md). Reads the LIVE `fsgg:claim`
+  # generation for the item this PR's own branch (`item/<n>-*`) declares it delivers, and compares it
+  # against an explicit `fsgg:pr-authorization` marker in the PR body. See
+  # scripts/check-claim-generation.py's own docstring for the four diagnoses this gate distinguishes
+  # (missing / stale / mismatched / unreadable) and for exactly how this slice is narrower than the
+  # full design (it does not yet ground the marker against a merge election — that is a later slice,
+  # out of this item's `Paths:`).
+  #
+  # OBSERVE-ONLY TODAY (.github#2342 AC6). Nothing here adds `claim-generation` to branch protection.
+  # A red verdict is real and visible in this job's own result, but it does not yet BLOCK a merge —
+  # arming is a deliberate, separate, administrative action, correctly deferred until design slice 3
+  # (`delivery` writing the marker automatically) has landed and a full claim-lease window has passed
+  # with zero unmarked in-flight `item/<n>-*` pull requests (design doc §9.1's migration sequence).
+  # The command an admin would run once that is true (alongside this repo's existing five contexts,
+  # read live from `gh api repos/FS-GG/.github/branches/main/protection` on 2026-08-04):
+  #
+  #   gh api -X PUT repos/FS-GG/.github/branches/main/protection/required_status_checks/contexts \
+  #     -f "contexts[]=contract-coherence / coherence" -f "contexts[]=projection" \
+  #     -f "contexts[]=roster-closure" -f "contexts[]=drift" -f "contexts[]=reconcile" \
+  #     -f "contexts[]=claim-generation"
+  #
+  # No `paths:` filter — inherited from this workflow's own `on:` above, which is deliberately
+  # unfiltered (.github#1508: a required context must report on EVERY pull request, and GitHub never
+  # skips a path-filtered required check — it never creates the check run at all, so branch protection
+  # waits forever). This job decides its own applicability from the BRANCH SHAPE
+  # (`item/<n>-*`) rather than from a trigger filter, so an unrelated PR still gets a real `success`.
+  claim-generation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Run the claim-generation fixture (no network)
+        run: bash tests/claim-generation/run.sh
+
+      # The body AND the branch name go through the ENVIRONMENT, never interpolated into a `run:`
+      # block. Both are attacker-controlled text — closing-keywords.yml states the same rule for the
+      # PR body, and a branch name can carry shell metacharacters just as readily as a body can.
+      - name: Assert the live claim generation authorizes this merge
+        id: check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.md
+          rc=0
+          out="$(python scripts/check-claim-generation.py \
+                   --repo "${{ github.repository }}" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+                   --body pr-body.md 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code — "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      - name: 'OK: authorization is current, or this PR does not deliver a board item'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "claim-generation: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: missing, stale, or mismatched claim-generation authorization'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### claim-generation: this PR's authorization does not name the current live claim"
+            echo
+            echo 'See the job log above for which of the three — missing, stale, or mismatched — and'
+            echo 'why. This check is OBSERVE-ONLY today (branch protection does not yet require it);'
+            echo 'see scripts/check-claim-generation.py for the `fsgg:pr-authorization` marker a PR'
+            echo 'body needs to carry once design slice 3 (`delivery` writing it automatically) lands.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=claim-generation: authorization is missing, stale, or mismatched::See the job log for which, and why."
+          exit 1
+
+      - name: 'NO VERDICT (retryable): the live claim state could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          echo "::error title=claim-generation: no verdict (retryable)::A rate limit or outage kept this job from reading the live claim state (#266: a failed read is never a pass). Re-run the job."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a permission or input failure'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          echo "::error title=claim-generation: no verdict (permanent)::See the job log — a credential problem or an unusable input kept this job from establishing a verdict. Retrying will not help."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=claim-generation: inconclusive::check-claim-generation.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
