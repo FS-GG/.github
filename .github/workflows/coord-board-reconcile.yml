@@ -35,8 +35,40 @@ on:
 permissions:
   contents: read
 
+# .github#2361 (measured residual of #2352): a REPO-WIDE group is what actually manufactures the
+# cancellations, not the job-level `if` above. GitHub Actions holds at most one RUNNING and one
+# PENDING run per concurrency group; a newer run for that same group evicts the pending one — this
+# happens BEFORE any job's `if` is evaluated, and it happens regardless of `cancel-in-progress`
+# (that setting only governs whether a newer run may cancel a currently-RUNNING one; it has no
+# bearing on the single-pending-slot eviction, which GitHub applies unconditionally). Measured:
+# 22/37 issue_comment-triggered runs cancelled, and separately a `pull_request` run cancelled by
+# unrelated issue_comment traffic silently blocked PR #2383 (`reconcile` context went MISSING, not
+# red — see the issue's evidence comments).
+#
+# `${{ github.repository }}` alone puts EVERY event this workflow answers to — every marker/receipt
+# comment on every open issue and PR, every `issues`/`pull_request`/`pull_request_review` event, the
+# hourly `schedule`, every `workflow_dispatch` — into that one shared group. A `drive-board` wave
+# generates dozens of `issue_comment` events spread across many DIFFERENT issues/PRs in the same few
+# minutes; none of that traffic is related to any other item, yet it all contends for the same one
+# pending slot.
+#
+# Keying the group by the issue/PR the event actually targets removes that unrelated contention:
+# comments on issue #A no longer evict a pending run for PR #B. `pull_request`/`pull_request_review`
+# carry `github.event.pull_request.number`; `issues`/`issue_comment` carry `github.event.issue.number`
+# (which equals the PR number when the comment is ON a PR, so a PR's own review-marker traffic stays
+# correctly serialized with that PR's own push-triggered runs — only truly UNRELATED issues/PRs are
+# separated). `schedule`/`workflow_dispatch` carry neither, so they fall back to one fixed literal
+# group shared only among themselves (unaffected by any issue/PR traffic, and still serialized
+# against each other so two full-board scans never overlap).
+#
+# `cancel-in-progress: false` is UNCHANGED and must stay false: `src/FS.GG.Coord.Core/Landable.fs:56-59`
+# (`#698`) requires that a run which starts is allowed to finish rather than being killed mid-scan by
+# a newer trigger — this fix narrows WHO contends for the slot, not whether an in-progress run may be
+# cancelled by a legitimate successor in its own, now-narrower group.
 concurrency:
-  group: coord-board-reconcile-${{ github.repository }}
+  group: >-
+    coord-board-reconcile-${{ github.repository }}-${{ github.event.pull_request.number ||
+    github.event.issue.number || 'periodic' }}
   cancel-in-progress: false
 
 jobs:
