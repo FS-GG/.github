@@ -5744,6 +5744,17 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
         | _, Error e, _ -> Error e
         | _, _, Error e -> Error e
         | Ok targetPathRepo, Ok openIssues, Ok closedIssues ->
+            // .github#2305/ADR-0044 — resolved ONCE for the whole scan, reusing the same
+            // `generatedPathCollector` seam `deliveryPathsVerified`/`updateTouchSet` already pay for (one
+            // local process invocation, no extra REST/GraphQL). A conflict pair attributable solely to a
+            // shared generated, CI-gated artifact is cleared below — see `TouchSet.excludeGenerated`'s doc
+            // for the exact-stem-only rule that keeps a directory-prefix declaration (the ADR-0044 #309
+            // parent-directory trap) colliding exactly as before.
+            let generated =
+                match KitDigest.kitRoot () with
+                | Some root -> generatedPathCollector root
+                | None -> Set.empty
+
             // THE TOKEN FILTER RUNS FIRST, AND IT IS WHAT MAKES THE MARKER READS AFFORDABLE. It is pure:
             // the bodies arrived on the list read above, `TouchSet.parse`/`conflicts` touch no network, and
             // a row whose declaration cannot collide is discarded before anything is spent on it.
@@ -5776,7 +5787,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             // Scope is carried by the reservation marker, which is deliberately read only
                             // after this cheap token shortlist. The unscoped comparison cannot create a
                             // collision by itself; the marker-backed scope check below is authoritative.
-                            match TouchSet.conflicts ts (TouchSet.parse body) with
+                            //
+                            // .github#2305 — a pair attributable SOLELY to a shared generated artifact is
+                            // excluded here, before the marker-backed scope check below ever runs: neither
+                            // side authors that file, so it is not a real reservation to defend.
+                            match TouchSet.conflicts ts (TouchSet.parse body) |> TouchSet.excludeGenerated generated with
                             | [] -> None
                             | pairs -> Some(other, Choice1Of2 pairs))
 
@@ -5979,6 +5994,32 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             eprint $"fsgg-coord-engine: %s{msg}"
                             ExitError
                         | Ok validated ->
+                            // .github#2305/ADR-0044 — a requested token that EXACTLY names a generated,
+                            // CI-gated artifact is refused here, before the body is even read and before
+                            // any collision scan runs: nobody authors such a file (a checked-in generator
+                            // emits it and CI reds on any diff), so declaring it is not input this command
+                            // accepts — the same all-or-nothing input refusal `Writes.validate` just gave a
+                            // flag-shaped or sentinel-mixed token, never a silent per-token drop (a drop
+                            // would leave the caller believing they declared something they did not).
+                            // `TouchSet.generatedTokens` compares STEMS and requires an EXACT match, so a
+                            // directory-prefix request (`registry/**`) is NOT caught here — see its doc for
+                            // why the ADR-0044 #309 parent-directory trap must keep colliding.
+                            let generated =
+                                match KitDigest.kitRoot () with
+                                | Some root -> generatedPathCollector root
+                                | None -> Set.empty
+
+                            let notDeclarable = TouchSet.generatedTokens generated validated.Tokens
+
+                            if not (List.isEmpty notDeclarable) then
+                                let joined = String.Join(", ", notDeclarable)
+
+                                eprint
+                                    $"fsgg-coord-engine: %s{verb} refuses %s{joined} — generated, CI-gated artifact(s) are not declarable (ADR-0044): nobody authors them, a checked-in generator emits them, and reserving one only serialises a worker who does not need its content. Regenerate and commit it instead; verify-paths already exempts the resulting drift."
+
+                                ExitError
+                            else
+
                             match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
                             | Error e -> fail e
                             | Ok body ->
@@ -6332,7 +6373,18 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                             match touchSetOf rb with
                             | Error e -> failSchedule rb e
                             | Ok tsb ->
-                                match TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb with
+                                // .github#2305/ADR-0044 — the same exact-stem exclusion `activeCollisions`
+                                // applies: a pair attributable solely to a shared generated, CI-gated
+                                // artifact is not a real reservation either side needs defended.
+                                let generated =
+                                    match KitDigest.kitRoot () with
+                                    | Some root -> generatedPathCollector root
+                                    | None -> Set.empty
+
+                                match
+                                    TouchSet.scopedConflicts ra.Owner (pathRepoOf ra) rb.Owner (pathRepoOf rb) tsa tsb
+                                    |> TouchSet.excludeGenerated generated
+                                with
                                 | [] ->
                                     printfn "DISJOINT — %s and %s share no touch-set token; they may run in parallel." ra.Short rb.Short
                                     ExitGreen
