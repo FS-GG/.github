@@ -354,10 +354,10 @@ module DriverEventsTests =
         let projection = project cursor [ staleFacts ] 600L
 
         Assert.Empty(projection.Active)
-        match Map.tryFind ".github#1" projection.Cursor with
-        | Some Ready -> Assert.Fail "the terminal row was accepted as Ready — this is the exact regression the issue reports"
-        | Some(Unreadable _) -> ()
-        | other -> Assert.Fail $"expected Unreadable, got %A{other}"
+        // The PERSISTED cursor sticks at the original trusted fact (Done), never at the guard's own
+        // remedial Unreadable (repair round 2, .github#2375) — that stickiness is what lets the SAME
+        // guard fire again on a second consecutive stale read, covered below.
+        Assert.Equal(Some Done, Map.tryFind ".github#1" projection.Cursor)
         Assert.Single(projection.Transitions) |> ignore
         Assert.DoesNotContain("-> ready", (renderText projection).ToLowerInvariant())
 
@@ -369,7 +369,7 @@ module DriverEventsTests =
         match projection.Active |> List.tryFind (fun c -> c.Ref = ".github#1") with
         | Some _ -> Assert.Fail "a regressed terminal row must never appear in the active inventory"
         | None -> ()
-        Assert.False(projection.Cursor |> Map.exists (fun _ state -> state = Ready))
+        Assert.Equal(Some Released, Map.tryFind ".github#1" projection.Cursor)
 
     /// GATE-INVERSION EVIDENCE for `guardTerminalRegression`. Removing the guard (equivalent to
     /// `project` calling only `classify`, as it did before this fix) makes the assertion above fail:
@@ -388,17 +388,59 @@ module DriverEventsTests =
         Assert.Equal(Ready, Map.find ".github#1" unguardedCursor)
         Assert.Contains("no live claim; unclaimed and schedulable", events.[0].Reason)
 
+    // ---- repair round 2 (fsgg:independent-review:v1, .github#2375): a PERSISTENT stale/missing read
+    // ---- must keep failing the same guard on every cycle, not just the first ----------------------
+
+    [<Fact>]
+    let ``terminal-regression: PERSISTENT — two consecutive stale reads both refuse the Done->Ready regression, never just the first`` () =
+        let cursor = Map.ofList [ ".github#1", Done ]
+        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let firstRead = project cursor [ staleFacts ] 600L
+        Assert.Empty(firstRead.Active)
+        Assert.Single(firstRead.Transitions) |> ignore
+        Assert.DoesNotContain("-> ready", (renderText firstRead).ToLowerInvariant())
+
+        // The realistic production condition (the issue's own repro is TWO consecutive reads, 8
+        // minutes apart from the merge): the SAME stale facts arrive again, over the cursor THIS
+        // process returned from cycle 1 — not a fresh Map.empty.
+        let secondRead = project firstRead.Cursor [ staleFacts ] 700L
+        Assert.Empty(secondRead.Active)
+        Assert.Single(secondRead.Transitions) |> ignore
+        Assert.DoesNotContain("-> ready", (renderText secondRead).ToLowerInvariant())
+        Assert.Equal(Some Done, Map.tryFind ".github#1" secondRead.Cursor)
+
+    /// GATE-INVERSION EVIDENCE, round 2. `guardTerminalRegression` and `missingActiveRefs` are private
+    /// to this module, so this constructs the exact SHAPE round 1's non-sticky fold would have left the
+    /// cursor in after cycle 1 (`Unreadable` where cycle 1 found `Done`) directly, then feeds it to the
+    /// PUBLIC `project` for a second read. `Unreadable` is not `isTerminal`, so today's guard's own
+    /// `Map.tryFind` no longer matches it — proving that without the stickiness fix, this exact
+    /// production code accepts the regression on cycle 2, reproducing the critic's finding. This was
+    /// also verified by physically reverting the stickiness lines in `project` to a plain
+    /// `deriveEvents`-only fold and re-running the suite: exactly the two "PERSISTENT" facts above went
+    /// red (the round-1, single-cycle facts stayed green, because they only exercise cycle 1), restored
+    /// after observing the red, as `independent-review` requires.
+    [<Fact>]
+    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override accepts a second Ready regression`` () =
+        let nonStickyCursorAfterCycle1 =
+            Map.ofList [ ".github#1", Unreadable "stand-in for round-1's own non-sticky fold overwriting Done" ]
+
+        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+        let secondRead = project nonStickyCursorAfterCycle1 [ staleFacts ] 800L
+
+        Assert.Equal(Some Ready, Map.tryFind ".github#1" secondRead.Cursor)
+        Assert.Contains("no live claim; unclaimed and schedulable", secondRead.Transitions.[0].Reason)
+
     // ---- .github#2375 symptom 2 — the active inventory must never silently empty while claims are
     // ---- live (issue acceptance #1, #3) ------------------------------------------------------------
 
     [<Fact>]
     let ``missing-active-ref: three live claims the cursor remembers, entirely absent from this read's facts, are never rendered as "no active items"`` () =
-        let claimedState worker = Claimed worker
         let cursor =
             Map.ofList
-                [ "FS-GG/.github#2305", claimedState "smew-1ae8"
-                  "FS-GG/.github#2365", claimedState "crake-4bcd"
-                  "FS-GG/.github#2373", claimedState "finch-d23b" ]
+                [ "FS-GG/.github#2305", Claimed "smew-1ae8"
+                  "FS-GG/.github#2365", Claimed "crake-4bcd"
+                  "FS-GG/.github#2373", Claimed "finch-d23b" ]
 
         // The reproduction exactly: no intervening board change, but this read's facts batch is empty
         // — the shape a caller-side partial/failed scan produces.
@@ -406,12 +448,12 @@ module DriverEventsTests =
 
         Assert.False(List.isEmpty projection.Transitions, "a vanished active ref must still surface as a transition")
         Assert.Equal(3, List.length projection.Transitions)
-        // None of the three are silently dropped: each renders Unreadable, and none is "no active
-        // items" with zero explanation.
-        for ref in [ "FS-GG/.github#2305"; "FS-GG/.github#2365"; "FS-GG/.github#2373" ] do
-            match Map.tryFind ref projection.Cursor with
-            | Some(Unreadable _) -> ()
-            | other -> Assert.Fail $"%s{ref}: expected Unreadable, got %A{other}"
+        Assert.Empty(projection.Active)
+        // The PERSISTED cursor sticks at the original trusted fact (Claimed), never at the guard's own
+        // remedial Unreadable (repair round 2) — see the persistent-cycle fixture below for why.
+        Assert.Equal(Some(Claimed "smew-1ae8"), Map.tryFind "FS-GG/.github#2305" projection.Cursor)
+        Assert.Equal(Some(Claimed "crake-4bcd"), Map.tryFind "FS-GG/.github#2365" projection.Cursor)
+        Assert.Equal(Some(Claimed "finch-d23b"), Map.tryFind "FS-GG/.github#2373" projection.Cursor)
 
         let rendered = renderText projection
         Assert.DoesNotContain("no material transitions", rendered)
@@ -458,6 +500,43 @@ module DriverEventsTests =
               RenderedAt = 700L }
         let rendered = renderText unguardedProjection
         Assert.Equal("no material transitions\nno active items", rendered)
+
+    [<Fact>]
+    let ``missing-active-ref: PERSISTENT — two consecutive reads with the ref still missing both surface it, never falling silent after cycle one`` () =
+        let cursor = Map.ofList [ "FS-GG/.github#2305", Claimed "smew-1ae8" ]
+
+        let firstRead = project cursor [] 700L
+        Assert.Single(firstRead.Transitions) |> ignore
+        Assert.Empty(firstRead.Active)
+
+        // Cycle 2: the ref is STILL absent, over the cursor THIS process returned from cycle 1 — not a
+        // fresh Map.empty. Falling silent here (round 1's shipped behavior) is WORSE than the original
+        // bug report: silent forever rather than silent once.
+        let secondRead = project firstRead.Cursor [] 800L
+        Assert.False(
+            List.isEmpty secondRead.Transitions,
+            "a persistently-missing, previously-active ref must keep surfacing on every cycle, not just the first"
+        )
+        Assert.Single(secondRead.Transitions) |> ignore
+        Assert.Equal(Some(Claimed "smew-1ae8"), Map.tryFind "FS-GG/.github#2305" secondRead.Cursor)
+        Assert.DoesNotContain("no material transitions", renderText secondRead)
+
+    /// GATE-INVERSION EVIDENCE, round 2. `missingActiveRefs` is private, so this constructs the exact
+    /// SHAPE round 1's non-sticky fold would have left the cursor in after cycle 1 (`Unreadable` where
+    /// cycle 1 found `Claimed`) directly, then feeds it to the PUBLIC `project` for a second read.
+    /// `isActive` is false for `Unreadable`, so today's guard's own filter no longer matches it —
+    /// proving that without the stickiness fix, this exact production code falls silent on cycle 2,
+    /// reproducing the critic's "silent forever" finding. Also verified by physically reverting the
+    /// stickiness lines in `project` and re-running the suite: exactly the two "PERSISTENT" facts above
+    /// went red, restored after observing the red, as `independent-review` requires.
+    [<Fact>]
+    let ``gate-inversion: a cursor left at the round-1 (non-sticky) Unreadable override falls silent on the next missing read`` () =
+        let nonStickyCursorAfterCycle1 =
+            Map.ofList
+                [ "FS-GG/.github#2305", Unreadable "stand-in for round-1's own non-sticky fold overwriting Claimed" ]
+
+        let secondRead = project nonStickyCursorAfterCycle1 [] 800L
+        Assert.Empty(secondRead.Transitions)
 
     // ---- encode/decode round-trip — the cursor file's on-disk vocabulary --------------------------
 

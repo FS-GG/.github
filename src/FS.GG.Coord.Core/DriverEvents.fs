@@ -223,15 +223,44 @@ module DriverEvents =
     let project (cursor: Cursor) (facts: ItemFacts list) (observedAt: int64) : Projection =
         // Guard order matters: regressions are checked per-item over what THIS read produced, then the
         // cursor is checked for active refs this read produced NOTHING for at all. Both guards read the
-        // cursor, neither writes it — `deriveEvents` below is still the one place a cursor is derived,
-        // so a guarded/synthesized entry persists across reads exactly like any other classification.
-        let regressionGuarded = facts |> List.map (classify >> guardTerminalRegression cursor)
+        // cursor as their SOURCE OF TRUTH for "what did this ref last legitimately settle to".
+        let rawClassified = facts |> List.map classify
+        let regressionGuarded = rawClassified |> List.map (guardTerminalRegression cursor)
         let missing = missingActiveRefs cursor regressionGuarded observedAt
-        let classified = regressionGuarded @ missing
-        let events, newCursor = deriveEvents cursor classified
+        let reported = regressionGuarded @ missing
+
+        // Repair round 2 (fsgg:independent-review:v1, .github#2375): a naive fold would persist EVERY
+        // reported state into the cursor, including the guards' own remedial `Unreadable` — which is
+        // neither `isTerminal` nor `isActive`. That erases the very fact ("Done", "Claimed w") each
+        // guard re-reads the cursor for, so a SECOND consecutive stale/missing read (the realistic
+        // production condition — the issue's own repro is two consecutive reads, 8 minutes apart from
+        // the merge) finds a cursor the first guard already scrubbed and no longer fires: the terminal
+        // regression is accepted on cycle 2, and the missing-active ref falls silent forever instead of
+        // once. The cursor slot for every ref either guard touched therefore STICKS at its cursor-
+        // supplied value across this read — untouched by what got reported — so the next read's guard
+        // re-checks the SAME original fact, not its own prior override, for as long as the disagreement
+        // persists.
+        let overriddenRefs =
+            List.zip rawClassified regressionGuarded
+            |> List.choose (fun (raw, guarded) -> if raw.State <> guarded.State then Some guarded.Ref else None)
+            |> Set.ofList
+
+        let missingRefs = missing |> List.map (fun c -> c.Ref) |> Set.ofList
+        let stickyRefs = Set.union overriddenRefs missingRefs
+
+        let events, foldedCursor = deriveEvents cursor reported
+
+        let newCursor =
+            stickyRefs
+            |> Set.fold
+                (fun acc ref ->
+                    match Map.tryFind ref cursor with
+                    | Some original -> Map.add ref original acc
+                    | None -> acc)
+                foldedCursor
 
         { Transitions = events
-          Active = classified |> List.filter (fun c -> isActive c.State)
+          Active = reported |> List.filter (fun c -> isActive c.State)
           Cursor = newCursor
           RenderedAt = observedAt }
 
