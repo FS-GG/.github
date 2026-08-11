@@ -229,6 +229,27 @@ repos:
   # gap in whichever sweep owns that capability. `EHotwagner/rogue3` stays deliberately absent from
   # BOTH this block and `outside-fabric:` — see #2206's decision for why an exemption there would be
   # the wrong shape.
+  #
+  # `receives: []` IS THE ORG-FABRIC AXIS ONLY, NOT THE SKILLS AXIS (.github#2366). `receives:` is
+  # this file's controlled vocabulary — `labels`, `coordination-kit`, `build-config`, `lockfile-sync`,
+  # `contract-coherence`, `skill-union` (`KNOWN_CAPS`, scripts/repos.sh) — and it is honest and
+  # complete: `sir` genuinely takes none of THOSE. It is a SEPARATE question whether `sir` receives
+  # any product/driver SKILLS, and that question is governed entirely by `registry/skills.yml`'s
+  # `materializes-when` predicate, evaluated per-scaffold against `sir`'s own
+  # `scaffold-provenance.json` — a mechanism this file's `receives:` vocabulary has no word for and
+  # never did. `sir` was scaffolded from `FS.GG.Workspace.Template` and materialized ~26 skills
+  # (16 `fs-gg-sdd-*`, `pnext-item`, `check-board`, `work-board`/`-best`/`-normal`, `work-roadmap`,
+  # and — the gap `.github#2366` traced — everything except `fs-gg-feedback-report`, whose registry
+  # row says `materializes-when: always` and should have been included). Read `receives: []` as
+  # "zero org-fabric participation", never as "delivered nothing" — the skills axis is real, already
+  # governed elsewhere, and simply not this field's business.
+  #
+  # NAMED GAP, NOT A SILENT ONE: no script in `.github`'s `Paths:` for #2366 (`scripts/repos.sh`,
+  # `scripts/repos-audit.sh`) mechanically grades a roster row's delivered skill set against
+  # `registry/skills.yml` — both scripts are outside that item's declared touch-set. Wiring that
+  # grading (so `repos-audit` can compare "what `registry/skills.yml` says a tree like this should
+  # have" against "what its own `scaffold-provenance.json` + skill roots actually carry") is a named
+  # follow-up, not done here.
   - { id: sir,         full: EHotwagner/S.I.R.,      role: non-participant, receives: [],
       reason: "user-owned and doing org work — S.I.R.#138 is a child of epic .github#2067 M6 and an open blocker on the .github#2070 release epic; it takes no org fabric" }
 

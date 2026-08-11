@@ -4,6 +4,15 @@ The host gives every claimed item worker one stable lowercase cycle id:
 `item-<issue-number>-<slug>`. The id is part of the initial worker brief and remains unchanged through
 review and merge.
 
+> If `.agents/skills/fs-gg-feedback-report/` (and its `.claude/` twin) is absent even though
+> `fs-gg-sdd-*` is present, this tree is a **partial product materialization**, not evidence the
+> board-driven loop does not apply here — the registry (`.github`'s `registry/skills.yml`) declares
+> `fs-gg-feedback-report` unconditionally materialized for every tree that receives this driver, so
+> the gap is a delivery defect (see `work-roadmap`'s `deep-detail.md` "Where this runs" for the same
+> three-state classification, which applies identically here). Do not stop the loop and do not
+> fabricate a substitute out-of-workspace tool path; record the zero-event reason below and
+> raise/dedupe one finding against the tree's scaffold provenance, `.github#2366`.
+
 At onboarding/first build, lifecycle authoring when used, the first implementation-test-evidence loop,
 and verify/ship/PR orchestration, invoke `fs-gg-feedback-report` and decide whether a material
 checkpoint qualifies. Append qualifying friction, rework, capability gaps, documentation defects,

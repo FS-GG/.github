@@ -17,12 +17,29 @@ across many disposable workers, driven off one markdown file.**
 
 ## Where this runs
 
-A **scaffolded fsgg-sdd product repo** — one where `fs-gg-sdd-*` (the lifecycle skills) and
-`fs-gg-feedback-report` are materialized. If those skills are not present, you are in the wrong tree
-(e.g. FS-GG/.github itself, a kit source, does not materialize them) and this skill has nothing to
-drive. Stop and say so rather than degrading into a plain edit loop — the whole value here is the
-SDD-per-milestone discipline. Feedback checkpoints are agent-invoked JSONL events owned by
-`fs-gg-feedback-report`; they are not Spec Kit hooks and work on every lifecycle lane.
+Classify the tree by which of `fs-gg-sdd-*` (the lifecycle skills) and `fs-gg-feedback-report` are
+materialized. There are three states, not two — a tree can satisfy one half without the other
+(`.github#2366`), and the two halves get different remedies:
+
+- **Kit source (neither half present)** — e.g. `FS-GG/.github` itself, which is the source of these
+  skills, not a scaffold of them. This skill has nothing to drive. Stop and say so rather than
+  degrading into a plain edit loop — the whole value here is the SDD-per-milestone discipline.
+- **Full product tree (both halves present)** — proceed normally. Feedback checkpoints are
+  agent-invoked JSONL events owned by `fs-gg-feedback-report`; they are not Spec Kit hooks and work
+  on every lifecycle lane.
+- **Partial product materialization (`fs-gg-sdd-*` present, `fs-gg-feedback-report` absent)** — this
+  is a genuine, working product tree with an incomplete skill delivery, **not** the wrong tree; the
+  registry (`.github`'s `registry/skills.yml`) declares `fs-gg-feedback-report` unconditionally
+  materialized (`materializes-when: always`) for every tree that receives this driver, so the gap is
+  a delivery defect, not evidence you are somewhere this skill does not belong. Do **not** stop, and
+  do **not** fabricate a substitute out-of-workspace tool path (a workaround that then has to be
+  remembered and re-applied every cycle, `.github#2366`'s "Recorded cost" table — eight of ten
+  independent cycles rediscovered exactly this). Instead: proceed with the loop; when a feedback
+  checkpoint step is reached, record it per the feedback contract's zero-event envelope with the
+  reason `fs-gg-feedback-report not materialized in this tree (see .github#2366)`; and raise or
+  dedupe **one** finding against the tree's own scaffold provenance (not against `work-roadmap`
+  itself) so the gap is fixed at its source rather than rediscovered by the next milestone's worker.
+  See `feedback-contract.md`'s note for the exact commands this affects.
 
 Preconditions, checked once before the loop:
 
