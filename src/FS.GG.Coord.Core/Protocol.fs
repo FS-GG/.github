@@ -75,10 +75,19 @@ module Protocol =
     // ---- MARKER GRAMMAR TYPES (.github#2399) ----------------------------------------------------------
     // See Protocol.fsi for the design rationale. `occurrences` is a fresh, directly-tested
     // implementation of the same rule `Driver.fs`'s private `leadingMarkerBlock`/`canonicalOccurrences`/
-    // `competingMarker` enforce for `LeadingBlock`, plus the `LeadingLine` rule #83758ec3/#d86ded2a
-    // fixed for the delivery markers — Driver.fs itself is out of this item's `Paths:` and is not
-    // rewired to call this; `ProtocolTests` pins this function's `LeadingBlock` behaviour against
-    // `Driver.parseReviewComments`'s OWN observed behaviour so the two cannot silently disagree.
+    // `competingMarker`/`annotateQuotedRegions`/`misplacedMarkerKinds` enforce for `LeadingBlock`, plus
+    // the `LeadingLine` rule #83758ec3/#d86ded2a fixed for the delivery markers — Driver.fs itself is
+    // out of this item's `Paths:` and is not rewired to call this; `ProtocolTests` pins this function's
+    // `LeadingBlock` behaviour DIRECTLY against `Driver.parseReviewComments`'s OWN observed behaviour
+    // (calling it on the same body, not merely hardcoding an expectation with the same name) so the two
+    // cannot silently disagree.
+    //
+    // REPAIR ROUND 1 (.github#2399 independent review): the first version of this function treated
+    // EVERY out-of-block occurrence as `Quoted`/inert. `Driver.fs` does not: it refuses an unfenced,
+    // unindented, out-of-block occurrence by name as a MISPLACED marker (`.github#2221`,
+    // `misplacedMarkerKinds`) rather than reading it as harmless. `MarkerOccurrence.Misplaced` and the
+    // markdown-quotation-aware branch below are the fix — see `MarkerOccurrence.Misplaced`'s own doc
+    // comment in `Protocol.fsi` for the one remaining, documented, safe-direction approximation.
     type MarkerId = string
 
     type MarkerAnchor =
@@ -89,6 +98,7 @@ module Protocol =
     type MarkerOccurrence =
         | Live of raw: string
         | Quoted
+        | Misplaced of raw: string
         | Competing of raw: string
 
     type Marker = { Id: MarkerId; Anchor: MarkerAnchor }
@@ -128,14 +138,52 @@ module Protocol =
             let leadingCount = List.length leadingBlock
             let canonicalInBlock = leadingBlock |> List.filter ((=) wireText) |> List.length
 
+            // Markdown-quotation regions — a fence (```/~~~) or a genuinely 4-space/tab-indented block
+            // — mirror `Driver.fs`'s `annotateQuotedRegions` (Driver.fs:272-286) exactly, byte for byte,
+            // so `Quoted` here means what `Driver.fs` means by it (repair round 1, .github#2399: the
+            // prior version treated EVERY out-of-block occurrence as `Quoted`, which disagreed with
+            // `Driver.fs`'s `misplacedMarkerKinds` for the unfenced/unindented case).
+            let quotedByMarkdown =
+                let mutable inFence = false
+
+                lines
+                |> List.map (fun line ->
+                    let trimmed = line.TrimStart()
+                    let isDelimiter = trimmed.StartsWith "```" || trimmed.StartsWith "~~~"
+
+                    if isDelimiter then
+                        inFence <- not inFence
+
+                    let indentedCodeBlock =
+                        trimmed <> "" && (line.StartsWith "    " || line.StartsWith "\t")
+
+                    isDelimiter || inFence || indentedCodeBlock)
+                |> List.toArray
+
             lines
             |> List.mapi (fun index line ->
-                if line <> wireText then
-                    None
-                elif index < leadingCount then
-                    if canonicalInBlock > 1 then Some(Competing wireText) else Some(Live wireText)
+                if index < leadingCount then
+                    // Membership in the leading block already required EXACT (untrimmed) equality via
+                    // `takeWhile`, so a line here either IS this marker's canonical text or it is some
+                    // OTHER known marker's — never a near-miss.
+                    if line = wireText then
+                        if canonicalInBlock > 1 then Some(Competing wireText) else Some(Live wireText)
+                    else
+                        None
                 else
-                    Some Quoted)
+                    // Outside the block, `Driver.fs`'s `misplacedMarkerKinds` compares the TRIMMED line
+                    // (Driver.fs:298, `trimmed = markerText name`) — not the untrimmed equality block
+                    // membership uses — so a marker pushed off the block by ONE LEADING SPACE (the
+                    // exact #2221 escape at `DriverTests.fs`'s misplaced-marker test) still counts as an
+                    // occurrence here.
+                    let trimmed = line.Trim()
+
+                    if trimmed <> wireText then
+                        None
+                    elif quotedByMarkdown[index] then
+                        Some Quoted
+                    else
+                        Some(Misplaced wireText))
             |> List.choose id
         | AnywhereInBody ->
             // Legacy/unanchored: every canonical whole-line occurrence anywhere in the body counts, and

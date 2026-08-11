@@ -91,33 +91,120 @@ module ProtocolTests =
     let ``markerWireText renders the same wrapping Driver.fs has always used`` () =
         Assert.Equal("<!-- fsgg:independent-review:v1 -->", Protocol.markerWireText "independent-review")
 
+    /// CROSS-VALIDATED AGAINST THE ENGINE IT MODELS, NOT ONLY AGAINST ITSELF (.github#2399 repair
+    /// round 1). The round-1 version of this test asserted hardcoded `occurrences` expectations under a
+    /// name that promised a check against `Driver.parseReviewComments` — and never called it, so it
+    /// could not have caught `occurrences` disagreeing with the engine it replaces. It did: the first
+    /// implementation read EVERY out-of-block occurrence as `Quoted`/inert, where `Driver.fs`'s
+    /// `misplacedMarkerKinds` (.github#2221) refuses an unfenced, unindented one BY NAME as misplaced —
+    /// pinned at `DriverTests.fs`'s `` #2221 a misplaced marker is refused by name, not silently
+    /// dropped `` test, and reproduced live by the independent critic on this exact PR. Every case below
+    /// now asserts BOTH `occurrences`' verdict AND `Driver.parseReviewComments`' actual behaviour on the
+    /// SAME body, so a future disagreement reds here rather than only looking plausible.
     [<Fact>]
     let ``occurrences classifies a LeadingBlock marker exactly as Driver.parseReviewComments does`` () =
         let marker: Protocol.Marker =
             { Id = "independent-review-repair-phase"; Anchor = Protocol.LeadingBlock }
 
-        // A fenced quotation is inert: outside the leading block, so Quoted — never Live.
-        let quotedBody = "Post this:\n\n```\n<!-- fsgg:independent-review-repair-phase:v1 -->\n```\n"
+        let wireText = Protocol.markerWireText marker.Id
+
+        let bystander body : Driver.ReviewComment =
+            { Id = 1L; Url = "https://reviews/bystander-1"; Body = body }
+
+        // A fenced quotation is inert to BOTH: occurrences reads Quoted, and Driver raises no error
+        // naming this marker at all.
+        let quotedBody = $"Post this:\n\n```\n%s{wireText}\n```\n"
 
         Assert.Equal<Protocol.MarkerOccurrence list>(
             [ Protocol.Quoted ],
             Protocol.occurrences reviewFamilyWireTexts marker quotedBody)
 
-        // The SAME canonical marker, twice in the comment's own leading block: both Competing, never Live.
-        let competingBody =
-            "<!-- fsgg:independent-review-repair-phase:v1 -->\n<!-- fsgg:independent-review-repair-phase:v1 -->\n"
+        match Driver.parseReviewComments [ bystander quotedBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "independent-review-repair-phase"),
+                $"Driver.parseReviewComments read the fenced quotation as live, disagreeing with occurrences' Quoted: %A{errors}")
+
+        // The SAME canonical marker, twice in the comment's own leading block: both Competing, and
+        // Driver refuses it by the same "repeated in the leading marker block" name.
+        let competingBody = $"%s{wireText}\n%s{wireText}\n"
 
         Assert.Equal<Protocol.MarkerOccurrence list>(
-            [ Protocol.Competing "<!-- fsgg:independent-review-repair-phase:v1 -->"
-              Protocol.Competing "<!-- fsgg:independent-review-repair-phase:v1 -->" ],
+            [ Protocol.Competing wireText; Protocol.Competing wireText ],
             Protocol.occurrences reviewFamilyWireTexts marker competingBody)
 
-        // A lone canonical marker as the comment's entire leading block: Live.
-        let liveBody = "<!-- fsgg:independent-review-repair-phase:v1 -->\n"
+        match Driver.parseReviewComments [ bystander competingBody ] with
+        | Ok _ -> failwith "a repeated canonical leading marker must fail closed"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "repeated in the leading marker block"),
+                $"Driver.parseReviewComments did not refuse the marker occurrences classifies Competing: %A{errors}")
+
+        // A lone canonical marker as the comment's entire leading block: Live, and Driver raises no
+        // "misplaced" complaint about it (it fails for the unrelated reason that no chain is complete).
+        let liveBody = $"%s{wireText}\n"
 
         Assert.Equal<Protocol.MarkerOccurrence list>(
-            [ Protocol.Live "<!-- fsgg:independent-review-repair-phase:v1 -->" ],
+            [ Protocol.Live wireText ],
             Protocol.occurrences reviewFamilyWireTexts marker liveBody)
+
+        match Driver.parseReviewComments [ bystander liveBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "leading marker"),
+                $"Driver.parseReviewComments read the sole leading marker as misplaced, disagreeing with occurrences' Live: %A{errors}")
+
+        // THE REPAIR ITSELF: an unfenced, unindented, OUT-OF-BLOCK canonical marker — the exact shape
+        // the independent critic measured `occurrences` and `Driver.parseReviewComments` disagreeing on.
+        // Both must now refuse it: occurrences as Misplaced, Driver by name as a marker that "stands on
+        // its own line but is not the comment's leading marker".
+        let misplacedBody = $"Some prose.\n%s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Misplaced wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker misplacedBody)
+
+        match Driver.parseReviewComments [ bystander misplacedBody ] with
+        | Ok _ -> failwith "a misplaced marker must fail closed, not be silently dropped as a quotation"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "is not the comment's leading marker"),
+                $"occurrences classifies this Misplaced but Driver.parseReviewComments did not refuse it: %A{errors}")
+
+        // ONE LEADING SPACE pushes the marker out of the leading block under UNTRIMMED equality (the
+        // block-membership test), but `Driver.fs`'s misplaced-detection compares the TRIMMED line — the
+        // exact #2221 "escape 1" shape (`DriverTests.fs`, one-leading-space confirmation marker).
+        // occurrences must agree it is still an occurrence, not silently invisible.
+        let oneSpaceBody = $" %s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Misplaced wireText ],
+            Protocol.occurrences reviewFamilyWireTexts marker oneSpaceBody)
+
+        match Driver.parseReviewComments [ bystander oneSpaceBody ] with
+        | Ok _ -> failwith "a one-leading-space misplaced marker must fail closed"
+        | Error errors ->
+            Assert.True(
+                errors |> List.exists (fun e -> e.Contains "is not the comment's leading marker"),
+                $"occurrences classifies this Misplaced but Driver.parseReviewComments did not refuse it: %A{errors}")
+
+        // A FOUR-SPACE indent is markdown's own way of showing the marker, not posting it — Driver.fs's
+        // `annotateQuotedRegions` reads it as quoted (Driver.fs:270's own comment: "four is somebody
+        // showing you the marker"), so occurrences must too, and Driver raises no complaint.
+        let indentedBody = $"Example:\n\n    %s{wireText}\n"
+
+        Assert.Equal<Protocol.MarkerOccurrence list>(
+            [ Protocol.Quoted ],
+            Protocol.occurrences reviewFamilyWireTexts marker indentedBody)
+
+        match Driver.parseReviewComments [ bystander indentedBody ] with
+        | Ok _ -> failwith "a lone bystander comment cannot itself satisfy the review chain"
+        | Error errors ->
+            Assert.False(
+                errors |> List.exists (fun e -> e.Contains "independent-review-repair-phase"),
+                $"Driver.parseReviewComments read the 4-space-indented marker as live, disagreeing with occurrences' Quoted: %A{errors}")
 
     /// THE REGRESSION #83758ec3/#d86ded2a FIXED, RECONSTRUCTED AGAINST THE TYPE. Both commits corrected
     /// the SAME defect for the delivery-obligation/receipt/none and delivery-route markers: each was

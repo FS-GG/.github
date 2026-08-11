@@ -240,10 +240,39 @@ module Protocol =
         /// A canonical occurrence inside the marker's anchor region, and the only one there — the
         /// occurrence a reader acts on.
         | Live of raw: string
-        /// A canonical occurrence OUTSIDE the marker's anchor region — a fenced/quoted example, prose
-        /// that mentions the marker, or (for `LeadingLine`/`LeadingBlock`) any line the anchor does not
-        /// reach. Inert: never evidence, never an error by itself.
+        /// A canonical occurrence OUTSIDE the marker's anchor region that markdown ITSELF marks as
+        /// quotation — inside a fence (`` ``` ``/`~~~`) or a genuinely 4-space/tab-indented block,
+        /// mirroring `Driver.fs`'s `annotateQuotedRegions` (Driver.fs:272-286) exactly, so this means
+        /// what `Driver.fs` means by it. Inert: never evidence, never an error by itself. (Revised
+        /// .github#2399 repair round 1: previously this case covered EVERY out-of-region occurrence,
+        /// which disagreed with `Driver.fs` for the unfenced/unindented case — see `Misplaced`.)
         | Quoted
+        /// A canonical occurrence OUTSIDE the marker's anchor region that markdown does NOT mark as
+        /// quotation — sitting on its own line, unfenced and unindented. `Driver.fs`'s
+        /// `misplacedMarkerKinds` (Driver.fs:288-311) refuses exactly this shape by name (`.github#2221`,
+        /// pinned at `DriverTests.fs`'s `` #2221 a misplaced marker is refused by name, not silently
+        /// dropped `` test) rather than treating it as an inert quotation: a critic or contributor who
+        /// wrote it clearly meant to post the marker, just not where the protocol requires it, and "I
+        /// found bytes I could not interpret" must not silently become "I read nothing wrong". Only
+        /// meaningfully produced for `LeadingBlock` today — `LeadingLine`/`AnywhereInBody` markers have
+        /// no `Misplaced` concept in their production code (`DeliveryApplication.fs`/`Client.fs`, out of
+        /// this item's `Paths:`).
+        ///
+        /// `Driver.fs` narrows this ONE STEP further for a marker carrying field grammar
+        /// (`Protocol.markerFieldGrammar`'s `RequiredFields` non-empty): it treats a structurally
+        /// misplaced occurrence as harmless when the comment ALSO writes no OTHER protocol field
+        /// anywhere in the body (`writesProtocolFields`, Driver.fs:290-295) — a whole-body,
+        /// cross-marker heuristic over the full protocol field vocabulary (route-evidence and
+        /// diff-audit fields included), not a per-marker anchor fact. `occurrences` does not model that
+        /// second gate, so for a field-grammar-bearing marker this case is a conservative
+        /// OVER-approximation of `Driver.fs`'s true refusal set: every occurrence `Driver.fs` actually
+        /// refuses is `Misplaced` here too (the structural condition is a prerequisite `Driver.fs`
+        /// checks first), but not every `Misplaced` here is one `Driver.fs` refuses. The asymmetry is
+        /// safe in the direction that matters — this function never reports `Quoted`/inert for an
+        /// occurrence `Driver.fs` would refuse — and is exact (no approximation at all) for a marker
+        /// with EMPTY field grammar (escalation, repair-phase), where `Driver.fs`'s own gate is
+        /// unconditional.
+        | Misplaced of raw: string
         /// A second (or later) canonical occurrence of the SAME marker INSIDE its own anchor region. A
         /// marker kind has exactly one meaning per comment, so every occurrence in the region is
         /// `Competing` when more than one is present — refused rather than resolved by "first wins".
@@ -261,8 +290,10 @@ module Protocol =
     /// of wire texts `LeadingBlock` needs to know the leading block's extent — a leading run mixing two
     /// different known markers is still one leading block (.github#2221) — and is ignored by
     /// `LeadingLine`/`AnywhereInBody`, which need no family context. Total: this is the
-    /// quoted-versus-competing rule of #2221/#2248 and the leading-line rule of #83758ec3/#d86ded2a,
-    /// stated once as a function instead of re-derived prose per call site.
+    /// quoted-versus-misplaced-versus-competing rule of #2221/#2248 and the leading-line rule of
+    /// #83758ec3/#d86ded2a, stated once as a function instead of re-derived prose per call site. See
+    /// `MarkerOccurrence.Misplaced` for the one documented, safe-direction approximation this makes
+    /// relative to `Driver.fs` for a field-grammar-bearing marker.
     val occurrences: knownMarkerTexts: string list -> marker: Marker -> body: string -> MarkerOccurrence list
 
     /// Renders the prose equivalent of `marker`'s anchor rule, dispatched over `MarkerAnchor` rather
