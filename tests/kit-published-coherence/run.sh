@@ -257,17 +257,31 @@ prarm 0.8.1
 must_fail "a prerelease <Version> cannot discharge a republish obligation" "cannot discharge a republish obligation"
 
 # Fail-closed reads. Each is a NO-VERDICT, and a no-verdict is RED (#1597 AC3).
+#
+# .github#2402 moved `declared_kit_version` off a raw `<Version>` regex onto the SAME
+# `dotnet msbuild -getProperty:Version` evaluation `check-engine-freshness.py` /
+# `check-engine-release-notes.py` already use ("never a grep" — a regex would misread the coherent
+# set's `<Version>$(FsggCoherentSetVersion)</Version>` reference as the literal token
+# `$(FsggCoherentSetVersion)`, not a version). The three fail-closed shapes below are re-expressed
+# against what REAL evaluation actually does, verified directly against `dotnet msbuild` rather than
+# assumed: a missing project file is an MSBuild error (still no-verdict); a project with no `<Version>`
+# property evaluates cleanly to an EMPTY string (still no-verdict, now for a different reason); and
+# "two `<Version>` elements" stopped being an ambiguity MSBuild can even see — a real project resolves
+# duplicate property definitions by ITS OWN well-defined last-definition-wins rule (verified: two
+# `<PropertyGroup>`s each declaring `<Version>` evaluate to the LAST one, not an error) — so that case
+# is replaced with the shape that IS still a real MSBuild failure: `<Version>` declared directly under
+# `<Project>`, outside any `<PropertyGroup>`, which MSBuild itself rejects as unrecognized (MSB4067).
 csproj 0.9.0
 prarm 0.8.1 --csproj "$WORK/no-such.csproj"
-must_fail "an unreadable csproj is a no-verdict" "cannot read"
+must_fail "an unreadable csproj is a no-verdict" "could not evaluate"
 
 printf '<Project></Project>\n' > "$CSPROJ"
 prarm 0.8.1
-must_fail "a csproj with no <Version> is a no-verdict" "declares 0 <Version> element(s)"
+must_fail "a csproj with no <Version> is a no-verdict" "evaluates to an empty Version"
 
-printf '<Project>\n<Version>1.0.0</Version>\n<Version>2.0.0</Version>\n</Project>\n' > "$CSPROJ"
+printf '<Project>\n<Version>1.0.0</Version>\n</Project>\n' > "$CSPROJ"
 prarm 0.8.1
-must_fail "an ambiguous multi-<Version> csproj is a no-verdict" "declares 2 <Version> element(s)"
+must_fail "a <Version> declared outside any PropertyGroup is a no-verdict" "could not evaluate"
 
 csproj 0.9.0
 set +e

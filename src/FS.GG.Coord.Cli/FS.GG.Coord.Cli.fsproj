@@ -88,8 +88,16 @@
          This property is the RELEASE ACT (see scripts/check-engine-freshness.py): the engine's version
          moves only at release time, by hand, and release-coord-engine.yml evaluates it with
          `dotnet msbuild -getProperty:Version` and refuses any `coord-engine/v[version]` tag that
-         disagrees. The tag is a coherence check against this line and never its source. -->
-    <Version>0.23.0</Version>
+         disagrees. The tag is a coherence check against this line and never its source.
+
+         0.23.0 is now the LAST independent literal this project declares (.github#2402). FS.GG.Kit,
+         FS.GG.Drivers and this engine are a coherent set: one MSBuild property,
+         $(FsggCoherentSetVersion) (Directory.Build.props), carries all three <Version> elements from
+         here on, so a bump to one moves all three and the three cannot diverge from each other again.
+         KEEP THIS PROPERTY IN STEP WITH THE ONE AT LINE ~127 (PackageReleaseNotes) EXACTLY AS BEFORE —
+         that requirement (.github#1762) is unaffected by where the literal now lives; only the source
+         of the literal moved. -->
+    <Version>$(FsggCoherentSetVersion)</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
@@ -112,7 +120,26 @@
          release's break and none of its own seven commits. Nothing gates the two against each other
          (.github#1762). A consumer who reads the listing and finds the wrong release described has been
          failed by it exactly as much as one who finds nothing. -->
-    <PackageReleaseNotes>0.23.0 — MINOR on the 0.x line: `driver --events [--cursor FILE]` (.github#2135,
+    <PackageReleaseNotes>0.49.0 — VERSIONING-SCHEME CHANGE, NOT A BEHAVIOR CUT (.github#2402):
+FS.GG.Coord.Cli's `&lt;Version&gt;` is no longer this project's own independent literal. FS.GG.Kit,
+FS.GG.Drivers and this engine are now released from one shared MSBuild property
+($(FsggCoherentSetVersion), Directory.Build.props), so a bump to any one of the three moves all
+three together and the three cannot diverge from each other the way FS.GG.Kit 0.49.0 and
+FS.GG.Drivers 0.18.0 diverged from this engine's 0.23.0 twenty minutes apart on 2026-08-10
+(commits f26da6ed/d48e1ec2). 0.49.0 is FS.GG.Kit's version at the time the set was declared — the
+highest of the three prior independent versions, so adopting the shared scalar cannot make any
+member appear to downgrade (see docs/registry/compatibility.md for the full migration note).
+
+THIS IS NOT THE USUAL PATCH/MINOR CLASSIFICATION. `git diff coord-engine/v0.23.0..HEAD --
+src/FS.GG.Coord.Core/Protocol.fs src/FS.GG.Coord.Cli/Options.fs` is empty: no verb, flag, help
+entry, render name, result name or exit code is added, removed or re-spelled by this cut, which
+under this repository's usual 0.x rule would make it a PATCH. The jump from 0.23.0 to 0.49.0 is
+instead dictated entirely by the coherent-set adoption above, stated here rather than left to look
+like an unexplained large PATCH-shaped bump.
+
+PREVIOUS RELEASE NOTES (0.23.0):
+
+0.23.0 — MINOR on the 0.x line: `driver --events [--cursor FILE]` (.github#2135,
 PR #2327) derives material transitions and the complete active-item inventory from live board/claim/
 PR/review/delivery facts, with an optional durable idempotency cursor file — a caller-visible flag,
 help entry, and render mode `driver` did not have before. Two repair rounds close #2135's residue:
