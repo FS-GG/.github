@@ -42,7 +42,7 @@ module SchedulabilityTests =
           PreviousStatus = Some Backlog }
 
     /// The default question: no backlog fallback, nothing in flight.
-    let private ask it = schedulable false [] it
+    let private ask it = schedulable Set.empty false [] it
 
     // ================================================================================================
     // THE HAPPY PATH — and it must be the ONLY green.
@@ -99,7 +99,7 @@ module SchedulabilityTests =
     let ``#437 ...and NoStatus is NOT Backlog, even with the backlog fallback on`` () =
         // If `NoStatus` silently read as `Backlog`, `--include-backlog` would quietly start scheduling
         // items nobody had triaged. It must stay unstartable, and it must stay NAMED.
-        Assert.Equal(WrongStatus NoStatus, schedulable true [] { item 3 with Status = NoStatus })
+        Assert.Equal(WrongStatus NoStatus, schedulable Set.empty true [] { item 3 with Status = NoStatus })
 
     // ================================================================================================
     // #440 / #488 — A FULL QUEUE MUST NOT READ AS AN EMPTY ONE.
@@ -111,11 +111,11 @@ module SchedulabilityTests =
 
     [<Fact>]
     let ``#440 a Backlog item is startable when the backlog fallback is on`` () =
-        Assert.Equal(Startable, schedulable true [] { item 4 with Status = Backlog })
+        Assert.Equal(Startable, schedulable Set.empty true [] { item 4 with Status = Backlog })
 
     [<Fact>]
     let ``#440 ...and is NOT startable when it is off — the fallback is a decision, not a default`` () =
-        Assert.Equal(WrongStatus Backlog, schedulable false [] { item 4 with Status = Backlog })
+        Assert.Equal(WrongStatus Backlog, schedulable Set.empty false [] { item 4 with Status = Backlog })
 
     // ================================================================================================
     // #496 — TWO DEATHS, TWO DIAGNOSES.
@@ -270,14 +270,69 @@ module SchedulabilityTests =
     let ``an item overlapping in-flight work is not startable, and the verdict names the collision`` () =
         let inFlight = [ Declared [ Matchable "src/Scene/**" ] ]
 
-        match schedulable false inFlight (item 13) with
+        match schedulable Set.empty false inFlight (item 13) with
         | OverlapsInFlight hits -> Assert.NotEmpty hits
         | other -> failwith $"expected OverlapsInFlight, got %A{other}"
 
     [<Fact>]
     let ``an item disjoint from everything in flight is startable`` () =
         let inFlight = [ Declared [ Matchable "src/Audio/**" ] ]
-        Assert.Equal(Startable, schedulable false inFlight (item 14))
+        Assert.Equal(Startable, schedulable Set.empty false inFlight (item 14))
+
+    // ---- .github#2305 / ADR-0044: generated, CI-gated artifacts do not block `take` ------------------
+    //
+    // The critic's repair-1 finding: `overlap`/`activeCollisions` (`Client.fs`) excluded a shared
+    // generated-artifact token from a collision verdict, but the live `take`/`batch` scheduling path
+    // (`Schedulability.schedulable`, reached via `Batch.scheduleWith`) did not — so a real `take` could
+    // still refuse two items whose actual subjects never collided, only a file neither of them authors.
+    // Reconstructs the row's own measured instance: `.github#2254` in flight holding
+    // `registry/driver-skill-manifest.json` (among its real files), `.github#2248` asking to start with
+    // the SAME generated token declared, real subjects otherwise disjoint.
+
+    [<Fact>]
+    let ``#2305 an item overlapping in-flight work SOLELY on a generated artifact token is Startable, given the roster`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+
+        let inFlight =
+            [ Declared
+                  [ Matchable ".claude/skills/drive-board/SKILL.md"
+                    Matchable "registry/driver-skill-manifest.json" ] ]
+
+        let candidate =
+            { item 2248 with
+                TouchSet =
+                    Declared
+                        [ Matchable ".claude/skills/pnext-item/references/independent-review.md"
+                          Matchable "registry/driver-skill-manifest.json" ] }
+
+        // WITHOUT the roster: today's pre-repair-1 defect (the negation this test would have asserted
+        // before the fix — the gate-inversion mutation reproduces this exact result).
+        match schedulable Set.empty false inFlight candidate with
+        | OverlapsInFlight hits -> Assert.NotEmpty hits
+        | other -> failwith $"expected the unaware call to still collide (this is the PRE-repair baseline); got %A{other}"
+
+        // WITH the roster: the repair. The real subjects never collided.
+        Assert.Equal(Startable, schedulable generated false inFlight candidate)
+
+    [<Fact>]
+    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still overlaps (#309 trap)`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let inFlight = [ Declared [ Matchable "registry/**" ] ]
+        let candidate = { item 15 with TouchSet = Declared [ Matchable "registry/driver-skill-manifest.json" ] }
+
+        match schedulable generated false inFlight candidate with
+        | OverlapsInFlight hits -> Assert.NotEmpty hits
+        | other -> failwith $"a directory-prefix claim over the parent must still block; got %A{other}"
+
+    [<Fact>]
+    let ``#2305 negative control — a genuinely shared non-generated path still overlaps (FS.GG.Kit Version shape)`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+        let inFlight = [ Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ] ]
+        let candidate = { item 16 with TouchSet = Declared [ Matchable "src/FS.GG.Kit/FS.GG.Kit.csproj" ] }
+
+        match schedulable generated false inFlight candidate with
+        | OverlapsInFlight hits -> Assert.NotEmpty hits
+        | other -> failwith $"a genuine single-writer field absent from the generated roster must still block; got %A{other}"
 
     // ================================================================================================
     // ORDER IS PART OF THE SPEC.
@@ -328,7 +383,7 @@ module SchedulabilityTests =
               ask { item 28 with Claim = Some(claim "w", LivenessUnknown) }
               ask { item 29 with HumanBlock = Some AwaitingHumanDecision }
               ask { item 30 with HumanBlock = Some AwaitingHumanAction }
-              schedulable false [ Declared [ Matchable "src/Scene/**" ] ] (item 31) ]
+              schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] (item 31) ]
 
         for v in verdicts do
             let reason = explain 120 (item 1) v
@@ -355,7 +410,7 @@ module SchedulabilityTests =
     let ``#1887 Class decision refuses Backlog even when the caller opts into Backlog`` () =
         Assert.Equal(
             AwaitingHuman AwaitingHumanDecision,
-            schedulable
+            schedulable Set.empty
                 true
                 []
                 { item 1887 with
@@ -390,7 +445,7 @@ module SchedulabilityTests =
         // in does not defeat it.
         Assert.Equal(
             AwaitingHuman AwaitingHumanDecision,
-            schedulable true [] { item 918 with Status = Backlog; HumanBlock = Some AwaitingHumanDecision })
+            schedulable Set.empty true [] { item 918 with Status = Backlog; HumanBlock = Some AwaitingHumanDecision })
 
     [<Fact>]
     let ``a human/action sentinel refuses too, carrying its own case`` () =
@@ -425,4 +480,4 @@ module SchedulabilityTests =
     let ``a chore conflicts with nothing — startable even beside in-flight work on any files`` () =
         Assert.Equal(
             Startable,
-            schedulable false [ Declared [ Matchable "src/Scene/**" ] ] { item 43 with TouchSet = DeclaredChore })
+            schedulable Set.empty false [ Declared [ Matchable "src/Scene/**" ] ] { item 43 with TouchSet = DeclaredChore })

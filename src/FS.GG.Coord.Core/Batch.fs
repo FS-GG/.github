@@ -441,7 +441,11 @@ module Batch =
             [ $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})" ]
         | _ -> TouchSet.unmatchable r.Paths
 
+    /// `generated` (.github#2305/ADR-0044) is threaded straight to `Schedulability.schedulable`'s own
+    /// step 6 below — see its doc for the exact-stem-only exclusion rule. `Set.empty` reproduces the
+    /// pre-#2305 verdict exactly.
     let scheduleWith
+        (generated: Set<string>)
         (boardCounts: Map<Ref, int>)
         (allowBacklog: bool)
         (limit: int option)
@@ -550,7 +554,7 @@ module Batch =
             // one an operator can actually act on.
             let visible = reserved |> inRepo owner repo |> List.map (fun r -> r.Paths)
 
-            let result = schedulable allowBacklog visible item
+            let result = schedulable generated allowBacklog visible item
 
             let collidedWith, reportedResult =
                 match result with
@@ -640,12 +644,13 @@ module Batch =
     /// `Rank.blockingCounts`. Those paths hold the unscoped scan rows already and pass whole-board counts
     /// to `scheduleWith`.
     let schedule
+        (generated: Set<string>)
         (allowBacklog: bool)
         (limit: int option)
         (inFlight: Reservation list)
         (candidates: Item list)
         : Verdict<BatchResult> =
-        scheduleWith (Rank.blockingCounts candidates) allowBacklog limit inFlight candidates
+        scheduleWith generated (Rank.blockingCounts candidates) allowBacklog limit inFlight candidates
 
     /// How many candidates this batch member DISPLACED — passed over because they collided with IT, and
     /// with it specifically.

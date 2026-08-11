@@ -182,7 +182,13 @@ module Batch =
     ///
     /// Everything above this note — disjointness, the priority-greedy pack, the `limit`, the reservations,
     /// the `Red` refusal — is unchanged by it, and is this function's contract.
+    /// `generated` is `.github#2305`/ADR-0044's repo-relative set of generated, CI-gated artifact paths
+    /// (`scripts/generated-paths`'s subtractable set), threaded straight to `Schedulability.schedulable`
+    /// — see its doc for the exact-stem-only exclusion rule. `Set.empty` reproduces the pre-#2305
+    /// verdict exactly, and is what a caller with no filesystem to ask (the pure `decide --snapshot`
+    /// path) must pass.
     val scheduleWith:
+        generated: Set<string> ->
         boardCounts: Map<Ref, int> ->
         allowBacklog: bool ->
         limit: int option ->
@@ -197,7 +203,11 @@ module Batch =
     /// scoped list truncates the blocking graph silently. Its caller is `decide --snapshot`, which is
     /// handed a document and nothing wider — the same position it is already in for `Phase` and age
     /// (.github#1598), and the same benign direction: an undercount sorts an item later, never earlier.
+    ///
+    /// `generated` — see `scheduleWith`'s doc; `decide --snapshot` has no filesystem to ask, so its
+    /// caller always passes `Set.empty` here.
     val schedule:
+        generated: Set<string> ->
         allowBacklog: bool ->
         limit: int option ->
         inFlight: Reservation list ->

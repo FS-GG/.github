@@ -54,7 +54,11 @@ module Lanes =
         | Some(claim, _) -> Some claim.Worker
         | None -> None
 
-    let partition (items: Item list) : Partition =
+    /// `generated` is `.github#2305`/ADR-0044's set of generated, CI-gated artifact repo-relative paths
+    /// (`scripts/generated-paths`'s subtractable set). `Set.empty` reproduces the pre-#2305 partition
+    /// exactly — always safe — and is what `Program.fs`'s pure, snapshot-only `lanes` command passes,
+    /// since it has no filesystem to ask.
+    let partition (generated: Set<string>) (items: Item list) : Partition =
 
         // THE THREE WAYS AN ITEM CANNOT BE LANED, KEPT APART (#496).
         //
@@ -127,7 +131,16 @@ module Lanes =
                 // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks "do these
                 // two rows share a repo?", a question `--repo` has no part in.
                 if a.Ref.Owner = b.Ref.Owner && a.PathRepo = b.PathRepo then
-                    if not (List.isEmpty (TouchSet.scopedConflicts a.Ref.Owner a.PathRepo b.Ref.Owner b.PathRepo a.TouchSet b.TouchSet)) then
+                    // .github#2305 — the same exclusion `Schedulability.schedulable`/`activeCollisions`/
+                    // `overlapCmd` apply: a conflict pair attributable SOLELY to a shared generated,
+                    // CI-gated artifact does not glue two lanes together. Before this, `overlap` could
+                    // answer DISJOINT for a pair that `Lanes.partition` still fused into one lane — #485's
+                    // shape, one question with two disagreeing implementations.
+                    let hits =
+                        TouchSet.scopedConflicts a.Ref.Owner a.PathRepo b.Ref.Owner b.PathRepo a.TouchSet b.TouchSet
+                        |> TouchSet.excludeGenerated generated
+
+                    if not (List.isEmpty hits) then
                         union i j
 
         let lanes =

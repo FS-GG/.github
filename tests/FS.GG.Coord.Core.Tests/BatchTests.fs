@@ -64,7 +64,7 @@ module BatchTests =
         |> List.tryFind (fun d -> d.Item.Ref.Number = n)
         |> Option.map (fun d -> d.Result)
 
-    let private run inFlight candidates = schedule false None inFlight candidates |> ok
+    let private run inFlight candidates = schedule Set.empty false None inFlight candidates |> ok
 
     // ================================================================================================
     // THE FOLD. An item chosen into the batch RESERVES its touch-set against every later candidate.
@@ -268,7 +268,7 @@ module BatchTests =
               Paths = Declared [ Unmatchable "**/*.fs" ]
               Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None) }
 
-        match schedule false None [ blind ] [ item 1 [ "src/A.fs" ] ] with
+        match schedule Set.empty false None [ blind ] [ item 1 [ "src/A.fs" ] ] with
         | Red reasons ->
             Assert.NotEmpty(reasons)
             Assert.Contains("reserves NOTHING", String.concat " " reasons)
@@ -301,7 +301,7 @@ module BatchTests =
     [<Fact>]
     let ``-n caps the batch and REPORTS that it truncated`` () =
         let r =
-            schedule false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ]; item 3 [ "src/C.fs" ] ]
+            schedule Set.empty false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ]; item 3 [ "src/C.fs" ] ]
             |> ok
 
         Assert.Equal<int list>([ 1; 2 ], chosenNumbers r)
@@ -311,14 +311,14 @@ module BatchTests =
     let ``a cap that did not bite does NOT report truncation`` () =
         // Reporting a cap that never fired would be its own small lie — and it is the signal a caller
         // uses to decide whether "nothing else is startable" is a fact or an artefact.
-        let r = schedule false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
+        let r = schedule Set.empty false (Some 2) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
 
         Assert.Equal<int list>([ 1; 2 ], chosenNumbers r)
         Assert.False(r.Truncated, "the cap was reached on the LAST candidate — nothing was left unseen")
 
     [<Fact>]
     let ``the candidates a cap never reached get NO verdict — silence is not a skip`` () =
-        let r = schedule false (Some 1) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
+        let r = schedule Set.empty false (Some 1) [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ] |> ok
 
         Assert.Equal<int list>([ 1 ], chosenNumbers r)
         Assert.True(r.Truncated)
@@ -558,7 +558,7 @@ module BatchTests =
         // The invariant the whole banner rests on: `WrongStatus Backlog` is reachable ONLY when the flag is
         // absent. With it, the row falls through to the ordinary checks and is handed out — so there is
         // nothing withheld to report, and no banner at all.
-        let r = schedule true None [] [ backlogItem 1 [ "src/A.fs" ] ] |> ok
+        let r = schedule Set.empty true None [] [ backlogItem 1 [ "src/A.fs" ] ] |> ok
 
         Assert.Equal<int list>([ 1 ], chosenNumbers r)
         Assert.Empty(starvedBanner 120 r)
@@ -930,6 +930,7 @@ module BatchTests =
         // ordering the cap always yielded #1.
         let r =
             schedule
+                Set.empty
                 false
                 (Some 1)
                 []

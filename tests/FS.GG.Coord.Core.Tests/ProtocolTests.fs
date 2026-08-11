@@ -673,7 +673,7 @@ module ProtocolTests =
                 |> Option.defaultWith (fun () -> failwith $"'{s.Wire}' is not a board status")
 
             let offered allowBacklog =
-                Schedulability.schedulable allowBacklog [] (columnProbe status) = Schedulability.Startable
+                Schedulability.schedulable Set.empty allowBacklog [] (columnProbe status) = Schedulability.Startable
 
             // The doc's WORD, decoded independently of the engine's own renderer — so this test states
             // what each published word must MEAN and checks the scheduler against it, rather than asking

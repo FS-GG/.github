@@ -70,14 +70,14 @@ module LanesTests =
     [<Fact>]
     let ``disjoint items are separate lanes — that is the parallelism`` () =
         let p =
-            partition [ item 1 [ "src/A/" ]; item 2 [ "src/B/" ]; item 3 [ "docs/" ] ]
+            partition Set.empty [ item 1 [ "src/A/" ]; item 2 [ "src/B/" ]; item 3 [ "docs/" ] ]
 
         Assert.Equal(3, List.length p.Lanes)
         Assert.Equal(3, List.length (free always p))
 
     [<Fact>]
     let ``overlapping items share a lane — they serialise`` () =
-        let p = partition [ item 1 [ "src/A/" ]; item 2 [ "src/A/thing.fs" ] ]
+        let p = partition Set.empty [ item 1 [ "src/A/" ]; item 2 [ "src/A/thing.fs" ] ]
 
         Assert.Equal(1, List.length p.Lanes)
         Assert.Equal(2, List.length (List.head p.Lanes).Items)
@@ -91,11 +91,70 @@ module LanesTests =
         let b = item 2 [ "src/A/"; "src/C/" ]
         let c = item 3 [ "src/C/" ]
 
-        let p = partition [ a; b; c ]
+        let p = partition Set.empty [ a; b; c ]
 
         Assert.Equal(1, List.length p.Lanes)
         Assert.Equal(3, List.length (List.head p.Lanes).Items)
         Assert.Equal(1, List.length (free always p)) // ONE worker, not three
+
+    // ---- .github#2305 / ADR-0044: generated, CI-gated artifacts do not glue lanes -------------------
+    //
+    // The critic's own repair-1 finding: `TouchSet.excludeGenerated` was wired into `activeCollisions`/
+    // `overlapCmd` (`Client.fs`) but not into `Lanes.partition`, so `overlap` and `take`/`lanes` could
+    // disagree about the identical pair — #485's shape, one question with two implementations. This
+    // section proves the property holds AT THIS FUNCTION, directly, reconstructing the row's own
+    // measured instance (`.github#2254` editing a driver skill + regenerating
+    // `registry/driver-skill-manifest.json`; `.github#2248` editing a pnext-item reference + needing the
+    // same regeneration — real subjects disjoint, only the generated token shared).
+
+    [<Fact>]
+    let ``#2305 two items sharing only a generated artifact token lane SEPARATELY, given the roster`` () =
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+
+        let a =
+            item 2254 [ ".claude/skills/drive-board/SKILL.md"; "registry/driver-skill-manifest.json" ]
+
+        let b =
+            item
+                2248
+                [ ".claude/skills/pnext-item/references/independent-review.md"
+                  "registry/driver-skill-manifest.json" ]
+
+        // WITHOUT the roster, today's pre-repair-1 defect: one lane (this is the regression the gate-
+        // inversion below re-proves — see the repair report's mutation).
+        let unaware = partition Set.empty [ a; b ]
+        Assert.Equal(1, List.length unaware.Lanes)
+
+        // WITH the roster, the fix: two lanes — the real subjects never collided.
+        let aware = partition generated [ a; b ]
+        Assert.Equal(2, List.length aware.Lanes)
+        Assert.Equal(2, List.length (free always aware))
+
+    [<Fact>]
+    let ``#2305 negative control — a directory-prefix claim over the generated artifact's parent still glues the lane (#309 trap)`` () =
+        // ADR-0044's own caution, reproduced at the LANE level: declaring the generated file's PARENT
+        // directory is a real claim over everything under it, generated or not (the `#309` test above).
+        // `excludeGenerated` requires an EXACT stem match on BOTH sides — a directory prefix on one side
+        // must keep gluing the lane, or this change would silently widen every worker's real reservation.
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+
+        let broad = item 1 [ "registry/**" ]
+        let exact = item 2 [ "registry/driver-skill-manifest.json" ]
+
+        let p = partition generated [ broad; exact ]
+        Assert.Equal(1, List.length p.Lanes)
+
+    [<Fact>]
+    let ``#2305 negative control — a genuinely shared non-generated path still glues the lane`` () =
+        // The FS.GG.Kit `<Version>` shape: a real single-writer field, absent from the generated-paths
+        // roster, so it is unaffected and keeps serialising exactly as before.
+        let generated = Set.ofList [ "registry/driver-skill-manifest.json" ]
+
+        let a = item 1 [ "src/FS.GG.Kit/FS.GG.Kit.csproj" ]
+        let b = item 2 [ "src/FS.GG.Kit/FS.GG.Kit.csproj" ]
+
+        let p = partition generated [ a; b ]
+        Assert.Equal(1, List.length p.Lanes)
 
     [<Fact>]
     let ``REPO SCOPING — the same token in two repos is two different files, so two lanes (#312)`` () =
@@ -103,7 +162,7 @@ module LanesTests =
         let a = itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "scripts/foo" ]
         let b = itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "scripts/foo" ]
 
-        let p = partition [ a; b ]
+        let p = partition Set.empty [ a; b ]
 
         Assert.Equal(2, List.length p.Lanes)
         Assert.Equal(2, List.length (free always p))
@@ -111,7 +170,7 @@ module LanesTests =
     [<Fact>]
     let ``a lane never spans repos`` () =
         let p =
-            partition
+            partition Set.empty
                 [ itemAt (refIn "FS-GG" "FS.GG.SDD" 1) [ "src/" ]
                   itemAt (refIn "FS-GG" "FS.GG.Game" 2) [ "src/" ] ]
 
@@ -125,7 +184,7 @@ module LanesTests =
         let audio = { itemAt { host with Number = 1 } [ "scripts/skill-view" ] with PathRepo = "FS.GG.Audio" }
         let github = { itemAt { host with Number = 2 } [ "scripts/skill-view" ] with PathRepo = ".github" }
 
-        let p = partition [ audio; github ]
+        let p = partition Set.empty [ audio; github ]
 
         Assert.Equal(2, List.length p.Lanes)
 
@@ -134,7 +193,7 @@ module LanesTests =
     [<Fact>]
     let ``a lane holding a live claim is OCCUPIED and is not free capacity`` () =
         let p =
-            partition [ item 1 [ "src/A/" ] |> heldBy "wren-1"; item 2 [ "src/B/" ] ]
+            partition Set.empty [ item 1 [ "src/A/" ] |> heldBy "wren-1"; item 2 [ "src/B/" ] ]
 
         Assert.Equal(2, List.length p.Lanes)
 
@@ -148,7 +207,7 @@ module LanesTests =
     let ``a lane with no STARTABLE item is not capacity either`` () =
         // Counting it would overstate the ceiling and send a worker to an empty lane — #440 ("no
         // schedulable item" over a board full of work) wearing a lane's hat.
-        let p = partition [ item 1 [ "src/A/" ]; item 2 [ "src/B/" ] ]
+        let p = partition Set.empty [ item 1 [ "src/A/" ]; item 2 [ "src/B/" ] ]
 
         let onlyOne (it: Item) = it.Ref.Number = 1
 
@@ -162,7 +221,7 @@ module LanesTests =
         let chokepoint = item 1 [ "scripts/" ]
 
         let p =
-            partition
+            partition Set.empty
                 [ chokepoint
                   item 2 [ "scripts/a" ]
                   item 3 [ "scripts/b" ]
@@ -175,7 +234,7 @@ module LanesTests =
 
     [<Fact>]
     let ``an UNDECLARED item is a chore — real work nobody can pick up`` () =
-        let p = partition [ item 1 [ "src/A/" ] |> withTouchSet Undeclared ]
+        let p = partition Set.empty [ item 1 [ "src/A/" ] |> withTouchSet Undeclared ]
 
         Assert.Empty p.Lanes
 
@@ -185,7 +244,7 @@ module LanesTests =
 
     [<Fact>]
     let ```Paths: none` is DELIBERATE — an epic, and never a chore`` () =
-        let p = partition [ item 1 [] |> withTouchSet DeclaredNone ]
+        let p = partition Set.empty [ item 1 [] |> withTouchSet DeclaredNone ]
 
         Assert.Empty p.Lanes
 
@@ -201,7 +260,7 @@ module LanesTests =
         let broken =
             item 1 [] |> withTouchSet (Declared [ Unmatchable "**/foo" ])
 
-        let p = partition [ broken; item 2 [ "src/B/" ] ]
+        let p = partition Set.empty [ broken; item 2 [ "src/B/" ] ]
 
         Assert.Equal(1, List.length p.Lanes) // ONLY the good item
         Assert.Equal(2, (List.head p.Lanes).Id.Number)
@@ -227,7 +286,7 @@ module LanesTests =
         let mixed =
             item 1 [] |> withTouchSet (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
 
-        let p = partition [ mixed; item 2 [ "src/A/thing.fs" ] ]
+        let p = partition Set.empty [ mixed; item 2 [ "src/A/thing.fs" ] ]
 
         // ONLY the good item lanes. #1 is a chore, not a lane-mate — even though `src/A/` genuinely
         // overlaps #2's file.
@@ -266,10 +325,10 @@ module LanesTests =
 
         for name, ts, expectedLanable in shapes do
             let it = item 1 [] |> withTouchSet ts
-            let p = partition [ it ]
+            let p = partition Set.empty [ it ]
 
             let laned = p.Lanes |> List.collect (fun l -> l.Items) |> List.isEmpty |> not
-            let startable = Schedulability.schedulable false [] it = Schedulability.Startable
+            let startable = Schedulability.schedulable Set.empty false [] it = Schedulability.Startable
 
             // THE RULE ITSELF is the third party to the agreement (#945). `lint` was a THIRD copy of
             // this question for as long as `Usability` lacked the every/some distinction it renders —
@@ -314,8 +373,8 @@ module LanesTests =
         // the lowest-numbered item in the component, and input order may not change it.
         let items = [ item 5 [ "src/A/" ]; item 2 [ "src/A/x" ]; item 9 [ "src/B/" ] ]
 
-        let a = partition items
-        let b = partition (List.rev items)
+        let a = partition Set.empty items
+        let b = partition Set.empty (List.rev items)
 
         let ids p = p.Lanes |> List.map (fun l -> l.Id.Number)
 
@@ -324,7 +383,7 @@ module LanesTests =
 
     [<Fact>]
     let ``an empty board has no lanes and no ceiling — not an error`` () =
-        let p = partition []
+        let p = partition Set.empty []
 
         Assert.Empty p.Lanes
         Assert.Empty p.Unlanable
@@ -343,7 +402,7 @@ module LanesTests =
               item 3 [ "scripts/coord"; "src/C/" ]
               item 4 [ "scripts/coord"; "src/D/" ] ]
 
-        let p = partition items
+        let p = partition Set.empty items
         Assert.Equal(1, List.length p.Lanes)
 
         let g = glue (List.head p.Lanes) |> List.head
@@ -359,7 +418,7 @@ module LanesTests =
         // buys 1 is worthless. Here `docs/` is that: it is declared by one item and glues nobody.
         let items = [ item 1 [ "src/A/"; "docs/" ]; item 2 [ "src/A/" ] ]
 
-        let p = partition items
+        let p = partition Set.empty items
         let ranked = glue (List.head p.Lanes)
 
         let docs = ranked |> List.find (fun g -> g.Token = "docs/")
@@ -379,11 +438,11 @@ module LanesTests =
             [ item 1 [ "a/"; "z/" ]; item 2 [ "a/"; "y/" ]; item 3 [ "a/" ] ]
 
         let tokensOf its =
-            (glue (List.head (partition its).Lanes)) |> List.map (fun g -> g.Token)
+            (glue (List.head (partition Set.empty its).Lanes)) |> List.map (fun g -> g.Token)
 
         Assert.Equal<string list>(tokensOf items, tokensOf (List.rev items))
 
     [<Fact>]
     let ``a lane of ONE has no glue — nothing is holding it to anything`` () =
-        let p = partition [ item 1 [ "src/A/" ] ]
+        let p = partition Set.empty [ item 1 [ "src/A/" ] ]
         Assert.Empty(glue (List.head p.Lanes))

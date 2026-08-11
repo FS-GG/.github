@@ -166,7 +166,7 @@ let ``a scanned item is SCHEDULABLE end to end - scan, parse, decide`` () =
         match Snapshot.parse document with
         | Ok request ->
             let decision =
-                Batch.schedule
+                Batch.schedule Set.empty
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
@@ -233,7 +233,7 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
             // The unreadable source also makes its source-bound route evidence unreadable.  It must park
             // at the mandatory route checkpoint, never become an implicit lightweight decision.
             let verdict =
-                Schedulability.schedulable false [] request.Candidates.[0].Item
+                Schedulability.schedulable Set.empty false [] request.Candidates.[0].Item
 
             match verdict with
             | Schedulability.AwaitingDeliveryRouteDecision _ -> ()
@@ -302,7 +302,7 @@ let ``#520 a CLOSED and STAMPED issue is a candidate, SWEPT with no read, and de
             let item = request.Candidates.[0].Item
             Assert.Equal(Closed, item.State)
 
-            match Schedulability.schedulable false [] item with
+            match Schedulability.schedulable Set.empty false [] item with
             | Schedulability.IssueClosed -> ()
             | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
 
@@ -509,7 +509,7 @@ let ``#2225 criterion 3 - an overlapping candidate is REFUSED and the CLOSED hol
             | Error e -> failwith $"the %A{state} holder's row must round-trip — got %A{e}"
             | Ok request ->
                 match
-                    Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                    Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
                 with
                 | Green result ->
                     // THE REFUSAL ITSELF: #43 is not handed to a second worker while #42's holder stands in
@@ -682,7 +682,7 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED, not scheduled over the lock the board could not see.
             let decision =
-                Batch.schedule
+                Batch.schedule Set.empty
                     request.AllowBacklog
                     request.Limit
                     request.InFlight
@@ -732,7 +732,7 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
 
             // AND THE OVERLAPPING CANDIDATE IS REFUSED: a stale lock is not scheduled over, only reaped.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result -> Assert.Empty(result.Chosen)
             | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
@@ -894,7 +894,7 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
 
             // AND THE OVERLAPPING Ready CANDIDATE IS REFUSED, its collision naming the Unowned reserver.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Green result ->
                 Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
@@ -964,7 +964,7 @@ let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch
             // THE FIX, ARM 2: the batch is RED. A reservation whose surface we never saw makes every later
             // comparison a lie, so #43 is refused rather than handed files #42's holder may be standing in.
             match
-                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
+                Batch.schedule Set.empty request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item |> withCurrentRoute))
             with
             | Red reasons -> Assert.True(reasons |> List.exists (fun (m: string) -> m.Contains "vole-418"))
             | other ->
