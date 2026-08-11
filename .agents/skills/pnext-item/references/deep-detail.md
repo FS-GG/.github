@@ -1063,8 +1063,10 @@ of you:
   that is not this item's work. Answer it before merge.
 - **`regenerated (expected):`** — **not** a finding, and nothing to explain. A generated, CI-gated
   artifact §1 told you not to declare, which `verify-paths` subtracted by asking the generators
-  themselves what they emit ([ADR-0044](../../../../docs/adr/0044-generated-artifacts-are-derived-from-their-generators.md),
-  [#498](https://github.com/FS-GG/.github/issues/498)).
+  themselves what they emit ([ADR-0044](https://github.com/FS-GG/.github/blob/main/docs/adr/0044-generated-artifacts-are-derived-from-their-generators.md),
+  [#498](https://github.com/FS-GG/.github/issues/498)). (ADR-0044 is an absolute URL, not a
+  relative link: `docs/adr/` is not part of the `kit:` transport `registry/repos.yml` declares, so
+  a receiver never materializes it and a relative link here would dangle. .github#2343.)
 
 > **This used to be one undifferentiated list, and the recipe's answer was to make the WORKER sort
 > it** — *"name which one it is in the PR"*. That was the best available advice while the tool could
