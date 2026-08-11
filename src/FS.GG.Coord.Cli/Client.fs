@@ -4086,6 +4086,25 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
 
                 scan [] inFlight
 
+    /// `cross-repo` IS NOT A REPOSITORY (#2351). `docs/coordination/board-schema.md` names it as the
+    /// **one deliberate non-roster value** the `Repo Scope` field carries — every other option is a
+    /// same-named `registry/repos.yml` row (`Options.resolveRepo`'s embedded roster). A caller that
+    /// takes a `Repo Scope` string and hands it straight to `Option.defaultValue` cannot tell those two
+    /// cases apart: `Option.defaultValue` only ever declines a `None`, and a `Some "cross-repo"` is a
+    /// `Some`. That is exactly how two items in the SAME repository, differing only in which of them
+    /// carries the sentinel, went DISJOINT-by-construction — the sentinel string substituted for a real
+    /// repository on one side of the comparison and could never equal the other side's genuine repo
+    /// name. This is the ONE place that gets settled (AC5): a scope that does not name a repository
+    /// behaves exactly like an ABSENT scope and falls back to `fallback` — normally the ref's own
+    /// hosting repository, the same repository its `Paths:` tokens are read against by
+    /// `TouchSet.parse`/`Reads.issueBody`. Every caller that turns a raw `Repo Scope`/marker `PathRepo`
+    /// value into the repository used for touch-set comparison MUST route through this, never through a
+    /// bare `Option.defaultValue`.
+    let private pathRepoOrFallback (fallback: string) (scope: string option) : string =
+        match scope with
+        | Some s when not (String.Equals(s, "cross-repo", StringComparison.OrdinalIgnoreCase)) -> s
+        | _ -> fallback
+
     /// Resolve the repository a board item's paths name without changing the issue ref used for reads
     /// and mutations. Off-board items have no `Repo Scope` projection and therefore retain their own
     /// repository as the only truthful scope.
@@ -5755,7 +5774,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 |> Result.map (fun markers ->
                     Reads.reserver opts.LeaseMinutes markers
                     |> Option.bind (fun marker -> marker.PathRepo)
-                    |> Option.defaultValue ref.Repo)
+                    // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
+                    |> pathRepoOrFallback ref.Repo)
 
         // .github#2250 — `openIssues` is necessarily OPEN-only, but a CLOSED item is not terminal until
         // its green Done stamp exists.  The scheduler already reads a closed-but-unstamped board row and
@@ -5947,7 +5967,8 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                         match Reads.reserver opts.LeaseMinutes markers with
                         | None -> scan acc rest
                         | Some m ->
-                            let otherPathRepo = m.PathRepo |> Option.defaultValue other.Repo
+                            // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
+                            let otherPathRepo = m.PathRepo |> pathRepoOrFallback other.Repo
                             let samePathRepo =
                                 String.Equals(ref.Owner, other.Owner, StringComparison.OrdinalIgnoreCase)
                                 && String.Equals(targetPathRepo, otherPathRepo, StringComparison.OrdinalIgnoreCase)
@@ -6136,11 +6157,12 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                     // and then notifies each colliding worker on their own issue; only an unreadable
                                     // scan refuses. Same-repo scope: a cross-repo namesake is a phantom (#353).
                                     match
+                                        // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`.
                                         activeCollisions
                                             ctx
                                             opts
                                             ref
-                                            (Some(held.PathRepo |> Option.defaultValue ref.Repo))
+                                            (Some(held.PathRepo |> pathRepoOrFallback ref.Repo))
                                             (TouchSet.parse rewritten.Body)
                                     with
                                     | Error e -> fail e
@@ -6406,7 +6428,13 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 match boardPathScopes ctx with
                 | Error e -> fail e
                 | Ok scopes ->
-                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> Option.defaultValue r.Repo
+                    // #2351 — `cross-repo` is not a repository; see `pathRepoOrFallback`. A board Repo
+                    // Scope of `cross-repo` used to substitute the literal string for a real repo name
+                    // here, so a genuinely same-repo pair whose scopes merely disagreed (one `cross-repo`,
+                    // one a rostered value) compared unequal and was reported DISJOINT BY CONSTRUCTION
+                    // without ever reading either touch-set — authorizing exactly the collision #353's
+                    // short-circuit exists to rule out.
+                    let pathRepoOf (r: Ref) = Map.tryFind r scopes |> pathRepoOrFallback r.Repo
                     let samePathRepo =
                         String.Equals(pathRepoOf ra, pathRepoOf rb, StringComparison.OrdinalIgnoreCase)
 
