@@ -200,7 +200,14 @@ jobs:
           python3 scripts/kit-auto-publish.py --facts facts.json --json --run "$GITHUB_RUN_ID" "${args[@]}" > escalation-decision.json
           state="$(jq -c .escalation escalation-decision.json)"
           jq -e '.valid == true' <<<"$state" >/dev/null || { echo '::error::sticky marker state malformed; refusing to overwrite'; exit 1; }
-          body="$marker\n\n```json\n$state\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          # A double-quoted one-liner here has two independent quoting defects (.github#2346): the
+          # fence backticks open command substitution inside double quotes, and `\n` inside double
+          # quotes is a literal backslash-n, not a newline. Both crashed this step at exit 127 before
+          # it ever wrote the sticky marker or the `blocked` label, so a correct refusal was silent.
+          # `printf`'s FORMAT is single-quoted, so the fence backticks are inert literal text (single
+          # quotes admit no command substitution, nested or not) and its own `\n` escapes become real
+          # newlines; `$marker`/`$state` are supplied as `%s` DATA arguments, never re-parsed as shell.
+          body="$(printf '%s\n\n```json\n%s\n```\n\nAuto-publish performed no tag, feed, or evidence-PR write. [Run](%s/%s/actions/runs/%s).' "$marker" "$state" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
           gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --add-label blocked
           if [ -n "$existing" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null; else gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$issue/comments" -f body="$body" >/dev/null; fi
       - name: Open or update the publish evidence PR
