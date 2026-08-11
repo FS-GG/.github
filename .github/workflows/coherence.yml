@@ -145,6 +145,15 @@ jobs:
   #     -f "contexts[]=roster-closure" -f "contexts[]=drift" -f "contexts[]=reconcile" \
   #     -f "contexts[]=claim-generation"
   #
+  # THIS JOB'S RED WAS BLOCKING ANYWAY, THROUGH A DIFFERENT DOOR (.github#2373). Branch protection never
+  # enforced it, as designed above — but `scripts/fsgg-coord landable`, the merge gate `pnext-item` names
+  # as authoritative, scored every LIVE check-run unconditionally and did not know this one was meant to
+  # be advisory, so a FINDING here (the ordinary shape for a PR opened before its worker knew to write the
+  # `fsgg:pr-authorization` marker) read `landable` RED anyway — reproduced live across three PRs in one
+  # wave. `Landable.fs` now carries a NAMED exemption for this check (`advisoryCheckNames`) so the two
+  # subsystems agree. Remove BOTH the name there and this comment's deferral — never just one — in the
+  # same change that arms this job into branch protection above.
+  #
   # No `paths:` filter — inherited from this workflow's own `on:` above, which is deliberately
   # unfiltered (.github#1508: a required context must report on EVERY pull request, and GitHub never
   # skips a path-filtered required check — it never creates the check run at all, so branch protection

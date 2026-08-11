@@ -93,6 +93,22 @@ arming). Until an admin runs (after this lands, and after slice 3 lands):
 ...a red verdict from this job does not block a merge — it is observed, not enforced. That is a
 DELIBERATE, NAMED gap (AC6), not a silent one.
 
+THAT PROMISE WAS TRUE FOR BRANCH PROTECTION AND FALSE FOR `landable` (`.github#2373`). Branch
+protection never gated on this job's own conclusion, exactly as designed above — but
+`scripts/fsgg-coord landable`, the merge gate `pnext-item` names as authoritative for every fleet
+worker, scored EVERY live check-run unconditionally, `claim-generation` included, so a FINDING here
+(the ordinary, expected shape for any PR opened before its worker knew to write the marker) turned
+`landable` red anyway. Reproduced live across three PRs in one wave: the PR without a hand-added
+`fsgg:pr-authorization` marker read `landable` RED; an otherwise-identical PR with one read GREEN —
+the manual workaround this gate's own design never asked workers to perform, and which (Actions
+replays the frozen `pull_request` event payload; a body edit alone never re-triggers this job) was
+often unreachable for a PR already open when `claim-generation` first landed. `.github#2373` fixed
+`Landable.fs` to hold the SAME "observed, not enforced" promise this gate's docstring already made:
+`claim-generation`'s FINDING conclusion is now excluded from `landable`'s rollup by name
+(`Landable.fs`'s `advisoryCheckNames`) until this job is genuinely armed into branch protection, at
+which point BOTH that name (here) and Landable's carve-out must be removed in the same change — see
+`Landable.fsi`'s `scoreRequired` doc for the caller-side detail.
+
 CROSS-REPO ITEMS ARE READABLE-OR-UNREADABLE, NOT ASSUMED. `.github/workflows/coherence.yml` runs only
 on `.github`'s own pull requests, so `--repo` is always `FS-GG/.github` here and its items live in the
 same repository the default `GITHUB_TOKEN` can already read comments on. The algorithm below does not
