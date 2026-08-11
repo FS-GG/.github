@@ -339,6 +339,126 @@ module DriverEventsTests =
         Assert.False(List.isEmpty projection.Transitions)
         Assert.Empty(projection.Active)
 
+    // ---- .github#2375 symptom 1 — a Done/closed/stamped row must never be reported transitioning to
+    // ---- ready, and never as schedulable (issue acceptance #2) ------------------------------------
+
+    [<Fact>]
+    let ``terminal-regression: a cursor-Done ref that a fresh read reports Ready is refused, never rendered ready or schedulable`` () =
+        // Simulates the reproduction exactly: a PREVIOUS read correctly classified the merged, closed,
+        // done-receipted row Done; the CURRENT read's facts (stale/partial, racing GitHub's own
+        // eventual consistency) claim no live claim and an unclaimed board status, which `classify`
+        // alone would turn into Ready.
+        let cursor = Map.ofList [ ".github#1", Done ]
+        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+
+        let projection = project cursor [ staleFacts ] 600L
+
+        Assert.Empty(projection.Active)
+        match Map.tryFind ".github#1" projection.Cursor with
+        | Some Ready -> Assert.Fail "the terminal row was accepted as Ready — this is the exact regression the issue reports"
+        | Some(Unreadable _) -> ()
+        | other -> Assert.Fail $"expected Unreadable, got %A{other}"
+        Assert.Single(projection.Transitions) |> ignore
+        Assert.DoesNotContain("-> ready", (renderText projection).ToLowerInvariant())
+
+    [<Fact>]
+    let ``terminal-regression: a cursor-Released ref regressing to Ready is refused the same way`` () =
+        let cursor = Map.ofList [ ".github#1", Released ]
+        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+        let projection = project cursor [ staleFacts ] 600L
+        match projection.Active |> List.tryFind (fun c -> c.Ref = ".github#1") with
+        | Some _ -> Assert.Fail "a regressed terminal row must never appear in the active inventory"
+        | None -> ()
+        Assert.False(projection.Cursor |> Map.exists (fun _ state -> state = Ready))
+
+    /// GATE-INVERSION EVIDENCE for `guardTerminalRegression`. Removing the guard (equivalent to
+    /// `project` calling only `classify`, as it did before this fix) makes the assertion above fail:
+    /// the cursor is overwritten with `Ready`, the item enters `Active` as nothing (Ready is never
+    /// active, but the point is it becomes schedulable), and `no live claim; unclaimed and schedulable`
+    /// reappears verbatim in the render. Observed red by hand during authoring (reverting
+    /// `guardTerminalRegression` to `id` and re-running this fixture) as `independent-review` requires.
+    [<Fact>]
+    let ``gate-inversion: without the terminal-regression guard, a Done row reads back Ready and schedulable`` () =
+        let cursor = Map.ofList [ ".github#1", Done ]
+        let staleFacts = { baseFacts with BoardStatus = Some Types.Ready; IssueState = Some Open }
+        // Reproduce the PRE-FIX behavior directly (bypassing the guard under test) to pin exactly what
+        // the guard prevents, without relying on the production code path staying broken.
+        let unguardedClassified = [ classify staleFacts ]
+        let events, unguardedCursor = deriveEvents cursor unguardedClassified
+        Assert.Equal(Ready, Map.find ".github#1" unguardedCursor)
+        Assert.Contains("no live claim; unclaimed and schedulable", events.[0].Reason)
+
+    // ---- .github#2375 symptom 2 — the active inventory must never silently empty while claims are
+    // ---- live (issue acceptance #1, #3) ------------------------------------------------------------
+
+    [<Fact>]
+    let ``missing-active-ref: three live claims the cursor remembers, entirely absent from this read's facts, are never rendered as "no active items"`` () =
+        let claimedState worker = Claimed worker
+        let cursor =
+            Map.ofList
+                [ "FS-GG/.github#2305", claimedState "smew-1ae8"
+                  "FS-GG/.github#2365", claimedState "crake-4bcd"
+                  "FS-GG/.github#2373", claimedState "finch-d23b" ]
+
+        // The reproduction exactly: no intervening board change, but this read's facts batch is empty
+        // — the shape a caller-side partial/failed scan produces.
+        let projection = project cursor [] 700L
+
+        Assert.False(List.isEmpty projection.Transitions, "a vanished active ref must still surface as a transition")
+        Assert.Equal(3, List.length projection.Transitions)
+        // None of the three are silently dropped: each renders Unreadable, and none is "no active
+        // items" with zero explanation.
+        for ref in [ "FS-GG/.github#2305"; "FS-GG/.github#2365"; "FS-GG/.github#2373" ] do
+            match Map.tryFind ref projection.Cursor with
+            | Some(Unreadable _) -> ()
+            | other -> Assert.Fail $"%s{ref}: expected Unreadable, got %A{other}"
+
+        let rendered = renderText projection
+        Assert.DoesNotContain("no material transitions", rendered)
+
+    [<Fact>]
+    let ``missing-active-ref: a live claim still present in the facts batch is unaffected by the guard`` () =
+        let cursor = Map.ofList [ ".github#1", Claimed "snipe-f30c" ]
+        let stillClaimed = { baseFacts with ClaimWorker = Some "snipe-f30c" }
+        let projection = project cursor [ stillClaimed ] 700L
+        Assert.Empty(projection.Transitions)
+        Assert.Single(projection.Active) |> ignore
+        Assert.Equal(Claimed "snipe-f30c", projection.Active.[0].State)
+
+    [<Fact>]
+    let ``missing-active-ref: a ref the cursor never marked active going missing is not synthesized`` () =
+        // A previously Ready (never active) or previously unseen ref disappearing from a read is not
+        // this guard's concern — only PREVIOUSLY ACTIVE refs are cross-checked against the cursor.
+        let cursor = Map.ofList [ ".github#1", Ready ]
+        let projection = project cursor [] 700L
+        Assert.Empty(projection.Transitions)
+        Assert.Empty(projection.Active)
+
+    /// GATE-INVERSION EVIDENCE for `missingActiveRefs`. Bypassing the guard (calling `deriveEvents`
+    /// directly over an empty facts batch, exactly as `project` did before this fix) reproduces the
+    /// verbatim reported output: "no material transitions" / "no active items" while the cursor still
+    /// holds three live claims. Observed red by hand during authoring (reverting `missingActiveRefs` to
+    /// return `[]` and re-running this fixture) as `independent-review` requires.
+    [<Fact>]
+    let ``gate-inversion: without the missing-active-ref guard, three live claims vanish with zero signal`` () =
+        let cursor =
+            Map.ofList
+                [ "FS-GG/.github#2305", Claimed "smew-1ae8"
+                  "FS-GG/.github#2365", Claimed "crake-4bcd"
+                  "FS-GG/.github#2373", Claimed "finch-d23b" ]
+
+        // Reproduce the PRE-FIX code path directly: classify over an empty facts batch, with no
+        // cross-check against the cursor at all.
+        let unguardedClassified: Classified list = [] |> List.map classify
+        let events, _ = deriveEvents cursor unguardedClassified
+        let unguardedProjection: Projection =
+            { Transitions = events
+              Active = unguardedClassified |> List.filter (fun c -> isActive c.State)
+              Cursor = cursor
+              RenderedAt = 700L }
+        let rendered = renderText unguardedProjection
+        Assert.Equal("no material transitions\nno active items", rendered)
+
     // ---- encode/decode round-trip — the cursor file's on-disk vocabulary --------------------------
 
     [<Fact>]
