@@ -2547,7 +2547,43 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                 let lifecycleChores, lifecycleWatermarks =
                     lifecycleItems
                     |> List.fold (fun (chores, watermarks) item ->
-                        let needsDeliveryRead = item.State = Closed || item.Status = InReview
+                        // A SETTLED ROW IS SWEPT, NOT READ — and this is `.github#2300` again, arriving
+                        // through the projector rather than the route search. `State = Closed` reads as a
+                        // narrow condition and is the OPPOSITE of one: a closed row is the only kind this
+                        // board accumulates, so this gate names ~99% of it and grows by one row for every
+                        // item the fleet ever completes. Measured on the live board (2026-08-11, one
+                        // `reconcile --json` dry run behind a logging proxy): 2,159 of 2,181 rows are
+                        // closed, and the pass spent 2,050+ billed REST requests, 1,847 of them exactly
+                        // here, against a 5,000/hr budget — so a `check-board` pass (dry-run, apply, fresh,
+                        // lint) could not finish inside one hour and the board driver exhausted the fleet's
+                        // budget before dispatching a single worker. `Reads.commentBodies` is unconditional
+                        // (`IfNoneMatch = None`) and paginates with the whole thread, so none of it is
+                        // recoverable by caching.
+                        //
+                        // THE BOUND IS A PROOF, NOT A BUDGET HEURISTIC — the same standard `memoisable`
+                        // holds. For `Closed` + `Done`, `LifecycleProjection.project` has exactly three
+                        // reachable answers, and the read cannot change ANY of them:
+                        //   * an unresolved blocker → `Project(Blocked)`. Decided by `observation.Blockers`,
+                        //     a free scan fact, ABOVE the closure arm — so it still fires here, unread.
+                        //   * `DoneStamped` → `Project(Done)`, and `Chore.lifecycleProjection` returns
+                        //     `None` on `item.Status = destination`. No chore, and — because the watermark
+                        //     is added only on the `Some chore` arm below — no watermark either.
+                        //   * no receipt → `Withheld "closed issue has no verified done receipt"`. Also no
+                        //     chore, also no watermark. Closure is never an instruction to demote a row
+                        //     (`project`'s own comment), so nothing is lost by not distinguishing these two.
+                        // Both read-dependent answers are already no-ops, so skipping the read is
+                        // BEHAVIOUR-PRESERVING, not a trade — identical chores, identical watermarks.
+                        //
+                        // WHAT IS DELIBERATELY STILL READ: a closed row that is NOT `Done`. That is
+                        // `.github#2225`'s post-merge window — closed, claim live, obligations outstanding —
+                        // and it is a first-class in-flight state whose receipt this projector must see. It
+                        // is also small and bounded by the fleet's own concurrency, which is the difference
+                        // that matters: it does not grow with the board's history.
+                        let settledDone = item.State = Closed && item.Status = Done
+
+                        let needsDeliveryRead =
+                            not settledDone && (item.State = Closed || item.Status = InReview)
+
                         let delivery =
                             if not needsDeliveryRead then Some (({ Outstanding = false; DoneStamped = false }: LifecycleProjection.Delivery), None)
                             else
