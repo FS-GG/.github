@@ -125,6 +125,71 @@ module DeliveryApplicationTests =
         | Error reason -> Assert.Contains("undeclared", reason)
         | other -> failwithf "expected undeclared refusal, got %A" other
 
+    // .github#2347: `obligationDeclaration`/`obligationReceipt`/the `none` sentinel anchored their
+    // regex against the comment's ENTIRE trimmed body, so the org's universal writing style — marker
+    // line, blank line, explanatory prose — read as malformed (declaration/receipt) or undeclared
+    // (none), even though the marker was correctly the comment's own leading line. `.github#2221`
+    // made this identical whole-body-to-whole-line correction for review markers; this applies it to
+    // the three delivery markers, which never received it.
+
+    [<Fact>]
+    let ``#2347 a declaration with trailing explanatory prose parses successfully`` () =
+        let comments =
+            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\n\nThis obligation covers publishing the nuget package once the merge lands."
+              comment "<!-- fsgg:delivery-receipt id=nuget head=head-a evidence=https://nuget.example/package -->\n\nPublished and verified on both feeds." ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [ obligation ] ->
+            Assert.Equal("nuget", obligation.Id)
+            Assert.True(obligation.Verified)
+        | other -> failwithf "expected one verified obligation parsed past the trailing prose, got %A" other
+
+    [<Fact>]
+    let ``#2347 the none sentinel with trailing explanatory prose parses successfully`` () =
+        let comments =
+            [ comment "<!-- fsgg:delivery-obligations none head=head-a -->\n\nNo package, deployment, or registry surface moves in this change." ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Ok [] -> ()
+        | other -> failwithf "expected the none sentinel to clear past the trailing prose, got %A" other
+
+    [<Fact>]
+    let ``#2347 a marker merely quoted later in a comment, never its own leading line, stays inert`` () =
+        // The comment does not itself start with the declaration prefix, so it is excluded by the
+        // same `StartsWith` filter round 1 (.github#2264) already relies on — the leading-line fix
+        // must not loosen that boundary.
+        let comments =
+            [ comment "For context, a declaration will look like:\n<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a -->\nonce it is posted." ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Error reason -> Assert.Contains("undeclared", reason)
+        | other -> failwithf "expected the quoted marker to stay inert and read as undeclared, got %A" other
+
+    [<Fact>]
+    let ``#2347 trailing text appended to the marker's own line, not a new line, is still malformed`` () =
+        let comments =
+            [ comment "<!-- fsgg:delivery-obligation id=nuget kind=publication head=head-a --> and more on the same line" ]
+        match DeliveryApplication.obligationsFromComments "head-a" comments with
+        | Error reason -> Assert.Contains("malformed", reason)
+        | other -> failwithf "expected same-line trailing text to remain malformed, got %A" other
+
+    [<Fact>]
+    let ``#2347 the real kit-0.48.0 declaration from .github#2264 PR #2271 (comment 5225891717) parses`` () =
+        // Reproduced verbatim (https://github.com/FS-GG/.github/issues/comments/5225891717) — the exact
+        // shape the issue measured as unparseable in production: marker line, blank line, prose.
+        let body =
+            "<!-- fsgg:delivery-obligation id=kit-0.48.0 kind=publication head=366b28a43251962de4a03a4fdac39651dc9b72e9 -->\n\n\
+This PR edits `.claude/skills/check-board/references/deep-detail.md` and its `.agents` twin, plus\n\
+`mechanical-reconciliation.md` in both skill roots. `check-board` is one of the four skills\n\
+`registry/repos.yml`'s `kit:` rows pack, so the packed kit manifest changes and `FS.GG.Kit` must be\n\
+released past the newest published version.\n\n\
+This worker does NOT tag or publish — release sequencing is the host's, per explicit dispatch\n\
+instruction. The obligation remains open (no `fsgg:delivery-receipt` yet) until the merged commit is\n\
+tagged `kit/v0.48.0` and the identical artifact is published to GitHub Packages and nuget.org."
+        match DeliveryApplication.obligationsFromComments "366b28a43251962de4a03a4fdac39651dc9b72e9" [ comment body ] with
+        | Ok [ obligation ] ->
+            Assert.Equal("kit-0.48.0", obligation.Id)
+            Assert.Equal("publication", obligation.Kind)
+            Assert.False(obligation.Verified)
+        | other -> failwithf "expected the real production declaration to parse with a real verdict, got %A" other
+
     // Round-1 review repair (.github#2264 PR #2271): `Client.outstandingObligations` is the extracted,
     // directly-testable core of `reconcile`'s lifecycle fold, which previously scanned live PR comments
     // with bulk, unanchored `.Contains` — a comment quoting ANOTHER obligation's receipt marker in prose
