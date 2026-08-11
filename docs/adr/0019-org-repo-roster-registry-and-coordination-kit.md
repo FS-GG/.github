@@ -89,10 +89,28 @@ participant-side analog of what `skills.yml` is for skills.
    > was introduced. A `Done`-status row costs nothing to leave unrostered (its history is a non-event),
    > so `EHotwagner/rogue3` needed no roster change — only `EHotwagner/S.I.R.`, already rostered by the
    > amendment above, was required. Direction C shares directions A/B's one exit-code contract (0
-   > closed / 1 violation / 3 no-verdict) and runs in the same `roster-closure` job; its live read can
-   > itself return a no-verdict in CI (the default `GITHUB_TOKEN` carries no Projects v2 read credential
-   > — the same class of gap §1's #1154 amendment already accepted for the org's private-repo count),
-   > handled the identical way: named on stdout, warned rather than swallowed, never silently green.
+   > closed / 1 violation / 3 no-verdict) and runs in the same `roster-closure` job; under the job's
+   > current `secrets.GITHUB_TOKEN`, its live read ALWAYS no-verdicts in CI today — not a possibility,
+   > a settled present-tense fact, measured on every run since this direction shipped (the default
+   > token carries no Projects v2 read credential — the same class of gap §1's #1154 amendment already
+   > accepted for the org's private-repo count), handled the identical way: named on stdout, warned
+   > rather than swallowed, never silently green.
+   >
+   > **Amendment (2026-08-11, [#2332](https://github.com/FS-GG/.github/issues/2332)). The credential
+   > gap for BOTH directions is a tracked, accepted design, not an open question.** The org's full
+   > CI credential inventory — checked (`grep -rhoE "secrets\.[A-Z0-9_]+" .github/workflows/*.yml`),
+   > not assumed — is exactly `FSGG_DISPATCH_APP_ID`/`FSGG_DISPATCH_APP_PRIVATE_KEY` (the cross-repo
+   > dispatch App, scoped for dispatch only, [#21](https://github.com/FS-GG/.github/issues/21)),
+   > `GITHUB_TOKEN`, and `NUGET_USER`. None carries organization read or Projects (v2) read, so
+   > neither direction B's private-repo-count leg nor direction C's board read can reach a real
+   > verdict in this job under any credential already in the org's inventory. Provisioning a PAT or
+   > GitHub App installation token scoped for both is an org-admin action, escalated to the
+   > maintainer rather than performed by this amendment. Until — and unless — that credential is
+   > granted, decision (b) applies to both directions: wired, correctly fail-closed to a no-verdict in
+   > CI, with the mechanism's actual violation-catching value realized by periodic manual/PAT-backed
+   > invocation outside this job (the same shape that found [#2206](https://github.com/FS-GG/.github/issues/2206)'s
+   > two repositories). This is the standing design, stated plainly rather than as a hedged
+   > possibility, so a future reader does not have to re-derive what this issue already measured.
 2. **`.github` is the authority/producer.** It holds the canonical fabrics and the coordination kit
    and mirrors them out — the analog of `fsgg-sdd` for product skills. The authority repo is the
    SOURCE of the coordination kit, never a receiver of it.

@@ -108,6 +108,19 @@ jobs:
       # Neither gap is new here: BOTH are the same "could not look" the #1154 gap already established
       # for direction B, now also true of direction C for the same reason (a narrower credential than
       # the claim being checked). A real open-world finding (exit 1) — org OR board — still fails hard.
+      #
+      # DECISION (.github#2332), stated plainly rather than as a hedged possibility: under this job's
+      # current `secrets.GITHUB_TOKEN`, BOTH directions ALWAYS no-verdict in CI today — this is the
+      # settled, observed behavior on every run, not something that "can" happen. The org's full CI
+      # credential inventory (`grep -rhoE "secrets\.[A-Z0-9_]+" .github/workflows/*.yml`) is exactly
+      # FSGG_DISPATCH_APP_ID/_PRIVATE_KEY (dispatch-only, #21), GITHUB_TOKEN, and NUGET_USER — none
+      # scoped for organization read or Projects (v2) read, so no swap to an existing secret can fix
+      # this. Provisioning a PAT or GitHub App token with those scopes is an org-admin action,
+      # escalated to the maintainer rather than done here. Until it lands, decision (b) is the standing
+      # design for both directions: wired, correctly fail-closed to a no-verdict, with the mechanism's
+      # real violation-catching value realized by periodic manual/PAT-backed invocation outside this
+      # job (the same shape that found #2206's two repositories). See ADR-0019 §1's 2026-08-11
+      # amendment for the full record.
       - name: Assert the org and board roster is closed (dependencies.yml + live org + live board)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
