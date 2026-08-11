@@ -1,0 +1,124 @@
+# reconcile-concurrency-scope-coherence — coord-board-reconcile.yml's concurrency block stays
+# fan-out-safe AND eviction-free.
+#
+# .github#2361, round 3 (independent review, twice). Two prior repairs on this same item narrowed
+# WHICH events share the workflow's `concurrency.group` to fix GitHub's `queue: single` default
+# evicting a pending run whenever a newer one for the same group arrived (measured: 22/37
+# issue_comment-triggered runs cancelled; PR #2383's required status context silently went missing).
+# Round 1 keyed the group by the triggering issue/PR number and reopened a double-write hole instead
+# — `reconcile --apply` scans and can WRITE THE WHOLE BOARD on any run that reaches it, not just the
+# triggering item, and posts `Writes.lifecycleWatermark` comments with no dedup/CAS guard, so letting
+# unrelated events land in different groups let them run that write step concurrently. Round 2
+# narrowed the fan-out to only marker-matching `issue_comment` events, closing the double-write hole
+# — but left genuine-vs-genuine eviction open (confirmed live: the comment that evicted PR #2383's own
+# run carried no marker prefix at all), so the item's own named worse-than-visible harm was still real.
+#
+# The shipped repair does not narrow the group at all: `concurrency.queue: max` (GitHub Actions, GA
+# 2026-05-07) replaces `queue: single`'s cancel-on-arrival behaviour with FIFO queueing, up to 100
+# pending runs, and is documented incompatible only with `cancel-in-progress: true` (unchanged here,
+# `false`). The group reverts to the single, flat, repo-wide string it was before this item existed —
+# every run, marker or genuine, waits in line instead of evicting whatever was pending, so there is
+# nothing left to fan out and nothing left to evict. `scripts/check-reconcile-concurrency-scope.py`
+# is the offline proof: the group must be a constant (no `github.event...` branching — the double-
+# write hole both prior rounds had to reason about by hand), `queue` must be `max`, and
+# `cancel-in-progress` must stay `false`.
+#
+# Like timeout-coherence, this gate does NOT run on a schedule: its subject is entirely local (one
+# workflow file in this repo), so `paths:` sees every change that could falsify it.
+name: reconcile-concurrency-scope-coherence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/coord-board-reconcile.yml"
+      - "scripts/check-reconcile-concurrency-scope.py"
+      - "tests/reconcile-concurrency-scope/**"
+      - ".github/workflows/reconcile-concurrency-scope-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/coord-board-reconcile.yml"
+      - "scripts/check-reconcile-concurrency-scope.py"
+      - "tests/reconcile-concurrency-scope/**"
+      - ".github/workflows/reconcile-concurrency-scope-coherence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reconcile-concurrency-scope-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+      - name: Run the reconcile-concurrency-scope fixture (no network)
+        run: bash tests/reconcile-concurrency-scope/run.sh
+
+  scope-fan-out-safe:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-policy-python
+
+      - name: Assert coord-board-reconcile.yml's concurrency block is fan-out-safe and eviction-free
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-reconcile-concurrency-scope.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is STATIC — one committed file, no API, no network —
+      # so it has no retryable failure to report.
+      - name: 'OK: the concurrency block is fan-out-safe and eviction-free'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "reconcile-concurrency-scope-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: the group varies by event, or queue/cancel-in-progress regressed'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### reconcile-concurrency-scope-coherence: the concurrency block regressed"
+            echo
+            echo "Either \`concurrency.group\` now references \`github.event...\` (varies by the"
+            echo "triggering event — real board-writing runs could run concurrently, the double-write"
+            echo "hole .github#2361 rounds 1/2 each had to reason about by hand), or \`concurrency.queue\`"
+            echo "is not \`max\` (reverts to GitHub's \`single\` default — the original .github#2361"
+            echo "eviction defect), or \`cancel-in-progress\` is not \`false\` (violates #698, and GitHub"
+            echo "rejects it paired with \`queue: max\` outright). See the log above for which."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=reconcile-concurrency-scope-coherence: concurrency block regressed::coord-board-reconcile.yml's concurrency block is no longer fan-out-safe/eviction-free. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### reconcile-concurrency-scope-coherence: no verdict — a file must be fixed"
+            echo
+            echo "coord-board-reconcile.yml is missing, would not parse, has no \`reconcile\` job, has"
+            echo "no \`concurrency\` block, or \`concurrency.group\` is missing or empty. Examining"
+            echo "nothing is a failure to audit, not a clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=reconcile-concurrency-scope-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=reconcile-concurrency-scope-coherence: inconclusive::check-reconcile-concurrency-scope.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

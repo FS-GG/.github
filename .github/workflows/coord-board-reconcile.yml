@@ -35,9 +35,60 @@ on:
 permissions:
   contents: read
 
+# .github#2361 (measured residual of #2352): a REPO-WIDE group is what actually manufactures the
+# cancellations, not the job-level `if` below. GitHub's DEFAULT queue depth is `single` — at most one
+# RUNNING and one PENDING run per concurrency group; a newer run for that group CANCELS the pending
+# one — and this happens BEFORE any job's `if` is evaluated, regardless of `cancel-in-progress` (that
+# setting only governs whether a newer run may cancel a currently-RUNNING one; it says nothing about
+# the pending-slot eviction, which is `queue: single`'s behaviour, not `cancel-in-progress`'s).
+# Measured: 22/37 issue_comment-triggered runs cancelled, and separately a `pull_request` run
+# cancelled by unrelated issue_comment traffic silently blocked PR #2383 (`reconcile`'s required
+# status context went MISSING, not red — see the issue's evidence comments).
+#
+# TWO PRIOR REPAIRS on this same item, both superseded (independent review; see PR #2391 history for
+# the full reasoning). Both tried to fix the eviction by narrowing WHICH events share the group:
+#   - round 1 keyed the group by the triggering issue/PR number for every event. Fixed the
+#     cancellation, but the `reconcile` job scans and WRITES THE WHOLE BOARD on every real run — not
+#     just the triggering item — and posts `Writes.lifecycleWatermark` comments with no dedup/CAS
+#     guard (`src/FS.GG.Coord.GitHub/Writes.fs:933-934` is a blind `postComment`). That design let
+#     genuinely concurrent board-writing runs happen (a PR push, an unrelated `issues` edit, and the
+#     hourly `schedule` all in different groups at once) — reopening the "no fan-out for a shared id
+#     to double-claim across" invariant `--worker coord-board-reconcile` below depends on.
+#   - round 2 narrowed the fan-out to ONLY marker-matching `issue_comment` events (mirroring the
+#     job's own skip `if:` verbatim), closing the double-write hole — but a GENUINE (non-marker)
+#     `issue_comment`, or any two UNRELATED real events (two different PRs' pushes, a PR push vs the
+#     hourly `schedule`), still shared one group with `queue: single`'s implicit default, so they
+#     could still evict each other. Confirmed live: the comment that evicted PR #2383's own run
+#     (`gh api repos/FS-GG/.github/issues/comments/5253487720`) carries no `<!-- fsgg:` prefix — a
+#     genuine comment, which round 2's own design does not isolate. The named harm (a required status
+#     context silently MISSING, not red) was therefore still open for real, not just synthetic, traffic.
+#
+# THE ACTUAL FIX: GitHub Actions' `concurrency.queue` key (GA 2026-05-07 —
+# https://github.blog/changelog/2026-05-07-github-actions-concurrency-groups-now-allow-larger-queues/,
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency)
+# accepts `single` (the undocumented-by-omission default this workflow inherited, and the actual
+# root cause above) or `max` — up to 100 pending runs per group, processed FIFO, cancelling only what
+# overflows past 100. It is documented incompatible ONLY with `cancel-in-progress: true`, which this
+# workflow does not set. `queue: max` fixes BOTH constraints at once, and needs neither a narrowed
+# group nor a mirrored predicate to do it: reverting to the single, flat, repo-wide group means every
+# run — marker or genuine, related or not — waits in line instead of evicting whatever was pending,
+# so `--worker coord-board-reconcile`'s "no fan-out" premise is not just preserved, it no longer has
+# anything to reason about (one group, one queue, FIFO, unconditionally). 100 pending is comfortably
+# above this repo's observed worst case (one wave's total marker/receipt volume across every
+# in-flight item, measured in the tens, not the hundreds — see PR #2391's history); if that changes,
+# `reconcile-concurrency-scope-coherence.yml` is where to raise it, not a narrower group again.
+#
+# `reconcile-concurrency-scope-coherence.yml`/`scripts/check-reconcile-concurrency-scope.py` assert
+# this mechanically: the group must be a single constant (no per-event branching — the double-write
+# hole both prior rounds had to reason about by hand), `queue` must be `max`, and `cancel-in-progress`
+# must stay `false` — the one combination GitHub itself will not reject and that this file's own
+# `#698` rationale requires (a run that starts must be allowed to finish, never killed mid-scan by a
+# newer trigger; `queue: max` does not change that — it only replaces PENDING-slot eviction with
+# PENDING-slot queueing).
 concurrency:
   group: coord-board-reconcile-${{ github.repository }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   # .github#2354: this job id/name is deliberately left as the bare `reconcile` — no override. This
