@@ -125,6 +125,58 @@ module DriverEvents =
         | Done
         | Unreadable _ -> false
 
+    let private isTerminal (state: MaterialState) : bool =
+        match state with
+        | Done
+        | Released -> true
+        | _ -> false
+
+    /// A terminal row regressing to `Ready` is never a legitimate transition (.github#2375 symptom 1,
+    /// issue acceptance #2): once this process has itself classified a ref `Done` (board status Done,
+    /// issue closed — the ONLY path `deriveState` reaches `Done` through) or `Released` (merged, closed,
+    /// every declared obligation verified), those are end states with no forward edge back to
+    /// unclaimed-and-schedulable in a legitimate lifecycle. A fresh read that disagrees is evidence of a
+    /// stale or partial read racing the board's own eventual consistency — reported at 09:03:29Z, 8
+    /// minutes after the merge, 11 seconds before a direct `gh issue view` confirmed CLOSED/Done — not
+    /// proof the item became schedulable again. Overriding to `Unreadable` keeps the regression OUT of
+    /// both `isActive` and "ready" while still surfacing, because `Unreadable` always reports
+    /// (`alwaysReports` below): a human sees the disagreement instead of a driver silently re-offering
+    /// finished work as startable. Scoped to the one dangerous regression the issue names — a terminal
+    /// row disagreeing about anything OTHER than "ready/schedulable" is not this guard's problem.
+    let private guardTerminalRegression (cursor: Cursor) (c: Classified) : Classified =
+        match Map.tryFind c.Ref cursor, c.State with
+        | Some previous, Ready when isTerminal previous ->
+            { c with
+                State = Unreadable $"cursor previously observed this item %A{previous}; a fresh read reported Ready, which regresses a terminal row and is refused rather than trusted"
+                Reason = $"terminal regression refused: previous read was %A{previous}, this read says Ready" }
+        | _ -> c
+
+    /// A ref this process previously classified ACTIVE that is simply ABSENT from the current facts
+    /// batch (.github#2375 symptom 2, issue acceptance #3) is a missing or partial read for THAT ref,
+    /// not evidence it went quiet: nothing in a legitimate lifecycle removes an active item from a full
+    /// board scan without first classifying it to some terminal or blocked state, and the caller's own
+    /// contract is a COMPLETE facts batch every read. Synthesizing an `Unreadable` entry for it keeps
+    /// the ref out of `Active` — matching what a genuinely failed read on that item would render — while
+    /// still emitting a transition (`alwaysReports`), so the rendered output is never the sterile "no
+    /// material transitions / no active items" pair with zero signal that three live claims went
+    /// unobserved. `cursor` is authoritative for "was this active", never `facts`, precisely because
+    /// this case is defined by the ref's ABSENCE from `facts`.
+    let private missingActiveRefs (cursor: Cursor) (classified: Classified list) (observedAt: int64) : Classified list =
+        let seenRefs = classified |> List.map (fun c -> c.Ref) |> Set.ofList
+        let fallbackSha =
+            classified |> List.tryHead |> Option.map (fun c -> c.SourceSha) |> Option.defaultValue ""
+
+        cursor
+        |> Map.toList
+        |> List.filter (fun (ref, state) -> isActive state && not (Set.contains ref seenRefs))
+        |> List.map (fun (ref, state) ->
+            { Ref = ref
+              State = Unreadable $"this item was active (%A{state}) as of the previous read and is absent from this read"
+              Reason = "missing from this read: previously active, absent from the current facts batch"
+              Evidence = "cursor-only; absent from current read"
+              ObservedAt = observedAt
+              SourceSha = fallbackSha })
+
     /// Idempotency is suppression of REPEATED news: a stable `Claimed`/`Ready`/etc. state that has not
     /// changed since the cursor is not worth re-announcing. `Unreadable` is the one state where that
     /// reasoning inverts (fsgg:independent-review:v1 round 1, finding 1, .github#2135 repair round 1):
@@ -169,11 +221,46 @@ module DriverEvents =
         events, newCursor
 
     let project (cursor: Cursor) (facts: ItemFacts list) (observedAt: int64) : Projection =
-        let classified = facts |> List.map classify
-        let events, newCursor = deriveEvents cursor classified
+        // Guard order matters: regressions are checked per-item over what THIS read produced, then the
+        // cursor is checked for active refs this read produced NOTHING for at all. Both guards read the
+        // cursor as their SOURCE OF TRUTH for "what did this ref last legitimately settle to".
+        let rawClassified = facts |> List.map classify
+        let regressionGuarded = rawClassified |> List.map (guardTerminalRegression cursor)
+        let missing = missingActiveRefs cursor regressionGuarded observedAt
+        let reported = regressionGuarded @ missing
+
+        // Repair round 2 (fsgg:independent-review:v1, .github#2375): a naive fold would persist EVERY
+        // reported state into the cursor, including the guards' own remedial `Unreadable` — which is
+        // neither `isTerminal` nor `isActive`. That erases the very fact ("Done", "Claimed w") each
+        // guard re-reads the cursor for, so a SECOND consecutive stale/missing read (the realistic
+        // production condition — the issue's own repro is two consecutive reads, 8 minutes apart from
+        // the merge) finds a cursor the first guard already scrubbed and no longer fires: the terminal
+        // regression is accepted on cycle 2, and the missing-active ref falls silent forever instead of
+        // once. The cursor slot for every ref either guard touched therefore STICKS at its cursor-
+        // supplied value across this read — untouched by what got reported — so the next read's guard
+        // re-checks the SAME original fact, not its own prior override, for as long as the disagreement
+        // persists.
+        let overriddenRefs =
+            List.zip rawClassified regressionGuarded
+            |> List.choose (fun (raw, guarded) -> if raw.State <> guarded.State then Some guarded.Ref else None)
+            |> Set.ofList
+
+        let missingRefs = missing |> List.map (fun c -> c.Ref) |> Set.ofList
+        let stickyRefs = Set.union overriddenRefs missingRefs
+
+        let events, foldedCursor = deriveEvents cursor reported
+
+        let newCursor =
+            stickyRefs
+            |> Set.fold
+                (fun acc ref ->
+                    match Map.tryFind ref cursor with
+                    | Some original -> Map.add ref original acc
+                    | None -> acc)
+                foldedCursor
 
         { Transitions = events
-          Active = classified |> List.filter (fun c -> isActive c.State)
+          Active = reported |> List.filter (fun c -> isActive c.State)
           Cursor = newCursor
           RenderedAt = observedAt }
 
