@@ -91,6 +91,16 @@
 # `in [..]`, and, or, true/false, always) — evaluable without a real expression engine, so the
 # shell gate and the typed validator (Fsgg.Registry) never drift.
 #
+# THIS SCRIPT'S (4) judges ONE concrete scaffold instance against ONE manifest; it never runs unless
+# a downstream repo's own CI chooses to invoke it with --manifest --params, which a `non-participant`
+# roster row (registry/repos.yml) has no obligation to do (.github#2366). `scripts/fsgg-skill-registry-
+# check`'s check 7 (`cross-references`) is the REGISTRY-INTERNAL sibling of this same invariant class —
+# it asserts, from `registry/skills.yml` alone, that a materialized skill's own text never depends on a
+# sibling path whose `materializes-when` is not implied by its own — so `.github`'s own CI catches the
+# class of drift this file's grammar was built to evaluate, without needing a live product tree at all.
+# The grammar here (`eval_clause`/`eval_and`/`eval_condition` below) is the one that checker's Python
+# port mirrors; the two are deliberately the SAME tokens so a predicate reads identically in both.
+#
 # Usage:
 #   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
 #                         [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
