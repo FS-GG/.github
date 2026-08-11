@@ -34,7 +34,9 @@ module RepoScopeTests =
     // ---- #962: `--repo` RESOLVES, at the parser, for every verb ------------------------------------------
 
     /// The three documented `--repo` spellings (skill Setup: "a registry short-id, `owner/repo`, or a bare
-    /// repo name") all reduce to the repo NAME board rows carry.
+    /// repo name") all reduce to the repo NAME board rows carry — now asserted on the `RepoScope.Scope`
+    /// union itself (#2398), so a roster spelling that resolved to `NonRepository` by mistake would fail
+    /// here rather than compile away into a string nobody checked the tag of.
     [<Theory>]
     [<InlineData("sdd", "FS.GG.SDD")>]
     [<InlineData("rendering", "FS.GG.Rendering")>]
@@ -48,11 +50,13 @@ module RepoScopeTests =
     [<InlineData("FS.GG.SDD", "FS.GG.SDD")>] // a literal name passes through
     [<InlineData(".github", ".github")>] // the repo whose short-id and name coincide
     let ``every documented --repo spelling resolves to the board's repo name`` (raw: string) (expected: string) =
-        Assert.Equal(expected, Options.resolveRepo raw)
+        Assert.Equal(FS.GG.Coord.RepoScope.Repository expected, Options.resolveRepo raw)
 
     /// IDEMPOTENT, and that is load-bearing rather than incidental: `Client` still resolves a GIT REMOTE and
     /// `issues`'s POSITIONAL repo arg through the same map, and those sites may be handed an already-resolved
-    /// name. If resolving twice moved, every one of them would be a bug.
+    /// name. If resolving twice moved, every one of them would be a bug. Compared as `Scope` values
+    /// directly (#2398) — a strictly stronger check than the prior string comparison, since it also pins
+    /// which arm survives the second resolve.
     [<Theory>]
     [<InlineData("sdd")>]
     [<InlineData("FS-GG/FS.GG.SDD")>]
@@ -60,7 +64,61 @@ module RepoScopeTests =
     [<InlineData(".github")>]
     let ``resolveRepo is idempotent`` (raw: string) =
         let once = Options.resolveRepo raw
-        Assert.Equal(once, Options.resolveRepo once)
+
+        // Re-resolving the same DISPLAY STRING a first resolve produced must land on the same arm —
+        // stated by an exhaustive two-arm match (never `Option.defaultValue` or a wildcard), so a
+        // hypothetical third `Scope` arm fails THIS build (FS0025, `TreatWarningsAsErrors`) rather than
+        // silently falling through unhandled.
+        let onceName =
+            match once with
+            | FS.GG.Coord.RepoScope.Repository name -> name
+            | FS.GG.Coord.RepoScope.NonRepository token -> token
+
+        Assert.Equal(once, Options.resolveRepo onceName)
+
+    // ---- .github#2363: `sir` / `S.I.R.` spelling equivalence, on the union rather than a string --------
+
+    /// Criterion 4's TYPE-LEVEL half: `sir` (any casing) and the canonical `S.I.R.` spelling resolve to
+    /// the identical `Scope` value, so `batch --repo sir` and `batch --repo S.I.R.` compare a board row's
+    /// resolved scope against the SAME `Repository "S.I.R."`, never two strings that merely print alike.
+    /// The live-fixture half of criterion 4 (rows actually selected) and criteria 5-6 (claim exclusion
+    /// across spellings, external-owner receiver verification) are `.github#2363`'s remaining scope —
+    /// this item's acceptance carries the union-level coverage, not the receiver-fixture proof.
+    [<Theory>]
+    [<InlineData("sir")>]
+    [<InlineData("Sir")>]
+    [<InlineData("SIR")>]
+    [<InlineData("S.I.R.")>]
+    let ``sir and S.I.R. resolve to the identical Scope value`` (raw: string) =
+        Assert.Equal(FS.GG.Coord.RepoScope.Repository "S.I.R.", Options.resolveRepo raw)
+
+    /// Gate-inversion evidence for the spelling-equivalence assertion above: reverting `RepoScope.fs`'s
+    /// `"sir" -> Repository "S.I.R."` arm to the pre-fix `"sir" -> "S.I.R."` string case (i.e. dropping
+    /// the tag) does not change what this test observes, because the test already asserts the STRUCTURED
+    /// value — it is the `resolveRepo`/`Options.resolveRepo` SIGNATURE change (string -> Scope) that makes
+    /// this file fail to compile at all against the pre-fix engine, which is the strongest red a type-level
+    /// fix can produce: not a wrong answer, a build that cannot lie about the answer having been checked.
+
+    // ---- .github#2398: `cross-repo` is a `NonRepository`, never a `Repository` -----------------------------
+
+    /// THE FIX ITSELF: the board's one deliberate non-roster value (`docs/coordination/board-schema.md`)
+    /// comes back tagged, so a consumer cannot compare it against a repository, reserve a `Paths:` token
+    /// under it, or select a claim lock with it without an explicit `NonRepository` match arm first.
+    [<Theory>]
+    [<InlineData("cross-repo")>]
+    [<InlineData("Cross-Repo")>]
+    [<InlineData("CROSS-REPO")>]
+    let ``cross-repo resolves to NonRepository, never a Repository`` (raw: string) =
+        match Options.resolveRepo raw with
+        | FS.GG.Coord.RepoScope.NonRepository token -> Assert.Equal(raw, token)
+        | FS.GG.Coord.RepoScope.Repository name ->
+            failwith $"cross-repo must never resolve to a Repository — got %s{name}"
+
+    /// Gate-inversion evidence: reverting `RepoScope.resolve`'s `"cross-repo" -> NonRepository raw` arm to
+    /// fall through to the generic passthrough (`"cross-repo" -> Repository raw`, i.e. treating it like
+    /// any other unrecognised token) turns this test red — the match above hits the `Repository` arm and
+    /// fails with the message above, rather than passing on either shape. Observed by hand against a
+    /// scratch revert of `RepoScope.fs` before this PR; restored and reconfirmed green.
 
     // ---- ADR-0042 / #1026: the chore-lock ref is EMBEDDED, and absent means SHUT ------------------------
 

@@ -92,7 +92,15 @@ module Scan =
         | Some name ->
             let kept =
                 rows
-                |> List.filter (fun r -> String.Equals(RepoScope.resolve r.PathRepo, name, StringComparison.OrdinalIgnoreCase))
+                |> List.filter (fun r ->
+                    // A `NonRepository` scope (`cross-repo`, the board's one deliberate non-roster
+                    // value) never matches a `--repo NAME` filter — `NAME` always names a repository,
+                    // and the sentinel is not one (#2398). This used to compare the raw resolved
+                    // string against `name`, which happened to be correct only because the old
+                    // `resolve` handed `cross-repo` back unchanged rather than tagging it.
+                    match RepoScope.resolve r.PathRepo with
+                    | RepoScope.Repository n -> String.Equals(n, name, StringComparison.OrdinalIgnoreCase)
+                    | RepoScope.NonRepository _ -> false)
 
             let advisory =
                 // A row matched, so the request named something real: nothing to say.
@@ -108,7 +116,13 @@ module Scan =
                 else
                     let known =
                         rows
-                        |> List.map (fun r -> RepoScope.resolve r.PathRepo)
+                        // The `cross-repo` sentinel names nothing a `--repo` filter could ever select,
+                        // so it does not belong in the "the board knows" list either (#2398) — showing
+                        // it there would offer a value that can never itself satisfy the filter above.
+                        |> List.choose (fun r ->
+                            match RepoScope.resolve r.PathRepo with
+                            | RepoScope.Repository n -> Some n
+                            | RepoScope.NonRepository _ -> None)
                         |> List.distinctBy (fun r -> r.ToLowerInvariant())
                         |> List.sort
 

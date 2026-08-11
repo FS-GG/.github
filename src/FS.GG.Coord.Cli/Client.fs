@@ -688,7 +688,18 @@ module Client =
                             // `Repo Scope` is the authority for WHERE `Paths:` live; `Ref` remains the
                             // issue identity for every GitHub mutation.  The resolver is shared with
                             // `--repo`, so roster short-ids and canonical names cannot split a lane.
-                            PathRepo = Options.resolveRepo row.PathRepo
+                            //
+                            // `RepoScope.orFallback` (#2398): a `Repo Scope` of `cross-repo` — the
+                            // board's one deliberate non-roster value — names no repository, so it
+                            // behaves exactly like an absent one and falls back to the item's own
+                            // hosting repository, same as `.github#2351`'s `pathRepoOrFallback` policy
+                            // for `overlap`/`activeCollisions`. Before this, the sentinel flowed into
+                            // `Item.PathRepo` UNCHANGED and untagged, so two items in the SAME
+                            // repository whose Repo Scope merely disagreed (one `cross-repo`, one
+                            // rostered) compared unequal downstream and split a lane on the strength of
+                            // the sentinel alone, without either touch-set ever being read
+                            // (`.github#2386`).
+                            PathRepo = FS.GG.Coord.RepoScope.orFallback c.Item.Ref.Repo (Options.resolveRepo row.PathRepo)
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
@@ -4116,7 +4127,11 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
             | Error e -> Error e
             | Ok rows ->
                 rows
-                |> List.map (fun r -> r.Ref, Options.resolveRepo r.PathRepo)
+                // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope names no repository, so it
+                // falls back to the row's own hosting repository — the doc above's "retain their own
+                // repository as the only truthful scope," now the same fallback `enrich`/`Lanes.partition`
+                // apply, rather than a raw resolve that could hand back the sentinel itself.
+                |> List.map (fun r -> r.Ref, FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo))
                 |> Map.ofList
                 |> Ok
 
@@ -7047,7 +7062,16 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
     ///
     /// An explicit `--repo` is ALREADY resolved by the time it reaches this module, so it needs no call here.
     /// The remaining ones are idempotent and harmless: they resolve a name that may already be resolved.
-    let private resolveRepo (raw: string) : string = Options.resolveRepo raw
+    ///
+    /// ECHOES, same as `Options.resolveRepoName` (#2398): every caller of this alias resolves a git
+    /// remote, a positional repo argument, or an already-resolved name — none of them a board `Repo
+    /// Scope` read, so none can genuinely be the `cross-repo` sentinel in practice. Stated by an
+    /// exhaustive two-arm match rather than assumed, so the byte-identical prior behaviour ("a literal
+    /// name passes through") is preserved for whichever arm actually arrives.
+    let private resolveRepo (raw: string) : string =
+        match Options.resolveRepo raw with
+        | FS.GG.Coord.RepoScope.Repository name -> name
+        | FS.GG.Coord.RepoScope.NonRepository token -> token
 
     // ---- #480/#430: the repo a command scopes to — the checkout you are STANDING IN ------------------
     // Defined ABOVE verify-paths (and the worker-command `scopedRepo` below) because BOTH read the same
@@ -8780,7 +8804,14 @@ scoped credential) and is tracked at .github#2332, not fixable from this repo's 
                                           // reserves a receiver worktree. Consolidation is evidence about
                                           // overlapping files, so it partitions on `Repo Scope`, not the
                                           // repository that happens to host the coordination issue (#1732).
-                                          LintApplication.ConsolidationRow.Repo = Options.resolveRepo r.PathRepo
+                                          //
+                                          // `RepoScope.orFallback` (#2398): a `cross-repo` Repo Scope
+                                          // names no repository, so consolidation falls back to the
+                                          // issue's own hosting repository rather than grouping on the
+                                          // sentinel itself — the same policy `enrich`/`Lanes.partition`
+                                          // apply.
+                                          LintApplication.ConsolidationRow.Repo =
+                                            FS.GG.Coord.RepoScope.orFallback r.Ref.Repo (Options.resolveRepo r.PathRepo)
                                           LintApplication.ConsolidationRow.TouchSet = TouchSet.parse body }
                                         :: touchSets
                                     else

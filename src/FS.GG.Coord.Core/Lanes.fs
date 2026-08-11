@@ -54,6 +54,16 @@ module Lanes =
         | Some(claim, _) -> Some claim.Worker
         | None -> None
 
+    /// The repository `item.PathRepo` NAMES, never the board's `cross-repo` sentinel by itself.
+    /// `RepoScope.orFallback` is the established policy (`.github#2351`'s `Client.pathRepoOrFallback`,
+    /// promoted here so both `Core` and `Cli` reach it): a scope that does not name a repository
+    /// behaves exactly like an absent one and falls back to the item's own hosting repository. Without
+    /// this, two items in the SAME repository whose Repo Scope merely disagreed (one `cross-repo`, one
+    /// rostered or unset) compared unequal on the strength of the sentinel alone and landed in separate
+    /// lanes — DISJOINT BY CONSTRUCTION, without either touch-set ever being read (`.github#2386`).
+    let private pathRepoOf (item: Item) : string =
+        RepoScope.orFallback item.Ref.Repo (RepoScope.resolve item.PathRepo)
+
     /// `generated` is `.github#2305`/ADR-0044's set of generated, CI-gated artifact repo-relative paths
     /// (`scripts/generated-paths`'s subtractable set). `Set.empty` reproduces the pre-#2305 partition
     /// exactly — always safe — and is what `Program.fs`'s pure, snapshot-only `lanes` command passes,
@@ -130,14 +140,16 @@ module Lanes =
                 // independent lanes into one, halving the parallelism the board actually has.
                 // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks "do these
                 // two rows share a repo?", a question `--repo` has no part in.
-                if a.Ref.Owner = b.Ref.Owner && a.PathRepo = b.PathRepo then
+                let aRepo, bRepo = pathRepoOf a, pathRepoOf b
+
+                if a.Ref.Owner = b.Ref.Owner && aRepo = bRepo then
                     // .github#2305 — the same exclusion `Schedulability.schedulable`/`activeCollisions`/
                     // `overlapCmd` apply: a conflict pair attributable SOLELY to a shared generated,
                     // CI-gated artifact does not glue two lanes together. Before this, `overlap` could
                     // answer DISJOINT for a pair that `Lanes.partition` still fused into one lane — #485's
                     // shape, one question with two disagreeing implementations.
                     let hits =
-                        TouchSet.scopedConflicts a.Ref.Owner a.PathRepo b.Ref.Owner b.PathRepo a.TouchSet b.TouchSet
+                        TouchSet.scopedConflicts a.Ref.Owner aRepo b.Ref.Owner bRepo a.TouchSet b.TouchSet
                         |> TouchSet.excludeGenerated generated
 
                     if not (List.isEmpty hits) then
@@ -153,7 +165,7 @@ module Lanes =
 
                 { Id = head.Ref
                   Owner = head.Ref.Owner
-                  Repo = head.PathRepo
+                  Repo = pathRepoOf head
                   Items = members
                   Tokens = members |> List.collect (fun it -> matchable it.TouchSet) |> List.distinct |> List.sort
                   HeldBy = members |> List.choose holder |> List.distinct })
