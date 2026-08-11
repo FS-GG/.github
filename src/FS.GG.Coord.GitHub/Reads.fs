@@ -731,7 +731,15 @@ module Reads =
                     |> Result.map List.rev
                 with
                 | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException ->
+                | :? System.NullReferenceException
+                // A PRESENT-BUT-NULL node — `data.repository` is `null` for a ref GraphQL cannot resolve
+                // (e.g. a noncanonical owner/repo spelling), and the same shape reaches `issue`,
+                // `comments`, or a `null` element inside `nodes` itself. `GetProperty`/`TryGetProperty`
+                // both throw `InvalidOperationException` — not `NullReferenceException` — when called on a
+                // `Null`-kind element, because the element itself is a real (non-missing) JSON value that is
+                // simply the wrong shape. A MISSING property is caught above; this is the null one
+                // (.github#2365). Without this case the exception escapes the typed read entirely.
+                | :? System.InvalidOperationException ->
                     Error(Malformed(subject, "the recent-comments response is missing `repository.issue.comments`"))
 
     // ---- the issue body ---------------------------------------------------------------------------
@@ -1130,7 +1138,11 @@ module Reads =
                     Ok { Total = total; Children = children }
                 with
                 | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException ->
+                | :? System.NullReferenceException
+                // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
+                // `data.repository` (or `.issue`) throws `InvalidOperationException` from `GetProperty`,
+                // not `NullReferenceException`.
+                | :? System.InvalidOperationException ->
                     Error(Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`"))
 
     let refIsPullRequest (transport: IGitHubTransport) (owner: string) (repo: string) (number: int) : IoResult<bool> =
@@ -2350,7 +2362,13 @@ module Reads =
                         | _ -> Ok None
                 with
                 | :? System.Collections.Generic.KeyNotFoundException
-                | :? System.NullReferenceException -> Ok None
+                | :? System.NullReferenceException
+                // Same present-but-null case as `recentCommentBodies` (.github#2365): a `null`
+                // `data.repository` (or `.pullRequest`) throws `InvalidOperationException` from
+                // `GetProperty`, not `NullReferenceException`. This read already treats an unreadable
+                // graph as `Ok None` (no closing ref found) rather than a hard refusal, so the null case
+                // joins that same fallback.
+                | :? System.InvalidOperationException -> Ok None
 
     // ---- the claim-scan candidate set --------------------------------------------------------------
 

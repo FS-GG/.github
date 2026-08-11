@@ -2029,3 +2029,74 @@ let ``#1680 a merged pr whose head IS the asserted sha reports nothing extra`` (
 
     Assert.Equal(PrMerged, state)
     Assert.Empty unmet
+
+// ---- .github#2365: a present-but-null GraphQL node refuses, it does not throw -----------------------
+//
+// A ref GraphQL cannot resolve (e.g. the noncanonical owner/repo spelling `EHotwagner/S.I.R`, missing
+// its trailing dot) answers `"repository": null` — PRESENT, not missing. `JsonElement.GetProperty` AND
+// `TryGetProperty` both throw `InvalidOperationException` (never `NullReferenceException`) when called
+// on a `Null`-kind element, because the element itself is a real JSON value of the wrong shape. The old
+// catch list (`KeyNotFoundException`, `NullReferenceException`) covered a MISSING property, not a
+// present NULL one, so the exception escaped the typed read and crashed the process instead of
+// producing a refusal.
+
+[<Fact>]
+let ``#2365 recentCommentBodies refuses a null repository instead of throwing`` () =
+    let transport = serving """{"data":{"repository":null}}"""
+
+    match Reads.recentCommentBodies transport "EHotwagner" "S.I.R" 146 20 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a null repository must refuse, not throw or succeed — got %A{other}"
+
+[<Fact>]
+let ``#2365 recentCommentBodies refuses a null issue`` () =
+    let transport = serving """{"data":{"repository":{"issue":null}}}"""
+
+    match Reads.recentCommentBodies transport "FS-GG" ".github" 2365 20 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a null issue must refuse, not throw — got %A{other}"
+
+[<Fact>]
+let ``#2365 recentCommentBodies refuses null comments`` () =
+    let transport = serving """{"data":{"repository":{"issue":{"comments":null}}}}"""
+
+    match Reads.recentCommentBodies transport "FS-GG" ".github" 2365 20 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"null comments must refuse, not throw — got %A{other}"
+
+[<Fact>]
+let ``#2365 recentCommentBodies refuses a null element inside nodes`` () =
+    let transport =
+        serving """{"data":{"repository":{"issue":{"comments":{"nodes":[null,{"body":"hi"}]}}}}}"""
+
+    match Reads.recentCommentBodies transport "FS-GG" ".github" 2365 20 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a null node must refuse, not throw — got %A{other}"
+
+[<Fact>]
+let ``#2365 recentCommentBodies still reads real comments`` () =
+    // The counterweight: the added null case must not shadow the working path.
+    let transport =
+        serving """{"data":{"repository":{"issue":{"comments":{"nodes":[{"body":"first"},{"body":"second"}]}}}}}"""
+
+    match Reads.recentCommentBodies transport "FS-GG" ".github" 2365 20 with
+    | Ok bodies -> Assert.Equal<string list>([ "first"; "second" ], bodies)
+    | Error e -> failwith $"a well-formed comments page must still resolve — got %A{e}"
+
+[<Fact>]
+let ``#2365 subIssues refuses a null repository instead of throwing`` () =
+    let transport = serving """{"data":{"repository":null}}"""
+
+    match Reads.subIssues transport "EHotwagner" "S.I.R" 146 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a null repository must refuse, not throw — got %A{other}"
+
+[<Fact>]
+let ``#2365 prClosingRef treats a null repository the same as an unreadable graph`` () =
+    // `prClosingRef` already folds an unreadable closing-ref graph into `Ok None` (no closing issue
+    // found) rather than a hard refusal; the null case joins that existing fallback, not a new one.
+    let transport = serving """{"data":{"repository":null}}"""
+
+    match Reads.prClosingRef transport "EHotwagner" "S.I.R" 146 with
+    | Ok None -> ()
+    | other -> failwith $"a null repository must fall back to None, not throw — got %A{other}"
