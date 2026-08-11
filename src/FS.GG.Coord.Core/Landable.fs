@@ -132,7 +132,71 @@ module Landable =
     /// doc (§9.1) already names as the way to turn this on for real — do it in the SAME change that adds
     /// the context to `branches/main/protection/required_status_checks`, so the two subsystems move together
     /// and cannot drift back out of agreement the way they did to produce #2373.
+    ///
+    /// THE ONE DECLARED PLACE (#2400): this binding is the sole source of advisory names — `checkGating`
+    /// below is the sole reader of it, and `runGating` derives a run's advisory-ness from `checkGating`
+    /// rather than from a second copy of this set. Adding the next advisory check is one entry here, not an
+    /// edit anywhere the rollup itself lives.
+    ///
+    /// NAME COLLISIONS ARE NOT CLOSED BY THIS CHANGE (`.github#2374`, still open, deliberately). A check-run
+    /// `Name` is the JOB name and collides across workflows (`CheckRow`'s own doc comment: seven runs named
+    /// `fixture`, from six workflows, measured on `.github`). If a future job in some OTHER workflow were
+    /// ever named `claim-generation`, `checkGating` would classify it `Advisory` too, on the string alone —
+    /// exactly as the pre-#2400 `Set<string>.Contains` test already did. This refactor changes HOW the
+    /// classification is consumed (a typed, exhaustively-matched `Gating` instead of an inline predicate),
+    /// not WHAT it is keyed on; the "#2400 must say this" review AC exists precisely so nobody reads this
+    /// past tense.
     let private advisoryCheckNames: Set<string> = Set.ofList [ "claim-generation" ]
+
+    /// How a CI result participates in the landable verdict (#2400): every subject `scoreRequired` scores is
+    /// EITHER `Blocking` (an ordinary finding — a bad or still-pending result withholds green) or `Advisory`
+    /// (reported, but never withholds a green verdict on its own, unless the caller `--require`d it by name,
+    /// #2373). This is the type `score`/`scoreN`/`scoreRequired` now MATCH ON, in place of the private
+    /// `Set<string>` the rollup used to consult ad hoc: `TreatWarningsAsErrors` (this project's `.fsproj`)
+    /// turns an incomplete match (FS0025) into a build failure, so a third `Gating` case added later is a
+    /// compile error at every one of them, not a silently-unfiltered default.
+    type private Gating =
+        | Blocking
+        | Advisory
+
+    /// A check-run's `Gating` (#2400, the #2373 rule restated as a typed classification): `Advisory` iff its
+    /// name is in `advisoryCheckNames` AND the caller did not `--require` it by that same name — `required`
+    /// is the one opt-in lever (#2373), and it must still win over the exemption or `--require
+    /// claim-generation` would do nothing.
+    let private checkGating (required: Set<string>) (c: CheckRow) : Gating =
+        if advisoryCheckNames.Contains c.Name && not (required.Contains c.Name) then
+            Advisory
+        else
+            Blocking
+
+    /// A workflow run's `Gating` (#2400, closing #2379): a run is `Advisory` only when its `CheckSuiteId` has
+    /// at least one live check-run AND every one of them is itself `Advisory` — the run's own redness is then
+    /// wholly attributable to jobs its own owner already declared "observed, not enforced". This is the
+    /// "advisory check's containing workflow run" fix #2379 asked for: `coherence.yml`'s run concluding
+    /// `failure` solely because its `claim-generation` job did is no longer scored, without touching a run
+    /// whose failure has ANY other cause.
+    ///
+    /// A run with NO live check-runs in its suite stays `Blocking` (#2379 AC3) — that is `startup_failure`:
+    /// GitHub failed the run before any job could report, so there is no check-run to attribute the failure
+    /// to, and calling that "advisory" would silently swallow a whole class of genuine failures that #606
+    /// exists to catch. A MIXED suite (one advisory job, one genuinely failing ordinary job — the
+    /// `registry-coherence` case, #642/#425) also stays `Blocking` (#2379 AC2): one non-advisory check-run in
+    /// the suite is enough to keep the run a real finding.
+    let private runGating (required: Set<string>) (liveChecksAll: CheckRow list) (r: RunRow) : Gating =
+        match r.CheckSuiteId with
+        | None -> Blocking
+        | Some suiteId ->
+            match liveChecksAll |> List.filter (fun c -> c.CheckSuiteId = Some suiteId) with
+            | [] -> Blocking
+            | ownChecks ->
+                let allAdvisory =
+                    ownChecks
+                    |> List.forall (fun c ->
+                        match checkGating required c with
+                        | Advisory -> true
+                        | Blocking -> false)
+
+                if allAdvisory then Advisory else Blocking
 
     /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
     let private isPending (status: string) = status <> "completed"
@@ -178,39 +242,52 @@ module Landable =
         | Some false -> PrConflicted, 0
         | Some true ->
             let live, _ = supersede runs
-            let liveChecks = liveChecks runs checks
+            let liveChecksAll = liveChecks runs checks
 
-            // `advisoryCheckNames` (#2373) are excluded from the bad/pending/total rollup UNLESS the
+            // `advisoryCheckNames` (#2373/#2400) are excluded from the bad/pending/total rollup UNLESS the
             // caller explicitly named them in `required` — an opt-in override, never a silent one. This
             // filters only the ROLLUP's own inputs; `missingFrom` below is still handed the FULL
-            // `liveChecks`, so a `--require`d advisory name is still satisfied by its presence exactly as
+            // `liveChecksAll`, so a `--require`d advisory name is still satisfied by its presence exactly as
             // any other required name would be — only its `bad`/`pending` contribution is what the
             // advisory carve-out withholds by default.
             let requiredSet = Set.ofList required
 
+            // ONE classification, consulted through `Gating` rather than a `Set<string>.Contains` inlined
+            // here — `checkGating` decides each check-run, `runGating` derives each run's from ITS check-runs
+            // (#2400/#2379). Both scored lists are exhaustive matches on the same two-case type.
             let scoredChecks =
-                liveChecks
-                |> List.filter (fun c -> not (advisoryCheckNames.Contains c.Name) || requiredSet.Contains c.Name)
+                liveChecksAll
+                |> List.filter (fun c ->
+                    match checkGating requiredSet c with
+                    | Blocking -> true
+                    | Advisory -> false)
+
+            let scoredRuns =
+                live
+                |> List.filter (fun r ->
+                    match runGating requiredSet liveChecksAll r with
+                    | Blocking -> true
+                    | Advisory -> false)
 
             // The rollup is over BOTH lists (#606): a run can fail with no check-runs at all
             // (`startup_failure`), and a check-run can fail while its run SUCCEEDS (job-level
             // `continue-on-error`). Neither list alone is the truth.
             let pending =
-                (live |> List.filter (fun r -> isPending r.Status) |> List.length)
+                (scoredRuns |> List.filter (fun r -> isPending r.Status) |> List.length)
                 + (scoredChecks |> List.filter (fun c -> isPending c.Status) |> List.length)
 
             let bad =
-                (live |> List.filter (fun r -> isBad r.Status r.Conclusion) |> List.length)
+                (scoredRuns |> List.filter (fun r -> isBad r.Status r.Conclusion) |> List.length)
                 + (scoredChecks |> List.filter (fun c -> isBad c.Status c.Conclusion) |> List.length)
 
-            let total = List.length live + List.length scoredChecks
+            let total = List.length scoredRuns + List.length scoredChecks
 
             // A `--require`d check that is not among the LIVE check-runs has not reported. Matched on the
             // live set, so a superseded suite's copy cannot satisfy it — the check that was cancelled is
             // exactly the one whose verdict we do not have. Same derivation `missing` reports from, so the
-            // verdict and its reason cannot disagree. Uses the UNFILTERED `liveChecks`, not `scoredChecks`
+            // verdict and its reason cannot disagree. Uses the UNFILTERED `liveChecksAll`, not `scoredChecks`
             // — an advisory check the caller `--require`d is still satisfied by its mere presence.
-            let missingRequired = missingFrom required liveChecks
+            let missingRequired = missingFrom required liveChecksAll
 
             // ZERO SUBJECTS IS NOT GREEN (#606). "Every check passed" and "CI never started" are the same
             // empty set. A missing subject is a finding, not a pass.

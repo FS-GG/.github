@@ -427,6 +427,71 @@ module LandableTests =
         let checks = [ named "pre-claim-generation-suffix" (Some 2L) "completed" (Some "failure") ]
         Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
 
+    // ---- advisory checks reach their CONTAINING WORKFLOW RUN too (#2400, closing #2379) --------------
+    //
+    // #2373 filtered only the check-run half of the rollup. `coherence.yml` runs `claim-generation`
+    // ALONGSIDE ordinary jobs, so the workflow RUN it belongs to still concluded `failure` whenever
+    // `claim-generation` failed — and `live` (the run list) was never filtered, so that run's redness
+    // still gated the merge (#2379). These tests hold `runGating`'s three cases to the corpus #2379
+    // itself specified.
+
+    [<Fact>]
+    let ``AC1: a run failing SOLELY because its one advisory check failed does not red the verdict (#2379)`` () =
+        // `coherenceRun` is the run; its ONLY check-run (same suite) is the advisory `claim-generation`,
+        // also failing. Both are excluded from the rollup — but `greenRun` (a DIFFERENT suite, no check
+        // of its own here) is still live and green, so the verdict is GREEN, not a #606 zero-subjects red.
+        let coherenceRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
+        Assert.Equal(PrGreen, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ])
+
+    [<Fact>]
+    let ``AC2: a run with ONE genuinely non-advisory failing check in the same suite still reds (#2379)`` () =
+        // The `registry-coherence` case (#642/#425): a mixed suite — one advisory job, one ordinary job
+        // that really failed — must not have its redness laundered by the advisory job sharing its suite.
+        let coherenceRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
+        let realCheck = named "contract-coherence" (Some 5L) "completed" (Some "failure")
+        Assert.Equal(PrRed, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck; realCheck ])
+
+    [<Fact>]
+    let ``AC3: a run failing with NO check-runs at all (startup_failure) still reds (#2379)`` () =
+        // The case that makes "just stop scoring runs" wrong: GitHub failed the run before any job could
+        // even report, so there is no check-run to attribute the failure to — `runGating`'s empty-suite
+        // arm must stay `Blocking`, not fall open because "no advisory checks disagreed".
+        let startupFailure =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        Assert.Equal(PrRed, score (Some true) [ greenRun; startupFailure ] [])
+
+    [<Fact>]
+    let ``a run whose only check-run is advisory and STILL RUNNING is not held at pending either`` () =
+        // Symmetry with the check-run half (`an advisory check STILL RUNNING does not hold the verdict at
+        // pending either`, above): `runGating` is a function of NAMES, not status, so an in-progress
+        // advisory-only run is excluded from `pending` exactly as a completed-and-failed one is excluded
+        // from `bad`.
+        let coherenceRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "in_progress" None (Some 5L)
+
+        let advisoryCheck = named "claim-generation" (Some 5L) "in_progress" None
+        Assert.Equal(PrGreen, score (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ])
+
+    [<Fact>]
+    let ``a --required advisory name reaches the run too — opting in un-hides the containing run`` () =
+        // The other direction of the #2373 opt-in lever, extended to runs (#2400): naming the advisory
+        // check in `required` makes `checkGating` return `Blocking` for it, which flips `runGating`'s
+        // all-advisory test for the run that contains it — so `--require claim-generation` restores BOTH
+        // halves to the rollup, not just the check-run half.
+        let coherenceRun =
+            run ".github/workflows/coherence.yml" "pull_request" "item/x" [ 1 ] 5 "completed" (Some "failure") (Some 5L)
+
+        let advisoryCheck = named "claim-generation" (Some 5L) "completed" (Some "failure")
+        let state, _ = scoreRequired [ "claim-generation" ] (Some true) [ greenRun; coherenceRun ] [ advisoryCheck ]
+        Assert.Equal(PrRed, state)
+
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
 
     [<Fact>]
