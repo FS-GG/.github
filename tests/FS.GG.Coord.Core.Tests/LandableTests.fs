@@ -401,6 +401,32 @@ module LandableTests =
         let checks = [ named "claim-generation" (Some 2L) "completed" (Some "success") ]
         Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
 
+    [<Fact>]
+    let ``a check that only SHARES A PREFIX with an advisory name is still scored, and still reds (#2373 repair 1)`` () =
+        // The exemption is a NAMED, EXACT set — not a prefix/substring match. `claim-generation-v2` is a
+        // DIFFERENT check that merely happens to share a prefix with the one advisory entry
+        // (`claim-generation`); nothing about this fix's own reasoning extends the "observed, not
+        // enforced" promise to it, and it must still gate the merge like any other ordinary check.
+        //
+        // This is the boundary the independent critic's own mutation found undefended: broadening
+        // `advisoryCheckNames.Contains c.Name` (exact) to
+        // `advisoryCheckNames |> Set.exists (fun a -> c.Name.StartsWith(a: string))` (prefix) left the
+        // whole 729-test suite green, because no existing case used a name that shares a prefix with
+        // `"claim-generation"` without BEING it. This test is written to fail under that broadening and
+        // pass under the current exact match — both directions demonstrated below.
+        let checks = [ named "claim-generation-v2" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``a check whose name merely CONTAINS an advisory name as a substring is still scored, and still reds`` () =
+        // The substring-broadening sibling of the prefix case above: `advisoryCheckNames |> Set.exists
+        // (fun a -> c.Name.Contains(a: string))` would ALSO match a name like
+        // `pre-claim-generation-suffix`, which shares no prefix with `claim-generation` but does contain
+        // it. Held apart from the prefix test so a repair that fixes one broadening but not the other is
+        // still caught.
+        let checks = [ named "pre-claim-generation-suffix" (Some 2L) "completed" (Some "failure") ]
+        Assert.Equal(PrRed, score (Some true) [ greenRun ] checks)
+
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
 
     [<Fact>]
